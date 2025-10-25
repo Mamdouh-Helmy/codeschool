@@ -1,0 +1,542 @@
+"use client";
+import React, { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import {
+  Crown,
+  Zap,
+  Star,
+  DollarSign,
+  Plus,
+  Edit,
+  Trash2,
+  Globe,
+  Users,
+  Briefcase,
+  CreditCard,
+  Package,
+  TrendingUp,
+  CheckCircle,
+  Lightbulb,
+  Euro,
+} from "lucide-react";
+import Modal from "./Modal";
+import PricingForm from "./PricingForm";
+import EgyptianPoundIcon from "../../icons/EgyptianPoundIcon";
+
+interface PricingPlan {
+  _id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  billingPeriod: string;
+  features: string[];
+  isPopular: boolean;
+  isActive: boolean;
+  maxStudents?: number;
+  language: string;
+  type: string;
+  discount?: number;
+  originalPrice?: number;
+}
+
+// إنشاء مكون Dialog مخصص
+function ConfirmationDialog({ isOpen, onClose, onConfirm, title, message }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-darkmode rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-2">
+          {title}
+        </h3>
+        <p className="text-SlateBlueText dark:text-darktext mb-6">{message}</p>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-SlateBlueText dark:text-darktext hover:bg-gray-100 dark:hover:bg-dark_border rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function PricingAdmin() {
+  const [plans, setPlans] = useState<PricingPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<PricingPlan | null>(null);
+
+  const loadPlans = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/pricing", { cache: "no-store" });
+      const json = await res.json();
+      if (json.success) {
+        setPlans(json.data);
+      }
+    } catch (err) {
+      console.error("Error loading pricing plans:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPlans();
+  }, []);
+
+  const onSaved = async () => {
+    await loadPlans();
+  };
+
+  const onEdit = (plan: PricingPlan) => {
+    setEditing(plan);
+    setOpen(true);
+  };
+
+  const onDelete = async (id: string) => {
+    toast(
+      (t) => (
+        <div
+          className="
+          w-404 max-w-full
+          bg-white dark:bg-darkmode
+          text-MidnightNavyText dark:text-white
+          rounded-14
+          shadow-round-box
+          border-none outline-none dark:border-dark_border
+          p-4
+        "
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className="
+              flex items-center justify-center
+              w-10 h-10 rounded-full
+              bg-LightYellow
+              text-primary font-bold
+            "
+              aria-hidden
+            >
+              !
+            </div>
+
+            <div className="flex-1">
+              <p className="text-16 font-semibold">
+                Are you sure you want to delete this pricing plan?
+              </p>
+              <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
+                This action cannot be undone.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <button
+              className="
+              px-3 py-1
+              bg-PaleCyan dark:bg-dark_input
+              text-MidnightNavyText dark:text-white
+              rounded-14
+              text-15
+              hover:opacity-90
+              border border-PeriwinkleBorder/50
+            "
+              onClick={() => toast.dismiss(t.id)}
+            >
+              Cancel
+            </button>
+
+            <button
+              className="
+              px-3 py-1
+              bg-primary
+              text-white
+              rounded-14
+              text-15
+              hover:bg-primary/90
+              shadow-sm
+            "
+              onClick={async () => {
+                toast.dismiss(t.id);
+                try {
+                  const res = await fetch(
+                    `/api/pricing?id=${encodeURIComponent(id)}`,
+                    { method: "DELETE" }
+                  );
+                  if (res.ok) {
+                    setPlans((prev) => prev.filter((p) => p._id !== id));
+                    toast.success("Plan deleted successfully");
+                  } else {
+                    toast.error("Failed to delete the plan");
+                  }
+                } catch (err) {
+                  console.error("Error deleting plan:", err);
+                  toast.error("Error deleting plan");
+                }
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      ),
+      { duration: Infinity, position: "top-center" }
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="bg-white dark:bg-darkmode rounded-xl shadow-sm p-6 border border-PowderBlueBorder dark:border-dark_border">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
+              <Package className="w-7 h-7 text-primary" />
+              Pricing Plans Management
+            </h1>
+            <p className="text-sm text-SlateBlueText dark:text-darktext max-w-2xl">
+              Create and manage subscription plans for your students. Customize
+              pricing, features, and availability to match your educational
+              offerings.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setEditing(null);
+              setOpen(true);
+            }}
+            className="mt-4 lg:mt-0 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Plan
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-darkmode rounded-xl p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
+                Total Plans
+              </p>
+              <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
+                {plans.length}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <Package className="w-5 h-5 text-primary" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-darkmode rounded-xl p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
+                Active Plans
+              </p>
+              <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
+                {plans.filter((p) => p.isActive).length}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-ElectricAqua/10 rounded-lg flex items-center justify-center">
+              <Zap className="w-5 h-5 text-ElectricAqua" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-darkmode rounded-xl p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
+                Popular Plans
+              </p>
+              <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
+                {plans.filter((p) => p.isPopular).length}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-Aquamarine/10 rounded-lg flex items-center justify-center">
+              <Crown className="w-5 h-5 text-Aquamarine" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-darkmode rounded-xl p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide flex items-center gap-1">
+                {plans.map((plan) => (
+                  <span key={plan._id} className="flex gap-1 items-center">
+                    {plan.currency === "USD" ? (
+                      <DollarSign className="inline-block w-4 h-4" />
+                    ) : plan.currency === "EUR" ? (
+                      <Euro className="inline-block w-4 h-4" />
+                    ) : (
+                      <EgyptianPoundIcon size={17} />
+                    )}
+                  </span>
+                ))}
+                Avg. Price
+              </p>
+              <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
+                {plans.length > 0
+                  ? Math.round(
+                      plans.reduce((acc, p) => acc + p.price, 0) / plans.length
+                    )
+                  : 0}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-LightYellow/10 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-LightYellow" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Plans Grid */}
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {plans.map((plan) => (
+          <div
+            key={plan._id}
+            className={`relative rounded-xl border p-6 transition-all duration-300 hover:shadow-md ${
+              plan.isPopular
+                ? "border-primary bg-gradient-to-br from-primary/5 to-primary/10"
+                : "border-PowderBlueBorder bg-white dark:bg-darkmode dark:border-dark_border"
+            }`}
+          >
+            {/* Popular Badge */}
+            {plan.isPopular && (
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <span className="bg-primary text-white px-4 py-1 rounded-full text-xs font-semibold shadow-md flex items-center gap-1">
+                  <Crown className="w-3 h-3" />
+                  Most Popular
+                </span>
+              </div>
+            )}
+
+            {/* Status Badge */}
+            <div className="absolute top-4 right-4">
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
+                  plan.isActive
+                    ? "bg-Aquamarine/20 text-Salem dark:bg-Aquamarine/30"
+                    : "bg-SlateBlueText/20 text-SlateBlueText dark:bg-darktext/30"
+                }`}
+              >
+                <CheckCircle className="w-3 h-3" />
+                {plan.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+
+            {/* Plan Header */}
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-2">
+                {plan.name}
+              </h3>
+              <p className="text-sm text-SlateBlueText dark:text-darktext">
+                {plan.description}
+              </p>
+            </div>
+
+            {/* Pricing */}
+            <div className="text-center mb-6">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <span className="text-2xl flex gap-1 items-center font-bold text-MidnightNavyText dark:text-white">
+                  {plan.currency == "USD" ? (
+                    <DollarSign className="inline-block w-5 h-5" />
+                  ) : plan.currency == "EUR" ? (
+                    <Euro className="inline-block w-5 h-5" />
+                  ) : (
+                    <EgyptianPoundIcon size={15} />
+                  )}
+                  {plan.price}
+                </span>
+                <span className="text-sm text-SlateBlueText dark:text-darktext mt-1">
+                  /{plan.billingPeriod}
+                </span>
+              </div>
+
+              {plan.originalPrice && plan.discount && (
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-sm flex gap-1 items-center text-SlateBlueText dark:text-darktext line-through">
+                    {plan.currency == "USD" ? (
+                      <DollarSign className="inline-block w-5 h-5" />
+                    ) : plan.currency == "EUR" ? (
+                      <Euro className="inline-block w-5 h-5" />
+                    ) : (
+                      <EgyptianPoundIcon size={15} />
+                    )}
+                    {plan.originalPrice}
+                  </span>
+                  <span className="bg-Aquamarine/20 text-Salem px-2 py-1 rounded-full text-xs font-semibold">
+                    Save {plan.discount}%
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Features */}
+            <div className="space-y-3 mb-6">
+              <h4 className="text-sm font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
+                <Lightbulb className="w-4 h-4 text-primary" />
+                Features Included:
+              </h4>
+              <div className="space-y-2">
+                {plan.features.slice(0, 6).map((feature, index) => (
+                  <div
+                    key={`feature-${plan._id}-${index}`}
+                    className="flex items-center gap-2"
+                  >
+                    <div className="w-1.5 h-1.5 bg-primary rounded-full flex-shrink-0"></div>
+                    <span className="text-sm text-SlateBlueText dark:text-darktext">
+                      {feature}
+                    </span>
+                  </div>
+                ))}
+                {plan.features.length > 6 && (
+                  <div className="text-xs text-SlateBlueText dark:text-darktext text-center pt-1">
+                    +{plan.features.length - 6} more features
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Plan Details */}
+            <div className="grid grid-cols-2 gap-3 text-xs text-SlateBlueText dark:text-darktext mb-6">
+              <div className="flex items-center gap-2">
+                <Globe className="w-3 h-3" />
+                <span className="capitalize">{plan.language}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="w-3 h-3" />
+                <span>{plan.maxStudents || "Unlimited"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-3 h-3" />
+                <span className="capitalize">{plan.type}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-3 h-3" />
+                <span>{plan.currency}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                {/* Edit */}
+                <button
+                  onClick={() => onEdit(plan)}
+                  aria-label="Edit plan"
+                  className="
+    w-full
+    bg-primary hover:bg-primary/90
+    text-white
+    py-2 px-3
+    rounded-lg
+    font-semibold text-sm
+    transition-transform transition-shadow duration-300
+    shadow-md hover:shadow-lg
+    transform hover:-translate-y-0.5 active:translate-y-0
+    focus:outline-none focus:ring-2 focus:ring-primary/30
+    flex items-center justify-center gap-2
+    group
+  "
+                >
+                  <Edit className="w-3 h-3 transition-transform duration-300 group-hover:-translate-y-0.5" />
+                  Edit
+                </button>
+
+                {/* Delete */}
+                <button
+                  onClick={() => onDelete(plan._id)}
+                  aria-label="Delete plan"
+                  className="
+    bg-SlateBlueText/10 hover:bg-SlateBlueText/20
+    dark:bg-darktext/20 dark:hover:bg-darktext/30
+    text-SlateBlueText dark:text-darktext
+    py-2 px-3
+    rounded-lg
+    font-semibold text-xs
+    transition-transform transition-colors transition-shadow duration-300
+    hover:scale-105 active:scale-100
+    shadow-sm hover:shadow-md
+    focus:outline-none focus:ring-2 focus:ring-SlateBlueText/20
+    flex items-center justify-center gap-2
+    group
+  "
+                >
+                  <Trash2 className="w-3 h-3 transition-transform duration-300 group-hover:rotate-12" />
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Empty State */}
+      {plans.length === 0 && (
+        <div className="text-center py-16 bg-white dark:bg-darkmode rounded-xl border border-PowderBlueBorder dark:border-dark_border">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Package className="w-8 h-8 text-primary" />
+          </div>
+          <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
+            No pricing plans yet
+          </h3>
+          <p className="text-sm text-SlateBlueText dark:text-darktext mb-6 max-w-md mx-auto">
+            Create your first pricing plan to start accepting subscriptions and
+            grow your business.
+          </p>
+          <button
+            onClick={() => setOpen(true)}
+            className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
+          >
+            <Plus className="w-4 h-4" />
+            Create Your First Plan
+          </button>
+        </div>
+      )}
+
+      {/* Modal */}
+      <Modal
+        open={open}
+        title={editing ? "Edit Pricing Plan" : "Create New Pricing Plan"}
+        onClose={() => {
+          setOpen(false);
+          setEditing(null);
+        }}
+      >
+        <PricingForm
+          initial={editing}
+          onClose={() => {
+            setOpen(false);
+            setEditing(null);
+          }}
+          onSaved={onSaved}
+        />
+      </Modal>
+    </div>
+  );
+}
