@@ -16,6 +16,7 @@ import {
   Trash2,
   Globe,
 } from "lucide-react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Props {
   initial?: any;
@@ -30,12 +31,14 @@ interface Speaker {
 }
 
 export default function WebinarForm({ initial, onClose, onSaved }: Props) {
+  const { t } = useI18n();
+
   // دالة لتحويل التاريخ من ISO إلى تنسيق datetime-local
   const formatDateTimeForInput = (dateTimeString: string) => {
     if (!dateTimeString) return "";
     try {
       const date = new Date(dateTimeString);
-      return date.toISOString().slice(0, 16); // يزيل الثواني و .000Z
+      return date.toISOString().slice(0, 16);
     } catch {
       return "";
     }
@@ -46,8 +49,8 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
     description: initial?.description || "",
     date: initial?.date || "",
     time: initial?.time || "",
-    duration: initial?.duration || 60, // إضافة المدة
-    image: initial?.image || "", // إضافة صورة الندوة
+    duration: initial?.duration || 60,
+    image: initial?.image || "",
     instructor: initial?.instructor || "",
     instructorImage: initial?.instructorImage || "",
     crmRegistrationUrl: initial?.crmRegistrationUrl || "",
@@ -64,7 +67,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
   const [newTagInput, setNewTagInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [instructorImagePreview, setInstructorImagePreview] = useState("");
-  const [webinarImagePreview, setWebinarImagePreview] = useState(""); // معاينة صورة الندوة
+  const [webinarImagePreview, setWebinarImagePreview] = useState("");
   const [speakers, setSpeakers] = useState<Speaker[]>(form.speakers);
   const [newSpeaker, setNewSpeaker] = useState<Speaker>({
     name: "",
@@ -73,14 +76,12 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
   });
   const [speakerImagePreview, setSpeakerImagePreview] = useState("");
 
-  // ✅ معاينة صورة المدرب
   useEffect(() => {
     if (form.instructorImage) {
       setInstructorImagePreview(form.instructorImage);
     }
   }, [form.instructorImage]);
 
-  // ✅ معاينة صورة الندوة
   useEffect(() => {
     if (form.image) {
       setWebinarImagePreview(form.image);
@@ -91,7 +92,6 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  // ✅ إضافة tag جديد
   const addTag = () => {
     const tag = newTagInput.trim();
     if (tag && !tags.includes(tag)) {
@@ -102,14 +102,12 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // ✅ حذف tag
   const removeTag = (index: number) => {
     const updatedTags = tags.filter((_, i) => i !== index);
     setTags(updatedTags);
     onChange("tags", updatedTags);
   };
 
-  // ✅ إدخال بالزر Enter للـ tags
   const handleTagKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -117,7 +115,6 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // ✅ معالجة رفع صورة المتحدث
   const handleSpeakerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -131,7 +128,6 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // ✅ إضافة متحدث جديد
   const addSpeaker = () => {
     if (newSpeaker.name.trim()) {
       const updatedSpeakers = [...speakers, { ...newSpeaker }];
@@ -142,14 +138,12 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // ✅ حذف متحدث
   const removeSpeaker = (index: number) => {
     const updatedSpeakers = speakers.filter((_, i) => i !== index);
     setSpeakers(updatedSpeakers);
     onChange("speakers", updatedSpeakers);
   };
 
-  // ✅ معالجة رفع صورة المدرب
   const handleInstructorImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -163,7 +157,6 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // ✅ معالجة رفع صورة الندوة
   const handleWebinarImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -182,7 +175,6 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
     setLoading(true);
 
     try {
-      // دالة لتحويل من datetime-local إلى ISO
       const parseDateTimeToISO = (dateTimeString: string) => {
         if (!dateTimeString) return "";
         try {
@@ -204,7 +196,6 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
 
       const method = initial?._id ? "PUT" : "POST";
       
-      // بناء الرابط الصحيح
       let url = "/api/webinars";
       if (initial?._id) {
         url = `/api/webinars?id=${encodeURIComponent(initial._id)}`;
@@ -216,21 +207,18 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
         body: JSON.stringify(payload),
       });
 
-      // تحقق من حالة الرد أولاً
       if (!res.ok) {
         let errorMessage = `HTTP error! status: ${res.status}`;
         try {
           const errorData = await res.json();
           errorMessage = errorData.message || errorMessage;
         } catch {
-          // إذا فشل تحويل JSON، اقرأ النص العادي
           const text = await res.text();
           errorMessage = text || errorMessage;
         }
         throw new Error(errorMessage);
       }
 
-      // إذا كان الرد ناجحاً، تابع
       const result = await res.json();
       if (result.success) {
         onSaved();
@@ -240,7 +228,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
       }
     } catch (err: any) {
       console.error("Error:", err);
-      alert(`An error occurred: ${err.message}`);
+      alert(`${t('webinar.saveError') || "An error occurred"}: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -256,10 +244,10 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Webinar Information
+              {t('webinar.basicInfo') || "Webinar Information"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Basic details about the webinar
+              {t('webinar.basicInfoDescription') || "Basic details about the webinar"}
             </p>
           </div>
         </div>
@@ -268,13 +256,13 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Calendar className="w-3 h-3 text-primary" />
-              Webinar Title *
+              {t('webinar.title') || "Webinar Title"} *
             </label>
             <input
               type="text"
               value={form.title}
               onChange={(e) => onChange("title", e.target.value)}
-              placeholder="e.g., Advanced React Patterns"
+              placeholder={t('webinar.titlePlaceholder') || "e.g., Advanced React Patterns"}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               required
             />
@@ -283,13 +271,13 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <User className="w-3 h-3 text-primary" />
-              Main Instructor *
+              {t('webinar.instructor') || "Main Instructor"} *
             </label>
             <input
               type="text"
               value={form.instructor}
               onChange={(e) => onChange("instructor", e.target.value)}
-              placeholder="Instructor name"
+              placeholder={t('webinar.instructorPlaceholder') || "Instructor name"}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               required
             />
@@ -299,13 +287,13 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <Calendar className="w-3 h-3 text-primary" />
-            Description *
+            {t('webinar.description') || "Description"} *
           </label>
           <textarea
             value={form.description}
             onChange={(e) => onChange("description", e.target.value)}
             rows={3}
-            placeholder="Describe the webinar content, learning objectives, and target audience..."
+            placeholder={t('webinar.descriptionPlaceholder') || "Describe the webinar content, learning objectives, and target audience..."}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200"
             required
           />
@@ -315,7 +303,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-3">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <Image className="w-3 h-3 text-primary" />
-            Webinar Cover Image
+            {t('webinar.coverImage') || "Webinar Cover Image"}
           </label>
           
           <div className="flex gap-4 items-start">
@@ -324,13 +312,13 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
                 type="text"
                 value={form.image}
                 onChange={(e) => onChange("image", e.target.value)}
-                placeholder="Image URL or upload file"
+                placeholder={t('webinar.imagePlaceholder') || "Image URL or upload file"}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
               <div className="mt-2">
                 <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
                   <Upload className="w-3 h-3" />
-                  Upload Image
+                  {t('webinar.uploadImage') || "Upload Image"}
                   <input
                     type="file"
                     accept="image/*"
@@ -348,7 +336,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
                     className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
                   >
                     <Trash2 className="w-3 h-3" />
-                    Remove
+                    {t('common.remove') || "Remove"}
                   </button>
                 )}
               </div>
@@ -375,19 +363,19 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Schedule & Timing
+              {t('webinar.schedule') || "Schedule & Timing"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Set date and time for the webinar
+              {t('webinar.scheduleDescription') || "Set date and time for the webinar"}
             </p>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Calendar className="w-3 h-3 text-Aquamarine" />
-              Date *
+              {t('webinar.date') || "Date"} *
             </label>
             <input
               type="date"
@@ -401,7 +389,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Clock className="w-3 h-3 text-Aquamarine" />
-              Time *
+              {t('webinar.time') || "Time"} *
             </label>
             <input
               type="time"
@@ -411,28 +399,13 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
               required
             />
           </div>
-
-          <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <Clock className="w-3 h-3 text-Aquamarine" />
-              Duration (minutes)
-            </label>
-            <input
-              type="number"
-              value={form.duration}
-              onChange={(e) => onChange("duration", parseInt(e.target.value) || 60)}
-              min="1"
-              placeholder="60"
-              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-            />
-          </div>
         </div>
 
         {/* Registration Period */}
         <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-              Registration Start
+              {t('webinar.registrationStart') || "Registration Start"}
             </label>
             <input
               type="datetime-local"
@@ -444,7 +417,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
 
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-              Registration End
+              {t('webinar.registrationEnd') || "Registration End"}
             </label>
             <input
               type="datetime-local"
@@ -456,7 +429,6 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
         </div>
       </div>
 
-      {/* باقي الكود يبقى كما هو بدون تغيير */}
       {/* Speakers */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
         <div className="flex items-center gap-3">
@@ -465,10 +437,10 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Speakers
+              {t('webinar.speakers') || "Speakers"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Add multiple speakers for this webinar
+              {t('webinar.speakersDescription') || "Add multiple speakers for this webinar"}
             </p>
           </div>
         </div>
@@ -476,7 +448,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
         {/* Add New Speaker */}
         <div className="space-y-3 p-4 bg-IcyBreeze dark:bg-dark_input rounded-lg">
           <h4 className="text-13 font-medium text-MidnightNavyText dark:text-white">
-            Add New Speaker
+            {t('webinar.addSpeaker') || "Add New Speaker"}
           </h4>
           
           <div className="grid md:grid-cols-2 gap-3">
@@ -484,14 +456,14 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
               type="text"
               value={newSpeaker.name}
               onChange={(e) => setNewSpeaker(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="Speaker name"
+              placeholder={t('webinar.speakerNamePlaceholder') || "Speaker name"}
               className="px-3 py-2 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13"
             />
             <input
               type="text"
               value={newSpeaker.role}
               onChange={(e) => setNewSpeaker(prev => ({ ...prev, role: e.target.value }))}
-              placeholder="Role/Title"
+              placeholder={t('webinar.speakerRolePlaceholder') || "Role/Title"}
               className="px-3 py-2 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13"
             />
           </div>
@@ -499,7 +471,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           {/* Speaker Image - URL or Upload */}
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-              Speaker Image
+              {t('webinar.speakerImage') || "Speaker Image"}
             </label>
             <div className="flex gap-3 items-start">
               <div className="flex-1">
@@ -510,13 +482,13 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
                     setNewSpeaker(prev => ({ ...prev, image: e.target.value }));
                     setSpeakerImagePreview(e.target.value);
                   }}
-                  placeholder="Image URL or upload file"
+                  placeholder={t('webinar.imagePlaceholder') || "Image URL or upload file"}
                   className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13"
                 />
                 <div className="mt-2 flex gap-2">
                   <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
                     <Upload className="w-3 h-3" />
-                    Upload Image
+                    {t('webinar.uploadImage') || "Upload Image"}
                     <input
                       type="file"
                       accept="image/*"
@@ -534,7 +506,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
                       className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />
-                      Remove
+                      {t('common.remove') || "Remove"}
                     </button>
                   )}
                 </div>
@@ -559,7 +531,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
             className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add Speaker
+            {t('webinar.addSpeakerButton') || "Add Speaker"}
           </button>
         </div>
 
@@ -567,7 +539,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
         {speakers.length > 0 && (
           <div className="space-y-3">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-              Added Speakers:
+              {t('webinar.addedSpeakers') || "Added Speakers"}:
             </label>
             <div className="space-y-2">
               {speakers.map((speaker, index) => (
@@ -614,10 +586,10 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Media & Registration
+              {t('webinar.mediaRegistration') || "Media & Registration"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Instructor image and registration details
+              {t('webinar.mediaRegistrationDescription') || "Instructor image and registration details"}
             </p>
           </div>
         </div>
@@ -626,7 +598,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-3">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <Image className="w-3 h-3 text-LightYellow" />
-            Instructor Image
+            {t('webinar.instructorImage') || "Instructor Image"}
           </label>
           
           <div className="flex gap-4 items-start">
@@ -635,13 +607,13 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
                 type="text"
                 value={form.instructorImage}
                 onChange={(e) => onChange("instructorImage", e.target.value)}
-                placeholder="Image URL or upload file"
+                placeholder={t('webinar.imagePlaceholder') || "Image URL or upload file"}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
               <div className="mt-2">
                 <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
                   <Upload className="w-3 h-3" />
-                  Upload Image
+                  {t('webinar.uploadImage') || "Upload Image"}
                   <input
                     type="file"
                     accept="image/*"
@@ -668,7 +640,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Link className="w-3 h-3 text-LightYellow" />
-              CRM Registration URL
+              {t('webinar.crmUrl') || "CRM Registration URL"}
             </label>
             <input
               type="url"
@@ -682,7 +654,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Users className="w-3 h-3 text-LightYellow" />
-              Max Attendees
+              {t('webinar.maxAttendees') || "Max Attendees"}
             </label>
             <input
               type="number"
@@ -703,10 +675,10 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Tags
+              {t('webinar.tags') || "Tags"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Add tags for better categorization and search
+              {t('webinar.tagsDescription') || "Add tags for better categorization and search"}
             </p>
           </div>
         </div>
@@ -720,7 +692,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
                 value={newTagInput}
                 onChange={(e) => setNewTagInput(e.target.value)}
                 onKeyPress={handleTagKeyPress}
-                placeholder="Enter a tag (e.g., React, JavaScript, Web Development)"
+                placeholder={t('webinar.tagsPlaceholder') || "Enter a tag (e.g., React, JavaScript, Web Development)"}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
             </div>
@@ -731,7 +703,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
               className="px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              Add
+              {t('common.add') || "Add"}
             </button>
           </div>
 
@@ -739,7 +711,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           {tags.length > 0 && (
             <div className="space-y-2">
               <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                Added Tags:
+                {t('webinar.addedTags') || "Added Tags"}:
               </label>
               <div className="flex flex-wrap gap-2">
                 {tags.map((tag, index) => (
@@ -762,7 +734,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           )}
 
           <p className="text-11 text-SlateBlueText dark:text-darktext">
-            Press Enter or click Add to include multiple tags
+            {t('webinar.tagsHint') || "Press Enter or click Add to include multiple tags"}
           </p>
         </div>
       </div>
@@ -775,10 +747,10 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Settings
+              {t('webinar.settings') || "Settings"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Webinar visibility and status
+              {t('webinar.settingsDescription') || "Webinar visibility and status"}
             </p>
           </div>
         </div>
@@ -797,11 +769,11 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
                   className="w-4 h-4 text-Aquamarine focus:ring-Aquamarine border-PowderBlueBorder rounded"
                 />
                 <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                  Active Webinar
+                  {t('webinar.activeWebinar') || "Active Webinar"}
                 </span>
               </div>
               <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                Make this webinar visible and available for registration
+                {t('webinar.activeDescription') || "Make this webinar visible and available for registration"}
               </p>
             </div>
           </label>
@@ -816,7 +788,7 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight hover:shadow-md flex items-center justify-center gap-2"
         >
           <X className="w-3 h-3" />
-          Cancel
+          {t('common.cancel') || "Cancel"}
         </button>
         <button
           type="submit"
@@ -826,17 +798,17 @@ export default function WebinarForm({ initial, onClose, onSaved }: Props) {
           {loading ? (
             <>
               <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Saving...
+              {t('common.saving') || "Saving..."}
             </>
           ) : initial ? (
             <>
               <Save className="w-3 h-3" />
-              Update Webinar
+              {t('webinar.updateWebinar') || "Update Webinar"}
             </>
           ) : (
             <>
               <Rocket className="w-3 h-3" />
-              Create Webinar
+              {t('webinar.createWebinar') || "Create Webinar"}
             </>
           )}
         </button>

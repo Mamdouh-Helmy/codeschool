@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Modal from "./Modal";
 import WebinarForm from "./WebinarForm";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Webinar {
   _id: string;
@@ -29,7 +30,7 @@ interface Webinar {
   date: string;
   time: string;
   duration: number;
-  image: string; // إضافة صورة الندوة
+  image: string;
   instructor: string;
   instructorImage: string;
   crmRegistrationUrl: string;
@@ -49,6 +50,7 @@ interface Webinar {
 }
 
 export default function WebinarAdmin() {
+  const { t } = useI18n();
   const [webinars, setWebinars] = useState<Webinar[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -101,7 +103,7 @@ export default function WebinarAdmin() {
       }
     } catch (err) {
       console.error("Error loading webinars:", err);
-      toast.error("Failed to load webinars");
+      toast.error(t('webinar.failedToLoad') || "Failed to load webinars");
     } finally {
       setLoading(false);
     }
@@ -113,7 +115,7 @@ export default function WebinarAdmin() {
 
   const onSaved = async () => {
     await loadWebinars();
-    toast.success("Webinar saved successfully");
+    toast.success(t('webinar.savedSuccess') || "Webinar saved successfully");
   };
 
   const onEdit = (webinar: Webinar) => {
@@ -122,8 +124,17 @@ export default function WebinarAdmin() {
   };
 
   const onDelete = async (id: string) => {
+    // الحل: استخدام النصوص المترجمة مباشرة خارج دالة toast
+    const deleteConfirm = t('webinar.deleteConfirm') || "Are you sure you want to delete this webinar?";
+    const deleteWarning = t('webinar.deleteWarning') || "This action cannot be undone.";
+    const cancelText = t('common.cancel') || "Cancel";
+    const deleteText = t('common.delete') || "Delete";
+    const deletedSuccess = t('webinar.deletedSuccess') || "Webinar deleted successfully";
+    const deleteFailed = t('webinar.deleteFailed') || "Failed to delete the webinar";
+    const deleteError = t('webinar.deleteError') || "Error deleting webinar";
+
     toast(
-      (t) => (
+      (toastInstance) => (
         <div className="w-404 max-w-full bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none dark:border-dark_border p-4">
           <div className="flex items-start gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold">
@@ -131,24 +142,24 @@ export default function WebinarAdmin() {
             </div>
             <div className="flex-1">
               <p className="text-16 font-semibold">
-                Are you sure you want to delete this webinar?
+                {deleteConfirm}
               </p>
               <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                This action cannot be undone.
+                {deleteWarning}
               </p>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
               className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-              onClick={() => toast.dismiss(t.id)}
+              onClick={() => toast.dismiss(toastInstance.id)}
             >
-              Cancel
+              {cancelText}
             </button>
             <button
               className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
               onClick={async () => {
-                toast.dismiss(t.id);
+                toast.dismiss(toastInstance.id);
                 try {
                   const res = await fetch(
                     `/api/webinars?id=${encodeURIComponent(id)}`,
@@ -158,17 +169,17 @@ export default function WebinarAdmin() {
                   );
                   if (res.ok) {
                     setWebinars((prev) => prev.filter((w) => w._id !== id));
-                    toast.success("Webinar deleted successfully");
+                    toast.success(deletedSuccess);
                   } else {
-                    toast.error("Failed to delete the webinar");
+                    toast.error(deleteFailed);
                   }
                 } catch (err) {
                   console.error("Error deleting webinar:", err);
-                  toast.error("Error deleting webinar");
+                  toast.error(deleteError);
                 }
               }}
             >
-              Delete
+              {deleteText}
             </button>
           </div>
         </div>
@@ -193,11 +204,10 @@ export default function WebinarAdmin() {
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
               <Video className="w-7 h-7 text-primary" />
-              Webinars Management
+              {t('webinar.management') || "Webinars Management"}
             </h1>
             <p className="text-sm text-SlateBlueText dark:text-darktext max-w-2xl">
-              Manage online webinars and conferences. Schedule sessions, manage
-              speakers, and track registrations.
+              {t('webinar.managementDescription') || "Manage online webinars and conferences. Schedule sessions, manage speakers, and track registrations."}
             </p>
           </div>
           <button
@@ -208,7 +218,7 @@ export default function WebinarAdmin() {
             className="mt-4 lg:mt-0 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add New Webinar
+            {t('webinar.addNew') || "Add New Webinar"}
           </button>
         </div>
       </div>
@@ -219,7 +229,7 @@ export default function WebinarAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Webinars
+                {t('webinar.totalWebinars') || "Total Webinars"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {webinars.length}
@@ -235,7 +245,7 @@ export default function WebinarAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Active Webinars
+                {t('webinar.activeWebinars') || "Active Webinars"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {webinars.filter((w) => w.isActive).length}
@@ -251,7 +261,7 @@ export default function WebinarAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Speakers
+                {t('webinar.totalSpeakers') || "Total Speakers"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {webinars.reduce(
@@ -270,7 +280,7 @@ export default function WebinarAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Avg. Attendees
+                {t('webinar.avgAttendees') || "Avg. Attendees"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {webinars.length > 0
@@ -302,11 +312,11 @@ export default function WebinarAdmin() {
           };
 
           const statusText = {
-            active: "Active",
-            upcoming: "Upcoming",
-            expired: "Expired",
-            "registration-closed": "Registration Closed",
-            inactive: "Inactive",
+            active: t('webinar.status.active') || "Active",
+            upcoming: t('webinar.status.upcoming') || "Upcoming",
+            expired: t('webinar.status.expired') || "Expired",
+            "registration-closed": t('webinar.status.registrationClosed') || "Registration Closed",
+            inactive: t('webinar.status.inactive') || "Inactive",
           };
 
           return (
@@ -372,7 +382,7 @@ export default function WebinarAdmin() {
                 {webinar.speakers && webinar.speakers.length > 0 && (
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
-                      Speakers ({webinar.speakers.length})
+                      {t('webinar.speakers') || "Speakers"} ({webinar.speakers.length})
                     </h4>
                     <div className="flex flex-wrap gap-1">
                       {webinar.speakers.slice(0, 3).map((speaker, index) => (
@@ -397,13 +407,13 @@ export default function WebinarAdmin() {
                   <div className="flex items-center gap-1">
                     <Users className="w-3 h-3" />
                     <span>
-                      {webinar.currentAttendees}/{webinar.maxAttendees} attendees
+                      {webinar.currentAttendees}/{webinar.maxAttendees} {t('webinar.attendees') || "attendees"}
                     </span>
                   </div>
                   {webinar.crmRegistrationUrl && (
                     <div className="flex items-center gap-1">
                       <Link className="w-3 h-3" />
-                      <span>CRM Linked</span>
+                      <span>{t('webinar.crmLinked') || "CRM Linked"}</span>
                     </div>
                   )}
                 </div>
@@ -433,7 +443,7 @@ export default function WebinarAdmin() {
                       className="w-full bg-primary hover:bg-primary/90 text-white py-2 px-3 rounded-lg font-semibold text-sm transition-transform transition-shadow duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-primary/30 flex items-center justify-center gap-2 group"
                     >
                       <Edit className="w-3 h-3 transition-transform duration-300 group-hover:-translate-y-0.5" />
-                      Edit
+                      {t('common.edit') || "Edit"}
                     </button>
 
                     {/* Delete */}
@@ -442,7 +452,7 @@ export default function WebinarAdmin() {
                       className="bg-SlateBlueText/10 hover:bg-SlateBlueText/20 dark:bg-darktext/20 dark:hover:bg-darktext/30 text-SlateBlueText dark:text-darktext py-2 px-3 rounded-lg font-semibold text-xs transition-transform transition-colors transition-shadow duration-300 hover:scale-105 active:scale-100 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-SlateBlueText/20 flex items-center justify-center gap-2 group"
                     >
                       <Trash2 className="w-3 h-3 transition-transform duration-300 group-hover:rotate-12" />
-                      Delete
+                      {t('common.delete') || "Delete"}
                     </button>
                   </div>
                 </div>
@@ -459,18 +469,17 @@ export default function WebinarAdmin() {
             <Video className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
-            No webinars yet
+            {t('webinar.noWebinars') || "No webinars yet"}
           </h3>
           <p className="text-sm text-SlateBlueText dark:text-darktext mb-6 max-w-md mx-auto">
-            Create your first webinar to start engaging with students and
-            sharing knowledge.
+            {t('webinar.createFirst') || "Create your first webinar to start engaging with students and sharing knowledge."}
           </p>
           <button
             onClick={() => setOpen(true)}
             className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
           >
             <Plus className="w-4 h-4" />
-            Create Your First Webinar
+            {t('webinar.createFirstButton') || "Create Your First Webinar"}
           </button>
         </div>
       )}
@@ -478,7 +487,7 @@ export default function WebinarAdmin() {
       {/* Modal */}
       <Modal
         open={open}
-        title={editing ? "Edit Webinar" : "Create New Webinar"}
+        title={editing ? t('webinar.editWebinar') || "Edit Webinar" : t('webinar.createWebinar') || "Create New Webinar"}
         onClose={() => {
           setOpen(false);
           setEditing(null);

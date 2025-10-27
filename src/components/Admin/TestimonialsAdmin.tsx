@@ -137,18 +137,20 @@ export default function TestimonialsAdmin() {
     );
   };
 
-  // تصفية التوصيات
-  const filteredTestimonials = testimonials.filter((testimonial) => {
-    const matchesSearch = testimonial.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         testimonial.courseTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         testimonial.comment.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFeatured = filterFeatured === null || testimonial.featured === filterFeatured;
-    
-    return matchesSearch && matchesFeatured;
-  });
-
-  // عرض النجوم
+ 
+const filteredTestimonials = testimonials.filter((testimonial) => {
+  const searchTermLower = searchTerm.toLowerCase();
+  
+  const matchesSearch = 
+    (testimonial.studentName?.toLowerCase() || '').includes(searchTermLower) ||
+    (testimonial.courseTitle?.toLowerCase() || '').includes(searchTermLower) ||
+    (testimonial.comment?.toLowerCase() || '').includes(searchTermLower);
+  
+  const matchesFeatured = filterFeatured === null || testimonial.featured === filterFeatured;
+  
+  return matchesSearch && matchesFeatured;
+});
+ 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }).map((_, index) => (
       <Star

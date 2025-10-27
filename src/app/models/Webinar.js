@@ -40,12 +40,10 @@ const WebinarSchema = new mongoose.Schema(
   }
 );
 
-// Virtual for formatted date
 WebinarSchema.virtual('formattedDate').get(function() {
   return this.date ? new Date(this.date).toLocaleDateString('en-US') : '';
 });
 
-// Virtual for formatted time
 WebinarSchema.virtual('formattedTime').get(function() {
   if (!this.time) return '';
   const [hours, minutes] = this.time.split(':');

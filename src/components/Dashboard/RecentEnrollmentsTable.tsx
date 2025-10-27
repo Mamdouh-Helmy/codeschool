@@ -1,3 +1,7 @@
+// RecentEnrollmentsTable.tsx
+"use client";
+import { useI18n } from "@/i18n/I18nProvider";
+
 type EnrollmentStatus = "active" | "pending" | "trial";
 
 export type EnrollmentRecord = {
@@ -30,23 +34,37 @@ const statusConfig: Record<EnrollmentStatus, { label: string; className: string 
 };
 
 const RecentEnrollmentsTable = ({ records }: RecentEnrollmentsTableProps) => {
+  const { t } = useI18n();
+
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-dark_border dark:bg-darklight">
       <header className="border-b border-slate-200 px-4 sm:px-6 py-4 dark:border-dark_border">
-        <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white">Latest enrollments</h3>
+        <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white">
+          {t('dashboard.latestEnrollments') || 'Latest enrollments'}
+        </h3>
         <p className="text-sm text-slate-500 dark:text-darktext">
-          Track the newest learners joining your programs this quarter.
+          {t('dashboard.enrollmentsDescription') || 'Track the newest learners joining your programs this quarter.'}
         </p>
       </header>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200 dark:divide-dark_border">
           <thead className="bg-slate-50 dark:bg-darkmode">
             <tr>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">Learner</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">Course</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">Progress</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">Enrolled on</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">Status</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">
+                {t('dashboard.learner') || 'Learner'}
+              </th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">
+                {t('dashboard.course') || 'Course'}
+              </th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">
+                {t('dashboard.progress') || 'Progress'}
+              </th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">
+                {t('dashboard.enrolledOn') || 'Enrolled on'}
+              </th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-darktext">
+                {t('dashboard.status') || 'Status'}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 bg-white dark:divide-dark_border dark:bg-darklight">

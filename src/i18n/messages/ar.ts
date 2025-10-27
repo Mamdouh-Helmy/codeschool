@@ -1,14 +1,11 @@
+// i18n/messages/ar.js
 const ar = {
-
-  
-  // Header
   "header.signIn": "تسجيل الدخول",
   "header.signUp": "إنشاء حساب",
   "header.menu": "القائمة",
   "header.profile": "الملف الشخصي",
   "header.signOut": "تسجيل الخروج",
 
-  // Hero
   "hero.title": "إطلاق طاقة المبدعين الصغار!",
   "hero.nextEvent": "انضم إلى فعالية {title} القادمة بتاريخ {date}.",
   "hero.webinar": "انضم إلى ندوتنا القادمة بتاريخ {date}.",
@@ -21,7 +18,7 @@ const ar = {
   "hero.instructor1Role": "تعلم الآلة",
   "hero.instructor2": "فريدة عبدالله",
   "hero.instructor2Role": "تطوير الويب",
-  // Pricing
+
   "pricing.choose": "اختر مسارك التعليمي",
   "pricing.loading": "جاري تحميل خطط الأسعار...",
   "pricing.choosePlan": "اختر هذه الخطة",
@@ -31,12 +28,14 @@ const ar = {
   "pricing.card": "الدفع بالبطاقة",
   "pricing.bank": "تحويل بنكي",
   "pricing.total": "المبلغ الإجمالي",
-  // Schedules
+
   "schedules.tba": "لاحقًا",
   "schedules.joinNow": "انضم الآن",
   "schedules.cachedNotice": "يتم عرض جدول مخزن مؤقتًا وقد لا يكون محدثًا.",
   "schedules.speechBy": "يتحدث",
-  // Contact
+  "schedules.subtitle":
+    "اكتشف ثروة من المواد الثاقبة المصممة بدقة لتوفر لك فهمًا شاملاً.",
+
   "contact.getInTouch": "تواصل معنا",
   "contact.subtitle": "هل لديك سؤال أو فكرة؟ يسعدنا سماعك.",
   "contact.firstName": "الاسم الأول*",
@@ -47,7 +46,7 @@ const ar = {
   "contact.date": "التاريخ*",
   "contact.time": "الوقت*",
   "contact.makeAppointment": "احجز موعدًا",
-  // Navigation
+
   "nav.homepage": "الرئيسية",
   "nav.schedules": "الجداول",
   "nav.speakers": "المتحدثون",
@@ -61,11 +60,9 @@ const ar = {
   "nav.signOut": "تسجيل الخروج",
   "nav.latestArticle": "أحدث المقالات",
 
-  // Theme Toggler
   "theme.toggleLight": "التبديل للوضع النهاري",
   "theme.toggleDark": "التبديل للوضع الليلي",
 
-  // Blog
   "blog.loading": "جاري تحميل المقالات...",
   "blog.cachedNotice": "يتم عرض مقالات مخزنة مؤقتًا وقد لا تكون محدثة.",
   "blog.latest": "أحدث المقالات",
@@ -83,7 +80,21 @@ const ar = {
   "blog.popularTags": "الوسوم الشائعة",
   "blog.minRead": "دقيقة قراءة",
   "blog.views": "مشاهدة",
-  // Common
+
+  "blog.notFound": "المقال غير موجود",
+  "blog.notFoundDescription": "المقال الذي تبحث عنه غير موجود أو تم حذفه.",
+  "blog.author": "مؤلف",
+  "blog.unknownAuthor": "مؤلف غير معروف",
+  "blog.imageAlt": "صورة المقال",
+  "blog.noContent": "لا يوجد محتوى متاح لهذا المقال.",
+
+  "blog.noArticles": "لم يتم العثور على مقالات.",
+  "blog.cover": "غلاف المقال",
+  "blog.article": "مقال",
+  "blog.untitled": "مقال بدون عنوان",
+  "blog.by": "بواسطة",
+  "blog.errorLoading": "خطأ في تحميل المقال",
+
   "common.english": "English",
   "common.arabic": "العربية",
   "common.loading": "جاري التحميل",
@@ -98,7 +109,6 @@ const ar = {
   "youngStars.thinkers": "مبتكرون",
   "youngStars.meetLeaders": "تعرف على المزيد من القادة",
 
-  // Projects
   "projects.title": "ماذا يبني طلابنا في مدرسة البرمجة",
   "projects.exploreMore": "استكشف المزيد من المشاريع",
   "projects.allProjects": "جميع مشاريع الطلاب",
@@ -108,7 +118,6 @@ const ar = {
   "projects.viewPortfolio": "عرض المحفظة",
   "common.close": "إغلاق",
 
-  // Event Ticket
   "eventTicket.title": "فصل Code School الرئيسي المجاني اليوم!",
   "eventTicket.description":
     "غالبًا ما يبدأ الفضول، وغالبًا ما تبدأ شرارات الدهشة في بناء أول عرض برمجة حقيقي على المنصة. بإرشاد من المرشدين الذين يعلمون المهارات باستخدام أدوات مثل Sprite Lab، وماينكرافت أيضًا - قدمت Code School للأطفال منصة رقمية حيث ينمو العبقرية.",
@@ -124,7 +133,6 @@ const ar = {
   "eventTicket.subscribe": "اشترك",
   "eventTicket.viewAllSubscriptions": "عرض جميع الاشتراكات",
 
-  // Highlight Section
   "highlight.title.main": "مدرسة البرمجة",
   "highlight.title.highlighted": "في العمل",
   "highlight.description":
@@ -143,21 +151,17 @@ const ar = {
   "highlight.modalDescription":
     "اكتشف كيف يحول المبرمجون الصغار الأفكار إلى واقع",
 
-  // Upcoming Events
   "upcoming.title": "المؤتمر القادم",
   "upcoming.speechBy": "يتحدث",
   "upcoming.tba": "لاحقًا",
   "upcoming.registerNow": "سجل الآن",
   "upcoming.noEvents": "لا توجد أحداث قادمة في الوقت الحالي",
 
-  // Ticket Section
   "ticketSection.title": "كن جزءًا من التطور الرقمي!",
   "ticketSection.ticketAlt": "تذكرة",
   "ticketSection.choosePlan": "اختر الخطة",
   "ticketSection.loadError": "فشل تحميل خطط الأسعار.",
   "ticketSection.noPlans": "لا توجد خطط تسعير نشطة متاحة.",
-
-  // Testimonials
 
   "testimonials.heading": "ماذا يقول المشاركون",
   "testimonials.cachedNotice": "يتم عرض شهادات مخزنة مؤقتًا وقد لا تكون محدثة.",
@@ -167,7 +171,6 @@ const ar = {
   "testimonials.course": "الدورة",
   "testimonials.rating": "التقييم",
 
-  // Footer
   "footer.logoAlt": "شعار الموقع",
   "footer.about": "من نحن",
   "footer.sponsors": "الرعاة",
@@ -177,9 +180,6 @@ const ar = {
   "footer.emailPlaceholder": "البريد الإلكتروني*",
   "footer.subscribe": "اشترك",
 
-
-
-   // Auth Components
   "auth.signIn": "تسجيل الدخول",
   "auth.signUp": "إنشاء حساب",
   "auth.email": "البريد الإلكتروني",
@@ -209,7 +209,6 @@ const ar = {
   "auth.validation.shortName": "الاسم يجب أن يكون حرفين على الأقل",
   "auth.validation.passwordsMismatch": "كلمات المرور غير متطابقة",
 
-  // Profile Components
   "profile.title": "الملف الشخصي",
   "profile.editProfile": "تعديل الملف الشخصي",
   "profile.changePhoto": "تغيير الصورة",
@@ -225,22 +224,20 @@ const ar = {
   "profile.noChanges": "لم تقم بإجراء أي تغييرات",
   "profile.sessionExpired": "انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى",
   "profile.validation.nameLength": "الاسم يجب أن يكون حرفين على الأقل",
-  "profile.validation.passwordLength": "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
-  "profile.validation.invalidImageType": "يجب أن تكون الصورة من نوع JPG, PNG, أو WEBP",
+  "profile.validation.passwordLength":
+    "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
+  "profile.validation.invalidImageType":
+    "يجب أن تكون الصورة من نوع JPG, PNG, أو WEBP",
   "profile.validation.imageTooLarge": "حجم الصورة يجب أن يكون أقل من 2MB",
 
-  // Social Auth
   "social.signInWith": "تسجيل الدخول باستخدام",
   "social.signUpWith": "إنشاء حساب باستخدام",
 
-  // Common
- 
   "common.saving": "جاري الحفظ...",
   "common.success": "نجح",
   "common.error": "خطأ",
   "common.warning": "تحذير",
   "common.info": "معلومة",
-
   "common.submit": "إرسال",
   "common.reset": "إعادة تعيين",
   "common.search": "بحث",
@@ -290,7 +287,6 @@ const ar = {
   "common.fileTooLarge": "الملف كبير جداً",
   "common.unsupportedType": "نوع غير مدعوم",
 
-  // Form Validation
   "validation.required": "هذا الحقل مطلوب",
   "validation.email": "يرجى إدخال بريد إلكتروني صحيح",
   "validation.minLength": "يجب أن يكون على الأقل {min} أحرف",
@@ -298,21 +294,674 @@ const ar = {
   "validation.passwordStrength": "كلمة المرور ضعيفة",
   "validation.passwordsMatch": "كلمات المرور غير متطابقة",
 
-  // Navigation
   "nav.home": "الرئيسية",
   "nav.about": "عننا",
   "nav.services": "الخدمات",
- 
   "nav.portfolio": "الأعمال",
   "nav.settings": "الإعدادات",
-  
   "nav.logout": "تسجيل الخروج",
 
-  // Privacy and Terms
   "auth.privacyAgreement": "بإنشاء حساب فإنك توافق على",
   "auth.termsOfService": "شروط الخدمة",
   "auth.privacyPolicy": "سياسة الخصوصية",
-  "auth.and": "و"
+  "auth.and": "و",
+
+  "pricing.noPlans": "لا توجد خطط تسعير متاحة.",
+  "pricing.loadError": "فشل تحميل خطط الأسعار.",
+
+  "contact.emailUs": "راسلنا عبر البريد",
+  "contact.emailDescription":
+    "للاستفسارات التجارية أو شراكات الأعمال، تواصل مع مطور الأعمال لدينا. سنرد عليك في أقرب وقت.",
+  "contact.sendEmail": "أرسل بريدًا إلكترونيًا",
+  "contact.messageUs": "راسلنا",
+  "contact.messageDescription":
+    "الأهالي مرحب بهم للتواصل معنا عبر واتساب للحصول على تفاصيل البرنامج، التسجيل، أو المتابعة.",
+  "contact.sendMessage": "أرسل رسالة",
+
+  "dashboard.latestActivity": "أحدث النشاطات",
+  "dashboard.activityDescription":
+    "راقب التحديثات الهامة من المجتمع والفريق الداخلي.",
+  "dashboard.contentPerformance": "أداء المحتوى",
+  "dashboard.contentDescription":
+    "راجع كيف تتفاعل مقالات المدونة والوثائق مع الطلاب.",
+  "dashboard.quickActions": "إجراءات سريعة",
+  "dashboard.latestEnrollments": "أحدث التسجيلات",
+  "dashboard.enrollmentsDescription":
+    "تتبع أحدث المتعلمين المنضمين إلى برامجك هذا الربع.",
+  "dashboard.learner": "المتعلم",
+  "dashboard.course": "الدورة",
+  "dashboard.progress": "التقدم",
+  "dashboard.enrolledOn": "تاريخ التسجيل",
+  "dashboard.status": "الحالة",
+  "dashboard.adminConsole": "لوحة التحكم",
+  "dashboard.openNavigation": "فتح القائمة",
+  "dashboard.closeNavigation": "إغلاق القائمة",
+  "dashboard.searchPlaceholder": "ابحث في التقارير، المستخدمين، أو الأحداث",
+  "dashboard.scheduleReview": "مراجعة الجدول",
+  "dashboard.viewNotifications": "عرض الإشعارات",
+  "dashboard.user": "مستخدم",
+  "dashboard.overview": "نظرة عامة",
+  "dashboard.webinars": "الندوات",
+  "dashboard.projects": "المشاريع",
+  "dashboard.blogs": "المدونة",
+  "dashboard.events": "الأحداث",
+  "dashboard.testimonials": "آراء العملاء",
+  "dashboard.totalStudents": "إجمالي الطلاب",
+  "dashboard.activeSubscriptions": "الاشتراكات النشطة",
+  "dashboard.monthlyRevenue": "الإيراد الشهري",
+  "dashboard.courseCompletion": "إكمال الدورة",
+  "dashboard.vsLastMonth": "مقارنة بالشهر الماضي",
+  "dashboard.studentEngagement": "تفاعل الطلاب",
+  "dashboard.weeklyProgress": "التقدم الأسبوعي عبر جميع الدورات",
+  "dashboard.weeklyTarget": "الهدف الأسبوعي",
+  "dashboard.completionGoal": "85% إكمال",
+  "dashboard.adminDashboard": "لوحة تحكم المدير",
+  "dashboard.welcomeMessage": "مرحباً بك في لوحة التحكم - بيانات مباشرة",
+  "dashboard.errorLoading": "خطأ في تحميل لوحة التحكم",
+  "dashboard.errorMessage": "يرجى التحقق من نقاط نهاية API والمحاولة مرة أخرى.",
+  "dashboard.realData": "بيانات حقيقية",
+  "dashboard.avgEngagement": "متوسط",
+  "dashboard.engagement": "تفاعل",
+  "dashboard.liveMetrics": "مقاييس مباشرة",
+  "dashboard.loadingData": "جاري تحميل بيانات الأداء الحقيقية...",
+  "dashboard.weeklyAverage": "المتوسط الأسبوعي",
+  "common.new": "جديد",
+
+  // Webinar keys
+  "webinar.management": "إدارة الندوات",
+  "webinar.managementDescription":
+    "إدارة الندوات والمؤتمرات عبر الإنترنت. جدولة الجلسات، إدارة المتحدثين، ومتابعة التسجيلات.",
+  "webinar.addNew": "إضافة ندوة جديدة",
+  "webinar.totalWebinars": "إجمالي الندوات",
+  "webinar.activeWebinars": "الندوات النشطة",
+  "webinar.totalSpeakers": "إجمالي المتحدثين",
+  "webinar.avgAttendees": "متوسط الحضور",
+  "webinar.speakers": "المتحدثين",
+  "webinar.attendees": "مشترك",
+  "webinar.crmLinked": "مرتبط بـ CRM",
+  "webinar.noWebinars": "لا توجد ندوات بعد",
+  "webinar.createFirst":
+    "أنشئ أول ندوة لك للبدء في التفاعل مع الطلاب ومشاركة المعرفة.",
+  "webinar.createFirstButton": "أنشئ أول ندوة لك",
+  "webinar.editWebinar": "تعديل الندوة",
+  "webinar.createWebinar": "إنشاء ندوة جديدة",
+  "webinar.failedToLoad": "فشل تحميل الندوات",
+  "webinar.savedSuccess": "تم حفظ الندوة بنجاح",
+  "webinar.deleteConfirm": "هل أنت متأكد أنك تريد حذف هذه الندوة؟",
+  "webinar.deleteWarning": "لا يمكن التراجع عن هذا الإجراء.",
+  "webinar.deletedSuccess": "تم حذف الندوة بنجاح",
+  "webinar.deleteFailed": "فشل حذف الندوة",
+  "webinar.deleteError": "خطأ في حذف الندوة",
+  "webinar.status.active": "نشط",
+  "webinar.status.upcoming": "قادم",
+  "webinar.status.expired": "منتهي",
+  "webinar.status.registrationClosed": "التسجيل مغلق",
+  "webinar.status.inactive": "غير نشط",
+
+  // Webinar form keys
+  "webinar.basicInfo": "معلومات الندوة",
+  "webinar.basicInfoDescription": "التفاصيل الأساسية عن الندوة",
+  "webinar.title": "عنوان الندوة",
+  "webinar.titlePlaceholder": "مثال: أنماط ريأكت المتقدمة",
+  "webinar.instructor": "المدرب الرئيسي",
+  "webinar.instructorPlaceholder": "اسم المدرب",
+  "webinar.description": "الوصف",
+  "webinar.descriptionPlaceholder":
+    "صف محتوى الندوة، أهداف التعلم، والجمهور المستهدف...",
+  "webinar.coverImage": "صورة الغلاف",
+  "webinar.imagePlaceholder": "رابط الصورة أو رفع ملف",
+  "webinar.uploadImage": "رفع صورة",
+  "webinar.schedule": "الجدول والمواعيد",
+  "webinar.scheduleDescription": "تعيين التاريخ والوقت للندوة",
+  "webinar.date": "التاريخ",
+  "webinar.time": "الوقت",
+  "webinar.duration": "المدة (بالدقائق)",
+  "webinar.registrationStart": "بداية التسجيل",
+  "webinar.registrationEnd": "نهاية التسجيل",
+
+  "webinar.speakersDescription": "إضافة متحدثين متعددين لهذه الندوة",
+  "webinar.addSpeaker": "إضافة متحدث جديد",
+  "webinar.speakerNamePlaceholder": "اسم المتحدث",
+  "webinar.speakerRolePlaceholder": "الدور/المسمى الوظيفي",
+  "webinar.speakerImage": "صورة المتحدث",
+  "webinar.addSpeakerButton": "إضافة متحدث",
+  "webinar.addedSpeakers": "المتحدثين المضافين",
+  "webinar.mediaRegistration": "الوسائط والتسجيل",
+  "webinar.mediaRegistrationDescription": "صورة المدرب وتفاصيل التسجيل",
+  "webinar.instructorImage": "صورة المدرب",
+  "webinar.crmUrl": "رابط تسجيل CRM",
+  "webinar.maxAttendees": "الحد الأقصى للحضور",
+  "webinar.tags": "الوسوم",
+  "webinar.tagsDescription": "إضافة وسوم لتحسين التصنيف والبحث",
+  "webinar.tagsPlaceholder": "أدخل وسم (مثال: ريأكت، جافاسكريبت، تطوير الويب)",
+  "webinar.addedTags": "الوسوم المضافوة",
+  "webinar.tagsHint": "اضغط Enter أو انقر على إضافة لتضمين وسوم متعددة",
+  "webinar.settings": "الإعدادات",
+  "webinar.settingsDescription": "رؤية الندوة وحالتها",
+  "webinar.activeWebinar": "ندوة نشطة",
+  "webinar.activeDescription": "اجعل هذه الندوة مرئية ومتاحة للتسجيل",
+  "webinar.updateWebinar": "تحديث الندوة",
+
+  "webinar.saveError": "حدث خطأ",
+  "common.remove": "إزالة",
+  "common.add": "إضافة",
+
+  // Profile validation
+  "profile.validation.nameTooLong": "الاسم يجب أن لا يتجاوز 50 حرف",
+  "profile.validation.passwordTooLong": "كلمة المرور يجب أن لا تتجاوز 128 حرف",
+  "profile.validation.passwordStrength":
+    "كلمة المرور يجب أن تحتوي على حرف كبير، حرف صغير، ورقم",
+  "profile.validation.passwordStrong": "كلمة المرور قوية",
+  "profile.validation.passwordsMismatch": "كلمات المرور غير متطابقة",
+  "profile.validation.passwordsMatch": "كلمات المرور متطابقة",
+
+  "auth.newPassword": "كلمة مرور جديدة",
+
+  // Projects management
+  "projects.management": "إدارة مشاريع الطلاب",
+  "projects.managementDescription":
+    "إدارة مشاريع الطلاب لقسم YoungStars. عرض الأعمال المميزة بالصور والفيديوهات وروابط المحفظة.",
+  "projects.addNew": "إضافة مشروع جديد",
+  "projects.totalProjects": "إجمالي المشاريع",
+  "projects.activeProjects": "المشاريع النشطة",
+  "projects.featuredProjects": "المشاريع المميزة",
+  "projects.withVideos": "المشاريع بفيديوهات",
+  "projects.noProjects": "لا توجد مشاريع بعد",
+  "projects.createFirst":
+    "أنشئ أول مشروع طالب لعرض الأعمال المميزة في قسم YoungStars.",
+  "projects.createFirstButton": "أنشئ أول مشروع لك",
+  "projects.editProject": "تعديل المشروع",
+  "projects.createProject": "إنشاء مشروع جديد",
+  "projects.failedToLoad": "فشل تحميل المشاريع",
+  "projects.savedSuccess": "تم حفظ المشروع بنجاح",
+  "projects.deleteConfirm": "هل أنت متأكد أنك تريد حذف هذا المشروع؟",
+  "projects.deleteWarning": "لا يمكن التراجع عن هذا الإجراء.",
+  "projects.deletedSuccess": "تم حذف المشروع بنجاح",
+  "projects.deleteFailed": "فشل حذف المشروع",
+  "projects.deleteError": "خطأ في حذف المشروع",
+  "projects.status.active": "نشط",
+  "projects.status.inactive": "غير نشط",
+  "projects.featured": "مميز",
+
+  // Project form keys
+  "project.basicInfo": "معلومات المشروع",
+  "project.basicInfoDescription": "التفاصيل الأساسية عن مشروع الطالب",
+  "project.title": "عنوان المشروع",
+  "project.titlePlaceholder": "مثال: موقع تجارة إلكترونية",
+  "project.selectStudent": "اختر طالب",
+  "project.description": "الوصف",
+  "project.descriptionPlaceholder":
+    "صف المشروع، التقنيات المستخدمة، والإنجازات...",
+  "project.coverImage": "صورة المشروع",
+  "project.technologies": "التقنيات",
+  "project.technologiesDescription": "أضف التقنيات المستخدمة في هذا المشروع",
+  "project.technologiesPlaceholder": "أدخل تقنية (مثال: React, Node.js)",
+  "project.addedTechnologies": "التقنيات المضافوة",
+  "project.technologiesHint":
+    "اضغط Enter أو انقر على إضافة لتضمين تقنيات متعددة",
+  "project.mediaLinks": "الوسائط والروابط",
+  "project.mediaLinksDescription": "رفع الصور، الفيديوهات، وروابط المحفظة",
+  "project.videoUrl": "رابط الفيديو",
+  "project.portfolioLink": "رابط المحفظة",
+  "project.settings": "الإعدادات",
+  "project.settingsDescription": "رؤية المشروع وحالته",
+  "project.featuredProject": "مشروع مميز",
+  "project.featuredDescription": "تمييز هذا المشروع في قسم YoungStars",
+  "project.activeProject": "مشروع نشط",
+  "project.activeDescription":
+    "اجعل هذا المشروع مرئي للمستخدمين في قسم YoungStars",
+  "project.updateProject": "تحديث المشروع",
+
+  // Additional project keys
+  "project.loadingStudents": "جاري تحميل الطلاب...",
+  "project.chooseStudent": "اختر طالب...",
+  "project.selected": "محدد",
+  "project.addTechnology": "إضافة تقنية",
+  "project.uploadImage": "رفع صورة",
+  "project.imagePlaceholder": "رابط الصورة أو رفع ملف",
+
+  // Additional common keys
+  "common.processing": "جاري المعالجة...",
+  "common.today": "اليوم",
+  "common.yesterday": "أمس",
+  "common.daysAgo": "أيام مضت",
+  "common.lastEdited": "آخر تعديل",
+  "common.image": "صورة",
+  "common.video": "فيديو",
+  "common.portfolio": "محفظة",
+
+  // Blog management
+  "blog.management": "إدارة المدونة",
+  "blog.managementDescription":
+    "أنشئ، حرر، وأدر مقالات المدونة. انشر محتوى جذاب لجمهورك.",
+  "blog.addNew": "مقال جديد",
+  "blog.totalPosts": "إجمالي المقالات",
+  "blog.published": "منشور",
+  "blog.totalViews": "إجمالي المشاهدات",
+  "blog.avgReadTime": "متوسط وقت القراءة",
+  "blog.noPosts": "لا توجد مقالات بعد",
+  "blog.createFirst":
+    "أنشئ أول مقال لك لبدء مشاركة المعرفة والتفاعل مع جمهورك.",
+  "blog.createFirstButton": "أنشئ أول مقال لك",
+  "blog.editPost": "تعديل المقال",
+  "blog.createPost": "إنشاء مقال جديد",
+  "blog.failedToLoad": "فشل تحميل المقالات",
+  "blog.savedSuccess": "تم حفظ المقال بنجاح",
+  "blog.deleteConfirm": "هل أنت متأكد أنك تريد حذف هذا المقال؟",
+  "blog.deleteWarning":
+    "لا يمكن التراجع عن هذا الإجراء وسيتم إزالة المقال نهائياً.",
+  "blog.deletedSuccess": "تم حذف المقال بنجاح",
+  "blog.deleteFailed": "فشل حذف المقال",
+  "blog.deleteError": "خطأ في حذف المقال",
+  "blog.status.published": "منشور",
+  "blog.status.scheduled": "مجدول",
+  "blog.status.draft": "مسودة",
+
+  // Blog form keys
+  "blogForm.basicInfo": "معلومات المقال",
+  "blogForm.basicInfoDescription": "التفاصيل الأساسية عن مقال المدونة",
+  "blogForm.title": "عنوان المقال",
+  "blogForm.titlePlaceholder": "أدخل عنوان المقال",
+  "blogForm.excerpt": "ملخص",
+  "blogForm.excerptPlaceholder":
+    "وصف مختصر للمقال (يتم توليده تلقائياً من المحتوى)",
+  "blogForm.category": "التصنيف",
+  "blogForm.categoryPlaceholder": "مثال: تكنولوجيا، أعمال، تصميم",
+  "blogForm.authorInfo": "معلومات المؤلف",
+  "blogForm.authorInfoDescription": "تفاصيل عن مؤلف هذا المقال",
+  "blogForm.authorName": "اسم المؤلف",
+  "blogForm.authorEmail": "بريد المؤلف الإلكتروني",
+  "blogForm.authorRole": "دور المؤلف",
+  "blogForm.authorAvatar": "صورة المؤلف",
+  "blogForm.content": "المحتوى",
+  "blogForm.contentDescription":
+    "المحتوى الرئيسي للمقال (يدعم HTML و Markdown)",
+  "blogForm.bodyContent": "محتوى المقال",
+  "blogForm.bodyPlaceholder": "اكتب محتوى مقالك هنا... يدعم HTML و Markdown.",
+  "blogForm.media": "الوسائط",
+  "blogForm.mediaDescription": "الصورة الرئيسية للمقال",
+  "blogForm.featuredImage": "الصورة الرئيسية",
+  "blogForm.imageAlt": "النص البديل للصورة",
+  "blogForm.imageAltPlaceholder": "وصف الصورة لإمكانية الوصول",
+  "blogForm.scheduleSettings": "الجدولة والإعدادات",
+  "blogForm.scheduleDescription": "خيارات النشر وإعدادات المقال",
+  "blogForm.publishDate": "تاريخ النشر",
+  "blogForm.status": "الحالة",
+  "blogForm.tags": "الوسوم",
+  "blogForm.tagsDescription": "أضف وسوماً لتحسين التصنيف والبحث",
+  "blogForm.tagsPlaceholder": "أدخل وسم (مثال: React، JavaScript، تطوير الويب)",
+  "blogForm.addedTags": "الوسوم المضافوة",
+  "blogForm.tagsHint": "اضغط Enter أو انقر على إضافة لتضمين وسوم متعددة",
+  "blogForm.featuredPost": "مقال مميز",
+  "blogForm.featuredDescription": "تمييز هذا المقال في الصفحة الرئيسية للمدونة",
+  "blogForm.updatePost": "تحديث المقال",
+
+  // Additional blog form keys
+  "blogForm.uploadImage": "رفع صورة",
+  "blogForm.uploadAvatar": "رفع صورة شخصية",
+  "blogForm.remove": "إزالة",
+  "blogForm.imagePlaceholder": "رابط الصورة أو رفع ملف",
+  "blogForm.avatarPlaceholder": "رابط الصورة الشخصية أو رفع ملف",
+  "blogForm.status.draft": "مسودة",
+  "blogForm.status.published": "منشور",
+  "blogForm.authorRoles.author": "مؤلف",
+  "blogForm.authorRoles.editor": "محرر",
+  "blogForm.authorRoles.contributor": "مساهم",
+  "blogForm.authorRoles.admin": "مدير",
+  "blogForm.authorRoles.guest": "كاتب ضيف",
+
+  // Additional common keys
+  "common.minRead": "دقيقة قراءة",
+  "common.views": "مشاهدة",
+  "common.readTime": "وقت القراءة",
+  "common.publishDate": "تاريخ النشر",
+  "common.author": "مؤلف",
+
+  "common.featured": "مميز",
+  "common.scheduled": "مجدول",
+  "common.draft": "مسودة",
+
+  // Pricing management - FIXED KEYS
+  "pricing.management": "إدارة خطط التسعير",
+  "pricing.managementDescription":
+    "إنشاء وإدارة خطط الاشتراك للطلاب. تخصيص الأسعار، الميزات، والتوفر لتتناسب مع عروضك التعليمية.",
+  "pricing.addNew": "إضافة خطة جديدة",
+  "pricing.totalPlans": "إجمالي الخطط",
+  "pricing.activePlans": "الخطط النشطة",
+  "pricing.popularPlans": "الخطط الشائعة",
+  "pricing.avgPrice": "متوسط السعر",
+  "pricing.popularBadge": "الأكثر شعبية",
+  "pricing.featuresIncluded": "الميزات المضمنة",
+  "pricing.moreFeatures": "+{count} ميزات إضافية",
+  "pricing.unlimited": "غير محدود",
+  "pricing.save": "وفر",
+  "pricing.createFirst": "أنشئ خطتك الأولى لبدء قبول الاشتراكات وتنمية أعمالك.",
+  "pricing.createFirstButton": "أنشئ خطتك الأولى",
+  "pricing.editPlan": "تعديل الخطة",
+  "pricing.createPlan": "إنشاء خطة جديدة",
+  "pricing.deleteConfirm": "هل أنت متأكد أنك تريد حذف هذه الخطة؟",
+  "pricing.deleteWarning": "لا يمكن التراجع عن هذا الإجراء.",
+  "pricing.deletedSuccess": "تم حذف الخطة بنجاح",
+  "pricing.deleteFailed": "فشل حذف الخطة",
+  "pricing.deleteError": "خطأ في حذف الخطة",
+  "pricing.savedSuccess": "تم حفظ الخطة بنجاح",
+  "pricing.saveError": "حدث خطأ: {message}",
+  "pricing.basicInfo": "معلومات أساسية",
+  "pricing.basicInfoDescription": "تفاصيل الخطة والوصف",
+  "pricing.planName": "اسم الخطة",
+  "pricing.planNamePlaceholder": "مثال: الخطة الاحترافية",
+  "pricing.descriptionPlaceholder": "وصف مختصر للخطة",
+  "pricing.pricingBilling": "التسعير والفوترة",
+  "pricing.pricingBillingDescription": "تحديد الأسعار، الخصومات، ودورة الفوترة",
+  "pricing.originalPrice": "السعر الأصلي",
+  "pricing.discount": "الخصم",
+  "pricing.finalPrice": "السعر النهائي",
+  "pricing.calculatedAutomatically": "تم الحساب تلقائياً",
+  "pricing.sameAsOriginal": "نفس السعر الأصلي",
+  "pricing.discountApplied": "تم تطبيق الخصم",
+
+  // Currency keys - FIXED
+  "pricing.currency.USD": "دولار أمريكي ($)",
+  "pricing.currency.EUR": "يورو (€)",
+  "pricing.currency.EGP": "جنيه مصري (ج.م)",
+
+  "pricing.billingPeriod": "دورة الفوترة",
+  "pricing.billingPeriod.monthly": "شهرياً",
+  "pricing.billingPeriod.quarterly": "ربع سنوي",
+  "pricing.billingPeriod.yearly": "سنوياً",
+  "pricing.planConfig": "إعدادات الخطة",
+  "pricing.planConfigDescription": "تكوين إعدادات الخطة والقيود",
+  "pricing.planType": "نوع الخطة",
+
+  // Plan type keys - FIXED
+  "pricing.type.standard": "قياسي",
+  "pricing.type.premium": "مميز",
+  "pricing.type.enterprise": "مؤسسي",
+
+  "pricing.maxStudents": "الحد الأقصى للطلاب",
+  "pricing.maxStudentsPlaceholder": "0 لعدد غير محدود",
+  "pricing.features": "الميزات",
+  "pricing.featuresDescription": "سرد جميع الميزات المضمنة في هذه الخطة",
+  "pricing.featuresLabel": "الميزات",
+  "pricing.featuresPlaceholder": "ميزة 1\nميزة 2\nميزة 3",
+  "pricing.featuresHint": "أدخل كل ميزة في سطر جديد",
+  "pricing.settings": "الإعدادات",
+  "pricing.settingsDescription": "رؤية الخطة وإعدادات الحالة",
+  "pricing.markPopular": "تمييز كشائع",
+  "pricing.markPopularDescription": "إبراز هذه الخطة كخيار موصى به للمستخدمين",
+  "pricing.activePlan": "خطة نشطة",
+  "pricing.activePlanDescription":
+    "اجعل هذه الخطة متاحة للشراء ومرئية للمستخدمين",
+  "pricing.updatePlan": "تحديث الخطة",
+
+  // Language keys - FIXED
+  "common.language.en": "English",
+  "common.language.ar": "العربية",
+  "common.currency": "العملة",
+  "common.status.active": "نشط",
+  "common.status.inactive": "غير نشط",
+
+  // في ملف ar.js - أضف هذه المفاتيب في القسم المناسب
+
+  // Subscriptions Management Keys
+  "subscriptions.management": "إدارة الاشتراكات",
+  "subscriptions.managementDescription":
+    "إدارة جميع اشتراكات المستخدمين، تتبع حالة الدفع، ومراقبة نشاطات الاشتراكات.",
+  "subscriptions.totalSubscriptions": "إجمالي الاشتراكات",
+  "subscriptions.activeSubscriptions": "الاشتراكات النشطة",
+  "subscriptions.pendingPayments": "المدفوعات المعلقة",
+  "subscriptions.totalRevenue": "إجمالي الإيرادات",
+  "subscriptions.activeUsers": "المستخدمين النشطين",
+  "subscriptions.noSubscriptions": "لا توجد اشتراكات بعد",
+  "subscriptions.noSubscriptionsDescription":
+    "عندما يشترك المستخدمون في خططك، ستظهر اشتراكاتهم هنا للإدارة.",
+  "subscriptions.viewDetails": "عرض التفاصيل",
+  "subscriptions.deleteConfirm": "هل أنت متأكد أنك تريد حذف هذا الاشتراك؟",
+  "subscriptions.deleteWarning":
+    "لا يمكن التراجع عن هذا الإجراء وسيتم إزالة جميع بيانات الاشتراك.",
+  "subscriptions.deletedSuccess": "تم حذف الاشتراك بنجاح",
+  "subscriptions.deleteFailed": "فشل حذف الاشتراك",
+  "subscriptions.deleteError": "خطأ في حذف الاشتراك",
+
+  // Subscription Status
+  "subscriptions.status.active": "نشط",
+  "subscriptions.status.pending": "معلق",
+  "subscriptions.status.cancelled": "ملغى",
+  "subscriptions.status.expired": "منتهي",
+
+  // Payment Status
+  "subscriptions.paymentStatus.paid": "مدفوع",
+  "subscriptions.paymentStatus.pending": "معلق",
+  "subscriptions.paymentStatus.failed": "فشل",
+
+  // Subscription Details
+  "subscriptions.user": "المستخدم",
+  "subscriptions.plan": "الخطة",
+  "subscriptions.invoiceNumber": "رقم الفاتورة",
+  "subscriptions.startDate": "تاريخ البدء",
+  "subscriptions.endDate": "تاريخ الانتهاء",
+  "subscriptions.studentCount": "طالب",
+  "subscriptions.paymentMethod": "طريقة الدفع",
+  "subscriptions.notes": "ملاحظات",
+  "subscriptions.unknownUser": "مستخدم غير معروف",
+  "subscriptions.unknownPlan": "خطة غير معروفة",
+  "subscriptions.noEmail": "لا يوجد بريد إلكتروني",
+
+  // Schedules Management Keys
+  "schedules.management": "إدارة الجداول",
+  "schedules.managementDescription":
+    "إدارة الأحداث والمؤتمرات والجداول. إنشاء وتنظيم الأحداث القادمة.",
+  "schedules.addNew": "إضافة حدث جديد",
+  "schedules.totalEvents": "إجمالي الأحداث",
+  "schedules.activeEvents": "الأحداث النشطة",
+  "schedules.upcomingEvents": "الأحداث القادمة",
+  "schedules.pastEvents": "الأحداث الماضية",
+  "schedules.noEvents": "لا توجد أحداث بعد",
+  "schedules.noEventsDescription":
+    "أنشئ أول حدث لك لبدء إدارة الجداول والمؤتمرات.",
+  "schedules.createFirstButton": "أنشئ أول حدث لك",
+  "schedules.editEvent": "تعديل الحدث",
+  "schedules.createEvent": "إنشاء حدث جديد",
+  "schedules.failedToLoad": "فشل تحميل الأحداث",
+  "schedules.savedSuccess": "تم حفظ الحدث بنجاح",
+  "schedules.deleteConfirm": "هل أنت متأكد أنك تريد حذف هذا الحدث؟",
+  "schedules.deleteWarning": "لا يمكن التراجع عن هذا الإجراء.",
+  "schedules.deletedSuccess": "تم حذف الحدث بنجاح",
+  "schedules.deleteFailed": "فشل حذف الحدث",
+  "schedules.deleteError": "خطأ في حذف الحدث",
+
+  // Schedule Form Keys
+  "scheduleForm.basicInfo": "معلومات الحدث",
+  "scheduleForm.basicInfoDescription": "التفاصيل الأساسية عن الحدث",
+  "scheduleForm.eventTitle": "عنوان الحدث",
+  "scheduleForm.titlePlaceholder": "مثال: مؤتمر React 2024",
+  "scheduleForm.description": "الوصف",
+  "scheduleForm.descriptionPlaceholder":
+    "صف محتوى الحدث، الأهداف، وما سيتعلمه الحضور...",
+  "scheduleForm.coverImage": "صورة غلاف الحدث",
+  "scheduleForm.imagePlaceholder": "رابط الصورة أو رفع ملف",
+  "scheduleForm.uploadImage": "رفع صورة",
+  "scheduleForm.removeImage": "إزالة",
+  "scheduleForm.scheduleLocation": "الجدول والموقع",
+  "scheduleForm.scheduleDescription": "تعيين التاريخ، الوقت، والموقع للحدث",
+  "scheduleForm.date": "التاريخ",
+  "scheduleForm.time": "الوقت",
+  "scheduleForm.location": "الموقع",
+  "scheduleForm.locationPlaceholder":
+    "مثال: القاعة الرئيسية، اجتماع افتراضي، إلخ",
+  "scheduleForm.speakers": "المتحدثون",
+  "scheduleForm.speakersDescription": "إضافة متحدثين متعددين لهذا الحدث",
+  "scheduleForm.addNewSpeaker": "إضافة متحدث جديد",
+  "scheduleForm.speakerName": "اسم المتحدث",
+  "scheduleForm.speakerNamePlaceholder": "اسم المتحدث",
+  "scheduleForm.speakerRole": "دور المتحدث",
+  "scheduleForm.speakerRolePlaceholder": "الدور/المسمى الوظيفي",
+  "scheduleForm.speakerImage": "صورة المتحدث",
+  "scheduleForm.addSpeaker": "إضافة متحدث",
+  "scheduleForm.addedSpeakers": "المتحدثين المضافين",
+  "scheduleForm.tags": "الوسوم",
+  "scheduleForm.tagsDescription": "إضافة وسوم لتحسين التصنيف والبحث",
+  "scheduleForm.tagsPlaceholder": "أدخل وسم (مثال: مؤتمر، ورشة عمل، شبكات)",
+  "scheduleForm.addTag": "إضافة",
+  "scheduleForm.addedTags": "الوسوم المضافوة",
+  "scheduleForm.tagsHint": "اضغط Enter أو انقر على إضافة لتضمين وسوم متعددة",
+  "scheduleForm.settings": "الإعدادات",
+  "scheduleForm.settingsDescription": "رؤية الحدث وحالته",
+  "scheduleForm.activeEvent": "حدث نشط",
+  "scheduleForm.activeDescription": "اجعل هذا الحدث مرئي ومتاح",
+  "scheduleForm.updateEvent": "تحديث الحدث",
+  "scheduleForm.createEvent": "إنشاء حدث",
+  "scheduleForm.saving": "جاري الحفظ...",
+
+  // في ملف ar.js - أضف هذه المفاتيب في القسم المناسب
+
+  // Events Management Keys
+  "events.management": "إدارة الأحداث",
+  "events.managementDescription":
+    "إدارة الأحداث، ورش العمل، والمؤتمرات. جدولة الجلسات، إدارة المتحدثين، ومتابعة التسجيلات لكل من الأحداث عبر الإنترنت والشخصية.",
+  "events.addNew": "إضافة حدث جديد",
+  "events.totalEvents": "إجمالي الأحداث",
+  "events.activeEvents": "الأحداث النشطة",
+  "events.totalSpeakers": "إجمالي المتحدثين",
+  "events.avgAttendees": "متوسط الحضور",
+  "events.noEvents": "لا توجد أحداث بعد",
+  "events.noEventsDescription":
+    "أنشئ أول حدث لك لبدء التفاعل مع الحضور وتنظيم تجارب لا تنسى.",
+  "events.createFirstButton": "أنشئ أول حدث لك",
+  "events.editEvent": "تعديل الحدث",
+  "events.createEvent": "إنشاء حدث جديد",
+  "events.failedToLoad": "فشل تحميل الأحداث",
+  "events.savedSuccess": "تم حفظ الحدث بنجاح",
+  "events.deleteConfirm": "هل أنت متأكد أنك تريد حذف هذا الحدث؟",
+  "events.deleteWarning": "لا يمكن التراجع عن هذا الإجراء.",
+  "events.deletedSuccess": "تم حذف الحدث بنجاح",
+  "events.deleteFailed": "فشل حذف الحدث",
+  "events.deleteError": "خطأ في حذف الحدث",
+
+  // Event Status
+  "events.status.active": "نشط",
+  "events.status.upcoming": "قادم",
+  "events.status.expired": "منتهي",
+  "events.status.registrationClosed": "التسجيل مغلق",
+  "events.status.inactive": "غير نشط",
+
+  // Event Form Keys
+  "eventForm.basicInfo": "معلومات الحدث",
+  "eventForm.basicInfoDescription": "التفاصيل الأساسية عن الحدث",
+  "eventForm.eventTitle": "عنوان الحدث",
+  "eventForm.titlePlaceholder": "مثال: مؤتمر React 2024",
+  "eventForm.mainInstructor": "المدرب الرئيسي",
+  "eventForm.instructorPlaceholder": "اسم المدرب",
+  "eventForm.description": "الوصف",
+  "eventForm.descriptionPlaceholder":
+    "صف محتوى الحدث، الأهداف، والجمهور المستهدف...",
+  "eventForm.location": "الموقع",
+  "eventForm.locationPlaceholder":
+    "مثال: عبر الإنترنت، القاعة الرئيسية، أو عنوان فعلي",
+  "eventForm.coverImage": "صورة غلاف الحدث",
+  "eventForm.imagePlaceholder": "رابط الصورة أو رفع ملف",
+  "eventForm.uploadImage": "رفع صورة",
+  "eventForm.removeImage": "إزالة",
+  "eventForm.scheduleTiming": "الجدول والمواعيد",
+  "eventForm.scheduleDescription": "تعيين التاريخ والوقت للحدث",
+  "eventForm.date": "التاريخ",
+  "eventForm.time": "الوقت",
+  "eventForm.registrationPeriod": "فترة التسجيل",
+  "eventForm.registrationStart": "بداية التسجيل",
+  "eventForm.registrationEnd": "نهاية التسجيل",
+  "eventForm.speakers": "المتحدثون",
+  "eventForm.speakersDescription": "إضافة متحدثين متعددين لهذا الحدث",
+  "eventForm.addNewSpeaker": "إضافة متحدث جديد",
+  "eventForm.speakerName": "اسم المتحدث",
+  "eventForm.speakerNamePlaceholder": "اسم المتحدث",
+  "eventForm.speakerRole": "دور المتحدث",
+  "eventForm.speakerRolePlaceholder": "الدور/المسمى الوظيفي",
+  "eventForm.speakerImage": "صورة المتحدث",
+  "eventForm.addSpeaker": "إضافة متحدث",
+  "eventForm.addedSpeakers": "المتحدثين المضافين",
+  "eventForm.mediaRegistration": "الوسائط والتسجيل",
+  "eventForm.mediaRegistrationDescription": "صورة المدرب وتفاصيل التسجيل",
+  "eventForm.instructorImage": "صورة المدرب",
+  "eventForm.crmRegistrationUrl": "رابط تسجيل CRM",
+  "eventForm.maxAttendees": "الحد الأقصى للحضور",
+  "eventForm.currentAttendees": "الحضور الحالي",
+  "eventForm.tags": "الوسوم",
+  "eventForm.tagsDescription": "إضافة وسوم لتحسين التصنيف والبحث",
+  "eventForm.tagsPlaceholder": "أدخل وسم (مثال: مؤتمر، ورشة عمل، React)",
+  "eventForm.addTag": "إضافة",
+  "eventForm.addedTags": "الوسوم المضافوة",
+  "eventForm.tagsHint": "اضغط Enter أو انقر على إضافة لتضمين وسوم متعددة",
+  "eventForm.settings": "الإعدادات",
+  "eventForm.settingsDescription": "رؤية الحدث وحالته",
+  "eventForm.activeEvent": "حدث نشط",
+  "eventForm.activeDescription": "اجعل هذا الحدث مرئي ومتاح للتسجيل",
+  "eventForm.updateEvent": "تحديث الحدث",
+  "eventForm.createEvent": "إنشاء حدث",
+  "eventForm.saving": "جاري الحفظ...",
+
+  // Event Details
+  "events.duration": "المدة",
+  "events.minutes": "دقيقة",
+  "events.locationNotSpecified": "الموقع غير محدد",
+  "events.speakers": "المتحدثون",
+  "events.attendees": "مشترك",
+  "events.crmLinked": "مرتبط بـ CRM",
+  "events.viewDetails": "عرض التفاصيل",
+
+  // Common Event Terms
+  "common.duration": "المدة",
+  "common.instructor": "المدرب",
+  "common.speakers": "المتحدثون",
+  "common.attendees": "الحضور",
+  "common.registration": "التسجيل",
+  "common.crm": "CRM",
+
+  "common.startDate": "تاريخ البدء",
+  "common.endDate": "تاريخ الانتهاء",
+  "common.students": "طلاب",
+
+  "subscriptions.subscriptionDetails": "تفاصيل الاشتراك",
+  "subscriptions.detailsDescription":
+    "عرض معلومات مفصلة حول اشتراك المستخدم، حالة الدفع، ونشاط الاشتراك.",
+  "subscriptions.userPlanInfo": "معلومات خطة المستخدم",
+  "subscriptions.paymentInfo": "معلومات الدفع",
+  "subscriptions.subscriptionActivity": "نشاط الاشتراك",
+  "subscriptions.userPlanDescription":
+    "تفاصيل حول خطة الاشتراك للمستخدم، بما في ذلك اسم الخطة، تاريخ البدء، وتاريخ الانتهاء.",
+  "subscriptions.paymentDescription":
+    "معلومات حول حالة الدفع، طريقة الدفع، وأي ملاحظات متعلقة بالدفع.",
+  "subscriptions.activityDescription":
+    "سجل النشاطات المتعلقة بالاشتراك، مثل التحديثات، التجديدات، أو الإلغاءات.",
+  "common.days": "أيام",
+  "subscriptions.status": "الحالة",
+  "subscriptions.features": "الميزات",
+  "subscriptions.detailsFullDescription":
+    "عرض معلومات مفصلة حول اشتراك المستخدم، حالة الدفع، ونشاط الاشتراك.",
+  "subscriptions.totalAmount": "المبلغ الإجمالي",
+  "subscriptions.lastPaymentDate": "تاريخ آخر دفعة",
+  "subscriptions.statusPaymentDescription":
+    "الحالة الحالية للاشتراك ومدفوعاته.",
+  "subscriptions.statusPayment": "حالة الاشتراك والدفع",
+  "subscriptions.paymentStatus": "حالة الدفع",
+  "subscriptions.timestampsDescription":
+    "عرض الطوابع الزمنية المهمة المتعلقة بالاشتراك.",
+
+  "subscriptions.remainingDays": "الأيام المتبقية",
+  "subscriptions.userInfo": "معلومات المستخدم",
+  "subscriptions.userInfoDescription": "تفاصيل صاحب الاشتراك",
+  "subscriptions.planInfo": "معلومات الخطة",
+  "subscriptions.planInfoDescription": "تفاصيل الخطة المشترك فيها",
+  "subscriptions.planFeatures": "مميزات الخطة",
+  "subscriptions.notesDescription": "ملاحظات إضافية حول الاشتراك",
+  "common.createdAt": "تم الإنشاء في",
+  "common.updatedAt": "تم التحديث في",
+  "common.deletedAt": "تم الحذف في",
+
+  "subscriptions.addNotesPlaceholder": "أضف ملاحظات حول هذا الاشتراك...",
+  "subscriptions.noNotes": "لا توجد ملاحظات",
+  "subscriptions.notesUpdated": "تم تحديث الملاحظات بنجاح",
+  "subscriptions.notesUpdateFailed": "فشل في تحديث الملاحظات",
+  "common.save": "حفظ",
 };
 
 export default ar;

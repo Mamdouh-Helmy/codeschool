@@ -16,6 +16,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Props {
   initial?: any;
@@ -31,6 +32,8 @@ interface Student {
 }
 
 export default function ProjectForm({ initial, onClose, onSaved }: Props) {
+  const { t } = useI18n();
+
   const [form, setForm] = useState(() => ({
     title: initial?.title || "",
     description: initial?.description || "",
@@ -53,7 +56,6 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
   const [studentsLoading, setStudentsLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
-  // ✅ جلب قائمة الطلاب من API
   useEffect(() => {
     const fetchStudents = async () => {
       try {
@@ -64,7 +66,6 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
         if (json.success) {
           setStudents(json.data);
           
-          // ✅ إذا كان هناك طالب محدد مسبقاً، نحدده في الـ dropdown
           if (initial?.student?.id) {
             const existingStudent = json.data.find(
               (student: Student) => student._id === initial.student.id
@@ -84,7 +85,6 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
     fetchStudents();
   }, [initial]);
 
-  // ✅ معاينة الصورة
   useEffect(() => {
     if (form.image) {
       setImagePreview(form.image);
@@ -95,7 +95,6 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  // ✅ عند اختيار طالب من الـ dropdown
   const handleStudentSelect = (student: Student | null) => {
     setSelectedStudent(student);
     
@@ -117,7 +116,6 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // ✅ إضافة تكنولوجيا جديدة
   const addTechnology = () => {
     const tech = newTechInput.trim();
     if (tech && !technologies.includes(tech)) {
@@ -128,14 +126,12 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // ✅ حذف تكنولوجيا
   const removeTechnology = (index: number) => {
     const updatedTechs = technologies.filter((_, i) => i !== index);
     setTechnologies(updatedTechs);
     onChange("technologies", updatedTechs);
   };
 
-  // ✅ إدخال بالزر Enter
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -146,7 +142,6 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // هنا يمكنك رفع الصورة إلى السيرفر
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
@@ -162,9 +157,8 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
     setLoading(true);
 
     try {
-      // ✅ التحقق من اختيار طالب
       if (!selectedStudent) {
-        alert("Please select a student");
+        alert(t('project.selectStudent') || "Please select a student");
         setLoading(false);
         return;
       }
@@ -188,8 +182,6 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
       const method = initial?._id ? "PUT" : "POST";
       const url = initial?._id ? `/api/projects/${initial._id}` : "/api/projects";
 
-      console.log("Sending payload:", payload);
-
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -201,7 +193,6 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
         onClose();
       } else {
         const errorData = await res.json();
-        console.error("Failed to save project:", errorData);
         alert(`Failed to save project: ${errorData.message}`);
       }
     } catch (err) {
@@ -222,10 +213,10 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Project Information
+              {t('project.basicInfo') || "Project Information"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Basic details about the student project
+              {t('project.basicInfoDescription') || "Basic details about the student project"}
             </p>
           </div>
         </div>
@@ -234,13 +225,13 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <FileText className="w-3 h-3 text-primary" />
-              Project Title *
+              {t('project.title') || "Project Title"} *
             </label>
             <input
               type="text"
               value={form.title}
               onChange={(e) => onChange("title", e.target.value)}
-              placeholder="e.g., E-commerce Website"
+              placeholder={t('project.titlePlaceholder') || "e.g., E-commerce Website"}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               required
             />
@@ -249,7 +240,7 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <User className="w-3 h-3 text-primary" />
-              Select Student *
+              {t('project.selectStudent') || "Select Student"} *
             </label>
             <div className="relative">
               <select
@@ -263,7 +254,7 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
                 required
                 disabled={studentsLoading}
               >
-                <option value="">Choose a student...</option>
+                <option value="">{t('project.chooseStudent') || "Choose a student..."}</option>
                 {students.map((student) => (
                   <option key={student._id} value={student._id}>
                     {student.name} ({student.email})
@@ -276,13 +267,13 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
             </div>
             {studentsLoading && (
               <p className="text-11 text-SlateBlueText dark:text-darktext">
-                Loading students...
+                {t('project.loadingStudents') || "Loading students..."}
               </p>
             )}
             {selectedStudent && (
               <div className="mt-2 p-2 bg-IcyBreeze dark:bg-dark_input rounded-lg">
                 <p className="text-12 text-MidnightNavyText dark:text-white">
-                  <strong>Selected:</strong> {selectedStudent.name}
+                  <strong>{t('project.selected') || "Selected"}:</strong> {selectedStudent.name}
                 </p>
                 <p className="text-11 text-SlateBlueText dark:text-darktext">
                   {selectedStudent.email}
@@ -295,13 +286,13 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <FileText className="w-3 h-3 text-primary" />
-            Description *
+            {t('project.description') || "Description"} *
           </label>
           <textarea
             value={form.description}
             onChange={(e) => onChange("description", e.target.value)}
             rows={3}
-            placeholder="Describe the project, technologies used, and achievements..."
+            placeholder={t('project.descriptionPlaceholder') || "Describe the project, technologies used, and achievements..."}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200"
             required
           />
@@ -316,16 +307,15 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Technologies
+              {t('project.technologies') || "Technologies"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Add technologies used in this project
+              {t('project.technologiesDescription') || "Add technologies used in this project"}
             </p>
           </div>
         </div>
 
         <div className="space-y-3">
-          {/* Input لإضافة تكنولوجيا جديدة */}
           <div className="flex gap-2">
             <div className="flex-1">
               <input
@@ -333,7 +323,7 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
                 value={newTechInput}
                 onChange={(e) => setNewTechInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Enter a technology (e.g., React, Node.js)"
+                placeholder={t('project.technologiesPlaceholder') || "Enter a technology (e.g., React, Node.js)"}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
             </div>
@@ -344,15 +334,14 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
               className="px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              Add
+              {t('common.add') || "Add"}
             </button>
           </div>
 
-          {/* قائمة التكنولوجيات المضافوة */}
           {technologies.length > 0 && (
             <div className="space-y-2">
               <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                Added Technologies:
+                {t('project.addedTechnologies') || "Added Technologies"}:
               </label>
               <div className="flex flex-wrap gap-2">
                 {technologies.map((tech, index) => (
@@ -375,7 +364,7 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           )}
 
           <p className="text-11 text-SlateBlueText dark:text-darktext">
-            Press Enter or click Add to include multiple technologies
+            {t('project.technologiesHint') || "Press Enter or click Add to include multiple technologies"}
           </p>
         </div>
       </div>
@@ -388,10 +377,10 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Media & Links
+              {t('project.mediaLinks') || "Media & Links"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Upload images, videos, and portfolio links
+              {t('project.mediaLinksDescription') || "Upload images, videos, and portfolio links"}
             </p>
           </div>
         </div>
@@ -400,7 +389,7 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-3">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <Image className="w-3 h-3 text-Aquamarine" />
-            Project Image
+            {t('project.coverImage') || "Project Image"}
           </label>
           
           <div className="flex gap-4 items-start">
@@ -409,13 +398,13 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
                 type="text"
                 value={form.image}
                 onChange={(e) => onChange("image", e.target.value)}
-                placeholder="Image URL or upload file"
+                placeholder={t('project.imagePlaceholder') || "Image URL or upload file"}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
               <div className="mt-2">
                 <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
                   <Upload className="w-3 h-3" />
-                  Upload Image
+                  {t('project.uploadImage') || "Upload Image"}
                   <input
                     type="file"
                     accept="image/*"
@@ -442,7 +431,7 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Film className="w-3 h-3 text-Aquamarine" />
-              Video URL
+              {t('project.videoUrl') || "Video URL"}
             </label>
             <input
               type="url"
@@ -456,7 +445,7 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Link className="w-3 h-3 text-Aquamarine" />
-              Portfolio Link
+              {t('project.portfolioLink') || "Portfolio Link"}
             </label>
             <input
               type="url"
@@ -477,10 +466,10 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Settings
+              {t('project.settings') || "Settings"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Project visibility and status
+              {t('project.settingsDescription') || "Project visibility and status"}
             </p>
           </div>
         </div>
@@ -499,11 +488,11 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
                   className="w-4 h-4 text-primary focus:ring-primary border-PowderBlueBorder rounded"
                 />
                 <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                  Featured Project
+                  {t('project.featuredProject') || "Featured Project"}
                 </span>
               </div>
               <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                Highlight this project as featured in the YoungStars section
+                {t('project.featuredDescription') || "Highlight this project as featured in the YoungStars section"}
               </p>
             </div>
           </label>
@@ -521,11 +510,11 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
                   className="w-4 h-4 text-Aquamarine focus:ring-Aquamarine border-PowderBlueBorder rounded"
                 />
                 <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                  Active Project
+                  {t('project.activeProject') || "Active Project"}
                 </span>
               </div>
               <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                Make this project visible to users in the YoungStars section
+                {t('project.activeDescription') || "Make this project visible to users in the YoungStars section"}
               </p>
             </div>
           </label>
@@ -540,7 +529,7 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight hover:shadow-md flex items-center justify-center gap-2"
         >
           <X className="w-3 h-3" />
-          Cancel
+          {t('common.cancel') || "Cancel"}
         </button>
         <button
           type="submit"
@@ -550,17 +539,17 @@ export default function ProjectForm({ initial, onClose, onSaved }: Props) {
           {loading ? (
             <>
               <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Saving...
+              {t('common.saving') || "Saving..."}
             </>
           ) : initial ? (
             <>
               <Save className="w-3 h-3" />
-              Update Project
+              {t('project.updateProject') || "Update Project"}
             </>
           ) : (
             <>
               <Rocket className="w-3 h-3" />
-              Create Project
+              {t('projects.createProject') || "Create Project"}
             </>
           )}
         </button>

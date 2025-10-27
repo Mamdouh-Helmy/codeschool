@@ -5,6 +5,8 @@ import { Icon } from "@iconify/react";
 import ThemeToggler from "@/components/Layout/Header/ThemeToggler";
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { useI18n } from "@/i18n/I18nProvider";
+import { useLocale } from "@/app/context/LocaleContext";
 
 type TopBarProps = {
   onMenuClick: () => void;
@@ -19,7 +21,9 @@ type TopBarProps = {
 
 const TopBar = ({ onMenuClick, user: serverUser }: TopBarProps) => {
   const { data: session } = useSession();
-  // if server passed user use it, otherwise fallback to session
+  const { t } = useI18n();
+  const { locale, toggleLocale } = useLocale();
+
   const [user, setUser] = useState<{
     name?: string;
     role?: string;
@@ -50,7 +54,7 @@ const TopBar = ({ onMenuClick, user: serverUser }: TopBarProps) => {
     }
   }, [serverUser, session]);
 
-  const displayName = user?.name || "User";
+  const displayName = user?.name || t("dashboard.user") || "User";
   const role = user?.role || "guest";
 
   const initials = displayName
@@ -86,7 +90,7 @@ const TopBar = ({ onMenuClick, user: serverUser }: TopBarProps) => {
             type="button"
             onClick={onMenuClick}
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary lg:hidden dark:border-dark_border dark:text-darktext dark:hover:bg-darkmode"
-            aria-label="Open navigation"
+            aria-label={t("dashboard.openNavigation") || "Open navigation"}
           >
             <Icon icon="ion:menu" className="h-6 w-6" />
           </button>
@@ -94,7 +98,10 @@ const TopBar = ({ onMenuClick, user: serverUser }: TopBarProps) => {
             <Icon icon="ion:search" className="h-5 w-5 text-slate-400" />
             <input
               type="search"
-              placeholder="Search reports, users, or events"
+              placeholder={
+                t("dashboard.searchPlaceholder") ||
+                "Search reports, users, or events"
+              }
               className="w-full border-none bg-transparent text-sm text-slate-600 outline-none dark:text-white"
             />
           </div>
@@ -103,14 +110,23 @@ const TopBar = ({ onMenuClick, user: serverUser }: TopBarProps) => {
           <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-dark_border dark:bg-darkmode">
             <Icon icon="ion:calendar" className="h-5 w-5 text-primary" />
             <span className="hidden text-slate-600 dark:text-white sm:inline">
-              Schedule review
+              {t("dashboard.scheduleReview") || "Schedule review"}
             </span>
           </div>
+          <button
+            aria-label="Toggle language"
+            onClick={toggleLocale}
+            className="text-sm px-3 py-1 rounded border border-slate-300 dark:border-dark_border dark:text-white"
+          >
+            {locale === "en" ? "العربية" : "English"}
+          </button>
           <ThemeToggler />
           <button
             type="button"
             className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary dark:border-dark_border dark:text-darktext dark:hover:bg-darkmode"
-            aria-label="View notifications"
+            aria-label={
+              t("dashboard.viewNotifications") || "View notifications"
+            }
           >
             <Icon icon="ion:notifications-outline" className="h-5 w-5" />
             <span className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
@@ -137,7 +153,7 @@ const TopBar = ({ onMenuClick, user: serverUser }: TopBarProps) => {
               onClick={handleSignOut}
               className="ml-2 text-xs text-red-500 hover:underline"
             >
-              Sign out
+              {t("profile.signOut") || "Sign out"}
             </button>
           </div>
         </div>

@@ -1,5 +1,7 @@
+"use client";
 import Link from "next/link";
 import { Icon } from "@iconify/react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export type ContentStat = {
   label: string;
@@ -21,12 +23,16 @@ type ContentManagerProps = {
 };
 
 const ContentManager = ({ stats, actions }: ContentManagerProps) => {
+  const { t } = useI18n();
+
   return (
     <section className="flex h-full flex-col gap-4 sm:gap-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm dark:border-dark_border dark:bg-darklight">
       <header>
-        <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white">Content performance</h3>
+        <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white">
+          {t('dashboard.contentPerformance')}
+        </h3>
         <p className="text-sm text-slate-500 dark:text-darktext">
-          Review how your blog posts and documentation are engaging students.
+          {t('dashboard.contentDescription')}
         </p>
       </header>
       <div className="grid gap-3 sm:gap-4">
@@ -52,7 +58,9 @@ const ContentManager = ({ stats, actions }: ContentManagerProps) => {
         ))}
       </div>
       <div className="mt-auto space-y-3">
-        <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-darktext">Quick actions</p>
+        <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-darktext">
+          {t('dashboard.quickActions')}
+        </p>
         {actions.map((action) => (
           <Link
             key={action.label}

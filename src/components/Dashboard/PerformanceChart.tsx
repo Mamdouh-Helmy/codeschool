@@ -1,4 +1,7 @@
+"use client";
+
 import { Icon } from "@iconify/react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export type PerformancePoint = {
   label: string;
@@ -14,6 +17,8 @@ type PerformanceChartProps = {
 };
 
 const PerformanceChart = ({ title, description, data, goalLabel, goalValue }: PerformanceChartProps) => {
+  const { t } = useI18n();
+
   const safeData = data || [];
   const maxValue = safeData.length > 0 ? Math.max(...safeData.map((point) => point.value)) : 0;
 
@@ -30,16 +35,16 @@ const PerformanceChart = ({ title, description, data, goalLabel, goalValue }: Pe
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
               <Icon icon="ion:trending-up" className="h-3 w-3" />
-              Real Data
+              {t('dashboard.realData')}
             </span>
             <span className="text-xs text-slate-500">
-              Avg: {averageEngagement}% engagement
+              {t('dashboard.avgEngagement')} {averageEngagement}% {t('dashboard.engagement')}
             </span>
           </div>
         </div>
         <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
           <Icon icon="ion:bar-chart" className="h-4 w-4" />
-          Live Metrics
+          {t('dashboard.liveMetrics')}
         </span>
       </header>
       
@@ -65,7 +70,7 @@ const PerformanceChart = ({ title, description, data, goalLabel, goalValue }: Pe
             })
           ) : (
             <div className="flex h-24 sm:h-36 w-full items-center justify-center">
-              <p className="text-slate-500 dark:text-darktext">Loading real performance data...</p>
+              <p className="text-slate-500 dark:text-darktext">{t('dashboard.loadingData')}</p>
             </div>
           )}
         </div>
@@ -87,8 +92,12 @@ const PerformanceChart = ({ title, description, data, goalLabel, goalValue }: Pe
             <Icon icon="ion:stats-chart" className="h-4 w-4 sm:h-5 sm:w-5" />
           </span>
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-darktext">Weekly Average</p>
-            <p className="text-sm font-semibold text-MidnightNavyText dark:text-white">{averageEngagement}% engagement</p>
+            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-darktext">
+              {t('dashboard.weeklyAverage')}
+            </p>
+            <p className="text-sm font-semibold text-MidnightNavyText dark:text-white">
+              {averageEngagement}% {t('dashboard.engagement')}
+            </p>
           </div>
         </div>
       </footer>

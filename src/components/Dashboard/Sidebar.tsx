@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { Icon } from "@iconify/react";
 import type { ReactNode } from "react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export type DashboardNavItem = {
   label: string;
@@ -20,6 +21,8 @@ type SidebarProps = {
 };
 
 const Sidebar = ({ items, activePath, isOpen, onClose }: SidebarProps) => {
+  const { t } = useI18n();
+
   return (
     <>
       <div
@@ -29,13 +32,13 @@ const Sidebar = ({ items, activePath, isOpen, onClose }: SidebarProps) => {
       >
         <div className="flex items-center justify-between px-6 pt-6 pb-4 lg:justify-center lg:pt-8">
           <div className="text-lg font-semibold text-MidnightNavyText dark:text-white">
-            Admin Console
+            {t('dashboard.adminConsole') || "Admin Console"}
           </div>
           <button
             type="button"
             onClick={onClose}
             className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary lg:hidden dark:text-darktext dark:hover:bg-darkmode"
-            aria-label="Close navigation"
+            aria-label={t('dashboard.closeNavigation') || "Close navigation"}
           >
             <Icon icon="ion:close" className="h-5 w-5" />
           </button>

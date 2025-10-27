@@ -1,15 +1,17 @@
+// src/components/Blog/BlogList.tsx
 "use client";
 import React, { useEffect, useState } from "react";
 import BlogCard from "@/components/SharedComponent/Blog/blogCard";
+import { useI18n } from "@/i18n/I18nProvider";
 
 const BlogList: React.FC = () => {
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useI18n();
 
   useEffect(() => {
     async function fetchPosts() {
       try {
-        // ✅ الاتصال بالـ API الحقيقي
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL || ""}/api/blog?page=1&limit=9`,
           { cache: "no-store" }
@@ -40,9 +42,9 @@ const BlogList: React.FC = () => {
     fetchPosts();
   }, []);
 
-  if (loading) return <p className="text-center py-10">Loading articles...</p>;
+  if (loading) return <p className="text-center py-10">{t("blog.loading")}</p>;
   if (posts.length === 0)
-    return <p className="text-center py-10">No articles found.</p>;
+    return <p className="text-center py-10">{t("blog.noArticles")}</p>;
 
   return (
     <section

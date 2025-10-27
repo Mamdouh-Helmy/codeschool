@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import Modal from "./Modal";
 import ProjectForm from "./ProjectForm";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Project {
   _id: string;
@@ -46,30 +47,28 @@ interface Project {
 }
 
 export default function ProjectsAdmin() {
+  const { t } = useI18n();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
 
-  // دالة لتنسيق التاريخ بشكل احترافي
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    // إذا كان التاريخ ضمن 7 أيام مضت، نعرضه بشكل نسبي
     if (diffDays < 7) {
       if (diffDays === 0) {
-        return "Today";
+        return t('common.today') || "Today";
       } else if (diffDays === 1) {
-        return "Yesterday";
+        return t('common.yesterday') || "Yesterday";
       } else {
-        return `${diffDays} days ago`;
+        return `${diffDays} ${t('common.daysAgo') || "days ago"}`;
       }
     }
 
-    // إذا كان أقدم من أسبوع، نعرض التاريخ الكامل
     return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
@@ -79,7 +78,6 @@ export default function ProjectsAdmin() {
     });
   };
 
-  // دالة للعرض التفصيلي للتاريخ
   const formatDetailedDate = (dateString: string) => {
     const date = new Date(dateString);
     return {
@@ -114,7 +112,7 @@ export default function ProjectsAdmin() {
       }
     } catch (err) {
       console.error("Error loading projects:", err);
-      toast.error("Failed to load projects");
+      toast.error(t('projects.failedToLoad') || "Failed to load projects");
     } finally {
       setLoading(false);
     }
@@ -126,7 +124,7 @@ export default function ProjectsAdmin() {
 
   const onSaved = async () => {
     await loadProjects();
-    toast.success("Project saved successfully");
+    toast.success(t('projects.savedSuccess') || "Project saved successfully");
   };
 
   const onEdit = (project: Project) => {
@@ -135,8 +133,16 @@ export default function ProjectsAdmin() {
   };
 
   const onDelete = async (id: string) => {
+    const deleteConfirm = t('projects.deleteConfirm') || "Are you sure you want to delete this project?";
+    const deleteWarning = t('projects.deleteWarning') || "This action cannot be undone.";
+    const cancelText = t('common.cancel') || "Cancel";
+    const deleteText = t('common.delete') || "Delete";
+    const deletedSuccess = t('projects.deletedSuccess') || "Project deleted successfully";
+    const deleteFailed = t('projects.deleteFailed') || "Failed to delete the project";
+    const deleteError = t('projects.deleteError') || "Error deleting project";
+
     toast(
-      (t) => (
+      (toastInstance) => (
         <div className="w-404 max-w-full bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none dark:border-dark_border p-4">
           <div className="flex items-start gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold">
@@ -144,24 +150,24 @@ export default function ProjectsAdmin() {
             </div>
             <div className="flex-1">
               <p className="text-16 font-semibold">
-                Are you sure you want to delete this project?
+                {deleteConfirm}
               </p>
               <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                This action cannot be undone.
+                {deleteWarning}
               </p>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
               className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-              onClick={() => toast.dismiss(t.id)}
+              onClick={() => toast.dismiss(toastInstance.id)}
             >
-              Cancel
+              {cancelText}
             </button>
             <button
               className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
               onClick={async () => {
-                toast.dismiss(t.id);
+                toast.dismiss(toastInstance.id);
                 try {
                   const res = await fetch(
                     `/api/projects/${encodeURIComponent(id)}`,
@@ -171,17 +177,17 @@ export default function ProjectsAdmin() {
                   );
                   if (res.ok) {
                     setProjects((prev) => prev.filter((p) => p._id !== id));
-                    toast.success("Project deleted successfully");
+                    toast.success(deletedSuccess);
                   } else {
-                    toast.error("Failed to delete the project");
+                    toast.error(deleteFailed);
                   }
                 } catch (err) {
                   console.error("Error deleting project:", err);
-                  toast.error("Error deleting project");
+                  toast.error(deleteError);
                 }
               }}
             >
-              Delete
+              {deleteText}
             </button>
           </div>
         </div>
@@ -206,11 +212,10 @@ export default function ProjectsAdmin() {
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
               <FileText className="w-7 h-7 text-primary" />
-              YoungStars Projects Management
+              {t('projects.management') || "YoungStars Projects Management"}
             </h1>
             <p className="text-sm text-SlateBlueText dark:text-darktext max-w-2xl">
-              Manage student projects for the YoungStars section. Showcase
-              amazing work with images, videos, and portfolio links.
+              {t('projects.managementDescription') || "Manage student projects for the YoungStars section. Showcase amazing work with images, videos, and portfolio links."}
             </p>
           </div>
           <button
@@ -221,7 +226,7 @@ export default function ProjectsAdmin() {
             className="mt-4 lg:mt-0 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add New Project
+            {t('projects.addNew') || "Add New Project"}
           </button>
         </div>
       </div>
@@ -232,7 +237,7 @@ export default function ProjectsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Projects
+                {t('projects.totalProjects') || "Total Projects"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {projects.length}
@@ -248,7 +253,7 @@ export default function ProjectsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Active Projects
+                {t('projects.activeProjects') || "Active Projects"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {projects.filter((p) => p.isActive).length}
@@ -264,7 +269,7 @@ export default function ProjectsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Featured Projects
+                {t('projects.featuredProjects') || "Featured Projects"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {projects.filter((p) => p.featured).length}
@@ -280,7 +285,7 @@ export default function ProjectsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                With Videos
+                {t('projects.withVideos') || "With Videos"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {projects.filter((p) => p.video).length}
@@ -309,7 +314,7 @@ export default function ProjectsAdmin() {
               <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                 <span className="bg-primary text-white px-4 py-1 rounded-full text-xs font-semibold shadow-md flex items-center gap-1">
                   <Star className="w-3 h-3" />
-                  Featured
+                  {t('projects.featured') || "Featured"}
                 </span>
               </div>
             )}
@@ -324,7 +329,7 @@ export default function ProjectsAdmin() {
                 }`}
               >
                 <CheckCircle className="w-3 h-3" />
-                {project.isActive ? "Active" : "Inactive"}
+                {project.isActive ? (t('projects.status.active') || "Active") : (t('projects.status.inactive') || "Inactive")}
               </span>
             </div>
 
@@ -357,7 +362,7 @@ export default function ProjectsAdmin() {
               <div className="flex-1">
                 <div className=" items-center justify-between">
                   <p className="text-sm font-medium text-MidnightNavyText dark:text-white">
-                    {project.student?.name || "Student"}
+                    {project.student?.name || t('projects.student') || "Student"}
                   </p>
                 </div>
 
@@ -383,7 +388,7 @@ export default function ProjectsAdmin() {
                   {project.updatedAt !== project.createdAt && (
                     <div className="flex items-center gap-1 mt-2 text-xs text-Aquamarine dark:text-Aquamarine">
                       <Edit3 className="w-3 h-3" />
-                      <span>Last edited {formatDate(project.updatedAt)}</span>
+                      <span>{t('common.lastEdited') || "Last edited"} {formatDate(project.updatedAt)}</span>
                     </div>
                   )}
                 </div>
@@ -416,19 +421,19 @@ export default function ProjectsAdmin() {
               {project.image && (
                 <div className="flex items-center gap-1">
                   <Image className="w-3 h-3" />
-                  <span>Image</span>
+                  <span>{t('common.image') || "Image"}</span>
                 </div>
               )}
               {project.video && (
                 <div className="flex items-center gap-1">
                   <Video className="w-3 h-3" />
-                  <span>Video</span>
+                  <span>{t('common.video') || "Video"}</span>
                 </div>
               )}
               {project.portfolioLink && (
                 <div className="flex items-center gap-1">
                   <Link className="w-3 h-3" />
-                  <span>Portfolio</span>
+                  <span>{t('common.portfolio') || "Portfolio"}</span>
                 </div>
               )}
             </div>
@@ -442,7 +447,7 @@ export default function ProjectsAdmin() {
                   className="w-full bg-primary hover:bg-primary/90 text-white py-2 px-3 rounded-lg font-semibold text-sm transition-transform transition-shadow duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-primary/30 flex items-center justify-center gap-2 group"
                 >
                   <Edit className="w-3 h-3 transition-transform duration-300 group-hover:-translate-y-0.5" />
-                  Edit
+                  {t('common.edit') || "Edit"}
                 </button>
 
                 {/* Delete */}
@@ -451,7 +456,7 @@ export default function ProjectsAdmin() {
                   className="bg-SlateBlueText/10 hover:bg-SlateBlueText/20 dark:bg-darktext/20 dark:hover:bg-darktext/30 text-SlateBlueText dark:text-darktext py-2 px-3 rounded-lg font-semibold text-xs transition-transform transition-colors transition-shadow duration-300 hover:scale-105 active:scale-100 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-SlateBlueText/20 flex items-center justify-center gap-2 group"
                 >
                   <Trash2 className="w-3 h-3 transition-transform duration-300 group-hover:rotate-12" />
-                  Delete
+                  {t('common.delete') || "Delete"}
                 </button>
               </div>
             </div>
@@ -466,18 +471,17 @@ export default function ProjectsAdmin() {
             <FileText className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
-            No projects yet
+            {t('projects.noProjects') || "No projects yet"}
           </h3>
           <p className="text-sm text-SlateBlueText dark:text-darktext mb-6 max-w-md mx-auto">
-            Create your first student project to showcase amazing work in the
-            YoungStars section.
+            {t('projects.createFirst') || "Create your first student project to showcase amazing work in the YoungStars section."}
           </p>
           <button
             onClick={() => setOpen(true)}
             className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
           >
             <Plus className="w-4 h-4" />
-            Create Your First Project
+            {t('projects.createFirstButton') || "Create Your First Project"}
           </button>
         </div>
       )}
@@ -485,7 +489,7 @@ export default function ProjectsAdmin() {
       {/* Modal */}
       <Modal
         open={open}
-        title={editing ? "Edit Project" : "Create New Project"}
+        title={editing ? (t('projects.editProject') || "Edit Project") : (t('projects.createProject') || "Create New Project")}
         onClose={() => {
           setOpen(false);
           setEditing(null);

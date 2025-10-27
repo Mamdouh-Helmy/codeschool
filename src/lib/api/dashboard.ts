@@ -22,24 +22,93 @@ export interface DashboardData {
   };
 }
 
-// دالة واحدة لجلب جميع البيانات
-export async function getDashboardData(): Promise<DashboardData> {
+// دالة مساعدة للحصول على الرسائل بناءً على اللغة
+function getMessages(locale: 'en' | 'ar') {
+  const messages = {
+    en: {
+      unknownStudent: "Unknown Student",
+      noEmail: "No email",
+      generalPlan: "General Plan",
+      systemReady: "System Ready",
+      dashboardLoading: "Dashboard is loading with real data",
+      dataLoaded: "Data Loaded",
+      allComponentsFunctional: "All dashboard components are functional",
+      newStudentRegistration: "New Student Registration",
+      joinedPlatform: "joined the platform",
+      newSubscription: "New Subscription",
+      subscribedTo: "subscribed to",
+      newProjectSubmitted: "New Project Submitted",
+      created: "created",
+      blogPosts: "Blog Posts",
+      studentProjects: "Student Projects",
+      writeNewBlog: "Write New Blog Post",
+      contentCreation: "Content creation",
+      viewStudentProjects: "View Student Projects",
+      portfolioReview: "Portfolio review",
+      days: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      timeAgo: {
+        minutes: (mins: number) => `${mins} minutes ago`,
+        hours: (hours: number) => `${hours} hours ago`,
+        days: (days: number) => `${days} days ago`
+      }
+    },
+    ar: {
+      unknownStudent: "طالب غير معروف",
+      noEmail: "لا يوجد بريد إلكتروني",
+      generalPlan: "الخطة العامة",
+      systemReady: "النظام جاهز",
+      dashboardLoading: "لوحة التحكم تعمل ببيانات حقيقية",
+      dataLoaded: "تم تحميل البيانات",
+      allComponentsFunctional: "جميع مكونات لوحة التحكم تعمل",
+      newStudentRegistration: "تسجيل طالب جديد",
+      joinedPlatform: "انضم إلى المنصة",
+      newSubscription: "اشتراك جديد",
+      subscribedTo: "اشترك في",
+      newProjectSubmitted: "تم تقديم مشروع جديد",
+      created: "أنشأ",
+      blogPosts: "مقالات المدونة",
+      studentProjects: "مشاريع الطلاب",
+      writeNewBlog: "كتابة مقال جديد",
+      contentCreation: "إنشاء محتوى",
+      viewStudentProjects: "عرض مشاريع الطلاب",
+      portfolioReview: "مراجعة المحفظة",
+      days: ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"],
+      timeAgo: {
+        minutes: (mins: number) => `قبل ${mins} دقيقة`,
+        hours: (hours: number) => `قبل ${hours} ساعة`,
+        days: (days: number) => `قبل ${days} يوم`
+      }
+    }
+  };
+
+  return messages[locale] || messages.en;
+}
+
+// الدالة الرئيسية لجلب جميع البيانات
+export async function getDashboardData(locale: 'en' | 'ar' = 'en'): Promise<DashboardData> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/dashboard`, {
       cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
+        'Accept-Language': locale,
       },
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const messages = getMessages(locale);
+      throw new Error(locale === 'ar' 
+        ? `خطأ في HTTP! الحالة: ${response.status}`
+        : `HTTP error! status: ${response.status}`);
     }
     
     const result = await response.json();
     
     if (!result.success) {
-      throw new Error(result.message || 'Failed to fetch dashboard data');
+      const messages = getMessages(locale);
+      throw new Error(result.message || (locale === 'ar' 
+        ? 'فشل في جلب بيانات لوحة التحكم' 
+        : 'Failed to fetch dashboard data'));
     }
     
     // ✅ التأكد من وجود ID فريد لكل تسجيل
@@ -55,36 +124,36 @@ export async function getDashboardData(): Promise<DashboardData> {
     return data;
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
-    return getFallbackData();
+    return getFallbackData(locale);
   }
 }
 
 // دوال منفصلة للتوافق مع الكود الحالي
-export async function getDashboardStats(): Promise<DashboardStats> {
-  const data = await getDashboardData();
+export async function getDashboardStats(locale: 'en' | 'ar' = 'en'): Promise<DashboardStats> {
+  const data = await getDashboardData(locale);
   return data.stats;
 }
 
-export async function getRecentEnrollments(): Promise<EnrollmentRecord[]> {
-  const data = await getDashboardData();
+export async function getRecentEnrollments(locale: 'en' | 'ar' = 'en'): Promise<EnrollmentRecord[]> {
+  const data = await getDashboardData(locale);
   return data.enrollments;
 }
 
-export async function getRecentActivities(): Promise<ActivityItem[]> {
-  const data = await getDashboardData();
+export async function getRecentActivities(locale: 'en' | 'ar' = 'en'): Promise<ActivityItem[]> {
+  const data = await getDashboardData(locale);
   return data.activities;
 }
 
-export async function getPerformanceData(): Promise<PerformancePoint[]> {
-  const data = await getDashboardData();
+export async function getPerformanceData(locale: 'en' | 'ar' = 'en'): Promise<PerformancePoint[]> {
+  const data = await getDashboardData(locale);
   return data.performance;
 }
 
-export async function getContentStats(): Promise<{
+export async function getContentStats(locale: 'en' | 'ar' = 'en'): Promise<{
   stats: ContentStat[];
   actions: any[];
 }> {
-  const data = await getDashboardData();
+  const data = await getDashboardData(locale);
   return data.content;
 }
 
@@ -95,8 +164,11 @@ function generateUniqueId(enrollment: any, index: number): string {
   return `enroll-${timestamp}-${random}-${index}`;
 }
 
-// بيانات افتراضية
-function getFallbackData(): DashboardData {
+// بيانات افتراضية بدعم اللغتين
+function getFallbackData(locale: 'en' | 'ar' = 'en'): DashboardData {
+  const messages = getMessages(locale);
+  const isArabic = locale === 'ar';
+
   return {
     stats: {
       totalStudents: 1248,
@@ -108,71 +180,66 @@ function getFallbackData(): DashboardData {
     },
     enrollments: [
       {
-        id: "enroll-1-ahmed-fullstack", // ✅ ID فريد
-        name: "Ahmed Mohamed",
+        id: "enroll-1-ahmed-fullstack",
+        name: isArabic ? "أحمد محمد" : "Ahmed Mohamed",
         email: "ahmed@example.com",
-        course: "Full Stack Development",
+        course: isArabic ? "تطوير الويب الشامل" : "Full Stack Development",
         progress: 25,
-        enrolledOn: new Date().toLocaleDateString('en-US'),
-        status: "active"
+        enrolledOn: new Date().toLocaleDateString(isArabic ? 'ar-EG' : 'en-US'),
+        status: "active" as const
       },
       {
-        id: "enroll-2-sara-react", // ✅ ID فريد
-        name: "Sara Ali",
+        id: "enroll-2-sara-react",
+        name: isArabic ? "سارة علي" : "Sara Ali",
         email: "sara@example.com",
-        course: "React Advanced",
+        course: isArabic ? "رياكت متقدم" : "React Advanced",
         progress: 100,
-        enrolledOn: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US'),
-        status: "active"
+        enrolledOn: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US'),
+        status: "active" as const
       },
       {
-        id: "enroll-3-omar-nodejs", // ✅ ID فريد
-        name: "Omar Hassan",
+        id: "enroll-3-omar-nodejs",
+        name: isArabic ? "عمر حسن" : "Omar Hassan",
         email: "omar@example.com",
-        course: "Node.js Backend",
+        course: isArabic ? "Node.js للخلفية" : "Node.js Backend",
         progress: 60,
-        enrolledOn: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US'),
-        status: "active"
+        enrolledOn: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US'),
+        status: "active" as const
       }
     ],
     activities: [
       {
         id: "activity-1",
-        title: "System Ready",
-        description: "Dashboard is loading with real data",
-        timestamp: "Just now",
+        title: messages.systemReady,
+        description: messages.dashboardLoading,
+        timestamp: isArabic ? messages.timeAgo.minutes(0) : "Just now",
         icon: "ion:checkmark-done",
-        tone: "success"
+        tone: "success" as const
       },
       {
         id: "activity-2",
-        title: "Data Loaded",
-        description: "All dashboard components are functional",
-        timestamp: "2 minutes ago",
+        title: messages.dataLoaded,
+        description: messages.allComponentsFunctional,
+        timestamp: isArabic ? messages.timeAgo.minutes(2) : "2 minutes ago",
         icon: "ion:server",
-        tone: "info"
+        tone: "info" as const
       }
     ],
-    performance: [
-      { label: "Mon", value: 65 },
-      { label: "Tue", value: 78 },
-      { label: "Wed", value: 82 },
-      { label: "Thu", value: 75 },
-      { label: "Fri", value: 90 },
-      { label: "Sat", value: 68 },
-      { label: "Sun", value: 72 }
-    ],
+    performance: messages.days.map((day, index) => ({
+      label: day,
+      value: [65, 78, 82, 75, 90, 68, 72][index]
+    })),
     content: {
       stats: [
         {
-          label: "Blog Posts",
+          label: messages.blogPosts,
           value: "24",
           change: "+12%",
           isPositive: true,
           icon: "ion:document-text"
         },
         {
-          label: "Student Projects",
+          label: messages.studentProjects,
           value: "156",
           change: "+8%",
           isPositive: true,
@@ -181,13 +248,13 @@ function getFallbackData(): DashboardData {
       ],
       actions: [
         {
-          label: "Write New Blog Post",
-          description: "Content creation",
+          label: messages.writeNewBlog,
+          description: messages.contentCreation,
           href: "/admin/blogs"
         },
         {
-          label: "View Student Projects",
-          description: "Portfolio review",
+          label: messages.viewStudentProjects,
+          description: messages.portfolioReview,
           href: "/admin/projects"
         }
       ]

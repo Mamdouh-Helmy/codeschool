@@ -1,5 +1,5 @@
 export default async function AdminSettingsPage() {
-  // No dedicated settings API in this repo; keep placeholder and suggest endpoint
+ 
   return (
     <div>
       <h1 className="text-2xl font-semibold">Settings</h1>

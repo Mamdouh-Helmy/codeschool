@@ -1,12 +1,11 @@
+// i18n/messages/en.js
 const en = {
-  
-  // Header
   "header.signIn": "Sign In",
   "header.signUp": "Sign Up",
   "header.menu": "Menu",
   "header.profile": "Profile",
   "header.signOut": "Sign Out",
-  // Hero
+
   "hero.title": "Empower Young Minds!",
   "hero.nextEvent": "Join our next {title} on {date}.",
   "hero.webinar": "Join our next webinar on {date}.",
@@ -19,7 +18,7 @@ const en = {
   "hero.instructor1Role": "Machine Learning",
   "hero.instructor2": "Frida Abdallah",
   "hero.instructor2Role": "Web Development",
-  // Pricing
+
   "pricing.choose": "Choose Your Learning Path",
   "pricing.loading": "Loading pricing plans...",
   "pricing.choosePlan": "Choose This Plan",
@@ -29,16 +28,18 @@ const en = {
   "pricing.card": "Card Payment",
   "pricing.bank": "Bank Transfer",
   "pricing.total": "Total Amount",
-  // Schedules
+
   "schedules.tba": "TBA",
   "schedules.joinNow": "Join Now",
   "schedules.cachedNotice":
     "Displaying cached schedule. Some events may be outdated.",
   "schedules.speechBy": "Speech by",
-  // Contact
+  "schedules.subtitle":
+    "Discover a wealth of insightful materials meticulously crafted to provide you with a comprehensive understanding.",
+
   "contact.getInTouch": "Get in Touch",
   "contact.subtitle":
-    "Have a question, idea, or request? We’d love to hear from you.",
+    "Have a question, idea, or request? We'd love to hear from you.",
   "contact.firstName": "First Name*",
   "contact.lastName": "Last Name*",
   "contact.email": "Email address*",
@@ -47,7 +48,7 @@ const en = {
   "contact.date": "Date*",
   "contact.time": "Time*",
   "contact.makeAppointment": "Make an appointment",
-  // Navigation
+
   "nav.homepage": "Home",
   "nav.schedules": "Schedules",
   "nav.speakers": "Speakers",
@@ -60,13 +61,10 @@ const en = {
   "nav.profile": "Profile",
   "nav.signOut": "Sign Out",
   "nav.latestArticle": "Latest Article",
-  // ملف en.js
 
-  // Theme Toggler
   "theme.toggleLight": "Switch to light mode",
   "theme.toggleDark": "Switch to dark mode",
 
-  // Blog
   "blog.loading": "Loading blog posts...",
   "blog.cachedNotice":
     "Displaying cached blog posts. Some content may be outdated.",
@@ -85,11 +83,25 @@ const en = {
   "blog.popularTags": "Popular Tags",
   "blog.minRead": "min read",
   "blog.views": "views",
-  // Common
+
+  "blog.notFound": "Post Not Found",
+  "blog.notFoundDescription":
+    "The blog article you're looking for doesn't exist or has been removed.",
+  "blog.author": "Author",
+  "blog.unknownAuthor": "Unknown Author",
+  "blog.imageAlt": "Blog image",
+  "blog.noContent": "No content available for this post.",
+
+  "blog.noArticles": "No articles found.",
+  "blog.cover": "blog cover",
+  "blog.article": "Article",
+  "blog.untitled": "Untitled Post",
+  "blog.by": "By",
+  "blog.errorLoading": "Error loading post",
+
   "common.english": "English",
   "common.arabic": "العربية",
   "common.loading": "Loading",
-  
 
   "youngStars.title": "Meet Our Young Tech Leaders!",
   "youngStars.highlighted": "Tech Leaders",
@@ -101,7 +113,6 @@ const en = {
   "youngStars.thinkers": "Thinkers",
   "youngStars.meetLeaders": "Meet More Leaders",
 
-  // Projects
   "projects.title": "What Our Students Build with Code School",
   "projects.exploreMore": "Explore more projects",
   "projects.allProjects": "All Student Projects",
@@ -111,7 +122,6 @@ const en = {
   "projects.viewPortfolio": "View Portfolio",
   "common.close": "Close",
 
-  // Event Ticket
   "eventTicket.title": "Free Code School Masterclass Today!",
   "eventTicket.description":
     "Often by curiosity, often sparks of wonder building this the first real coding show on the platform. guided by mentors teaching skills with tools like Sprite Lab, Minecraft too— Code School gave children a digital stage where genius grew.",
@@ -127,7 +137,6 @@ const en = {
   "eventTicket.subscribe": "Subscribe",
   "eventTicket.viewAllSubscriptions": "View All Subscriptions",
 
-  // Highlight Section
   "highlight.title.main": "Code School",
   "highlight.title.highlighted": "in Action",
   "highlight.description":
@@ -146,32 +155,27 @@ const en = {
   "highlight.modalDescription":
     "Discover how our young coders are transforming ideas into reality",
 
-  // Upcoming Events
   "upcoming.title": "Upcoming Conference",
   "upcoming.speechBy": "Speech by",
   "upcoming.tba": "TBA",
   "upcoming.registerNow": "Register Now",
   "upcoming.noEvents": "No upcoming events at the moment",
 
-  // Ticket Section
   "ticketSection.title": "Become a Part of the Digital Evolution!",
   "ticketSection.ticketAlt": "ticket",
   "ticketSection.choosePlan": "Choose Plan",
   "ticketSection.loadError": "Failed to load pricing plans.",
   "ticketSection.noPlans": "No active pricing plans available.",
 
-  // Testimonials
-
   "testimonials.heading": "What Our Attendees Say",
   "testimonials.cachedNotice":
     "Displaying cached testimonials. Some content may be outdated.",
-"testimonials.loading": "Loading testimonials...",
-"testimonials.noComment": "No comment provided",
-"testimonials.anonymous": "Anonymous",
-"testimonials.course": "Course",
-"testimonials.rating": "Rating",
+  "testimonials.loading": "Loading testimonials...",
+  "testimonials.noComment": "No comment provided",
+  "testimonials.anonymous": "Anonymous",
+  "testimonials.course": "Course",
+  "testimonials.rating": "Rating",
 
-  // Footer
   "footer.logoAlt": "website logo",
   "footer.about": "About",
   "footer.sponsors": "Sponsors",
@@ -181,9 +185,6 @@ const en = {
   "footer.emailPlaceholder": "Email address*",
   "footer.subscribe": "Subscribe",
 
-
-
-  // Auth Components
   "auth.signIn": "Sign In",
   "auth.signUp": "Sign Up",
   "auth.email": "Email",
@@ -213,7 +214,6 @@ const en = {
   "auth.validation.shortName": "Name must be at least 2 characters",
   "auth.validation.passwordsMismatch": "Passwords do not match",
 
-  // Profile Components
   "profile.title": "Profile",
   "profile.editProfile": "Edit Profile",
   "profile.changePhoto": "Change Photo",
@@ -233,18 +233,14 @@ const en = {
   "profile.validation.invalidImageType": "Image must be JPG, PNG, or WEBP",
   "profile.validation.imageTooLarge": "Image size must be less than 2MB",
 
-  // Social Auth
   "social.signInWith": "Sign in with",
   "social.signUpWith": "Sign up with",
 
-  // Common
-  
   "common.saving": "Saving...",
   "common.success": "Success",
   "common.error": "Error",
   "common.warning": "Warning",
   "common.info": "Information",
- 
   "common.submit": "Submit",
   "common.reset": "Reset",
   "common.search": "Search",
@@ -294,7 +290,6 @@ const en = {
   "common.fileTooLarge": "File too large",
   "common.unsupportedType": "Unsupported Type",
 
-  // Form Validation
   "validation.required": "This field is required",
   "validation.email": "Please enter a valid email address",
   "validation.minLength": "Must be at least {min} characters",
@@ -302,21 +297,707 @@ const en = {
   "validation.passwordStrength": "Password is too weak",
   "validation.passwordsMatch": "Passwords do not match",
 
-  // Navigation
   "nav.home": "Home",
   "nav.about": "About",
   "nav.services": "Services",
-  
   "nav.portfolio": "Portfolio",
   "nav.settings": "Settings",
-  
   "nav.logout": "Logout",
 
-  // Privacy and Terms
   "auth.privacyAgreement": "By creating an account you agree to our",
   "auth.termsOfService": "Terms of Service",
   "auth.privacyPolicy": "Privacy Policy",
-  "auth.and": "and"
+  "auth.and": "and",
+
+  "pricing.noPlans": "No pricing plans available.",
+  "pricing.loadError": "Failed to load pricing plans.",
+
+  "contact.emailUs": "Email US",
+  "contact.emailDescription":
+    "For business or partnership inquiries, contact our Business Developer. We'll respond promptly.",
+  "contact.sendEmail": "Send an email",
+  "contact.messageUs": "Message Us",
+  "contact.messageDescription":
+    "Parents are welcome to contact us via WhatsApp for program details, registration, or follow-up.",
+  "contact.sendMessage": "Send a message",
+
+  "dashboard.latestActivity": "Latest activity",
+  "dashboard.activityDescription":
+    "Monitor important updates from the community and internal team.",
+  "dashboard.contentPerformance": "Content performance",
+  "dashboard.contentDescription":
+    "Review how your blog posts and documentation are engaging students.",
+  "dashboard.quickActions": "Quick actions",
+  "dashboard.latestEnrollments": "Latest enrollments",
+  "dashboard.enrollmentsDescription":
+    "Track the newest learners joining your programs this quarter.",
+  "dashboard.learner": "Learner",
+  "dashboard.course": "Course",
+  "dashboard.progress": "Progress",
+  "dashboard.enrolledOn": "Enrolled on",
+  "dashboard.status": "Status",
+  "dashboard.adminConsole": "Admin Console",
+  "dashboard.openNavigation": "Open navigation",
+  "dashboard.closeNavigation": "Close navigation",
+  "dashboard.searchPlaceholder": "Search reports, users, or events",
+  "dashboard.scheduleReview": "Schedule review",
+  "dashboard.viewNotifications": "View notifications",
+  "dashboard.user": "User",
+  "dashboard.overview": "Overview",
+  "dashboard.webinars": "Webinars",
+  "dashboard.projects": "Projects",
+  "dashboard.blogs": "Blogs",
+  "dashboard.events": "Events",
+  "dashboard.testimonials": "Testimonials",
+  "dashboard.totalStudents": "Total Students",
+  "dashboard.activeSubscriptions": "Active Subscriptions",
+  "dashboard.monthlyRevenue": "Monthly Revenue",
+  "dashboard.courseCompletion": "Course Completion",
+  "dashboard.vsLastMonth": "vs last month",
+  "dashboard.studentEngagement": "Student Engagement",
+  "dashboard.weeklyProgress": "Weekly progress across all courses",
+  "dashboard.weeklyTarget": "Weekly Target",
+  "dashboard.completionGoal": "85% completion",
+  "dashboard.adminDashboard": "Admin Dashboard",
+  "dashboard.welcomeMessage":
+    "Welcome to your administration panel - Real-time data",
+  "dashboard.errorLoading": "Error Loading Dashboard",
+  "dashboard.errorMessage": "Please check your API endpoints and try again.",
+  "dashboard.realData": "Real Data",
+  "dashboard.avgEngagement": "Avg",
+  "dashboard.engagement": "engagement",
+  "dashboard.liveMetrics": "Live Metrics",
+  "dashboard.loadingData": "Loading real performance data...",
+  "dashboard.weeklyAverage": "Weekly Average",
+  "common.new": "New",
+
+  // Webinar keys
+  "webinar.management": "Webinars Management",
+  "webinar.managementDescription":
+    "Manage online webinars and conferences. Schedule sessions, manage speakers, and track registrations.",
+  "webinar.addNew": "Add New Webinar",
+  "webinar.totalWebinars": "Total Webinars",
+  "webinar.activeWebinars": "Active Webinars",
+  "webinar.totalSpeakers": "Total Speakers",
+  "webinar.avgAttendees": "Avg. Attendees",
+  "webinar.speakers": "Speakers",
+  "webinar.attendees": "attendees",
+  "webinar.crmLinked": "CRM Linked",
+  "webinar.noWebinars": "No webinars yet",
+  "webinar.createFirst":
+    "Create your first webinar to start engaging with students and sharing knowledge.",
+  "webinar.createFirstButton": "Create Your First Webinar",
+  "webinar.editWebinar": "Edit Webinar",
+  "webinar.createWebinar": "Create New Webinar",
+  "webinar.failedToLoad": "Failed to load webinars",
+  "webinar.savedSuccess": "Webinar saved successfully",
+  "webinar.deleteConfirm": "Are you sure you want to delete this webinar?",
+  "webinar.deleteWarning": "This action cannot be undone.",
+  "webinar.deletedSuccess": "Webinar deleted successfully",
+  "webinar.deleteFailed": "Failed to delete the webinar",
+  "webinar.deleteError": "Error deleting webinar",
+  "webinar.status.active": "Active",
+  "webinar.status.upcoming": "Upcoming",
+  "webinar.status.expired": "Expired",
+  "webinar.status.registrationClosed": "Registration Closed",
+  "webinar.status.inactive": "Inactive",
+
+  // Webinar form keys
+  "webinar.basicInfo": "Webinar Information",
+  "webinar.basicInfoDescription": "Basic details about the webinar",
+  "webinar.title": "Webinar Title",
+  "webinar.titlePlaceholder": "e.g., Advanced React Patterns",
+  "webinar.instructor": "Main Instructor",
+  "webinar.instructorPlaceholder": "Instructor name",
+  "webinar.description": "Description",
+  "webinar.descriptionPlaceholder":
+    "Describe the webinar content, learning objectives, and target audience...",
+  "webinar.coverImage": "Webinar Cover Image",
+  "webinar.imagePlaceholder": "Image URL or upload file",
+  "webinar.uploadImage": "Upload Image",
+  "webinar.schedule": "Schedule & Timing",
+  "webinar.scheduleDescription": "Set date and time for the webinar",
+  "webinar.date": "Date",
+  "webinar.time": "Time",
+  "webinar.duration": "Duration (minutes)",
+  "webinar.registrationStart": "Registration Start",
+  "webinar.registrationEnd": "Registration End",
+
+  "webinar.speakersDescription": "Add multiple speakers for this webinar",
+  "webinar.addSpeaker": "Add New Speaker",
+  "webinar.speakerNamePlaceholder": "Speaker name",
+  "webinar.speakerRolePlaceholder": "Role/Title",
+  "webinar.speakerImage": "Speaker Image",
+  "webinar.addSpeakerButton": "Add Speaker",
+  "webinar.addedSpeakers": "Added Speakers",
+  "webinar.mediaRegistration": "Media & Registration",
+  "webinar.mediaRegistrationDescription":
+    "Instructor image and registration details",
+  "webinar.instructorImage": "Instructor Image",
+  "webinar.crmUrl": "CRM Registration URL",
+  "webinar.maxAttendees": "Max Attendees",
+  "webinar.tags": "Tags",
+  "webinar.tagsDescription": "Add tags for better categorization and search",
+  "webinar.tagsPlaceholder":
+    "Enter a tag (e.g., React, JavaScript, Web Development)",
+  "webinar.addedTags": "Added Tags",
+  "webinar.tagsHint": "Press Enter or click Add to include multiple tags",
+  "webinar.settings": "Settings",
+  "webinar.settingsDescription": "Webinar visibility and status",
+  "webinar.activeWebinar": "Active Webinar",
+  "webinar.activeDescription":
+    "Make this webinar visible and available for registration",
+  "webinar.updateWebinar": "Update Webinar",
+
+  "webinar.saveError": "An error occurred",
+  "common.remove": "Remove",
+  "common.add": "Add",
+
+  // Profile validation
+  "profile.validation.nameTooLong": "Name must not exceed 50 characters",
+  "profile.validation.passwordTooLong":
+    "Password must not exceed 128 characters",
+  "profile.validation.passwordStrength":
+    "Password must contain uppercase, lowercase, and number",
+  "profile.validation.passwordStrong": "Password is strong",
+  "profile.validation.passwordsMismatch": "Passwords do not match",
+  "profile.validation.passwordsMatch": "Passwords match",
+
+  "auth.newPassword": "New Password",
+
+  // Projects management
+  "projects.management": "YoungStars Projects Management",
+  "projects.managementDescription":
+    "Manage student projects for the YoungStars section. Showcase amazing work with images, videos, and portfolio links.",
+  "projects.addNew": "Add New Project",
+  "projects.totalProjects": "Total Projects",
+  "projects.activeProjects": "Active Projects",
+  "projects.featuredProjects": "Featured Projects",
+  "projects.withVideos": "With Videos",
+  "projects.noProjects": "No projects yet",
+  "projects.createFirst":
+    "Create your first student project to showcase amazing work in the YoungStars section.",
+  "projects.createFirstButton": "Create Your First Project",
+  "projects.editProject": "Edit Project",
+  "projects.createProject": "Create New Project",
+  "projects.failedToLoad": "Failed to load projects",
+  "projects.savedSuccess": "Project saved successfully",
+  "projects.deleteConfirm": "Are you sure you want to delete this project?",
+  "projects.deleteWarning": "This action cannot be undone.",
+  "projects.deletedSuccess": "Project deleted successfully",
+  "projects.deleteFailed": "Failed to delete the project",
+  "projects.deleteError": "Error deleting project",
+  "projects.status.active": "Active",
+  "projects.status.inactive": "Inactive",
+  "projects.featured": "Featured",
+
+  // Project form keys
+  "project.basicInfo": "Project Information",
+  "project.basicInfoDescription": "Basic details about the student project",
+  "project.title": "Project Title",
+  "project.titlePlaceholder": "e.g., E-commerce Website",
+  "project.selectStudent": "Select Student",
+  "project.description": "Description",
+  "project.descriptionPlaceholder":
+    "Describe the project, technologies used, and achievements...",
+  "project.coverImage": "Project Image",
+  "project.technologies": "Technologies",
+  "project.technologiesDescription": "Add technologies used in this project",
+  "project.technologiesPlaceholder":
+    "Enter a technology (e.g., React, Node.js)",
+  "project.addedTechnologies": "Added Technologies",
+  "project.technologiesHint":
+    "Press Enter or click Add to include multiple technologies",
+  "project.mediaLinks": "Media & Links",
+  "project.mediaLinksDescription": "Upload images, videos, and portfolio links",
+  "project.videoUrl": "Video URL",
+  "project.portfolioLink": "Portfolio Link",
+  "project.settings": "Settings",
+  "project.settingsDescription": "Project visibility and status",
+  "project.featuredProject": "Featured Project",
+  "project.featuredDescription":
+    "Highlight this project as featured in the YoungStars section",
+  "project.activeProject": "Active Project",
+  "project.activeDescription":
+    "Make this project visible to users in the YoungStars section",
+  "project.updateProject": "Update Project",
+
+  // Additional project keys
+  "project.loadingStudents": "Loading students...",
+  "project.chooseStudent": "Choose a student...",
+  "project.selected": "Selected",
+  "project.addTechnology": "Add Technology",
+  "project.uploadImage": "Upload Image",
+  "project.imagePlaceholder": "Image URL or upload file",
+
+  // Additional common keys
+  "common.processing": "Processing...",
+  "common.today": "Today",
+  "common.yesterday": "Yesterday",
+  "common.daysAgo": "days ago",
+  "common.lastEdited": "Last edited",
+  "common.image": "Image",
+  "common.video": "Video",
+  "common.portfolio": "Portfolio",
+
+  // Blog management
+  "blog.management": "Blog Management",
+  "blog.managementDescription":
+    "Create, edit, and manage your blog posts. Publish engaging content for your audience.",
+  "blog.addNew": "New Blog Post",
+  "blog.totalPosts": "Total Posts",
+  "blog.published": "Published",
+  "blog.totalViews": "Total Views",
+  "blog.avgReadTime": "Avg. Read Time",
+  "blog.noPosts": "No blog posts yet",
+  "blog.createFirst":
+    "Create your first blog post to start sharing knowledge and engaging with your audience.",
+  "blog.createFirstButton": "Create Your First Post",
+  "blog.editPost": "Edit Blog Post",
+  "blog.createPost": "Create New Blog Post",
+  "blog.failedToLoad": "Failed to load blogs",
+  "blog.savedSuccess": "Blog post saved successfully",
+  "blog.deleteConfirm": "Are you sure you want to delete this blog post?",
+  "blog.deleteWarning":
+    "This action cannot be undone and will remove the post permanently.",
+  "blog.deletedSuccess": "Blog post deleted successfully",
+  "blog.deleteFailed": "Failed to delete the blog post",
+  "blog.deleteError": "Error deleting blog post",
+  "blog.status.published": "Published",
+  "blog.status.scheduled": "Scheduled",
+  "blog.status.draft": "Draft",
+
+  // Blog form keys
+  "blogForm.basicInfo": "Blog Information",
+  "blogForm.basicInfoDescription": "Basic details about the blog post",
+  "blogForm.title": "Title",
+  "blogForm.titlePlaceholder": "Enter blog post title",
+  "blogForm.excerpt": "Excerpt",
+  "blogForm.excerptPlaceholder":
+    "Brief description of the blog post (auto-generated from content)",
+  "blogForm.category": "Category",
+  "blogForm.categoryPlaceholder": "e.g., Technology, Business, Design",
+  "blogForm.authorInfo": "Author Information",
+  "blogForm.authorInfoDescription":
+    "Details about the author of this blog post",
+  "blogForm.authorName": "Author Name",
+  "blogForm.authorEmail": "Author Email",
+  "blogForm.authorRole": "Author Role",
+  "blogForm.authorAvatar": "Author Avatar",
+  "blogForm.content": "Content",
+  "blogForm.contentDescription":
+    "Main content of the blog post (HTML/Markdown supported)",
+  "blogForm.bodyContent": "Body Content",
+  "blogForm.bodyPlaceholder":
+    "Write your blog post content here... HTML and Markdown are supported.",
+  "blogForm.media": "Media",
+  "blogForm.mediaDescription": "Featured image for the blog post",
+  "blogForm.featuredImage": "Featured Image",
+  "blogForm.imageAlt": "Image Alt Text",
+  "blogForm.imageAltPlaceholder": "Description of the image for accessibility",
+  "blogForm.scheduleSettings": "Schedule & Settings",
+  "blogForm.scheduleDescription": "Publishing options and post settings",
+  "blogForm.publishDate": "Publish Date",
+  "blogForm.status": "Status",
+  "blogForm.tags": "Tags",
+  "blogForm.tagsDescription": "Add tags for better categorization and search",
+  "blogForm.tagsPlaceholder":
+    "Enter a tag (e.g., React, JavaScript, Web Development)",
+  "blogForm.addedTags": "Added Tags",
+  "blogForm.tagsHint": "Press Enter or click Add to include multiple tags",
+  "blogForm.featuredPost": "Featured Post",
+  "blogForm.featuredDescription":
+    "Highlight this post as featured on the blog homepage",
+  "blogForm.updatePost": "Update Post",
+
+  // Additional blog form keys
+  "blogForm.uploadImage": "Upload Image",
+  "blogForm.uploadAvatar": "Upload Avatar",
+  "blogForm.remove": "Remove",
+  "blogForm.imagePlaceholder": "Image URL or upload file",
+  "blogForm.avatarPlaceholder": "Avatar URL or upload file",
+  "blogForm.status.draft": "Draft",
+  "blogForm.status.published": "Published",
+  "blogForm.authorRoles.author": "Author",
+  "blogForm.authorRoles.editor": "Editor",
+  "blogForm.authorRoles.contributor": "Contributor",
+  "blogForm.authorRoles.admin": "Admin",
+  "blogForm.authorRoles.guest": "Guest Writer",
+
+  // Additional common keys
+  "common.minRead": "min read",
+  "common.views": "views",
+  "common.readTime": "read time",
+  "common.publishDate": "Publish Date",
+  "common.author": "Author",
+
+  "common.featured": "Featured",
+  "common.scheduled": "Scheduled",
+  "common.draft": "Draft",
+
+  // Pricing management - FIXED KEYS
+  "pricing.management": "Pricing Plans Management",
+  "pricing.managementDescription":
+    "Create and manage subscription plans for your students. Customize pricing, features, and availability to match your educational offerings.",
+  "pricing.addNew": "Add New Plan",
+  "pricing.totalPlans": "Total Plans",
+  "pricing.activePlans": "Active Plans",
+  "pricing.popularPlans": "Popular Plans",
+  "pricing.avgPrice": "Average Price",
+  "pricing.popularBadge": "Most Popular",
+  "pricing.featuresIncluded": "Features Included",
+  "pricing.moreFeatures": "+{count} more features",
+  "pricing.unlimited": "Unlimited",
+  "pricing.save": "Save",
+  "pricing.createFirst":
+    "Create your first pricing plan to start accepting subscriptions and grow your business.",
+  "pricing.createFirstButton": "Create Your First Plan",
+  "pricing.editPlan": "Edit Pricing Plan",
+  "pricing.createPlan": "Create New Pricing Plan",
+  "pricing.deleteConfirm": "Are you sure you want to delete this pricing plan?",
+  "pricing.deleteWarning": "This action cannot be undone.",
+  "pricing.deletedSuccess": "Plan deleted successfully",
+  "pricing.deleteFailed": "Failed to delete the plan",
+  "pricing.deleteError": "Error deleting plan",
+  "pricing.savedSuccess": "Plan saved successfully",
+  "pricing.saveError": "An error occurred: {message}",
+  "pricing.basicInfo": "Basic Information",
+  "pricing.basicInfoDescription": "Plan details and description",
+  "pricing.planName": "Plan Name",
+  "pricing.planNamePlaceholder": "e.g., Professional Plan",
+  "pricing.descriptionPlaceholder": "Brief description of the plan",
+  "pricing.pricingBilling": "Pricing & Billing",
+  "pricing.pricingBillingDescription":
+    "Set pricing, discounts, and billing cycle",
+  "pricing.originalPrice": "Original Price",
+  "pricing.discount": "Discount",
+  "pricing.finalPrice": "Final Price",
+  "pricing.calculatedAutomatically": "Calculated automatically",
+  "pricing.sameAsOriginal": "Same as original price",
+  "pricing.discountApplied": "Discount Applied",
+
+  // Currency keys - FIXED
+  "pricing.currency.USD": "US Dollar ($)",
+  "pricing.currency.EUR": "Euro (€)",
+  "pricing.currency.EGP": "Egyptian Pound (E£)",
+
+  "pricing.billingPeriod": "Billing Period",
+  "pricing.billingPeriod.monthly": "Monthly",
+  "pricing.billingPeriod.quarterly": "Quarterly",
+  "pricing.billingPeriod.yearly": "Yearly",
+  "pricing.planConfig": "Plan Configuration",
+  "pricing.planConfigDescription": "Configure plan settings and limitations",
+  "pricing.planType": "Plan Type",
+
+  // Plan type keys - FIXED
+  "pricing.type.standard": "Standard",
+  "pricing.type.premium": "Premium",
+  "pricing.type.enterprise": "Enterprise",
+
+  "pricing.maxStudents": "Max Students",
+  "pricing.maxStudentsPlaceholder": "0 for unlimited",
+  "pricing.features": "Features",
+  "pricing.featuresDescription": "List all features included in this plan",
+  "pricing.featuresLabel": "Features",
+  "pricing.featuresPlaceholder": "Feature 1\nFeature 2\nFeature 3",
+  "pricing.featuresHint": "Enter each feature on a new line",
+  "pricing.settings": "Settings",
+  "pricing.settingsDescription": "Plan visibility and status settings",
+  "pricing.markPopular": "Mark as Popular",
+  "pricing.markPopularDescription":
+    "Highlight this plan as recommended choice for users",
+  "pricing.activePlan": "Active Plan",
+  "pricing.activePlanDescription":
+    "Make this plan available for purchase and visible to users",
+  "pricing.updatePlan": "Update Plan",
+
+  // Language keys - FIXED
+  "common.language.en": "English",
+  "common.language.ar": "العربية",
+  "common.currency": "Currency",
+  "common.status.active": "Active",
+  "common.status.inactive": "Inactive",
+
+  // في ملف en.js - أضف هذه المفاتيب في القسم المناسب
+
+  // Subscriptions Management Keys
+  "subscriptions.management": "Subscriptions Management",
+  "subscriptions.managementDescription":
+    "Manage all user subscriptions, track payment status, and monitor subscription activities.",
+  "subscriptions.totalSubscriptions": "Total Subscriptions",
+  "subscriptions.activeSubscriptions": "Active Subscriptions",
+  "subscriptions.pendingPayments": "Pending Payments",
+  "subscriptions.totalRevenue": "Total Revenue",
+  "subscriptions.activeUsers": "Active Users",
+  "subscriptions.noSubscriptions": "No subscriptions yet",
+  "subscriptions.noSubscriptionsDescription":
+    "When users subscribe to your plans, their subscriptions will appear here for management.",
+  "subscriptions.viewDetails": "View Details",
+  "subscriptions.deleteConfirm":
+    "Are you sure you want to delete this subscription?",
+  "subscriptions.deleteWarning":
+    "This action cannot be undone and will remove all subscription data.",
+  "subscriptions.deletedSuccess": "Subscription deleted successfully",
+  "subscriptions.deleteFailed": "Failed to delete the subscription",
+  "subscriptions.deleteError": "Error deleting subscription",
+
+  // Subscription Status
+  "subscriptions.status.active": "Active",
+  "subscriptions.status.pending": "Pending",
+  "subscriptions.status.cancelled": "Cancelled",
+  "subscriptions.status.expired": "Expired",
+
+  // Payment Status
+  "subscriptions.paymentStatus.paid": "Paid",
+  "subscriptions.paymentStatus.pending": "Pending",
+  "subscriptions.paymentStatus.failed": "Failed",
+
+  // Subscription Details
+  "subscriptions.user": "User",
+  "subscriptions.plan": "Plan",
+  "subscriptions.invoiceNumber": "Invoice Number",
+  "subscriptions.startDate": "Start Date",
+  "subscriptions.endDate": "End Date",
+  "subscriptions.studentCount": "Students",
+  "subscriptions.paymentMethod": "Payment Method",
+  "subscriptions.notes": "Notes",
+  "subscriptions.unknownUser": "Unknown User",
+  "subscriptions.unknownPlan": "Unknown Plan",
+  "subscriptions.noEmail": "No Email",
+
+  // Schedules Management Keys
+  "schedules.management": "Schedules Management",
+  "schedules.managementDescription":
+    "Manage events, conferences, and schedules. Create and organize upcoming events.",
+  "schedules.addNew": "Add New Event",
+  "schedules.totalEvents": "Total Events",
+  "schedules.activeEvents": "Active Events",
+  "schedules.upcomingEvents": "Upcoming Events",
+  "schedules.pastEvents": "Past Events",
+  "schedules.noEvents": "No events yet",
+  "schedules.noEventsDescription":
+    "Create your first event to start managing schedules and conferences.",
+  "schedules.createFirstButton": "Create Your First Event",
+  "schedules.editEvent": "Edit Event",
+  "schedules.createEvent": "Create New Event",
+  "schedules.failedToLoad": "Failed to load events",
+  "schedules.savedSuccess": "Event saved successfully",
+  "schedules.deleteConfirm": "Are you sure you want to delete this event?",
+  "schedules.deleteWarning": "This action cannot be undone.",
+  "schedules.deletedSuccess": "Event deleted successfully",
+  "schedules.deleteFailed": "Failed to delete the event",
+  "schedules.deleteError": "Error deleting event",
+
+  // Schedule Form Keys
+  "scheduleForm.basicInfo": "Event Information",
+  "scheduleForm.basicInfoDescription": "Basic details about the event",
+  "scheduleForm.eventTitle": "Event Title",
+  "scheduleForm.titlePlaceholder": "e.g., React Conference 2024",
+  "scheduleForm.description": "Description",
+  "scheduleForm.descriptionPlaceholder":
+    "Describe the event content, objectives, and what attendees will learn...",
+  "scheduleForm.coverImage": "Event Cover Image",
+  "scheduleForm.imagePlaceholder": "Image URL or upload file",
+  "scheduleForm.uploadImage": "Upload Image",
+  "scheduleForm.removeImage": "Remove",
+  "scheduleForm.scheduleLocation": "Schedule & Location",
+  "scheduleForm.scheduleDescription":
+    "Set date, time, and location for the event",
+  "scheduleForm.date": "Date",
+  "scheduleForm.time": "Time",
+  "scheduleForm.location": "Location",
+  "scheduleForm.locationPlaceholder":
+    "e.g., Conference Hall A, Virtual Meeting, etc.",
+  "scheduleForm.speakers": "Speakers",
+  "scheduleForm.speakersDescription": "Add multiple speakers for this event",
+  "scheduleForm.addNewSpeaker": "Add New Speaker",
+  "scheduleForm.speakerName": "Speaker Name",
+  "scheduleForm.speakerNamePlaceholder": "Speaker name",
+  "scheduleForm.speakerRole": "Speaker Role",
+  "scheduleForm.speakerRolePlaceholder": "Role/Title",
+  "scheduleForm.speakerImage": "Speaker Image",
+  "scheduleForm.addSpeaker": "Add Speaker",
+  "scheduleForm.addedSpeakers": "Added Speakers",
+  "scheduleForm.tags": "Tags",
+  "scheduleForm.tagsDescription":
+    "Add tags for better categorization and search",
+  "scheduleForm.tagsPlaceholder":
+    "Enter a tag (e.g., Conference, Workshop, Networking)",
+  "scheduleForm.addTag": "Add",
+  "scheduleForm.addedTags": "Added Tags",
+  "scheduleForm.tagsHint": "Press Enter or click Add to include multiple tags",
+  "scheduleForm.settings": "Settings",
+  "scheduleForm.settingsDescription": "Event visibility and status",
+  "scheduleForm.activeEvent": "Active Event",
+  "scheduleForm.activeDescription": "Make this event visible and available",
+  "scheduleForm.updateEvent": "Update Event",
+  "scheduleForm.createEvent": "Create Event",
+  "scheduleForm.saving": "Saving...",
+
+  // Common Form Labels
+  "common.eventTitle": "Event Title",
+
+  "common.speakers": "Speakers",
+
+  "common.active": "Active",
+
+  "common.save": "Save",
+
+  "common.paymentStatus": "Payment Status",
+  "common.paymentMethod": "Payment Method",
+  "common.invoiceNumber": "Invoice Number",
+  "common.startDate": "Start Date",
+  "common.endDate": "End Date",
+  "common.totalAmount": "Total Amount",
+
+  "common.students": "Students",
+  "common.notes": "Notes",
+
+  // في ملف en.js - أضف هذه المفاتيب في القسم المناسب
+
+  // Events Management Keys
+  "events.management": "Events Management",
+  "events.managementDescription":
+    "Manage your events, workshops, and conferences. Schedule sessions, manage speakers, and track registrations for both online and in-person events.",
+  "events.addNew": "Add New Event",
+  "events.totalEvents": "Total Events",
+  "events.activeEvents": "Active Events",
+  "events.totalSpeakers": "Total Speakers",
+  "events.avgAttendees": "Avg. Attendees",
+  "events.noEvents": "No events yet",
+  "events.noEventsDescription":
+    "Create your first event to start engaging with attendees and organizing memorable experiences.",
+  "events.createFirstButton": "Create Your First Event",
+  "events.editEvent": "Edit Event",
+  "events.createEvent": "Create New Event",
+  "events.failedToLoad": "Failed to load events",
+  "events.savedSuccess": "Event saved successfully",
+  "events.deleteConfirm": "Are you sure you want to delete this event?",
+  "events.deleteWarning": "This action cannot be undone.",
+  "events.deletedSuccess": "Event deleted successfully",
+  "events.deleteFailed": "Failed to delete the event",
+  "events.deleteError": "Error deleting event",
+
+  // Event Status
+  "events.status.active": "Active",
+  "events.status.upcoming": "Upcoming",
+  "events.status.expired": "Expired",
+  "events.status.registrationClosed": "Registration Closed",
+  "events.status.inactive": "Inactive",
+
+  // Event Form Keys
+  "eventForm.basicInfo": "Event Information",
+  "eventForm.basicInfoDescription": "Basic details about the event",
+  "eventForm.eventTitle": "Event Title",
+  "eventForm.titlePlaceholder": "e.g., React Conference 2024",
+  "eventForm.mainInstructor": "Main Instructor",
+  "eventForm.instructorPlaceholder": "Instructor name",
+  "eventForm.description": "Description",
+  "eventForm.descriptionPlaceholder":
+    "Describe the event content, objectives, and target audience...",
+  "eventForm.location": "Location",
+  "eventForm.locationPlaceholder":
+    "e.g., Online, Conference Hall A, or Physical Address",
+  "eventForm.coverImage": "Event Cover Image",
+  "eventForm.imagePlaceholder": "Image URL or upload file",
+  "eventForm.uploadImage": "Upload Image",
+  "eventForm.removeImage": "Remove",
+  "eventForm.scheduleTiming": "Schedule & Timing",
+  "eventForm.scheduleDescription": "Set date and time for the event",
+  "eventForm.date": "Date",
+  "eventForm.time": "Time",
+  "eventForm.registrationPeriod": "Registration Period",
+  "eventForm.registrationStart": "Registration Start",
+  "eventForm.registrationEnd": "Registration End",
+  "eventForm.speakers": "Speakers",
+  "eventForm.speakersDescription": "Add multiple speakers for this event",
+  "eventForm.addNewSpeaker": "Add New Speaker",
+  "eventForm.speakerName": "Speaker Name",
+  "eventForm.speakerNamePlaceholder": "Speaker name",
+  "eventForm.speakerRole": "Speaker Role",
+  "eventForm.speakerRolePlaceholder": "Role/Title",
+  "eventForm.speakerImage": "Speaker Image",
+  "eventForm.addSpeaker": "Add Speaker",
+  "eventForm.addedSpeakers": "Added Speakers",
+  "eventForm.mediaRegistration": "Media & Registration",
+  "eventForm.mediaRegistrationDescription":
+    "Instructor image and registration details",
+  "eventForm.instructorImage": "Instructor Image",
+  "eventForm.crmRegistrationUrl": "CRM Registration URL",
+  "eventForm.maxAttendees": "Max Attendees",
+  "eventForm.currentAttendees": "Current Attendees",
+  "eventForm.tags": "Tags",
+  "eventForm.tagsDescription": "Add tags for better categorization and search",
+  "eventForm.tagsPlaceholder":
+    "Enter a tag (e.g., Conference, Workshop, React)",
+  "eventForm.addTag": "Add",
+  "eventForm.addedTags": "Added Tags",
+  "eventForm.tagsHint": "Press Enter or click Add to include multiple tags",
+  "eventForm.settings": "Settings",
+  "eventForm.settingsDescription": "Event visibility and status",
+  "eventForm.activeEvent": "Active Event",
+  "eventForm.activeDescription":
+    "Make this event visible and available for registration",
+  "eventForm.updateEvent": "Update Event",
+  "eventForm.createEvent": "Create Event",
+  "eventForm.saving": "Saving...",
+
+  // Event Details
+  "events.duration": "Duration",
+  "events.minutes": "minutes",
+  "events.locationNotSpecified": "Location not specified",
+  "events.speakers": "Speakers",
+  "events.attendees": "attendees",
+  "events.crmLinked": "CRM Linked",
+  "events.viewDetails": "View Details",
+
+  // Common Event Terms
+  "common.duration": "Duration",
+  "common.instructor": "Instructor",
+
+  "common.attendees": "Attendees",
+  "common.registration": "Registration",
+  "common.crm": "CRM",
+
+  "subscriptions.subscriptionDetails": " Subscription Details",
+  "subscriptions.detailsDescription":
+    " View detailed information about user subscriptions, payment status, and subscription activities.",
+  "subscriptions.userPlanInfo": " User Subscription Plan",
+  "subscriptions.paymentInfo": "Payment Information",
+  "subscriptions.subscriptionActivity": "Subscription Activity",
+  "subscriptions.userPlanDescription":
+    "Details about the user's subscription plan, including the plan name, start date, and end date.",
+  "subscriptions.paymentDescription":
+    "Information about payment status, payment method, and any payment-related notes.",
+  "subscriptions.activityDescription":
+    "Log of activities related to the subscription, such as updates, renewals, or cancellations.",
+  "common.days": "Days",
+  "subscriptions.status": "Status",
+  "subscriptions.features": "Features",
+  "subscriptions.detailsFullDescription":
+    "View detailed information about the user's subscription, payment status, and subscription activity.",
+  "subscriptions.totalAmount": "Total Amount",
+  "subscriptions.lastPaymentDate": "Last Payment Date",
+  "subscriptions.statusPaymentDescription":
+    "Current status of the subscription and its payments.",
+  "subscriptions.statusPayment": "Subscription and Payment Status",
+  "subscriptions.paymentStatus": "Payment Status",
+  "subscriptions.timestampsDescription":
+    "Display important timestamps related to the subscription.",
+
+  "subscriptions.remainingDays": "Remaining Days",
+  "subscriptions.userInfo": "User Information",
+  "subscriptions.userInfoDescription": "Subscription Owner Details",
+  "subscriptions.planInfo": "Plan Information",
+  "subscriptions.planInfoDescription": "Details of the Subscribed Plan",
+  "subscriptions.planFeatures": "Plan Features",
+  "subscriptions.notesDescription": "Additional Notes about the Subscription",
+  "common.createdAt": "Created At",
+  "common.updatedAt": "Updated At",
+  "common.deletedAt": "Deleted At",
+  "subscriptions.notesUpdated": "Notes updated successfully",
+  "subscriptions.notesUpdateFailed": "Failed to update notes",
+ 
 };
 
 export default en;

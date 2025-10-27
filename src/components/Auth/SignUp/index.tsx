@@ -7,6 +7,7 @@ import SocialSignUp from "../SocialSignUp";
 import Logo from "@/components/Layout/Header/Logo";
 import Loader from "@/components/Common/Loader";
 import AuthDialogContext from "@/app/context/AuthDialogContext";
+import { useI18n } from "@/i18n/I18nProvider";
 
 type Errors = {
   name?: string;
@@ -17,26 +18,27 @@ type Errors = {
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const validateName = (name: string) => {
-  if (!name || !name.trim()) return "Name is required";
-  if (name.trim().length < 2) return "Name must be at least 2 characters";
+  if (!name || !name.trim()) return "auth.validation.required";
+  if (name.trim().length < 2) return "auth.validation.shortName";
   return "";
 };
 
 const validateEmail = (email: string) => {
-  if (!email || !email.trim()) return "Email is required";
-  if (!emailRegex.test(email.trim())) return "Invalid email";
+  if (!email || !email.trim()) return "auth.validation.required";
+  if (!emailRegex.test(email.trim())) return "auth.validation.invalidEmail";
   return "";
 };
 
 const validatePassword = (password: string) => {
-  if (!password) return "Password is required";
-  if (password.length < 6) return "Password must be at least 6 characters";
+  if (!password) return "auth.validation.required";
+  if (password.length < 6) return "auth.validation.shortPassword";
   return "";
 };
 
 const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
   const router = useRouter();
   const authDialog = useContext(AuthDialogContext);
+  const { t } = useI18n();
 
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -46,7 +48,6 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
     const { name, value } = e.target;
     setForm((s) => ({ ...s, [name]: value }));
 
-    // تحقق لحظي وحذف الخطأ عند التعديل
     if (name === "name")
       setErrors((p) => ({ ...p, name: validateName(value) || "" }));
     if (name === "email")
@@ -73,7 +74,6 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
 
     setLoading(true);
 
-    // نرسل الإيميل بصيغة lowercase عشان نتجنب التكرار بحروف مختلفة
     const payload = {
       name: form.name.trim(),
       email: form.email.trim().toLowerCase(),
@@ -90,25 +90,21 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
       const result = await res.json();
 
       if (!res.ok) {
-        // حالة 409: إيميل موجود بالفعل
         if (res.status === 409) {
-          const message = result?.message || "Email already registered";
+          const message = result?.message || "auth.emailExists";
           setErrors((p) => ({ ...p, email: message }));
-          toast.error(message);
+          toast.error(t(message));
         } else if (result?.errors && typeof result.errors === "object") {
-          // إذا السيرفر رجع أخطاء حقول
           setErrors(result.errors);
-          toast.error(result.message || "Validation failed");
+          toast.error(result.message || "auth.registrationFailed");
         } else {
-          toast.error(result?.message || "Registration failed");
+          toast.error(result?.message || "auth.registrationFailed");
         }
         setLoading(false);
         return;
       }
 
-      // نجاح
-      toast.success("Successfully registered! Redirecting...");
-      // أغلق المودال فقط بعد النجاح
+      toast.success(t("auth.registrationSuccess"));
       if (typeof signUpOpen === "function") signUpOpen(false);
 
       authDialog?.setIsUserRegistered(true);
@@ -118,7 +114,7 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
       setTimeout(() => router.push("/"), 1200);
     } catch (err: any) {
       console.error("Register error:", err);
-      toast.error(err?.message || "Registration failed");
+      toast.error(err?.message || t("auth.registrationFailed"));
       setLoading(false);
     }
   };
@@ -134,7 +130,7 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
       <span className="z-1 relative my-8 block text-center">
         <span className="-z-1 absolute left-0 top-1/2 block h-px w-full bg-border dark:bg-dark_border"></span>
         <span className="text-body-secondary relative z-10 inline-block bg-white dark:bg-darklight px-3 text-base dark:bg-dark">
-          OR
+          {t("auth.signUpWith")}
         </span>
       </span>
 
@@ -142,7 +138,7 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
         <div className="mb-[22px]">
           <input
             type="text"
-            placeholder="Name"
+            placeholder={t("auth.name")}
             name="name"
             value={form.name}
             onChange={handleChange}
@@ -152,14 +148,14 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
             }`}
           />
           {errors.name && (
-            <p className="text-sm text-red-500 mt-1">{errors.name}</p>
+            <p className="text-sm text-red-500 mt-1">{t(errors.name)}</p>
           )}
         </div>
 
         <div className="mb-[22px]">
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t("auth.email")}
             name="email"
             value={form.email}
             onChange={handleChange}
@@ -169,14 +165,14 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
             }`}
           />
           {errors.email && (
-            <p className="text-sm text-red-500 mt-1">{errors.email}</p>
+            <p className="text-sm text-red-500 mt-1">{t(errors.email)}</p>
           )}
         </div>
 
         <div className="mb-[22px]">
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t("auth.password")}
             name="password"
             value={form.password}
             onChange={handleChange}
@@ -186,7 +182,7 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
             }`}
           />
           {errors.password && (
-            <p className="text-sm text-red-500 mt-1">{errors.password}</p>
+            <p className="text-sm text-red-500 mt-1">{t(errors.password)}</p>
           )}
         </div>
 
@@ -199,33 +195,33 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
             {loading ? (
               <>
                 <Loader />
-                <span className="pl-2">Signing up...</span>
+                <span className="pl-2">{t("auth.signingUp")}</span>
               </>
             ) : (
-              "Sign Up"
+              t("auth.signUp")
             )}
           </button>
         </div>
       </form>
 
       <p className="text-body-secondary mb-4 text-base">
-        By creating an account you are agree with our{" "}
+        {t("auth.privacyAgreement")}{" "}
         <a href="/#" className="text-primary hover:underline">
-          Privacy
+          {t("auth.termsOfService")}
         </a>{" "}
-        and{" "}
+        {t("auth.and")}{" "}
         <a href="/#" className="text-primary hover:underline">
-          Policy
+          {t("auth.privacyPolicy")}
         </a>
       </p>
 
       <p className="text-body-secondary text-base">
-        Already have an account?
+        {t("auth.haveAccount")}
         <Link
           href="/signin"
           className="pl-2 text-primary hover:bg-darkprimary hover:underline"
         >
-          Sign In
+          {t("auth.signIn")}
         </Link>
       </p>
     </>

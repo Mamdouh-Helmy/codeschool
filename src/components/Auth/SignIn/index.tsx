@@ -6,18 +6,19 @@ import Logo from "@/components/Layout/Header/Logo";
 import Loader from "@/components/Common/Loader";
 import AuthDialogContext from "@/app/context/AuthDialogContext";
 import SocialSignIn from "../SocialSignIn";
+import { useI18n } from "@/i18n/I18nProvider";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const validateEmail = (email: string) => {
-  if (!email || !email.trim()) return "Email is required";
-  if (!emailRegex.test(email.trim())) return "Invalid email address";
+  if (!email || !email.trim()) return "auth.validation.required";
+  if (!emailRegex.test(email.trim())) return "auth.validation.invalidEmail";
   return "";
 };
 
 const validatePassword = (password: string) => {
-  if (!password) return "Password is required";
-  if (password.length < 6) return "Password must be at least 6 characters";
+  if (!password) return "auth.validation.required";
+  if (password.length < 6) return "auth.validation.shortPassword";
   return "";
 };
 
@@ -27,6 +28,7 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
   const authDialog = useContext(AuthDialogContext);
+  const { t } = useI18n();
 
   const handleChangeEmail = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -66,25 +68,23 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
       setLoading(false);
 
       if (!res.ok || !data.success) {
-        const message = data?.message || "Login failed";
-        toast.error(message);
+        const message = data?.message || "auth.loginFailed";
+        toast.error(t(message));
         authDialog?.setIsFailedDialogOpen(true);
         setTimeout(() => authDialog?.setIsFailedDialogOpen(false), 1100);
         return;
       }
 
-      // خزّن التوكن في localStorage كخيار للطلبات من الـ client
       try {
         if (data.accessToken) localStorage.setItem("token", data.accessToken);
       } catch (err) {
         console.warn("Failed to store token", err);
       }
 
-      toast.success("Logged in successfully!");
+      toast.success(t("auth.loginSuccess"));
       authDialog?.setIsSuccessDialogOpen(true);
       setTimeout(() => authDialog?.setIsSuccessDialogOpen(false), 1100);
 
-      // توجيه حسب الدور — middleware على الخادم سيقرأ الـ cookie ويمنع الوصول لو مش admin
       setTimeout(() => {
         signInOpen && signInOpen(false);
         if (data.user?.role === "admin") {
@@ -96,7 +96,7 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
     } catch (err) {
       setLoading(false);
       console.error(err);
-      toast.error("Unexpected error");
+      toast.error(t("common.error"));
       authDialog?.setIsFailedDialogOpen(true);
       setTimeout(() => authDialog?.setIsFailedDialogOpen(false), 1100);
     }
@@ -113,7 +113,7 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
       <span className="relative my-8 block text-center">
         <span className="absolute left-0 top-1/2 block h-px w-full bg-border dark:bg-dark_border"></span>
         <span className="relative z-10 inline-block bg-white dark:bg-darklight px-3 text-base dark:bg-dark">
-          OR
+          {t("auth.signInWith")}
         </span>
         <Toaster />
       </span>
@@ -122,7 +122,7 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
         <div className="mb-[22px]">
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t("auth.email")}
             required
             value={email}
             onChange={handleChangeEmail}
@@ -130,13 +130,13 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
               errors.email ? "border-red-500" : ""
             }`}
           />
-          {errors.email && <p className="text-sm text-red-500 mt-1">{errors.email}</p>}
+          {errors.email && <p className="text-sm text-red-500 mt-1">{t(errors.email)}</p>}
         </div>
 
         <div className="mb-[22px]">
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t("auth.password")}
             required
             value={password}
             onChange={handleChangePassword}
@@ -144,7 +144,7 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
               errors.password ? "border-red-500" : ""
             }`}
           />
-          {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password}</p>}
+          {errors.password && <p className="text-sm text-red-500 mt-1">{t(errors.password)}</p>}
         </div>
 
         <div className="mb-9">
@@ -156,19 +156,19 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
             {loading ? (
               <>
                 <Loader />
-                <span className="pl-2">Signing in...</span>
+                <span className="pl-2">{t("auth.signingIn")}</span>
               </>
             ) : (
-              "Sign In"
+              t("auth.signIn")
             )}
           </button>
         </div>
       </form>
 
       <p className="text-body-secondary text-base">
-        Not a member yet?{" "}
+        {t("auth.noAccount")}{" "}
         <Link href="/signup" className="text-primary hover:underline">
-          Sign Up
+          {t("auth.signUp")}
         </Link>
       </p>
     </>

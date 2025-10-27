@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Slider from "react-slick";
+import { useI18n } from "@/i18n/I18nProvider";
 
 type Event = {
   _id?: string;
@@ -17,6 +18,7 @@ const BoxSlider = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { t } = useI18n();
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -28,27 +30,27 @@ const BoxSlider = () => {
         setEvents(result.data || []);
       } catch (err) {
         console.error("Error fetching events:", err);
-        setError("Failed to load events");
+        setError(t("common.error"));
       } finally {
         setLoading(false);
       }
     };
 
     fetchEvents();
-  }, []);
+  }, [t]);
 
   const settings = {
     dots: false,
-    arrows: false, // 🔹 نخفي الأسهم عشان الشكل يكون شريط متصل
-    infinite: true, // 🔁 مهم جدًا للاستمرارية
-    speed: 6000, // ⏩ سرعة الانزلاق (غيّر الرقم لو عايز أسرع أو أبطأ)
-    autoplay: true, // 🌀 تشغيل تلقائي
-    autoplaySpeed: 0, // ⏱️ صفر = حركة مستمرة بدون توقف
-    cssEase: "linear", // 💨 يخلي الحركة ثابتة وناعمة
+    arrows: false,
+    infinite: true,
+    speed: 6000,
+    autoplay: true,
+    autoplaySpeed: 0,
+    cssEase: "linear",
     slidesToShow: 7,
     slidesToScroll: 1,
     pauseOnHover: true,
-    swipeToSlide: true, // تقدر تسحب بيدك لو حبيت
+    swipeToSlide: true,
 
     responsive: [
       {
@@ -77,14 +79,13 @@ const BoxSlider = () => {
   };
 
   return (
-    <div className="text-center space-y-4 overflow-hidden"> {/* ✅ يخفي أي overflow يطلع برة */}
+    <div className="text-center space-y-4 overflow-hidden">
       {loading ? (
-        <p className="text-gray-400">Loading events...</p>
+        <p className="text-gray-400">{t("common.loading")}</p>
       ) : error ? (
         <p className="text-gray-400">{error}</p>
       ) : events.length > 0 ? (
         <Slider {...settings}>
-          {/* ✅ نكرر البيانات مرتين عشان نضمن الاتصال المستمر */}
           {[...events, ...events].map((event, index) => {
             const { day, month, year } = formatDate(event.date);
             return (
@@ -102,7 +103,7 @@ const BoxSlider = () => {
           })}
         </Slider>
       ) : (
-        <p className="text-gray-400">No events available</p>
+        <p className="text-gray-400">{t("upcoming.noEvents")}</p>
       )}
     </div>
   );

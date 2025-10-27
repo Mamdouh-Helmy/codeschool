@@ -26,6 +26,8 @@ import {
   PoundSterling,
 } from "lucide-react";
 import EgyptianPoundIcon from "../../icons/EgyptianPoundIcon";
+import { useI18n } from "@/i18n/I18nProvider";
+import toast from "react-hot-toast";
 
 interface Props {
   initial?: any;
@@ -34,6 +36,7 @@ interface Props {
 }
 
 export default function PricingForm({ initial, onClose, onSaved }: Props) {
+  const { t } = useI18n();
   const [form, setForm] = useState(() => ({
     name: initial?.name || "",
     description: initial?.description || "",
@@ -55,14 +58,12 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
   );
   const [loading, setLoading] = useState(false);
 
-  // ✅ دالة آمنة لتحويل الأرقام
   const safeParseNumber = (value: string | number): number => {
     if (value === "" || value === null || value === undefined) return 0;
     const num = typeof value === "string" ? parseFloat(value) : value;
     return isNaN(num) ? 0 : num;
   };
 
-  // ✅ حساب السعر النهائي تلقائياً
   const calculateFinalPrice = (original: number, discount: number): number => {
     if (original > 0 && discount > 0) {
       const discountAmount = (original * discount) / 100;
@@ -71,7 +72,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
     return original;
   };
 
-  // ✅ حساب نسبة الخصم تلقائياً
   const calculateDiscountPercentage = (
     original: number,
     final: number
@@ -82,7 +82,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
     return 0;
   };
 
-  // ✅ دالة لإرجاع الأيقونة والرمز المناسب للعملة
   const getCurrencyInfo = (currency: string) => {
     switch (currency) {
       case "USD":
@@ -98,13 +97,11 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
 
   const currencyInfo = getCurrencyInfo(form.currency);
 
-  // ✅ تحديث الحقول تلقائياً عند تغيير أي من الأسعار
   useEffect(() => {
     const original = safeParseNumber(form.originalPrice);
     const discount = safeParseNumber(form.discount);
     const price = safeParseNumber(form.price);
 
-    // ✅ إذا تم تغيير السعر الأصلي بدون خصم، تحديث السعر النهائي
     if (original > 0 && discount === 0 && price === 0) {
       setForm((prev) => ({
         ...prev,
@@ -112,7 +109,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
       }));
     }
 
-    // ✅ إذا تم تغيير السعر الأصلي مع وجود خصم، إعادة حساب السعر النهائي
     if (original > 0 && discount > 0) {
       const finalPrice = calculateFinalPrice(original, discount);
       setForm((prev) => ({
@@ -123,18 +119,9 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
   }, [form.originalPrice, form.discount]);
 
   const onChange = (field: string, value: any) => {
-    if (field === "currency") {
-      // ✅ عند تغيير العملة، قم بتحديث الحقول الأخرى إذا لزم الأمر
-      setForm((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-    } else {
-      setForm((prev) => ({ ...prev, [field]: value }));
-    }
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  // ✅ دالة معالجة تغيير الأسعار
   const handlePriceChange = (field: string, value: string | number) => {
     const numValue = safeParseNumber(value);
 
@@ -144,7 +131,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
 
       if (original > 0) {
         if (discount > 0) {
-          // ✅ إذا كان هناك خصم، احسب السعر النهائي
           const finalPrice = calculateFinalPrice(original, discount);
           setForm((prev) => ({
             ...prev,
@@ -152,7 +138,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
             price: Number(finalPrice.toFixed(2)),
           }));
         } else {
-          // ✅ إذا لم يكن هناك خصم، اجعل السعر النهائي = السعر الأصلي
           setForm((prev) => ({
             ...prev,
             originalPrice: original,
@@ -160,7 +145,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           }));
         }
       } else {
-        // ✅ إذا تم مسح السعر الأصلي، امسح السعر النهائي أيضاً
         setForm((prev) => ({
           ...prev,
           originalPrice: original,
@@ -173,7 +157,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
 
       if (original > 0) {
         if (discount > 0) {
-          // ✅ احسب السعر النهائي عند إدخال الخصم
           const finalPrice = calculateFinalPrice(original, discount);
           setForm((prev) => ({
             ...prev,
@@ -181,7 +164,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
             price: Number(finalPrice.toFixed(2)),
           }));
         } else {
-          // ✅ إذا تم مسح الخصم، ارجع السعر النهائي إلى السعر الأصلي
           setForm((prev) => ({
             ...prev,
             discount: 0,
@@ -189,7 +171,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           }));
         }
       } else {
-        // ✅ إذا لم يكن هناك سعر أصلي، لا تفعل شيئاً
         setForm((prev) => ({
           ...prev,
           discount: discount,
@@ -201,7 +182,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
 
       if (original > 0 && finalPrice > 0) {
         if (finalPrice < original) {
-          // ✅ احسب نسبة الخصم تلقائياً
           const discountPercentage = calculateDiscountPercentage(
             original,
             finalPrice
@@ -212,7 +192,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
             discount: discountPercentage,
           }));
         } else if (finalPrice >= original) {
-          // ✅ إذا كان السعر النهائي ≥ السعر الأصلي، أزل الخصم
           setForm((prev) => ({
             ...prev,
             price: finalPrice,
@@ -240,7 +219,6 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
         .map((feature) => feature.trim())
         .filter((feature) => feature.length > 0);
 
-      // ✅ استخدام الدالة الآمنة لتحويل الأرقام
       const payload = {
         ...form,
         features,
@@ -266,20 +244,20 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
       if (res.ok) {
         onSaved();
         onClose();
+        toast.success(t("pricing.savedSuccess"));
       } else {
         const errorData = await res.json();
         console.error("Failed to save pricing plan:", errorData);
-        alert(`Failed to save pricing plan: ${errorData.message}`);
+        toast.error(t("pricing.saveError", { message: errorData.message }));
       }
     } catch (err) {
       console.error("Error:", err);
-      alert("An error occurred while saving the plan.");
+      toast.error(t("pricing.saveError", { message: t("common.error") }));
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ عرض معلومات الخصم
   const showDiscountInfo =
     form.originalPrice > 0 && form.discount > 0 && form.price > 0;
 
@@ -293,10 +271,10 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Basic Information
+              {t("pricing.basicInfo")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Plan details and description
+              {t("pricing.basicInfoDescription")}
             </p>
           </div>
         </div>
@@ -305,13 +283,13 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Tag className="w-3 h-3 text-primary" />
-              Plan Name *
+              {t("pricing.planName")} *
             </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => onChange("name", e.target.value)}
-              placeholder="e.g., Professional Plan"
+              placeholder={t("pricing.planNamePlaceholder")}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               required
             />
@@ -320,13 +298,13 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <FileText className="w-3 h-3 text-primary" />
-              Description *
+              {t("common.description")} *
             </label>
             <input
               type="text"
               value={form.description}
               onChange={(e) => onChange("description", e.target.value)}
-              placeholder="Brief description of the plan"
+              placeholder={t("pricing.descriptionPlaceholder")}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder outline-none dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               required
             />
@@ -342,27 +320,25 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Pricing & Billing
+              {t("pricing.pricingBilling")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Set pricing, discounts, and billing cycle
+              {t("pricing.pricingBillingDescription")}
             </p>
           </div>
         </div>
 
         <div className="grid md:grid-cols-3 gap-3">
           <div className="space-y-2">
-            <label className="block text-13  font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <span className="text-Aquamarine"> {currencyInfo.icon}</span>
-              Original Price *
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+              <span className="text-Aquamarine">{currencyInfo.icon}</span>
+              {t("pricing.originalPrice")} *
             </label>
             <div className="relative">
               <input
                 type="number"
                 value={form.originalPrice || ""}
-                onChange={(e) =>
-                  handlePriceChange("originalPrice", e.target.value)
-                }
+                onChange={(e) => handlePriceChange("originalPrice", e.target.value)}
                 placeholder="0.00"
                 min="0"
                 step="0.01"
@@ -378,7 +354,7 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <BadgePercent className="w-3 h-3 text-Aquamarine" />
-              Discount (%)
+              {t("pricing.discount")} (%)
             </label>
             <input
               type="number"
@@ -394,7 +370,7 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <CheckCircle className="w-3 h-3 text-Aquamarine" />
-              Final Price *
+              {t("pricing.finalPrice")} *
             </label>
             <div className="relative">
               <input
@@ -419,19 +395,18 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
             {form.originalPrice > 0 && form.discount > 0 && (
               <p className="text-11 text-Aquamarine dark:text-Aquamarine mt-1 flex items-center gap-1">
                 <Zap className="w-2.5 h-2.5" />
-                Calculated automatically
+                {t("pricing.calculatedAutomatically")}
               </p>
             )}
             {form.originalPrice > 0 && form.discount === 0 && (
               <p className="text-11 text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1">
                 <CheckCircle className="w-2.5 h-2.5" />
-                Same as original price
+                {t("pricing.sameAsOriginal")}
               </p>
             )}
           </div>
         </div>
 
-        {/* ✅ عرض معلومات الخصم */}
         {showDiscountInfo && (
           <div className="bg-gradient-to-r from-Aquamarine/10 to-primary/10 border border-Aquamarine/20 rounded-lg p-3">
             <div className="flex items-center justify-between">
@@ -441,7 +416,7 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
                 </div>
                 <div>
                   <p className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                    Discount Applied
+                    {t("pricing.discountApplied")}
                   </p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-13 flex gap-2 items-center text-SlateBlueText dark:text-darktext line-through">
@@ -459,7 +434,7 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
                 </div>
               </div>
               <div className="bg-Aquamarine/20 items-center flex gap-2 text-Aquamarine px-2 py-1 rounded-full text-12 font-semibold">
-                Save {currencyInfo.icon}
+                {t("pricing.save")} {currencyInfo.icon}
                 {(form.originalPrice - form.price).toFixed(2)}
               </div>
             </div>
@@ -470,7 +445,7 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Globe className="w-3 h-3 text-Aquamarine" />
-              Currency
+              {t("common.currency")}
             </label>
             <div className="relative">
               <select
@@ -478,9 +453,9 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
                 onChange={(e) => onChange("currency", e.target.value)}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200 appearance-none pr-10"
               >
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
-                <option value="EGP">EGP (ج.م)</option>
+                <option value="USD">{t("pricing.currency.USD")}</option>
+                <option value="EUR">{t("pricing.currency.EUR")}</option>
+                <option value="EGP">{t("pricing.currency.EGP")}</option>
               </select>
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
                 {currencyInfo.icon}
@@ -491,22 +466,21 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Calendar className="w-3 h-3 text-Aquamarine" />
-              Billing Period
+              {t("pricing.billingPeriod")}
             </label>
             <select
               value={form.billingPeriod}
               onChange={(e) => onChange("billingPeriod", e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             >
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="yearly">Yearly</option>
+              <option value="monthly">{t("pricing.billingPeriod.monthly")}</option>
+              <option value="quarterly">{t("pricing.billingPeriod.quarterly")}</option>
+              <option value="yearly">{t("pricing.billingPeriod.yearly")}</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* باقي الأقسام بدون تغيير */}
       {/* Plan Configuration */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
         <div className="flex items-center gap-3">
@@ -515,10 +489,10 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Plan Configuration
+              {t("pricing.planConfig")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Configure plan settings and limitations
+              {t("pricing.planConfigDescription")}
             </p>
           </div>
         </div>
@@ -527,38 +501,38 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Languages className="w-3 h-3 text-ElectricAqua" />
-              Language
+              {t("common.language")}
             </label>
             <select
               value={form.language}
               onChange={(e) => onChange("language", e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             >
-              <option value="en">English</option>
-              <option value="ar">Arabic</option>
+              <option value="en">{t("common.language.en")}</option>
+              <option value="ar">{t("common.language.ar")}</option>
             </select>
           </div>
 
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Package className="w-3 h-3 text-ElectricAqua" />
-              Plan Type
+              {t("pricing.planType")}
             </label>
             <select
               value={form.type}
               onChange={(e) => onChange("type", e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             >
-              <option value="standard">Standard</option>
-              <option value="premium">Premium</option>
-              <option value="enterprise">Enterprise</option>
+              <option value="standard">{t("pricing.type.standard")}</option>
+              <option value="premium">{t("pricing.type.premium")}</option>
+              <option value="enterprise">{t("pricing.type.enterprise")}</option>
             </select>
           </div>
 
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Users className="w-3 h-3 text-ElectricAqua" />
-              Max Students
+              {t("pricing.maxStudents")}
             </label>
             <input
               type="number"
@@ -566,7 +540,7 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
               onChange={(e) =>
                 onChange("maxStudents", safeParseNumber(e.target.value))
               }
-              placeholder="0 for unlimited"
+              placeholder={t("pricing.maxStudentsPlaceholder")}
               min="0"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             />
@@ -582,10 +556,10 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Features
+              {t("pricing.features")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              List all features included in this plan
+              {t("pricing.featuresDescription")}
             </p>
           </div>
         </div>
@@ -593,18 +567,18 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <List className="w-3 h-3 text-LightYellow" />
-            Features (one per line)
+            {t("pricing.featuresLabel")} ({t("pricing.featuresHint")})
           </label>
           <textarea
             value={featuresInput}
             onChange={(e) => setFeaturesInput(e.target.value)}
             rows={4}
-            placeholder="Feature 1&#10;Feature 2&#10;Feature 3"
+            placeholder={t("pricing.featuresPlaceholder")}
             className="w-full px-3 py-2.5 border outline-none border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200"
           />
           <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 flex items-center gap-1">
             <Lightbulb className="w-2.5 h-2.5" />
-            Enter each feature on a new line
+            {t("pricing.featuresHint")}
           </p>
         </div>
       </div>
@@ -617,10 +591,10 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Settings
+              {t("pricing.settings")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Plan visibility and status settings
+              {t("pricing.settingsDescription")}
             </p>
           </div>
         </div>
@@ -639,11 +613,11 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
                   className="w-4 h-4 text-primary focus:ring-primary border-PowderBlueBorder rounded"
                 />
                 <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                  Mark as Popular
+                  {t("pricing.markPopular")}
                 </span>
               </div>
               <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                Highlight this plan as recommended choice for users
+                {t("pricing.markPopularDescription")}
               </p>
             </div>
           </label>
@@ -661,11 +635,11 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
                   className="w-4 h-4 text-Aquamarine focus:ring-Aquamarine border-PowderBlueBorder rounded"
                 />
                 <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                  Active Plan
+                  {t("pricing.activePlan")}
                 </span>
               </div>
               <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                Make this plan available for purchase and visible to users
+                {t("pricing.activePlanDescription")}
               </p>
             </div>
           </label>
@@ -680,7 +654,7 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight hover:shadow-md flex items-center justify-center gap-2"
         >
           <X className="w-3 h-3" />
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="submit"
@@ -690,17 +664,17 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
           {loading ? (
             <>
               <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Saving...
+              {t("common.saving")}
             </>
           ) : initial ? (
             <>
               <Save className="w-3 h-3" />
-              Update Plan
+              {t("pricing.updatePlan")}
             </>
           ) : (
             <>
               <Rocket className="w-3 h-3" />
-              Create Plan
+              {t("pricing.createPlan")}
             </>
           )}
         </button>

@@ -1,4 +1,7 @@
+// MetricCard.tsx
+"use client";
 import { Icon } from "@iconify/react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export type MetricTrend = {
   value: string;
@@ -15,6 +18,8 @@ type MetricCardProps = {
 };
 
 const MetricCard = ({ label, value, icon, trend, sublabel }: MetricCardProps) => {
+  const { t } = useI18n();
+
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md dark:border-dark_border dark:bg-darklight">
       <div className="flex items-start justify-between">

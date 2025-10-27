@@ -20,7 +20,7 @@ const PricingPlanSchema = new mongoose.Schema(
     discount: { type: Number, default: 0 },
     originalPrice: { type: Number },
 
-    // ✅ العلاقات مع المستخدم المسؤول
+   
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },

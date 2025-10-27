@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import { useActiveWebinar } from "@/hooks/useApiData";
 
 interface WebinarPopupModalProps {
@@ -10,6 +9,7 @@ interface WebinarPopupModalProps {
 
 const WebinarPopupModal = ({ onClose, isOpen }: WebinarPopupModalProps) => {
   const { data: activeWebinar, loading, source } = useActiveWebinar();
+  const [imageError, setImageError] = useState(false);
 
   // Don't show modal if no active webinar
   if (!isOpen || loading || !activeWebinar) {
@@ -31,7 +31,14 @@ const WebinarPopupModal = ({ onClose, isOpen }: WebinarPopupModalProps) => {
     });
   };
 
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
   const webinar = activeWebinar as any;
+  const imageSrc = imageError || !webinar.instructorImage 
+    ? "/images/instructors/default.jpg" 
+    : webinar.instructorImage;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -131,12 +138,13 @@ const WebinarPopupModal = ({ onClose, isOpen }: WebinarPopupModalProps) => {
           {/* Right side - Instructor image */}
           <div className="flex items-center justify-center">
             <div className="relative">
-              <Image
-                src={webinar.instructorImage || "/images/instructors/default.jpg"}
-                alt={webinar.instructor}
+              <img
+                src={imageSrc}
+                alt={`Instructor ${webinar.instructor}`}
                 width={300}
                 height={300}
-                className="rounded-2xl shadow-lg"
+                className="rounded-2xl shadow-lg object-cover w-[300px] h-[300px]"
+                onError={handleImageError}
               />
               <div className="absolute -bottom-4 -right-4 bg-primary text-white px-4 py-2 rounded-full text-sm font-semibold">
                 Expert Instructor

@@ -1,4 +1,4 @@
-// components/Dashboard/DashboardLayout.tsx - الإصدار المحسن بالأيقونات المناسبة
+// components/Dashboard/DashboardLayout.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar, { type DashboardNavItem } from "./Sidebar";
 import TopBar from "./TopBar";
+import { useI18n } from "@/i18n/I18nProvider";
 
 const createBadge = (value: string) => (
   <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
@@ -13,71 +14,61 @@ const createBadge = (value: string) => (
   </span>
 );
 
-const NAVIGATION: DashboardNavItem[] = [
-  { label: "Home", href: "/", icon: "ion:home-outline" },
-  { label: "Overview", href: "/admin", icon: "ion:speedometer-outline" },
-  {
-    label: "Webinars",
-    href: "/admin/webinars",
-    icon: "ion:videocam-outline",
-    badge: createBadge("New"),
-  },
-  {
-    label: "Projects",
-    href: "/admin/projects",
-    icon: "ion:briefcase-outline", // المشاريع
-  },
-  {
-    label: "Blogs",
-    href: "/admin/blogs",
-    icon: "ion:newspaper-outline", // المقالات
-  },
-  {
-    label: "Pricing",
-    href: "/admin/pricing",
-    icon: "ion:cash-outline", // الأسعار
-  },
-  {
-    label: "Subscriptions",
-    href: "/admin/subscriptions",
-    icon: "ion:card-outline", // الاشتراكات
-  },
-  {
-    label: "Events",
-    href: "/admin/events",
-    icon: "ion:calendar-outline", // الأحداث
-  },
-  {
-    label: "Testimonials",
-    href: "/admin/Testimonials",
-    icon: "ion:chatbubbles-outline", // آراء العملاء
-  },
-  {
-    label: "Schedules",
-    href: "/admin/schedules",
-    icon: "ion:time-outline", // الجداول الزمنية
-  },
-  {
-    label: "Settings",
-    href: "/admin/settings",
-    icon: "ion:settings-outline",
-  },
-];
-
-type DashboardLayoutProps = {
-  children: ReactNode;
-  user?: {
-    id?: string;
-    name?: string;
-    email?: string;
-    role?: string;
-    image?: string | null;
-  } | null;
-};
-
-const DashboardLayout = ({ children, user }: DashboardLayoutProps) => {
+const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }) => {
+  const { t } = useI18n();
   const pathname = usePathname();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+
+  const NAVIGATION: DashboardNavItem[] = [
+    { label: t('nav.homepage') || "Home", href: "/", icon: "ion:home-outline" },
+    { label: t('dashboard.overview') || "Overview", href: "/admin", icon: "ion:speedometer-outline" },
+    {
+      label: t('dashboard.webinars') || "Webinars",
+      href: "/admin/webinars",
+      icon: "ion:videocam-outline",
+      badge: createBadge(t('common.new') || "New"),
+    },
+    {
+      label: t('dashboard.projects') || "Projects",
+      href: "/admin/projects",
+      icon: "ion:briefcase-outline",
+    },
+    {
+      label: t('dashboard.blogs') || "Blogs",
+      href: "/admin/blogs",
+      icon: "ion:newspaper-outline",
+    },
+    {
+      label: t('nav.pricing') || "Pricing",
+      href: "/admin/pricing",
+      icon: "ion:cash-outline",
+    },
+    {
+      label: t('nav.subscriptions') || "Subscriptions",
+      href: "/admin/subscriptions",
+      icon: "ion:card-outline",
+    },
+    {
+      label: t('dashboard.events') || "Events",
+      href: "/admin/events",
+      icon: "ion:calendar-outline",
+    },
+    {
+      label: t('dashboard.testimonials') || "Testimonials",
+      href: "/admin/Testimonials",
+      icon: "ion:chatbubbles-outline",
+    },
+    {
+      label: t('nav.schedules') || "Schedules",
+      href: "/admin/schedules",
+      icon: "ion:time-outline",
+    },
+    {
+      label: t('nav.settings') || "Settings",
+      href: "/admin/settings",
+      icon: "ion:settings-outline",
+    },
+  ];
 
   const activePath = useMemo(() => {
     if (!pathname) return null;

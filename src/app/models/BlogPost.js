@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-// 🧠 دالة لتوليد slug من العنوان
 function generateSlug(title) {
   if (!title) return "";
   return title
@@ -11,7 +10,6 @@ function generateSlug(title) {
     .replace(/^-+|-+$/g, "");
 }
 
-// 🏗️ إنشاء الـ Schema
 const BlogPostSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
@@ -42,7 +40,6 @@ const BlogPostSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// 🪄 قبل الحفظ: توليد slug وexcerpt وreadTime
 BlogPostSchema.pre("save", function (next) {
   try {
     if (!this.slug || this.isModified("title")) {

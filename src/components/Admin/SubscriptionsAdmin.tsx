@@ -17,7 +17,8 @@ import {
   Euro,
 } from "lucide-react";
 import EgyptianPoundIcon from "../../icons/EgyptianPoundIcon";
-import SubscriptionsForm from "./SubscriptionsForm"; // تأكد من المسار الصحيح
+import SubscriptionsForm from "./SubscriptionsForm";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Subscription {
   _id: string;
@@ -50,9 +51,11 @@ interface Subscription {
 }
 
 export default function SubscriptionsAdmin() {
+  const { t } = useI18n();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null);
+  const [selectedSubscription, setSelectedSubscription] =
+    useState<Subscription | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
   const loadSubscriptions = async () => {
@@ -68,11 +71,11 @@ export default function SubscriptionsAdmin() {
       if (json.success) {
         setSubscriptions(json.data || []);
       } else {
-        toast.error(json.message || "Failed to load subscriptions");
+        toast.error(json.message || t("subscriptions.failedToLoad"));
       }
     } catch (err: any) {
       console.error("Error loading subscriptions:", err);
-      toast.error("Failed to load subscriptions: " + err.message);
+      toast.error(t("subscriptions.failedToLoad") + ": " + err.message);
     } finally {
       setLoading(false);
     }
@@ -82,7 +85,6 @@ export default function SubscriptionsAdmin() {
     loadSubscriptions();
   }, []);
 
-  // دالة لإرجاع أيقونة العملة المناسبة
   const getCurrencyIcon = (currency: string) => {
     switch (currency) {
       case "USD":
@@ -96,14 +98,13 @@ export default function SubscriptionsAdmin() {
     }
   };
 
-  // دالة لعرض السعر مع العملة
   const formatPrice = (amount: number, currency: string) => {
     return `${amount} ${currency}`;
   };
 
   const deleteSubscription = async (id: string) => {
     toast(
-      (t) => (
+      (tObj) => (
         <div className="w-404 max-w-full bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none dark:border-dark_border p-4">
           <div className="flex items-start gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold">
@@ -111,24 +112,24 @@ export default function SubscriptionsAdmin() {
             </div>
             <div className="flex-1">
               <p className="text-16 font-semibold">
-                Are you sure you want to delete this subscription?
+                {t("subscriptions.deleteConfirm")}
               </p>
               <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                This action cannot be undone and will remove all subscription data.
+                {t("subscriptions.deleteWarning")}
               </p>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
               className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-              onClick={() => toast.dismiss(t.id)}
+              onClick={() => toast.dismiss(tObj.id)}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
               onClick={async () => {
-                toast.dismiss(t.id);
+                toast.dismiss(tObj.id);
                 try {
                   const res = await fetch(
                     `/api/subscriptions?id=${encodeURIComponent(id)}`,
@@ -140,17 +141,17 @@ export default function SubscriptionsAdmin() {
                     setSubscriptions((prev) =>
                       prev.filter((s) => s._id !== id)
                     );
-                    toast.success("Subscription deleted successfully");
+                    toast.success(t("subscriptions.deletedSuccess"));
                   } else {
-                    toast.error("Failed to delete the subscription");
+                    toast.error(t("subscriptions.deleteFailed"));
                   }
                 } catch (err) {
                   console.error("Error deleting subscription:", err);
-                  toast.error("Error deleting subscription");
+                  toast.error(t("subscriptions.deleteError"));
                 }
               }}
             >
-              Delete
+              {t("common.delete")}
             </button>
           </div>
         </div>
@@ -202,23 +203,19 @@ export default function SubscriptionsAdmin() {
     }
   };
 
-  // دالة مساعدة للحصول على اسم المستخدم بشكل آمن
   const getUserName = (user: any) => {
-    return user?.name || user?.email || "Unknown User";
+    return user?.name || user?.email || t("subscriptions.unknownUser");
   };
 
-  // دالة مساعدة للحصول على اسم الخطة بشكل آمن
   const getPlanName = (plan: any) => {
-    return plan?.name || "Unknown Plan";
+    return plan?.name || t("subscriptions.unknownPlan");
   };
 
-  // دالة مساعدة للحصول على الحرف الأول من اسم المستخدم
   const getUserInitial = (user: any) => {
     const name = getUserName(user);
     return name.charAt(0).toUpperCase();
   };
 
-  // دالة لتنسيق التاريخ
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -228,13 +225,11 @@ export default function SubscriptionsAdmin() {
     });
   };
 
-  // دالة لعرض تفاصيل الاشتراك
   const showSubscriptionDetails = (subscription: Subscription) => {
     setSelectedSubscription(subscription);
     setShowDetails(true);
   };
 
-  // دالة لإغلاق تفاصيل الاشتراك
   const closeSubscriptionDetails = () => {
     setShowDetails(false);
     setSelectedSubscription(null);
@@ -244,40 +239,37 @@ export default function SubscriptionsAdmin() {
     return (
       <div className="flex justify-center items-center p-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <span className="ml-2">{t("common.loading")}</span>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
       <div className="bg-white dark:bg-darkmode rounded-xl shadow-sm p-6 border border-PowderBlueBorder dark:border-dark_border">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
               <Package className="w-7 h-7 text-primary" />
-              Subscriptions Management
+              {t("subscriptions.management")}
             </h1>
             <p className="text-sm text-SlateBlueText dark:text-darktext max-w-2xl">
-              Manage all user subscriptions, track payment status, and monitor
-              subscription activities.
+              {t("subscriptions.managementDescription")}
             </p>
           </div>
           <div className="mt-4 lg:mt-0">
             <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium">
-              Total: {subscriptions.length}
+              {t("subscriptions.totalSubscriptions")}: {subscriptions.length}
             </span>
           </div>
         </div>
       </div>
-
-      {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-darkmode rounded-xl p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Active Subscriptions
+                {t("subscriptions.activeSubscriptions")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {subscriptions.filter((s) => s.status === "active").length}
@@ -293,7 +285,7 @@ export default function SubscriptionsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Pending Payments
+                {t("subscriptions.pendingPayments")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {
@@ -312,13 +304,12 @@ export default function SubscriptionsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Revenue
+                {t("subscriptions.totalRevenue")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
-                {subscriptions.reduce(
-                  (acc, s) => acc + (s.totalAmount || 0),
-                  0
-                )}
+                {subscriptions
+                  .reduce((acc, s) => acc + (s.totalAmount || 0), 0)
+                  .toFixed(2)}
               </p>
             </div>
             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -331,7 +322,7 @@ export default function SubscriptionsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Active Users
+                {t("subscriptions.activeUsers")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {
@@ -346,8 +337,6 @@ export default function SubscriptionsAdmin() {
           </div>
         </div>
       </div>
-
-      {/* Subscriptions Grid */}
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {subscriptions.map((subscription) => (
           <div
@@ -359,7 +348,6 @@ export default function SubscriptionsAdmin() {
             }`}
           >
             <div className="p-6">
-              {/* Status Badges */}
               <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
                 <span
                   className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${getStatusColor(
@@ -367,18 +355,19 @@ export default function SubscriptionsAdmin() {
                   )}`}
                 >
                   {getStatusIcon(subscription.status)}
-                  {subscription.status}
+                  {t(`subscriptions.status.${subscription.status}`)}
                 </span>
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-semibold ${getPaymentStatusColor(
                     subscription.paymentStatus
                   )}`}
                 >
-                  {subscription.paymentStatus}
+                  {t(
+                    `subscriptions.paymentStatus.${subscription.paymentStatus}`
+                  )}
                 </span>
               </div>
 
-              {/* User & Plan Info */}
               <div className="flex items-center space-x-3 mb-4">
                 <div className="flex-shrink-0 w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
                   <span className="text-primary font-semibold text-lg">
@@ -390,7 +379,7 @@ export default function SubscriptionsAdmin() {
                     {getUserName(subscription.user)}
                   </h3>
                   <p className="text-sm text-SlateBlueText dark:text-darktext truncate">
-                    {subscription.user?.email || "No Email"}
+                    {subscription.user?.email || t("subscriptions.noEmail")}
                   </p>
                   <div className="text-sm text-primary font-medium mt-1">
                     {getPlanName(subscription.plan)}
@@ -398,7 +387,6 @@ export default function SubscriptionsAdmin() {
                 </div>
               </div>
 
-              {/* Subscription Details */}
               <div className="space-y-3 mb-4">
                 <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                   <FileText className="w-4 h-4" />
@@ -409,20 +397,26 @@ export default function SubscriptionsAdmin() {
 
                 <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                   <Calendar className="w-4 h-4" />
-                  <span>Start: {formatDate(subscription.startDate)}</span>
+                  <span>
+                    {t("common.startDate")}:{" "}
+                    {formatDate(subscription.startDate)}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                   <Calendar className="w-4 h-4" />
-                  <span>End: {formatDate(subscription.endDate)}</span>
+                  <span>
+                    {t("common.endDate")}: {formatDate(subscription.endDate)}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                   <Users className="w-4 h-4" />
-                  <span>{subscription.studentCount} Students</span>
+                  <span>
+                    {subscription.studentCount} {t("common.students")}
+                  </span>
                 </div>
 
-                {/* السعر مع أيقونة العملة */}
                 <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                   {getCurrencyIcon(subscription.currency)}
                   <span className="font-semibold text-MidnightNavyText dark:text-white">
@@ -439,7 +433,6 @@ export default function SubscriptionsAdmin() {
                 </div>
               </div>
 
-              {/* Notes (if any) */}
               {subscription.notes && (
                 <div className="mb-4 p-3 bg-PaleCyan dark:bg-dark_input rounded-lg">
                   <p className="text-xs text-SlateBlueText dark:text-darktext">
@@ -448,14 +441,13 @@ export default function SubscriptionsAdmin() {
                 </div>
               )}
 
-              {/* Action Buttons */}
               <div className="flex gap-2">
                 <button
                   onClick={() => showSubscriptionDetails(subscription)}
                   className="flex-1 bg-primary hover:bg-primary/90 text-white py-2 px-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
                 >
                   <Eye className="w-3 h-3" />
-                  View Details
+                  {t("subscriptions.viewDetails")}
                 </button>
 
                 <button
@@ -469,28 +461,33 @@ export default function SubscriptionsAdmin() {
           </div>
         ))}
       </div>
-
-      {/* Empty State */}
       {subscriptions.length === 0 && (
         <div className="text-center py-16 bg-white dark:bg-darkmode rounded-xl border border-PowderBlueBorder dark:border-dark_border">
           <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <Package className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
-            No subscriptions yet
+            {t("subscriptions.noSubscriptions")}
           </h3>
           <p className="text-sm text-SlateBlueText dark:text-darktext mb-6 max-w-md mx-auto">
-            When users subscribe to your plans, their subscriptions will appear
-            here for management.
+            {t("subscriptions.noSubscriptionsDescription")}
           </p>
         </div>
       )}
-
-      {/* Subscription Details Modal */}
+  
       {showDetails && selectedSubscription && (
         <SubscriptionsForm
           subscription={selectedSubscription}
           onClose={closeSubscriptionDetails}
+          onUpdate={(updatedSubscription) => {
+          
+            setSubscriptions((prev) =>
+              prev.map((sub) =>
+                sub._id === updatedSubscription._id ? updatedSubscription : sub
+              )
+            );
+            setSelectedSubscription(updatedSubscription);
+          }}
         />
       )}
     </div>

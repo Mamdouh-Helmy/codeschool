@@ -1,7 +1,12 @@
+// ContactInfo.tsx
+"use client";
 import React from "react";
 import Link from "next/link";
+import { useI18n } from "@/i18n/I18nProvider";
 
 const ContactInfo = () => {
+  const { t } = useI18n();
+
   return (
     <>
       <section className="dark:bg-darkmode lg:pt-20 pt-16 lg:pb-24 pb-10">
@@ -14,10 +19,10 @@ const ContactInfo = () => {
               <div className="flex md:flex-col sm:flex-row flex-col md:items-start sm:items-center items-start h-full justify-between">
                 <div>
                   <span className="text-secondary dark:text-white text-xl font-bold">
-                    Email US
+                    {t('contact.emailUs') || 'Email US'}
                   </span>
                   <p className="text-SlateBlueText font-normal text-xl max-w-80 pt-3 pb-7 dark:text-opacity-80">
-                    For business or partnership inquiries, contact our Business Developer. We’ll respond promptly.
+                    {t('contact.emailDescription') || 'For business or partnership inquiries, contact our Business Developer. We\'ll respond promptly.'}
                   </p>
                 </div>
                 <div>
@@ -25,7 +30,7 @@ const ContactInfo = () => {
                     href="mailto:DB@codeschool.online"
                     className="text-primary text-lg font-medium flex items-center gap-3 group hover:text-secondary dark:hover:text-white"
                   >
-                    Send an email
+                    {t('contact.sendEmail') || 'Send an email'}
                     <svg
                       width="23"
                       height="17"
@@ -49,11 +54,10 @@ const ContactInfo = () => {
               <div className="flex md:flex-col sm:flex-row flex-col md:items-start sm:items-center items-start h-full justify-between">
                 <div>
                   <span className="text-secondary dark:text-white text-xl font-bold">
-                    Message Us
+                    {t('contact.messageUs') || 'Message Us'}
                   </span>
                   <p className="text-SlateBlueText font-normal text-xl max-w-80 pt-3 pb-7 dark:text-opacity-80">
-                    Parents are welcome to contact us via WhatsApp for program details, 
-                    registration, or follow-up.
+                    {t('contact.messageDescription') || 'Parents are welcome to contact us via WhatsApp for program details, registration, or follow-up.'}
                   </p>
                 </div>
                 <div>
@@ -63,7 +67,7 @@ const ContactInfo = () => {
                     rel="noopener noreferrer"
                     className="text-primary text-lg font-medium flex items-center gap-3 group hover:text-secondary dark:hover:text-white"
                   >
-                    Send a message
+                    {t('contact.sendMessage') || 'Send a message'}
                     <svg
                       width="23"
                       height="17"

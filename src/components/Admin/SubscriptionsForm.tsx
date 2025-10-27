@@ -1,5 +1,6 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
+import toast from "react-hot-toast"; // استيراد toast
 import {
   Calendar,
   Clock,
@@ -11,16 +12,14 @@ import {
   CheckCircle,
   XCircle,
   Package,
-  Mail,
-  Phone,
-  MapPin,
-  Globe,
-  Edit,
-  Download,
-  Send,
+  X,
   Euro,
+  Mail,
+  Edit3,
+  Save,
 } from "lucide-react";
 import EgyptianPoundIcon from "../../icons/EgyptianPoundIcon";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Subscription {
   _id: string;
@@ -52,18 +51,18 @@ interface Subscription {
   updatedAt: string;
 }
 
-interface SubscriptionDetailsProps {
+interface Props {
   subscription: Subscription;
   onClose: () => void;
-  onEdit?: (subscription: Subscription) => void;
+  onUpdate?: (updatedSubscription: Subscription) => void;
 }
 
-export default function SubscriptionsForm({ 
-  subscription, 
-  onClose, 
-  onEdit 
-}: SubscriptionDetailsProps) {
-  // دالة لإرجاع أيقونة العملة المناسبة
+export default function SubscriptionsForm({ subscription, onClose, onUpdate }: Props) {
+  const { t } = useI18n();
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notes, setNotes] = useState(subscription.notes || "");
+  const [isSaving, setIsSaving] = useState(false);
+
   const getCurrencyIcon = (currency: string) => {
     switch (currency) {
       case "USD":
@@ -77,12 +76,13 @@ export default function SubscriptionsForm({
     }
   };
 
-  // دالة لعرض السعر مع العملة
   const formatPrice = (amount: number, currency: string) => {
-    return `${amount} ${currency}`;
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount) + ` ${currency}`;
   };
 
-  // دالة لتنسيق التاريخ
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -92,7 +92,6 @@ export default function SubscriptionsForm({
     });
   };
 
-  // دالة لتنسيق التاريخ والوقت
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -104,23 +103,34 @@ export default function SubscriptionsForm({
     });
   };
 
-  // دالة للحصول على لون الحالة
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
-        return "bg-Aquamarine/20 text-Salem border-Aquamarine/30";
+        return "bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800";
       case "pending":
-        return "bg-LightYellow/20 text-amber-700 border-LightYellow/30";
+        return "bg-yellow-100 text-yellow-800 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800";
       case "cancelled":
-        return "bg-red-100 text-red-700 border-red-200";
+        return "bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800";
       case "expired":
-        return "bg-SlateBlueText/20 text-SlateBlueText border-SlateBlueText/30";
+        return "bg-gray-100 text-gray-800 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700";
       default:
-        return "bg-gray-200 text-gray-700 border-gray-300";
+        return "bg-gray-100 text-gray-800 border border-gray-200 dark:bg-gray-800 dark:text-gray-300";
     }
   };
 
-  // دالة للحصول على أيقونة الحالة
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800";
+      case "pending":
+        return "bg-yellow-100 text-yellow-800 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800";
+      case "failed":
+        return "bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800";
+      default:
+        return "bg-gray-100 text-gray-800 border border-gray-200 dark:bg-gray-800 dark:text-gray-300";
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "active":
@@ -130,201 +140,313 @@ export default function SubscriptionsForm({
       case "cancelled":
         return <XCircle className="w-4 h-4" />;
       case "expired":
-        return <Clock className="w-4 h-4" />;
+        return <XCircle className="w-4 h-4" />;
       default:
         return <Clock className="w-4 h-4" />;
     }
   };
 
-  // حساب الأيام المتبقية
-  const getDaysRemaining = () => {
+  const remainingDays = () => {
     const endDate = new Date(subscription.endDate);
     const today = new Date();
     const diffTime = endDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+    return diffDays > 0 ? diffDays : 0;
   };
 
-  const daysRemaining = getDaysRemaining();
+  const getProgressPercentage = () => {
+    const start = new Date(subscription.startDate).getTime();
+    const end = new Date(subscription.endDate).getTime();
+    const now = new Date().getTime();
+    
+    if (now < start) return 0;
+    if (now > end) return 100;
+    
+    const total = end - start;
+    const passed = now - start;
+    return Math.round((passed / total) * 100);
+  };
+
+  const isSubscriptionActive = subscription.status === "active";
+  const progressPercentage = getProgressPercentage();
+
+  const handleSaveNotes = async () => {
+    if (notes === subscription.notes) {
+      setIsEditingNotes(false);
+      toast.success(t("subscriptions.noChangesMade")); // إشعار عند عدم وجود تغييرات
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/subscriptions`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subscriptionId: subscription._id,
+          notes: notes,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setIsEditingNotes(false);
+          if (onUpdate) {
+            onUpdate(result.data);
+          }
+          // إشعار نجاح الحفظ
+          toast.success(t("subscriptions.notesUpdated"));
+        }
+      } else {
+        throw new Error("Failed to update notes");
+      }
+    } catch (error) {
+      console.error("Error updating notes:", error);
+      // إشعار خطأ
+      toast.error(t("subscriptions.notesUpdateFailed"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setNotes(subscription.notes || "");
+    setIsEditingNotes(false);
+    // إشعار عند الإلغاء
+    toast(t("common.changesCancelled"), {
+      icon: '⚠️',
+    });
+  };
+
+  const handleEditClick = () => {
+    setIsEditingNotes(true);
+  };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-darkmode rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden border border-gray-200 dark:border-gray-700">
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-darkmode border-b border-PowderBlueBorder dark:border-dark_border p-6 rounded-t-xl">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Package className="w-5 h-5 text-primary" />
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+                <Package className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white">
-                  Subscription Details
-                </h2>
-                <p className="text-sm text-SlateBlueText dark:text-darktext">
-                  Invoice: {subscription.invoiceNumber}
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {t("subscriptions.subscriptionDetails")}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2 mt-1">
+                  <FileText className="w-4 h-4" />
+                  {t("subscriptions.invoiceNumber")}: {subscription.invoiceNumber}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {onEdit && (
-                <button
-                  onClick={() => onEdit(subscription)}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-sm transition-all duration-300"
-                >
-                  <Edit className="w-4 h-4" />
-                  Edit
-                </button>
-              )}
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center bg-SlateBlueText/10 hover:bg-SlateBlueText/20 dark:bg-darktext/20 dark:hover:bg-darktext/30 text-SlateBlueText dark:text-darktext rounded-lg transition-all duration-300"
-              >
-                ×
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-all duration-200"
+            >
+              <X className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+            </button>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Status Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className={`p-4 rounded-lg border-2 ${getStatusColor(subscription.status)}`}>
-              <div className="flex items-center gap-3">
-                {getStatusIcon(subscription.status)}
-                <div>
-                  <p className="text-sm font-medium">Subscription Status</p>
-                  <p className="text-lg font-bold capitalize">{subscription.status}</p>
+        <div className="overflow-y-auto max-h-[calc(95vh-140px)]">
+          <div className="p-6 space-y-6">
+            {/* Status Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Subscription Status */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      {t("subscriptions.status")}
+                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className={`px-3 py-1.5 rounded-full text-sm font-semibold flex items-center gap-2 ${getStatusColor(subscription.status)}`}>
+                        {getStatusIcon(subscription.status)}
+                        {t(`subscriptions.status.${subscription.status}`)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Status */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      {t("subscriptions.paymentStatus")}
+                    </p>
+                    <div className="mt-2">
+                      <span className={`px-3 py-1.5 rounded-full text-sm font-semibold ${getPaymentStatusColor(subscription.paymentStatus)}`}>
+                        {t(`subscriptions.paymentStatus.${subscription.paymentStatus}`)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Remaining Days */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      {t("subscriptions.remainingDays")}
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                      {remainingDays()}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      {t("dashboard.progress")}
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                      {progressPercentage}%
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className={`p-4 rounded-lg border-2 ${
-              subscription.paymentStatus === "paid" 
-                ? "bg-Aquamarine/20 text-Salem border-Aquamarine/30"
-                : subscription.paymentStatus === "pending"
-                ? "bg-LightYellow/20 text-amber-700 border-LightYellow/30"
-                : "bg-red-100 text-red-700 border-red-200"
-            }`}>
-              <div className="flex items-center gap-3">
-                <CreditCard className="w-4 h-4" />
-                <div>
-                  <p className="text-sm font-medium">Payment Status</p>
-                  <p className="text-lg font-bold capitalize">{subscription.paymentStatus}</p>
+            {/* Progress Bar */}
+            {isSubscriptionActive && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  <span>{t("dashboard.weeklyProgress")}</span>
+                  <span>{progressPercentage}%</span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${progressPercentage}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  <span>{formatDate(subscription.startDate)}</span>
+                  <span>{formatDate(subscription.endDate)}</span>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="p-4 rounded-lg border-2 border-PowderBlueBorder dark:border-dark_border bg-PaleCyan dark:bg-dark_input">
-              <div className="flex items-center gap-3">
-                <Clock className="w-4 h-4 text-primary" />
-                <div>
-                  <p className="text-sm font-medium">Days Remaining</p>
-                  <p className="text-lg font-bold text-MidnightNavyText dark:text-white">
-                    {daysRemaining > 0 ? `${daysRemaining} days` : "Expired"}
-                  </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* User Information */}
+              <div className="space-y-4 bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <User className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {t("subscriptions.userInfo")}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {t("subscriptions.userInfoDescription")}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* User Information */}
-            <div className="space-y-4">
-              <div className="bg-PaleCyan dark:bg-dark_input rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white mb-4 flex items-center gap-2">
-                  <User className="w-5 h-5 text-primary" />
-                  User Information
-                </h3>
-                
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                      <span className="text-primary font-semibold text-lg">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                    <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center shadow-md">
+                      <span className="text-white font-semibold text-lg">
                         {subscription.user?.name?.charAt(0).toUpperCase() || "U"}
                       </span>
                     </div>
-                    <div>
-                      <p className="font-semibold text-MidnightNavyText dark:text-white">
-                        {subscription.user?.name || "Unknown User"}
-                      </p>
-                      <p className="text-sm text-SlateBlueText dark:text-darktext">
-                        User ID: {subscription.user?._id || "N/A"}
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-900 dark:text-white text-lg">
+                        {subscription.user?.name || t("subscriptions.unknownUser")}
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 font-mono">
+                        ID: {subscription.user?._id}
                       </p>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Mail className="w-4 h-4 text-SlateBlueText" />
-                      <span className="text-SlateBlueText dark:text-darktext">
-                        {subscription.user?.email || "No email provided"}
-                      </span>
-                    </div>
-                    
-                    {subscription.user?.phone && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Phone className="w-4 h-4 text-SlateBlueText" />
-                        <span className="text-SlateBlueText dark:text-darktext">
-                          {subscription.user.phone}
-                        </span>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <Mail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">Email</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {subscription.user?.email || t("subscriptions.noEmail")}
+                        </p>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Plan Information */}
-              <div className="bg-PaleCyan dark:bg-dark_input rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white mb-4 flex items-center gap-2">
-                  <Package className="w-5 h-5 text-primary" />
-                  Plan Details
-                </h3>
-                
-                <div className="space-y-3">
+              <div className="space-y-4 bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                    <Package className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  </div>
                   <div>
-                    <p className="font-semibold text-MidnightNavyText dark:text-white text-lg">
-                      {subscription.plan?.name || "Unknown Plan"}
-                    </p>
-                    <p className="text-sm text-SlateBlueText dark:text-darktext">
-                      Plan ID: {subscription.plan?._id || "N/A"}
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {t("subscriptions.planInfo")}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {t("subscriptions.planInfoDescription")}
                     </p>
                   </div>
+                </div>
 
-                  <div className="flex items-center gap-2 text-lg font-bold text-MidnightNavyText dark:text-white">
-                    {getCurrencyIcon(subscription.currency)}
-                    <span>
-                      {formatPrice(
-                        subscription.totalAmount || 0,
-                        subscription.currency
-                      )}
-                    </span>
-                  </div>
-
-                  {subscription.plan?.duration && (
-                    <div className="text-sm text-SlateBlueText dark:text-darktext">
-                      Duration: {subscription.plan.duration} days
+                <div className="space-y-4">
+                  <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                    <h4 className="font-semibold text-gray-900 dark:text-white text-lg mb-3">
+                      {subscription.plan?.name || t("subscriptions.unknownPlan")}
+                    </h4>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {getCurrencyIcon(subscription.currency)}
+                        <span className="text-xl font-bold text-gray-900 dark:text-white">
+                          {formatPrice(subscription.totalAmount || 0, subscription.currency)}
+                        </span>
+                      </div>
+                      <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 px-3 py-1 rounded-full text-sm font-semibold">
+                        {subscription.plan?.duration || 30} {t("common.days")}
+                      </span>
                     </div>
-                  )}
+                  </div>
 
                   {subscription.plan?.features && subscription.plan.features.length > 0 && (
                     <div>
-                      <p className="text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                        Features:
-                      </p>
-                      <ul className="space-y-1">
-                        {subscription.plan.features.slice(0, 5).map((feature, index) => (
-                          <li key={index} className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
-                            <CheckCircle className="w-3 h-3 text-Aquamarine" />
-                            {feature}
-                          </li>
+                      <h5 className="font-medium text-gray-900 dark:text-white mb-3">
+                        {t("subscriptions.planFeatures")}:
+                      </h5>
+                      <div className="space-y-2">
+                        {subscription.plan.features.map((feature, index) => (
+                          <div key={index} className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>{feature}</span>
+                          </div>
                         ))}
-                        {subscription.plan.features.length > 5 && (
-                          <li className="text-sm text-SlateBlueText dark:text-darktext">
-                            +{subscription.plan.features.length - 5} more features
-                          </li>
-                        )}
-                      </ul>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -332,129 +454,144 @@ export default function SubscriptionsForm({
             </div>
 
             {/* Subscription Details */}
-            <div className="space-y-4">
-              {/* Timeline */}
-              <div className="bg-PaleCyan dark:bg-dark_input rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white mb-4 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  Subscription Timeline
-                </h3>
-                
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-MidnightNavyText dark:text-white">Start Date</p>
-                      <p className="text-sm text-SlateBlueText dark:text-darktext">
-                        {formatDate(subscription.startDate)}
-                      </p>
-                    </div>
-                    <div className="w-3 h-3 bg-Aquamarine rounded-full"></div>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-MidnightNavyText dark:text-white">End Date</p>
-                      <p className="text-sm text-SlateBlueText dark:text-darktext">
-                        {formatDate(subscription.endDate)}
-                      </p>
-                    </div>
-                    <div className="w-3 h-3 bg-primary rounded-full"></div>
-                  </div>
-
-                  <div className="h-1 bg-PowderBlueBorder dark:bg-dark_border rounded-full relative">
-                    <div 
-                      className="h-1 bg-gradient-to-r from-Aquamarine to-primary rounded-full absolute top-0 left-0"
-                      style={{
-                        width: `${Math.max(0, Math.min(100, 100 - (daysRemaining / (subscription.plan?.duration || 30)) * 100))}%`
-                      }}
-                    ></div>
-                  </div>
-
-                  <div className="text-center">
-                    <p className="text-sm text-SlateBlueText dark:text-darktext">
-                      {daysRemaining > 0 
-                        ? `${daysRemaining} days remaining` 
-                        : "Subscription expired"
-                      }
-                    </p>
-                  </div>
+            <div className="space-y-4 bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 </div>
-              </div>
-
-              {/* Payment & Students */}
-              <div className="bg-PaleCyan dark:bg-dark_input rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white mb-4">
-                  Additional Information
-                </h3>
-                
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-MidnightNavyText dark:text-white">
-                        Payment Method
-                      </p>
-                      <p className="text-sm text-SlateBlueText dark:text-darktext capitalize">
-                        {subscription.paymentMethod}
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <p className="text-sm font-medium text-MidnightNavyText dark:text-white">
-                        Student Count
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-SlateBlueText" />
-                        <span className="text-sm text-SlateBlueText dark:text-darktext">
-                          {subscription.studentCount} students
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium text-MidnightNavyText dark:text-white">
-                      Created At
-                    </p>
-                    <p className="text-sm text-SlateBlueText dark:text-darktext">
-                      {formatDateTime(subscription.createdAt)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium text-MidnightNavyText dark:text-white">
-                      Last Updated
-                    </p>
-                    <p className="text-sm text-SlateBlueText dark:text-darktext">
-                      {formatDateTime(subscription.updatedAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              {subscription.notes && (
-                <div className="bg-PaleCyan dark:bg-dark_input rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white mb-2">
-                    Notes
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {t("subscriptions.subscriptionDetails")}
                   </h3>
-                  <p className="text-sm text-SlateBlueText dark:text-darktext">
-                    {subscription.notes}
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {t("subscriptions.detailsFullDescription")}
                   </p>
                 </div>
-              )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <FileText className="w-5 h-5 text-blue-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t("subscriptions.invoiceNumber")}</p>
+                      <p className="font-mono font-semibold text-gray-900 dark:text-white">{subscription.invoiceNumber}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <Calendar className="w-5 h-5 text-green-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t("common.startDate")}</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">{formatDate(subscription.startDate)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <Users className="w-5 h-5 text-orange-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t("common.students")}</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">{subscription.studentCount} {t("common.students")}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <CreditCard className="w-5 h-5 text-purple-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t("subscriptions.paymentMethod")}</p>
+                      <p className="font-semibold text-gray-900 dark:text-white capitalize">{subscription.paymentMethod}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <Calendar className="w-5 h-5 text-red-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t("common.endDate")}</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">{formatDate(subscription.endDate)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <Clock className="w-5 h-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t("common.createdAt")}</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">{formatDateTime(subscription.createdAt)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes Section */}
+            <div className="space-y-4 bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {t("subscriptions.notes")}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {t("subscriptions.notesDescription")}
+                    </p>
+                  </div>
+                </div>
+                {!isEditingNotes && (
+                  <button
+                    onClick={handleEditClick}
+                    className="flex items-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-all duration-200"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    {t("common.edit")}
+                  </button>
+                )}
+              </div>
+
+              <div className={`p-4 rounded-xl border ${
+                isEditingNotes 
+                  ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800" 
+                  : "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
+              }`}>
+                {isEditingNotes ? (
+                  <div className="space-y-3">
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder={t("subscriptions.addNotesPlaceholder")}
+                      className="w-full h-32 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={handleCancelEdit}
+                        disabled={isSaving}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 disabled:opacity-50"
+                      >
+                        {t("common.cancel")}
+                      </button>
+                      <button
+                        onClick={handleSaveNotes}
+                        disabled={isSaving}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-all duration-200 disabled:opacity-50"
+                      >
+                        <Save className="w-4 h-4" />
+                        {isSaving ? t("common.saving") : t("common.save")}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className={`text-gray-700 dark:text-yellow-200 leading-relaxed ${
+                    !notes ? "italic text-gray-500 dark:text-gray-400" : ""
+                  }`}>
+                    {notes || t("subscriptions.noNotes")}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-
-          {/* <div className="flex gap-3 pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
-            <button className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-sm transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight flex items-center justify-center gap-2">
-              <Download className="w-4 h-4" />
-              Download Invoice
-            </button>
-            <button className="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2">
-              <Send className="w-4 h-4" />
-              Send Reminder
-            </button>
-          </div> */}
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+// ContactForm.tsx - تم التعديل عليه بالفعل
 "use client";
 import React from "react";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -15,7 +16,7 @@ const ContactForm = () => {
             <div className="col-span-6">
               <h2 className="max-w-72 text-[40px] leading-[3.4rem] font-bold mb-9 text-secondary">{t('contact.getInTouch') || 'Get in Touch'}</h2>
               <p className="text-xl text-SlateBlueText mb-6">
-                {t('contact.subtitle') || 'Have a question, idea, or request? We’d love to hear from you.'}
+                {t('contact.subtitle') || 'Have a question, idea, or request? We\'d love to hear from you.'}
               </p>
               <form className="flex flex-wrap w-full m-auto justify-between">
                 <div className="sm:flex gap-3 w-full">
@@ -50,12 +51,12 @@ const ContactForm = () => {
                     <select id="Specialist" className="w-full text-base px-4 py-2.5 text-SlateBlueText rounded-lg border-border dark:text-white border-solid dark:bg-darkmode border transition-all duration-500 focus:border-primary dark:focus:border-primary dark:border-dark_border focus:border-solid focus:outline-0">
                       <option value="">{t('contact.chooseSpecialist') || 'Choose a specialist'}</option>
                       <option value="Baking &amp; Pastry">
-                        Choose a specialist
+                        {t('contact.chooseSpecialist') || 'Choose a specialist'}
                       </option>
                       <option value="Exotic Cuisine">Exotic Cuisine</option>
                       <option value="French Desserts">French Desserts</option>
                       <option value="Seafood &amp; Wine">
-                        Choose a specialist
+                        {t('contact.chooseSpecialist') || 'Choose a specialist'}
                       </option>
                     </select>
                   </div>

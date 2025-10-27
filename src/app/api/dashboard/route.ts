@@ -7,8 +7,71 @@ import BlogPost from "../../models/BlogPost";
 import Event from "../../models/Event";
 import Webinar from "../../models/Webinar";
 
-export async function GET() {
+// دالة لاستخراج اللغة من الـ headers
+function getLocaleFromHeaders(headers: Headers): 'ar' | 'en' {
+  const acceptLanguage = headers.get('accept-language');
+  return acceptLanguage?.startsWith('ar') ? 'ar' : 'en';
+}
+
+// رسائل باللغتين
+const messages = {
+  en: {
+    noRealData: "No real data available yet",
+    failedToFetch: "Failed to fetch dashboard data",
+    unknownStudent: "Unknown Student",
+    noEmail: "No email",
+    generalPlan: "General Plan",
+    newStudentRegistration: "New Student Registration",
+    joinedPlatform: "joined the platform",
+    newSubscription: "New Subscription",
+    subscribedTo: "subscribed to",
+    newProjectSubmitted: "New Project Submitted",
+    created: "created",
+    blogPosts: "Blog Posts",
+    studentProjects: "Student Projects",
+    writeNewBlog: "Write New Blog Post",
+    contentCreation: "Content creation",
+    viewStudentProjects: "View Student Projects",
+    portfolioReview: "Portfolio review",
+    days: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    timeAgo: {
+      minutes: (mins: number) => `${mins} minutes ago`,
+      hours: (hours: number) => `${hours} hours ago`,
+      days: (days: number) => `${days} days ago`
+    }
+  },
+  ar: {
+    noRealData: "لا توجد بيانات حقيقية متاحة بعد",
+    failedToFetch: "فشل في جلب بيانات لوحة التحكم",
+    unknownStudent: "طالب غير معروف",
+    noEmail: "لا يوجد بريد إلكتروني",
+    generalPlan: "الخطة العامة",
+    newStudentRegistration: "تسجيل طالب جديد",
+    joinedPlatform: "انضم إلى المنصة",
+    newSubscription: "اشتراك جديد",
+    subscribedTo: "اشترك في",
+    newProjectSubmitted: "تم تقديم مشروع جديد",
+    created: "أنشأ",
+    blogPosts: "مقالات المدونة",
+    studentProjects: "مشاريع الطلاب",
+    writeNewBlog: "كتابة مقال جديد",
+    contentCreation: "إنشاء محتوى",
+    viewStudentProjects: "عرض مشاريع الطلاب",
+    portfolioReview: "مراجعة المحفظة",
+    days: ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"],
+    timeAgo: {
+      minutes: (mins: number) => `قبل ${mins} دقيقة`,
+      hours: (hours: number) => `قبل ${hours} ساعة`,
+      days: (days: number) => `قبل ${days} يوم`
+    }
+  }
+};
+
+export async function GET(request: Request) {
   try {
+    const locale = getLocaleFromHeaders(request.headers);
+    const msg = messages[locale];
+    
     await connectDB();
 
     const [
@@ -110,7 +173,7 @@ export async function GET() {
       return NextResponse.json({
         success: true,
         data: null,
-        message: "No real data available yet",
+        message: msg.noRealData,
         hasData: false,
         timestamp: new Date().toISOString(),
       });
@@ -132,16 +195,17 @@ export async function GET() {
 
     const performanceData = generateRealPerformanceData(
       weeklySubscriptions,
-      userActivity
+      userActivity,
+      locale
     );
 
     const enrollments = recentSubscriptions.map((subscription, index) => ({
       id: subscription._id?.toString() || `sub-${index}-${Date.now()}`,
-      name: subscription.user?.name || "Unknown Student",
-      email: subscription.user?.email || "No email",
-      course: subscription.plan?.name || "General Plan",
+      name: subscription.user?.name || msg.unknownStudent,
+      email: subscription.user?.email || msg.noEmail,
+      course: subscription.plan?.name || msg.generalPlan,
       progress: calculateProgress(subscription),
-      enrolledOn: new Date(subscription.startDate).toLocaleDateString("en-US"),
+      enrolledOn: new Date(subscription.startDate).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US'),
       status: mapSubscriptionStatus(subscription.status),
     }));
 
@@ -150,9 +214,9 @@ export async function GET() {
     recentUsers.forEach((user, index) => {
       activities.push({
         id: user._id?.toString() || `user-${index}-${Date.now()}`,
-        title: "New Student Registration",
-        description: `${user.name} joined the platform`,
-        timestamp: formatTimestamp(user.createdAt),
+        title: msg.newStudentRegistration,
+        description: `${user.name} ${msg.joinedPlatform}`,
+        timestamp: formatTimestamp(user.createdAt, locale),
         icon: "ion:person-add",
         tone: "success",
       });
@@ -161,11 +225,9 @@ export async function GET() {
     recentSubscriptions.forEach((sub, index) => {
       activities.push({
         id: sub._id?.toString() || `sub-act-${index}-${Date.now()}`,
-        title: "New Subscription",
-        description: `${sub.user?.name || "User"} subscribed to ${
-          sub.plan?.name || "a plan"
-        }`,
-        timestamp: formatTimestamp(sub.createdAt),
+        title: msg.newSubscription,
+        description: `${sub.user?.name || "User"} ${msg.subscribedTo} ${sub.plan?.name || "a plan"}`,
+        timestamp: formatTimestamp(sub.createdAt, locale),
         icon: "ion:card",
         tone: "info",
       });
@@ -174,11 +236,9 @@ export async function GET() {
     recentProjects.forEach((project, index) => {
       activities.push({
         id: project._id?.toString() || `project-${index}-${Date.now()}`,
-        title: "New Project Submitted",
-        description: `${project.student?.name || "Student"} created "${
-          project.title
-        }"`,
-        timestamp: formatTimestamp(project.createdAt),
+        title: msg.newProjectSubmitted,
+        description: `${project.student?.name || "Student"} ${msg.created} "${project.title}"`,
+        timestamp: formatTimestamp(project.createdAt, locale),
         icon: "ion:rocket",
         tone: "warning",
       });
@@ -208,14 +268,14 @@ export async function GET() {
         content: {
           stats: [
             {
-              label: "Blog Posts",
+              label: msg.blogPosts,
               value: totalBlogs.toString(),
               change: "+12%",
               isPositive: true,
               icon: "ion:document-text",
             },
             {
-              label: "Student Projects",
+              label: msg.studentProjects,
               value: totalProjects.toString(),
               change: "+8%",
               isPositive: true,
@@ -224,13 +284,13 @@ export async function GET() {
           ],
           actions: [
             {
-              label: "Write New Blog Post",
-              description: "Content creation",
+              label: msg.writeNewBlog,
+              description: msg.contentCreation,
               href: "/admin/blogs",
             },
             {
-              label: "View Student Projects",
-              description: "Portfolio review",
+              label: msg.viewStudentProjects,
+              description: msg.portfolioReview,
               href: "/admin/projects",
             },
           ],
@@ -241,10 +301,13 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Error fetching dashboard data:", error);
+    const locale = getLocaleFromHeaders(new Headers());
+    const msg = messages[locale];
+    
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to fetch dashboard data",
+        message: msg.failedToFetch,
         error: error.message,
       },
       { status: 500 }
@@ -300,13 +363,15 @@ function checkIfHasRealData(data: {
 
 function generateRealPerformanceData(
   weeklySubscriptions: any[],
-  userActivity: any[]
+  userActivity: any[],
+  locale: 'ar' | 'en' = 'en'
 ) {
   if (weeklySubscriptions.length === 0 && userActivity.length === 0) {
     return [];
   }
 
-  const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const msg = messages[locale];
+  const daysOfWeek = msg.days;
 
   if (weeklySubscriptions.length > 0) {
     const performanceData = daysOfWeek.map((day, index) => {
@@ -338,7 +403,7 @@ function generateRealPerformanceData(
   }
 
   if (userActivity.length > 0) {
-    const last7Days = getLast7Days();
+    const last7Days = getLast7Days(locale);
 
     const performanceData = last7Days.map((day, index) => {
       const dayData = userActivity.find((item) => item._id === day.date);
@@ -366,9 +431,10 @@ function generateRealPerformanceData(
   return [];
 }
 
-function getLast7Days() {
+function getLast7Days(locale: 'ar' | 'en' = 'en') {
+  const msg = messages[locale];
   const days = [];
-  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dayLabels = msg.days;
 
   for (let i = 6; i >= 0; i--) {
     const date = new Date();
@@ -403,7 +469,8 @@ function calculateCourseCompletion(subscriptions: any[]): number {
   return Math.max(0, Math.min(100, averageProgress));
 }
 
-function formatTimestamp(date: Date): string {
+function formatTimestamp(date: Date, locale: 'ar' | 'en' = 'en'): string {
+  const msg = messages[locale];
   const now = new Date();
   const diffMs = now.getTime() - new Date(date).getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -411,11 +478,11 @@ function formatTimestamp(date: Date): string {
   const diffDays = Math.floor(diffMs / 86400000);
 
   if (diffMins < 60) {
-    return `${diffMins} minutes ago`;
+    return msg.timeAgo.minutes(diffMins);
   } else if (diffHours < 24) {
-    return `${diffHours} hours ago`;
+    return msg.timeAgo.hours(diffHours);
   } else {
-    return `${diffDays} days ago`;
+    return msg.timeAgo.days(diffDays);
   }
 }
 

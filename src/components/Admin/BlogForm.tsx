@@ -17,6 +17,7 @@ import {
   Mail,
   Shield,
 } from "lucide-react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Props {
   initial?: any;
@@ -25,6 +26,8 @@ interface Props {
 }
 
 export default function BlogForm({ initial, onClose, onSaved }: Props) {
+  const { t } = useI18n();
+
   // دالة لتحويل التاريخ من ISO إلى تنسيق date
   const formatDateForInput = (dateString: string) => {
     if (!dateString) return "";
@@ -163,8 +166,6 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           : new Date().toISOString(),
       };
 
-      console.log("Sending blog payload:", payload);
-
       const token = localStorage.getItem("token");
       if (!token) {
         throw new Error("Authentication required. Please log in.");
@@ -197,7 +198,6 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         throw new Error(errorMessage);
       }
 
-      // إذا كان الرد ناجحاً، تابع
       try {
         const result = JSON.parse(responseText);
         if (result.success) {
@@ -218,7 +218,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-6 ">
+    <form onSubmit={submit} className="space-y-6">
       {/* Basic Information */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
         <div className="flex items-center gap-3">
@@ -227,10 +227,10 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Blog Information
+              {t('blogForm.basicInfo') || "Blog Information"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Basic details about the blog post
+              {t('blogForm.basicInfoDescription') || "Basic details about the blog post"}
             </p>
           </div>
         </div>
@@ -238,13 +238,13 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <FileText className="w-3 h-3 text-primary" />
-            Title *
+            {t('blogForm.title') || "Title"} *
           </label>
           <input
             type="text"
             value={form.title}
             onChange={(e) => onChange("title", e.target.value)}
-            placeholder="Enter blog post title"
+            placeholder={t('blogForm.titlePlaceholder') || "Enter blog post title"}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             required
           />
@@ -253,13 +253,13 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <FileText className="w-3 h-3 text-primary" />
-            Excerpt
+            {t('blogForm.excerpt') || "Excerpt"}
           </label>
           <textarea
             value={form.excerpt}
             onChange={(e) => onChange("excerpt", e.target.value)}
             rows={2}
-            placeholder="Brief description of the blog post (auto-generated from content)"
+            placeholder={t('blogForm.excerptPlaceholder') || "Brief description of the blog post (auto-generated from content)"}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200"
           />
         </div>
@@ -267,13 +267,13 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <FileText className="w-3 h-3 text-primary" />
-            Category
+            {t('blogForm.category') || "Category"}
           </label>
           <input
             type="text"
             value={form.category}
             onChange={(e) => onChange("category", e.target.value)}
-            placeholder="e.g., Technology, Business, Design"
+            placeholder={t('blogForm.categoryPlaceholder') || "e.g., Technology, Business, Design"}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
           />
         </div>
@@ -287,10 +287,10 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Author Information
+              {t('blogForm.authorInfo') || "Author Information"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Details about the author of this blog post
+              {t('blogForm.authorInfoDescription') || "Details about the author of this blog post"}
             </p>
           </div>
         </div>
@@ -299,13 +299,13 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <User className="w-3 h-3 text-Aquamarine" />
-              Author Name *
+              {t('blogForm.authorName') || "Author Name"} *
             </label>
             <input
               type="text"
               value={form.author.name}
               onChange={(e) => onChangeAuthor("name", e.target.value)}
-              placeholder="Author name"
+              placeholder={t('blogForm.authorName') || "Author name"}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               required
             />
@@ -314,7 +314,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Mail className="w-3 h-3 text-Aquamarine" />
-              Author Email
+              {t('blogForm.authorEmail') || "Author Email"}
             </label>
             <input
               type="email"
@@ -330,25 +330,25 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Shield className="w-3 h-3 text-Aquamarine" />
-              Author Role
+              {t('blogForm.authorRole') || "Author Role"}
             </label>
             <select
               value={form.author.role}
               onChange={(e) => onChangeAuthor("role", e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             >
-              <option value="Author">Author</option>
-              <option value="Editor">Editor</option>
-              <option value="Contributor">Contributor</option>
-              <option value="Admin">Admin</option>
-              <option value="Guest">Guest Writer</option>
+              <option value="Author">{t('blogForm.authorRoles.author') || "Author"}</option>
+              <option value="Editor">{t('blogForm.authorRoles.editor') || "Editor"}</option>
+              <option value="Contributor">{t('blogForm.authorRoles.contributor') || "Contributor"}</option>
+              <option value="Admin">{t('blogForm.authorRoles.admin') || "Admin"}</option>
+              <option value="Guest">{t('blogForm.authorRoles.guest') || "Guest Writer"}</option>
             </select>
           </div>
 
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Image className="w-3 h-3 text-Aquamarine" />
-              Author Avatar
+              {t('blogForm.authorAvatar') || "Author Avatar"}
             </label>
             <div className="flex gap-3 items-start">
               <div className="flex-1">
@@ -356,13 +356,13 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                   type="text"
                   value={form.author.avatar}
                   onChange={(e) => onChangeAuthor("avatar", e.target.value)}
-                  placeholder="Avatar URL or upload file"
+                  placeholder={t('blogForm.avatarPlaceholder') || "Avatar URL or upload file"}
                   className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
                 />
                 <div className="mt-2">
                   <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-Aquamarine/10 text-Aquamarine rounded-lg text-12 cursor-pointer hover:bg-Aquamarine/20 transition-colors">
                     <Upload className="w-3 h-3" />
-                    Upload Avatar
+                    {t('blogForm.uploadAvatar') || "Upload Avatar"}
                     <input
                       type="file"
                       accept="image/*"
@@ -380,7 +380,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                       className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />
-                      Remove
+                      {t('blogForm.remove') || "Remove"}
                     </button>
                   )}
                 </div>
@@ -408,23 +408,23 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Content
+              {t('blogForm.content') || "Content"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Main content of the blog post (HTML/Markdown supported)
+              {t('blogForm.contentDescription') || "Main content of the blog post (HTML/Markdown supported)"}
             </p>
           </div>
         </div>
 
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-            Body Content *
+            {t('blogForm.bodyContent') || "Body Content"} *
           </label>
           <textarea
             value={form.body}
             onChange={(e) => handleBodyChange(e.target.value)}
             rows={8}
-            placeholder="Write your blog post content here... HTML and Markdown are supported."
+            placeholder={t('blogForm.bodyPlaceholder') || "Write your blog post content here... HTML and Markdown are supported."}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200 font-mono"
             required
           />
@@ -439,17 +439,17 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Media
+              {t('blogForm.media') || "Media"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Featured image for the blog post
+              {t('blogForm.mediaDescription') || "Featured image for the blog post"}
             </p>
           </div>
         </div>
 
         <div className="space-y-3">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-            Featured Image
+            {t('blogForm.featuredImage') || "Featured Image"}
           </label>
 
           <div className="flex gap-4 items-start">
@@ -458,13 +458,13 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                 type="text"
                 value={form.image}
                 onChange={(e) => onChange("image", e.target.value)}
-                placeholder="Image URL or upload file"
+                placeholder={t('blogForm.imagePlaceholder') || "Image URL or upload file"}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
               <div className="mt-2">
                 <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
                   <Upload className="w-3 h-3" />
-                  Upload Image
+                  {t('blogForm.uploadImage') || "Upload Image"}
                   <input
                     type="file"
                     accept="image/*"
@@ -482,7 +482,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                     className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
                   >
                     <Trash2 className="w-3 h-3" />
-                    Remove
+                    {t('blogForm.remove') || "Remove"}
                   </button>
                 )}
               </div>
@@ -502,19 +502,18 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
 
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-            Image Alt Text
+            {t('blogForm.imageAlt') || "Image Alt Text"}
           </label>
           <input
             type="text"
             value={form.imageAlt}
             onChange={(e) => onChange("imageAlt", e.target.value)}
-            placeholder="Description of the image for accessibility"
+            placeholder={t('blogForm.imageAltPlaceholder') || "Description of the image for accessibility"}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
           />
         </div>
       </div>
 
-      {/* باقي الأقسام تبقى كما هي (Schedule & Settings, Tags, Action Buttons) */}
       {/* Schedule & Settings */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
         <div className="flex items-center gap-3">
@@ -523,10 +522,10 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Schedule & Settings
+              {t('blogForm.scheduleSettings') || "Schedule & Settings"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Publishing options and post settings
+              {t('blogForm.scheduleDescription') || "Publishing options and post settings"}
             </p>
           </div>
         </div>
@@ -535,7 +534,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Calendar className="w-3 h-3 text-primary" />
-              Publish Date
+              {t('blogForm.publishDate') || "Publish Date"}
             </label>
             <input
               type="date"
@@ -548,15 +547,15 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Eye className="w-3 h-3 text-primary" />
-              Status
+              {t('blogForm.status') || "Status"}
             </label>
             <select
               value={form.status}
               onChange={(e) => onChange("status", e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             >
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
+              <option value="draft">{t('blogForm.status.draft') || "Draft"}</option>
+              <option value="published">{t('blogForm.status.published') || "Published"}</option>
             </select>
           </div>
         </div>
@@ -575,11 +574,11 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                   className="w-4 h-4 text-Aquamarine focus:ring-Aquamarine border-PowderBlueBorder rounded"
                 />
                 <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                  Featured Post
+                  {t('blogForm.featuredPost') || "Featured Post"}
                 </span>
               </div>
               <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                Highlight this post as featured on the blog homepage
+                {t('blogForm.featuredDescription') || "Highlight this post as featured on the blog homepage"}
               </p>
             </div>
           </label>
@@ -594,10 +593,10 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Tags
+              {t('blogForm.tags') || "Tags"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Add tags for better categorization and search
+              {t('blogForm.tagsDescription') || "Add tags for better categorization and search"}
             </p>
           </div>
         </div>
@@ -610,7 +609,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                 value={newTagInput}
                 onChange={(e) => setNewTagInput(e.target.value)}
                 onKeyPress={handleTagKeyPress}
-                placeholder="Enter a tag (e.g., React, JavaScript, Web Development)"
+                placeholder={t('blogForm.tagsPlaceholder') || "Enter a tag (e.g., React, JavaScript, Web Development)"}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
             </div>
@@ -621,14 +620,14 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
               className="px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              Add
+              {t('common.add') || "Add"}
             </button>
           </div>
 
           {tags.length > 0 && (
             <div className="space-y-2">
               <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                Added Tags:
+                {t('blogForm.addedTags') || "Added Tags"}:
               </label>
               <div className="flex flex-wrap gap-2">
                 {tags.map((tag, index) => (
@@ -651,7 +650,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           )}
 
           <p className="text-11 text-SlateBlueText dark:text-darktext">
-            Press Enter or click Add to include multiple tags
+            {t('blogForm.tagsHint') || "Press Enter or click Add to include multiple tags"}
           </p>
         </div>
       </div>
@@ -664,7 +663,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight hover:shadow-md flex items-center justify-center gap-2"
         >
           <X className="w-3 h-3" />
-          Cancel
+          {t('common.cancel') || "Cancel"}
         </button>
         <button
           type="submit"
@@ -674,17 +673,17 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           {loading ? (
             <>
               <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Saving...
+              {t('common.saving') || "Saving..."}
             </>
           ) : initial ? (
             <>
               <Save className="w-3 h-3" />
-              Update Post
+              {t('blogForm.updatePost') || "Update Post"}
             </>
           ) : (
             <>
               <Rocket className="w-3 h-3" />
-              Create Post
+              {t('blog.createPost') || "Create Post"}
             </>
           )}
         </button>

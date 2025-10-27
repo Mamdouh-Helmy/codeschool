@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import Modal from "./Modal";
 import BlogForm from "./BlogForm";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface BlogPost {
   _id: string;
@@ -44,6 +45,7 @@ interface BlogPost {
 }
 
 export default function BlogsAdmin() {
+  const { t } = useI18n();
   const [blogs, setBlogs] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -79,7 +81,7 @@ export default function BlogsAdmin() {
       }
     } catch (err) {
       console.error("Error loading blogs:", err);
-      toast.error("Failed to load blogs");
+      toast.error(t('blog.failedToLoad') || "Failed to load blogs");
     } finally {
       setLoading(false);
     }
@@ -91,7 +93,7 @@ export default function BlogsAdmin() {
 
   const onSaved = async () => {
     await loadBlogs();
-    toast.success("Blog post saved successfully");
+    toast.success(t('blog.savedSuccess') || "Blog post saved successfully");
   };
 
   const onEdit = (blog: BlogPost) => {
@@ -100,8 +102,16 @@ export default function BlogsAdmin() {
   };
 
   const onDelete = async (id: string) => {
+    const deleteConfirm = t('blog.deleteConfirm') || "Are you sure you want to delete this blog post?";
+    const deleteWarning = t('blog.deleteWarning') || "This action cannot be undone and will remove the post permanently.";
+    const cancelText = t('common.cancel') || "Cancel";
+    const deleteText = t('common.delete') || "Delete";
+    const deletedSuccess = t('blog.deletedSuccess') || "Blog post deleted successfully";
+    const deleteFailed = t('blog.deleteFailed') || "Failed to delete the blog post";
+    const deleteError = t('blog.deleteError') || "Error deleting blog post";
+
     toast(
-      (t) => (
+      (toastInstance) => (
         <div className="w-404 max-w-full bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none dark:border-dark_border p-4">
           <div className="flex items-start gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold">
@@ -109,24 +119,24 @@ export default function BlogsAdmin() {
             </div>
             <div className="flex-1">
               <p className="text-16 font-semibold">
-                Are you sure you want to delete this blog post?
+                {deleteConfirm}
               </p>
               <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                This action cannot be undone and will remove the post permanently.
+                {deleteWarning}
               </p>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
               className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-              onClick={() => toast.dismiss(t.id)}
+              onClick={() => toast.dismiss(toastInstance.id)}
             >
-              Cancel
+              {cancelText}
             </button>
             <button
               className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
               onClick={async () => {
-                toast.dismiss(t.id);
+                toast.dismiss(toastInstance.id);
                 try {
                   const res = await fetch(
                     `/api/blog/${encodeURIComponent(id)}`,
@@ -136,17 +146,17 @@ export default function BlogsAdmin() {
                   );
                   if (res.ok) {
                     setBlogs((prev) => prev.filter((b) => b._id !== id));
-                    toast.success("Blog post deleted successfully");
+                    toast.success(deletedSuccess);
                   } else {
-                    toast.error("Failed to delete the blog post");
+                    toast.error(deleteFailed);
                   }
                 } catch (err) {
                   console.error("Error deleting blog:", err);
-                  toast.error("Error deleting blog post");
+                  toast.error(deleteError);
                 }
               }}
             >
-              Delete
+              {deleteText}
             </button>
           </div>
         </div>
@@ -171,10 +181,10 @@ export default function BlogsAdmin() {
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
               <FileText className="w-7 h-7 text-primary" />
-              Blog Management
+              {t('blog.management') || "Blog Management"}
             </h1>
             <p className="text-sm text-SlateBlueText dark:text-darktext max-w-2xl">
-              Create, edit, and manage your blog posts. Publish engaging content for your audience.
+              {t('blog.managementDescription') || "Create, edit, and manage your blog posts. Publish engaging content for your audience."}
             </p>
           </div>
           <button
@@ -185,7 +195,7 @@ export default function BlogsAdmin() {
             className="mt-4 lg:mt-0 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            New Blog Post
+            {t('blog.addNew') || "New Blog Post"}
           </button>
         </div>
       </div>
@@ -196,7 +206,7 @@ export default function BlogsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Posts
+                {t('blog.totalPosts') || "Total Posts"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {blogs.length}
@@ -212,7 +222,7 @@ export default function BlogsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Published
+                {t('blog.published') || "Published"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {blogs.filter((b) => b.status === "published").length}
@@ -228,7 +238,7 @@ export default function BlogsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Views
+                {t('blog.totalViews') || "Total Views"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {blogs.reduce((acc, b) => acc + b.viewCount, 0)}
@@ -244,12 +254,12 @@ export default function BlogsAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Avg. Read Time
+                {t('blog.avgReadTime') || "Avg. Read Time"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {blogs.length > 0
                   ? Math.round(blogs.reduce((acc, b) => acc + b.readTime, 0) / blogs.length)
-                  : 0} min
+                  : 0} {t('common.minRead') || "min"}
               </p>
             </div>
             <div className="w-10 h-10 bg-LightYellow/10 rounded-lg flex items-center justify-center">
@@ -270,9 +280,9 @@ export default function BlogsAdmin() {
           };
 
           const statusText = {
-            published: "Published",
-            scheduled: "Scheduled",
-            draft: "Draft",
+            published: t('blog.status.published') || "Published",
+            scheduled: t('blog.status.scheduled') || "Scheduled",
+            draft: t('blog.status.draft') || "Draft",
           };
 
           return (
@@ -324,11 +334,11 @@ export default function BlogsAdmin() {
                   </div>
                   <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                     <Clock className="w-4 h-4" />
-                    <span>{blog.readTime} min read</span>
+                    <span>{blog.readTime} {t('common.minRead') || "min read"}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                     <User className="w-4 h-4" />
-                    <span>{blog.author?.name || "Unknown Author"}</span>
+                    <span>{blog.author?.name || t('common.author') || "Unknown Author"}</span>
                   </div>
                 </div>
 
@@ -366,12 +376,12 @@ export default function BlogsAdmin() {
                 <div className="flex items-center justify-between text-xs text-SlateBlueText dark:text-darktext mb-4">
                   <div className="flex items-center gap-1">
                     <Eye className="w-3 h-3" />
-                    <span>{blog.viewCount} views</span>
+                    <span>{blog.viewCount} {t('common.views') || "views"}</span>
                   </div>
                   {blog.featured && (
                     <div className="flex items-center gap-1">
                       <Zap className="w-3 h-3" />
-                      <span>Featured</span>
+                      <span>{t('blog.featured') || "Featured"}</span>
                     </div>
                   )}
                 </div>
@@ -385,7 +395,7 @@ export default function BlogsAdmin() {
                       className="w-full bg-primary hover:bg-primary/90 text-white py-2 px-3 rounded-lg font-semibold text-sm transition-transform transition-shadow duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-primary/30 flex items-center justify-center gap-2 group"
                     >
                       <Edit className="w-3 h-3 transition-transform duration-300 group-hover:-translate-y-0.5" />
-                      Edit
+                      {t('common.edit') || "Edit"}
                     </button>
 
                     {/* Delete */}
@@ -394,7 +404,7 @@ export default function BlogsAdmin() {
                       className="bg-SlateBlueText/10 hover:bg-SlateBlueText/20 dark:bg-darktext/20 dark:hover:bg-darktext/30 text-SlateBlueText dark:text-darktext py-2 px-3 rounded-lg font-semibold text-xs transition-transform transition-colors transition-shadow duration-300 hover:scale-105 active:scale-100 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-SlateBlueText/20 flex items-center justify-center gap-2 group"
                     >
                       <Trash2 className="w-3 h-3 transition-transform duration-300 group-hover:rotate-12" />
-                      Delete
+                      {t('common.delete') || "Delete"}
                     </button>
                   </div>
                 </div>
@@ -411,17 +421,17 @@ export default function BlogsAdmin() {
             <FileText className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
-            No blog posts yet
+            {t('blog.noPosts') || "No blog posts yet"}
           </h3>
           <p className="text-sm text-SlateBlueText dark:text-darktext mb-6 max-w-md mx-auto">
-            Create your first blog post to start sharing knowledge and engaging with your audience.
+            {t('blog.createFirst') || "Create your first blog post to start sharing knowledge and engaging with your audience."}
           </p>
           <button
             onClick={() => setOpen(true)}
             className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
           >
             <Plus className="w-4 h-4" />
-            Create Your First Post
+            {t('blog.createFirstButton') || "Create Your First Post"}
           </button>
         </div>
       )}
@@ -429,7 +439,7 @@ export default function BlogsAdmin() {
       {/* Modal */}
       <Modal
         open={open}
-        title={editing ? "Edit Blog Post" : "Create New Blog Post"}
+        title={editing ? (t('blog.editPost') || "Edit Blog Post") : (t('blog.createPost') || "Create New Blog Post")}
         onClose={() => {
           setOpen(false);
           setEditing(null);

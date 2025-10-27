@@ -4,6 +4,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import { CheckCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useI18n } from "@/i18n/I18nProvider";
 
 type PricingPlan = {
   _id?: string;
@@ -27,6 +28,7 @@ const DynamicPricing = () => {
   const router = useRouter();
   const pathname = usePathname();
   const auth = useAuth();
+  const { t } = useI18n();
   const planIdFromQuery = searchParams.get("plan");
 
   // ✅ جلب الباقات من الـ API مباشرة
@@ -39,25 +41,25 @@ const DynamicPricing = () => {
         if (result.success && result.data?.length > 0) {
           setPlans(result.data);
         } else {
-          setError("No plans available.");
+          setError(t("pricing.noPlans"));
         }
       } catch (err) {
         console.error("Fetch pricing error:", err);
-        setError("Failed to load pricing plans.");
+        setError(t("pricing.loadError"));
       } finally {
         setLoading(false);
       }
     };
 
     fetchPlans();
-  }, []);
+  }, [t]);
 
   // ✅ تحديد الخطة المختارة من URL
   useEffect(() => {
     if (planIdFromQuery) setSelectedPlan(planIdFromQuery);
   }, [planIdFromQuery]);
 
-  // ✅ جلب اشتراكات المستخدم (من الكوكيز يتم معرفة المستخدم تلقائيًا)
+  // ✅ جلب اشتراكات المستخدم
   useEffect(() => {
     const fetchUserSubscriptions = async () => {
       try {
@@ -81,45 +83,41 @@ const DynamicPricing = () => {
   // ✅ الاشتراك في الخطة
   const handleSubscribe = async (planId: string) => {
     if (subscribedPlans.includes(planId)) {
-      toast.error("You are already subscribed to this plan.");
+      toast.error(t("eventTicket.alreadySubscribed"));
       return;
     }
 
-    // If user is not authenticated, redirect to signin page with callback
-      if (!auth?.isAuthenticated) {
-        // Try to verify server-side session (cookie) in case client state is out-of-sync
-        try {
-          const sess = await fetch("/api/auth/session", { cache: "no-store" });
-          if (sess.ok) {
-            const sessJson = await sess.json();
-            if (sessJson?.success && sessJson?.loggedIn) {
-              // Sync minimal client state so UI behaves as logged in
-              try {
-                if (sessJson.user) localStorage.setItem("user", JSON.stringify(sessJson.user));
-              } catch (e) {
-                console.warn("Failed to sync user to localStorage", e);
-              }
-              // proceed to subscription flow (no redirect)
-            } else {
-              toast.error("Please login to subscribe.");
-              const callback = pathname || "/";
-              
-              return;
+    if (!auth?.isAuthenticated) {
+      try {
+        const sess = await fetch("/api/auth/session", { cache: "no-store" });
+        if (sess.ok) {
+          const sessJson = await sess.json();
+          if (sessJson?.success && sessJson?.loggedIn) {
+            try {
+              if (sessJson.user) localStorage.setItem("user", JSON.stringify(sessJson.user));
+            } catch (e) {
+              console.warn("Failed to sync user to localStorage", e);
             }
           } else {
-            toast.error("Please login to subscribe.");
+            toast.error(t("eventTicket.pleaseLogin"));
             const callback = pathname || "/";
-            
+            router.push(`/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`);
             return;
           }
-        } catch (e) {
-          console.error("Session check failed:", e);
-          toast.error("Please login to subscribe.");
+        } else {
+          toast.error(t("eventTicket.pleaseLogin"));
           const callback = pathname || "/";
           router.push(`/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`);
           return;
         }
+      } catch (e) {
+        console.error("Session check failed:", e);
+        toast.error(t("eventTicket.pleaseLogin"));
+        const callback = pathname || "/";
+        router.push(`/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`);
+        return;
       }
+    }
 
     try {
       setProcessing(true);
@@ -137,21 +135,20 @@ const DynamicPricing = () => {
       const result = await res.json();
 
       if (res.ok && result.success) {
-        toast.success("Subscription successful!");
-        setSubscribedPlans((prev) => [...prev, planId]); // add to list
+        toast.success(t("eventTicket.subscriptionSuccess"));
+        setSubscribedPlans((prev) => [...prev, planId]);
         setTimeout(() => {
           router.push(`/subscriptions?plan=${planId}`);
         }, 1500);
       } else if (res.status === 401) {
-        // Not authenticated according to server - redirect to signin
-        toast.error("Please login first.");
+        toast.error(t("eventTicket.pleaseLogin"));
         const callback = pathname || "/";
         router.push(`/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`);
       } else {
-        toast.error(result.message || "Subscription failed.");
+        toast.error(result.message || t("eventTicket.subscriptionFailed"));
       }
     } catch (err) {
-      toast.error("Error while subscribing.");
+      toast.error(t("eventTicket.subscriptionError"));
       console.error(err);
     } finally {
       setProcessing(false);
@@ -160,7 +157,7 @@ const DynamicPricing = () => {
 
   if (loading)
     return (
-      <div className="py-20 text-center text-gray-500">Loading plans...</div>
+      <div className="py-20 text-center text-gray-500">{t("pricing.loading")}</div>
     );
 
   if (error)
@@ -174,7 +171,7 @@ const DynamicPricing = () => {
           {plans.map((plan) => {
             const isSelected =
               selectedPlan === plan.id || selectedPlan === plan._id;
-            const isSubscribed = subscribedPlans.includes(plan._id || plan.id!); // ✅ تحقق إذا كان مشترك بالفعل
+            const isSubscribed = subscribedPlans.includes(plan._id || plan.id!);
 
             return (
               <div
@@ -187,7 +184,7 @@ const DynamicPricing = () => {
               >
                 {isSelected && (
                   <div className="absolute top-4 right-4 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">
-                    Selected
+                    {t("common.selected")}
                   </div>
                 )}
 
@@ -210,7 +207,7 @@ const DynamicPricing = () => {
                     className="w-full flex items-center justify-center gap-2 py-3 bg-gray-400 text-white rounded-lg font-semibold cursor-not-allowed"
                   >
                     <CheckCircle className="w-5 h-5 text-white" />
-                    <span>Subscribed</span>
+                    <span>{t("eventTicket.subscribed")}</span>
                   </button>
                 ) : isSelected ? (
                   <button
@@ -222,7 +219,7 @@ const DynamicPricing = () => {
                         : "bg-primary text-white hover:bg-primary/90"
                     }`}
                   >
-                    {processing ? "Processing..." : "Subscribe Now"}
+                    {processing ? t("eventTicket.processing") : t("pricing.subscribe")}
                   </button>
                 ) : (
                   <button
@@ -234,7 +231,7 @@ const DynamicPricing = () => {
                         : "border-gray-300 text-MidnightNavyText dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
                     }`}
                   >
-                    Choose Plan
+                    {t("pricing.choosePlan")}
                   </button>
                 )}
               </div>

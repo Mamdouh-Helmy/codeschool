@@ -1,7 +1,5 @@
-// src/components/UI/ImageWithFallback.tsx
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 
 interface ImageWithFallbackProps {
@@ -24,13 +22,14 @@ const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
   const [imgSrc, setImgSrc] = useState(src);
 
   return (
-    <Image
+    <img
       src={imgSrc}
       alt={alt}
       width={width}
       height={height}
       className={className}
       onError={() => setImgSrc(fallbackSrc)}
+      loading="lazy"
     />
   );
 };

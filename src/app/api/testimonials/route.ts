@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Testimonial from "../../models/Testimonial";
-import { FALLBACK_TESTIMONIALS } from "@/lib/fallbackData/testimonials";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
-const JWT_SECRET = process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
+const JWT_SECRET =
+  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
 export const revalidate = 60;
 
 export async function GET(request: NextRequest) {
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "10");
 
     const query: any = { isActive: true };
-    if (featured) query.featured = true; 
+    if (featured) query.featured = true;
 
     const testimonials = await Testimonial.find(query)
       .sort({ rating: -1, createdAt: -1 })
@@ -26,18 +26,17 @@ export async function GET(request: NextRequest) {
 
     console.log("📦 Found testimonials:", testimonials.length);
 
-    const data = testimonials.length
-      ? testimonials
-      : FALLBACK_TESTIMONIALS.slice(0, limit);
-
     return NextResponse.json({
       success: true,
-      data,
-      source: testimonials.length ? "database" : "fallback",
+      data: testimonials,
+      source: "database",
     });
   } catch (error) {
     console.error("❌ Error fetching testimonials:", error);
-    return NextResponse.json({ success: false, message: "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -47,14 +46,15 @@ export async function POST(request: NextRequest) {
 
     const token = request.cookies.get("token")?.value;
     if (!token) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const decoded: any = jwt.verify(token, JWT_SECRET);
-
     const body = await request.json();
 
-    // التحقق من صحة userId قبل الإرسال
     const userId = body.userId || body.studentId;
     let validUserId = null;
 
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const testimonial = await Testimonial.create({
-      userId: validUserId || decoded.id, // استخدام userId الصالح أو ID المستخدم الحالي
+      userId: validUserId || decoded.id,
       studentName: body.studentName || decoded.name || "Anonymous",
       studentImage: body.studentImage || decoded.image || "",
       courseId: body.courseId || "",
@@ -95,21 +95,26 @@ export async function PUT(request: NextRequest) {
 
     const token = request.cookies.get("token")?.value;
     if (!token) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const decoded: any = jwt.verify(token, JWT_SECRET);
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
-    
+
     if (!id) {
-      return NextResponse.json({ success: false, message: "ID is required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "ID is required" },
+        { status: 400 }
+      );
     }
 
     const body = await request.json();
 
-    // التحقق من صحة userId قبل التحديث
     const userId = body.userId || body.studentId;
     let validUserId = null;
 
@@ -117,22 +122,20 @@ export async function PUT(request: NextRequest) {
       validUserId = userId;
     }
 
-    // إذا لم يكن هناك userId صالح، نستخدم ID المستخدم الحالي كقيمة افتراضية
     if (!validUserId) {
       validUserId = decoded.id;
     }
 
-    // بناء object التحديث بشكل آمن
     const updateData: any = {
       studentName: body.studentName,
       studentImage: body.studentImage,
-      userId: validUserId, // دائماً نرسل userId
+      userId: validUserId,
       courseId: body.courseId,
       courseTitle: body.courseTitle,
       rating: body.rating,
       comment: body.comment,
       featured: body.featured,
-      isActive: body.isActive
+      isActive: body.isActive,
     };
 
     const updatedTestimonial = await Testimonial.findByIdAndUpdate(
@@ -142,7 +145,10 @@ export async function PUT(request: NextRequest) {
     );
 
     if (!updatedTestimonial) {
-      return NextResponse.json({ success: false, message: "Testimonial not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "Testimonial not found" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({
@@ -166,20 +172,29 @@ export async function DELETE(request: NextRequest) {
 
     const token = request.cookies.get("token")?.value;
     if (!token) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
-    
+
     if (!id) {
-      return NextResponse.json({ success: false, message: "ID is required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "ID is required" },
+        { status: 400 }
+      );
     }
 
     const deletedTestimonial = await Testimonial.findByIdAndDelete(id);
 
     if (!deletedTestimonial) {
-      return NextResponse.json({ success: false, message: "Testimonial not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "Testimonial not found" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({

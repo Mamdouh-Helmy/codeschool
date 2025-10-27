@@ -1,4 +1,7 @@
+// ActivityFeed.tsx
+"use client";
 import { Icon } from "@iconify/react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export type ActivityItem = {
   id: string;
@@ -20,14 +23,16 @@ const toneStyles: Record<ActivityItem["tone"], string> = {
 };
 
 const ActivityFeed = ({ items }: ActivityFeedProps) => {
+  const { t } = useI18n();
+
   return (
     <section className="h-full rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm dark:border-dark_border dark:bg-darklight">
       <header>
         <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white">
-          Latest activity
+          {t('dashboard.latestActivity') || 'Latest activity'}
         </h3>
         <p className="text-sm text-slate-500 dark:text-darktext">
-          Monitor important updates from the community and internal team.
+          {t('dashboard.activityDescription') || 'Monitor important updates from the community and internal team.'}
         </p>
       </header>
       <div className="mt-4 sm:mt-6 space-y-4 sm:space-y-5">

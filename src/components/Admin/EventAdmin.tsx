@@ -21,10 +21,11 @@ import {
 } from "lucide-react";
 import Modal from "./Modal";
 import EventForm from "./EventForm";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Event {
-  _id: string; // تغيير إلى _id
-  id?: string; // إضافة id اختياري
+  _id: string;
+  id?: string;
   title: string;
   description: string;
   date: string;
@@ -51,12 +52,12 @@ interface Event {
 }
 
 export default function EventAdmin() {
+  const { t } = useI18n();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Event | null>(null);
 
-  // دالة لتنسيق التاريخ
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -74,7 +75,6 @@ export default function EventAdmin() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  // التحقق من حالة الحدث
   const getEventStatus = (event: Event) => {
     const now = new Date();
     const eventDate = new Date(`${event.date}T${event.time}`);
@@ -82,7 +82,6 @@ export default function EventAdmin() {
     if (!event.isActive) return "inactive";
     if (eventDate < now) return "expired";
 
-    // التحقق من فترة التسجيل
     if (event.registrationStart && event.registrationEnd) {
       const regStart = new Date(event.registrationStart);
       const regEnd = new Date(event.registrationEnd);
@@ -103,7 +102,7 @@ export default function EventAdmin() {
       }
     } catch (err) {
       console.error("Error loading events:", err);
-      toast.error("Failed to load events");
+      toast.error(t("events.failedToLoad"));
     } finally {
       setLoading(false);
     }
@@ -115,7 +114,7 @@ export default function EventAdmin() {
 
   const onSaved = async () => {
     await loadEvents();
-    toast.success("Event saved successfully");
+    toast.success(t("events.savedSuccess"));
   };
 
   const onEdit = (event: Event) => {
@@ -125,7 +124,7 @@ export default function EventAdmin() {
 
   const onDelete = async (id: string) => {
     toast(
-      (t) => (
+      (tObj) => (
         <div className="w-404 max-w-full bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none dark:border-dark_border p-4">
           <div className="flex items-start gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold">
@@ -133,24 +132,24 @@ export default function EventAdmin() {
             </div>
             <div className="flex-1">
               <p className="text-16 font-semibold">
-                Are you sure you want to delete this event?
+                {t("events.deleteConfirm")}
               </p>
               <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                This action cannot be undone.
+                {t("events.deleteWarning")}
               </p>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
               className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-              onClick={() => toast.dismiss(t.id)}
+              onClick={() => toast.dismiss(tObj.id)}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
               onClick={async () => {
-                toast.dismiss(t.id);
+                toast.dismiss(tObj.id);
                 try {
                   const res = await fetch(
                     `/api/events?id=${encodeURIComponent(id)}`,
@@ -160,17 +159,17 @@ export default function EventAdmin() {
                   );
                   if (res.ok) {
                     setEvents((prev) => prev.filter((e) => e._id !== id));
-                    toast.success("Event deleted successfully");
+                    toast.success(t("events.deletedSuccess"));
                   } else {
-                    toast.error("Failed to delete the event");
+                    toast.error(t("events.deleteFailed"));
                   }
                 } catch (err) {
                   console.error("Error deleting event:", err);
-                  toast.error("Error deleting event");
+                  toast.error(t("events.deleteError"));
                 }
               }}
             >
-              Delete
+              {t("common.delete")}
             </button>
           </div>
         </div>
@@ -183,6 +182,7 @@ export default function EventAdmin() {
     return (
       <div className="flex justify-center items-center p-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <span className="ml-2">{t("common.loading")}</span>
       </div>
     );
   }
@@ -195,10 +195,10 @@ export default function EventAdmin() {
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
               <Calendar className="w-7 h-7 text-primary" />
-              Events Management
+              {t("events.management")}
             </h1>
             <p className="text-sm text-SlateBlueText dark:text-darktext max-w-2xl">
-              Manage your events, workshops, and conferences. Schedule sessions, manage speakers, and track registrations for both online and in-person events.
+              {t("events.managementDescription")}
             </p>
           </div>
           <button
@@ -209,7 +209,7 @@ export default function EventAdmin() {
             className="mt-4 lg:mt-0 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add New Event
+            {t("events.addNew")}
           </button>
         </div>
       </div>
@@ -220,7 +220,7 @@ export default function EventAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Events
+                {t("events.totalEvents")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {events.length}
@@ -236,7 +236,7 @@ export default function EventAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Active Events
+                {t("events.activeEvents")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {events.filter((e) => e.isActive).length}
@@ -252,7 +252,7 @@ export default function EventAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Speakers
+                {t("events.totalSpeakers")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {events.reduce(
@@ -271,7 +271,7 @@ export default function EventAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Avg. Attendees
+                {t("events.avgAttendees")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {events.length > 0
@@ -303,16 +303,16 @@ export default function EventAdmin() {
           };
 
           const statusText = {
-            active: "Active",
-            upcoming: "Upcoming",
-            expired: "Expired",
-            "registration-closed": "Registration Closed",
-            inactive: "Inactive",
+            active: t("events.status.active"),
+            upcoming: t("events.status.upcoming"),
+            expired: t("events.status.expired"),
+            "registration-closed": t("events.status.registrationClosed"),
+            inactive: t("events.status.inactive"),
           };
 
           return (
             <div
-              key={event._id} // استخدام _id كـ key
+              key={event._id}
               className={`relative rounded-xl border overflow-hidden transition-all duration-300 hover:shadow-md ${
                 status === "active"
                   ? "border-primary bg-gradient-to-br from-primary/5 to-primary/10"
@@ -360,13 +360,13 @@ export default function EventAdmin() {
                   <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                     <Clock className="w-4 h-4" />
                     <span>
-                      {formatTime(event.time)} • {event.duration}min
+                      {formatTime(event.time)} • {event.duration} {t("events.minutes")}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                     <MapPin className="w-4 h-4" />
                     <span className={!event.location ? "text-gray-400" : ""}>
-                      {event.location || "Location not specified"}
+                      {event.location || t("events.locationNotSpecified")}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
@@ -379,12 +379,12 @@ export default function EventAdmin() {
                 {event.speakers && event.speakers.length > 0 && (
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
-                      Speakers ({event.speakers.length})
+                      {t("events.speakers")} ({event.speakers.length})
                     </h4>
                     <div className="flex flex-wrap gap-1">
                       {event.speakers.slice(0, 3).map((speaker, index) => (
                         <span
-                          key={`${event._id}-speaker-${index}`} // key فريد للمتحدث
+                          key={`${event._id}-speaker-${index}`}
                           className="px-2 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded text-xs"
                         >
                           {speaker.name}
@@ -404,13 +404,13 @@ export default function EventAdmin() {
                   <div className="flex items-center gap-1">
                     <Users className="w-3 h-3" />
                     <span>
-                      {event.currentAttendees}/{event.maxAttendees} attendees
+                      {event.currentAttendees}/{event.maxAttendees} {t("events.attendees")}
                     </span>
                   </div>
                   {event.crmRegistrationUrl && (
                     <div className="flex items-center gap-1">
                       <Link className="w-3 h-3" />
-                      <span>CRM Linked</span>
+                      <span>{t("events.crmLinked")}</span>
                     </div>
                   )}
                 </div>
@@ -421,7 +421,7 @@ export default function EventAdmin() {
                     <div className="flex flex-wrap gap-1">
                       {event.tags.slice(0, 3).map((tag, index) => (
                         <span
-                          key={`${event._id}-tag-${index}`} // key فريد للـ tag
+                          key={`${event._id}-tag-${index}`}
                           className="px-2 py-1 bg-primary/10 text-primary rounded text-xs"
                         >
                           {tag}
@@ -440,16 +440,16 @@ export default function EventAdmin() {
                       className="w-full bg-primary hover:bg-primary/90 text-white py-2 px-3 rounded-lg font-semibold text-sm transition-transform transition-shadow duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-primary/30 flex items-center justify-center gap-2 group"
                     >
                       <Edit className="w-3 h-3 transition-transform duration-300 group-hover:-translate-y-0.5" />
-                      Edit
+                      {t("common.edit")}
                     </button>
 
                     {/* Delete */}
                     <button
-                      onClick={() => onDelete(event._id)} // استخدام _id للحذف
+                      onClick={() => onDelete(event._id)}
                       className="bg-SlateBlueText/10 hover:bg-SlateBlueText/20 dark:bg-darktext/20 dark:hover:bg-darktext/30 text-SlateBlueText dark:text-darktext py-2 px-3 rounded-lg font-semibold text-xs transition-transform transition-colors transition-shadow duration-300 hover:scale-105 active:scale-100 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-SlateBlueText/20 flex items-center justify-center gap-2 group"
                     >
                       <Trash2 className="w-3 h-3 transition-transform duration-300 group-hover:rotate-12" />
-                      Delete
+                      {t("common.delete")}
                     </button>
                   </div>
                 </div>
@@ -466,17 +466,17 @@ export default function EventAdmin() {
             <Calendar className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
-            No events yet
+            {t("events.noEvents")}
           </h3>
           <p className="text-sm text-SlateBlueText dark:text-darktext mb-6 max-w-md mx-auto">
-            Create your first event to start engaging with attendees and organizing memorable experiences.
+            {t("events.noEventsDescription")}
           </p>
           <button
             onClick={() => setOpen(true)}
             className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
           >
             <Plus className="w-4 h-4" />
-            Create Your First Event
+            {t("events.createFirstButton")}
           </button>
         </div>
       )}
@@ -484,7 +484,7 @@ export default function EventAdmin() {
       {/* Modal */}
       <Modal
         open={open}
-        title={editing ? "Edit Event" : "Create New Event"}
+        title={editing ? t("events.editEvent") : t("events.createEvent")}
         onClose={() => {
           setOpen(false);
           setEditing(null);

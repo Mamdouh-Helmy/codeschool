@@ -24,7 +24,7 @@ const ProjectSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ إذا كان المودل موجود مسبقاً، احذفه أولاً
+
 delete mongoose.connection.models.Project;
 
 export default mongoose.models.Project ||

@@ -20,22 +20,25 @@ const fileToBase64 = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-const validateProfile = (name: string, password: string, file?: File) => {
-  const errors: { name?: string; password?: string; image?: string } = {};
+const validateName = (name: string) => {
+  if (name && name.trim().length < 2) return "profile.validation.nameLength";
+  return "";
+};
 
-  if (name && name.trim().length < 2)
-    errors.name = "profile.validation.nameLength";
-  if (password && password.length < 6)
-    errors.password = "profile.validation.passwordLength";
-  if (file) {
-    const validTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!validTypes.includes(file.type))
-      errors.image = "profile.validation.invalidImageType";
-    const maxSize = 2 * 1024 * 1024;
-    if (file.size > maxSize) errors.image = "profile.validation.imageTooLarge";
-  }
+const validatePassword = (password: string) => {
+  if (password && password.length < 6) return "profile.validation.passwordLength";
+  return "";
+};
 
-  return errors;
+const validateImage = (file: File) => {
+  const validTypes = ["image/jpeg", "image/png", "image/webp"];
+  if (!validTypes.includes(file.type))
+    return "profile.validation.invalidImageType";
+  
+  const maxSize = 2 * 1024 * 1024;
+  if (file.size > maxSize) return "profile.validation.imageTooLarge";
+  
+  return "";
 };
 
 export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
@@ -106,32 +109,51 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const validationErrors = validateProfile(name, password, file);
-    if (validationErrors.image) {
-      setErrors(validationErrors);
+    const imageError = validateImage(file);
+    if (imageError) {
+      setErrors((prev) => ({ ...prev, image: imageError }));
       return;
     }
 
     const base64 = await fileToBase64(file);
     setImagePreview(base64);
     setImageFile(file);
-    setErrors((prev) => ({ ...prev, image: undefined }));
+    setErrors((prev) => ({ ...prev, image: "" }));
+  };
+
+  const handleChangeName = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setName(value);
+    setErrors((prev) => ({ ...prev, name: validateName(value) || "" }));
+  };
+
+  const handleChangePassword = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setPassword(value);
+    setErrors((prev) => ({ ...prev, password: validatePassword(value) || "" }));
+  };
+
+  const validateAll = () => {
+    const nameError = validateName(name);
+    const passError = validatePassword(password);
+    
+    const newErrors: { name?: string; password?: string; image?: string } = {};
+    if (nameError) newErrors.name = nameError;
+    if (passError) newErrors.password = passError;
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
-    const validationErrors = validateProfile(
-      name,
-      password,
-      imageFile || undefined
-    );
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      setLoading(false);
+    
+    if (!validateAll()) {
+      toast.error(t("profile.validation.fixErrors"));
       return;
     }
+
+    setLoading(true);
 
     try {
       const updateData: any = {};
@@ -155,7 +177,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
         return;
       }
 
-      const res = await fetch("/api/users/update", {
+      const res = await fetch("/api/auth/profile", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -164,13 +186,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
         body: JSON.stringify(updateData),
       });
 
-      const text = await res.text();
-      let data: any = {};
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = {};
-      }
+      const data = await res.json();
 
       if (!res.ok) {
         if (res.status === 401) {
@@ -193,6 +209,10 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       setUserData(updatedUser);
 
       if (onProfileUpdate) onProfileUpdate(updatedUser);
+
+      // إعادة تعيين كلمة المرور بعد الحفظ الناجح
+      setPassword("");
+      setErrors((prev) => ({ ...prev, password: "" }));
 
       setLoading(false);
       onClose && onClose();
@@ -236,7 +256,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
         <h3 className="text-lg font-semibold">{t("profile.title")}</h3>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6" noValidate>
         <div className="flex items-center gap-4">
           <div className="relative">
             <div className="w-28 h-28 rounded-full overflow-hidden bg-gray-100 border-none border-gray-200">
@@ -306,10 +326,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
             </label>
             <input
               value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (errors.name) setErrors((p) => ({ ...p, name: undefined }));
-              }}
+              onChange={handleChangeName}
               placeholder={t("auth.name")}
               className={`w-full rounded-md border border-border dark:border-dark_border bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary dark:text-white dark:focus:border-primary ${
                 errors.name ? "border-red-500" : ""
@@ -327,12 +344,8 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
             <input
               type="password"
               value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (errors.password)
-                  setErrors((p) => ({ ...p, password: undefined }));
-              }}
-              placeholder={t("auth.password")}
+              onChange={handleChangePassword}
+              placeholder={t("auth.newPassword")}
               className={`w-full rounded-md border border-border dark:border-dark_border bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary dark:text-white dark:focus:border-primary ${
                 errors.password ? "border-red-500" : ""
               }`}
