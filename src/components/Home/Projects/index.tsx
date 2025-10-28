@@ -100,7 +100,7 @@ const Projects = ({ showTitle = true }) => {
   const repeatedProjects = [...projects, ...projects]; 
 
   return ( 
-    <section className={`dark:bg-darkmode relative overflow-hidden ${pathname === "/" ? "" : ""}`}> 
+    <section className={`dark:bg-darkmode relative overflow-hidden ${pathname === "/" ? "" : ""}`} dir="ltr"> 
       {showTitle && ( 
         <h2 className="text-center mb-6">{t("projects.title")}</h2> 
       )} 

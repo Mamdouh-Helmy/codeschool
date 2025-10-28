@@ -5,6 +5,7 @@ import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Slider from "react-slick";
 import { useI18n } from "@/i18n/I18nProvider";
+import { useLocale } from "@/app/context/LocaleContext";
 
 type Event = {
   _id?: string;
@@ -19,6 +20,8 @@ const BoxSlider = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { t } = useI18n();
+  const { locale } = useLocale();
+  const isArabic = String(locale || "").startsWith("ar");
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -68,13 +71,31 @@ const BoxSlider = () => {
     ],
   };
 
+  const toArabicNumbers = (input: string | number) => {
+    const map = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+    return String(input).replace(/\d/g, (d) => map[Number(d)]);
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    const day = date.getDate();
-    const month = date
-      .toLocaleString("en-US", { month: "short" })
-      .toUpperCase();
-    const year = date.getFullYear();
+
+    const localeCode = isArabic ? "ar" : "en";
+
+    let day = date.toLocaleString(localeCode, { day: "numeric" });
+    let month = date.toLocaleString(localeCode, { month: "short" });
+    let year = date.toLocaleString(localeCode, { year: "numeric" });
+
+    if (!isArabic) {
+      month = month.toUpperCase();
+    }
+
+    if (isArabic) {
+      day = toArabicNumbers(day);
+      year = toArabicNumbers(year);
+
+      month = month.replace(/\d/g, (d) => toArabicNumbers(d));
+    }
+
     return { day, month, year };
   };
 

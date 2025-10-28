@@ -5,6 +5,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { CheckCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useI18n } from "@/i18n/I18nProvider";
+import { useLocale } from "@/app/context/LocaleContext";
 
 type PricingPlan = {
   _id?: string;
@@ -30,8 +31,9 @@ const DynamicPricing = () => {
   const auth = useAuth();
   const { t } = useI18n();
   const planIdFromQuery = searchParams.get("plan");
+  const { locale } = useLocale();
 
-  // ✅ جلب الباقات من الـ API مباشرة
+
   useEffect(() => {
     const fetchPlans = async () => {
       try {
@@ -54,7 +56,7 @@ const DynamicPricing = () => {
     fetchPlans();
   }, [t]);
 
-  // ✅ تحديد الخطة المختارة من URL
+
   useEffect(() => {
     if (planIdFromQuery) setSelectedPlan(planIdFromQuery);
   }, [planIdFromQuery]);
@@ -80,7 +82,7 @@ const DynamicPricing = () => {
     fetchUserSubscriptions();
   }, []);
 
-  // ✅ الاشتراك في الخطة
+
   const handleSubscribe = async (planId: string) => {
     if (subscribedPlans.includes(planId)) {
       toast.error(t("eventTicket.alreadySubscribed"));
@@ -93,28 +95,37 @@ const DynamicPricing = () => {
         if (sess.ok) {
           const sessJson = await sess.json();
           if (sessJson?.success && sessJson?.loggedIn) {
-            try {
-              if (sessJson.user) localStorage.setItem("user", JSON.stringify(sessJson.user));
-            } catch (e) {
-              console.warn("Failed to sync user to localStorage", e);
-            }
+            // try {
+            //   if (sessJson.user)
+            //     // localStorage.setItem("user", JSON.stringify(sessJson.user));
+            // } catch (e) {
+            //   console.warn("Failed to sync user to localStorage", e);
+            // }
           } else {
             toast.error(t("eventTicket.pleaseLogin"));
             const callback = pathname || "/";
-            router.push(`/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`);
+            // router.push(
+            //   `/signin?callbackUrl=${encodeURIComponent(
+            //     callback
+            //   )}&plan=${planId}`
+            // );
             return;
           }
         } else {
           toast.error(t("eventTicket.pleaseLogin"));
           const callback = pathname || "/";
-          router.push(`/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`);
+          router.push(
+            `/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`
+          );
           return;
         }
       } catch (e) {
         console.error("Session check failed:", e);
         toast.error(t("eventTicket.pleaseLogin"));
         const callback = pathname || "/";
-        router.push(`/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`);
+        router.push(
+          `/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`
+        );
         return;
       }
     }
@@ -143,7 +154,9 @@ const DynamicPricing = () => {
       } else if (res.status === 401) {
         toast.error(t("eventTicket.pleaseLogin"));
         const callback = pathname || "/";
-        router.push(`/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`);
+        // router.push(
+        //   `/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`
+        // );
       } else {
         toast.error(result.message || t("eventTicket.subscriptionFailed"));
       }
@@ -157,7 +170,9 @@ const DynamicPricing = () => {
 
   if (loading)
     return (
-      <div className="py-20 text-center text-gray-500">{t("pricing.loading")}</div>
+      <div className="py-20 text-center text-gray-500">
+        {t("pricing.loading")}
+      </div>
     );
 
   if (error)
@@ -194,12 +209,21 @@ const DynamicPricing = () => {
                 <p className="text-center text-gray-600 dark:text-gray-300 mb-4">
                   {plan.description}
                 </p>
-                <p className="text-center text-4xl font-bold text-primary mb-6">
-                  {plan.price} {plan.currency}
-                  <span className="text-gray-500 text-base ml-1">
-                    /{plan.billingPeriod}
-                  </span>
-                </p>
+                {locale === "ar" ? (
+                  <p className="text-center text-4xl font-bold text-primary mb-6">
+                    <span className="text-gray-500 text-base ml-1">
+                      {plan.billingPeriod} /
+                    </span>{" "}
+                    {plan.price} {plan.currency}
+                  </p>
+                ) : (
+                  <p className="text-center text-4xl font-bold text-primary mb-6">
+                    {plan.price} {plan.currency}
+                    <span className="text-gray-500 text-base ml-1">
+                      / {plan.billingPeriod}
+                    </span>
+                  </p>
+                )}
 
                 {isSubscribed ? (
                   <button
@@ -219,7 +243,9 @@ const DynamicPricing = () => {
                         : "bg-primary text-white hover:bg-primary/90"
                     }`}
                   >
-                    {processing ? t("eventTicket.processing") : t("pricing.subscribe")}
+                    {processing
+                      ? t("eventTicket.processing")
+                      : t("pricing.subscribe")}
                   </button>
                 ) : (
                   <button

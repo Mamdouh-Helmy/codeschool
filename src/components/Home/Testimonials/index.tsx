@@ -5,14 +5,20 @@ import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import { useI18n } from "@/i18n/I18nProvider";
+import { useLocale } from "@/app/context/LocaleContext";
 
 const cleanBase64 = (str?: string) => {
   if (!str) return "";
-  return String(str).replace(/\s/g, "").replace(/%[0-9A-F]{2}/gi, "").replaceAll("…", "").trim();
+  return String(str)
+    .replace(/\s/g, "")
+    .replace(/%[0-9A-F]{2}/gi, "")
+    .replaceAll("…", "")
+    .trim();
 };
 
 const getImageInfo = (img?: string | null) => {
-  if (!img) return { src: null as string | null, useImgTag: false, isGif: false };
+  if (!img)
+    return { src: null as string | null, useImgTag: false, isGif: false };
 
   const raw = String(img).trim();
 
@@ -53,6 +59,9 @@ const getImageInfo = (img?: string | null) => {
 
 const Testimonials = () => {
   const { t } = useI18n();
+  const { locale } = useLocale();
+  const isArabic = String(locale || "").startsWith("ar");
+
   const [testimonials, setTestimonials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -78,6 +87,8 @@ const Testimonials = () => {
     slidesToShow: 1,
     slidesToScroll: 1,
     autoplay: true,
+    rtl: isArabic,
+    arrows: false,
   };
 
   if (loading) {
@@ -99,51 +110,66 @@ const Testimonials = () => {
             const imgRaw = testimonial.studentImage;
             let studentImageFallback = "/images/hero/john.png";
 
-            const { src: studentSrc, useImgTag: studentUseImgTag } = getImageInfo(
-              imgRaw && String(imgRaw).startsWith("data:") ? imgRaw : imgRaw ? imgRaw : null
-            );
+            const { src: studentSrc, useImgTag: studentUseImgTag } =
+              getImageInfo(
+                imgRaw && String(imgRaw).startsWith("data:")
+                  ? imgRaw
+                  : imgRaw
+                  ? imgRaw
+                  : null
+              );
 
             const finalImageSrc = studentSrc || studentImageFallback;
+
+            // decorative big image corner radii mirrored for RTL
+            const decorativeStyle = isArabic
+              ? {
+                  borderTopRightRadius: "200px",
+                  borderBottomLeftRadius: "200px",
+                  borderTopLeftRadius: "0px",
+                  borderBottomRightRadius: "0px",
+                  height: "450px",
+                }
+              : {
+                  borderTopLeftRadius: "200px",
+                  borderBottomRightRadius: "200px",
+                  borderTopRightRadius: "0px",
+                  borderBottomLeftRadius: "0px",
+                  height: "450px",
+                };
+
+            // content spacing depending on RTL/LTR
+            const contentSpacingClass = isArabic
+              ? "md:mr-20 mr-0 text-right"
+              : "md:ml-20 ml-0 text-left";
 
             return (
               <div key={testimonial._id || testimonial.id}>
                 <div className="grid md:grid-cols-12 grid-cols-1 items-center">
                   <div
-                    className="col-span-4 relative hidden lg:block overflow-hidden bg-LightSkyBlue"
-                    style={{
-                      borderTopLeftRadius: "200px",
-                      borderBottomRightRadius: "200px",
-                      borderTopRightRadius: "0px",
-                      borderBottomLeftRadius: "0px",
-                      height: "450px",
-                    }}
+                    className={`col-span-4 relative hidden lg:block overflow-hidden bg-LightSkyBlue ${
+                      isArabic ? "md:order-2" : "md:order-1"
+                    }`}
+                    style={decorativeStyle}
                   >
                     {/* big decorative image */}
-                    {studentUseImgTag ? (
-                      <img
-                        src={finalImageSrc}
-                        alt={testimonial.studentName || "testimonial"}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = "/images/hero/john.png";
-                        }}
-                      />
-                    ) : (
-                      // use normal <img> if for any reason studentUseImgTag is false but src is data/local (safe fallback)
-                      <img
-                        src={finalImageSrc}
-                        alt={testimonial.studentName || "testimonial"}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = "/images/hero/john.png";
-                        }}
-                      />
-                    )}
+                    <img
+                      src={finalImageSrc}
+                      alt={testimonial.studentName || "testimonial"}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src =
+                          "/images/hero/john.png";
+                      }}
+                    />
                   </div>
 
-                  <div className="col-span-8 md:ml-20 ml-0">
+                  <div
+                    className={`col-span-8 ${
+                      isArabic ? "md:order-1" : "md:order-2"
+                    } ${contentSpacingClass}`}
+                  >
                     <h2 className="text-3xl font-bold text-secondary dark:text-white mb-5">
                       {t("testimonials.heading")}
                     </h2>
@@ -152,7 +178,11 @@ const Testimonials = () => {
                       "{testimonial.comment || t("testimonials.noComment")}"
                     </p>
 
-                    <div className="flex items-center gap-6">
+                    <div
+                      className={`flex items-center gap-6 ${
+                        isArabic ? "justify-end" : "justify-start"
+                      }`}
+                    >
                       <div
                         className="rounded-full overflow-hidden bg-gray-200 flex items-center justify-center"
                         style={{
@@ -161,38 +191,36 @@ const Testimonials = () => {
                           flexShrink: 0,
                         }}
                       >
-                        {studentUseImgTag ? (
-                          <img
-                            src={finalImageSrc}
-                            alt={testimonial.studentName}
-                            className="object-cover w-full h-full"
-                            loading="lazy"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).src = "/images/hero/john.png";
-                            }}
-                          />
-                        ) : (
-                          <img
-                            src={finalImageSrc}
-                            alt={testimonial.studentName}
-                            className="object-cover w-full h-full"
-                            loading="lazy"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).src = "/images/hero/john.png";
-                            }}
-                          />
-                        )}
+                        <img
+                          src={finalImageSrc}
+                          alt={testimonial.studentName}
+                          className="object-cover w-full h-full"
+                          loading="lazy"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src =
+                              "/images/hero/john.png";
+                          }}
+                        />
                       </div>
 
                       <div>
                         <p className="text-xl font-medium text-secondary dark:text-white pb-1">
-                          {testimonial.studentName || t("testimonials.anonymous")}
+                          {testimonial.studentName ||
+                            t("testimonials.anonymous")}
                         </p>
-                        <div className="flex items-center">
-                          {Array.from({ length: Math.round(testimonial.rating || 5) }).map((_, i) => (
+                        <div
+                          className={`flex items-center ${
+                            isArabic ? "flex-row-reverse" : ""
+                          }`}
+                        >
+                          {Array.from({
+                            length: Math.round(testimonial.rating || 5),
+                          }).map((_, i) => (
                             <svg
                               key={i}
-                              className="w-4 h-4 text-yellow-500 ms-1"
+                              className={`w-4 h-4 text-yellow-500 ${
+                                isArabic ? "me-1" : "ms-1"
+                              }`}
                               xmlns="http://www.w3.org/2000/svg"
                               fill="currentColor"
                               viewBox="0 0 22 20"
@@ -204,7 +232,9 @@ const Testimonials = () => {
                         {testimonial.courseTitle && (
                           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                             {t("testimonials.course")}:{" "}
-                            <span className="font-medium">{testimonial.courseTitle}</span>
+                            <span className="font-medium">
+                              {testimonial.courseTitle}
+                            </span>
                           </p>
                         )}
                       </div>
