@@ -42,7 +42,7 @@ const Hero = () => {
               data-aos="fade-up"
               data-aos-delay="400"
               data-aos-duration="1000"
-              className="text-xl text-SlateBlueText dark:text-opacity-80 font-normal md:pb-14 pb-6"
+              className="text-xl text-SlateBlueText dark:text-opacity-80 font-normal md:pb-14 pb-6 w-[500px]"
             >
               {preview}
               <button
@@ -87,6 +87,7 @@ const Hero = () => {
             data-aos-delay="200"
             data-aos-duration="1000"
             className="col-span-6 lg:flex hidden items-center gap-3"
+            dir="ltr"
           >
             <div className="bg-[#ffbd59] relative rounded-tl-166 rounded-br-166 w-full">
               <Image
