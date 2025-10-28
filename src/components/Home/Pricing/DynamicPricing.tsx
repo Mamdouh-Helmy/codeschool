@@ -104,11 +104,7 @@ const DynamicPricing = () => {
           } else {
             toast.error(t("eventTicket.pleaseLogin"));
             const callback = pathname || "/";
-            // router.push(
-            //   `/signin?callbackUrl=${encodeURIComponent(
-            //     callback
-            //   )}&plan=${planId}`
-            // );
+            
             return;
           }
         } else {
