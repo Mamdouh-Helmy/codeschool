@@ -997,7 +997,184 @@ const en = {
   "common.deletedAt": "Deleted At",
   "subscriptions.notesUpdated": "Notes updated successfully",
   "subscriptions.notesUpdateFailed": "Failed to update notes",
- 
+
+  "auth.validation.requiredEmail": "Email is required",
+  "auth.validation.invalidOtp": "Invalid verification code",
+  "auth.verificationSent": "A verification code has been sent to your email",
+  "auth.verifyEmail": "Verify your Email",
+  "auth.verificationCodeSent": "A verification code was sent to",
+  "auth.enterOtp": "Enter the 6-digit verification code",
+  "auth.verifying": "Verifying...",
+  "auth.verifyAndRegister": "Verify and Register",
+  "auth.resendCode": "Resend Code",
+  "auth.resendIn": "Resend in",
+  "auth.backToEdit": "Back to Edit Details",
+  "auth.invalidOtp": "Invalid verification code",
+  "auth.fillAllFields": "Please fill in all fields",
+  "auth.sendingCode": "Sending code...",
+  "auth.sendVerification": "Send Verification Code",
+  "auth.emailVerified": "Email verified successfully",
+  "auth.verificationFailed":
+    "Failed to send verification code. Please try again.",
+
+  // في قسم Testimonials Management
+  "testimonials.form.studentInfo": "Student Information",
+  "testimonials.form.studentInfoDescription":
+    "Select a student from database or enter name manually",
+  "testimonials.form.studentName": "Student Name *",
+  "testimonials.form.studentImage": "Student Image",
+  "testimonials.form.searchStudent":
+    "Search for a student or enter name manually",
+  "testimonials.form.databaseStudent": "Database Student",
+  "testimonials.form.linkedAccount": "Linked to user account",
+  "testimonials.form.manualEntry": "Manual Entry",
+  "testimonials.form.manualStudent": "Student added manually",
+  "testimonials.form.imageUrl": "Image URL or upload file",
+  "testimonials.form.uploadImage": "Upload Image",
+  "testimonials.form.removeImage": "Remove",
+  "testimonials.form.courseInfo": "Course Information",
+  "testimonials.form.courseTitle": "Course Title",
+  "testimonials.form.courseId": "Course ID (Optional)",
+  "testimonials.form.ratingFeedback": "Rating & Feedback",
+  "testimonials.form.ratingDescription":
+    "Student rating and testimonial content",
+  "testimonials.form.rating": "Rating *",
+  "testimonials.form.testimonialComment": "Testimonial Comment *",
+  "testimonials.form.settings": "Settings",
+  "testimonials.form.settingsDescription":
+    "Testimonial visibility and features",
+  "testimonials.form.activeTestimonial": "Active Testimonial",
+  "testimonials.form.activeDescription":
+    "Make this testimonial visible on the website",
+  "testimonials.form.featuredTestimonial": "Featured Testimonial",
+  "testimonials.form.featuredDescription":
+    "Highlight this testimonial as a featured review",
+  "testimonials.form.cancel": "Cancel",
+  "testimonials.form.updateTestimonial": "Update Testimonial",
+  "testimonials.form.createTestimonial": "Create Testimonial",
+  "testimonials.form.saving": "Saving...",
+
+  // Dropdown related
+  "testimonials.dropdown.searchStudents": "Search students...",
+  "testimonials.dropdown.databaseStudents": "DATABASE STUDENTS",
+  "testimonials.dropdown.manualEntries": "MANUAL ENTRIES",
+  "testimonials.dropdown.addStudent": 'Add "{name}"',
+  "testimonials.dropdown.createEntry": "Create new student entry",
+  "testimonials.dropdown.noStudents": "No students found",
+  "testimonials.dropdown.student": "Student",
+  "testimonials.dropdown.manual": "Manual",
+
+  // Testimonials Management
+  "testimonials.management": "Testimonials Management",
+  "testimonials.managementDescription":
+    "Manage student testimonials and reviews. Showcase positive feedback to build trust with potential students.",
+  "testimonials.addNew": "Add New Testimonial",
+  "testimonials.totalTestimonials": "Total Testimonials",
+  "testimonials.featured": "Featured",
+  "testimonials.avgRating": "Avg. Rating",
+  "testimonials.active": "Active",
+  "testimonials.searchPlaceholder":
+    "Search testimonials by student, course, or comment...",
+  "testimonials.all": "All",
+  "testimonials.regular": "Regular",
+  "testimonials.noTestimonials": "No testimonials found",
+  "testimonials.noTestimonialsDescription":
+    "Start collecting student feedback to build trust and showcase your platform's value.",
+  "testimonials.clearFilters": "Clear Filters",
+  "testimonials.createFirst": "Create Your First Testimonial",
+  "testimonials.edit": "Edit",
+  "testimonials.delete": "Delete",
+  "testimonials.deleteConfirm":
+    "Are you sure you want to delete this testimonial?",
+  "testimonials.deleteWarning": "This action cannot be undone.",
+  "testimonials.inactive": "Inactive",
+
+  // Stats and labels
+  "testimonials.stats.total": "Total Testimonials",
+  "testimonials.stats.featured": "Featured",
+  "testimonials.stats.avgRating": "Avg. Rating",
+  "testimonials.stats.active": "Active",
+  "testimonials.loadError": "Failed to load testimonials",
+  "testimonials.savedSuccess": "Testimonial saved successfully",
+  "testimonials.deletedSuccess": "Testimonial deleted successfully",
+  "testimonials.deleteFailed": "Failed to delete the testimonial",
+  "testimonials.deleteError": "Error deleting testimonial",
+
+  // Common UI Elements
+  "common.student": "Student",
+  "common.course": "Course",
+  "common.rating": "Rating",
+  "common.comment": "Comment",
+
+  // Schedule Form
+  "schedules.form.basicInfo": "Event Information",
+  "schedules.form.basicInfoDescription": "Basic details about the event",
+  "schedules.form.eventTitle": "Event Title *",
+  "schedules.form.titlePlaceholder": "e.g., React Conference 2024",
+  "schedules.form.description": "Description *",
+  "schedules.form.descriptionPlaceholder":
+    "Describe the event content, objectives, and what attendees will learn...",
+  "schedules.form.coverImage": "Event Cover Image",
+  "schedules.form.imagePlaceholder": "Image URL or upload file",
+  "schedules.form.uploadImage": "Upload Image",
+  "schedules.form.removeImage": "Remove",
+  "schedules.form.scheduleLocation": "Schedule & Location",
+  "schedules.form.scheduleDescription":
+    "Set date, time, and location for the event",
+  "schedules.form.date": "Date *",
+  "schedules.form.time": "Time *",
+  "schedules.form.location": "Location",
+  "schedules.form.locationPlaceholder":
+    "e.g., Conference Hall A, Virtual Meeting, etc.",
+  "schedules.form.speakers": "Speakers",
+  "schedules.form.speakersDescription": "Add multiple speakers for this event",
+  "schedules.form.addNewSpeaker": "Add New Speaker",
+  "schedules.form.speakerName": "Speaker Name",
+  "schedules.form.speakerNamePlaceholder": "Speaker name",
+  "schedules.form.speakerRole": "Speaker Role",
+  "schedules.form.speakerRolePlaceholder": "Role/Title",
+  "schedules.form.speakerImage": "Speaker Image",
+  "schedules.form.addSpeaker": "Add Speaker",
+  "schedules.form.addedSpeakers": "Added Speakers",
+  "schedules.form.tags": "Tags",
+  "schedules.form.tagsDescription":
+    "Add tags for better categorization and search",
+  "schedules.form.tagsPlaceholder":
+    "Enter a tag (e.g., Conference, Workshop, Networking)",
+  "schedules.form.addTag": "Add",
+  "schedules.form.addedTags": "Added Tags",
+  "schedules.form.tagsHint":
+    "Press Enter or click Add to include multiple tags",
+  "schedules.form.settings": "Settings",
+  "schedules.form.settingsDescription": "Event visibility and status",
+  "schedules.form.activeEvent": "Active Event",
+  "schedules.form.activeDescription": "Make this event visible and available",
+  "schedules.form.updateEvent": "Update Event",
+  "schedules.form.createEvent": "Create Event",
+  "schedules.form.saving": "Saving...",
+
+  // Event Status
+  "schedules.status.active": "Active",
+  "schedules.status.upcoming": "Upcoming",
+  "schedules.status.expired": "Expired",
+  "schedules.status.inactive": "Inactive",
+
+  // Stats
+  "schedules.stats.totalEvents": "Total Events",
+  "schedules.stats.activeEvents": "Active Events",
+  "schedules.stats.totalSpeakers": "Total Speakers",
+  "schedules.stats.upcomingEvents": "Upcoming Events",
+
+  // UI Elements
+  "schedules.speakers": "Speakers",
+  "schedules.duration": "Duration",
+  "schedules.minutes": "minutes",
+  "schedules.location": "Location",
+  "schedules.tags": "Tags",
+
+  // Status Messages
+  "schedules.loading": "Loading events...",
+  "schedules.loadError": "Failed to load events",
 };
 
 export default en;

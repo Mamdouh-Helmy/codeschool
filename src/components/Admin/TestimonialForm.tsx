@@ -17,6 +17,7 @@ import {
   Search,
   Plus,
 } from "lucide-react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Props {
   initial?: any;
@@ -30,7 +31,7 @@ interface Student {
   email: string;
   role: string;
   image?: string;
-  isManual?: boolean; // إضافة علامة للطلاب اليدويين
+  isManual?: boolean;
 }
 
 export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
@@ -52,12 +53,12 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const [studentSearch, setStudentSearch] = useState("");
-  const [manualStudents, setManualStudents] = useState<Student[]>([]); // قائمة الطلاب اليدويين
+  const [manualStudents, setManualStudents] = useState<Student[]>([]); 
+  const { t } = useI18n();
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // جلب قائمة الطلاب من API
   useEffect(() => {
     const fetchStudents = async () => {
       setStudentsLoading(true);
@@ -77,7 +78,6 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
     fetchStudents();
   }, []);
 
-  // إغلاق dropdown عند النقر خارجها
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -91,7 +91,6 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
     };
   }, []);
 
-  // معاينة صورة الطالب
   useEffect(() => {
     if (form.studentImage) {
       setStudentImagePreview(form.studentImage);
@@ -102,7 +101,6 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  // إضافة طالب يدوي إلى القائمة
   const addManualStudent = (name: string) => {
     if (name.trim() && !manualStudents.some(student => student.name === name.trim())) {
       const newManualStudent: Student = {
@@ -118,10 +116,9 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
     return null;
   };
 
-  // اختيار طالب من القائمة
   const handleStudentSelect = (student: Student) => {
     onChange("studentName", student.name);
-    onChange("studentId", student.isManual ? "" : student._id); // لا نضع ID للطلاب اليدويين
+    onChange("studentId", student.isManual ? "" : student._id);
     
     if (student.image && !student.isManual) {
       onChange("studentImage", student.image);
@@ -132,35 +129,29 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
     setStudentSearch("");
   };
 
-  // معالجة تغيير الإدخال
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     onChange("studentName", value);
     setStudentSearch(value);
   };
 
-  // فتح/إغلاق dropdown
   const handleInputFocus = () => {
     setShowStudentDropdown(true);
   };
 
-  // تصفية الطلاب حسب البحث
   const filteredStudents = students.filter(student =>
     student.name.toLowerCase().includes(studentSearch.toLowerCase()) ||
     student.email.toLowerCase().includes(studentSearch.toLowerCase())
   );
 
-  // تصفية الطلاب اليدويين حسب البحث
   const filteredManualStudents = manualStudents.filter(student =>
     student.name.toLowerCase().includes(studentSearch.toLowerCase())
   );
 
-  // التحقق إذا كان الاسم المدخل موجودًا في القوائم
   const isNameInLists = studentSearch.trim() && 
     (filteredStudents.some(student => student.name.toLowerCase() === studentSearch.toLowerCase()) ||
      filteredManualStudents.some(student => student.name.toLowerCase() === studentSearch.toLowerCase()));
 
-  // إضافة الاسم المدخل إلى القائمة
   const handleAddManualStudent = () => {
     if (studentSearch.trim() && !isNameInLists) {
       const newStudent = addManualStudent(studentSearch);
@@ -170,7 +161,6 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // معالجة رفع صورة الطالب
   const handleStudentImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -184,7 +174,6 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // إنشاء النجوم للتقييم
   const renderRatingStars = () => {
     return Array.from({ length: 5 }, (_, index) => (
       <button
@@ -204,77 +193,65 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
     ));
   };
 
- const submit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-  try {
-    // جلب token المستخدم الحالي
-    const getToken = () => {
-      return document.cookie
-        .split('; ')
-        .find(row => row.startsWith('token='))
-        ?.split('=')[1];
-    };
+    try {
+      const payload: any = { 
+        studentName: form.studentName,
+        studentImage: form.studentImage,
+        courseId: form.courseId,
+        courseTitle: form.courseTitle,
+        rating: form.rating,
+        comment: form.comment,
+        featured: form.featured,
+        isActive: form.isActive
+      };
 
-    // بناء payload آمن
-    const payload: any = { 
-      studentName: form.studentName,
-      studentImage: form.studentImage,
-      courseId: form.courseId,
-      courseTitle: form.courseTitle,
-      rating: form.rating,
-      comment: form.comment,
-      featured: form.featured,
-      isActive: form.isActive
-    };
-
-    // إضافة userId - إذا كان موجودًا نستخدمه، وإلا سيستخدم الـ API القيمة الافتراضية
-    if (form.studentId && form.studentId.trim() !== "") {
-      payload.userId = form.studentId;
-    }
-
-    console.log("Sending testimonial payload:", payload);
-
-    const method = initial?._id ? "PUT" : "POST";
-    
-    let url = "/api/testimonials";
-    if (initial?._id) {
-      url = `/api/testimonials?id=${encodeURIComponent(initial._id)}`;
-    }
-
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      let errorMessage = `HTTP error! status: ${res.status}`;
-      try {
-        const errorData = await res.json();
-        errorMessage = errorData.message || errorMessage;
-      } catch {
-        const text = await res.text();
-        errorMessage = text || errorMessage;
+      if (form.studentId && form.studentId.trim() !== "") {
+        payload.userId = form.studentId;
       }
-      throw new Error(errorMessage);
-    }
 
-    const result = await res.json();
-    if (result.success) {
-      onSaved();
-      onClose();
-    } else {
-      throw new Error(result.message || "Operation failed");
+      const method = initial?._id ? "PUT" : "POST";
+      
+      let url = "/api/testimonials";
+      if (initial?._id) {
+        url = `/api/testimonials?id=${encodeURIComponent(initial._id)}`;
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        let errorMessage = `HTTP error! status: ${res.status}`;
+        try {
+          const errorData = await res.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          const text = await res.text();
+          errorMessage = text || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const result = await res.json();
+      if (result.success) {
+        onSaved();
+        onClose();
+      } else {
+        throw new Error(result.message || "Operation failed");
+      }
+    } catch (err: any) {
+      console.error("Error:", err);
+      alert(`An error occurred: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
-  } catch (err: any) {
-    console.error("Error:", err);
-    alert(`An error occurred: ${err.message}`);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <form onSubmit={submit} className="space-y-6">
@@ -286,10 +263,10 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Student Information
+              {t("testimonials.form.studentInfo")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Select a student from database or enter name manually
+              {t("testimonials.form.studentInfoDescription")}
             </p>
           </div>
         </div>
@@ -298,11 +275,10 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-3">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <User className="w-3 h-3 text-primary" />
-            Student Name *
+            {t("testimonials.form.studentName")}
           </label>
           
           <div className="relative" ref={dropdownRef}>
-            {/* Input مع dropdown */}
             <div className="relative">
               <input
                 ref={inputRef}
@@ -310,7 +286,7 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
                 value={form.studentName}
                 onChange={handleInputChange}
                 onFocus={handleInputFocus}
-                placeholder="Search for a student or enter name manually"
+                placeholder={t("testimonials.form.searchStudent")}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200 pr-10"
                 required
               />
@@ -323,10 +299,8 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
               </div>
             </div>
 
-            {/* Dropdown List */}
             {showStudentDropdown && (
               <div className="absolute z-10 w-full mt-1 bg-white dark:bg-darkmode border border-PowderBlueBorder dark:border-dark_border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                {/* Search Header */}
                 <div className="p-2 border-b border-PowderBlueBorder dark:border-dark_border">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-SlateBlueText dark:text-darktext" />
@@ -334,16 +308,14 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
                       type="text"
                       value={studentSearch}
                       onChange={(e) => setStudentSearch(e.target.value)}
-                      placeholder="Search students..."
+                      placeholder={t("testimonials.dropdown.searchStudents")}
                       className="w-full pl-10 pr-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13"
                       autoFocus
                     />
                   </div>
                 </div>
 
-                {/* Students List */}
                 <div className="py-1">
-                  {/* زر إضافة الاسم المدخل */}
                   {studentSearch.trim() && !isNameInLists && (
                     <button
                       type="button"
@@ -355,21 +327,20 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                          Add "{studentSearch}"
+                          {t("testimonials.dropdown.addStudent", { name: studentSearch })}
                         </p>
                         <p className="text-11 text-SlateBlueText dark:text-darktext">
-                          Create new student entry
+                          {t("testimonials.dropdown.createEntry")}
                         </p>
                       </div>
                     </button>
                   )}
 
-                  {/* الطلاب من قاعدة البيانات */}
                   {filteredStudents.length > 0 && (
                     <div className="border-b border-PowderBlueBorder dark:border-dark_border">
                       <div className="px-3 py-1 bg-IcyBreeze dark:bg-dark_input">
                         <p className="text-11 font-medium text-SlateBlueText dark:text-darktext">
-                          DATABASE STUDENTS
+                          {t("testimonials.dropdown.databaseStudents")}
                         </p>
                       </div>
                       {filteredStudents.map((student) => (
@@ -399,19 +370,18 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
                             </p>
                           </div>
                           <span className="text-10 px-2 py-1 bg-primary/10 text-primary rounded-full">
-                            Student
+                            {t("testimonials.dropdown.student")}
                           </span>
                         </button>
                       ))}
                     </div>
                   )}
 
-                  {/* الطلاب اليدويين */}
                   {filteredManualStudents.length > 0 && (
                     <div>
                       <div className="px-3 py-1 bg-IcyBreeze dark:bg-dark_input">
                         <p className="text-11 font-medium text-SlateBlueText dark:text-darktext">
-                          MANUAL ENTRIES
+                          {t("testimonials.dropdown.manualEntries")}
                         </p>
                       </div>
                       {filteredManualStudents.map((student) => (
@@ -429,21 +399,20 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
                               {student.name}
                             </p>
                             <p className="text-11 text-SlateBlueText dark:text-darktext">
-                              Manual entry
+                              {t("testimonials.form.manualEntry")}
                             </p>
                           </div>
                           <span className="text-10 px-2 py-1 bg-LightYellow/10 text-LightYellow rounded-full">
-                            Manual
+                            {t("testimonials.dropdown.manual")}
                           </span>
                         </button>
                       ))}
                     </div>
                   )}
 
-                  {/* لا توجد نتائج */}
                   {filteredStudents.length === 0 && filteredManualStudents.length === 0 && !studentSearch.trim() && (
                     <div className="px-3 py-2 text-13 text-SlateBlueText dark:text-darktext text-center">
-                      No students found
+                      {t("testimonials.dropdown.noStudents")}
                     </div>
                   )}
                 </div>
@@ -451,32 +420,30 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
             )}
           </div>
 
-          {/* Student Status Display */}
           {form.studentId && (
             <div className="flex items-center gap-2 text-11 text-SlateBlueText dark:text-darktext">
               <span className="px-2 py-1 bg-Aquamarine/10 text-Aquamarine rounded-full">
-                Database Student
+                {t("testimonials.form.databaseStudent")}
               </span>
-              <span>Linked to user account</span>
+              <span>{t("testimonials.form.linkedAccount")}</span>
             </div>
           )}
 
           {!form.studentId && form.studentName && (
             <div className="flex items-center gap-2 text-11 text-SlateBlueText dark:text-darktext">
               <span className="px-2 py-1 bg-LightYellow/10 text-LightYellow rounded-full">
-                Manual Entry
+                {t("testimonials.form.manualEntry")}
               </span>
-              <span>Student added manually</span>
+              <span>{t("testimonials.form.manualStudent")}</span>
             </div>
           )}
         </div>
 
-        {/* باقي المكونات كما هي */}
         {/* Student Image */}
         <div className="space-y-3">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <Image className="w-3 h-3 text-primary" />
-            Student Image
+            {t("testimonials.form.studentImage")}
           </label>
           
           <div className="flex gap-4 items-start">
@@ -485,13 +452,13 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
                 type="text"
                 value={form.studentImage}
                 onChange={(e) => onChange("studentImage", e.target.value)}
-                placeholder="Image URL or upload file"
+                placeholder={t("testimonials.form.imageUrl")}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
               <div className="mt-2">
                 <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
                   <Upload className="w-3 h-3" />
-                  Upload Image
+                  {t("testimonials.form.uploadImage")}
                   <input
                     type="file"
                     accept="image/*"
@@ -509,7 +476,7 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
                     className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
                   >
                     <Trash2 className="w-3 h-3" />
-                    Remove
+                    {t("testimonials.form.removeImage")}
                   </button>
                 )}
               </div>
@@ -532,7 +499,7 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <BookOpen className="w-3 h-3 text-primary" />
-              Course Title
+              {t("testimonials.form.courseTitle")}
             </label>
             <input
               type="text"
@@ -546,7 +513,7 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <BookOpen className="w-3 h-3 text-primary" />
-              Course ID (Optional)
+              {t("testimonials.form.courseId")}
             </label>
             <input
               type="text"
@@ -558,6 +525,7 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
           </div>
         </div>
       </div>
+
       {/* Rating & Feedback */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
         <div className="flex items-center gap-3">
@@ -566,10 +534,10 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Rating & Feedback
+              {t("testimonials.form.ratingFeedback")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Student rating and testimonial content
+              {t("testimonials.form.ratingDescription")}
             </p>
           </div>
         </div>
@@ -577,7 +545,7 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
         {/* Rating */}
         <div className="space-y-3">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-            Rating *
+            {t("testimonials.form.rating")}
           </label>
           <div className="flex items-center gap-2">
             {renderRatingStars()}
@@ -591,7 +559,7 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <MessageSquare className="w-3 h-3 text-LightYellow" />
-            Testimonial Comment *
+            {t("testimonials.form.testimonialComment")}
           </label>
           <textarea
             value={form.comment}
@@ -612,10 +580,10 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Settings
+              {t("testimonials.form.settings")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Testimonial visibility and features
+              {t("testimonials.form.settingsDescription")}
             </p>
           </div>
         </div>
@@ -635,11 +603,11 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
                   className="w-4 h-4 text-ElectricAqua focus:ring-ElectricAqua border-PowderBlueBorder rounded"
                 />
                 <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                  Active Testimonial
+                  {t("testimonials.form.activeTestimonial")}
                 </span>
               </div>
               <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                Make this testimonial visible on the website
+                {t("testimonials.form.activeDescription")}
               </p>
             </div>
           </label>
@@ -658,11 +626,11 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
                   className="w-4 h-4 text-Aquamarine focus:ring-Aquamarine border-PowderBlueBorder rounded"
                 />
                 <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                  Featured Testimonial
+                  {t("testimonials.form.featuredTestimonial")}
                 </span>
               </div>
               <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                Highlight this testimonial as a featured review
+                {t("testimonials.form.featuredDescription")}
               </p>
             </div>
           </label>
@@ -677,7 +645,7 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
           className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight hover:shadow-md flex items-center justify-center gap-2"
         >
           <X className="w-3 h-3" />
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="submit"
@@ -687,17 +655,17 @@ export default function TestimonialForm({ initial, onClose, onSaved }: Props) {
           {loading ? (
             <>
               <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Saving...
+              {t("testimonials.form.saving")}
             </>
           ) : initial ? (
             <>
               <Save className="w-3 h-3" />
-              Update Testimonial
+              {t("testimonials.form.updateTestimonial")}
             </>
           ) : (
             <>
               <Rocket className="w-3 h-3" />
-              Create Testimonial
+              {t("testimonials.form.createTestimonial")}
             </>
           )}
         </button>

@@ -1,6 +1,8 @@
+// app/api/register/route.js (مصحح)
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import User from "../../models/User";
+import Verification from "../../models/Verification";
 import { connectDB } from "../../../lib/mongodb";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -32,6 +34,21 @@ export async function POST(req) {
 
     await connectDB();
 
+    // التحقق من أن البريد الإلكتروني تم التحقق منه
+    // نتحقق من أن لا يوجد سجل في Verification لهذا البريد
+    // لأننا نحذف السجل بعد التحقق الناجح في verify-otp
+    const existingVerification = await Verification.findOne({
+      email: email.toLowerCase()
+    });
+
+    // إذا كان لا يزال هناك سجل تحقق، معناه لم يتم التحقق بعد
+    if (existingVerification) {
+      return NextResponse.json({ 
+        success: false, 
+        message: "Email not verified. Please complete verification first." 
+      }, { status: 400 });
+    }
+
     // تحقق من وجود إيميل سابقًا
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
@@ -46,6 +63,7 @@ export async function POST(req) {
       email: email.toLowerCase(),
       password: hashedPassword,
       role: role || "student",
+      emailVerified: true,
     });
 
     // لا تُرجع الباسورد في الـ response
@@ -57,7 +75,12 @@ export async function POST(req) {
       createdAt: newUser.createdAt,
     };
 
-    return NextResponse.json({ success: true, message: "User registered successfully", user: userResponse }, { status: 201 });
+    return NextResponse.json({ 
+      success: true, 
+      message: "User registered successfully", 
+      user: userResponse 
+    }, { status: 201 });
+    
   } catch (error) {
     console.error("Register error:", error);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import Modal from "./Modal";
 import SchedulesForm from "./SchedulesForm";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface ScheduleEvent {
   _id: string;
@@ -44,6 +45,7 @@ export default function SchedulesAdmin() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ScheduleEvent | null>(null);
+  const { t } = useI18n();
 
   // دالة لتنسيق التاريخ
   const formatDate = (dateString: string) => {
@@ -85,7 +87,7 @@ export default function SchedulesAdmin() {
       }
     } catch (err) {
       console.error("Error loading schedule events:", err);
-      toast.error("Failed to load schedule events");
+      toast.error(t("schedules.loadError"));
     } finally {
       setLoading(false);
     }
@@ -97,7 +99,7 @@ export default function SchedulesAdmin() {
 
   const onSaved = async () => {
     await loadEvents();
-    toast.success("Schedule event saved successfully");
+    toast.success(t("schedules.savedSuccess"));
   };
 
   const onEdit = (event: ScheduleEvent) => {
@@ -107,7 +109,7 @@ export default function SchedulesAdmin() {
 
   const onDelete = async (id: string) => {
     toast(
-      (t) => (
+      (tToast) => (
         <div className="w-404 max-w-full bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none dark:border-dark_border p-4">
           <div className="flex items-start gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold">
@@ -115,24 +117,24 @@ export default function SchedulesAdmin() {
             </div>
             <div className="flex-1">
               <p className="text-16 font-semibold">
-                Are you sure you want to delete this event?
+                {t("schedules.deleteConfirm")}
               </p>
               <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                This action cannot be undone.
+                {t("schedules.deleteWarning")}
               </p>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
               className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-              onClick={() => toast.dismiss(t.id)}
+              onClick={() => toast.dismiss(tToast.id)}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
               onClick={async () => {
-                toast.dismiss(t.id);
+                toast.dismiss(tToast.id);
                 try {
                   const res = await fetch(
                     `/api/schedules?id=${encodeURIComponent(id)}`,
@@ -142,17 +144,17 @@ export default function SchedulesAdmin() {
                   );
                   if (res.ok) {
                     setEvents((prev) => prev.filter((e) => e._id !== id));
-                    toast.success("Event deleted successfully");
+                    toast.success(t("schedules.deletedSuccess"));
                   } else {
-                    toast.error("Failed to delete the event");
+                    toast.error(t("schedules.deleteFailed"));
                   }
                 } catch (err) {
                   console.error("Error deleting event:", err);
-                  toast.error("Error deleting event");
+                  toast.error(t("schedules.deleteError"));
                 }
               }}
             >
-              Delete
+              {t("common.delete")}
             </button>
           </div>
         </div>
@@ -177,10 +179,10 @@ export default function SchedulesAdmin() {
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
               <Calendar className="w-7 h-7 text-primary" />
-              Schedule Events Management
+              {t("schedules.management")}
             </h1>
             <p className="text-sm text-SlateBlueText dark:text-darktext max-w-2xl">
-              Manage schedule events, sessions, and activities. Organize events with speakers, locations, and timing.
+              {t("schedules.managementDescription")}
             </p>
           </div>
           <button
@@ -191,7 +193,7 @@ export default function SchedulesAdmin() {
             className="mt-4 lg:mt-0 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add New Event
+            {t("schedules.addNew")}
           </button>
         </div>
       </div>
@@ -202,7 +204,7 @@ export default function SchedulesAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Events
+                {t("schedules.stats.totalEvents")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {events.length}
@@ -218,7 +220,7 @@ export default function SchedulesAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Active Events
+                {t("schedules.stats.activeEvents")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {events.filter((e) => e.isActive).length}
@@ -234,7 +236,7 @@ export default function SchedulesAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Speakers
+                {t("schedules.stats.totalSpeakers")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {events.reduce(
@@ -253,7 +255,7 @@ export default function SchedulesAdmin() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Upcoming Events
+                {t("schedules.stats.upcomingEvents")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {events.filter((e) => getEventStatus(e) === "upcoming").length}
@@ -278,10 +280,10 @@ export default function SchedulesAdmin() {
           };
 
           const statusText = {
-            active: "Active",
-            upcoming: "Upcoming",
-            expired: "Expired",
-            inactive: "Inactive",
+            active: t("schedules.status.active"),
+            upcoming: t("schedules.status.upcoming"),
+            expired: t("schedules.status.expired"),
+            inactive: t("schedules.status.inactive"),
           };
 
           return (
@@ -334,7 +336,7 @@ export default function SchedulesAdmin() {
                   <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                     <Clock className="w-4 h-4" />
                     <span>
-                      {formatTime(event.time)} • {event.duration}min
+                      {formatTime(event.time)} • {event.duration} {t("schedules.minutes")}
                     </span>
                   </div>
                   {event.location && (
@@ -349,7 +351,7 @@ export default function SchedulesAdmin() {
                 {event.speakers && event.speakers.length > 0 && (
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
-                      Speakers ({event.speakers.length})
+                      {t("schedules.speakers")} ({event.speakers.length})
                     </h4>
                     <div className="flex flex-wrap gap-1">
                       {event.speakers.slice(0, 3).map((speaker, index) => (
@@ -394,7 +396,7 @@ export default function SchedulesAdmin() {
                       className="w-full bg-primary hover:bg-primary/90 text-white py-2 px-3 rounded-lg font-semibold text-sm transition-transform transition-shadow duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-primary/30 flex items-center justify-center gap-2 group"
                     >
                       <Edit className="w-3 h-3 transition-transform duration-300 group-hover:-translate-y-0.5" />
-                      Edit
+                      {t("common.edit")}
                     </button>
 
                     {/* Delete */}
@@ -403,7 +405,7 @@ export default function SchedulesAdmin() {
                       className="bg-SlateBlueText/10 hover:bg-SlateBlueText/20 dark:bg-darktext/20 dark:hover:bg-darktext/30 text-SlateBlueText dark:text-darktext py-2 px-3 rounded-lg font-semibold text-xs transition-transform transition-colors transition-shadow duration-300 hover:scale-105 active:scale-100 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-SlateBlueText/20 flex items-center justify-center gap-2 group"
                     >
                       <Trash2 className="w-3 h-3 transition-transform duration-300 group-hover:rotate-12" />
-                      Delete
+                      {t("common.delete")}
                     </button>
                   </div>
                 </div>
@@ -420,17 +422,17 @@ export default function SchedulesAdmin() {
             <Calendar className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
-            No events yet
+            {t("schedules.noEvents")}
           </h3>
           <p className="text-sm text-SlateBlueText dark:text-darktext mb-6 max-w-md mx-auto">
-            Create your first schedule event to start organizing sessions and activities.
+            {t("schedules.noEventsDescription")}
           </p>
           <button
             onClick={() => setOpen(true)}
             className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
           >
             <Plus className="w-4 h-4" />
-            Create Your First Event
+            {t("schedules.createFirstButton")}
           </button>
         </div>
       )}
@@ -438,7 +440,7 @@ export default function SchedulesAdmin() {
       {/* Modal */}
       <Modal
         open={open}
-        title={editing ? "Edit Event" : "Create New Event"}
+        title={editing ? t("schedules.editEvent") : t("schedules.createEvent")}
         onClose={() => {
           setOpen(false);
           setEditing(null);

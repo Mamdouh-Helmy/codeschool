@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Modal from "./Modal";
 import TestimonialForm from "./TestimonialForm";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Testimonial {
   _id: string;
@@ -39,6 +40,7 @@ export default function TestimonialsAdmin() {
   const [editing, setEditing] = useState<Testimonial | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterFeatured, setFilterFeatured] = useState<boolean | null>(null);
+  const { t } = useI18n();
 
   // دالة لتنسيق التاريخ
   const formatDate = (dateString: string) => {
@@ -61,7 +63,7 @@ export default function TestimonialsAdmin() {
       }
     } catch (err) {
       console.error("Error loading testimonials:", err);
-      toast.error("Failed to load testimonials");
+      toast.error(t("testimonials.loadError"));
     } finally {
       setLoading(false);
     }
@@ -73,7 +75,7 @@ export default function TestimonialsAdmin() {
 
   const onSaved = async () => {
     await loadTestimonials();
-    toast.success("Testimonial saved successfully");
+    toast.success(t("testimonials.savedSuccess"));
   };
 
   const onEdit = (testimonial: Testimonial) => {
@@ -83,7 +85,7 @@ export default function TestimonialsAdmin() {
 
   const onDelete = async (id: string) => {
     toast(
-      (t) => (
+      (tToast) => (
         <div className="w-404 max-w-full bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none dark:border-dark_border p-4">
           <div className="flex items-start gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold">
@@ -91,24 +93,24 @@ export default function TestimonialsAdmin() {
             </div>
             <div className="flex-1">
               <p className="text-16 font-semibold">
-                Are you sure you want to delete this testimonial?
+                {t("testimonials.deleteConfirm")}
               </p>
               <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                This action cannot be undone.
+                {t("testimonials.deleteWarning")}
               </p>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
               className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-              onClick={() => toast.dismiss(t.id)}
+              onClick={() => toast.dismiss(tToast.id)}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
               onClick={async () => {
-                toast.dismiss(t.id);
+                toast.dismiss(tToast.id);
                 try {
                   const res = await fetch(
                     `/api/testimonials?id=${encodeURIComponent(id)}`,
@@ -118,17 +120,17 @@ export default function TestimonialsAdmin() {
                   );
                   if (res.ok) {
                     setTestimonials((prev) => prev.filter((t) => t._id !== id));
-                    toast.success("Testimonial deleted successfully");
+                    toast.success(t("testimonials.deletedSuccess"));
                   } else {
-                    toast.error("Failed to delete the testimonial");
+                    toast.error(t("testimonials.deleteFailed"));
                   }
                 } catch (err) {
                   console.error("Error deleting testimonial:", err);
-                  toast.error("Error deleting testimonial");
+                  toast.error(t("testimonials.deleteError"));
                 }
               }}
             >
-              Delete
+              {t("common.delete")}
             </button>
           </div>
         </div>
@@ -137,20 +139,19 @@ export default function TestimonialsAdmin() {
     );
   };
 
- 
-const filteredTestimonials = testimonials.filter((testimonial) => {
-  const searchTermLower = searchTerm.toLowerCase();
-  
-  const matchesSearch = 
-    (testimonial.studentName?.toLowerCase() || '').includes(searchTermLower) ||
-    (testimonial.courseTitle?.toLowerCase() || '').includes(searchTermLower) ||
-    (testimonial.comment?.toLowerCase() || '').includes(searchTermLower);
-  
-  const matchesFeatured = filterFeatured === null || testimonial.featured === filterFeatured;
-  
-  return matchesSearch && matchesFeatured;
-});
- 
+  const filteredTestimonials = testimonials.filter((testimonial) => {
+    const searchTermLower = searchTerm.toLowerCase();
+    
+    const matchesSearch = 
+      (testimonial.studentName?.toLowerCase() || '').includes(searchTermLower) ||
+      (testimonial.courseTitle?.toLowerCase() || '').includes(searchTermLower) ||
+      (testimonial.comment?.toLowerCase() || '').includes(searchTermLower);
+    
+    const matchesFeatured = filterFeatured === null || testimonial.featured === filterFeatured;
+    
+    return matchesSearch && matchesFeatured;
+  });
+
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }).map((_, index) => (
       <Star
@@ -180,10 +181,10 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
               <MessageSquare className="w-7 h-7 text-primary" />
-              Testimonials Management
+              {t("testimonials.management")}
             </h1>
             <p className="text-sm text-SlateBlueText dark:text-darktext max-w-2xl">
-              Manage student testimonials and reviews. Showcase positive feedback to build trust with potential students.
+              {t("testimonials.managementDescription")}
             </p>
           </div>
           <button
@@ -194,7 +195,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
             className="mt-4 lg:mt-0 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add New Testimonial
+            {t("testimonials.addNew")}
           </button>
         </div>
       </div>
@@ -205,7 +206,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Total Testimonials
+                {t("testimonials.totalTestimonials")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {testimonials.length}
@@ -221,7 +222,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Featured
+                {t("testimonials.featured")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {testimonials.filter((t) => t.featured).length}
@@ -237,7 +238,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Avg. Rating
+                {t("testimonials.avgRating")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {testimonials.length > 0
@@ -255,7 +256,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                Active
+                {t("testimonials.active")}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
                 {testimonials.filter((t) => t.isActive).length}
@@ -277,7 +278,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-SlateBlueText dark:text-darktext w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search testimonials by student, course, or comment..."
+                placeholder={t("testimonials.searchPlaceholder")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-sm"
@@ -295,7 +296,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
                   : "bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white border border-PowderBlueBorder dark:border-dark_border"
               }`}
             >
-              All
+              {t("testimonials.all")}
             </button>
             <button
               onClick={() => setFilterFeatured(true)}
@@ -306,7 +307,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
               }`}
             >
               <Award className="w-4 h-4" />
-              Featured
+              {t("testimonials.featured")}
             </button>
             <button
               onClick={() => setFilterFeatured(false)}
@@ -316,7 +317,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
                   : "bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white border border-PowderBlueBorder dark:border-dark_border"
               }`}
             >
-              Regular
+              {t("testimonials.regular")}
             </button>
           </div>
         </div>
@@ -339,12 +340,12 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
                 {testimonial.featured && (
                   <span className="px-3 py-1 bg-ElectricAqua/20 text-ElectricAqua dark:bg-ElectricAqua/30 rounded-full text-xs font-semibold flex items-center gap-1">
                     <Award className="w-3 h-3" />
-                    Featured
+                    {t("testimonials.featured")}
                   </span>
                 )}
                 {!testimonial.isActive && (
                   <span className="px-3 py-1 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-full text-xs font-semibold">
-                    Inactive
+                    {t("testimonials.inactive")}
                   </span>
                 )}
               </div>
@@ -396,7 +397,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
                 <span>{formatDate(testimonial.createdAt)}</span>
                 {testimonial.courseId && (
                   <span className="px-2 py-1 bg-primary/10 text-primary rounded">
-                    Course
+                    {t("common.course")}
                   </span>
                 )}
               </div>
@@ -410,7 +411,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
                     className="w-full bg-primary hover:bg-primary/90 text-white py-2 px-3 rounded-lg font-semibold text-sm transition-transform transition-shadow duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-primary/30 flex items-center justify-center gap-2 group"
                   >
                     <Edit className="w-3 h-3 transition-transform duration-300 group-hover:-translate-y-0.5" />
-                    Edit
+                    {t("common.edit")}
                   </button>
 
                   {/* Delete */}
@@ -419,7 +420,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
                     className="bg-SlateBlueText/10 hover:bg-SlateBlueText/20 dark:bg-darktext/20 dark:hover:bg-darktext/30 text-SlateBlueText dark:text-darktext py-2 px-3 rounded-lg font-semibold text-xs transition-transform transition-colors transition-shadow duration-300 hover:scale-105 active:scale-100 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-SlateBlueText/20 flex items-center justify-center gap-2 group"
                   >
                     <Trash2 className="w-3 h-3 transition-transform duration-300 group-hover:rotate-12" />
-                    Delete
+                    {t("common.delete")}
                   </button>
                 </div>
               </div>
@@ -435,12 +436,12 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
             <MessageSquare className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
-            No testimonials found
+            {t("testimonials.noTestimonials")}
           </h3>
           <p className="text-sm text-SlateBlueText dark:text-darktext mb-6 max-w-md mx-auto">
             {searchTerm || filterFeatured !== null
-              ? "Try adjusting your search or filters to see more results."
-              : "Start collecting student feedback to build trust and showcase your platform's value."}
+              ? t("testimonials.noTestimonialsDescription")
+              : t("testimonials.noTestimonialsDescription")}
           </p>
           {(searchTerm || filterFeatured !== null) ? (
             <button
@@ -451,7 +452,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
               className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
             >
               <Filter className="w-4 h-4" />
-              Clear Filters
+              {t("testimonials.clearFilters")}
             </button>
           ) : (
             <button
@@ -459,7 +460,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
               className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
             >
               <Plus className="w-4 h-4" />
-              Create Your First Testimonial
+              {t("testimonials.createFirst")}
             </button>
           )}
         </div>
@@ -468,7 +469,7 @@ const filteredTestimonials = testimonials.filter((testimonial) => {
       {/* Modal */}
       <Modal
         open={open}
-        title={editing ? "Edit Testimonial" : "Create New Testimonial"}
+        title={editing ? t("testimonials.form.updateTestimonial") : t("testimonials.form.createTestimonial")}
         onClose={() => {
           setOpen(false);
           setEditing(null);

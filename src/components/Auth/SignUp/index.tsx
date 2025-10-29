@@ -1,3 +1,4 @@
+// components/Auth/SignUp.js (معدل)
 "use client";
 import React, { useContext, useState } from "react";
 import Link from "next/link";
@@ -9,113 +10,172 @@ import Loader from "@/components/Common/Loader";
 import AuthDialogContext from "@/app/context/AuthDialogContext";
 import { useI18n } from "@/i18n/I18nProvider";
 
-type Errors = {
-  name?: string;
-  email?: string;
-  password?: string;
-};
-
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const validateName = (name: string) => {
-  if (!name || !name.trim()) return "auth.validation.required";
-  if (name.trim().length < 2) return "auth.validation.shortName";
-  return "";
-};
-
-const validateEmail = (email: string) => {
-  if (!email || !email.trim()) return "auth.validation.required";
-  if (!emailRegex.test(email.trim())) return "auth.validation.invalidEmail";
-  return "";
-};
-
-const validatePassword = (password: string) => {
-  if (!password) return "auth.validation.required";
-  if (password.length < 6) return "auth.validation.shortPassword";
-  return "";
-};
-
-const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
+const SignUp = ({ signUpOpen }) => {
   const router = useRouter();
   const authDialog = useContext(AuthDialogContext);
   const { t } = useI18n();
 
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
-  const [errors, setErrors] = useState<Errors>({});
+  const [step, setStep] = useState(1); // 1: بيانات الأساسية، 2: التحقق
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    otp: "",
+  });
+  const [errors, setErrors] = useState({});
+  const [otpSent, setOtpSent] = useState(false);
+  const [canResend, setCanResend] = useState(true);
+  const [resendTimer, setResendTimer] = useState(0);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setForm((s) => ({ ...s, [name]: value }));
-
-    if (name === "name")
-      setErrors((p) => ({ ...p, name: validateName(value) || "" }));
-    if (name === "email")
-      setErrors((p) => ({ ...p, email: validateEmail(value) || "" }));
-    if (name === "password")
-      setErrors((p) => ({ ...p, password: validatePassword(value) || "" }));
-  };
-
-  const validateAll = (): boolean => {
-    const eName = validateName(form.name);
-    const eEmail = validateEmail(form.email);
-    const ePass = validatePassword(form.password);
-    const newErrors: Errors = {};
-    if (eName) newErrors.name = eName;
-    if (eEmail) newErrors.email = eEmail;
-    if (ePass) newErrors.password = ePass;
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!validateAll()) return;
+  // دالة إرسال رمز التحقق
+  const sendVerificationCode = async () => {
+    if (!form.email) {
+      toast.error(t("auth.validation.requiredEmail"));
+      return;
+    }
 
     setLoading(true);
+    try {
+      const res = await fetch("/api/send-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email }),
+      });
 
-    const payload = {
-      name: form.name.trim(),
-      email: form.email.trim().toLowerCase(),
-      password: form.password,
-    };
+      const result = await res.json();
 
+      if (result.success) {
+        setOtpSent(true);
+        setStep(2);
+        toast.success(t("auth.verificationSent"));
+
+        // تفعيل عداد إعادة الإرسال
+        setCanResend(false);
+        setResendTimer(60);
+        const timer = setInterval(() => {
+          setResendTimer((prev) => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              setCanResend(true);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        toast.error(result.message || t("auth.verificationFailed"));
+      }
+    } catch (error) {
+      toast.error(t("auth.verificationFailed"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (!form.otp || form.otp.length !== 6) {
+      toast.error(t("auth.validation.invalidOtp"));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email,
+          otp: form.otp,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        toast.success(t("auth.emailVerified"));
+       
+        setTimeout(async () => {
+          await completeRegistration();
+        }, 500);
+      } else {
+        toast.error(result.message || t("auth.invalidOtp"));
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error("Verification error:", error);
+      toast.error(t("auth.verificationFailed"));
+      setLoading(false);
+    }
+  };
+
+  const completeRegistration = async () => {
     try {
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+        }),
       });
 
       const result = await res.json();
 
       if (!res.ok) {
         if (res.status === 409) {
-          const message = result?.message || "auth.emailExists";
-          setErrors((p) => ({ ...p, email: message }));
-          toast.error(t(message));
-        } else if (result?.errors && typeof result.errors === "object") {
-          setErrors(result.errors);
-          toast.error(result.message || "auth.registrationFailed");
+         
+          toast.error(
+            "هذا البريد الإلكتروني مسجل بالفعل. حاول تسجيل الدخول بدلاً من ذلك."
+          );
+          setTimeout(() => {
+            router.push("/signin");
+          }, 2000);
+        } else if (res.status === 400) {
+          toast.error(
+            result.message || "لم يتم التحقق من البريد الإلكتروني بعد"
+          );
+          setCanResend(true);
+          setResendTimer(0);
         } else {
-          toast.error(result?.message || "auth.registrationFailed");
+          toast.error(result.message || t("auth.registrationFailed"));
         }
         setLoading(false);
         return;
       }
 
-      toast.success(t("auth.registrationSuccess"));
-      if (typeof signUpOpen === "function") signUpOpen(false);
+      if (result.success) {
+        toast.success(t("auth.registrationSuccess"));
+        if (signUpOpen) signUpOpen(false);
 
-      authDialog?.setIsUserRegistered(true);
-      setTimeout(() => authDialog?.setIsUserRegistered(false), 1500);
+        authDialog?.setIsUserRegistered(true);
+        setTimeout(() => authDialog?.setIsUserRegistered(false), 1500);
 
+        setTimeout(() => router.push("/"), 1200);
+      } else {
+        toast.error(result.message || t("auth.registrationFailed"));
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      toast.error(t("auth.registrationFailed"));
       setLoading(false);
-      setTimeout(() => router.push("/"), 1200);
-    } catch (err: any) {
-      console.error("Register error:", err);
-      toast.error(err?.message || t("auth.registrationFailed"));
-      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (step === 1) {
+      // التحقق من البيانات الأساسية أولاً
+      if (!form.name || !form.email || !form.password) {
+        toast.error(t("auth.fillAllFields"));
+        return;
+      }
+      await sendVerificationCode();
+    } else if (step === 2) {
+      await verifyOtp();
     }
   };
 
@@ -125,92 +185,143 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (open: boolean) => void }) => {
         <Logo />
       </div>
 
-      <SocialSignUp />
+      {step === 1 && (
+        <>
+          <SocialSignUp />
 
-      <span className="z-1 relative my-8 block text-center">
-        <span className="-z-1 absolute left-0 top-1/2 block h-px w-full bg-border dark:bg-dark_border"></span>
-        <span className="text-body-secondary relative z-10 inline-block bg-white dark:bg-darklight px-3 text-base dark:bg-dark">
-          {t("auth.signUpWith")}
-        </span>
-      </span>
+          <span className="z-1 relative my-8 block text-center">
+            <span className="-z-1 absolute left-0 top-1/2 block h-px w-full bg-border dark:bg-dark_border"></span>
+            <span className="text-body-secondary relative z-10 inline-block bg-white dark:bg-darklight px-3 text-base">
+              {t("auth.signUpWith")}
+            </span>
+          </span>
 
-      <form onSubmit={handleSubmit} noValidate>
-        <div className="mb-[22px]">
-          <input
-            type="text"
-            placeholder={t("auth.name")}
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            required
-            className={`w-full rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary ${
-              errors.name ? "border-red-500" : ""
-            }`}
-          />
-          {errors.name && (
-            <p className="text-sm text-red-500 mt-1">{t(errors.name)}</p>
-          )}
+          <form onSubmit={handleSubmit}>
+            <div className="mb-[22px]">
+              <input
+                type="text"
+                placeholder={t("auth.name")}
+                name="name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+                className="w-full rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary"
+              />
+            </div>
+
+            <div className="mb-[22px]">
+              <input
+                type="email"
+                placeholder={t("auth.email")}
+                name="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+                className="w-full rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary"
+              />
+            </div>
+
+            <div className="mb-[22px]">
+              <input
+                type="password"
+                placeholder={t("auth.password")}
+                name="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                className="w-full rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary"
+              />
+            </div>
+
+            <div className="mb-9">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full cursor-pointer items-center justify-center rounded-md bg-primary px-5 py-3 text-base text-white transition duration-300 ease-in-out hover:!bg-darkprimary disabled:opacity-60"
+              >
+                {loading ? (
+                  <>
+                    <Loader />
+                    <span className="pl-2">{t("auth.sendingCode")}</span>
+                  </>
+                ) : (
+                  t("auth.sendVerification")
+                )}
+              </button>
+            </div>
+          </form>
+        </>
+      )}
+
+      {step === 2 && (
+        <div className="text-center">
+          <h3 className="text-xl font-semibold mb-4">
+            {t("auth.verifyEmail")}
+          </h3>
+          <p className="mb-6 text-gray-600">
+            {t("auth.verificationCodeSent")} <strong>{form.email}</strong>
+          </p>
+
+          <div className="mb-6">
+            <input
+              type="text"
+              placeholder={t("auth.enterOtp")}
+              value={form.otp}
+              onChange={(e) =>
+                setForm({ ...form, otp: e.target.value.replace(/\D/g, "") })
+              }
+              maxLength={6}
+              className="w-full text-center text-2xl font-bold rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-dark outline-none transition placeholder:text-gray-300 focus:border-primary"
+            />
+          </div>
+
+          <div className="mb-6">
+            <button
+              onClick={handleSubmit}
+              disabled={loading || form.otp.length !== 6}
+              className="flex w-full cursor-pointer items-center justify-center rounded-md bg-primary px-5 py-3 text-base text-white transition duration-300 ease-in-out hover:!bg-darkprimary disabled:opacity-60"
+            >
+              {loading ? (
+                <>
+                  <Loader />
+                  <span className="pl-2">{t("auth.verifying")}</span>
+                </>
+              ) : (
+                t("auth.verifyAndRegister")
+              )}
+            </button>
+          </div>
+
+          <div className="text-center">
+            <button
+              onClick={sendVerificationCode}
+              disabled={!canResend || loading}
+              className="text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {canResend
+                ? t("auth.resendCode")
+                : `${t("auth.resendIn")} ${resendTimer}s`}
+            </button>
+          </div>
+
+          <div className="mt-4">
+            <button
+              onClick={() => setStep(1)}
+              className="text-gray-600 hover:text-primary text-sm"
+            >
+              {t("auth.backToEdit")}
+            </button>
+          </div>
         </div>
-
-        <div className="mb-[22px]">
-          <input
-            type="email"
-            placeholder={t("auth.email")}
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-            required
-            className={`w-full rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary ${
-              errors.email ? "border-red-500" : ""
-            }`}
-          />
-          {errors.email && (
-            <p className="text-sm text-red-500 mt-1">{t(errors.email)}</p>
-          )}
-        </div>
-
-        <div className="mb-[22px]">
-          <input
-            type="password"
-            placeholder={t("auth.password")}
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-            required
-            className={`w-full rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary ${
-              errors.password ? "border-red-500" : ""
-            }`}
-          />
-          {errors.password && (
-            <p className="text-sm text-red-500 mt-1">{t(errors.password)}</p>
-          )}
-        </div>
-
-        <div className="mb-9">
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full cursor-pointer items-center justify-center rounded-md bg-primary px-5 py-3 text-base text-white transition duration-300 ease-in-out hover:!bg-darkprimary dark:hover:!bg-darkprimary disabled:opacity-60"
-          >
-            {loading ? (
-              <>
-                <Loader />
-                <span className="pl-2">{t("auth.signingUp")}</span>
-              </>
-            ) : (
-              t("auth.signUp")
-            )}
-          </button>
-        </div>
-      </form>
+      )}
 
       <p className="text-body-secondary mb-4 text-base">
         {t("auth.privacyAgreement")}{" "}
-        <a href="/#" className="text-primary hover:underline">
+        <a href="/terms" className="text-primary hover:underline">
           {t("auth.termsOfService")}
         </a>{" "}
         {t("auth.and")}{" "}
-        <a href="/#" className="text-primary hover:underline">
+        <a href="/privacy" className="text-primary hover:underline">
           {t("auth.privacyPolicy")}
         </a>
       </p>

@@ -16,6 +16,7 @@ import {
   Globe,
   MapPin,
 } from "lucide-react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface Props {
   initial?: any;
@@ -53,8 +54,8 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
     image: "",
   });
   const [speakerImagePreview, setSpeakerImagePreview] = useState("");
+  const { t } = useI18n();
 
-  // ✅ معاينة صورة الحدث
   useEffect(() => {
     if (form.image) {
       setEventImagePreview(form.image);
@@ -203,10 +204,10 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Event Information
+              {t("schedules.form.basicInfo")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Basic details about the event
+              {t("schedules.form.basicInfoDescription")}
             </p>
           </div>
         </div>
@@ -214,13 +215,13 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <Calendar className="w-3 h-3 text-primary" />
-            Event Title *
+            {t("schedules.form.eventTitle")}
           </label>
           <input
             type="text"
             value={form.title}
             onChange={(e) => onChange("title", e.target.value)}
-            placeholder="e.g., React Conference 2024"
+            placeholder={t("schedules.form.titlePlaceholder")}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             required
           />
@@ -229,13 +230,13 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <Calendar className="w-3 h-3 text-primary" />
-            Description *
+            {t("schedules.form.description")}
           </label>
           <textarea
             value={form.description}
             onChange={(e) => onChange("description", e.target.value)}
             rows={3}
-            placeholder="Describe the event content, objectives, and what attendees will learn..."
+            placeholder={t("schedules.form.descriptionPlaceholder")}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200"
             required
           />
@@ -245,7 +246,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-3">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <Image className="w-3 h-3 text-primary" />
-            Event Cover Image
+            {t("schedules.form.coverImage")}
           </label>
 
           <div className="flex gap-4 items-start">
@@ -254,13 +255,13 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
                 type="text"
                 value={form.image}
                 onChange={(e) => onChange("image", e.target.value)}
-                placeholder="Image URL or upload file"
+                placeholder={t("schedules.form.imagePlaceholder")}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
               <div className="mt-2">
                 <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
                   <Upload className="w-3 h-3" />
-                  Upload Image
+                  {t("schedules.form.uploadImage")}
                   <input
                     type="file"
                     accept="image/*"
@@ -278,7 +279,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
                     className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
                   >
                     <Trash2 className="w-3 h-3" />
-                    Remove
+                    {t("schedules.form.removeImage")}
                   </button>
                 )}
               </div>
@@ -305,10 +306,10 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Schedule & Location
+              {t("schedules.form.scheduleLocation")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Set date, time, and location for the event
+              {t("schedules.form.scheduleDescription")}
             </p>
           </div>
         </div>
@@ -317,7 +318,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Calendar className="w-3 h-3 text-Aquamarine" />
-              Date *
+              {t("schedules.form.date")}
             </label>
             <input
               type="date"
@@ -331,7 +332,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Clock className="w-3 h-3 text-Aquamarine" />
-              Time *
+              {t("schedules.form.time")}
             </label>
             <input
               type="time"
@@ -346,13 +347,13 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <MapPin className="w-3 h-3 text-Aquamarine" />
-            Location
+            {t("schedules.form.location")}
           </label>
           <input
             type="text"
             value={form.location}
             onChange={(e) => onChange("location", e.target.value)}
-            placeholder="e.g., Conference Hall A, Virtual Meeting, etc."
+            placeholder={t("schedules.form.locationPlaceholder")}
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
           />
         </div>
@@ -366,10 +367,10 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Speakers
+              {t("schedules.form.speakers")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Add multiple speakers for this event
+              {t("schedules.form.speakersDescription")}
             </p>
           </div>
         </div>
@@ -377,7 +378,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
         {/* Add New Speaker */}
         <div className="space-y-3 p-4 bg-IcyBreeze dark:bg-dark_input rounded-lg">
           <h4 className="text-13 font-medium text-MidnightNavyText dark:text-white">
-            Add New Speaker
+            {t("schedules.form.addNewSpeaker")}
           </h4>
 
           <div className="grid md:grid-cols-2 gap-3">
@@ -387,7 +388,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
               onChange={(e) =>
                 setNewSpeaker((prev) => ({ ...prev, name: e.target.value }))
               }
-              placeholder="Speaker name"
+              placeholder={t("schedules.form.speakerNamePlaceholder")}
               className="px-3 py-2 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13"
             />
             <input
@@ -396,7 +397,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
               onChange={(e) =>
                 setNewSpeaker((prev) => ({ ...prev, role: e.target.value }))
               }
-              placeholder="Role/Title"
+              placeholder={t("schedules.form.speakerRolePlaceholder")}
               className="px-3 py-2 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13"
             />
           </div>
@@ -404,7 +405,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           {/* Speaker Image - URL or Upload */}
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-              Speaker Image
+              {t("schedules.form.speakerImage")}
             </label>
             <div className="flex gap-3 items-start">
               <div className="flex-1">
@@ -418,13 +419,13 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
                     }));
                     setSpeakerImagePreview(e.target.value);
                   }}
-                  placeholder="Image URL or upload file"
+                  placeholder={t("schedules.form.imagePlaceholder")}
                   className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13"
                 />
                 <div className="mt-2 flex gap-2">
                   <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
                     <Upload className="w-3 h-3" />
-                    Upload Image
+                    {t("schedules.form.uploadImage")}
                     <input
                       type="file"
                       accept="image/*"
@@ -442,7 +443,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
                       className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />
-                      Remove
+                      {t("schedules.form.removeImage")}
                     </button>
                   )}
                 </div>
@@ -467,7 +468,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
             className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add Speaker
+            {t("schedules.form.addSpeaker")}
           </button>
         </div>
 
@@ -475,7 +476,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
         {speakers.length > 0 && (
           <div className="space-y-3">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-              Added Speakers:
+              {t("schedules.form.addedSpeakers")}:
             </label>
             <div className="space-y-2">
               {speakers.map((speaker, index) => (
@@ -522,10 +523,10 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Tags
+              {t("schedules.form.tags")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Add tags for better categorization and search
+              {t("schedules.form.tagsDescription")}
             </p>
           </div>
         </div>
@@ -539,7 +540,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
                 value={newTagInput}
                 onChange={(e) => setNewTagInput(e.target.value)}
                 onKeyPress={handleTagKeyPress}
-                placeholder="Enter a tag (e.g., Conference, Workshop, Networking)"
+                placeholder={t("schedules.form.tagsPlaceholder")}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               />
             </div>
@@ -550,7 +551,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
               className="px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              Add
+              {t("schedules.form.addTag")}
             </button>
           </div>
 
@@ -558,7 +559,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           {tags.length > 0 && (
             <div className="space-y-2">
               <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                Added Tags:
+                {t("schedules.form.addedTags")}:
               </label>
               <div className="flex flex-wrap gap-2">
                 {tags.map((tag, index) => (
@@ -581,7 +582,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           )}
 
           <p className="text-11 text-SlateBlueText dark:text-darktext">
-            Press Enter or click Add to include multiple tags
+            {t("schedules.form.tagsHint")}
           </p>
         </div>
       </div>
@@ -594,10 +595,10 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              Settings
+              {t("schedules.form.settings")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              Event visibility and status
+              {t("schedules.form.settingsDescription")}
             </p>
           </div>
         </div>
@@ -616,11 +617,11 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
                   className="w-4 h-4 text-Aquamarine focus:ring-Aquamarine border-PowderBlueBorder rounded"
                 />
                 <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                  Active Event
+                  {t("schedules.form.activeEvent")}
                 </span>
               </div>
               <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                Make this event visible and available
+                {t("schedules.form.activeDescription")}
               </p>
             </div>
           </label>
@@ -635,7 +636,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight hover:shadow-md flex items-center justify-center gap-2"
         >
           <X className="w-3 h-3" />
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="submit"
@@ -645,17 +646,17 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
           {loading ? (
             <>
               <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Saving...
+              {t("schedules.form.saving")}
             </>
           ) : initial ? (
             <>
               <Save className="w-3 h-3" />
-              Update Event
+              {t("schedules.form.updateEvent")}
             </>
           ) : (
             <>
               <Rocket className="w-3 h-3" />
-              Create Event
+              {t("schedules.form.createEvent")}
             </>
           )}
         </button>

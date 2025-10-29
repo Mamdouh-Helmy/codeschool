@@ -61,7 +61,7 @@ const DynamicPricing = () => {
     if (planIdFromQuery) setSelectedPlan(planIdFromQuery);
   }, [planIdFromQuery]);
 
-  // ✅ جلب اشتراكات المستخدم
+
   useEffect(() => {
     const fetchUserSubscriptions = async () => {
       try {
