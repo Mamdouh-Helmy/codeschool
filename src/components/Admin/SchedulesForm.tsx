@@ -30,8 +30,21 @@ interface Speaker {
   image: string;
 }
 
+interface Form {
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  image: string;
+  location: string;
+  tags: string[];
+  speakers: Speaker[];
+  isActive: boolean;
+  _id?: string;
+}
+
 export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
-  const [form, setForm] = useState(() => ({
+  const [form, setForm] = useState<Form>(() => ({
     title: initial?.title || "",
     description: initial?.description || "",
     date: initial?.date || "",
@@ -41,6 +54,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
     tags: initial?.tags || [],
     speakers: initial?.speakers || [],
     isActive: initial?.isActive ?? true,
+    _id: initial?._id,
   }));
 
   const [tags, setTags] = useState<string[]>(initial?.tags || []);
@@ -143,22 +157,27 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
     setLoading(true);
 
     try {
-      const payload = {
-        ...form,
-        tags,
-        speakers,
+      // ✅ إصلاح: إنشاء payload مع تضمين _id دائمًا إذا كان موجودًا
+      const payload: any = {
+        title: form.title,
+        description: form.description,
+        date: form.date,
+        time: form.time,
+        image: form.image,
+        location: form.location,
+        tags: tags,
+        speakers: speakers,
+        isActive: form.isActive,
       };
 
-      // إذا كان هناك ID (تعديل) نضيفه للـ payload
-      if (initial?._id) {
-        payload.id = initial._id;
+      // ✅ إضافة _id إذا كان موجودًا (للتحديث)
+      if (form._id) {
+        payload.id = form._id;
       }
 
-      console.log("Sending schedule event payload:", payload);
+      // console.log("Sending schedule event payload:", payload);
 
-      const method = initial?._id ? "PUT" : "POST";
-      
-      // استخدام endpoint الصحيح
+      const method = form._id ? "PUT" : "POST";
       const url = "/api/schedules";
 
       const res = await fetch(url, {
@@ -648,7 +667,7 @@ export default function SchedulesForm({ initial, onClose, onSaved }: Props) {
               <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               {t("schedules.form.saving")}
             </>
-          ) : initial ? (
+          ) : form._id ? (
             <>
               <Save className="w-3 h-3" />
               {t("schedules.form.updateEvent")}

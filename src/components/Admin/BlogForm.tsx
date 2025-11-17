@@ -18,6 +18,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
+import RichTextEditor from "../Blog/RichTextEditor";
 
 interface Props {
   initial?: any;
@@ -79,9 +80,9 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   };
 
   const onChangeAuthor = (field: string, value: any) => {
-    setForm((prev) => ({ 
-      ...prev, 
-      author: { ...prev.author, [field]: value } 
+    setForm((prev) => ({
+      ...prev,
+      author: { ...prev.author, [field]: value }
     }));
   };
 
@@ -385,7 +386,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                   )}
                 </div>
               </div>
-              
+
               {authorAvatarPreview && (
                 <div className="w-16 h-16 border border-PowderBlueBorder rounded-full overflow-hidden">
                   <img
@@ -420,13 +421,10 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
             {t('blogForm.bodyContent') || "Body Content"} *
           </label>
-          <textarea
+          <RichTextEditor
             value={form.body}
-            onChange={(e) => handleBodyChange(e.target.value)}
-            rows={8}
+            onChange={handleBodyChange}
             placeholder={t('blogForm.bodyPlaceholder') || "Write your blog post content here... HTML and Markdown are supported."}
-            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200 font-mono"
-            required
           />
         </div>
       </div>

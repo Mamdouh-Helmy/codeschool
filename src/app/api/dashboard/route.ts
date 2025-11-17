@@ -8,9 +8,9 @@ import Event from "../../models/Event";
 import Webinar from "../../models/Webinar";
 
 // دالة لاستخراج اللغة من الـ headers
-function getLocaleFromHeaders(headers: Headers): 'ar' | 'en' {
-  const acceptLanguage = headers.get('accept-language');
-  return acceptLanguage?.startsWith('ar') ? 'ar' : 'en';
+function getLocaleFromHeaders(headers: Headers): "ar" | "en" {
+  const acceptLanguage = headers.get("accept-language");
+  return acceptLanguage?.startsWith("ar") ? "ar" : "en";
 }
 
 // رسائل باللغتين
@@ -37,8 +37,8 @@ const messages = {
     timeAgo: {
       minutes: (mins: number) => `${mins} minutes ago`,
       hours: (hours: number) => `${hours} hours ago`,
-      days: (days: number) => `${days} days ago`
-    }
+      days: (days: number) => `${days} days ago`,
+    },
   },
   ar: {
     noRealData: "لا توجد بيانات حقيقية متاحة بعد",
@@ -58,20 +58,28 @@ const messages = {
     contentCreation: "إنشاء محتوى",
     viewStudentProjects: "عرض مشاريع الطلاب",
     portfolioReview: "مراجعة المحفظة",
-    days: ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"],
+    days: [
+      "الأحد",
+      "الإثنين",
+      "الثلاثاء",
+      "الأربعاء",
+      "الخميس",
+      "الجمعة",
+      "السبت",
+    ],
     timeAgo: {
       minutes: (mins: number) => `قبل ${mins} دقيقة`,
       hours: (hours: number) => `قبل ${hours} ساعة`,
-      days: (days: number) => `قبل ${days} يوم`
-    }
-  }
+      days: (days: number) => `قبل ${days} يوم`,
+    },
+  },
 };
 
 export async function GET(request: Request) {
   try {
     const locale = getLocaleFromHeaders(request.headers);
     const msg = messages[locale];
-    
+
     await connectDB();
 
     const [
@@ -205,11 +213,22 @@ export async function GET(request: Request) {
       email: subscription.user?.email || msg.noEmail,
       course: subscription.plan?.name || msg.generalPlan,
       progress: calculateProgress(subscription),
-      enrolledOn: new Date(subscription.startDate).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US'),
+      enrolledOn: new Date(subscription.startDate).toLocaleDateString(
+        locale === "ar" ? "ar-EG" : "en-US"
+      ),
       status: mapSubscriptionStatus(subscription.status),
     }));
 
-    const activities = [];
+    type Activity = {
+      id: string;
+      title: string;
+      description: string;
+      timestamp: string;
+      icon: string;
+      tone: "success" | "info" | "warning" | "error";
+    };
+
+    const activities: Activity[] = [];
 
     recentUsers.forEach((user, index) => {
       activities.push({
@@ -226,7 +245,9 @@ export async function GET(request: Request) {
       activities.push({
         id: sub._id?.toString() || `sub-act-${index}-${Date.now()}`,
         title: msg.newSubscription,
-        description: `${sub.user?.name || "User"} ${msg.subscribedTo} ${sub.plan?.name || "a plan"}`,
+        description: `${sub.user?.name || "User"} ${msg.subscribedTo} ${
+          sub.plan?.name || "a plan"
+        }`,
         timestamp: formatTimestamp(sub.createdAt, locale),
         icon: "ion:card",
         tone: "info",
@@ -237,7 +258,9 @@ export async function GET(request: Request) {
       activities.push({
         id: project._id?.toString() || `project-${index}-${Date.now()}`,
         title: msg.newProjectSubmitted,
-        description: `${project.student?.name || "Student"} ${msg.created} "${project.title}"`,
+        description: `${project.student?.name || "Student"} ${msg.created} "${
+          project.title
+        }"`,
         timestamp: formatTimestamp(project.createdAt, locale),
         icon: "ion:rocket",
         tone: "warning",
@@ -299,16 +322,21 @@ export async function GET(request: Request) {
       hasData: true,
       timestamp: new Date().toISOString(),
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error fetching dashboard data:", error);
     const locale = getLocaleFromHeaders(new Headers());
     const msg = messages[locale];
-    
+
+    let errorMessage = "Unknown error";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
     return NextResponse.json(
       {
         success: false,
         message: msg.failedToFetch,
-        error: error.message,
+        error: errorMessage,
       },
       { status: 500 }
     );
@@ -364,7 +392,7 @@ function checkIfHasRealData(data: {
 function generateRealPerformanceData(
   weeklySubscriptions: any[],
   userActivity: any[],
-  locale: 'ar' | 'en' = 'en'
+  locale: "ar" | "en" = "en"
 ) {
   if (weeklySubscriptions.length === 0 && userActivity.length === 0) {
     return [];
@@ -431,7 +459,7 @@ function generateRealPerformanceData(
   return [];
 }
 
-function getLast7Days(locale: 'ar' | 'en' = 'en') {
+function getLast7Days(locale: "ar" | "en" = "en") {
   const msg = messages[locale];
   const days = [];
   const dayLabels = msg.days;
@@ -469,7 +497,7 @@ function calculateCourseCompletion(subscriptions: any[]): number {
   return Math.max(0, Math.min(100, averageProgress));
 }
 
-function formatTimestamp(date: Date, locale: 'ar' | 'en' = 'en'): string {
+function formatTimestamp(date: Date, locale: "ar" | "en" = "en"): string {
   const msg = messages[locale];
   const now = new Date();
   const diffMs = now.getTime() - new Date(date).getTime();

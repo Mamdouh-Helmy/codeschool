@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
 import { ContactSubmission, ApiResponse } from "@/lib/types";
+import { Collection } from "mongodb";
 
 const COLLECTION_NAME = "contact_submissions";
-
 export const revalidate = 0;
 
 export async function POST(request: NextRequest) {
   try {
     const contactData = await request.json();
     const db = await getDatabase();
-    const collection = db.collection<ContactSubmission>(COLLECTION_NAME);
+    const collection: Collection<ContactSubmission> = db.collection(COLLECTION_NAME);
 
     const newSubmission: Omit<ContactSubmission, 'id'> = {
       ...contactData,
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     };
 
     const result = await collection.insertOne(newSubmission as ContactSubmission);
-    
+
     return NextResponse.json({
       data: { ...newSubmission, id: result.insertedId.toString() },
       source: 'database',
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Contact form submitted successfully'
     } as ApiResponse<ContactSubmission>);
+
   } catch (error) {
     console.error('Error submitting contact form:', error);
     return NextResponse.json(
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
 
     const db = await getDatabase();
-    const collection = db.collection<ContactSubmission>(COLLECTION_NAME);
+    const collection: Collection<ContactSubmission> = db.collection(COLLECTION_NAME);
 
     const query: any = {};
     if (status) query.status = status;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
-import { Course, ApiResponse, PaginatedResponse, PaginationParams } from "@/lib/types";
+import { Course, ApiResponse, PaginatedResponse } from "@/lib/types";
+import { Collection } from "mongodb";
 import { FALLBACK_COURSES } from "@/lib/fallbackData/courses";
 
 const COLLECTION_NAME = "courses";
@@ -16,12 +17,11 @@ export async function GET(request: NextRequest) {
     const level = searchParams.get('level');
     const search = searchParams.get('search');
     const sortBy = searchParams.get('sortBy') || 'createdAt';
-    const sortOrder = searchParams.get('sortOrder') as 'asc' | 'desc' || 'desc';
+    const sortOrder = (searchParams.get('sortOrder') as 'asc' | 'desc') || 'desc';
 
     const db = await getDatabase();
-    const collection = db.collection<Course>(COLLECTION_NAME);
+    const collection: Collection<Course> = db.collection(COLLECTION_NAME);
 
-    // Build query
     const query: any = { isActive: true };
     if (category) query.category = category;
     if (level) query.level = level;
@@ -33,10 +33,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Get total count
     const total = await collection.countDocuments(query);
-
-    // Get paginated results
     const courses = await collection
       .find(query)
       .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
@@ -77,10 +74,10 @@ export async function GET(request: NextRequest) {
     };
 
     return NextResponse.json(response);
+
   } catch (error) {
     console.error('Error fetching courses:', error);
-    
-    const fallbackResponse: PaginatedResponse<Course> = {
+    return NextResponse.json({
       data: FALLBACK_COURSES,
       pagination: {
         page: 1,
@@ -92,9 +89,7 @@ export async function GET(request: NextRequest) {
       },
       source: 'fallback',
       timestamp: new Date().toISOString()
-    };
-
-    return NextResponse.json(fallbackResponse);
+    });
   }
 }
 
@@ -102,7 +97,7 @@ export async function POST(request: NextRequest) {
   try {
     const courseData = await request.json();
     const db = await getDatabase();
-    const collection = db.collection<Course>(COLLECTION_NAME);
+    const collection: Collection<Course> = db.collection(COLLECTION_NAME);
 
     const newCourse: Omit<Course, 'id'> = {
       ...courseData,
@@ -116,7 +111,7 @@ export async function POST(request: NextRequest) {
     };
 
     const result = await collection.insertOne(newCourse as Course);
-    
+
     return NextResponse.json({
       data: { ...newCourse, id: result.insertedId.toString() },
       source: 'database',
@@ -124,6 +119,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Course created successfully'
     } as ApiResponse<Course>);
+
   } catch (error) {
     console.error('Error creating course:', error);
     return NextResponse.json(

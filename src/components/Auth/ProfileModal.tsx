@@ -26,7 +26,8 @@ const validateName = (name: string) => {
 };
 
 const validatePassword = (password: string) => {
-  if (password && password.length < 6) return "profile.validation.passwordLength";
+  if (password && password.length < 6)
+    return "profile.validation.passwordLength";
   return "";
 };
 
@@ -34,20 +35,21 @@ const validateImage = (file: File) => {
   const validTypes = ["image/jpeg", "image/png", "image/webp"];
   if (!validTypes.includes(file.type))
     return "profile.validation.invalidImageType";
-  
+
   const maxSize = 2 * 1024 * 1024;
   if (file.size > maxSize) return "profile.validation.imageTooLarge";
-  
+
   return "";
 };
 
 export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
   const [userData, setUserData] = useState<{
-    id: string;
+    _id: string;
     name: string;
     email: string;
     role: string;
     image?: string | null;
+    qrCode?: string | null;
   } | null>(null);
 
   const [name, setName] = useState("");
@@ -61,8 +63,11 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
     image?: string;
   }>({});
   const [loading, setLoading] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+  const [qrCode, setQrCode] = useState("");
   const { t } = useI18n();
 
+  // في components/Profile/ProfileModal.jsx
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -87,6 +92,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
           setName(data.user.name || "");
           setEmail(data.user.email || t("common.none"));
           setImagePreview(data.user.image || null);
+          setQrCode(data.user.qrCode || "");
         } else {
           if (res.status === 401) {
             toast.error(t("profile.sessionExpired"));
@@ -104,6 +110,54 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
 
     fetchUser();
   }, [onClose, t]);
+
+  const handleShowQR = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("يجب تسجيل الدخول أولاً");
+        return;
+      }
+
+      if (!userData || !userData._id) {
+        console.error("❌ User data or id is missing:", userData);
+        toast.error("بيانات المستخدم غير متوفرة");
+        return;
+      }
+
+      const response = await fetch("/api/auth/generate-qr", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: userData._id, 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setQrCode(data.qrCode);
+        setShowQR(true);
+
+        const updatedUser = {
+          ...userData,
+          qrCode: data.qrCode,
+          qrCodeData: data.qrData,
+        };
+        setUserData(updatedUser);
+        if (onProfileUpdate) onProfileUpdate(updatedUser);
+      } else {
+        console.error("❌ QR generation failed:", data.message);
+        toast.error(data.message || "فشل توليد QR code");
+      }
+    } catch (error) {
+      console.error("💥 Show QR error:", error);
+      toast.error("حدث خطأ أثناء توليد QR code");
+    }
+  };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,18 +190,18 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
   const validateAll = () => {
     const nameError = validateName(name);
     const passError = validatePassword(password);
-    
+
     const newErrors: { name?: string; password?: string; image?: string } = {};
     if (nameError) newErrors.name = nameError;
     if (passError) newErrors.password = passError;
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateAll()) {
       toast.error(t("profile.validation.fixErrors"));
       return;
@@ -177,7 +231,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
         return;
       }
 
-      const res = await fetch("/api/auth/profile", {
+      const res = await fetch("/api/users/update", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -254,6 +308,25 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       <Toaster />
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">{t("profile.title")}</h3>
+        <button
+          onClick={handleShowQR}
+          className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 transition-all duration-200 flex items-center gap-2"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+            />
+          </svg>
+          {t("profile.showQR")}
+        </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6" noValidate>
@@ -305,7 +378,9 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
           </div>
         </div>
 
-        {errors.image && <p className="text-sm text-red-500">{t(errors.image)}</p>}
+        {errors.image && (
+          <p className="text-sm text-red-500">{t(errors.image)}</p>
+        )}
 
         <div className="grid grid-cols-1 gap-4">
           <div>
@@ -396,10 +471,66 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
                 />
               </svg>
             ) : null}
-            <span>{loading ? t("common.saving") : t("profile.saveChanges")}</span>
+            <span>
+              {loading ? t("common.saving") : t("profile.saveChanges")}
+            </span>
           </button>
         </div>
       </form>
+
+      {/* نافذة عرض QR Code */}
+      {showQR && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-darklight rounded-2xl p-6 max-w-sm w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">{t("profile.myQRCode")}</h3>
+              <button
+                onClick={() => setShowQR(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="text-center">
+              {qrCode ? (
+                <>
+                  <img
+                    src={qrCode}
+                    alt="QR Code"
+                    className="mx-auto w-56 border border-gray-200 rounded-lg"
+                  />
+                  <p className="text-sm text-gray-600 mt-4">
+                    {t("profile.qrInstructions")}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {userData?.name} • {userData?.role}
+                  </p>
+                </>
+              ) : (
+                <div className="py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                  <p className="mt-4 text-gray-600">
+                    {t("profile.generatingQR")}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

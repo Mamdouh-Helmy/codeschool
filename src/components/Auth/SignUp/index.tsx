@@ -1,4 +1,3 @@
-// components/Auth/SignUp.js (معدل)
 "use client";
 import React, { useContext, useState } from "react";
 import Link from "next/link";
@@ -10,13 +9,18 @@ import Loader from "@/components/Common/Loader";
 import AuthDialogContext from "@/app/context/AuthDialogContext";
 import { useI18n } from "@/i18n/I18nProvider";
 
-const SignUp = ({ signUpOpen }) => {
+type SignUpProps = {
+  signUpOpen: (value: boolean) => void;
+  onSuccess: (userData: any) => void;
+};
+
+const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
   const router = useRouter();
   const authDialog = useContext(AuthDialogContext);
   const { t } = useI18n();
 
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1); // 1: بيانات الأساسية، 2: التحقق
+  const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -94,7 +98,7 @@ const SignUp = ({ signUpOpen }) => {
 
       if (result.success) {
         toast.success(t("auth.emailVerified"));
-       
+
         setTimeout(async () => {
           await completeRegistration();
         }, 500);
@@ -125,7 +129,6 @@ const SignUp = ({ signUpOpen }) => {
 
       if (!res.ok) {
         if (res.status === 409) {
-         
           toast.error(
             "هذا البريد الإلكتروني مسجل بالفعل. حاول تسجيل الدخول بدلاً من ذلك."
           );
@@ -147,12 +150,65 @@ const SignUp = ({ signUpOpen }) => {
 
       if (result.success) {
         toast.success(t("auth.registrationSuccess"));
-        if (signUpOpen) signUpOpen(false);
 
-        authDialog?.setIsUserRegistered(true);
-        setTimeout(() => authDialog?.setIsUserRegistered(false), 1500);
+        // 🔥 التعديل الجديد: تسجيل الدخول التلقائي بعد التسجيل الناجح
+        try {
+          // محاولة تسجيل الدخول تلقائياً
+          const loginRes = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: form.email.trim().toLowerCase(),
+              password: form.password
+            }),
+          });
 
-        setTimeout(() => router.push("/"), 1200);
+          const loginData = await loginRes.json();
+
+          if (loginRes.ok && loginData.success) {
+            // تخزين التوكن
+            if (loginData.accessToken) {
+              localStorage.setItem("token", loginData.accessToken);
+            }
+
+            // تحديث حالة المستخدم
+            if (onSuccess && loginData.user) {
+              onSuccess(loginData.user);
+            }
+
+            toast.success(t("auth.autoLoginSuccess") || "تم تسجيل الدخول تلقائياً بنجاح!");
+
+            // إغلاق modal التسجيل
+            if (signUpOpen) signUpOpen(false);
+
+            // إظهار dialog النجاح
+            authDialog?.setIsSuccessDialogOpen(true);
+            setTimeout(() => authDialog?.setIsSuccessDialogOpen(false), 1100);
+
+            // التوجيه بناءً على دور المستخدم
+            setTimeout(() => {
+              if (loginData.user?.role === "admin") {
+                window.location.href = "/admin";
+              } else {
+                window.location.href = "/";
+              }
+            }, 600);
+          } else {
+            // إذا فشل تسجيل الدخول التلقائي، نفتح modal تسجيل الدخول
+            throw new Error("Auto login failed");
+          }
+        } catch (loginError) {
+          console.error("Auto login failed:", loginError);
+          // فتح modal تسجيل الدخول يدوياً
+          toast.success(t("auth.registrationSuccessManualLogin") || "تم إنشاء الحساب بنجاح! يرجى تسجيل الدخول.");
+          if (signUpOpen) signUpOpen(false);
+
+          // يمكنك هنا فتح modal تسجيل الدخول بدلاً من التوجيه
+          // أو ترك المستخدم يسجل الدخول يدوياً
+          setTimeout(() => {
+            router.push("/signin");
+          }, 1200);
+        }
       } else {
         toast.error(result.message || t("auth.registrationFailed"));
         setLoading(false);
@@ -164,11 +220,10 @@ const SignUp = ({ signUpOpen }) => {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (step === 1) {
-      // التحقق من البيانات الأساسية أولاً
       if (!form.name || !form.email || !form.password) {
         toast.error(t("auth.fillAllFields"));
         return;
@@ -181,7 +236,7 @@ const SignUp = ({ signUpOpen }) => {
 
   return (
     <>
-      <div className="mb-10 text-center mx-auto inline-block max-w-[160px]">
+      <div className="text-center mx-auto inline-block max-w-[160px]">
         <Logo />
       </div>
 
@@ -197,7 +252,7 @@ const SignUp = ({ signUpOpen }) => {
           </span>
 
           <form onSubmit={handleSubmit}>
-            <div className="mb-[22px]">
+            <div className="mb-[18px]">
               <input
                 type="text"
                 placeholder={t("auth.name")}
@@ -261,57 +316,58 @@ const SignUp = ({ signUpOpen }) => {
           <p className="mb-6 text-gray-600">
             {t("auth.verificationCodeSent")} <strong>{form.email}</strong>
           </p>
+          <form onSubmit={handleSubmit}>
+            <div className="mb-6">
+              <input
+                type="text"
+                placeholder={t("auth.enterOtp")}
+                value={form.otp}
+                onChange={(e) =>
+                  setForm({ ...form, otp: e.target.value.replace(/\D/g, "") })
+                }
+                maxLength={6}
+                className="w-full text-center text-2xl font-bold rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-dark outline-none transition placeholder:text-gray-300 focus:border-primary"
+              />
+            </div>
 
-          <div className="mb-6">
-            <input
-              type="text"
-              placeholder={t("auth.enterOtp")}
-              value={form.otp}
-              onChange={(e) =>
-                setForm({ ...form, otp: e.target.value.replace(/\D/g, "") })
-              }
-              maxLength={6}
-              className="w-full text-center text-2xl font-bold rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-dark outline-none transition placeholder:text-gray-300 focus:border-primary"
-            />
-          </div>
+            <div className="mb-6">
+              <button
+                type="submit"
+                disabled={loading || form.otp.length !== 6}
+                className="flex w-full cursor-pointer items-center justify-center rounded-md bg-primary px-5 py-3 text-base text-white transition duration-300 ease-in-out hover:!bg-darkprimary disabled:opacity-60"
+              >
+                {loading ? (
+                  <>
+                    <Loader />
+                    <span className="pl-2">{t("auth.verifying")}</span>
+                  </>
+                ) : (
+                  t("auth.verifyAndRegister")
+                )}
+              </button>
+            </div>
 
-          <div className="mb-6">
-            <button
-              onClick={handleSubmit}
-              disabled={loading || form.otp.length !== 6}
-              className="flex w-full cursor-pointer items-center justify-center rounded-md bg-primary px-5 py-3 text-base text-white transition duration-300 ease-in-out hover:!bg-darkprimary disabled:opacity-60"
-            >
-              {loading ? (
-                <>
-                  <Loader />
-                  <span className="pl-2">{t("auth.verifying")}</span>
-                </>
-              ) : (
-                t("auth.verifyAndRegister")
-              )}
-            </button>
-          </div>
+            <div className="text-center">
+              <button
+                onClick={sendVerificationCode}
+                disabled={!canResend || loading}
+                className="text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {canResend
+                  ? t("auth.resendCode")
+                  : `${t("auth.resendIn")} ${resendTimer}s`}
+              </button>
+            </div>
 
-          <div className="text-center">
-            <button
-              onClick={sendVerificationCode}
-              disabled={!canResend || loading}
-              className="text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {canResend
-                ? t("auth.resendCode")
-                : `${t("auth.resendIn")} ${resendTimer}s`}
-            </button>
-          </div>
-
-          <div className="mt-4">
-            <button
-              onClick={() => setStep(1)}
-              className="text-gray-600 hover:text-primary text-sm"
-            >
-              {t("auth.backToEdit")}
-            </button>
-          </div>
+            <div className="mt-4">
+              <button
+                onClick={() => setStep(1)}
+                className="text-gray-600 hover:text-primary text-sm"
+              >
+                {t("auth.backToEdit")}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

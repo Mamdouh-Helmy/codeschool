@@ -86,11 +86,16 @@ const Upcoming = () => {
 
         if (result.success) {
           const now = new Date();
+          // تعيين الوقت إلى بداية اليوم للمقارنة الصحيحة
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          
           const upcoming = (result.data || [])
             .filter((event: EventItem) => {
-              // robust date parsing: if event.date includes time use it, otherwise compare start of day
               const eventDate = new Date(event.date);
-              return eventDate >= now;
+              // تعيين وقت الحدث إلى بداية اليوم للمقارنة الصحيحة
+              const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+              // عرض الأحداث التي تاريخها اليوم أو بعده
+              return eventDateOnly >= today;
             })
             .slice(0, 2);
 

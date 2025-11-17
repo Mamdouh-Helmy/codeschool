@@ -7,14 +7,30 @@ export const metadata: Metadata = {
     "Sign In | Codeschool",
 };
 
+
+
 const SigninPage = () => {
+  const handleSuccess = (userData: any) => {
+ 
+    localStorage.setItem("user", JSON.stringify(userData));
+  };
+
+  const handleSignInOpen = (value: boolean) => {
+   
+    console.log("Signin modal open:", value);
+  };
+
   return (
     <>
       <Breadcrumb pageName="Sign In Page" />
 
-      <Signin />
+      <Signin 
+        signInOpen={handleSignInOpen}
+        onSuccess={handleSuccess}
+      />
     </>
   );
 };
+
 
 export default SigninPage;

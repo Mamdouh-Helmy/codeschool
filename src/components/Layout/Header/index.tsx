@@ -182,6 +182,22 @@ const Header: React.FC = () => {
                     </Link>
                   </li>
                 )}
+
+                {/* يظهر فقط لو المستخدم marketing */}
+                {localUser?.role === "marketing" && (
+                  <li>
+                    <Link
+                      href="/marketing/blogs"
+                      className={`text-base font-medium transition-colors duration-200 ${
+                        pathUrl === "/marketing/blogs"
+                          ? "text-primary"
+                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                      }`}
+                    >
+                      {t("nav.addBlog") || "إضافة مدونة"}
+                    </Link>
+                  </li>
+                )}
               </ul>
             )}
 
@@ -257,29 +273,6 @@ const Header: React.FC = () => {
                       {localUser.name || localUser.email}
                     </span>
                   </button>
-
-                  {isProfileOpen && (
-                    <div
-                      ref={profileRef}
-                      className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50"
-                    >
-                      <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
-                        <button
-                          onClick={() => setIsProfileOpen(false)}
-                          className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
-                        >
-                          <Icon
-                            icon="ic:round-close"
-                            className="text-2xl dark:text-white"
-                          />
-                        </button>
-                        <ProfileModal
-                          onClose={() => setIsProfileOpen(false)}
-                          onProfileUpdate={handleProfileUpdate}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </>
               ) : (
                 <>
@@ -304,68 +297,6 @@ const Header: React.FC = () => {
                   >
                     <span className="!py-2 !px-4">{t("header.signUp")}</span>
                   </Link>
-
-                  {isSignInOpen && (
-                    <div
-                      ref={signInRef}
-                      className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50"
-                    >
-                      <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
-                        <button
-                          onClick={() => setIsSignInOpen(false)}
-                          className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
-                        >
-                          <Icon
-                            icon="ic:round-close"
-                            className="text-2xl dark:text-white"
-                          />
-                        </button>
-                        <Signin
-                          signInOpen={(value: boolean) =>
-                            setIsSignInOpen(value)
-                          }
-                          onSuccess={(userData) => {
-                            setLocalUser(userData);
-                            localStorage.setItem(
-                              "user",
-                              JSON.stringify(userData)
-                            );
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {isSignUpOpen && (
-                    <div
-                      ref={signUpRef}
-                      className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50"
-                    >
-                      <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
-                        <button
-                          onClick={() => setIsSignUpOpen(false)}
-                          className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
-                        >
-                          <Icon
-                            icon="ic:round-close"
-                            className="text-2xl dark:text-white"
-                          />
-                        </button>
-                        <SignUp
-                          signUpOpen={(value: boolean) =>
-                            setIsSignUpOpen(value)
-                          }
-                          onSuccess={(userData) => {
-                            setLocalUser(userData);
-                            localStorage.setItem(
-                              "user",
-                              JSON.stringify(userData)
-                            );
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
 
@@ -445,6 +376,17 @@ const Header: React.FC = () => {
                 className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
               >
                 {t("nav.dashboard")}
+              </Link>
+            )}
+
+            {/* إضافة مدونة لـ marketing فقط */}
+            {localUser?.role === "marketing" && (
+              <Link
+                href="/marketing/blogs"
+                onClick={() => setNavbarOpen(false)}
+                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+              >
+                {t("nav.addBlog") || "إضافة مدونة"}
               </Link>
             )}
 
@@ -552,6 +494,88 @@ const Header: React.FC = () => {
           <UserRegistered />
         </div>
       </header>
+
+      {isSignInOpen && (
+        <div
+          ref={signInRef}
+          className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
+          <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
+            <button
+              onClick={() => setIsSignInOpen(false)}
+              className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
+            >
+              <Icon
+                icon="ic:round-close"
+                className="text-2xl dark:text-white"
+              />
+            </button>
+            <Signin
+              signInOpen={(value: boolean) =>
+                setIsSignInOpen(value)
+              }
+              onSuccess={(userData) => {
+                setLocalUser(userData);
+                localStorage.setItem(
+                  "user",
+                  JSON.stringify(userData)
+                );
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {isSignUpOpen && (
+        <div
+          ref={signUpRef}
+          className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
+          <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
+            <button
+              onClick={() => setIsSignUpOpen(false)}
+              className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
+            >
+              <Icon
+                icon="ic:round-close"
+                className="text-2xl dark:text-white"
+              />
+            </button>
+            <SignUp
+              signUpOpen={(value: boolean) =>
+                setIsSignUpOpen(value)
+              }
+              onSuccess={(userData) => {
+                setLocalUser(userData);
+                // لا حاجة لتخزين user في localStorage لأننا نخزن token فقط
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {isProfileOpen && (
+        <div
+          ref={profileRef}
+          className="fixed inset-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
+          <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
+            <button
+              onClick={() => setIsProfileOpen(false)}
+              className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
+            >
+              <Icon
+                icon="ic:round-close"
+                className="text-2xl dark:text-white"
+              />
+            </button>
+            <ProfileModal
+              onClose={() => setIsProfileOpen(false)}
+              onProfileUpdate={handleProfileUpdate}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 };

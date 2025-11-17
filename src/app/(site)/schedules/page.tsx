@@ -4,7 +4,6 @@ import React from "react";
 import '@/Style/style.css'
 import Schedules from "@/components/Home/Schedules";
 import TicketSection from "@/components/Home/TicketSection";
-import Testimonial from "@/components/SharedComponent/Testimonial";
 import Testimonials from "@/components/Home/Testimonials";
 import { Metadata } from "next";
 export const metadata: Metadata = {

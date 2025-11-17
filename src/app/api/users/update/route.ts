@@ -1,13 +1,14 @@
-// app/api/auth/profile/route.ts
-import { NextResponse } from "next/server";
+// app/api/users/update/route.js
+import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import User from "../../../models/User";
-import { connectDB } from "../../../../lib/mongodb";
+import User from "@/app/models/User";
+import { connectDB } from "@/lib/mongodb";
 
-const JWT_SECRET = process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET;
+const JWT_SECRET =
+  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
 
-export async function PATCH(req: Request) {
+export async function PATCH(req: NextRequest) {
   try {
     if (!JWT_SECRET) {
       console.error("JWT secret not set");
@@ -33,7 +34,7 @@ export async function PATCH(req: Request) {
       );
     }
 
-    let payload: any;
+    let payload;
     try {
       payload = jwt.verify(token, JWT_SECRET);
     } catch (err) {
@@ -49,7 +50,9 @@ export async function PATCH(req: Request) {
 
     await connectDB();
 
-    const userId = payload?.id || payload?._id;
+    const userPayload = payload as jwt.JwtPayload;
+    const userId = (userPayload.id || userPayload._id) as string;
+
     if (!userId) {
       return NextResponse.json(
         { success: false, message: "Invalid token payload" },
@@ -57,7 +60,7 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const user = await User.findById(userId).select("+password");
+    const user = await User.findById(userId);
     if (!user) {
       return NextResponse.json(
         { success: false, message: "User not found" },
@@ -65,7 +68,6 @@ export async function PATCH(req: Request) {
       );
     }
 
-    
     if (name !== undefined) {
       if (typeof name !== "string" || name.trim().length < 2) {
         return NextResponse.json(
@@ -94,7 +96,6 @@ export async function PATCH(req: Request) {
         );
       }
 
-      
       const parts = image.split(",");
       const meta = parts[0] || "";
       const base64 = parts[1] || parts[0];
@@ -109,7 +110,6 @@ export async function PATCH(req: Request) {
         );
       }
 
-  
       let imageSize = 0;
       try {
         const buffer = Buffer.from(base64, "base64");
@@ -122,7 +122,7 @@ export async function PATCH(req: Request) {
         );
       }
 
-      const maxSize = 2 * 1024 * 1024; 
+      const maxSize = 2 * 1024 * 1024;
       if (imageSize > maxSize) {
         return NextResponse.json(
           { success: false, message: "Image size must be less than 2MB" },
@@ -141,6 +141,8 @@ export async function PATCH(req: Request) {
       email: user.email,
       role: user.role,
       image: user.image || null,
+      qrCode: user.qrCode || null,
+      qrCodeData: user.qrCodeData || null,
     };
 
     return NextResponse.json(

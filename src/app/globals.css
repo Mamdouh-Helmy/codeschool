@@ -118,5 +118,21 @@ body {
   @apply mb-6 text-2xl font-bold dark:text-white sm:text-28;
 }
 
+.swiper-pagination-bullet {
+  width: 12px !important;
+  height: 12px !important;
+  background-color: #4b63e1 !important;
 
+  transition: all 0.3s !important;
+  -webkit-transition: all 0.3s !important;
+  -moz-transition: all 0.3s !important;
+  -ms-transition: all 0.3s !important;
+  -o-transition: all 0.3s !important;
+}
 
+.swiper-pagination-bullet-active {
+  width: 16px;
+  height: 16px;
+  background-color: #ffbd59;
+  opacity: 1;
+}

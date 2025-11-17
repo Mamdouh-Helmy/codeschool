@@ -1,3 +1,4 @@
+// models/User.js
 import mongoose from "mongoose";
 
 const UserSchema = new mongoose.Schema(
@@ -26,10 +27,22 @@ const UserSchema = new mongoose.Schema(
     },
     image: {
       type: String,
+      default: "/images/default-avatar.jpg",
+    },
+    qrCode: {
+      type: String,
       default: "",
     },
+    qrCodeData: {
+      type: String,
+      default: "",
+    }
   },
-  { timestamps: true }
+  { 
+    timestamps: true,
+    strict: true 
+  }
 );
 
+console.log("🔧 User Schema loaded with QR fields");
 export default mongoose.models.User || mongoose.model("User", UserSchema);

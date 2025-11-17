@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const limit = parseInt(searchParams.get("limit") || "200");
 
     let projects = await Project.find({})
       .sort({ createdAt: -1 })
@@ -36,7 +36,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("❌ Error fetching projects:", error);
     return NextResponse.json(
-      { success: false, message: "Failed to fetch projects", error: error.message },
+      {
+        success: false,
+        message: "Failed to fetch projects",
+        error: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
@@ -56,7 +60,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-  
     const newProject = await Project.create({
       title: body.title,
       description: body.description,
@@ -70,7 +73,7 @@ export async function POST(request: NextRequest) {
         id: new mongoose.Types.ObjectId(),
         name: "Student",
         email: "student@example.com",
-        role: "student"
+        role: "student",
       },
     });
 
@@ -83,12 +86,12 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("❌ Error creating project:", error);
+    console.error("❌ Error fetching projects:", error);
     return NextResponse.json(
-      { 
-        success: false, 
-        message: "Failed to create project",
-        error: error.message 
+      {
+        success: false,
+        message: "Failed to fetch projects",
+        error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );

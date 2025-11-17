@@ -8,7 +8,7 @@ const WebinarPopupManager = () => {
   const { data: activeWebinar, loading } = useActiveWebinar();
 
   useEffect(() => {
-    // Show popup every visit (no cooldown), but only if there's an active webinar
+
     if (loading || !activeWebinar) return;
     const timer = setTimeout(() => setShowPopup(true), 1000);
 

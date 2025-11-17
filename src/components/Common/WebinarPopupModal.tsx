@@ -36,14 +36,14 @@ const WebinarPopupModal = ({ onClose, isOpen }: WebinarPopupModalProps) => {
   };
 
   const webinar = activeWebinar as any;
-  const imageSrc = imageError || !webinar.instructorImage 
-    ? "/images/instructors/default.jpg" 
+  const imageSrc = imageError || !webinar.instructorImage
+    ? "/images/instructors/default.jpg"
     : webinar.instructorImage;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div className="bg-white dark:bg-darkmode p-8 rounded-2xl shadow-2xl w-[90vw] max-w-2xl mx-4 relative animate-fadeIn">
-        {/* Close button */}
+  
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 text-2xl font-bold"

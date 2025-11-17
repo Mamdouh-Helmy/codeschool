@@ -4,12 +4,10 @@ import BlogPost from "../../models/BlogPost";
 import { verifyJwt } from "@/lib/auth";
 import { hasPermission } from "@/lib/permissions";
 
-
 export async function GET(req: Request) {
   try {
     await connectDB();
 
-  
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (token) {
       const user = verifyJwt(token);
@@ -25,19 +23,25 @@ export async function GET(req: Request) {
     const search = url.searchParams.get("search");
     const tag = url.searchParams.get("tag");
     const category = url.searchParams.get("category");
+    const status = url.searchParams.get("status") || "published"; // Default to published
     const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = parseInt(url.searchParams.get("limit") || "10");
+    const limit = parseInt(url.searchParams.get("limit") || "100");
 
-    const query: any = {};
+    const query: any = { status }; // Filter by status
+
     if (search) query.title = { $regex: search, $options: "i" };
-    if (tag) query.tags = { $in: [tag] };
+    if (tag) query.tags = { $in: [tag] }; // Filter by tag
     if (category) query.category = category;
+
+    console.log("🔍 Database Query:", query); // Debug log
 
     const total = await BlogPost.countDocuments(query);
     const posts = await BlogPost.find(query)
       .sort({ publishDate: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
+
+    console.log(`✅ Found ${posts.length} posts with query`); // Debug log
 
     return NextResponse.json({
       success: true,
@@ -59,12 +63,10 @@ export async function GET(req: Request) {
   }
 }
 
-
 export async function POST(req: Request) {
   try {
     await connectDB();
 
-  
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) {
       return NextResponse.json(
@@ -85,11 +87,9 @@ export async function POST(req: Request) {
 
     console.log("Received data:", data);
 
-   
     let authorData;
 
     if (data.author && typeof data.author === "object") {
-   
       authorData = {
         id: user.id,
         name: data.author.name || user.name || "Admin",
@@ -99,7 +99,6 @@ export async function POST(req: Request) {
         role: data.author.role || user.role || "Author",
       };
     } else {
-  
       authorData = {
         id: user.id,
         name: data.author || user.name || "Admin",
@@ -109,7 +108,6 @@ export async function POST(req: Request) {
       };
     }
 
-   
     if (!authorData.name || authorData.name.trim() === "") {
       return NextResponse.json(
         { success: false, message: "Author name is required" },
@@ -130,7 +128,6 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error("Create blog error:", err);
 
- 
     if (err.name === "ValidationError") {
       const errors = Object.values(err.errors).map(
         (error: any) => error.message

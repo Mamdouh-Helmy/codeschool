@@ -15,7 +15,7 @@ const BlogImageWithFallback: React.FC<BlogImageWithFallbackProps> = ({
   src,
   alt,
   width = 1170,
-  height = 266,
+  height = 150,
   className = "",
   fallbackSrc = "/images/blog/blog_1.png",
 }) => {

@@ -1,8 +1,5 @@
 import { formatISO } from "date-fns";
-import type {
-  DashboardSnapshot,
-  ScheduleResponse,
-} from "./types";
+import type { DashboardSnapshot, ScheduleResponse } from "./types";
 
 export const FALLBACK_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
   metrics: [
@@ -103,6 +100,7 @@ export const FALLBACK_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
   ],
   enrollments: [
     {
+      id: "enroll-1",
       name: "Melissa Carter",
       email: "melissa.carter@example.com",
       course: "Advanced React Patterns",
@@ -111,6 +109,7 @@ export const FALLBACK_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
       status: "active",
     },
     {
+      id: "enroll-2",
       name: "Diego Hernández",
       email: "diego.h@example.com",
       course: "Product Design Foundations",
@@ -119,6 +118,7 @@ export const FALLBACK_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
       status: "trial",
     },
     {
+      id: "enroll-3",
       name: "Aisha Patel",
       email: "aisha.patel@example.com",
       course: "AI for Educators",
@@ -127,6 +127,7 @@ export const FALLBACK_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
       status: "pending",
     },
     {
+      id: "enroll-4",
       name: "Noah Williams",
       email: "noah.williams@example.com",
       course: "Full-stack Bootcamp",
@@ -135,6 +136,7 @@ export const FALLBACK_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
       status: "active",
     },
     {
+      id: "enroll-5",
       name: "Sofia Martins",
       email: "sofia.martins@example.com",
       course: "Data Storytelling",

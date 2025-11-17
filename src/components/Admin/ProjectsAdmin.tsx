@@ -204,6 +204,8 @@ export default function ProjectsAdmin() {
     );
   }
 
+  // console.log(projects)
+
   return (
     <div className="space-y-6">
       {/* Header Section */}

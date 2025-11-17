@@ -1,64 +1,69 @@
-// src/app/(site)/blog/[slug]/page.tsx
-import { getApiUrl } from "@/utils/urlUtils";
-import { PostContent } from "@/components/Blog/PostContent";
-import { Metadata } from "next";
+// app/blog/[slug]/page.tsx
+import { Metadata } from 'next';
+import { PostContent } from '@/components/Blog/PostContent';
+import { getApiUrl } from '@/utils/urlUtils';
 
-// ✅ توليد الميتاداتا
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
-  const { slug } = await params;
-
+// دالة لجلب بيانات المقالة لـ Meta Tags
+async function getPost(slug: string) {
   try {
     const apiUrl = getApiUrl(`/api/blog/${slug}`);
+    const res = await fetch(apiUrl, { cache: 'no-store' });
 
-    if (!apiUrl) {
-      console.warn("⚠️ generateMetadata: API URL is not configured");
-      return {
-        title: "Post Not Found | CodeSchool",
-        description: "Blog article",
-      };
-    }
+    if (!res.ok) return null;
 
-    const res = await fetch(apiUrl, {
-      next: { revalidate: 60 },
-    });
-
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-
-    const text = await res.text();
-    const postData = text ? JSON.parse(text) : {};
-    const post = postData.data;
-
-    return {
-      title: post ? `${post.title} | CodeSchool` : "Post Not Found",
-      description: post?.excerpt || "Blog article",
-      openGraph: {
-        title: post?.title || "Post Not Found",
-        description: post?.excerpt || "Blog article",
-        type: "article",
-        publishedTime: post?.publishDate,
-        authors: post?.author?.name ? [post.author.name] : [],
-      },
-    };
+    const data = await res.json();
+    return data.data;
   } catch (error) {
-    console.error("Metadata fetch error:", error);
-    return {
-      title: "Error Loading Post",
-      description: "Unable to fetch post metadata",
-    };
+    return null;
   }
 }
 
-// ✅ الصفحة الرئيسية (Server Component)
-export default async function Post({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
+// إنشاء Dynamic Metadata
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const post = await getPost(params.slug);
 
-  return <PostContent slug={slug} />;
+  if (!post) {
+    return {
+      title: 'Blog Post - CodeSchool',
+      description: 'Read this amazing blog post on CodeSchool',
+    };
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const postUrl = `${baseUrl}/blog/${params.slug}`;
+  const imageUrl = post.image
+    ? (post.image.startsWith('http') ? post.image : `${baseUrl}${post.image}`)
+    : `${baseUrl}/images/blog/blog_1.png`;
+
+  return {
+    title: post.title,
+    description: post.body?.substring(0, 160) || 'Read this amazing blog post on CodeSchool',
+    openGraph: {
+      title: post.title,
+      description: post.body?.substring(0, 160) || 'Read this amazing blog post on CodeSchool',
+      url: postUrl,
+      siteName: 'CodeSchool',
+      images: [
+        {
+          url: imageUrl,
+          width: 1200,
+          height: 630,
+          alt: post.title,
+        },
+      ],
+      type: 'article',
+      publishedTime: post.publishDate,
+      authors: [post.author?.name || 'CodeSchool'],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: post.title,
+      description: post.body?.substring(0, 160) || 'Read this amazing blog post on CodeSchool',
+      images: [imageUrl],
+    },
+  };
+}
+
+export default function BlogPostPage({ params }: { params: { slug: string } }) {
+  return <PostContent slug={params.slug} />;
 }

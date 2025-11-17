@@ -22,10 +22,17 @@ const validatePassword = (password: string) => {
   return "";
 };
 
-const Signin = ({ signInOpen }: { signInOpen?: any }) => {
+type SigninProps = {
+  signInOpen: (value: boolean) => void;
+  onSuccess: (userData: any) => void;
+};
+
+const Signin: React.FC<SigninProps> = ({ signInOpen, onSuccess }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
+    {}
+  );
   const [loading, setLoading] = useState(false);
   const authDialog = useContext(AuthDialogContext);
   const { t } = useI18n();
@@ -81,9 +88,14 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
         console.warn("Failed to store token", err);
       }
 
-      toast.success(t("auth.loginSuccess"));
+      // toast.success(t("auth.loginSuccess"));
       authDialog?.setIsSuccessDialogOpen(true);
       setTimeout(() => authDialog?.setIsSuccessDialogOpen(false), 1100);
+
+      // تحديث بيانات المستخدم
+      if (onSuccess && data.user) {
+        onSuccess(data.user);
+      }
 
       setTimeout(() => {
         signInOpen && signInOpen(false);
@@ -130,7 +142,9 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
               errors.email ? "border-red-500" : ""
             }`}
           />
-          {errors.email && <p className="text-sm text-red-500 mt-1">{t(errors.email)}</p>}
+          {errors.email && (
+            <p className="text-sm text-red-500 mt-1">{t(errors.email)}</p>
+          )}
         </div>
 
         <div className="mb-[22px]">
@@ -144,7 +158,9 @@ const Signin = ({ signInOpen }: { signInOpen?: any }) => {
               errors.password ? "border-red-500" : ""
             }`}
           />
-          {errors.password && <p className="text-sm text-red-500 mt-1">{t(errors.password)}</p>}
+          {errors.password && (
+            <p className="text-sm text-red-500 mt-1">{t(errors.password)}</p>
+          )}
         </div>
 
         <div className="mb-9">

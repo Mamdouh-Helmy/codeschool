@@ -42,7 +42,7 @@ const Hero = () => {
               data-aos="fade-up"
               data-aos-delay="400"
               data-aos-duration="1000"
-              className="text-xl text-SlateBlueText dark:text-opacity-80 font-normal md:pb-14 pb-6 w-[500px]"
+              className="text-xl text-SlateBlueText dark:text-opacity-80 font-normal md:pb-14 pb-6 md:w-[500px]"
             >
               {preview}
               <button
@@ -134,7 +134,7 @@ const Hero = () => {
           <div
             onClick={(e) => e.stopPropagation()}
             className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl w-[70vw] max-w-none mx-4 relative animate-fadeIn font-sans text-base text-SlateBlueText"
-            // Add here the same font class used in the site, e.g. font-sans or font-primary
+          // Add here the same font class used in the site, e.g. font-sans or font-primary
           >
             <h2 className="text-2xl font-bold text-[#8c52ff] mb-4">
               {t("hero.title")}
@@ -167,13 +167,14 @@ const Hero = () => {
             </h2>
             <div className="relative pb-[56.25%] h-0 overflow-hidden rounded">
               <iframe
-                src="https://www.youtube.com/embed/1oDrJba2PSs?autoplay=1"
+                src="https://www.youtube.com/embed/p1CrKwmY_ps?autoplay=1"
                 className="absolute top-0 left-0 w-full h-full"
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 title="Code School Demo"
               />
+
             </div>
             <button
               onClick={closeModal}

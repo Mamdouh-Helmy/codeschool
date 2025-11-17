@@ -7,11 +7,24 @@ import { useAuth } from "@/hooks/useAuth";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
 
+interface Plan {
+  _id: string;
+  name: string;
+  price: number;
+  currency: string;
+  billingPeriod: string;
+}
+
+interface Subscription {
+  status: string;
+  plan?: Plan | string;
+}
+
 const EventTicket = () => {
-  const [plans, setPlans] = useState([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [subscribedPlans, setSubscribedPlans] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [subscribedPlans, setSubscribedPlans] = useState([]);
   const { locale } = useLocale();
 
   const auth = useAuth();
@@ -37,7 +50,6 @@ const EventTicket = () => {
     fetchPlans();
   }, []);
 
-  // ✅ جلب اشتراكات المستخدم
   useEffect(() => {
     const fetchUserSubscriptions = async () => {
       try {
@@ -45,10 +57,12 @@ const EventTicket = () => {
         if (!res.ok) return;
         const result = await res.json();
         if (result.success && result.data?.length > 0) {
-          const userSubs = result.data
+          const userSubs = (result.data as Subscription[])
             .filter((sub) => sub.status !== "cancelled")
-            .map((sub) => sub.plan?._id || sub.plan);
-          setSubscribedPlans(userSubs);
+            .map((sub) =>
+              typeof sub.plan === "object" ? sub.plan._id : sub.plan
+            );
+          setSubscribedPlans(userSubs as string[]);
         }
       } catch (error) {
         console.error("Error fetching user subscriptions:", error);
@@ -59,7 +73,7 @@ const EventTicket = () => {
   }, []);
 
   // ✅ الاشتراك في الخطة
-  const handleSubscribe = async (planId) => {
+  const handleSubscribe = async (planId: string) => {
     if (subscribedPlans.includes(planId)) {
       toast.error(t("eventTicket.alreadySubscribed"));
       return;
@@ -76,7 +90,6 @@ const EventTicket = () => {
 
     try {
       setProcessing(true);
-
       const res = await fetch("/api/subscriptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -171,9 +184,8 @@ const EventTicket = () => {
                       {t("common.loading")}
                     </div>
                   ) : (
-                    plans.map((plan) => {
+                    plans.map((plan: Plan) => {
                       const isSubscribed = subscribedPlans.includes(plan._id);
-
                       return (
                         <div
                           key={plan._id}
@@ -188,26 +200,7 @@ const EventTicket = () => {
                           <p className="text-sm font-normal text-SlateBlueText">
                             {plan.billingPeriod}
                           </p>
-                          {/* {isSubscribed ? (
-                            <button
-                              disabled
-                              className="ml-auto px-4 py-1 bg-primary text-white rounded text-sm font-semibold cursor-not-allowed"
-                            >
-                              {t("eventTicket.subscribed")}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleSubscribe(plan._id)}
-                              disabled={processing}
-                              className={`ml-auto px-4 py-1 rounded text-sm font-semibold transition ${
-                                processing
-                                  ? "bg-gray-400 cursor-not-allowed"
-                                  : "bg-primary text-white hover:bg-primary/90"
-                              }`}
-                            >
-                              {processing ? t("eventTicket.processing") : t("eventTicket.subscribe")}
-                            </button>
-                          )} */}
+                         
                         </div>
                       );
                     })

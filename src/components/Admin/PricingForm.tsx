@@ -216,8 +216,8 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
     try {
       const features = featuresInput
         .split("\n")
-        .map((feature) => feature.trim())
-        .filter((feature) => feature.length > 0);
+        .map((feature: string) => feature.trim())
+        .filter((feature: string) => feature.length > 0);
 
       const payload = {
         ...form,

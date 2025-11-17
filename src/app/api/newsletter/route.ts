@@ -18,7 +18,8 @@ export async function POST(request: NextRequest) {
     }
 
     const db = await getDatabase();
-    const collection = db.collection<NewsletterSubscription>(COLLECTION_NAME);
+    const collection = db.collection(COLLECTION_NAME) as any;
+
 
     // Check if email already exists
     const existingSubscription = await collection.findOne({ email });
@@ -90,7 +91,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     const db = await getDatabase();
-    const collection = db.collection<NewsletterSubscription>(COLLECTION_NAME);
+const collection = db.collection(COLLECTION_NAME) as any;
+
 
     const result = await collection.updateOne(
       { email },

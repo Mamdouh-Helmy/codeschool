@@ -33,7 +33,6 @@ const DynamicPricing = () => {
   const planIdFromQuery = searchParams.get("plan");
   const { locale } = useLocale();
 
-
   useEffect(() => {
     const fetchPlans = async () => {
       try {
@@ -56,11 +55,9 @@ const DynamicPricing = () => {
     fetchPlans();
   }, [t]);
 
-
   useEffect(() => {
     if (planIdFromQuery) setSelectedPlan(planIdFromQuery);
   }, [planIdFromQuery]);
-
 
   useEffect(() => {
     const fetchUserSubscriptions = async () => {
@@ -82,7 +79,6 @@ const DynamicPricing = () => {
     fetchUserSubscriptions();
   }, []);
 
-
   const handleSubscribe = async (planId: string) => {
     if (subscribedPlans.includes(planId)) {
       toast.error(t("eventTicket.alreadySubscribed"));
@@ -95,16 +91,13 @@ const DynamicPricing = () => {
         if (sess.ok) {
           const sessJson = await sess.json();
           if (sessJson?.success && sessJson?.loggedIn) {
-            // try {
-            //   if (sessJson.user)
-            //     // localStorage.setItem("user", JSON.stringify(sessJson.user));
-            // } catch (e) {
-            //   console.warn("Failed to sync user to localStorage", e);
-            // }
+            // المستخدم مسجل دخول - نواصل العملية
           } else {
             toast.error(t("eventTicket.pleaseLogin"));
             const callback = pathname || "/";
-            
+            router.push(
+              `/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`
+            );
             return;
           }
         } else {
@@ -126,38 +119,34 @@ const DynamicPricing = () => {
       }
     }
 
+    // بعد التأكد من تسجيل الدخول، نوجه إلى الواتساب
     try {
       setProcessing(true);
 
-      const res = await fetch("/api/subscriptions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          planId,
-          paymentMethod: "manual",
-          studentCount: 1,
-        }),
-      });
+      // البحث عن الخطة المختارة
+      const selectedPlan = plans.find(p => p._id === planId || p.id === planId);
 
-      const result = await res.json();
-
-      if (res.ok && result.success) {
-        toast.success(t("eventTicket.subscriptionSuccess"));
-        setSubscribedPlans((prev) => [...prev, planId]);
-        setTimeout(() => {
-          router.push(`/subscriptions?plan=${planId}`);
-        }, 1500);
-      } else if (res.status === 401) {
-        toast.error(t("eventTicket.pleaseLogin"));
-        const callback = pathname || "/";
-        // router.push(
-        //   `/signin?callbackUrl=${encodeURIComponent(callback)}&plan=${planId}`
-        // );
-      } else {
-        toast.error(result.message || t("eventTicket.subscriptionFailed"));
+      if (!selectedPlan) {
+        toast.error(t("pricing.planNotFound") || "الخطة غير موجودة");
+        return;
       }
+
+      // إنشاء رسالة الواتساب
+      const message = `مرحباً، أريد الاشتراك في الخطة التالية:%0A%0A*الخطة المختارة:* ${selectedPlan.name}%0A*السعر:* ${selectedPlan.price} ${selectedPlan.currency}%0A*مدة الاشتراك:* ${selectedPlan.billingPeriod === 'monthly' ? 'شهري' : selectedPlan.billingPeriod === 'yearly' ? 'سنوي' : selectedPlan.billingPeriod}%0A*وصف الخطة:* ${selectedPlan.description}%0A%0Aيرجى التواصل معي لإكمال عملية الاشتراك والدفع.`;
+
+      // رقم الواتساب
+      const whatsappNumber = "+201110050892";
+
+      // رابط الواتساب
+      const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${message}`;
+
+      // فتح الواتساب في نافذة جديدة
+      window.open(whatsappUrl, '_blank');
+
+      toast.success(t("pricing.redirectingToWhatsApp") || "جاري التوجيه إلى الواتساب...");
+
     } catch (err) {
-      toast.error(t("eventTicket.subscriptionError"));
+      toast.error(t("pricing.redirectError") || "حدث خطأ أثناء التوجيه للواتساب");
       console.error(err);
     } finally {
       setProcessing(false);
@@ -187,11 +176,10 @@ const DynamicPricing = () => {
             return (
               <div
                 key={plan._id || plan.id}
-                className={`relative bg-white dark:bg-darkmode rounded-2xl shadow-lg p-8 transition-all ${
-                  isSelected
-                    ? "ring-4 ring-primary scale-105"
-                    : "hover:shadow-xl"
-                }`}
+                className={`relative bg-white dark:bg-darkmode rounded-2xl shadow-lg p-8 transition-all ${isSelected
+                  ? "ring-4 ring-primary scale-105"
+                  : "hover:shadow-xl"
+                  }`}
               >
                 {isSelected && (
                   <div className="absolute top-4 right-4 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">
@@ -233,11 +221,10 @@ const DynamicPricing = () => {
                   <button
                     onClick={() => handleSubscribe(plan._id!)}
                     disabled={processing}
-                    className={`w-full py-3 rounded-lg font-semibold transition ${
-                      processing
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-primary text-white hover:bg-primary/90"
-                    }`}
+                    className={`w-full py-3 rounded-lg font-semibold transition ${processing
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-primary text-white hover:bg-primary/90"
+                      }`}
                   >
                     {processing
                       ? t("eventTicket.processing")
@@ -247,11 +234,10 @@ const DynamicPricing = () => {
                   <button
                     onClick={() => setSelectedPlan(plan._id!)}
                     disabled={processing}
-                    className={`block w-full py-3 text-center border rounded-lg font-semibold transition ${
-                      processing
-                        ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                        : "border-gray-300 text-MidnightNavyText dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                    }`}
+                    className={`block w-full py-3 text-center border rounded-lg font-semibold transition ${processing
+                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      : "border-gray-300 text-MidnightNavyText dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+                      }`}
                   >
                     {t("pricing.choosePlan")}
                   </button>

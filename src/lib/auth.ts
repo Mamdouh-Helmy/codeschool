@@ -2,7 +2,8 @@ import jwt from "jsonwebtoken";
 import { connectDB } from "./mongodb";
 import User from "@/app/models/User";
 
-const JWT_SECRET = process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
+const JWT_SECRET =
+  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
 
 export interface SafeUser {
   id: string;
@@ -12,6 +13,13 @@ export interface SafeUser {
   image?: string | null;
 }
 
+interface UserDoc {
+  _id: any;
+  name?: string;
+  email?: string;
+  role?: string;
+  image?: string | null;
+}
 
 /**
  * Parse cookie header string into object form.
@@ -63,7 +71,10 @@ export async function getUserFromRequest(
 
     // Get user from DB
     await connectDB();
-    const user = await User.findById(userId).select("-password -__v").lean();
+    const user = await User.findById(userId)
+      .select("-password -__v")
+      .lean<UserDoc>();
+
     if (!user) return null;
 
     return {
@@ -89,7 +100,7 @@ export function verifyJwt(token?: string): SafeUser | null {
     }
 
     const payload: any = jwt.verify(token, JWT_SECRET);
-    
+
     if (!payload?.id) {
       return null;
     }

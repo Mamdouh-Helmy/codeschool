@@ -11,11 +11,11 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("token")?.value;
 
- 
   const protectedRoutes = [
     "/admin",
     "/dashboard",
-    "/profile"
+    "/profile",
+    "/marketing"
   ];
 
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -34,6 +34,11 @@ export async function middleware(req: NextRequest) {
       
       // تحقق من الصلاحيات للإدارة
       if (pathname.startsWith("/admin") && payload.role !== "admin") {
+        return NextResponse.redirect(new URL("/", req.url));
+      }
+      
+      // تحقق من الصلاحيات للتسويق
+      if (pathname.startsWith("/marketing") && payload.role !== "marketing") {
         return NextResponse.redirect(new URL("/", req.url));
       }
       
@@ -73,7 +78,7 @@ export const config = {
     "/admin/:path*",
     "/dashboard/:path*",
     "/profile/:path*",
-   
+    "/marketing/:path*",
     "/signin",
     "/signup"
   ],

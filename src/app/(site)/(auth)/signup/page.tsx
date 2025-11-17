@@ -8,13 +8,29 @@ export const metadata: Metadata = {
 };
 
 const SignupPage = () => {
+  const handleSuccess = (userData: any) => {
+   
+    localStorage.setItem("user", JSON.stringify(userData));
+  };
+
+  const handleSignUpOpen = (value: boolean) => {
+    
+    console.log("SignUp modal open:", value);
+  };
+
   return (
     <>
       <Breadcrumb pageName="Sign Up Page" />
 
-      <SignUp />
+      <SignUp 
+        signUpOpen={handleSignUpOpen}
+        onSuccess={handleSuccess}
+      />
     </>
   );
 };
 
 export default SignupPage;
+
+
+

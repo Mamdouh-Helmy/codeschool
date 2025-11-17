@@ -1,3 +1,4 @@
+// src/app/layout.tsx
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
@@ -7,7 +8,7 @@ import SessionProviderComp from "@/components/nextauth/SessionProvider";
 import { AuthDialogProvider } from "./context/AuthDialogContext";
 import NextTopLoader from "nextjs-toploader";
 import SiteWrapper from "./SiteWrapper";
-import WebinarPopupManager from "@/components/Common/WebinarPopupManager";
+import WelcomePopupManager from "@/components/Common/WelcomePopupManager";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { LocaleProvider } from "./context/LocaleContext";
@@ -41,17 +42,15 @@ export default async function RootLayout({
                 >
                   <Aoscompo>
                     <NextTopLoader />
-                    {/* Toaster محدث ليتماشى مع الـ tailwind.config */}
+
+                    {/* تم نقل Toaster خارج ThemeProvider لتجنب مشاكل الـ theme */}
                     <Toaster
                       position="top-right"
                       containerStyle={{ zIndex: 9999 }}
                       toastOptions={{
-                        // هذا الـ className الافتراضي لكل توست (يمكن تجاوزه عند استدعاء toast)
                         className:
                           "bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none p-3 max-w-404",
-                        // نمط إضافي إن أردت حد أقصى للعرض
                         style: { maxWidth: "25rem" },
-                        // خيارات لأنواع معينة
                         success: {
                           className:
                             "bg-primary text-white rounded-14 shadow-sm p-3 max-w-404",
@@ -60,12 +59,12 @@ export default async function RootLayout({
                           className:
                             "bg-red-600 text-white rounded-14 shadow-sm p-3 max-w-404",
                         },
-                        // مدة افتراضية (يمكن تمرير duration عند الاستدعاء)
                         duration: 4000,
                       }}
                     />
+                    
                     <SiteWrapper>{children}</SiteWrapper>
-                    <WebinarPopupManager />
+                    <WelcomePopupManager />
                   </Aoscompo>
                   <ScrollToTop />
                 </ThemeProvider>

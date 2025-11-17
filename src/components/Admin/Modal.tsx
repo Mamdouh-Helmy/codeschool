@@ -1,5 +1,6 @@
 "use client";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "@iconify/react";
 
 type ModalProps = {
@@ -10,14 +11,19 @@ type ModalProps = {
 };
 
 export default function Modal({ open, title, children, onClose }: ModalProps) {
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
 
-  return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+  // نتاكد ان الكومبوننت اشتغل في المتصفح (مش SSR)
+  useEffect(() => setMounted(true), []);
+
+  if (!open || !mounted) return null;
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div 
+      <div
         className="bg-white dark:bg-darkmode rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden border border-PowderBlueBorder dark:border-dark_border"
         onClick={(e) => e.stopPropagation()}
       >
@@ -28,6 +34,8 @@ export default function Modal({ open, title, children, onClose }: ModalProps) {
           </h2>
           <button
             onClick={onClose}
+            title="Close"
+            aria-label="Close modal"
             className="w-8 h-8 flex items-center justify-center rounded-10 hover:bg-white dark:hover:bg-darkmode transition-colors duration-200 text-SlateBlueText dark:text-darktext hover:text-MidnightNavyText dark:hover:text-white"
           >
             <Icon icon="ion:close" className="w-5 h-5" />
@@ -35,10 +43,12 @@ export default function Modal({ open, title, children, onClose }: ModalProps) {
         </div>
 
         {/* Content */}
-        <div className="p-4 overflow-y-auto max-h-[calc(85vh-80px)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full dark:[&::-webkit-scrollbar-track]:bg-dark_input dark:[&::-webkit-scrollbar-thumb]:bg-dark_border hover:[&::-webkit-scrollbar-thumb]:bg-gray-400 dark:hover:[&::-webkit-scrollbar-thumb]:bg-darktext">
+        <div className="p-4 overflow-y-auto max-h-[calc(85vh-80px)] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-dark_border">
           {children}
         </div>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
