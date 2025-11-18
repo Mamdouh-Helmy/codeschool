@@ -1434,7 +1434,101 @@ const en = {
   "auth.registrationSuccessManualLogin":
     "Registration successful! You can log in manually.",
 
-  "auth.autoLoginSuccess": "Auto login successful!", 
+  "auth.autoLoginSuccess": "Auto login successful!",
+
+  "eventTicket.price": "Price",
+  "eventTicket.planName": "Plan Name",
+  "eventTicket.billingPeriod": "Billing Period",
+
+  "pricing.confirmSubscription": "Confirm Subscription",
+  "pricing.whatsappMessage":
+    "You will be contacted via WhatsApp to complete the subscription process",
+  "pricing.planDetails": "Plan Details:",
+  "pricing.planPrice": "Price:",
+  "pricing.planDuration": "Duration:",
+  "pricing.monthly": "Monthly",
+  "pricing.yearly": "Yearly",
+  "pricing.openWhatsApp": "Open WhatsApp",
+  "pricing.openWhatsAppLoding": "Loading...",
+  "pricing.popular": "Popular",
+  "pricing.off": "off",
+  "highlight.clickToWatch": "Click to Watch",
+  "highlight.allVideos": "All Videos",
+
+  "dashboard.sectionImages": "Section Images",
+  "dashboard.manageSectionImages": "Manage Section Images",
+  "dashboard.uploadSectionImage": "Upload Section Image",
+  "dashboard.editSectionImage": "Edit Section Image",
+
+  "sectionImages.management": "Section Images Management",
+  "sectionImages.managementDescription":
+    "Manage images for different sections on your site. Upload and organize images for ticket sections, event pages, and more.",
+  "sectionImages.addNew": "Add New Image",
+  "sectionImages.totalImages": "Total Images",
+  "sectionImages.activeImages": "Active Images",
+  "sectionImages.arabicImages": "Arabic Images",
+  "sectionImages.englishImages": "English Images",
+  "sectionImages.searchPlaceholder":
+    "Search by section name, alt text, or description...",
+  "sectionImages.allLanguages": "All Languages",
+  "sectionImages.allStatuses": "All Statuses",
+  "sectionImages.active": "Active",
+  "sectionImages.inactive": "Inactive",
+
+  "sectionImages.status.active": "Active",
+  "sectionImages.status.inactive": "Inactive",
+
+  "sectionImages.deleteConfirm": "Are you sure you want to delete this image?",
+  "sectionImages.deleteWarning": "This action cannot be undone.",
+  "sectionImages.deletedSuccess": "Image deleted successfully",
+  "sectionImages.deleteFailed": "Failed to delete image",
+  "sectionImages.deleteError": "Error deleting image",
+  "sectionImages.failedToLoad": "Failed to load images",
+  "sectionImages.savedSuccess": "Image saved successfully",
+  "sectionImages.statusUpdated": "Status updated successfully",
+  "sectionImages.statusUpdateFailed": "Failed to update status",
+  "sectionImages.noResults": "No images found",
+  "sectionImages.noImages": "No images yet",
+  "sectionImages.tryDifferentSearch":
+    "Try adjusting your search criteria or filters.",
+  "sectionImages.createFirst":
+    "Create your first section image to enhance your site's visual appeal.",
+  "sectionImages.clearFilters": "Clear Filters",
+  "sectionImages.createFirstButton": "Create Your First Image",
+  "sectionImages.editImage": "Edit Image",
+  "sectionImages.createImage": "Create New Image",
+  "sectionImages.basicInfo": "Image Basic Info",
+  "sectionImages.basicInfoDescription":
+    "The basic details about the section image",
+  "sectionImages.sectionName": "Section Name",
+  "sectionImages.language": "Language",
+  "sectionImages.imageAlt": "Alt Text",
+  "sectionImages.imageAltPlaceholder": "Descriptive text for accessibility",
+  "sectionImages.description": "Description",
+  "sectionImages.descriptionPlaceholder":
+    "Optional description for this image...",
+  "sectionImages.displayOrder": "Display Order",
+  "sectionImages.displayOrderHint": "Lower numbers appear first",
+  "sectionImages.chooseSection": "Choose Section...",
+  "sectionImages.imageUpload": "Upload Image",
+  "sectionImages.imageUploadDescription":
+    "Upload or provide a link for the section image",
+  "sectionImages.imageUrl": "Image URL",
+  "sectionImages.imageUrlPlaceholder": "https://example.com/image.jpg",
+  "sectionImages.uploadImage": "Upload Image",
+  "sectionImages.settings": "Settings",
+  "sectionImages.settingsDescription": "Visibility and status of the image",
+  "sectionImages.activeImage": "Image Active",
+  "sectionImages.activeDescription":
+    "Make this image visible in the selected section",
+  "sectionImages.updateImage": "Update Image",
+  "sectionImages.inactiveImages": "Inactive Images",
+
+  "footer.subscribeSuccess": "Successfully subscribed to newsletter!",
+  "footer.subscribing": "Subscribing...",
+
+
+  
 };
 
 export default en;

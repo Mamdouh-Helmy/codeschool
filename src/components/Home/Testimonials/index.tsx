@@ -115,8 +115,8 @@ const Testimonials = () => {
                 imgRaw && String(imgRaw).startsWith("data:")
                   ? imgRaw
                   : imgRaw
-                  ? imgRaw
-                  : null
+                    ? imgRaw
+                    : null
               );
 
             const finalImageSrc = studentSrc || studentImageFallback;
@@ -124,19 +124,19 @@ const Testimonials = () => {
             // decorative big image corner radii mirrored for RTL
             const decorativeStyle = isArabic
               ? {
-                  borderTopRightRadius: "200px",
-                  borderBottomLeftRadius: "200px",
-                  borderTopLeftRadius: "0px",
-                  borderBottomRightRadius: "0px",
-                  height: "450px",
-                }
+                borderTopRightRadius: "200px",
+                borderBottomLeftRadius: "200px",
+                borderTopLeftRadius: "0px",
+                borderBottomRightRadius: "0px",
+                height: "450px",
+              }
               : {
-                  borderTopLeftRadius: "200px",
-                  borderBottomRightRadius: "200px",
-                  borderTopRightRadius: "0px",
-                  borderBottomLeftRadius: "0px",
-                  height: "450px",
-                };
+                borderTopLeftRadius: "200px",
+                borderBottomRightRadius: "200px",
+                borderTopRightRadius: "0px",
+                borderBottomLeftRadius: "0px",
+                height: "450px",
+              };
 
             // content spacing depending on RTL/LTR
             const contentSpacingClass = isArabic
@@ -147,9 +147,8 @@ const Testimonials = () => {
               <div key={testimonial._id || testimonial.id}>
                 <div className="grid md:grid-cols-12 grid-cols-1 items-center">
                   <div
-                    className={`col-span-4 relative hidden lg:block overflow-hidden bg-LightSkyBlue ${
-                      isArabic ? "md:order-2" : "md:order-1"
-                    }`}
+                    className={`col-span-4 relative hidden lg:block overflow-hidden bg-LightSkyBlue ${isArabic ? "md:order-2" : "md:order-1"
+                      }`}
                     style={decorativeStyle}
                   >
                     {/* big decorative image */}
@@ -166,9 +165,8 @@ const Testimonials = () => {
                   </div>
 
                   <div
-                    className={`col-span-8 ${
-                      isArabic ? "md:order-1" : "md:order-2"
-                    } ${contentSpacingClass}`}
+                    className={`col-span-8 ${isArabic ? "md:order-1" : "md:order-2"
+                      } ${contentSpacingClass}`}
                   >
                     <h2 className="text-3xl font-bold text-secondary dark:text-white mb-5">
                       {t("testimonials.heading")}
@@ -179,9 +177,8 @@ const Testimonials = () => {
                     </p>
 
                     <div
-                      className={`flex items-center gap-6 ${
-                        isArabic ? "justify-end" : "justify-start"
-                      }`}
+                      className={`flex items-center gap-6 ${isArabic ? "justify-end" : "justify-start"
+                        }`}
                     >
                       <div
                         className="rounded-full overflow-hidden bg-gray-200 flex items-center justify-center"
@@ -209,18 +206,16 @@ const Testimonials = () => {
                             t("testimonials.anonymous")}
                         </p>
                         <div
-                          className={`flex items-center ${
-                            isArabic ? "flex-row-reverse" : ""
-                          }`}
+                          className={`flex items-center ${isArabic ? "flex-row-reverse" : ""
+                            }`}
                         >
                           {Array.from({
                             length: Math.round(testimonial.rating || 5),
                           }).map((_, i) => (
                             <svg
                               key={i}
-                              className={`w-4 h-4 text-yellow-500 ${
-                                isArabic ? "me-1" : "ms-1"
-                              }`}
+                              className={`w-4 h-4 text-yellow-500 ${isArabic ? "me-1" : "ms-1"
+                                }`}
                               xmlns="http://www.w3.org/2000/svg"
                               fill="currentColor"
                               viewBox="0 0 22 20"

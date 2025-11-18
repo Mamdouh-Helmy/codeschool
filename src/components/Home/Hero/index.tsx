@@ -8,6 +8,7 @@ const Hero = () => {
   const { t } = useI18n();
   const [showFullText, setShowFullText] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  const [showPlanPopup, setShowPlanPopup] = useState(false);
 
   const fullText = t("hero.description");
   const preview = fullText.split(" ").slice(0, 36).join(" ") + "...";
@@ -15,6 +16,7 @@ const Hero = () => {
   const closeModal = () => {
     setShowFullText(false);
     setShowVideo(false);
+    setShowPlanPopup(false);
   };
 
   return (
@@ -30,6 +32,7 @@ const Hero = () => {
             >
               {t("hero.webinar", { date: "October 2, 2025" })}
             </p>
+
             <h1
               className="py-4"
               data-aos="fade-up"
@@ -38,6 +41,7 @@ const Hero = () => {
             >
               {t("hero.title")}
             </h1>
+
             <p
               data-aos="fade-up"
               data-aos-delay="400"
@@ -54,8 +58,9 @@ const Hero = () => {
             </p>
 
             <div className="flex items-center md:justify-normal lg:justify-center justify-start flex-wrap gap-4">
-              <Link
-                href="/"
+              {/* === Browse Courses Button with Popup === */}
+              <button
+                onClick={() => setShowPlanPopup(true)}
                 data-aos="fade-up"
                 data-aos-delay="500"
                 data-aos-duration="1000"
@@ -65,7 +70,8 @@ const Hero = () => {
                   <i className="bg-[url('/images/hero/tickets.svg')] bg-no-repeat bg-contain w-6 h-6 inline-block filter brightness-0"></i>
                   {t("hero.browseCourses")}
                 </span>
-              </Link>
+              </button>
+
               <button
                 onClick={() => setShowVideo(true)}
                 data-aos="fade-up"
@@ -81,7 +87,7 @@ const Hero = () => {
             </div>
           </div>
 
-          {/* Right side with images stays as-is */}
+          {/* Right Images Stays */}
           <div
             data-aos="fade-left"
             data-aos-delay="200"
@@ -90,81 +96,46 @@ const Hero = () => {
             dir="ltr"
           >
             <div className="bg-[#ffbd59] relative rounded-tl-166 rounded-br-166 w-full">
-              <Image
-                src="/images/hero/john.png"
-                alt="hero"
-                width={400}
-                height={500}
-                quality={100}
-                className="w-full h-full"
-              />
+              <Image src="/images/hero/john.png" alt="hero" width={400} height={500} quality={100} className="w-full h-full" />
               <div className="bg-[#8c52ff] rounded-22 shadow-hero-box py-4 px-5 absolute top-16 -left-20">
                 <p className="text-lg font-bold text-white">{t("hero.instructor1")}</p>
-                <p className="text-base font-medium text-white text-center">
-                  {t("hero.instructor1Role")}
-                </p>
+                <p className="text-base font-medium text-white text-center">{t("hero.instructor1Role")}</p>
               </div>
             </div>
+
             <div className="bg-primary relative rounded-tr-166 rounded-bl-166 w-full mt-32">
-              <Image
-                src="/images/hero/maria.png"
-                alt="hero"
-                width={400}
-                height={500}
-                quality={100}
-                className="w-full h-full"
-              />
+              <Image src="/images/hero/maria.png" alt="hero" width={400} height={500} quality={100} className="w-full h-full" />
               <div className="bg-[#ffbd59] rounded-22 shadow-hero-box py-4 px-5 absolute top-24 -right-20 xl:inline-block hidden">
                 <p className="text-lg font-bold text-white">{t("hero.instructor2")}</p>
-                <p className="text-base font-medium text-white text-center">
-                  {t("hero.instructor2Role")}
-                </p>
+                <p className="text-base font-medium text-white text-center">{t("hero.instructor2Role")}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modal for full text */}
+      {/* === Full Text Modal === */}
       {showFullText && (
-        <div
-          onClick={closeModal}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-        >
+        <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl w-[70vw] max-w-none mx-4 relative animate-fadeIn font-sans text-base text-SlateBlueText"
-          // Add here the same font class used in the site, e.g. font-sans or font-primary
+            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl w-[70vw] mx-4 relative animate-fadeIn font-sans text-base text-SlateBlueText"
           >
-            <h2 className="text-2xl font-bold text-[#8c52ff] mb-4">
-              {t("hero.title")}
-            </h2>
-            <p className="text-base text-gray-700 dark:text-gray-200 leading-relaxed">
-              {fullText}
-            </p>
-            <button
-              onClick={closeModal}
-              className="absolute top-3 right-3 text-[#8c52ff] text-xl font-bold hover:opacity-80"
-            >
-              ×
-            </button>
+            <h2 className="text-2xl font-bold text-[#8c52ff] mb-4">{t("hero.title")}</h2>
+            <p className="text-base text-gray-700 dark:text-gray-200 leading-relaxed">{fullText}</p>
+            <button onClick={closeModal} className="absolute top-3 right-3 text-[#8c52ff] text-xl font-bold hover:opacity-80">×</button>
           </div>
         </div>
       )}
 
-      {/* Modal for video demo */}
+      {/* === Video Modal === */}
       {showVideo && (
-        <div
-          onClick={closeModal}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-        >
+        <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl w-[70vw] max-w-none mx-4 relative animate-fadeIn"
+            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl w-[70vw] mx-4 relative animate-fadeIn"
           >
-            <h2 className="text-2xl font-bold text-[#8c52ff] mb-4">
-              {t("hero.watchDemo")}
-            </h2>
+            <h2 className="text-2xl font-bold text-[#8c52ff] mb-4">{t("hero.watchDemo")}</h2>
             <div className="relative pb-[56.25%] h-0 overflow-hidden rounded">
               <iframe
                 src="https://www.youtube.com/embed/p1CrKwmY_ps?autoplay=1"
@@ -174,14 +145,22 @@ const Hero = () => {
                 allowFullScreen
                 title="Code School Demo"
               />
-
             </div>
-            <button
-              onClick={closeModal}
-              className="absolute top-3 right-3 text-[#8c52ff] text-xl font-bold hover:opacity-80"
-            >
-              ×
-            </button>
+            <button onClick={closeModal} className="absolute top-3 right-3 text-[#8c52ff] text-xl font-bold hover:opacity-80">×</button>
+          </div>
+        </div>
+      )}
+
+      {/* === New Popup for "Browse Courses" === */}
+      {showPlanPopup && (
+        <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-darkmode p-8 rounded-2xl shadow-2xl w-[60vw] mx-4 relative animate-fadeIn text-center"
+          >
+            <h2 className="text-3xl font-extrabold text-[#8c52ff] mb-4">الخطة القادمة</h2>
+            <p className="text-lg text-gray-700 dark:text-gray-200 mb-4">Soon in Next Plan</p>
+            <button onClick={closeModal} className="mt-4 px-6 py-2 bg-[#8c52ff] text-white rounded-lg font-semibold hover:opacity-80">تمام</button>
           </div>
         </div>
       )}

@@ -88,7 +88,7 @@ const Upcoming = () => {
           const now = new Date();
           // تعيين الوقت إلى بداية اليوم للمقارنة الصحيحة
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          
+
           const upcoming = (result.data || [])
             .filter((event: EventItem) => {
               const eventDate = new Date(event.date);

@@ -1388,6 +1388,101 @@ const ar = {
     "تم التسجيل بنجاح! يمكنك تسجيل الدخول يدوياً.",
 
   "auth.autoLoginSuccess": "تم تسجيل الدخول تلقائياً بنجاح!",
+
+  "eventTicket.price": "السعر",
+  "eventTicket.planName": "اسم الباقة",
+  "eventTicket.billingPeriod": "مدة الاشتراك",
+
+  "pricing.confirmSubscription": "تأكيد الاشتراك",
+  "pricing.whatsappMessage":
+    "سيتم التواصل معك عبر الواتساب لإكمال عملية الاشتراك",
+  "pricing.planDetails": "تفاصيل الخطة:",
+  "pricing.planPrice": "السعر:",
+  "pricing.planDuration": "المدة:",
+  "pricing.monthly": "شهري",
+  "pricing.yearly": "سنوي",
+  "pricing.openWhatsApp": "فتح الواتساب",
+  "pricing.openWhatsAppLoding": "جاري التحميل...",
+  "pricing.popular": "شائع",
+  "pricing.off": "خصم",
+  "highlight.clickToWatch": "اضغط للمشاهدة",
+  "highlight.allVideos": "كل الفيديوهات",
+
+  "dashboard.sectionImages": "صور الأقسام",
+  "dashboard.manageSectionImages": "إدارة صور الأقسام",
+  "dashboard.uploadSectionImage": "رفع صورة قسم",
+  "dashboard.editSectionImage": "تعديل صورة القسم",
+
+  "sectionImages.management": "إدارة صور الأقسام",
+  "sectionImages.managementDescription":
+    "إدارة الصور للأقسام المختلفة في موقعك. رفع وتنظيم الصور لأقسام التذاكر وصفحات الفعاليات والمزيد.",
+  "sectionImages.addNew": "إضافة صورة جديدة",
+  "sectionImages.totalImages": "إجمالي الصور",
+  "sectionImages.activeImages": "الصور النشطة",
+  "sectionImages.arabicImages": "الصور العربية",
+  "sectionImages.englishImages": "الصور الإنجليزية",
+  "sectionImages.searchPlaceholder":
+    "البحث باسم القسم، النص البديل، أو الوصف...",
+  "sectionImages.allLanguages": "جميع اللغات",
+  "sectionImages.allStatuses": "جميع الحالات",
+  "sectionImages.active": "نشط",
+  "sectionImages.inactive": "غير نشط",
+
+  "sectionImages.status.active": "نشط",
+  "sectionImages.status.inactive": "غير نشط",
+
+  "sectionImages.deleteConfirm": "هل أنت متأكد من حذف هذه الصورة؟",
+  "sectionImages.deleteWarning": "لا يمكن التراجع عن هذا الإجراء.",
+  "sectionImages.deletedSuccess": "تم حذف الصورة بنجاح",
+  "sectionImages.deleteFailed": "فشل في حذف الصورة",
+  "sectionImages.deleteError": "خطأ في حذف الصورة",
+  "sectionImages.failedToLoad": "فشل في تحميل الصور",
+  "sectionImages.savedSuccess": "تم حفظ الصورة بنجاح",
+  "sectionImages.statusUpdated": "تم تحديث الحالة بنجاح",
+  "sectionImages.statusUpdateFailed": "فشل في تحديث الحالة",
+  "sectionImages.noResults": "لم يتم العثور على صور",
+  "sectionImages.noImages": "لا توجد صور بعد",
+  "sectionImages.tryDifferentSearch": "حاول تعديل معايير البحث أو الفلاتر.",
+  "sectionImages.createFirst": "أنشئ أول صورة قسم لتعزيز المظهر المرئي لموقعك.",
+  "sectionImages.clearFilters": "مسح الفلاتر",
+  "sectionImages.createFirstButton": "أنشئ أول صورة لك",
+  "sectionImages.editImage": "تعديل الصورة",
+  "sectionImages.createImage": "إنشاء صورة جديدة",
+  "sectionImages.basicInfo": "معلومات الصورة",
+  "sectionImages.basicInfoDescription": "التفاصيل الأساسية عن صورة القسم",
+  "sectionImages.sectionName": "اسم القسم",
+  "sectionImages.language": "اللغة",
+  "sectionImages.imageAlt": "النص البديل للصورة",
+  "sectionImages.imageAltPlaceholder": "نص وصفي لإمكانية الوصول",
+  "sectionImages.description": "الوصف",
+  "sectionImages.descriptionPlaceholder": "وصف اختياري عن هذه الصورة...",
+  "sectionImages.displayOrder": "ترتيب العرض",
+  "sectionImages.displayOrderHint": "الأرقام الأقل تظهر أولاً",
+  "sectionImages.chooseSection": "اختر قسم...",
+  "sectionImages.imageUpload": "رفع الصورة",
+  "sectionImages.imageUploadDescription": "رفع أو تقديم رابط لصورة القسم",
+  "sectionImages.imageUrl": "رابط الصورة",
+  "sectionImages.imageUrlPlaceholder": "https://example.com/image.jpg",
+  "sectionImages.uploadImage": "رفع صورة",
+  "sectionImages.settings": "الإعدادات",
+  "sectionImages.settingsDescription": "رؤية الصورة وحالتها",
+  "sectionImages.activeImage": "الصورة نشطة",
+  "sectionImages.activeDescription": "اجعل هذه الصورة مرئية في القسم المحدد",
+  "sectionImages.updateImage": "تحديث الصورة",
+  "sectionImages.inactiveImages": "الصور غير النشطة",
+
+  // في ملف الترجمات
+
+  "contact.message": "رسالة إضافية",
+  "contact.messagePlaceholder": "أخبرنا المزيد عن استفسارك...",
+  "contact.submitting": "جاري الإرسال...",
+  "contact.successMessage": "تم إرسال طلب الموعد بنجاح!",
+
+  // ... الترجمات الحالية
+  "footer.subscribeSuccess": "تم الاشتراك بنجاح في النشرة البريدية!",
+  "footer.subscribing": "جاري الاشتراك...",
+
+  
 };
 
 export default ar;

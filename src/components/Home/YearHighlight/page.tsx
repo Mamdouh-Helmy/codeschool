@@ -6,21 +6,37 @@ import Link from "next/link";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Slider from "react-slick";
-import { Play, Users, Heart, Target, Award, X } from "lucide-react";
+import { Play, Users, Heart, Target, Award, X, Video } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
 
 const Highlight = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAllVideosModalOpen, setIsAllVideosModalOpen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [currentVideo, setCurrentVideo] = useState("");
   const { t } = useI18n();
 
-  const openModal = (e: { preventDefault: () => void }) => {
-    e.preventDefault();
+  const openModal = (videoUrl: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setCurrentVideo(videoUrl);
     setIsModalOpen(true);
+  };
+
+  const openAllVideosModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsAllVideosModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
+    setCurrentVideo("");
+  };
+
+  const closeAllVideosModal = () => {
+    setIsAllVideosModalOpen(false);
   };
 
   const stats = [
@@ -31,9 +47,39 @@ const Highlight = () => {
   ];
 
   const slides = [
-    { image: "/images/highlight/slide-1.png", title: t("highlight.slides.showcase") },
-    { image: "/images/highlight/slide-1.png", title: t("highlight.slides.competition") },
-    { image: "/images/highlight/slide-1.png", title: t("highlight.slides.graduation") }
+    {
+      image: "/images/highlight/slide-1.png",
+      title: t("highlight.slides.showcase"),
+      videoUrl: "https://www.facebook.com/reel/1241224360842408"
+    },
+    {
+      image: "/images/highlight/slide-1.png",
+      title: t("highlight.slides.competition"),
+      videoUrl: "https://www.facebook.com/reel/846940067682949"
+    },
+    {
+      image: "/images/highlight/slide-1.png",
+      title: t("highlight.slides.graduation"),
+      videoUrl: "https://youtube.com/shorts/5N1bYifaCws?si=iy3qO9nS0WXymkM2"
+    }
+  ];
+
+  const allVideos = [
+    {
+      title: t("highlight.slides.showcase"),
+      videoUrl: "https://www.facebook.com/reel/1241224360842408",
+      thumbnail: "/images/highlight/slide-1.png"
+    },
+    {
+      title: t("highlight.slides.competition"),
+      videoUrl: "https://www.facebook.com/reel/846940067682949",
+      thumbnail: "/images/highlight/slide-1.png"
+    },
+    {
+      title: t("highlight.slides.graduation"),
+      videoUrl: "https://youtube.com/shorts/5N1bYifaCws?si=iy3qO9nS0WXymkM2",
+      thumbnail: "/images/highlight/slide-1.png"
+    },
   ];
 
   var settings = {
@@ -48,12 +94,11 @@ const Highlight = () => {
     pauseOnHover: true,
     beforeChange: (current: number, next: number) => setCurrentSlide(next),
     customPaging: (i: number) => (
-      <div 
-        className={`w-3 h-3 rounded-full transition-all duration-300 ${
-          i === currentSlide 
-            ? "bg-primary scale-125" 
-            : "bg-primary/30 hover:bg-primary/50"
-        }`} 
+      <div
+        className={`w-3 h-3 rounded-full transition-all duration-300 ${i === currentSlide
+          ? "bg-primary scale-125"
+          : "bg-primary/30 hover:bg-primary/50"
+          }`}
       />
     ),
     appendDots: (dots: React.ReactNode) => (
@@ -77,13 +122,71 @@ const Highlight = () => {
     ],
   };
 
+  // دالة محسنة لتحويل الروابط إلى embed
+  const getEmbedUrl = (url: string) => {
+    console.log("Original URL:", url); // للديباجنج
+
+    // فيسبوك رييل
+    if (url.includes('facebook.com/reel')) {
+      const videoId = url.split('/reel/')[1];
+      const embedUrl = `https://www.facebook.com/plugins/video.php?href=https%3A%2F%2Fwww.facebook.com%2Freel%2F${videoId}&show_text=0&width=500`;
+      console.log("Facebook Embed URL:", embedUrl);
+      return embedUrl;
+    }
+    // فيسبوك عادي
+    else if (url.includes('facebook.com/')) {
+      const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=0&width=500`;
+      console.log("Facebook Embed URL:", embedUrl);
+      return embedUrl;
+    }
+    // يوتيوب شورتس
+    else if (url.includes('youtube.com/shorts/')) {
+      const videoId = url.split('/shorts/')[1]?.split('?')[0];
+      const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      console.log("YouTube Shorts Embed URL:", embedUrl);
+      return embedUrl;
+    }
+    // يوتيوب عادي
+    else if (url.includes('youtube.com/watch?v=')) {
+      const videoId = url.split('v=')[1]?.split('&')[0];
+      const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      console.log("YouTube Embed URL:", embedUrl);
+      return embedUrl;
+    }
+    // youtu.be
+    else if (url.includes('youtu.be/')) {
+      const videoId = url.split('youtu.be/')[1]?.split('?')[0];
+      const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      console.log("YouTube Embed URL:", embedUrl);
+      return embedUrl;
+    }
+    // تيك توك
+    else if (url.includes('tiktok.com')) {
+      const videoId = url.split('/video/')[1]?.split('?')[0];
+      const embedUrl = `https://www.tiktok.com/embed/v2/${videoId}`;
+      console.log("TikTok Embed URL:", embedUrl);
+      return embedUrl;
+    }
+
+    console.log("Returning original URL:", url);
+    return url;
+  };
+
+  // دالة لمعرفة نوع الفيديو لعرض رسالة إذا لم يكن مدعوم
+  const getVideoType = (url: string) => {
+    if (url.includes('facebook.com')) return 'facebook';
+    if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
+    if (url.includes('tiktok.com')) return 'tiktok';
+    return 'unknown';
+  };
+
   return (
     <>
       <section className="bg-gradient-to-br from-IcyBreeze via-white to-PaleCyan dark:bg-gradient-to-br dark:from-darklight dark:via-darkmode dark:to-darklight relative overflow-hidden">
         {/* Background Elements */}
         <div className="absolute top-20 left-20 w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-20 right-20 w-80 h-80 bg-primary/5 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        
+
         <div className="container relative z-10">
           <div className="grid lg:grid-cols-12 grid-cols-1 items-center gap-12 lg:gap-20 max-w-[125rem] mx-auto">
             {/* Content Section */}
@@ -101,7 +204,7 @@ const Highlight = () => {
                   {t("highlight.title.main")} <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/70">{t("highlight.title.highlighted")}</span>
                 </h2>
               </div>
-              
+
               <p className="text-xl font-normal text-SlateBlueText dark:text-gray-300 max-w-2xl lg:pt-6 pt-4 lg:pb-10 pb-8 leading-relaxed">
                 {t("highlight.description")}
               </p>
@@ -111,7 +214,7 @@ const Highlight = () => {
                 {stats.map((stat, index) => {
                   const IconComponent = stat.icon;
                   return (
-                    <div 
+                    <div
                       key={index}
                       className="flex items-center gap-4 p-4 bg-white/60 dark:bg-darkmode/60 rounded-2xl backdrop-blur-sm border border-white/30 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105"
                     >
@@ -129,14 +232,16 @@ const Highlight = () => {
                 })}
               </div>
 
-              {/* CTA Button */}
-              <Link
-                href="/success-stories"
-                className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary to-primary/80 text-white text-lg font-semibold rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:from-primary hover:to-primary"
-              >
-                <span>{t("highlight.viewStories")}</span>
-                <Play className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              </Link>
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4">
+                <button
+                  onClick={openAllVideosModal}
+                  className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary to-primary/80 text-white text-lg font-semibold rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:from-primary hover:to-primary"
+                >
+                  <span>{t("highlight.viewStories")}</span>
+                  <Play className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                </button>
+              </div>
             </div>
 
             {/* Slider Section */}
@@ -150,7 +255,10 @@ const Highlight = () => {
                 <Slider {...settings}>
                   {slides.map((slide, index) => (
                     <div key={index} className="outline-none px-2">
-                      <div className="relative group rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500">
+                      <div
+                        className="relative group rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500 cursor-pointer"
+                        onClick={(e) => openModal(slide.videoUrl, e)}
+                      >
                         <div className="relative aspect-[4/3] rounded-3xl overflow-hidden">
                           <Image
                             src={slide.image}
@@ -159,10 +267,10 @@ const Highlight = () => {
                             quality={95}
                             className="object-cover transition-transform duration-700 group-hover:scale-110"
                           />
-                          
+
                           {/* Gradient Overlay */}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
-                          
+
                           {/* Content Overlay */}
                           <div className="absolute bottom-6 left-6 right-6">
                             <h3 className="text-2xl font-bold text-white mb-2">
@@ -179,13 +287,12 @@ const Highlight = () => {
                           </div>
 
                           {/* Play Button */}
-                          <button
-                            onClick={openModal}
+                          <div
                             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 group/play bg-white/95 hover:bg-white text-primary rounded-full w-16 h-16 lg:w-20 lg:h-20 flex items-center justify-center shadow-2xl transition-all duration-500 hover:scale-110 hover:shadow-3xl border border-primary/20"
                             aria-label={t("highlight.playVideo")}
                           >
                             <Play className="w-6 h-6 lg:w-8 lg:h-8 fill-primary ml-1 group-hover/play:scale-110 transition-transform duration-300" />
-                          </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -196,7 +303,7 @@ const Highlight = () => {
           </div>
         </div>
 
-        {/* Video Modal */}
+        {/* Single Video Modal */}
         {isModalOpen && (
           <div className="fixed inset-0 w-full h-full bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="relative bg-white dark:bg-darkmode rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden">
@@ -213,25 +320,96 @@ const Highlight = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
+
               {/* Video Container */}
               <div className="p-6">
                 <div className="relative aspect-video rounded-2xl overflow-hidden bg-gray-100 dark:bg-dark_input">
-                  <iframe
-                    className="w-full h-full"
-                    src="https://www.youtube.com/embed/zzBxZeOTuDw?si=y_4N9SeeNXiSofCG"
-                    title="YouTube video player"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    loading="lazy"
-                  />
+                  {getVideoType(currentVideo) === 'youtube' || getVideoType(currentVideo) === 'facebook' ? (
+                    <iframe
+                      className="w-full h-full"
+                      src={getEmbedUrl(currentVideo)}
+                      title="Video player"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                      <Video className="w-16 h-16 text-primary mb-4" />
+                      <h4 className="text-xl font-bold text-MidnightNavyText dark:text-white mb-2">
+                        الفيديو غير متاح للتشغيل المدمج
+                      </h4>
+                      <p className="text-SlateBlueText dark:text-gray-400 mb-4">
+                        يمكنك مشاهدة هذا الفيديو عبر زيارة الرابط الأصلي
+                      </p>
+                      <a
+                        href={currentVideo}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/80 transition-colors"
+                      >
+                        مشاهدة على المنصة الأصلية
+                      </a>
+                    </div>
+                  )}
                 </div>
-                
-                {/* Video Description */}
-                <div className="mt-6 text-center">
-                  <p className="text-lg text-SlateBlueText dark:text-gray-300">
-                    {t("highlight.modalDescription")}
-                  </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* All Videos Modal */}
+        {isAllVideosModalOpen && (
+          <div className="fixed inset-0 w-full h-full bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="relative bg-white dark:bg-darkmode rounded-3xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-PowderBlueBorder dark:border-dark_border">
+                <h3 className="text-2xl font-bold text-MidnightNavyText dark:text-white">
+                  {t("highlight.allVideos") || "All Success Stories"}
+                </h3>
+                <button
+                  onClick={closeAllVideosModal}
+                  className="w-10 h-10 bg-primary/10 hover:bg-primary/20 text-primary rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110"
+                  aria-label={t("common.close")}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Videos Grid */}
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {allVideos.map((video, index) => (
+                    <div
+                      key={index}
+                      className="group bg-white dark:bg-dark_input rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 cursor-pointer"
+                      onClick={(e) => {
+                        openModal(video.videoUrl, e);
+                        closeAllVideosModal();
+                      }}
+                    >
+                      <div className="relative aspect-video overflow-hidden">
+                        <Image
+                          src={video.thumbnail}
+                          alt={video.title}
+                          fill
+                          className="object-cover transition-transform duration-500 group-hover:scale-110"
+                        />
+                        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all duration-300" />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 group-hover:bg-white text-primary rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all duration-300 group-hover:scale-110">
+                          <Play className="w-5 h-5 fill-primary ml-0.5" />
+                        </div>
+                      </div>
+                      <div className="p-4">
+                        <h4 className="font-semibold text-MidnightNavyText dark:text-white text-lg mb-2">
+                          {video.title}
+                        </h4>
+                        <p className="text-sm text-SlateBlueText dark:text-gray-400">
+                          {t("highlight.clickToWatch") || "Click to watch"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

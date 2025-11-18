@@ -92,7 +92,7 @@ const YoungStars = () => {
   const activeProject = thumbnails.find((p) => p._id === activeId);
 
   return (
-    <section className="bg-[#ffbd59]/20 dark:bg-darklight relative overflow-hidden">
+    <section className="bg-white/20 dark:bg-darklight relative overflow-hidden">
       <div className="container mx-auto px-4 py-12 lg:py-20">
         <div className="grid lg:grid-cols-2 grid-cols-1 items-center gap-12 lg:gap-16 xl:gap-24">
           {/* ===== Main Slider ===== */}

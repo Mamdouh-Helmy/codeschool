@@ -63,8 +63,8 @@ const BoxSlider = () => {
   };
 
   const toArabicNumbers = (input: string | number) => {
-    const map = ["٠","١","٢","٣","٤","٥","٦","٧","٨","٩"];
-    return String(input).replace(/\d/g, d => map[Number(d)]);
+    const map = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+    return String(input).replace(/\d/g, (d) => map[Number(d)]);
   };
 
   const formatDate = (dateStr: string) => {
@@ -79,25 +79,37 @@ const BoxSlider = () => {
     if (isArabic) {
       day = toArabicNumbers(day);
       year = toArabicNumbers(year);
-      month = month.replace(/\d/g, d => toArabicNumbers(d));
+      month = month.replace(/\d/g, (d) => toArabicNumbers(d));
     }
 
     return { day, month, year };
   };
 
   const getEventStatus = (eventDateStr: string) => {
-    const eventDate = new Date(eventDateStr);
+    const [year, month, day] = eventDateStr.split("-").map(Number);
+    const eventDate = new Date(year, month - 1, day);
+    eventDate.setHours(0, 0, 0, 0); // تجاهل الوقت
+
     const now = new Date();
+    now.setHours(0, 0, 0, 0); // تجاهل الوقت
 
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfEvent = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+    let status: "past" | "today" | "soon";
 
-    const msDiff = startOfEvent.getTime() - startOfToday.getTime();
-    const daysDiff = Math.round(msDiff / (1000 * 3600 * 24));
+    if (eventDate.getTime() < now.getTime()) {
+      status = "past";
+    } else if (eventDate.getTime() === now.getTime()) {
+      status = "today";
+    } else {
+      status = "soon";
+    }
 
-    if (daysDiff === 0) return { status: "today" as const };
-    if (daysDiff >= 1 && daysDiff <= 12) return { status: "soon" as const };
-    return { status: null as null };
+    console.log(
+      "EVENT DATE:", eventDate.toDateString(),
+      "TODAY:", now.toDateString(),
+      "STATUS:", status
+    );
+
+    return { status };
   };
 
   return (
@@ -112,18 +124,39 @@ const BoxSlider = () => {
             const { day, month, year } = formatDate(event.date);
             const { status } = getEventStatus(event.date);
 
-            const isHighlighted = status === "today" || status === "soon";
+            let boxClasses = "";
+            let dayClasses = "";
+            let dateClasses = "";
 
-            // label للـ h5
-            const labelForDay = status === "today" ? t("upcoming.today") || (isArabic ? "اليوم" : "Today") : day;
+            if (status === "past") {
+              boxClasses = "bg-gray-300 dark:bg-gray-700 opacity-90 cursor-default";
+              dayClasses = "text-gray-500";
+              dateClasses = "text-gray-500";
+            } else if (status === "today") {
+              boxClasses = "bg-IcyBreeze dark:bg-darklight border-2 border-primary shadow-lg";
+              dayClasses = "text-primary";
+              dateClasses = "text-primary";
+            } else if (status === "soon") {
+              boxClasses =
+                "bg-IcyBreeze dark:bg-darklight hover:bg-primary transition-all duration-300";
+              dayClasses = "text-gray-400 group-hover:text-white";
+              dateClasses = "text-gray-400 group-hover:text-white";
+            }
 
-            // badge صغيرة
-            const smallBadge = status === "soon" ? t("upcoming.comingSoon") || (isArabic ? "قريباً" : "Soon") : null;
+            const labelForDay =
+              status === "today"
+                ? t("upcoming.today") || (isArabic ? "اليوم" : "Today")
+                : day;
+
+            const smallBadge =
+              status === "soon"
+                ? t("upcoming.comingSoon") || (isArabic ? "قريباً" : "Soon")
+                : null;
 
             return (
               <div key={event._id || `${index}-${event.date}`} className="px-2">
                 <div
-                  className={`bg-IcyBreeze dark:bg-darklight pt-5 pb-7 rounded-lg text-center group transition-all duration-300 relative ${isHighlighted ? "border-2 border-primary shadow-lg" : "hover:bg-primary"}`}
+                  className={`pt-5 pb-7 rounded-lg text-center group relative ${boxClasses}`}
                 >
                   {smallBadge && (
                     <div className="absolute -top-0 -right-2 bg-primary text-white text-xs px-2 py-1 rounded-full font-semibold">
@@ -131,11 +164,13 @@ const BoxSlider = () => {
                     </div>
                   )}
 
-                  <h5 className={`text-[34px] leading-[2.76rem] font-normal ${isHighlighted ? "text-primary group-hover:text-primary-dark" : "text-gray-400 group-hover:text-white"}`}>
+                  <h5
+                    className={`text-[34px] leading-[2.76rem] font-normal ${dayClasses}`}
+                  >
                     {labelForDay}
                   </h5>
 
-                  <p className={`text-xs font-medium ${isHighlighted ? "text-primary group-hover:text-primary-dark" : "text-gray-400 group-hover:text-white"}`}>
+                  <p className={`text-xs font-medium ${dateClasses}`}>
                     {month} {year}
                   </p>
                 </div>

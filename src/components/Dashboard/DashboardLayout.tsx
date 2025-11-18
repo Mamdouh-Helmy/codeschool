@@ -63,6 +63,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       href: "/admin/schedules",
       icon: "ion:time-outline",
     },
+    // رابط جديد لإدارة الصور
+    {
+      label: t('dashboard.sectionImages') || "Section Images",
+      href: "/admin/sectionImages",
+      icon: "ion:images-outline",
+    },
     {
       label: t('nav.settings') || "Settings",
       href: "/admin/settings",
