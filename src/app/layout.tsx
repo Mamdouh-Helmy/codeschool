@@ -43,27 +43,27 @@ export default async function RootLayout({
                   <Aoscompo>
                     <NextTopLoader />
 
-                    {/* تم نقل Toaster خارج ThemeProvider لتجنب مشاكل الـ theme */}
-                    <Toaster
-                      position="top-right"
-                      containerStyle={{ zIndex: 9999 }}
-                      toastOptions={{
-                        className:
-                          "bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none p-3 max-w-404",
-                        style: { maxWidth: "25rem" },
-                        success: {
+
+
+                    <SiteWrapper>   {/* تم نقل Toaster خارج ThemeProvider لتجنب مشاكل الـ theme */}
+                      <Toaster
+                       
+                        containerStyle={{ zIndex: 9999 }}
+                        toastOptions={{
                           className:
-                            "bg-primary text-white rounded-14 shadow-sm p-3 max-w-404",
-                        },
-                        error: {
-                          className:
-                            "bg-red-600 text-white rounded-14 shadow-sm p-3 max-w-404",
-                        },
-                        duration: 4000,
-                      }}
-                    />
-                    
-                    <SiteWrapper>{children}</SiteWrapper>
+                            "bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none p-3 max-w-404",
+                          style: { maxWidth: "25rem" },
+                          success: {
+                            className:
+                              "bg-primary text-white rounded-14 shadow-sm p-3 max-w-404",
+                          },
+                          error: {
+                            className:
+                              "bg-red-600 text-white rounded-14 shadow-sm p-3 max-w-404",
+                          },
+                          duration: 4000,
+                        }}
+                      /> {children}</SiteWrapper>
                     <WelcomePopupManager />
                   </Aoscompo>
                   <ScrollToTop />
