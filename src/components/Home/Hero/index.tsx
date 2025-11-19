@@ -59,8 +59,8 @@ const Hero = () => {
 
             <div className="flex items-center md:justify-normal lg:justify-center justify-start flex-wrap gap-4">
               {/* === Browse Courses Button with Popup === */}
-              <button
-                onClick={() => setShowPlanPopup(true)}
+              <Link
+                href="/curriculum"
                 data-aos="fade-up"
                 data-aos-delay="500"
                 data-aos-duration="1000"
@@ -70,7 +70,8 @@ const Hero = () => {
                   <i className="bg-[url('/images/hero/tickets.svg')] bg-no-repeat bg-contain w-6 h-6 inline-block filter brightness-0"></i>
                   {t("hero.browseCourses")}
                 </span>
-              </button>
+              </Link>
+
 
               <button
                 onClick={() => setShowVideo(true)}

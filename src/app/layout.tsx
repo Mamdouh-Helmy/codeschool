@@ -47,7 +47,7 @@ export default async function RootLayout({
 
                     <SiteWrapper>   {/* تم نقل Toaster خارج ThemeProvider لتجنب مشاكل الـ theme */}
                       <Toaster
-                       
+
                         containerStyle={{ zIndex: 9999 }}
                         toastOptions={{
                           className:

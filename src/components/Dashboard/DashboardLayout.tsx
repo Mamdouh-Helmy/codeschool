@@ -68,12 +68,20 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       label: t('dashboard.sectionImages') || "Section Images",
       href: "/admin/sectionImages",
       icon: "ion:images-outline",
+      badge: createBadge(t('common.new') || "New"),
+    },
+    {
+      label: t('nav.curriculum') || "Curriculum",
+      href: "/admin/curriculum",
+      icon: "ion:school-outline",
+      badge: createBadge(t('common.new') || "New"),
     },
     {
       label: t('nav.settings') || "Settings",
       href: "/admin/settings",
       icon: "ion:settings-outline",
     },
+
   ];
 
   const activePath = useMemo(() => {
