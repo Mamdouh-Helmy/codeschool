@@ -1,4 +1,4 @@
-// components/Curriculum/AgeCategoryForm.jsx
+// components/Curriculum/AgeCategoryForm.tsx
 'use client';
 import { useState, useEffect } from 'react';
 import {
@@ -10,8 +10,31 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const AgeCategoryForm = ({ initial, onClose, onSaved, t }) => {
-    const [form, setForm] = useState(() => ({
+interface AgeRange {
+    en: string;
+    ar: string;
+}
+
+interface AgeCategory {
+    _id?: string;
+    age_range: AgeRange;
+    name_en: string;
+    name_ar: string;
+    description_en: string;
+    description_ar: string;
+    order: number;
+    icon: string;
+}
+
+interface AgeCategoryFormProps {
+    initial?: AgeCategory;
+    onClose: () => void;
+    onSaved: () => void;
+    t: (key: string) => string;
+}
+
+const AgeCategoryForm = ({ initial, onClose, onSaved, t }: AgeCategoryFormProps) => {
+    const [form, setForm] = useState<AgeCategory>(() => ({
         age_range: initial?.age_range || { en: '', ar: '' },
         name_en: initial?.name_en || '',
         name_ar: initial?.name_ar || '',
@@ -21,10 +44,10 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }) => {
         icon: initial?.icon || '👶',
     }));
 
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState<boolean>(false);
 
     // كل الفئات العمرية المحددة في الموديل باللغتين
-    const ageRanges = [
+    const ageRanges: AgeRange[] = [
         { 
             en: '6-8 years', 
             ar: '6-8 سنوات' 
@@ -55,20 +78,20 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }) => {
         }
     ];
 
-    const icons = ['👶', '👦', '👧', '🧒', '🧑', '👨', '👩', '🚀', '💻', '🎮', '📚', '🎓'];
+    const icons: string[] = ['👶', '👦', '👧', '🧒', '🧑', '👨', '👩', '🚀', '💻', '🎮', '📚', '🎓'];
 
-    const onChange = (field, value) => {
+    const onChange = (field: keyof AgeCategory, value: any) => {
         setForm(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleAgeRangeChange = (selectedRange) => {
+    const handleAgeRangeChange = (selectedRange: AgeRange) => {
         setForm(prev => ({ 
             ...prev, 
             age_range: selectedRange 
         }));
     };
 
-    const submit = async (e) => {
+    const submit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
@@ -89,7 +112,7 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }) => {
                 name_ar: form.name_ar,
                 description_en: form.description_en,
                 description_ar: form.description_ar,
-                order: parseInt(form.order),
+                order: parseInt(form.order.toString()),
                 icon: form.icon,
             };
 
@@ -126,15 +149,15 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }) => {
             const result = JSON.parse(responseText);
 
             if (result.success) {
-                // toast.success(result.message || 'Category saved successfully');
                 onSaved();
                 onClose();
             } else {
                 throw new Error(result.message || 'Operation failed');
             }
-        } catch (err) {
+        } catch (err: unknown) {
             console.error('Error saving category:', err);
-            toast.error(err.message || 'An error occurred while saving.');
+            const errorMessage = err instanceof Error ? err.message : 'An error occurred while saving.';
+            toast.error(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -200,7 +223,7 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }) => {
                         <input
                             type="number"
                             value={form.order}
-                            onChange={(e) => onChange('order', e.target.value)}
+                            onChange={(e) => onChange('order', parseInt(e.target.value))}
                             min="1"
                             max="10"
                             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"

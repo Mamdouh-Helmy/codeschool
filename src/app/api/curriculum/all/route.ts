@@ -22,7 +22,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request) {
+export async function POST(request: Request) {
   try {
     await connectDB();
     const body = await request.json();
@@ -45,8 +45,24 @@ export async function POST(request) {
       data: newStage,
       message: 'Curriculum stage created successfully'
     }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating curriculum stage:', error);
+    
+    // معالجة أخطاء محددة
+    if (error.name === 'ValidationError') {
+      return NextResponse.json(
+        { success: false, message: 'Validation error', errors: error.errors },
+        { status: 400 }
+      );
+    }
+    
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { success: false, message: 'Curriculum stage with this order index already exists' },
+        { status: 409 }
+      );
+    }
+    
     return NextResponse.json(
       { success: false, message: 'Failed to create curriculum stage' },
       { status: 500 }

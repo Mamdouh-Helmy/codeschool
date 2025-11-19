@@ -1,13 +1,36 @@
-// app/api/categories/[id]/route.js
+// app/api/categories/[id]/route.ts
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import AgeCategory from '../../../models/AgeCategory';
 import mongoose from 'mongoose';
 
-export async function GET(request, { params }) {
+interface Params {
+  id: string;
+}
+
+interface AgeRange {
+  en: string;
+  ar: string;
+}
+
+interface CategoryBody {
+  age_range?: AgeRange;
+  description?: {
+    en?: string;
+    ar?: string;
+  };
+  color?: string;
+  order?: number;
+  status?: string;
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<Params> }
+) {
   try {
     await connectDB();
-    const { id } = params;
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -38,11 +61,14 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PUT(request, { params }) {
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<Params> }
+) {
   try {
     await connectDB();
-    const { id } = params;
-    const body = await request.json();
+    const { id } = await params;
+    const body: CategoryBody = await request.json();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -98,7 +124,7 @@ export async function PUT(request, { params }) {
       data: updatedCategory,
       message: 'Category updated successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating category:', error);
     
     if (error.code === 11000) {
@@ -118,10 +144,13 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function DELETE(request, { params }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<Params> }
+) {
   try {
     await connectDB();
-    const { id } = params;
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(

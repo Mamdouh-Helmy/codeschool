@@ -1,4 +1,4 @@
-// app/api/categories/route.js
+// app/api/categories/route.ts
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import AgeCategory from '../../models/AgeCategory';
@@ -21,7 +21,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request) {
+export async function POST(request: Request) {
   try {
     await connectDB();
     const body = await request.json();
@@ -69,7 +69,7 @@ export async function POST(request) {
       data: newCategory,
       message: 'Category created successfully'
     }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating category:', error);
     
     // معالجة خطأ الـ duplicate key بشكل خاص

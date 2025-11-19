@@ -1,4 +1,4 @@
-// components/Curriculum/CurriculumStageForm.jsx
+// components/Curriculum/CurriculumStageForm.tsx
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import {
@@ -18,8 +18,57 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
-    const [form, setForm] = useState(() => ({
+interface AgeRange {
+    en: string;
+    ar: string;
+}
+
+interface AgeCategory {
+    _id?: string;
+    age_range: AgeRange;
+    name_en: string;
+    name_ar: string;
+    description_en: string;
+    description_ar: string;
+    order: number;
+    icon: string;
+}
+
+interface LanguageType {
+    value: string;
+    en: string;
+    ar: string;
+}
+
+interface CurriculumStage {
+    _id?: string;
+    age_category_id?: string;
+    age_range: AgeRange | string;
+    name_en?: string;
+    name_ar?: string;
+    title_en: string;
+    title_ar: string;
+    platform: string;
+    language_type: LanguageType | string;
+    duration: string;
+    lessons_count: number;
+    projects_count: number;
+    description_en: string;
+    description_ar: string;
+    media_url?: string;
+    order_index: number;
+}
+
+interface CurriculumStageFormProps {
+    initial?: CurriculumStage;
+    categories: AgeCategory[];
+    onClose: () => void;
+    onSaved: () => void;
+    t: (key: string) => string;
+}
+
+const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }: CurriculumStageFormProps) => {
+    const [form, setForm] = useState<CurriculumStage>(() => ({
         age_category_id: initial?.age_category_id || '',
         age_range: initial?.age_range || { en: '', ar: '' },
         name_en: initial?.name_en || '',  // من AgeCategory
@@ -37,30 +86,30 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
         order_index: initial?.order_index || 1,
     }));
 
-    const [loading, setLoading] = useState(false);
-    const [imagePreview, setImagePreview] = useState('');
+    const [loading, setLoading] = useState<boolean>(false);
+    const [imagePreview, setImagePreview] = useState<string>('');
 
     // States for dropdown functionality
-    const [platforms, setPlatforms] = useState(['Code.org', 'Scratch', 'Replit', 'Python', 'JavaScript', 'HTML/CSS']);
-    const [durations, setDurations] = useState(['4 weeks', '6 weeks', '8 weeks', '12 weeks', '3 months', '6 months', '1 year']);
+    const [platforms, setPlatforms] = useState<string[]>(['Code.org', 'Scratch', 'Replit', 'Python', 'JavaScript', 'HTML/CSS']);
+    const [durations, setDurations] = useState<string[]>(['4 weeks', '6 weeks', '8 weeks', '12 weeks', '3 months', '6 months', '1 year']);
 
     // Platform dropdown states
-    const [platformSearch, setPlatformSearch] = useState('');
-    const [showPlatformDropdown, setShowPlatformDropdown] = useState(false);
-    const [customPlatforms, setCustomPlatforms] = useState([]);
+    const [platformSearch, setPlatformSearch] = useState<string>('');
+    const [showPlatformDropdown, setShowPlatformDropdown] = useState<boolean>(false);
+    const [customPlatforms, setCustomPlatforms] = useState<string[]>([]);
 
     // Duration dropdown states
-    const [durationSearch, setDurationSearch] = useState('');
-    const [showDurationDropdown, setShowDurationDropdown] = useState(false);
-    const [customDurations, setCustomDurations] = useState([]);
+    const [durationSearch, setDurationSearch] = useState<string>('');
+    const [showDurationDropdown, setShowDurationDropdown] = useState<boolean>(false);
+    const [customDurations, setCustomDurations] = useState<string[]>([]);
 
-    const platformDropdownRef = useRef(null);
-    const durationDropdownRef = useRef(null);
-    const platformInputRef = useRef(null);
-    const durationInputRef = useRef(null);
+    const platformDropdownRef = useRef<HTMLDivElement>(null);
+    const durationDropdownRef = useRef<HTMLDivElement>(null);
+    const platformInputRef = useRef<HTMLInputElement>(null);
+    const durationInputRef = useRef<HTMLInputElement>(null);
 
     // تعريف language_types باللغتين
-    const languageTypes = [
+    const languageTypes: LanguageType[] = [
         {
             value: 'Block',
             en: 'Block Programming',
@@ -123,25 +172,25 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                 // إذا كانت البيانات تحتوي على language_type كـ object
                 else if (typeof initial.language_type === 'object') {
                     // إذا كان object بدون value، نضيف value
-                    if (!initial.language_type.value) {
+                    if (!(initial.language_type as LanguageType).value) {
                         const langType = languageTypes.find(lang =>
-                            lang.en === initial.language_type.en ||
-                            lang.ar === initial.language_type.ar
+                            lang.en === (initial.language_type as any).en ||
+                            lang.ar === (initial.language_type as any).ar
                         );
                         if (langType) {
                             setForm(prev => ({
                                 ...prev,
                                 language_type: {
                                     value: langType.value,
-                                    en: initial.language_type.en,
-                                    ar: initial.language_type.ar
+                                    en: (initial.language_type as any).en,
+                                    ar: (initial.language_type as any).ar
                                 }
                             }));
                         }
                     } else {
                         setForm(prev => ({
                             ...prev,
-                            language_type: initial.language_type
+                            language_type: initial.language_type as LanguageType
                         }));
                     }
                 }
@@ -151,11 +200,11 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
 
     // Handle click outside for dropdowns
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (platformDropdownRef.current && !platformDropdownRef.current.contains(event.target)) {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (platformDropdownRef.current && !platformDropdownRef.current.contains(event.target as Node)) {
                 setShowPlatformDropdown(false);
             }
-            if (durationDropdownRef.current && !durationDropdownRef.current.contains(event.target)) {
+            if (durationDropdownRef.current && !durationDropdownRef.current.contains(event.target as Node)) {
                 setShowDurationDropdown(false);
             }
         };
@@ -166,12 +215,12 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
         };
     }, []);
 
-    const onChange = (field, value) => {
+    const onChange = (field: keyof CurriculumStage, value: any) => {
         setForm(prev => ({ ...prev, [field]: value }));
     };
 
     // دالة للتعامل مع اختيار الفئة العمرية
-    const handleAgeCategoryChange = (categoryId) => {
+    const handleAgeCategoryChange = (categoryId: string) => {
         const selectedCategory = categories.find(cat => cat._id === categoryId);
         if (selectedCategory) {
             setForm(prev => ({
@@ -185,7 +234,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
     };
 
     // دالة للتعامل مع اختيار نوع اللغة
-    const handleLanguageTypeChange = (langValue) => {
+    const handleLanguageTypeChange = (langValue: string) => {
         const selectedLang = languageTypes.find(lang => lang.value === langValue);
         if (selectedLang) {
             setForm(prev => ({
@@ -200,13 +249,13 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
     };
 
     // Platform dropdown functions
-    const handlePlatformSelect = (platform) => {
+    const handlePlatformSelect = (platform: string) => {
         onChange('platform', platform);
         setShowPlatformDropdown(false);
         setPlatformSearch('');
     };
 
-    const handlePlatformInputChange = (e) => {
+    const handlePlatformInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
         onChange('platform', value);
         setPlatformSearch(value);
@@ -226,13 +275,13 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
     };
 
     // Duration dropdown functions
-    const handleDurationSelect = (duration) => {
+    const handleDurationSelect = (duration: string) => {
         onChange('duration', duration);
         setShowDurationDropdown(false);
         setDurationSearch('');
     };
 
-    const handleDurationInputChange = (e) => {
+    const handleDurationInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
         onChange('duration', value);
         setDurationSearch(value);
@@ -277,12 +326,12 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
             filteredCustomDurations.some(duration => duration.toLowerCase() === durationSearch.toLowerCase()));
 
     // معالجة رفع الصورة
-    const handleImageUpload = (e) => {
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const result = e.target?.result;
+                const result = e.target?.result as string;
                 setImagePreview(result);
                 onChange('media_url', result);
             };
@@ -291,7 +340,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
     };
 
     // دالة مساعدة للحصول على age_range display
-    const getAgeRangeDisplay = (ageRange) => {
+    const getAgeRangeDisplay = (ageRange: AgeRange | string): string => {
         if (!ageRange) return '';
 
         if (typeof ageRange === 'object') {
@@ -302,7 +351,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
     };
 
     // دالة للتحقق من صحة النموذج
-    const validateForm = () => {
+    const validateForm = (): boolean => {
         if (!form.age_category_id) {
             toast.error('Please select an age range');
             return false;
@@ -315,7 +364,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
             toast.error('Please select a platform');
             return false;
         }
-        if (!form.language_type?.value) {
+        if (!(form.language_type as LanguageType)?.value) {
             toast.error('Please select a language type');
             return false;
         }
@@ -338,7 +387,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
         return true;
     };
 
-    const submit = async (e) => {
+    const submit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         // التحقق من الصحة قبل الإرسال
@@ -359,12 +408,12 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                 platform: form.platform,
                 language_type: form.language_type,
                 duration: form.duration,
-                lessons_count: parseInt(form.lessons_count),
-                projects_count: parseInt(form.projects_count),
+                lessons_count: parseInt(form.lessons_count.toString()),
+                projects_count: parseInt(form.projects_count.toString()),
                 description_en: form.description_en,
                 description_ar: form.description_ar,
                 media_url: form.media_url,
-                order_index: parseInt(form.order_index),
+                order_index: parseInt(form.order_index.toString()),
             };
 
             const method = initial?._id ? 'PUT' : 'POST';
@@ -394,19 +443,29 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
             const result = JSON.parse(responseText);
 
             if (result.success) {
-                // toast.success(result.message || 'Stage saved successfully');
                 onSaved();
                 onClose();
             } else {
                 throw new Error(result.message || 'Operation failed');
             }
-        } catch (err) {
+        } catch (err: unknown) {
             console.error('Error saving stage:', err);
-            toast.error(err.message || 'An error occurred while saving.');
+            const errorMessage = err instanceof Error ? err.message : 'An error occurred while saving.';
+            toast.error(errorMessage);
         } finally {
             setLoading(false);
         }
     };
+
+    const getLanguageTypeValue = (languageType: LanguageType | string): LanguageType => {
+        if (typeof languageType === 'string') {
+            const found = languageTypes.find(lang => lang.value === languageType);
+            return found || { value: '', en: '', ar: '' };
+        }
+        return languageType;
+    };
+
+    const currentLanguageType = getLanguageTypeValue(form.language_type);
 
     return (
         <form onSubmit={submit} className="space-y-6">
@@ -454,10 +513,10 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                                     <div>
                                         <span className="text-SlateBlueText dark:text-darktext">Age Range:</span>
                                         <div className="font-medium text-MidnightNavyText dark:text-white">
-                                            EN: {form.age_range?.en}
+                                            EN: {(form.age_range as AgeRange)?.en}
                                         </div>
                                         <div className="font-medium text-MidnightNavyText dark:text-white">
-                                            AR: {form.age_range?.ar}
+                                            AR: {(form.age_range as AgeRange)?.ar}
                                         </div>
                                     </div>
                                     <div>
@@ -481,7 +540,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                         <input
                             type="number"
                             value={form.order_index}
-                            onChange={(e) => onChange('order_index', e.target.value)}
+                            onChange={(e) => onChange('order_index', parseInt(e.target.value))}
                             min="1"
                             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
                         />
@@ -600,7 +659,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                                                         {t('curriculum.predefinedPlatforms') || "Predefined Platforms"}
                                                     </p>
                                                 </div>
-                                                {filteredPlatforms.map((platform, index) => (
+                                                {filteredPlatforms.map((platform) => (
                                                     <button
                                                         key={platform}
                                                         type="button"
@@ -726,7 +785,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                                                         {t('curriculum.predefinedDurations') || "Predefined Durations"}
                                                     </p>
                                                 </div>
-                                                {filteredDurations.map((duration, index) => (
+                                                {filteredDurations.map((duration) => (
                                                     <button
                                                         key={duration}
                                                         type="button"
@@ -796,7 +855,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                             {t('curriculum.languageType') || "Language Type"} *
                         </label>
                         <select
-                            value={form.language_type?.value || ''}
+                            value={currentLanguageType.value}
                             onChange={(e) => handleLanguageTypeChange(e.target.value)}
                             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
                         >
@@ -809,16 +868,16 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                         </select>
 
                         {/* عرض البيانات المختارة */}
-                        {form.language_type?.en && (
+                        {currentLanguageType.en && (
                             <div className="mt-2 p-2 bg-Aquamarine/10 rounded-lg border border-Aquamarine/20">
                                 <div className="text-12 text-SlateBlueText dark:text-darktext">
                                     <strong>Selected Language Type:</strong>
                                 </div>
                                 <div className="text-12 font-medium text-MidnightNavyText dark:text-white">
-                                    EN: {form.language_type.en}
+                                    EN: {currentLanguageType.en}
                                 </div>
                                 <div className="text-12 font-medium text-MidnightNavyText dark:text-white">
-                                    AR: {form.language_type.ar}
+                                    AR: {currentLanguageType.ar}
                                 </div>
                             </div>
                         )}
@@ -831,7 +890,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                         <input
                             type="number"
                             value={form.lessons_count}
-                            onChange={(e) => onChange('lessons_count', e.target.value)}
+                            onChange={(e) => onChange('lessons_count', parseInt(e.target.value))}
                             min="0"
                             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
                         />
@@ -844,7 +903,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }) => {
                         <input
                             type="number"
                             value={form.projects_count}
-                            onChange={(e) => onChange('projects_count', e.target.value)}
+                            onChange={(e) => onChange('projects_count', parseInt(e.target.value))}
                             min="0"
                             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
                         />

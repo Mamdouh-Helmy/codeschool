@@ -1,4 +1,3 @@
-// app/api/projects/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Project from "../../../models/Project";
@@ -6,35 +5,45 @@ import mongoose from "mongoose";
 
 export const revalidate = 0;
 
+// GET (لو حابب تضيفه)
+export async function GET(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const id = pathname.split("/").pop();
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ success: false, message: "Invalid project ID" }, { status: 400 });
+  }
+
   try {
     await connectDB();
-    const { id } = params;
+    const project = await Project.findById(id);
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid project ID" },
-        { status: 400 }
-      );
+    if (!project) {
+      return NextResponse.json({ success: false, message: "Project not found" }, { status: 404 });
     }
 
-    const body = await request.json();
+    return NextResponse.json({ success: true, data: project });
+  } catch (error) {
+    return NextResponse.json({ success: false, message: "Failed to fetch project" }, { status: 500 });
+  }
+}
 
-    const updated = await Project.findByIdAndUpdate(
-      id,
-      { ...body, updatedAt: new Date() },
-      { new: true }
-    );
+// PUT - تحديث مشروع
+export async function PUT(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const id = pathname.split("/").pop();
+
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ success: false, message: "Invalid project ID" }, { status: 400 });
+  }
+
+  try {
+    await connectDB();
+    const body = await request.json();
+    const updated = await Project.findByIdAndUpdate(id, { ...body, updatedAt: new Date() }, { new: true });
 
     if (!updated) {
-      return NextResponse.json(
-        { success: false, message: "Project not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, message: "Project not found" }, { status: 404 });
     }
 
     return NextResponse.json({
@@ -45,35 +54,25 @@ export async function PUT(
     });
   } catch (error) {
     console.error("Error updating project:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to update project" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: "Failed to update project" }, { status: 500 });
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+// DELETE - حذف مشروع
+export async function DELETE(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const id = pathname.split("/").pop();
+
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ success: false, message: "Invalid project ID" }, { status: 400 });
+  }
+
   try {
     await connectDB();
-    const { id } = params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid project ID" },
-        { status: 400 }
-      );
-    }
-
     const deleted = await Project.findByIdAndDelete(id);
 
     if (!deleted) {
-      return NextResponse.json(
-        { success: false, message: "Project not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, message: "Project not found" }, { status: 404 });
     }
 
     return NextResponse.json({
@@ -84,9 +83,6 @@ export async function DELETE(
     });
   } catch (error) {
     console.error("Error deleting project:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to delete project" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: "Failed to delete project" }, { status: 500 });
   }
 }

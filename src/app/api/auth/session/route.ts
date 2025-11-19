@@ -7,7 +7,11 @@ import User from "@/app/models/User";
 export async function GET() {
   try {
     await connectDB();
-    const token = cookies().get("token")?.value;
+    
+    // استخدم await مع cookies()
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+    
     const user = verifyJwt(token || "");
 
     if (!user) {

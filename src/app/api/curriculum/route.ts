@@ -1,10 +1,10 @@
-// src/app/api/curriculum/route.js
+// src/app/api/curriculum/route.ts
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import CurriculumStage from "../../models/CurriculumStage";
-import AgeCategory from "../../models/AgeCategory"; // أضف هذا الاستيراد
+import AgeCategory from "../../models/AgeCategory";
 
-export async function GET(request) {
+export async function GET(request: Request) {
   try {
     await connectDB();
 
@@ -35,14 +35,14 @@ export async function GET(request) {
   }
 }
 
-export async function POST(request) {
+export async function POST(request: Request) {
   try {
     await connectDB();
     const body = await request.json();
 
     // التحقق من الحقول المطلوبة
     const requiredFields = [
-      "age_category_id", // غيرنا من age_range إلى age_category_id
+      "age_category_id",
       "title_en",
       "title_ar",
       "platform", 
@@ -97,8 +97,24 @@ export async function POST(request) {
       },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating curriculum stage:", error);
+    
+    // معالجة أخطاء محددة
+    if (error.name === 'ValidationError') {
+      return NextResponse.json(
+        { success: false, message: 'Validation error', errors: error.errors },
+        { status: 400 }
+      );
+    }
+    
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { success: false, message: 'Curriculum stage with this order index already exists' },
+        { status: 409 }
+      );
+    }
+    
     return NextResponse.json(
       { success: false, message: "Failed to create curriculum stage" },
       { status: 500 }

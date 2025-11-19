@@ -1,44 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
-import Contact from "../../../models/Contact";
+import Project from "../../../models/Project"; // عدّل الاسم لو مختلف
 import mongoose from "mongoose";
 
-// GET - جلب طلب اتصال محدد
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+// GET - جلب مشروع محدد
+export async function GET(request: NextRequest) {
+  const pathname = request.nextUrl.pathname; // /api/projects/:id
+  const id = pathname.split("/").pop(); // آخر جزء في المسار هو الـ id
+
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ success: false, message: "Invalid project ID" }, { status: 400 });
+  }
+
   try {
     await connectDB();
+    const project = await Project.findById(id);
 
-    const { id } = params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid contact ID" },
-        { status: 400 }
-      );
+    if (!project) {
+      return NextResponse.json({ success: false, message: "Project not found" }, { status: 404 });
     }
 
-    const contact = await Contact.findById(id);
-
-    if (!contact) {
-      return NextResponse.json(
-        { success: false, message: "Contact not found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: contact,
-    });
+    return NextResponse.json({ success: true, data: project });
   } catch (error) {
-    console.error("❌ Error fetching contact:", error);
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to fetch contact",
+        message: "Failed to fetch project",
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
@@ -46,48 +33,30 @@ export async function GET(
   }
 }
 
-// PUT - تحديث طلب اتصال
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+// PUT - تحديث مشروع
+export async function PUT(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const id = pathname.split("/").pop();
+
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ success: false, message: "Invalid project ID" }, { status: 400 });
+  }
+
   try {
     await connectDB();
-
-    const { id } = params;
     const body = await request.json();
+    const updatedProject = await Project.findByIdAndUpdate(id, { ...body, updatedAt: new Date() }, { new: true, runValidators: true });
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid contact ID" },
-        { status: 400 }
-      );
+    if (!updatedProject) {
+      return NextResponse.json({ success: false, message: "Project not found" }, { status: 404 });
     }
 
-    const updatedContact = await Contact.findByIdAndUpdate(
-      id,
-      { ...body, updatedAt: new Date() },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedContact) {
-      return NextResponse.json(
-        { success: false, message: "Contact not found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: updatedContact,
-      message: "Contact updated successfully",
-    });
+    return NextResponse.json({ success: true, data: updatedProject, message: "Project updated successfully" });
   } catch (error) {
-    console.error("❌ Error updating contact:", error);
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to update contact",
+        message: "Failed to update project",
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
@@ -95,46 +64,29 @@ export async function PUT(
   }
 }
 
-// DELETE - حذف طلب اتصال (Soft Delete)
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+// DELETE - حذف مشروع
+export async function DELETE(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const id = pathname.split("/").pop();
+
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ success: false, message: "Invalid project ID" }, { status: 400 });
+  }
+
   try {
     await connectDB();
+    const deletedProject = await Project.findByIdAndUpdate(id, { isActive: false, updatedAt: new Date() }, { new: true });
 
-    const { id } = params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, message: "Invalid contact ID" },
-        { status: 400 }
-      );
+    if (!deletedProject) {
+      return NextResponse.json({ success: false, message: "Project not found" }, { status: 404 });
     }
 
-    const deletedContact = await Contact.findByIdAndUpdate(
-      id,
-      { isActive: false, updatedAt: new Date() },
-      { new: true }
-    );
-
-    if (!deletedContact) {
-      return NextResponse.json(
-        { success: false, message: "Contact not found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Contact deleted successfully",
-    });
+    return NextResponse.json({ success: true, message: "Project deleted successfully" });
   } catch (error) {
-    console.error("❌ Error deleting contact:", error);
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to delete contact",
+        message: "Failed to delete project",
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }

@@ -20,11 +20,15 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("❌ Error fetching students:", error);
+    
+    // التحقق من نوع error قبل الوصول إلى message
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
     return NextResponse.json(
       { 
         success: false, 
         message: "Failed to fetch students",
-        error: error.message 
+        error: errorMessage 
       },
       { status: 500 }
     );

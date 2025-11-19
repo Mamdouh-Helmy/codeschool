@@ -3,10 +3,13 @@ import { connectDB } from '@/lib/mongodb';
 import CurriculumStage from '../../../models/CurriculumStage';
 import mongoose from 'mongoose';
 
-export async function GET(request, { params }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     await connectDB();
-    const { id } = params;
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -37,10 +40,13 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PUT(request, { params }) {
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     await connectDB();
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -68,7 +74,7 @@ export async function PUT(request, { params }) {
       data: updatedStage,
       message: 'Stage updated successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating curriculum stage:', error);
     return NextResponse.json(
       { success: false, message: 'Failed to update stage' },
@@ -77,10 +83,13 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function DELETE(request, { params }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     await connectDB();
-    const { id } = params;
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
