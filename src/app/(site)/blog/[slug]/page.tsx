@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     };
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000' || 'https://codeschool.online';
   const postUrl = `${baseUrl}/blog/${params.slug}`;
   const imageUrl = post.image
     ? (post.image.startsWith('http') ? post.image : `${baseUrl}${post.image}`)

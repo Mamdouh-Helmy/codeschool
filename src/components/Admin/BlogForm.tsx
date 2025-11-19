@@ -42,7 +42,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
 
   const [form, setForm] = useState(() => ({
     title: initial?.title || "",
-    body: initial?.body || "<p></p>",
+    body: initial?.body || "",
     image: initial?.image || "",
     imageAlt: initial?.imageAlt || "",
     category: initial?.category || "",
@@ -64,7 +64,6 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
   const [authorAvatarPreview, setAuthorAvatarPreview] = useState("");
-  const [errors, setErrors] = useState<{title?: string; body?: string}>({});
 
   // معاينة الصور
   useEffect(() => {
@@ -78,10 +77,6 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
 
   const onChange = (field: string, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-    // مسح الأخطاء عند التغيير
-    if (errors[field as keyof typeof errors]) {
-      setErrors(prev => ({...prev, [field]: undefined}));
-    }
   };
 
   const onChangeAuthor = (field: string, value: any) => {
@@ -89,24 +84,6 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
       ...prev,
       author: { ...prev.author, [field]: value }
     }));
-  };
-
-  // توليد excerpt تلقائياً من النص
-  const generateExcerpt = (body: string) => {
-    const plain = body.replace(/<[^>]*>/g, "");
-    return plain.length > 150 ? plain.substring(0, 150) + "..." : plain;
-  };
-
-  // عند تغيير النص، توليد excerpt تلقائياً
-  const handleBodyChange = (value: string) => {
-    // Ensure body is never empty
-    const sanitizedValue = value.trim() || "<p></p>";
-    onChange("body", sanitizedValue);
-    
-    // Auto-generate excerpt only if empty or matches current content
-    if (!form.excerpt || form.excerpt === generateExcerpt(form.body)) {
-      onChange("excerpt", generateExcerpt(sanitizedValue));
-    }
   };
 
   // إضافة tag جديد
@@ -163,29 +140,22 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  const validateForm = () => {
-    const newErrors: {title?: string; body?: string} = {};
+  // توليد excerpt تلقائياً من النص
+  const generateExcerpt = (body: string) => {
+    const plain = body.replace(/<[^>]*>/g, "");
+    return plain.length > 150 ? plain.substring(0, 150) + "..." : plain;
+  };
 
-    if (!form.title.trim()) {
-      newErrors.title = t('blogForm.titleRequired') || "Blog title is required";
+  // عند تغيير النص، توليد excerpt تلقائياً
+  const handleBodyChange = (value: string) => {
+    onChange("body", value);
+    if (!form.excerpt || form.excerpt === generateExcerpt(form.body)) {
+      onChange("excerpt", generateExcerpt(value));
     }
-
-    if (!form.body || form.body.trim() === "" || form.body === "<p></p>" || form.body === "<p><br></p>") {
-      newErrors.body = t('blogForm.bodyRequired') || "Blog content is required";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Client-side validation
-    if (!validateForm()) {
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -270,21 +240,15 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <FileText className="w-3 h-3 text-primary" />
             {t('blogForm.title') || "Title"} *
-            <span className="text-red-500 ml-1">*</span>
           </label>
           <input
             type="text"
             value={form.title}
             onChange={(e) => onChange("title", e.target.value)}
             placeholder={t('blogForm.titlePlaceholder') || "Enter blog post title"}
-            className={`w-full px-3 py-2.5 border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200 ${
-              errors.title ? 'border-red-500' : 'border-PowderBlueBorder dark:border-dark_border'
-            }`}
+            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             required
           />
-          {errors.title && (
-            <p className="text-red-500 text-12 mt-1">{errors.title}</p>
-          )}
         </div>
 
         <div className="space-y-2">
@@ -337,7 +301,6 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <User className="w-3 h-3 text-Aquamarine" />
               {t('blogForm.authorName') || "Author Name"} *
-              <span className="text-red-500 ml-1">*</span>
             </label>
             <input
               type="text"
@@ -457,16 +420,12 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
             {t('blogForm.bodyContent') || "Body Content"} *
-            <span className="text-red-500 ml-1">*</span>
           </label>
           <RichTextEditor
             value={form.body}
             onChange={handleBodyChange}
             placeholder={t('blogForm.bodyPlaceholder') || "Write your blog post content here... HTML and Markdown are supported."}
           />
-          {errors.body && (
-            <p className="text-red-500 text-12 mt-1">{errors.body}</p>
-          )}
         </div>
       </div>
 

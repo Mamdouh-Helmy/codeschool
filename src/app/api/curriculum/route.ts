@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import CurriculumStage from "../../models/CurriculumStage";
+import AgeCategory from "../../models/AgeCategory"; // أضف هذا الاستيراد
 
 export async function GET(request) {
   try {
@@ -10,23 +11,16 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const age = searchParams.get("age");
 
-    // console.log("🔍 Requested age:", age);
-
     let query = {};
     if (age) {
-   
       query = {
         $or: [{ "age_range.en": age }, { "age_range.ar": age }],
       };
     }
 
-    // console.log("🔍 Query:", query);
-
     const stages = await CurriculumStage.find(query)
       .populate("age_category_id")
       .sort({ order_index: 1 });
-
-    // console.log("🔍 Found stages:", stages.length); 
 
     return NextResponse.json({
       success: true,
@@ -48,10 +42,10 @@ export async function POST(request) {
 
     // التحقق من الحقول المطلوبة
     const requiredFields = [
-      "age_range",
+      "age_category_id", // غيرنا من age_range إلى age_category_id
       "title_en",
       "title_ar",
-      "platform",
+      "platform", 
       "language_type",
       "duration",
       "lessons_count",
@@ -60,6 +54,7 @@ export async function POST(request) {
       "description_ar",
       "order_index",
     ];
+    
     const missingFields = requiredFields.filter((field) => !body[field]);
 
     if (missingFields.length > 0) {
@@ -72,25 +67,26 @@ export async function POST(request) {
       );
     }
 
-    // البحث عن الـ Age Category بناءً على age_range
-    const ageCategory = await AgeCategory.findOne({
-      age_range: body.age_range,
-    });
-
+    // التحقق من وجود الفئة العمرية باستخدام age_category_id
+    const ageCategory = await AgeCategory.findById(body.age_category_id);
+    
     if (!ageCategory) {
       return NextResponse.json(
         {
           success: false,
-          message: "Age category not found for the specified age range",
+          message: "Age category not found",
         },
         { status: 404 }
       );
     }
 
-    // إنشاء الـ stage مع إضافة age_category_id
+    // إنشاء الـ stage مع التأكد من البيانات
     const newStage = await CurriculumStage.create({
       ...body,
-      age_category_id: ageCategory._id,
+      // تأكد من أن age_range مأخوذ من الفئة العمرية
+      age_range: ageCategory.age_range,
+      name_en: ageCategory.name_en,
+      name_ar: ageCategory.name_ar,
     });
 
     return NextResponse.json(
