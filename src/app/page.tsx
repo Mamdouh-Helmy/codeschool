@@ -25,7 +25,7 @@ export default function Home() {
       <Upcoming />
       {/* <DynamicPricing /> */}
       <Testimonials />
-      <TicketSection />
+      {/* <TicketSection /> */}
     </main>
   )
 }

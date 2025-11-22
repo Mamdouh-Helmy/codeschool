@@ -643,7 +643,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }: Curri
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                                                        {t('curriculum.addPlatform', { platform: platformSearch }) || `Add "${platformSearch}"`}
+                                                        {t('curriculum.addPlatform') || `Add "${platformSearch}"`}
                                                     </p>
                                                     <p className="text-11 text-SlateBlueText dark:text-darktext">
                                                         {t('curriculum.createNewPlatform') || "Create new platform"}
@@ -769,7 +769,7 @@ const CurriculumStageForm = ({ initial, categories, onClose, onSaved, t }: Curri
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                                                        {t('curriculum.addDuration', { duration: durationSearch }) || `Add "${durationSearch}"`}
+                                                        {t('curriculum.addDuration') || `Add "${durationSearch}"`}
                                                     </p>
                                                     <p className="text-11 text-SlateBlueText dark:text-darktext">
                                                         {t('curriculum.createNewDuration') || "Create new duration"}

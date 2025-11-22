@@ -1,9 +1,15 @@
-// components/Admin/StagesList.tsx
+// في components/Admin/StagesList.tsx
 'use client';
 import { Edit, Trash2, BookOpen, Code, Blocks, Rocket } from 'lucide-react';
 import { useLocale } from '@/app/context/LocaleContext';
 
 interface AgeRange {
+    en: string;
+    ar: string;
+}
+
+interface LanguageType {
+    value: string;
     en: string;
     ar: string;
 }
@@ -14,13 +20,14 @@ interface CurriculumStage {
     title_en: string;
     title_ar: string;
     platform: string;
-    language_type: string | { en: string; ar: string };
+    language_type: LanguageType | string; // تأكد أن هذا يتوافق مع CurriculumAdmin
     duration: string;
     lessons_count: number;
     projects_count: number;
     description_en: string;
     description_ar: string;
     order_index: number;
+    media_url?: string;
 }
 
 interface StagesListProps {
@@ -50,7 +57,7 @@ const StagesList = ({ stages, onEdit, onDelete, t }: StagesListProps) => {
         return ageRange;
     };
 
-    const getLanguageType = (languageType: string | { en: string; ar: string }): string => {
+    const getLanguageType = (languageType: LanguageType | string): string => {
         if (typeof languageType === 'object') {
             return locale === 'ar' ? languageType.ar : languageType.en;
         }

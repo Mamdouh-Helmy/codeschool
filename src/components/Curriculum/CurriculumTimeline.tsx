@@ -5,9 +5,73 @@ import { useI18n } from '@/i18n/I18nProvider';
 import AgeModal from './AgeModal';
 import { useLocale } from '@/app/context/LocaleContext';
 
+// تعريف الأنواع
+interface AgeRange {
+    en: string;
+    ar: string;
+}
+
+interface AgeCategory {
+    _id?: string;
+    age_range: AgeRange;
+    name_en: string;
+    name_ar: string;
+    description_en: string;
+    description_ar: string;
+    order: number;
+    icon: string;
+}
+
+interface LanguageType {
+    value: string;
+    en: string;
+    ar: string;
+}
+
+interface CurriculumStage {
+    _id?: string;
+    age_range: AgeRange | string;
+    title_en: string;
+    title_ar: string;
+    platform: string;
+    language_type: LanguageType | string;
+    duration: string;
+    lessons_count: number;
+    projects_count: number;
+    description_en: string;
+    description_ar: string;
+    order_index: number;
+    age_category_id?: string;
+    media_url?: string;
+    difficulty_level?: string;
+}
+
+// تعريف الـ props للمكونات
+interface PlatformIconProps {
+    platform: string;
+}
+
+interface StageCardProps {
+    stage: CurriculumStage;
+    index: number;
+    totalStages: number;
+    locale: string;
+    t: (key: string) => string;
+    onStageClick: (stage: CurriculumStage) => void;
+    isVisible: boolean;
+}
+
+interface StageModalProps {
+    stage: CurriculumStage;
+    onClose: () => void;
+    onEnroll: (stageId: string) => void;
+    t: (key: string) => string;
+    locale: string;
+}
+
 // Memoized Components for better performance
-const PlatformIcon = memo(({ platform }) => {
-    const platformIcons = {
+const PlatformIcon = memo(({ platform }: PlatformIconProps) => {
+    const platformIcons: Record<string, JSX.Element> = {
         'Code.org': <Code className="w-5 h-5" />,
         'Scratch': <Blocks className="w-5 h-5" />,
         'Replit': <Play className="w-5 h-5" />,
@@ -15,23 +79,25 @@ const PlatformIcon = memo(({ platform }) => {
         'JavaScript': <Code className="w-5 h-5" />,
         'HTML/CSS': <Code className="w-5 h-5" />,
         'Unity': <Rocket className="w-5 h-5" />,
-        'default': <Code className="w-5 h-5" />
+        'default': <Code className="w-5 h-5" />,
     };
-    return platformIcons[platform] || platformIcons.default;
+
+    return platformIcons[platform] ?? platformIcons["default"];
+
 });
 
 PlatformIcon.displayName = 'PlatformIcon';
 
-const StageCard = memo(({ stage, index, totalStages, locale, t, onStageClick, isVisible }) => {
+const StageCard = memo(({ stage, index, totalStages, locale, t, onStageClick, isVisible }: StageCardProps) => {
     const getLanguageType = useCallback(() => {
         return typeof stage.language_type === 'object'
-            ? (locale === 'ar' ? stage.language_type.ar : stage.language_type.en)
+            ? (locale === 'ar' ? (stage.language_type as LanguageType).ar : (stage.language_type as LanguageType).en)
             : stage.language_type;
     }, [stage.language_type, locale]);
 
     const isBlockLanguage = useCallback(() => {
         return stage.language_type === 'Block' ||
-            (typeof stage.language_type === 'object' && stage.language_type.en === 'Block');
+            (typeof stage.language_type === 'object' && (stage.language_type as LanguageType).en === 'Block');
     }, [stage.language_type]);
 
     return (
@@ -132,13 +198,13 @@ StageCard.displayName = 'StageCard';
 const CurriculumTimeline = () => {
     const { t } = useI18n();
     const { locale } = useLocale();
-    const [selectedAge, setSelectedAge] = useState(null);
-    const [stages, setStages] = useState([]);
-    const [categories, setCategories] = useState([]);
+    const [selectedAge, setSelectedAge] = useState<AgeCategory | null>(null);
+    const [stages, setStages] = useState<CurriculumStage[]>([]);
+    const [categories, setCategories] = useState<AgeCategory[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedStage, setSelectedStage] = useState(null);
+    const [selectedStage, setSelectedStage] = useState<CurriculumStage | null>(null);
     const [showStageModal, setShowStageModal] = useState(false);
-    const [visibleStages, setVisibleStages] = useState(new Set());
+    const [visibleStages, setVisibleStages] = useState<Set<string>>(new Set());
     const observerRef = useRef(null);
 
     // Debounced fetch functions
@@ -156,7 +222,7 @@ const CurriculumTimeline = () => {
         }
     }, []);
 
-    const fetchStages = useCallback(async (ageCategory) => {
+    const fetchStages = useCallback(async (ageCategory: AgeCategory) => {
         setLoading(true);
         try {
             const ageRange = typeof ageCategory.age_range === 'object'
@@ -199,7 +265,9 @@ const CurriculumTimeline = () => {
                 entries.forEach((entry) => {
                     if (entry.isIntersecting) {
                         const stageId = entry.target.getAttribute('data-stage-id');
-                        setVisibleStages(prev => new Set([...prev, stageId]));
+                        if (stageId) {
+                            setVisibleStages(prev => new Set([...prev, stageId]));
+                        }
                     }
                 });
             },
@@ -215,12 +283,12 @@ const CurriculumTimeline = () => {
         return () => observer.disconnect();
     }, [stages]);
 
-    const handleStageClick = useCallback((stage) => {
+    const handleStageClick = useCallback((stage: CurriculumStage) => {
         setSelectedStage(stage);
         setShowStageModal(true);
     }, []);
 
-    const handleEnroll = useCallback(async (stageId) => {
+    const handleEnroll = useCallback(async (stageId: string) => {
         try {
             const res = await fetch('/api/enroll', {
                 method: 'POST',
@@ -246,7 +314,7 @@ const CurriculumTimeline = () => {
         setStages([]);
     }, []);
 
-    const getDisplayAgeRange = useCallback((ageRange) => {
+    const getDisplayAgeRange = useCallback((ageRange: AgeRange | string) => {
         if (typeof ageRange === 'object') {
             return locale === 'ar' ? ageRange.ar : ageRange.en;
         }
@@ -320,7 +388,7 @@ const CurriculumTimeline = () => {
                                     locale={locale}
                                     t={t}
                                     onStageClick={handleStageClick}
-                                    isVisible={visibleStages.has(stage._id)}
+                                    isVisible={visibleStages.has(stage._id || '')}
                                 />
                             ))}
                         </div>
@@ -384,7 +452,7 @@ const CurriculumTimeline = () => {
 };
 
 // Optimized StageModal Component - زيادة العرض
-const StageModal = memo(({ stage, onClose, onEnroll, t, locale }) => {
+const StageModal = memo(({ stage, onClose, onEnroll, t, locale }: StageModalProps) => {
     const [isClosing, setIsClosing] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
@@ -419,7 +487,7 @@ const StageModal = memo(({ stage, onClose, onEnroll, t, locale }) => {
                 {
                     title: locale === 'ar' ? 'نوع البرمجة' : 'Programming Type',
                     value: typeof stage.language_type === 'object'
-                        ? (locale === 'ar' ? stage.language_type.ar : stage.language_type.en)
+                        ? (locale === 'ar' ? (stage.language_type as LanguageType).ar : (stage.language_type as LanguageType).en)
                         : stage.language_type,
                     color: 'text-purple-600'
                 },
@@ -651,7 +719,7 @@ const StageModal = memo(({ stage, onClose, onEnroll, t, locale }) => {
                                 </h3>
                                 <p className="text-white/90 text-xs sm:text-sm truncate">
                                     {stage.platform} • {typeof stage.language_type === 'object'
-                                        ? (locale === 'ar' ? stage.language_type.ar : stage.language_type.en)
+                                        ? (locale === 'ar' ? (stage.language_type as LanguageType).ar : (stage.language_type as LanguageType).en)
                                         : stage.language_type} • {stage.duration}
                                 </p>
                             </div>
@@ -787,7 +855,7 @@ const StageModal = memo(({ stage, onClose, onEnroll, t, locale }) => {
                                     </p>
 
                                     <button
-                                        onClick={() => onEnroll(stage._id)}
+                                        onClick={() => onEnroll(stage._id || '')}
                                         className="w-full bg-white text-primary hover:bg-white/90 py-2 px-3 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
                                     >
                                         <Rocket className="w-3 h-3 sm:w-4 sm:h-4" />

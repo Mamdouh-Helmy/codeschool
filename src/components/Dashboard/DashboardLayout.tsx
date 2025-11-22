@@ -77,6 +77,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       badge: createBadge(t('common.new') || "New"),
     },
     {
+      label: t('dashboard.contacts') || "Contacts",
+      href: "/admin/ContactsPage",
+      icon: "ion:chatbubble-ellipses-outline",
+      badge: createBadge(t('common.new') || "New"),
+    },
+    {
       label: t('nav.settings') || "Settings",
       href: "/admin/settings",
       icon: "ion:settings-outline",

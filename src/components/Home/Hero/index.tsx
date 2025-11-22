@@ -20,7 +20,7 @@ const Hero = () => {
   };
 
   return (
-    <section className="dark:bg-darkmode py-40 md:py-22">
+    <section className="dark:bg-darkmode pt-40 md:pt-22">
       <div className="container">
         <div className="grid lg:grid-cols-12 grid-cols-1 items-center gap-30">
           <div className="col-span-6">
@@ -120,7 +120,7 @@ const Hero = () => {
         <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl w-[70vw] mx-4 relative animate-fadeIn font-sans text-base text-SlateBlueText"
+            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl md:w-[70vw] w-[90vw] mx-4 relative animate-fadeIn font-sans text-base text-SlateBlueText"
           >
             <h2 className="text-2xl font-bold text-[#8c52ff] mb-4">{t("hero.title")}</h2>
             <p className="text-base text-gray-700 dark:text-gray-200 leading-relaxed">{fullText}</p>
@@ -134,7 +134,7 @@ const Hero = () => {
         <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl w-[70vw] mx-4 relative animate-fadeIn"
+            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl md:w-[70vw] w-[90vw] mx-4 relative animate-fadeIn"
           >
             <h2 className="text-2xl font-bold text-[#8c52ff] mb-4">{t("hero.watchDemo")}</h2>
             <div className="relative pb-[56.25%] h-0 overflow-hidden rounded">
@@ -152,19 +152,7 @@ const Hero = () => {
         </div>
       )}
 
-      {/* === New Popup for "Browse Courses" === */}
-      {showPlanPopup && (
-        <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-darkmode p-8 rounded-2xl shadow-2xl w-[60vw] mx-4 relative animate-fadeIn text-center"
-          >
-            <h2 className="text-3xl font-extrabold text-[#8c52ff] mb-4">الخطة القادمة</h2>
-            <p className="text-lg text-gray-700 dark:text-gray-200 mb-4">Soon in Next Plan</p>
-            <button onClick={closeModal} className="mt-4 px-6 py-2 bg-[#8c52ff] text-white rounded-lg font-semibold hover:opacity-80">تمام</button>
-          </div>
-        </div>
-      )}
+     
     </section>
   );
 };

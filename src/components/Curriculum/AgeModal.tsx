@@ -4,15 +4,47 @@ import { X, ChevronDown, Users, Sparkles } from 'lucide-react';
 import { useI18n } from '@/i18n/I18nProvider';
 import { useLocale } from '@/app/context/LocaleContext';
 
-const AgeCategoryCard = memo(({ category, index, isSelected, onSelect, locale, animateIn }) => {
-  const getDisplayAgeRange = useCallback((ageRange) => {
+// أضف هذه الـ interfaces في الأعلى
+interface AgeRange {
+  en: string;
+  ar: string;
+}
+
+interface AgeCategory {
+  _id?: string;
+  age_range: AgeRange;
+  name_en: string;
+  name_ar: string;
+  description_en: string;
+  description_ar: string;
+  order: number;
+  icon: string;
+}
+
+interface AgeCategoryCardProps {
+  category: AgeCategory;
+  index: number;
+  isSelected: boolean;
+  onSelect: (category: AgeCategory) => void;
+  locale: string;
+  animateIn: boolean;
+}
+
+interface AgeModalProps {
+  onAgeSelect: (category: AgeCategory) => void;
+  categories?: AgeCategory[];
+}
+
+// الآن عدل تعريف المكون ليستخدم الـ interfaces
+const AgeCategoryCard = memo(({ category, index, isSelected, onSelect, locale, animateIn }: AgeCategoryCardProps) => {
+  const getDisplayAgeRange = useCallback((ageRange: AgeRange | string) => {
     if (typeof ageRange === 'object') {
       return locale === 'ar' ? ageRange.ar : ageRange.en;
     }
     return ageRange;
   }, [locale]);
 
-  const getCategoryIcon = useCallback((index) => {
+  const getCategoryIcon = useCallback((index: number) => {
     const icons = ['👶', '🧒', '👦', '👧', '🧑', '👨', '👩'];
     return icons[index] || '🌟';
   }, []);
@@ -67,7 +99,7 @@ const AgeCategoryCard = memo(({ category, index, isSelected, onSelect, locale, a
 
 AgeCategoryCard.displayName = 'AgeCategoryCard';
 
-const AgeModal = ({ onAgeSelect, categories = [] }) => {
+const AgeModal = ({ onAgeSelect, categories = [] }: AgeModalProps) => {
   const { t } = useI18n();
   const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
@@ -95,8 +127,8 @@ const AgeModal = ({ onAgeSelect, categories = [] }) => {
     }, 300);
   }, []);
 
-  const handleAgeSelect = useCallback((category) => {
-    const getDisplayAgeRange = (ageRange) => {
+  const handleAgeSelect = useCallback((category: AgeCategory) => {
+    const getDisplayAgeRange = (ageRange: AgeRange | string) => {
       if (typeof ageRange === 'object') {
         return locale === 'ar' ? ageRange.ar : ageRange.en;
       }
@@ -167,7 +199,7 @@ const AgeModal = ({ onAgeSelect, categories = [] }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {categories.map((category, index) => {
-              const getDisplayAgeRange = (ageRange) => {
+              const getDisplayAgeRange = (ageRange: AgeRange | string) => {
                 if (typeof ageRange === 'object') {
                   return locale === 'ar' ? ageRange.ar : ageRange.en;
                 }

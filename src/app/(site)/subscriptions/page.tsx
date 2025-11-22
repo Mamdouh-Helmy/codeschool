@@ -22,7 +22,7 @@ const page = () => {
         breadcrumbLinks={breadcrumbLinks}
       />
       <DynamicPricing />
-      <TicketSection />
+      {/* <TicketSection /> */}
     </>
   );
 };

@@ -15,6 +15,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
+import { useLocale } from "@/app/context/LocaleContext";
 
 interface WelcomePopupProps {
   isOpen: boolean;
@@ -22,7 +23,8 @@ interface WelcomePopupProps {
 }
 
 const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
-  const { t, locale } = useI18n();
+  const { locale } = useLocale();
+  const { t } = useI18n();
   const router = useRouter();
   const [currentSlide, setCurrentSlide] = useState(0);
 

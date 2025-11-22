@@ -2,13 +2,7 @@
 import React from "react";
 import Modal from "@/components/Common/Modal";
 import { useI18n } from "@/i18n/I18nProvider";
-
-type Project = {
-  _id: string;
-  student?: { id?: string; name?: string; email?: string };
-  title?: string;
-  image?: string;
-};
+import { Project } from "./YoungStars"; // استيراد النوع من الملف الرئيسي
 
 export default function LeadersModal({
   open,
@@ -23,7 +17,7 @@ export default function LeadersModal({
 }) {
   const { t } = useI18n();
 
-  // 🧠 إزالة التكرار (كل طالب يظهر مرة واحدة)
+ 
   const leadersMap = new Map();
   for (const p of projects) {
     const key = p.student?.id || p.student?.email || p._id;
@@ -67,7 +61,7 @@ export default function LeadersModal({
                   {p.student?.name || t("youngStars.unknownStudent")}
                 </h3>
                 <p className="text-sm text-SlateBlueText dark:text-gray-400 mt-1 line-clamp-2">
-                  {/* {p.title || t("youngStars.noTitle")} */}
+                  {p.title || t("youngStars.noTitle")}
                 </p>
               </div>
 
