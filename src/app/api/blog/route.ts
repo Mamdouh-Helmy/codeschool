@@ -20,6 +20,41 @@ function isValidUser(user: any): user is {
   return !!user && typeof user === 'object' && 'id' in user && 'role' in user;
 }
 
+// دالة محسنة لتوليد slug تدعم جميع اللغات
+function generateSlug(title) {
+  if (!title || typeof title !== 'string') return "";
+  
+  // إنشاء slug أساسي باستخدام toLowerCase
+  let slug = title
+    .toLowerCase()
+    .trim();
+  
+  // استبدال المسافات بشرطات
+  slug = slug.replace(/\s+/g, '-');
+  
+  // إزالة الأحرف الخاصة باستثناء الشرطات
+  // نضيف نطاقات Unicode للغات المختلفة:
+  // - العربية: \u0600-\u06FF
+  // - الصينية/اليابانية/الكورية: \u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\uac00-\ud7af
+  // - السيريلية: \u0400-\u04FF
+  // - العبرية: \u0590-\u05FF
+  // - الهندية: \u0900-\u097F
+  slug = slug.replace(/[^a-z0-9\u0600-\u06FF\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\uac00-\ud7af\u0400-\u04FF\u0590-\u05FF\u0900-\u097F\-]/g, '');
+  
+  // إزالة الشرطات المتكررة
+  slug = slug.replace(/-+/g, '-');
+  
+  // إزالة الشرطات من البداية والنهاية
+  slug = slug.replace(/^-+|-+$/g, '');
+  
+  // إذا كان الناتج فارغاً، ننشئ slug عشوائي
+  if (!slug) {
+    slug = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+  
+  return slug;
+}
+
 export async function GET(req: Request) {
   try {
     await connectDB();
@@ -145,13 +180,13 @@ export async function POST(req: Request) {
     // تحديث الاسم بعد التنظيف
     authorData.name = authorName;
 
-    // أنشئ slug مبدئي للتحقق
-    const tempSlug = generateSlug(data.title) || `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // إنشاء slug باستخدام الدالة المحسنة
+    const slug = generateSlug(data.title);
 
     const newPost = await BlogPost.create({
       ...data,
       author: authorData,
-      slug: tempSlug, // تأكد من وجود slug
+      slug: slug,
     });
 
     return NextResponse.json({
@@ -178,7 +213,7 @@ export async function POST(req: Request) {
         const newSlug = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         try {
           // أعد المحاولة مع slug جديد
-          const data = await req.json(); // تحتاج إلى إعادة قراءة body
+          const data = await req.json();
           const newPost = await BlogPost.create({
             ...data,
             slug: newSlug,
@@ -206,23 +241,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
-
-// أضف دالة generateSlug هنا أيضاً
-function generateSlug(title: string): string {
-  if (!title || typeof title !== 'string') return "";
-  
-  let slug = title
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\u0600-\u06FF -]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  if (!slug) {
-    slug = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  return slug;
 }

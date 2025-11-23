@@ -148,3 +148,73 @@ body {
   scrollbar-width: none; /* Firefox */
 }
 
+/* في ملف CSS الخاص بالمدونة */
+.prose h4 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  line-height: 1.6;
+}
+
+.prose h5 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  line-height: 1.6;
+}
+
+.prose h6 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  line-height: 1.6;
+}
+
+.prose h7 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 0.75em;
+  margin-bottom: 0.5em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* أنماط الجداول */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.prose th {
+  /* background-color: #f9fafb; */
+  font-weight: 600;
+}
+
+/* أنماط النص المنخفض والمرتفع */
+.prose sub,
+.prose sup {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.prose sup {
+  top: -0.5em;
+}
+
+.prose sub {
+  bottom: -0.25em;
+}

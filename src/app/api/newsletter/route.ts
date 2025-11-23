@@ -96,13 +96,20 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "50");
+    const search = searchParams.get("search") || "";
 
-    const subscribers = await Newsletter.find({ isActive: true })
+    let filter: any = { isActive: true };
+    
+    if (search) {
+      filter.email = { $regex: search, $options: "i" };
+    }
+
+    const subscribers = await Newsletter.find(filter)
       .sort({ subscribedAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
 
-    const total = await Newsletter.countDocuments({ isActive: true });
+    const total = await Newsletter.countDocuments(filter);
 
     return NextResponse.json({
       success: true,
@@ -120,6 +127,51 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         message: "Failed to fetch subscribers",
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - حذف مشترك
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectDB();
+    
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: "Subscriber ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const deletedSubscriber = await Newsletter.findByIdAndUpdate(
+      id,
+      { isActive: false, updatedAt: new Date() },
+      { new: true }
+    );
+
+    if (!deletedSubscriber) {
+      return NextResponse.json(
+        { success: false, message: "Subscriber not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Subscriber deleted successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error deleting subscriber:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Failed to delete subscriber",
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }

@@ -1,13 +1,33 @@
+// models/BlogPost.js
 import mongoose from "mongoose";
 
+// دالة محسنة لتوليد slug تدعم جميع اللغات
 function generateSlug(title) {
-  if (!title) return "";
-  return title
+  if (!title || typeof title !== 'string') return "";
+  
+  // إنشاء slug أساسي باستخدام toLowerCase
+  let slug = title
     .toLowerCase()
-    .replace(/[^a-z0-9 -]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .trim();
+  
+  // استبدال المسافات بشرطات
+  slug = slug.replace(/\s+/g, '-');
+  
+  // إزالة الأحرف الخاصة باستثناء الشرطات
+  slug = slug.replace(/[^a-z0-9\u0600-\u06FF\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\uac00-\ud7af\-]/g, '');
+  
+  // إزالة الشرطات المتكررة
+  slug = slug.replace(/-+/g, '-');
+  
+  // إزالة الشرطات من البداية والنهاية
+  slug = slug.replace(/^-+|-+$/g, '');
+  
+  // إذا كان الناتج فارغاً، ننشئ slug عشوائي
+  if (!slug) {
+    slug = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+  
+  return slug;
 }
 
 const BlogPostSchema = new mongoose.Schema(

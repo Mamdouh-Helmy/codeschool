@@ -3,6 +3,25 @@ import { connectDB } from "@/lib/mongodb";
 import BlogPost from "../../../models/BlogPost";
 import mongoose from "mongoose";
 
+// دالة محسنة لتوليد slug تدعم جميع اللغات
+function generateSlug(title) {
+  if (!title || typeof title !== 'string') return "";
+  
+  let slug = title
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9\u0600-\u06FF\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\uac00-\ud7af\u0400-\u04FF\u0590-\u05FF\u0900-\u097F\-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (!slug) {
+    slug = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  return slug;
+}
+
 export async function GET(
   req: Request,
   context: { params: Promise<{ slug: string }> }
@@ -33,7 +52,6 @@ export async function GET(
   }
 }
 
-
 export async function PUT(
   req: Request,
   context: { params: Promise<{ slug: string }> }
@@ -44,6 +62,10 @@ export async function PUT(
 
     const body = await req.json();
     
+    // إذا تم تغيير العنوان، نحدث الـ slug
+    if (body.title) {
+      body.slug = generateSlug(body.title);
+    }
    
     const isObjectId = mongoose.Types.ObjectId.isValid(slug);
     const query = isObjectId ? { _id: slug } : { slug };
@@ -83,7 +105,6 @@ export async function PUT(
   }
 }
 
-
 export async function DELETE(
   req: Request,
   context: { params: Promise<{ slug: string }> }
@@ -92,7 +113,6 @@ export async function DELETE(
     await connectDB();
     const { slug } = await context.params;
 
-  
     const isObjectId = mongoose.Types.ObjectId.isValid(slug);
     const query = isObjectId ? { _id: slug } : { slug };
     

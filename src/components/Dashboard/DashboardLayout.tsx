@@ -83,6 +83,18 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       badge: createBadge(t('common.new') || "New"),
     },
     {
+      label: t('nav.newsletter') || "Newsletter",
+      href: "/admin/newsletter",
+      icon: "ion:mail-outline",
+      badge: createBadge(t('common.new') || "New"),
+    },
+    {
+      label: t('nav.blogSubscribers') || "Blog Subscribers",
+      href: "/admin/blog-subscribers",
+      icon: "ion:newspaper-outline",
+      badge: createBadge(t('common.new') || "New"),
+    },
+    {
       label: t('nav.settings') || "Settings",
       href: "/admin/settings",
       icon: "ion:settings-outline",

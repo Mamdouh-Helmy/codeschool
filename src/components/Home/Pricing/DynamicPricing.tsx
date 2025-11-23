@@ -92,18 +92,18 @@ const DynamicPricing = () => {
           const sessJson = await sess.json();
           if (!(sessJson?.success && sessJson?.loggedIn)) {
             toast.error(t("eventTicket.pleaseLogin"));
-            router.push(`/signin?callbackUrl=${encodeURIComponent(pathname || "/")}&plan=${planId}`);
+          
             return;
           }
         } else {
           toast.error(t("eventTicket.pleaseLogin"));
-          router.push(`/signin?callbackUrl=${encodeURIComponent(pathname || "/")}&plan=${planId}`);
+         
           return;
         }
       } catch (e) {
         console.error("Session check failed:", e);
         toast.error(t("eventTicket.pleaseLogin"));
-        router.push(`/signin?callbackUrl=${encodeURIComponent(pathname || "/")}&plan=${planId}`);
+       
         return;
       }
     }
@@ -178,7 +178,7 @@ const DynamicPricing = () => {
                       {plan.discount}% {t("pricing.discount") || "خصم"}
                     </div>
                   )}
-                  <h3 className="text-2xl font-bold text-center mb-3">{plan.name}</h3>
+                  <h3 className="text-2xl font-bold text-center my-6">{plan.name}</h3>
                   <p className="text-center text-gray-600 dark:text-gray-300 mb-4">{plan.description}</p>
 
                   <div className="text-center mb-6">
