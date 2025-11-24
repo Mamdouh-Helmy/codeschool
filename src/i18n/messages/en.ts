@@ -1780,7 +1780,181 @@ const en = {
   "blogForm.includeHeader": "Include Header",
   "blogForm.inlineStyle": "Inline Style",
   "blogForm.enterLinkTitle": "Enter Link Title",
-  "blogForm.words": "Words",  
+  "blogForm.words": "Words",
+
+  "curriculum.englishAgeRange": "English Age Range",
+  "curriculum.arabicAgeRange": "Arabic Age Range",
+  "curriculum.usePredefined": "Use Predefined",
+  "curriculum.useCustom": "Use Custom",
+
+  // Portfolio Translations
+  "portfolio.builder.title": "Portfolio Builder",
+  "portfolio.builder.basicInfo": "Basic Info",
+  "portfolio.builder.skills": "Skills",
+  "portfolio.builder.projects": "Projects",
+  "portfolio.builder.socialLinks": "Social Links",
+  "portfolio.builder.settings": "Settings",
+  "portfolio.builder.save": "Save Portfolio",
+  "portfolio.builder.saving": "Saving...",
+  "portfolio.builder.preview": "Preview",
+  "portfolio.builder.livePreview": "Live Preview",
+  "portfolio.builder.hidePreview": "Hide Preview",
+
+  // Basic Info Section
+  "portfolio.basic.title": "Portfolio Title",
+  "portfolio.basic.titlePlaceholder": "e.g., John Doe - Web Developer",
+  "portfolio.basic.description": "Description",
+  "portfolio.basic.descriptionPlaceholder":
+    "Tell us about yourself and your professional background...",
+  "portfolio.basic.contactInfo": "Contact Information",
+  "portfolio.basic.email": "Email",
+  "portfolio.basic.phone": "Phone",
+  "portfolio.basic.location": "Location",
+
+  // Skills Section
+  "portfolio.skills.addNew": "Add New Skill",
+  "portfolio.skills.skillName": "Skill Name *",
+  "portfolio.skills.skillNamePlaceholder": "e.g., React, JavaScript, Python",
+  "portfolio.skills.category": "Category",
+  "portfolio.skills.proficiency": "Proficiency Level",
+  "portfolio.skills.level": "Level",
+  "portfolio.skills.icon": "Icon (Emoji)",
+  "portfolio.skills.iconPlaceholder": "🎨, 💻, 🚀",
+  "portfolio.skills.yourSkills": "Your Skills",
+  "portfolio.skills.noSkills": "No skills added yet",
+  "portfolio.skills.beginner": "Beginner",
+  "portfolio.skills.expert": "Expert",
+  "portfolio.skills.addSkill": "Add Skill",
+
+  // Projects Section
+  "portfolio.projects.addNew": "Add New Project",
+  "portfolio.projects.title": "Project Title *",
+  "portfolio.projects.titlePlaceholder": "e.g., E-commerce Website",
+  "portfolio.projects.description": "Description",
+  "portfolio.projects.descriptionPlaceholder":
+    "Describe your project, technologies used, and achievements...",
+  "portfolio.projects.technologies": "Technologies & Tools",
+  "portfolio.projects.addTechnology": "Add Technology",
+  "portfolio.projects.githubUrl": "GitHub URL",
+  "portfolio.projects.demoUrl": "Live Demo URL",
+  "portfolio.projects.startDate": "Start Date",
+  "portfolio.projects.endDate": "End Date",
+  "portfolio.projects.status": "Status",
+  "portfolio.projects.status.completed": "Completed",
+  "portfolio.projects.status.inProgress": "In Progress",
+  "portfolio.projects.status.planned": "Planned",
+  "portfolio.projects.featured": "Featured Project",
+  "portfolio.projects.addImage": "Add Image",
+  "portfolio.projects.yourProjects": "Your Projects",
+  "portfolio.projects.noProjects": "No projects added yet",
+  "portfolio.projects.projectImages": "Project Images",
+
+  // Social Links Section
+  "portfolio.social.title": "Social Media & Online Profiles",
+  "portfolio.social.github": "GitHub",
+  "portfolio.social.linkedin": "LinkedIn",
+  "portfolio.social.twitter": "Twitter",
+  "portfolio.social.website": "Personal Website",
+  "portfolio.social.youtube": "YouTube",
+  "portfolio.social.instagram": "Instagram",
+  "portfolio.social.facebook": "Facebook",
+  "portfolio.social.dribbble": "Dribbble",
+  "portfolio.social.preview": "Preview",
+  "portfolio.social.tip":
+    "Tip: Add your social media profiles to make it easier for visitors to connect with you.",
+
+  // Settings Section
+  "portfolio.settings.visibility": "Portfolio Visibility",
+  "portfolio.settings.public": "Public",
+  "portfolio.settings.private": "Private",
+  "portfolio.settings.livePortfolio": "Your portfolio is live!",
+  "portfolio.settings.shareLink": "Share it with this link:",
+  "portfolio.settings.copy": "Copy",
+  "portfolio.settings.theme": "Theme",
+  "portfolio.settings.layout": "Layout",
+  "portfolio.settings.statistics": "Portfolio Statistics",
+  "portfolio.settings.totalViews": "Total Views",
+  "portfolio.settings.skillsCount": "Skills",
+  "portfolio.settings.projectsCount": "Projects",
+  "portfolio.settings.socialLinksCount": "Social Links",
+  "portfolio.settings.dangerZone": "Danger Zone",
+  "portfolio.settings.reset": "Reset Portfolio",
+  "portfolio.settings.resetWarning":
+    "Remove all your skills, projects, and reset to default settings",
+
+  // Public Portfolio
+  "portfolio.public.views": "views",
+  "portfolio.public.share": "Share",
+  "portfolio.public.export": "Export",
+  "portfolio.public.contact": "Contact Me",
+  "portfolio.public.available":
+    "Available for new opportunities and collaborations",
+  "portfolio.public.letsWork": "Let's Work Together",
+  "portfolio.public.workDescription":
+    "Interested in collaborating or have a project in mind? I'd love to hear from you and discuss how we can work together.",
+  "portfolio.public.getInTouch": "Get In Touch",
+  "portfolio.public.email": "Email",
+  "portfolio.public.phone": "Phone",
+  "portfolio.public.location": "Location",
+  "portfolio.public.skillsExpertise": "Skills & Expertise",
+  "portfolio.public.technicalSkills": "Technical skills and proficiency levels",
+  "portfolio.public.projectsShowcase": "Projects Showcase",
+  "portfolio.public.workAccomplishments":
+    "Showcase of my work and accomplishments",
+  "portfolio.public.featuredProjects": "Featured Projects",
+  "portfolio.public.noProjectsCategory": "No projects found in this category",
+  "portfolio.public.all": "All",
+  "portfolio.public.present": "Present",
+  "portfolio.public.by": "by",
+
+  // Status Messages
+  "portfolio.status.saved": "Portfolio saved successfully!",
+  "portfolio.status.saveFailed": "Failed to save portfolio",
+  "portfolio.status.loadFailed": "Failed to load portfolio",
+
+  // Common Portfolio Terms
+  "portfolio.common.featured": "Featured",
+  "portfolio.common.completed": "Completed",
+  "portfolio.common.inProgress": "In Progress",
+  "portfolio.common.planned": "Planned",
+  "portfolio.common.expert": "Expert",
+  "portfolio.common.advanced": "Advanced",
+  "portfolio.common.intermediate": "Intermediate",
+  "portfolio.common.beginner": "Beginner",
+
+  // Additional common terms
+  "common.characters": "characters",
+  "common.present": "Present",
+
+  "portfolio.builder.customizeSection":
+    "Customize your portfolio {section} section",
+  "portfolio.skills.selectCategory": "Select Category",
+  "common.tip": "Tip",
+  "portfolio.social.noLinks":
+    "No social links added. They will appear here once you add them.",
+  "portfolio.settings.appearance": "Appearance",
+  "portfolio.settings.colorTheme": "Color Theme",
+  "portfolio.settings.layoutStyle": "Layout Style",
+  "portfolio.settings.publicDescription":
+    "Your portfolio is live and accessible to everyone",
+  "portfolio.settings.privateDescription":
+    "Your portfolio is private and only you can see it",
+  "portfolio.settings.portfolio": "Portfolio",
+  "portfolio.settings.resetConfirm":
+    "Are you sure you want to reset your portfolio? This action cannot be undone.",
+  "common.pressEnter": "press Enter",
+  "portfolio.projects.demo": "Live Demo",
+  "portfolio.public.notFound": "Portfolio Not Found",
+  "portfolio.public.notFoundDescription":
+    "The portfolio you're looking for doesn't exist or is not published.",
+  "common.goHome": "Go Home",
+  "portfolio.public.linkCopied": "Link copied to clipboard!",
+  "portfolio.public.builtWith": "Built with",
+  "common.call": "Call",
+  "portfolio.preview.addContent": "Add skills and projects to see them here",
+
+  "nav.createPortfolio": "Create Portfolio",
+  "nav.myPortfolio": "My Portfolio",
 };
 
 export default en;

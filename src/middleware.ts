@@ -15,7 +15,8 @@ export async function middleware(req: NextRequest) {
     "/admin",
     "/dashboard",
     "/profile",
-    "/marketing"
+    "/marketing",
+    "/portfolio/builder" // 🔥 أضفنا هذا
   ];
 
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -41,6 +42,9 @@ export async function middleware(req: NextRequest) {
       if (pathname.startsWith("/marketing") && payload.role !== "marketing") {
         return NextResponse.redirect(new URL("/", req.url));
       }
+      
+      // 🔥 صفحة إنشاء البورتفليو متاحة لجميع المستخدمين المسجلين (user, admin, marketing)
+      // لا حاجة لتحقق إضافي هنا
       
       // إضافة بيانات المستخدم للهيدر
       const requestHeaders = new Headers(req.headers);
@@ -79,6 +83,7 @@ export const config = {
     "/dashboard/:path*",
     "/profile/:path*",
     "/marketing/:path*",
+    "/portfolio/builder", // 🔥 أضفنا هذا
     "/signin",
     "/signup"
   ],

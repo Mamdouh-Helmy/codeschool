@@ -15,13 +15,13 @@ interface AgeRange {
 
 interface CategoryBody {
   age_range?: AgeRange;
-  description?: {
-    en?: string;
-    ar?: string;
-  };
-  color?: string;
+  name_en?: string;
+  name_ar?: string;
+  description_en?: string;
+  description_ar?: string;
   order?: number;
-  status?: string;
+  is_active?: boolean;
+  icon?: string;
 }
 
 export async function GET(
@@ -126,6 +126,19 @@ export async function PUT(
     });
   } catch (error: any) {
     console.error('Error updating category:', error);
+    
+    // معالجة أخطاء التحقق من الصحة
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map((err: any) => err.message);
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'Validation error',
+          errors: errors.join(', ')
+        },
+        { status: 400 }
+      );
+    }
     
     if (error.code === 11000) {
       return NextResponse.json(

@@ -1,3 +1,4 @@
+// api/section-images/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import SectionImage from "../../models/SectionImage";
@@ -43,7 +44,17 @@ export async function POST(req) {
     await connectDB();
 
     const body = await req.json();
-    const { sectionName, imageUrl, imageAlt, description, displayOrder } = body;
+    const { 
+      sectionName, 
+      imageUrl, 
+      imageAlt, 
+      secondImageUrl, 
+      secondImageAlt, 
+      description, 
+      displayOrder 
+    } = body;
+
+    console.log("🔍 POST Request Body:", body); // للتصحيح
 
     // التحقق من الحقول المطلوبة
     if (!sectionName || !imageUrl || !imageAlt) {
@@ -56,14 +67,37 @@ export async function POST(req) {
       );
     }
 
-    const newImage = await SectionImage.create({
+    // إذا كان hero-section، تحقق من الصورة الثانية
+    if (sectionName === "hero-section") {
+      if (!secondImageUrl || !secondImageAlt) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Both images and their alt texts are required for hero section",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // تحضير بيانات الإنشاء مع جميع الحقول
+    const createData = {
       sectionName,
       imageUrl,
       imageAlt,
       description: description || "",
       displayOrder: displayOrder || 0,
       isActive: true,
-    });
+      // إضافة الحقول الجديدة بشكل صريح
+      secondImageUrl: secondImageUrl || "",
+      secondImageAlt: secondImageAlt || "",
+    };
+
+    console.log("📝 Creating with data:", createData); // للتصحيح
+
+    const newImage = await SectionImage.create(createData);
+
+    console.log("✅ Created image:", newImage); // للتصحيح
 
     return NextResponse.json(
       {
@@ -74,8 +108,7 @@ export async function POST(req) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Create section image error:", error);
-
+    console.error("❌ Create section image error:", error);
     return NextResponse.json(
       { success: false, message: "Failed to create image" },
       { status: 500 }
@@ -93,10 +126,14 @@ export async function PUT(req) {
       sectionName,
       imageUrl,
       imageAlt,
+      secondImageUrl,
+      secondImageAlt,
       description,
       displayOrder,
       isActive,
     } = body;
+
+    console.log("🔍 PUT Request Body:", body); // للتصحيح
 
     // التحقق من وجود الـ ID
     if (!id) {
@@ -117,6 +154,19 @@ export async function PUT(req) {
       );
     }
 
+    // إذا كان hero-section، تحقق من الصورة الثانية
+    if (sectionName === "hero-section") {
+      if (!secondImageUrl || !secondImageAlt) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Both images and their alt texts are required for hero section",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // البحث عن الصورة الحالية
     const existingImage = await SectionImage.findById(id);
     if (!existingImage) {
@@ -126,20 +176,30 @@ export async function PUT(req) {
       );
     }
 
+    // تحضير بيانات التحديث مع جميع الحقول
+    const updateData = {
+      sectionName,
+      imageUrl,
+      imageAlt,
+      description: description || "",
+      displayOrder: displayOrder || 0,
+      isActive: isActive !== undefined ? isActive : existingImage.isActive,
+      updatedAt: new Date(),
+      // تحديث الحقول الجديدة بشكل صريح
+      secondImageUrl: secondImageUrl || "",
+      secondImageAlt: secondImageAlt || "",
+    };
+
+    console.log("📝 Updating with data:", updateData); // للتصحيح
+
     // تحديث الصورة
     const updatedImage = await SectionImage.findByIdAndUpdate(
       id,
-      {
-        sectionName,
-        imageUrl,
-        imageAlt,
-        description: description || "",
-        displayOrder: displayOrder || 0,
-        isActive: isActive !== undefined ? isActive : existingImage.isActive,
-        updatedAt: new Date(),
-      },
+      updateData,
       { new: true, runValidators: true }
     );
+
+    console.log("✅ Updated image:", updatedImage); // للتصحيح
 
     return NextResponse.json({
       success: true,
@@ -147,16 +207,7 @@ export async function PUT(req) {
       message: "Image updated successfully",
     });
   } catch (error) {
-    console.error("Update section image error:", error);
-
-    if (error.name === "ValidationError") {
-      const errors = Object.values(error.errors).map((err) => err.message);
-      return NextResponse.json(
-        { success: false, message: "Validation error", errors },
-        { status: 400 }
-      );
-    }
-
+    console.error("❌ Update section image error:", error);
     return NextResponse.json(
       { success: false, message: "Failed to update image" },
       { status: 500 }

@@ -1,3 +1,4 @@
+// components/Header/Header.tsx
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -24,6 +25,7 @@ type LocalUser = {
   id?: string;
   name?: string;
   email?: string;
+  username?: string;
   role?: string;
   image?: string | null;
   [key: string]: any;
@@ -148,15 +150,18 @@ const Header: React.FC = () => {
     }
   };
 
+  // 🔥 دالة للتحقق مما إذا كان المستخدم يمكنه الوصول للبورتفليو
+  const canAccessPortfolio = localUser &&
+    (localUser.role === "student" || localUser.role === "admin" || localUser.role === "marketing");
+
   return (
     <>
       <div className="relative"></div>
       <header
-        className={`fixed h-24 top-0 py-1 z-50 w-full bg-transparent transition-all ${
-          sticky
+        className={`fixed h-24 top-0 py-1 z-50 w-full bg-transparent transition-all ${sticky
             ? "shadow-lg dark:shadow-darkmd bg-white dark:bg-secondary"
             : "shadow-none"
-        }`}
+          }`}
       >
         <div className="container">
           <div className="flex items-center justify-between py-6">
@@ -167,16 +172,45 @@ const Header: React.FC = () => {
                   <HeaderLink key={index} item={item} />
                 ))}
 
+                {/* 🔥 رابط إنشاء البورتفليو - يظهر لأي مستخدم مسجل (user, admin, marketing) */}
+                {canAccessPortfolio && (
+                  <li>
+                    <Link
+                      href="/portfolio/builder"
+                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/portfolio/builder"
+                          ? "text-primary"
+                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        }`}
+                    >
+                      {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                    </Link>
+                  </li>
+                )}
+
+                {/* 🔥 رابط عرض البورتفليو - يظهر لأي مستخدم مسجل */}
+                {canAccessPortfolio && localUser?.username && (
+                  <li>
+                    <Link
+                      href={`/portfolio/${localUser.username}`}
+                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === `/portfolio/${localUser.username}`
+                          ? "text-primary"
+                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        }`}
+                    >
+                      {t("nav.myPortfolio") || "بورتفليو"}
+                    </Link>
+                  </li>
+                )}
+
                 {/* يظهر فقط لو المستخدم أدمن */}
                 {localUser?.role === "admin" && (
                   <li>
                     <Link
                       href="/admin"
-                      className={`text-base font-medium transition-colors duration-200 ${
-                        pathUrl === "/admin"
+                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/admin"
                           ? "text-primary"
                           : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                      }`}
+                        }`}
                     >
                       {t("nav.dashboard")}
                     </Link>
@@ -188,11 +222,10 @@ const Header: React.FC = () => {
                   <li>
                     <Link
                       href="/marketing/blogs"
-                      className={`text-base font-medium transition-colors duration-200 ${
-                        pathUrl === "/marketing/blogs"
+                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/marketing/blogs"
                           ? "text-primary"
                           : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                      }`}
+                        }`}
                     >
                       {t("nav.addBlog") || "إضافة مدونة"}
                     </Link>
@@ -218,9 +251,8 @@ const Header: React.FC = () => {
                 {/* أيقونة القمر - تظهر في الوضع الفاتح فقط */}
                 <svg
                   viewBox="0 0 23 23"
-                  className={`h-8 w-8 text-dark dark:hidden ${
-                    !sticky && pathUrl === "/" && "text-white"
-                  }`}
+                  className={`h-8 w-8 text-dark dark:hidden ${!sticky && pathUrl === "/" && "text-white"
+                    }`}
                 >
                   <path d="M16.6111 15.855C17.591 15.1394 18.3151 14.1979 18.7723 13.1623C16.4824 13.4065 14.1342 12.4631 12.6795 10.4711C11.2248 8.47905 11.0409 5.95516 11.9705 3.84818C10.8449 3.9685 9.72768 4.37162 8.74781 5.08719C5.7759 7.25747 5.12529 11.4308 7.29558 14.4028C9.46586 17.3747 13.6392 18.0253 16.6111 15.855Z" />
                 </svg>
@@ -306,19 +338,16 @@ const Header: React.FC = () => {
                 aria-label="Toggle menu"
               >
                 <span
-                  className={`block w-6 h-0.5 bg-black dark:bg-white transition-all duration-200 ${
-                    navbarOpen ? "rotate-45 translate-y-2" : ""
-                  }`}
+                  className={`block w-6 h-0.5 bg-black dark:bg-white transition-all duration-200 ${navbarOpen ? "rotate-45 translate-y-2" : ""
+                    }`}
                 ></span>
                 <span
-                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${
-                    navbarOpen ? "opacity-0" : ""
-                  }`}
+                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${navbarOpen ? "opacity-0" : ""
+                    }`}
                 ></span>
                 <span
-                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${
-                    navbarOpen ? "-rotate-45 -translate-y-2" : ""
-                  }`}
+                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${navbarOpen ? "-rotate-45 -translate-y-2" : ""
+                    }`}
                 ></span>
               </button>
             </div>
@@ -332,9 +361,8 @@ const Header: React.FC = () => {
         {/* قائمة الموبايل */}
         <div
           ref={mobileMenuRef}
-          className={`lg:hidden fixed top-0 right-0 h-full w-full bg-white dark:bg-darkmode shadow-lg transform transition-transform duration-300 max-w-64 ${
-            navbarOpen ? "translate-x-0" : "translate-x-full"
-          } z-50`}
+          className={`lg:hidden fixed top-0 right-0 h-full w-full bg-white dark:bg-darkmode shadow-lg transform transition-transform duration-300 max-w-64 ${navbarOpen ? "translate-x-0" : "translate-x-full"
+            } z-50`}
         >
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-bold text-black dark:text-SlateBlueText">
@@ -367,6 +395,28 @@ const Header: React.FC = () => {
               headerData.map((item, index) => (
                 <MobileHeaderLink key={index} item={item} />
               ))}
+
+            {/* 🔥 رابط إنشاء البورتفليو في الموبايل - لأي مستخدم مسجل */}
+            {canAccessPortfolio && (
+              <Link
+                href="/portfolio/builder"
+                onClick={() => setNavbarOpen(false)}
+                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+              >
+                {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+              </Link>
+            )}
+
+            {/* 🔥 رابط عرض البورتفليو في الموبايل - لأي مستخدم مسجل */}
+            {canAccessPortfolio && localUser?.username && (
+              <Link
+                href={`/portfolio/${localUser.username}`}
+                onClick={() => setNavbarOpen(false)}
+                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+              >
+                {t("nav.myPortfolio") || "بورتفليو"}
+              </Link>
+            )}
 
             {/* Dashboard للأدمن فقط */}
             {localUser?.role === "admin" && (
@@ -467,29 +517,26 @@ const Header: React.FC = () => {
 
         {/* Dialogs */}
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
-            authDialog?.isSuccessDialogOpen
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isSuccessDialogOpen
               ? "opacity-100 transform translate-y-0"
               : "opacity-0 transform -translate-y-4 pointer-events-none"
-          }`}
+            }`}
         >
           <SuccessfullLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
-            authDialog?.isFailedDialogOpen
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isFailedDialogOpen
               ? "opacity-100 transform translate-y-0"
               : "opacity-0 transform -translate-y-4 pointer-events-none"
-          }`}
+            }`}
         >
           <FailedLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
-            authDialog?.isUserRegistered
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isUserRegistered
               ? "opacity-100 transform translate-y-0"
               : "opacity-0 transform -translate-y-4 pointer-events-none"
-          }`}
+            }`}
         >
           <UserRegistered />
         </div>

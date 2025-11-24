@@ -108,6 +108,8 @@ export function PostContent({ slug }: { slug: string }) {
     ? window.location.href
     : `${process.env.NEXT_PUBLIC_BASE_URL}/blog/${slug}`;
 
+  console.log(post)
+
   return (
     <>
       {/* ===== Header Section ===== */}
@@ -123,9 +125,13 @@ export function PostContent({ slug }: { slug: string }) {
                   {post.viewCount || 0} {t("blog.views")}
                 </span>
               </div>
-              <h2 className="text-midnight_text dark:text-white pt-4 md:pt-7 text-xl sm:text-2xl md:text-3xl font-bold leading-tight">
-                {post.title || t("blog.untitled")}
+              <h2
+                className="text-midnight_text dark:text-white pt-4 md:pt-7 text-xl sm:text-2xl md:text-3xl font-bold leading-tight 
+             overflow-hidden whitespace-nowrap text-ellipsis"
+              >
+                {post.excerpt || t("blog.untitled")}
               </h2>
+
             </div>
 
             <div className="md:col-span-4 pt-4 md:pt-0">
@@ -153,7 +159,7 @@ export function PostContent({ slug }: { slug: string }) {
       </section>
 
       {/* ===== Body Section ===== */}
-      <section className="dark:bg-darkmode py-8 md:py-12">
+      <section className="dark:bg-darkmode ">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex flex-wrap justify-center">
             <div className="w-full px-0 sm:px-4">
@@ -167,72 +173,26 @@ export function PostContent({ slug }: { slug: string }) {
                   fallbackSrc="/images/blog/blog_1.png"
                 />
               </div>
-
-              <div className="w-full lg:w-10/12 xl:w-8/12 mx-auto">
-                {post.body ? (
-                  <div
-                    className="prose prose-sm sm:prose-base lg:prose-lg dark:prose-invert max-w-none
-                      prose-headings:break-words
-                      prose-p:break-words
-                      prose-li:break-words
-                      prose-img:rounded-lg
-                      prose-img:w-full
-                      prose-img:h-auto"
-                    dangerouslySetInnerHTML={{
-                      __html: post.body,
-                    }}
-                  ></div>
-                ) : (
-                  <p className="text-center text-gray-500 text-sm md:text-base">
-                    {t("blog.noContent")}
-                  </p>
-                )}
-              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* ===== Blog Features Section ===== */}
-      <section className="dark:bg-darkmode py-8 md:py-12">
+      <section className="dark:bg-darkmode ">
         <div className="container mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
             {/* المحتوى الرئيسي */}
-            <div className="lg:col-span-2 space-y-6 md:space-y-8">
+            <div className=" space-y-6 md:space-y-8">
               {/* Social Sharing */}
               <SocialSharing
                 title={post.title}
                 url={currentUrl}
               />
 
-              {/* Tags */}
-              {post.tags && post.tags.length > 0 && (
-                <div className="bg-IcyBreeze dark:bg-dark_input rounded-lg p-4 md:p-6 border border-PowderBlueBorder dark:border-dark_border">
-                  <h3 className="text-base md:text-lg font-semibold text-MidnightNavyText dark:text-white mb-3 md:mb-4">
-                    {t("blog.tags") || "Tags"}
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {post.tags.map((tag: string, index: number) => (
-                      <span
-                        key={index}
-                        className="px-2 md:px-3 py-1 md:py-1.5 bg-primary/10 text-primary dark:bg-primary/20 rounded-lg text-xs md:text-sm font-medium hover:bg-primary hover:text-white transition-all duration-200 cursor-pointer break-words max-w-full"
-                        onClick={() => {
-                          router.push(`/blog?tag=${encodeURIComponent(tag)}`);
-                        }}
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-4 md:space-y-6">
               <EmailSubscription />
 
-              {/* Popular Tags Sidebar */}
+                {/* Popular Tags Sidebar */}
               <div className="bg-IcyBreeze dark:bg-dark_input rounded-lg p-4 md:p-6 border border-PowderBlueBorder dark:border-dark_border">
                 <h3 className="text-base md:text-lg font-semibold text-MidnightNavyText dark:text-white mb-3 md:mb-4">
                   {t("blog.popularTags") || "Popular Tags"}
@@ -243,6 +203,61 @@ export function PostContent({ slug }: { slug: string }) {
                   isFilter={true}
                 />
               </div>
+            </div>
+
+            {/* Sidebar */}
+            <div className="space-y-6 md:space-y-8">
+              {/* محتوى المقال الرئيسي */}
+              <div className=" rounded-lg px-3 border-none">
+                <h2 className="text-midnight_text dark:text-white text-xl sm:text-2xl md:text-3xl font-bold leading-tight mb-4 md:mb-6">
+                  {post.title || t("blog.untitled")}
+                </h2>
+
+                <div className="prose prose-sm sm:prose-base lg:prose-lg dark:prose-invert max-w-none
+                  prose-headings:break-words
+                  prose-p:break-words
+                  prose-li:break-words
+                  prose-img:rounded-lg
+                  prose-img:w-full
+                  prose-img:h-auto">
+                  {post.body ? (
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html: post.body,
+                      }}
+                    />
+                  ) : (
+                    <p className="text-center text-gray-500 text-sm md:text-base">
+                      {t("blog.noContent")}
+                    </p>
+                  )}
+                </div>
+
+                {/* Tags */}
+                {post.tags && post.tags.length > 0 && (
+                  <div className="mt-6 md:mt-8">
+                    <h3 className="text-base md:text-lg font-semibold text-MidnightNavyText dark:text-white mb-3 md:mb-4">
+                      {t("blog.tags") || "Tags"}
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {post.tags.map((tag: string, index: number) => (
+                        <span
+                          key={index}
+                          className="px-2 md:px-3 py-1 md:py-1.5 bg-primary/10 text-primary dark:bg-primary/20 rounded-lg text-xs md:text-sm font-medium hover:bg-primary hover:text-white transition-all duration-200 cursor-pointer break-words max-w-full"
+                          onClick={() => {
+                            router.push(`/blog?tag=${encodeURIComponent(tag)}`);
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            
+
+              {/* يمكنك إضافة مكونات أخرى للسايدبار هنا */}
             </div>
           </div>
         </div>

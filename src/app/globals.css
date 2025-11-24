@@ -218,3 +218,30 @@ body {
 .prose sub {
   bottom: -0.25em;
 }
+
+
+/* في ملف globals.css */
+.portfolio-header {
+  background: linear-gradient(to right, var(--gradient-from), var(--gradient-to)) !important;
+  color: white !important;
+}
+
+.portfolio-header-light {
+  --gradient-from: #2563eb;
+  --gradient-to: #1d4ed8;
+}
+
+.portfolio-header-green {
+  --gradient-from: #059669;
+  --gradient-to: #047857;
+}
+
+.portfolio-header-blue {
+  --gradient-from: #2563eb;
+  --gradient-to: #1d4ed8;
+}
+
+.portfolio-header-dark {
+  --gradient-from: #374151;
+  --gradient-to: #4b5563;
+}

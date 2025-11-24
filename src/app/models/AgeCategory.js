@@ -9,13 +9,13 @@ const AgeCategorySchema = new mongoose.Schema({
     type: {
       en: { 
         type: String, 
-        required: true,
-        enum: ['6-8 years', '8-10 years', '10-12 years', '12-14 years', '14-16 years', '16-18 years', '18+ years']
+        required: true
+        // تم إزالة الـ enum للسماح بقيم مخصصة
       },
       ar: { 
         type: String, 
-        required: true,
-        enum: ['6-8 سنوات', '8-10 سنوات', '10-12 سنوات', '12-14 سنوات', '14-16 سنوات', '16-18 سنوات', '18+ سنة']
+        required: true
+        // تم إزالة الـ enum للسماح بقيم مخصصة
       }
     },
     required: true

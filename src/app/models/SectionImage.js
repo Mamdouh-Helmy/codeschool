@@ -1,3 +1,4 @@
+// models/SectionImage.js
 import mongoose from "mongoose";
 
 const SectionImageSchema = new mongoose.Schema(
@@ -9,16 +10,28 @@ const SectionImageSchema = new mongoose.Schema(
       enum: ["ticket-section", "event-ticket", "hero-section", "about-section", "contact-section"]
     },
     
-    // رابط الصورة
+    // رابط الصورة الرئيسية
     imageUrl: { 
       type: String, 
       required: true 
     },
     
-    // النص البديل للصورة
+    // النص البديل للصورة الرئيسية
     imageAlt: { 
       type: String, 
       required: true 
+    },
+    
+    // رابط الصورة الثانية (خاص بـ hero-section فقط)
+    secondImageUrl: { 
+      type: String, 
+      default: "" 
+    },
+    
+    // النص البديل للصورة الثانية
+    secondImageAlt: { 
+      type: String, 
+      default: "" 
     },
     
     // وصف إضافي (اختياري)
@@ -44,8 +57,8 @@ const SectionImageSchema = new mongoose.Schema(
   }
 );
 
-// إنشاء index للبحث السريع بدون اللغة
+// إنشاء index للبحث السريع
 SectionImageSchema.index({ sectionName: 1, isActive: 1 });
 
-export default mongoose.models.SectionImage ||
-  mongoose.model("SectionImage", SectionImageSchema);
+// التأكد من أن الموديل مُسجل بشكل صحيح
+export default mongoose.models.SectionImage || mongoose.model("SectionImage", SectionImageSchema);

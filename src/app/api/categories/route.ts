@@ -72,6 +72,19 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error creating category:', error);
     
+    // معالجة أخطاء التحقق من الصحة
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map((err: any) => err.message);
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'Validation error',
+          errors: errors.join(', ')
+        },
+        { status: 400 }
+      );
+    }
+    
     // معالجة خطأ الـ duplicate key بشكل خاص
     if (error.code === 11000) {
       return NextResponse.json(

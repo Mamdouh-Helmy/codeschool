@@ -13,6 +13,9 @@ import {
   Sparkles,
   ArrowRight,
   ArrowLeft,
+  Users,
+  GraduationCap,
+  Heart,
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { useLocale } from "@/app/context/LocaleContext";
@@ -22,46 +25,78 @@ interface WelcomePopupProps {
   onClose: () => void;
 }
 
+interface HeroImages {
+  imageUrl?: string;
+  secondImageUrl?: string;
+  imageAlt?: string;
+  secondImageAlt?: string;
+}
+
 const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
   const { locale } = useLocale();
   const { t } = useI18n();
   const router = useRouter();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [heroImages, setHeroImages] = useState<HeroImages | null>(null);
 
-  // تحديد direction بناءً على locale
   const isRTL = locale === "ar";
   const direction = isRTL ? "rtl" : "ltr";
+
+  useEffect(() => {
+    const fetchHeroImages = async () => {
+      try {
+        const res = await fetch('/api/section-images?sectionName=hero-section&activeOnly=true');
+        const result = await res.json();
+        if (result.success && result.data.length > 0) {
+          setHeroImages(result.data[0]);
+        }
+      } catch (error) {
+        console.error('Error fetching hero images for popup:', error);
+      }
+    };
+
+    fetchHeroImages();
+  }, []);
+
+  const getImageSrc = (imageUrl: string | undefined, defaultImage: string): string => {
+    if (!imageUrl) return defaultImage;
+    if (imageUrl.startsWith('data:image')) return imageUrl;
+    return imageUrl;
+  };
 
   const slides = [
     {
       title: t("hero.title") || "Empower Young Minds!",
       subtitle: t("welcome.subtitle1") || "Transform your child's future with coding",
-      imageUrl: "/images/hero/john.png",
+      imageUrl: getImageSrc(heroImages?.imageUrl, "/images/hero/john.png"),
       features: [
-        t("welcome.feature1") || "130K+ Graduates",
-        t("welcome.feature2") || "Expert Instructors",
-        t("welcome.feature3") || "Interactive Learning",
+        t("welcome.feature1") || "Expert Coding Instructors",
+        t("welcome.feature2") || "Interactive Learning Platform",
+        t("welcome.feature3") || "Project-Based Curriculum",
       ],
+      icon: GraduationCap,
     },
     {
       title: t("welcome.specialOffer") || "Special Launch Offer!",
       subtitle: t("welcome.subtitle2") || "Get 30% off on all courses",
-      imageUrl: "/images/hero/maria.png",
+      imageUrl: getImageSrc(heroImages?.secondImageUrl, "/images/hero/maria.png"),
       features: [
-        t("welcome.feature4") || "Limited Time Only",
-        t("welcome.feature5") || "All Age Groups",
-        t("welcome.feature6") || "Certificate Included",
+        t("welcome.feature4") || "All Age Groups (6-18)",
+        t("welcome.feature5") || "International Certificate",
+        t("welcome.feature6") || "Flexible Schedule",
       ],
+      icon: Heart,
     },
   ];
 
   const currentSlideData = slides[currentSlide];
+  const CurrentIcon = currentSlideData.icon;
 
   useEffect(() => {
     if (isOpen) {
       const interval = setInterval(() => {
         setCurrentSlide((prev) => (prev + 1) % slides.length);
-      }, 4000);
+      }, 5000);
       return () => clearInterval(interval);
     }
   }, [isOpen, slides.length]);
@@ -109,7 +144,6 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -118,7 +152,6 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
             onClick={onClose}
           />
 
-          {/* Popup Content */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -127,8 +160,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
             className="fixed inset-2 sm:inset-4 md:inset-8 lg:inset-16 xl:inset-20 z-50 flex items-center justify-center p-2 sm:p-4"
             dir={direction}
           >
-            <div className="relative w-full max-w-4xl h-auto max-h-[95vh] bg-white dark:bg-darkmode rounded-2xl sm:rounded-3xl shadow-2xl border-none overflow-hidden">
-              {/* Close Button */}
+            <div className="relative w-full max-w-4xl h-auto max-h-[98vh] bg-white dark:bg-darkmode rounded-2xl sm:rounded-3xl shadow-2xl border-none overflow-hidden">
               <button
                 onClick={onClose}
                 className={`absolute top-2 sm:top-4 ${isRTL ? "left-2 sm:left-4" : "right-2 sm:right-4"} z-10 w-8 h-8 sm:w-10 sm:h-10 bg-white/90 dark:bg-darklight/90 rounded-full flex items-center justify-center hover:bg-white dark:hover:bg-darklight transition-all duration-300 shadow-lg hover:scale-110`}
@@ -136,13 +168,10 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                 <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-darktext" />
               </button>
 
-              {/* Content */}
               <div
                 className={`flex flex-col lg:flex-row ${isRTL ? "lg:flex-row-reverse" : ""} h-full`}
               >
-                {/* Image Section */}
                 <div className="lg:w-1/2 xl:w-2/5 relative overflow-hidden bg-gradient-to-br from-primary via-[#7a45e6] to-[#6a3ac9] p-4 sm:p-6 md:p-8 flex items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
-                  {/* Floating elements */}
                   <div className="absolute inset-0 overflow-hidden">
                     {[...Array(6)].map((_, i) => (
                       <motion.div
@@ -175,7 +204,13 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                     transition={{ duration: 0.6 }}
                     className="relative z-10 text-center w-full"
                   >
-                    <div className="bg-white/10 backdrop-blur-sm rounded-14 sm:rounded-22 p-3 sm:p-4 mb-2 sm:mb-6 mx-auto max-w-[280px]">
+                    <div className="mb-4 sm:mb-6">
+                      <div className="bg-white/20 backdrop-blur-sm rounded-full p-3 sm:p-4 w-16 h-16 sm:w-20 sm:h-20 mx-auto flex items-center justify-center mb-3">
+                        <CurrentIcon className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+                      </div>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-sm rounded-14 sm:rounded-22 p-3 sm:p-4 mb-4 sm:mb-6 mx-auto max-w-[280px]">
                       <Image
                         src={currentSlideData.imageUrl}
                         alt="Welcome"
@@ -185,7 +220,6 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                       />
                     </div>
 
-                    {/* Features */}
                     <div className="w-full max-w-md mx-auto grid grid-cols-1 gap-2 sm:gap-3">
                       {currentSlideData.features.map((feature, index) => (
                         <motion.div
@@ -206,7 +240,6 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                     </div>
                   </motion.div>
 
-                  {/* Slide indicators */}
                   <div className="absolute bottom-3 sm:bottom-4 md:bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2">
                     {slides.map((_, index) => (
                       <button
@@ -222,7 +255,6 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
 
-                {/* Content Section */}
                 <div className="lg:w-1/2 xl:w-3/5 p-4 sm:p-6 md:p-8 flex flex-col justify-center bg-IcyBreeze dark:bg-darklight overflow-y-auto">
                   <motion.div
                     key={currentSlide}
@@ -270,7 +302,6 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                       )}
                     </div>
 
-                    {/* Contact Options */}
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -278,10 +309,9 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                       className="space-y-3 sm:space-y-4"
                     >
                       <h3 className="text-lg sm:text-20 font-semibold text-MidnightNavyText dark:text-white mb-3 sm:mb-4">
-                        {t("welcome.contactUs") || "Contact Us Now:"}
+                        {t("welcome.contactUs") || "Start Your Child's Journey Today!"}
                       </h3>
 
-                      {/* WhatsApp Button */}
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
@@ -290,7 +320,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                       >
                         <FaWhatsapp className="text-xl sm:text-24" />
                         <span>
-                          {t("welcome.whatsappButton") || "Message Us on WhatsApp"}
+                          {t("welcome.whatsappButton") || "Free Consultation on WhatsApp"}
                         </span>
                         {isRTL ? (
                           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -299,7 +329,6 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                         )}
                       </motion.button>
 
-                      {/* Contact Options Row */}
                       <div className="grid grid-cols-2 gap-2 sm:gap-3">
                         <motion.button
                           whileHover={{ scale: 1.02 }}
@@ -309,7 +338,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                         >
                           <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
                           <span>
-                            {t("welcome.callButton") || "Call Us"}
+                            {t("welcome.callButton") || "Call Now"}
                           </span>
                         </motion.button>
 
@@ -327,7 +356,6 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                       </div>
                     </motion.div>
 
-                    {/* Trust indicators */}
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -346,9 +374,12 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                           <span className="font-semibold">4.9/5</span>
                         </div>
                         <span className="hidden sm:inline text-gray-400">•</span>
-                        <span className="font-medium text-center sm:text-start">
-                          {t("welcome.happyParents") || "250K+ Happy Parents"}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <Users className="w-4 h-4 text-primary" />
+                          <span className="font-medium">
+                            {t("welcome.happyParents") || "Happy Parents"}
+                          </span>
+                        </div>
                       </div>
                     </motion.div>
                   </motion.div>

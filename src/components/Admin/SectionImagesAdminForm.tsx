@@ -1,3 +1,4 @@
+// components/Admin/SectionImagesAdminForm.js
 "use client";
 import { useState, useEffect } from "react";
 import {
@@ -10,6 +11,9 @@ import {
   Layout,
   Type,
   FileText,
+  Plus,
+  Trash2,
+  Info
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -26,6 +30,8 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
     sectionName: initial?.sectionName || "",
     imageUrl: initial?.imageUrl || "",
     imageAlt: initial?.imageAlt || "",
+    secondImageUrl: initial?.secondImageUrl || "",
+    secondImageAlt: initial?.secondImageAlt || "",
     description: initial?.description || "",
     displayOrder: initial?.displayOrder || 0,
     isActive: initial?.isActive ?? true,
@@ -33,6 +39,7 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
 
   const [loading, setLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
+  const [secondImagePreview, setSecondImagePreview] = useState("");
 
   // Available sections
   const sections = [
@@ -44,25 +51,55 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
   ];
 
   useEffect(() => {
+    console.log("Initial data:", initial);
+    
     if (form.imageUrl) {
       setImagePreview(form.imageUrl);
     }
-  }, [form.imageUrl]);
+    if (form.secondImageUrl) {
+      setSecondImagePreview(form.secondImageUrl);
+    }
+  }, [form.imageUrl, form.secondImageUrl, initial]);
 
   const onChange = (field: string, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isSecondImage = false) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        setImagePreview(result);
-        onChange("imageUrl", result);
+        if (isSecondImage) {
+          setSecondImagePreview(result);
+          onChange("secondImageUrl", result);
+          // تعيين نص بديل افتراضي للصورة الثانية
+          if (!form.secondImageAlt) {
+            onChange("secondImageAlt", "Second hero image");
+          }
+        } else {
+          setImagePreview(result);
+          onChange("imageUrl", result);
+          // تعيين نص بديل افتراضي للصورة الأولى
+          if (!form.imageAlt) {
+            onChange("imageAlt", "First hero image");
+          }
+        }
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = (isSecondImage = false) => {
+    if (isSecondImage) {
+      setSecondImagePreview("");
+      onChange("secondImageUrl", "");
+      onChange("secondImageAlt", "");
+    } else {
+      setImagePreview("");
+      onChange("imageUrl", "");
+      onChange("imageAlt", "");
     }
   };
 
@@ -71,9 +108,20 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
     setLoading(true);
 
     try {
+      // التحقق من الصور لـ hero-section
+      if (form.sectionName === "hero-section") {
+        if (!form.imageUrl || !form.imageAlt || !form.secondImageUrl || !form.secondImageAlt) {
+          alert("Both images and their alt texts are required for hero section");
+          setLoading(false);
+          return;
+        }
+      }
+
       const payload = {
         ...form,
       };
+
+      console.log("Submitting payload:", payload);
 
       const method = initial?._id ? "PUT" : "POST";
       const url = "/api/section-images";
@@ -85,6 +133,7 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
       });
 
       const result = await res.json();
+      console.log("Server response:", result);
 
       if (res.ok && result.success) {
         onSaved();
@@ -99,6 +148,8 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
       setLoading(false);
     }
   };
+
+  const isHeroSection = form.sectionName === "hero-section";
 
   return (
     <form onSubmit={submit} className="space-y-6">
@@ -126,7 +177,17 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
             </label>
             <select
               value={form.sectionName}
-              onChange={(e) => onChange("sectionName", e.target.value)}
+              onChange={(e) => {
+                const newSection = e.target.value;
+                onChange("sectionName", newSection);
+                
+                // إذا تم تغيير القسم من hero-section، مسح بيانات الصورة الثانية
+                if (newSection !== "hero-section") {
+                  setSecondImagePreview("");
+                  onChange("secondImageUrl", "");
+                  onChange("secondImageAlt", "");
+                }
+              }}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
               required
             >
@@ -139,20 +200,17 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <Type className="w-3 h-3 text-primary" />
-              {t('sectionImages.imageAlt') || "Image Alt Text"} *
-            </label>
-            <input
-              type="text"
-              value={form.imageAlt}
-              onChange={(e) => onChange("imageAlt", e.target.value)}
-              placeholder={t('sectionImages.imageAltPlaceholder') || "Descriptive text for accessibility"}
-              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-              required
-            />
-          </div>
+          {isHeroSection && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
+                <Info className="w-4 h-4" />
+                <span className="text-13 font-medium">Hero Section Requirement</span>
+              </div>
+              <p className="text-12 text-blue-600 dark:text-blue-400">
+                For hero section, you need to upload two images. Both images will be displayed side by side.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
@@ -188,7 +246,7 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
         </div>
       </div>
 
-      {/* Image Upload */}
+      {/* First Image Upload */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-Aquamarine/10 rounded-lg flex items-center justify-center">
@@ -196,10 +254,12 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              {t('sectionImages.imageUpload') || "Image Upload"}
+              {isHeroSection ? "First Image" : "Image Upload"} *
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              {t('sectionImages.imageUploadDescription') || "Upload or provide URL for the section image"}
+              {isHeroSection 
+                ? "Upload the first image for the hero section" 
+                : "Upload or provide URL for the section image"}
             </p>
           </div>
         </div>
@@ -218,17 +278,27 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
                 required
               />
-              <div className="mt-2">
+              <div className="mt-2 flex gap-2">
                 <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
                   <Upload className="w-3 h-3" />
                   {t('sectionImages.uploadImage') || "Upload Image"}
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={handleImageUpload}
+                    onChange={(e) => handleImageUpload(e, false)}
                     className="hidden"
                   />
                 </label>
+                {imagePreview && (
+                  <button
+                    type="button"
+                    onClick={() => removeImage(false)}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Remove
+                  </button>
+                )}
               </div>
             </div>
             
@@ -236,14 +306,113 @@ export default function SectionImagesAdminForm({ initial, onClose, onSaved }: Pr
               <div className="w-20 h-20 border border-PowderBlueBorder rounded-lg overflow-hidden">
                 <img
                   src={imagePreview}
-                  alt="Preview"
+                  alt="First Preview"
                   className="w-full h-full object-cover"
                 />
               </div>
             )}
           </div>
+
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+              <Type className="w-3 h-3 text-primary" />
+              {t('sectionImages.imageAlt') || "Image Alt Text"} *
+            </label>
+            <input
+              type="text"
+              value={form.imageAlt}
+              onChange={(e) => onChange("imageAlt", e.target.value)}
+              placeholder={isHeroSection ? "Description for first image" : "Descriptive text for accessibility"}
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+              required
+            />
+          </div>
         </div>
       </div>
+
+      {/* Second Image Upload (Only for Hero Section) */}
+      {isHeroSection && (
+        <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-purple-500/10 rounded-lg flex items-center justify-center">
+              <Plus className="w-4 h-4 text-purple-500" />
+            </div>
+            <div>
+              <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
+                Second Image *
+              </h3>
+              <p className="text-12 text-SlateBlueText dark:text-darktext">
+                Upload the second image for the hero section
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex gap-4 items-start">
+              <div className="flex-1">
+                <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
+                  Second Image URL *
+                </label>
+                <input
+                  type="url"
+                  value={form.secondImageUrl}
+                  onChange={(e) => onChange("secondImageUrl", e.target.value)}
+                  placeholder="https://example.com/second-image.jpg"
+                  className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+                  required={isHeroSection}
+                />
+                <div className="mt-2 flex gap-2">
+                  <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 text-purple-500 rounded-lg text-12 cursor-pointer hover:bg-purple-500/20 transition-colors">
+                    <Upload className="w-3 h-3" />
+                    Upload Second Image
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, true)}
+                      className="hidden"
+                    />
+                  </label>
+                  {secondImagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => removeImage(true)}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {secondImagePreview && (
+                <div className="w-20 h-20 border border-PowderBlueBorder rounded-lg overflow-hidden">
+                  <img
+                    src={secondImagePreview}
+                    alt="Second Preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+                <Type className="w-3 h-3 text-purple-500" />
+                Second Image Alt Text *
+              </label>
+              <input
+                type="text"
+                value={form.secondImageAlt}
+                onChange={(e) => onChange("secondImageAlt", e.target.value)}
+                placeholder="Description for second image"
+                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+                required={isHeroSection}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">

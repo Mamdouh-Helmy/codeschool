@@ -1,14 +1,41 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useI18n } from "@/i18n/I18nProvider";
+
+interface HeroImages {
+  imageUrl?: string;
+  secondImageUrl?: string;
+  imageAlt?: string;
+  secondImageAlt?: string;
+}
 
 const Hero = () => {
   const { t } = useI18n();
   const [showFullText, setShowFullText] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
-  const [showPlanPopup, setShowPlanPopup] = useState(false);
+  const [heroImages, setHeroImages] = useState<HeroImages | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHeroImages = async () => {
+      try {
+        const res = await fetch('/api/section-images?sectionName=hero-section&activeOnly=true');
+        const result = await res.json();
+
+        if (result.success && result.data.length > 0) {
+          setHeroImages(result.data[0]);
+        }
+      } catch (error) {
+        console.error('Error fetching hero images:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHeroImages();
+  }, []);
 
   const fullText = t("hero.description");
   const preview = fullText.split(" ").slice(0, 36).join(" ") + "...";
@@ -16,7 +43,12 @@ const Hero = () => {
   const closeModal = () => {
     setShowFullText(false);
     setShowVideo(false);
-    setShowPlanPopup(false);
+  };
+
+  const getImageSrc = (imageUrl: string | undefined, defaultImage: string): string => {
+    if (!imageUrl) return defaultImage;
+    if (imageUrl.startsWith('data:image')) return imageUrl;
+    return imageUrl;
   };
 
   return (
@@ -58,7 +90,6 @@ const Hero = () => {
             </p>
 
             <div className="flex items-center md:justify-normal lg:justify-center justify-start flex-wrap gap-4">
-              {/* === Browse Courses Button with Popup === */}
               <Link
                 href="/curriculum"
                 data-aos="fade-up"
@@ -71,7 +102,6 @@ const Hero = () => {
                   {t("hero.browseCourses")}
                 </span>
               </Link>
-
 
               <button
                 onClick={() => setShowVideo(true)}
@@ -88,7 +118,6 @@ const Hero = () => {
             </div>
           </div>
 
-          {/* Right Images Stays */}
           <div
             data-aos="fade-left"
             data-aos-delay="200"
@@ -97,7 +126,14 @@ const Hero = () => {
             dir="ltr"
           >
             <div className="bg-[#ffbd59] relative rounded-tl-166 rounded-br-166 w-full">
-              <Image src="/images/hero/john.png" alt="hero" width={400} height={500} quality={100} className="w-full h-full" />
+              <img
+                src={getImageSrc(heroImages?.imageUrl, "/images/hero/john.png")}
+                alt={heroImages?.imageAlt || "hero"}
+                width={400}
+                height={500}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
               <div className="bg-[#8c52ff] rounded-22 shadow-hero-box py-4 px-5 absolute top-16 -left-20">
                 <p className="text-lg font-bold text-white">{t("hero.instructor1")}</p>
                 <p className="text-base font-medium text-white text-center">{t("hero.instructor1Role")}</p>
@@ -105,7 +141,14 @@ const Hero = () => {
             </div>
 
             <div className="bg-primary relative rounded-tr-166 rounded-bl-166 w-full mt-32">
-              <Image src="/images/hero/maria.png" alt="hero" width={400} height={500} quality={100} className="w-full h-full" />
+              <img
+                src={getImageSrc(heroImages?.secondImageUrl, "/images/hero/maria.png")}
+                alt={heroImages?.secondImageAlt || "hero"}
+                width={400}
+                height={500}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
               <div className="bg-[#ffbd59] rounded-22 shadow-hero-box py-4 px-5 absolute top-24 -right-20 xl:inline-block hidden">
                 <p className="text-lg font-bold text-white">{t("hero.instructor2")}</p>
                 <p className="text-base font-medium text-white text-center">{t("hero.instructor2Role")}</p>
@@ -115,7 +158,6 @@ const Hero = () => {
         </div>
       </div>
 
-      {/* === Full Text Modal === */}
       {showFullText && (
         <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div
@@ -129,7 +171,6 @@ const Hero = () => {
         </div>
       )}
 
-      {/* === Video Modal === */}
       {showVideo && (
         <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div
@@ -151,8 +192,6 @@ const Hero = () => {
           </div>
         </div>
       )}
-
-     
     </section>
   );
 };

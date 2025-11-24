@@ -7,6 +7,7 @@ import {
     X,
     Save,
     Plus,
+    Edit3,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -45,9 +46,10 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }: AgeCategoryFormProps)
     }));
 
     const [loading, setLoading] = useState<boolean>(false);
+    const [isCustomAgeRange, setIsCustomAgeRange] = useState<boolean>(false);
 
     // كل الفئات العمرية المحددة في الموديل باللغتين
-    const ageRanges: AgeRange[] = [
+    const predefinedAgeRanges: AgeRange[] = [
         { 
             en: '6-8 years', 
             ar: '6-8 سنوات' 
@@ -80,6 +82,16 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }: AgeCategoryFormProps)
 
     const icons: string[] = ['👶', '👦', '👧', '🧒', '🧑', '👨', '👩', '🚀', '💻', '🎮', '📚', '🎓'];
 
+    useEffect(() => {
+        // إذا كان هناك initial data، تحقق إذا كانت الفئة مخصصة
+        if (initial?.age_range) {
+            const isPredefined = predefinedAgeRanges.some(range => 
+                range.en === initial.age_range.en && range.ar === initial.age_range.ar
+            );
+            setIsCustomAgeRange(!isPredefined);
+        }
+    }, [initial]);
+
     const onChange = (field: keyof AgeCategory, value: any) => {
         setForm(prev => ({ ...prev, [field]: value }));
     };
@@ -89,29 +101,82 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }: AgeCategoryFormProps)
             ...prev, 
             age_range: selectedRange 
         }));
+        setIsCustomAgeRange(false);
+    };
+
+    const handleCustomAgeRangeChange = (field: 'en' | 'ar', value: string) => {
+        setForm(prev => ({
+            ...prev,
+            age_range: {
+                ...prev.age_range,
+                [field]: value
+            }
+        }));
+    };
+
+    const toggleCustomAgeRange = () => {
+        setIsCustomAgeRange(!isCustomAgeRange);
+        if (!isCustomAgeRange) {
+            // عند التبديل إلى الوضع المخصص، امسح القيم
+            setForm(prev => ({
+                ...prev,
+                age_range: { en: '', ar: '' }
+            }));
+        } else {
+            // عند الرجوع إلى القائمة المحددة، اختر أول عنصر
+            if (predefinedAgeRanges.length > 0) {
+                handleAgeRangeChange(predefinedAgeRanges[0]);
+            }
+        }
+    };
+
+    const validateForm = (): boolean => {
+        // التحقق من age_range
+        if (!form.age_range.en.trim() || !form.age_range.ar.trim()) {
+            toast.error('Please enter both English and Arabic age ranges');
+            return false;
+        }
+
+        // التحقق من الأسماء
+        if (!form.name_en.trim() || !form.name_ar.trim()) {
+            toast.error('Please enter both English and Arabic titles');
+            return false;
+        }
+
+        // التحقق من الوصف
+        if (!form.description_en.trim() || !form.description_ar.trim()) {
+            toast.error('Please enter both English and Arabic descriptions');
+            return false;
+        }
+
+        // التحقق من الترتيب
+        if (form.order < 1 || form.order > 10) {
+            toast.error('Order must be between 1 and 10');
+            return false;
+        }
+
+        return true;
     };
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        if (!validateForm()) {
+            return;
+        }
+
         setLoading(true);
 
         try {
-            // التحقق من أن age_range تحتوي على القيم المطلوبة
-            if (!form.age_range.en || !form.age_range.ar) {
-                toast.error('Please select a valid age range');
-                setLoading(false);
-                return;
-            }
-
             const payload = {
                 age_range: {
-                    en: form.age_range.en,
-                    ar: form.age_range.ar
+                    en: form.age_range.en.trim(),
+                    ar: form.age_range.ar.trim()
                 },
-                name_en: form.name_en,
-                name_ar: form.name_ar,
-                description_en: form.description_en,
-                description_ar: form.description_ar,
+                name_en: form.name_en.trim(),
+                name_ar: form.name_ar.trim(),
+                description_en: form.description_en.trim(),
+                description_ar: form.description_ar.trim(),
                 order: parseInt(form.order.toString()),
                 icon: form.icon,
             };
@@ -149,6 +214,7 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }: AgeCategoryFormProps)
             const result = JSON.parse(responseText);
 
             if (result.success) {
+                toast.success(initial ? 'Category updated successfully' : 'Category created successfully');
                 onSaved();
                 onClose();
             } else {
@@ -181,15 +247,31 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }: AgeCategoryFormProps)
                     </div>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
+                {/* Toggle between predefined and custom age ranges */}
+                <div className="flex items-center justify-between">
+                    <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+                        {t('curriculum.ageGroup') || "Age Range"} *
+                    </label>
+                    <button
+                        type="button"
+                        onClick={toggleCustomAgeRange}
+                        className="flex items-center gap-2 px-3 py-1.5 text-12 bg-IcyBreeze dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-PaleCyan dark:hover:bg-darklight transition-colors"
+                    >
+                        <Edit3 className="w-3 h-3" />
+                        {isCustomAgeRange 
+                            ? t('curriculum.usePredefined') || "Use Predefined"
+                            : t('curriculum.useCustom') || "Use Custom"
+                        }
+                    </button>
+                </div>
+
+                {!isCustomAgeRange ? (
+                    // Predefined Age Ranges
                     <div className="space-y-2">
-                        <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                            {t('curriculum.ageGroup') || "Age Range"} *
-                        </label>
                         <select
                             value={form.age_range.en}
                             onChange={(e) => {
-                                const selected = ageRanges.find(range => range.en === e.target.value);
+                                const selected = predefinedAgeRanges.find(range => range.en === e.target.value);
                                 if (selected) {
                                     handleAgeRangeChange(selected);
                                 }
@@ -198,7 +280,7 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }: AgeCategoryFormProps)
                             required
                         >
                             <option value="">{t('curriculum.selectAgeRange') || "Select Age Range"}</option>
-                            {ageRanges.map(range => (
+                            {predefinedAgeRanges.map(range => (
                                 <option key={range.en} value={range.en}>
                                     {range.en} / {range.ar}
                                 </option>
@@ -215,7 +297,39 @@ const AgeCategoryForm = ({ initial, onClose, onSaved, t }: AgeCategoryFormProps)
                             </div>
                         )}
                     </div>
+                ) : (
+                    // Custom Age Range Inputs
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+                                {t('curriculum.englishAgeRange') || "English Age Range"} *
+                            </label>
+                            <input
+                                type="text"
+                                value={form.age_range.en}
+                                onChange={(e) => handleCustomAgeRangeChange('en', e.target.value)}
+                                placeholder="e.g., 5-7 years, 15-17 years, etc."
+                                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+                                {t('curriculum.arabicAgeRange') || "Arabic Age Range"} *
+                            </label>
+                            <input
+                                type="text"
+                                value={form.age_range.ar}
+                                onChange={(e) => handleCustomAgeRangeChange('ar', e.target.value)}
+                                placeholder="مثال: 5-7 سنوات، 15-17 سنة، إلخ"
+                                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+                                required
+                            />
+                        </div>
+                    </div>
+                )}
 
+                <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
                             {t('curriculum.displayOrder') || "Display Order"} *

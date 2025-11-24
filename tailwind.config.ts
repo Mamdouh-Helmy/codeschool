@@ -1,3 +1,4 @@
+// tailwind.config.js
 import type { Config } from "tailwindcss";
 
 const config: Config = {
@@ -6,6 +7,20 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/utils/**/*.{js,ts,jsx,tsx}",
+  ],
+  safelist: [
+    {
+      pattern: /(bg|from|to|text)-(blue|green|gray)-(50|100|200|300|400|500|600|700|800|900)/,
+    },
+    {
+      pattern: /bg-gradient-to-r/,
+    },
+    'portfolio-header',
+    'portfolio-header-light', 
+    'portfolio-header-green',
+    'portfolio-header-blue',
+    'portfolio-header-dark'
   ],
   theme: {
     extend: {
