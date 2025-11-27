@@ -24,6 +24,8 @@ import {
   Wrench,
   Euro,
   PoundSterling,
+  Plus,
+  ChevronDown,
 } from "lucide-react";
 import EgyptianPoundIcon from "../../icons/EgyptianPoundIcon";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -57,6 +59,21 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
     initial?.features?.join("\n") || ""
   );
   const [loading, setLoading] = useState(false);
+  
+  // ✅ الحالة الجديدة للـ Billing Period
+  const [billingPeriodOptions, setBillingPeriodOptions] = useState([
+    "monthly",
+    "quarterly", 
+    "yearly",
+    "weekly",
+    "bi-weekly",
+    "semi-annual",
+    "biennial",
+    "lifetime"
+  ]);
+  const [customBillingPeriod, setCustomBillingPeriod] = useState("");
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [showBillingDropdown, setShowBillingDropdown] = useState(false);
 
   const safeParseNumber = (value: string | number): number => {
     if (value === "" || value === null || value === undefined) return 0;
@@ -120,6 +137,24 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
 
   const onChange = (field: string, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // ✅ دالة لإضافة فترة دفع مخصصة
+  const addCustomBillingPeriod = () => {
+    if (customBillingPeriod.trim() && !billingPeriodOptions.includes(customBillingPeriod.trim().toLowerCase())) {
+      const newPeriod = customBillingPeriod.trim().toLowerCase();
+      setBillingPeriodOptions(prev => [...prev, newPeriod]);
+      onChange("billingPeriod", newPeriod);
+      setCustomBillingPeriod("");
+      setShowCustomInput(false);
+      toast.success(t("pricing.customBillingAdded") || "Custom billing period added");
+    }
+  };
+
+  // ✅ دالة لاختيار فترة الدفع
+  const handleBillingPeriodSelect = (period: string) => {
+    onChange("billingPeriod", period);
+    setShowBillingDropdown(false);
   };
 
   const handlePriceChange = (field: string, value: string | number) => {
@@ -463,20 +498,107 @@ export default function PricingForm({ initial, onClose, onSaved }: Props) {
             </div>
           </div>
 
+          {/* ✅ Billing Period مع إمكانية الإدخال اليدوي */}
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Calendar className="w-3 h-3 text-Aquamarine" />
               {t("pricing.billingPeriod")}
             </label>
-            <select
-              value={form.billingPeriod}
-              onChange={(e) => onChange("billingPeriod", e.target.value)}
-              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-            >
-              <option value="monthly">{t("pricing.billingPeriod.monthly")}</option>
-              <option value="quarterly">{t("pricing.billingPeriod.quarterly")}</option>
-              <option value="yearly">{t("pricing.billingPeriod.yearly")}</option>
-            </select>
+            
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowBillingDropdown(!showBillingDropdown)}
+                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200 flex items-center justify-between"
+              >
+                <span className="capitalize">
+                  {form.billingPeriod || t("pricing.selectBillingPeriod")}
+                </span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${showBillingDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showBillingDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-darkmode border border-PowderBlueBorder dark:border-dark_border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div className="p-2 border-b border-PowderBlueBorder dark:border-dark_border">
+                    <div className="text-xs font-medium text-SlateBlueText dark:text-darktext mb-1">
+                      {t("pricing.selectBillingPeriod")}
+                    </div>
+                  </div>
+                  
+                  {/* الخيارات المحددة مسبقاً */}
+                  {billingPeriodOptions.map((period) => (
+                    <button
+                      key={period}
+                      type="button"
+                      onClick={() => handleBillingPeriodSelect(period)}
+                      className={`w-full px-3 py-2 text-left hover:bg-PaleCyan dark:hover:bg-dark_input transition-colors duration-200 flex items-center justify-between ${
+                        form.billingPeriod === period ? 'bg-primary/10 text-primary' : ''
+                      }`}
+                    >
+                      <span className="capitalize text-13">{period}</span>
+                      {form.billingPeriod === period && (
+                        <CheckCircle className="w-3 h-3 text-primary" />
+                      )}
+                    </button>
+                  ))}
+
+                  {/* إضافة فترة مخصصة */}
+                  <div className="border-t border-PowderBlueBorder dark:border-dark_border p-2">
+                    {!showCustomInput ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomInput(true)}
+                        className="w-full px-3 py-2 text-left hover:bg-PaleCyan dark:hover:bg-dark_input transition-colors duration-200 flex items-center gap-2 text-primary text-13"
+                      >
+                        <Plus className="w-3 h-3" />
+                        {t("pricing.addCustomBilling")}
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={customBillingPeriod}
+                          onChange={(e) => setCustomBillingPeriod(e.target.value)}
+                          placeholder={t("pricing.customBillingPlaceholder")}
+                          className="w-full px-2 py-1 border border-PowderBlueBorder dark:border-dark_border rounded text-13 dark:bg-dark_input dark:text-white"
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={addCustomBillingPeriod}
+                            disabled={!customBillingPeriod.trim()}
+                            className="flex-1 bg-primary text-white py-1 px-2 rounded text-12 disabled:opacity-50"
+                          >
+                            {t("common.add")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowCustomInput(false);
+                              setCustomBillingPeriod("");
+                            }}
+                            className="flex-1 bg-gray-500 text-white py-1 px-2 rounded text-12"
+                          >
+                            {t("common.cancel")}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* عرض الفترة المختارة حالياً */}
+            {form.billingPeriod && (
+              <div className="flex items-center gap-2 text-11 text-SlateBlueText dark:text-darktext mt-1">
+                <span className="px-2 py-1 bg-Aquamarine/10 text-Aquamarine rounded-full capitalize">
+                  {form.billingPeriod}
+                </span>
+                <span>{t("pricing.currentSelection")}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

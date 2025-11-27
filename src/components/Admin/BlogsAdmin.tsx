@@ -1,3 +1,4 @@
+// components/BlogsAdmin.tsx
 "use client";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -15,27 +16,36 @@ import {
   BookOpen,
   Zap,
   CheckCircle,
+  Languages,
 } from "lucide-react";
 import Modal from "./Modal";
 import BlogForm from "./BlogForm";
 import { useI18n } from "@/i18n/I18nProvider";
+import { useLocale } from "@/app/context/LocaleContext";
 
 interface BlogPost {
   _id: string;
-  title: string;
+  title_ar: string;
+  title_en: string;
   slug: string;
-  body: string;
+  body_ar: string;
+  body_en: string;
   image: string;
-  imageAlt: string;
-  category: string;
-  excerpt: string;
+  imageAlt_ar: string;
+  imageAlt_en: string;
+  category_ar: string;
+  category_en: string;
+  excerpt_ar: string;
+  excerpt_en: string;
   publishDate: string;
   author: {
-    name: string;
+    name_ar: string;
+    name_en: string;
     avatar: string;
     role: string;
   };
-  tags: string[];
+  tags_ar: string[];
+  tags_en: string[];
   featured: boolean;
   readTime: number;
   status: "draft" | "published";
@@ -46,10 +56,12 @@ interface BlogPost {
 
 export default function BlogsAdmin() {
   const { t } = useI18n();
+  const { locale } = useLocale();
   const [blogs, setBlogs] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<BlogPost | null>(null);
+  const [displayLanguage, setDisplayLanguage] = useState<"ar" | "en">(locale as "ar" | "en");
 
   // دالة لتنسيق التاريخ
   const formatDate = (dateString: string) => {
@@ -65,10 +77,22 @@ export default function BlogsAdmin() {
   const getBlogStatus = (blog: BlogPost) => {
     const now = new Date();
     const publishDate = new Date(blog.publishDate);
-    
+
     if (blog.status === "draft") return "draft";
     if (publishDate > now) return "scheduled";
     return "published";
+  };
+
+  // دالة لاختيار البيانات بناءً على اللغة المحددة
+  const getLocalizedData = (blog: BlogPost) => {
+    return {
+      title: displayLanguage === "ar" ? blog.title_ar : blog.title_en,
+      excerpt: displayLanguage === "ar" ? blog.excerpt_ar : blog.excerpt_en,
+      category: displayLanguage === "ar" ? blog.category_ar : blog.category_en,
+      authorName: displayLanguage === "ar" ? blog.author.name_ar : blog.author.name_en,
+      tags: displayLanguage === "ar" ? blog.tags_ar : blog.tags_en,
+      imageAlt: displayLanguage === "ar" ? blog.imageAlt_ar : blog.imageAlt_en,
+    };
   };
 
   const loadBlogs = async () => {
@@ -187,16 +211,40 @@ export default function BlogsAdmin() {
               {t('blog.managementDescription') || "Create, edit, and manage your blog posts. Publish engaging content for your audience."}
             </p>
           </div>
-          <button
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
-            }}
-            className="mt-4 lg:mt-0 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            {t('blog.addNew') || "New Blog Post"}
-          </button>
+          <div className="flex items-center gap-3 mt-4 lg:mt-0">
+            {/* Language Selector */}
+            <div className="flex items-center gap-2 bg-IcyBreeze dark:bg-dark_input rounded-lg p-1">
+              <button
+                onClick={() => setDisplayLanguage("ar")}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${displayLanguage === "ar"
+                    ? "bg-primary text-white"
+                    : "text-SlateBlueText dark:text-darktext hover:text-MidnightNavyText dark:hover:text-white"
+                  }`}
+              >
+                العربية
+              </button>
+              <button
+                onClick={() => setDisplayLanguage("en")}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${displayLanguage === "en"
+                    ? "bg-primary text-white"
+                    : "text-SlateBlueText dark:text-darktext hover:text-MidnightNavyText dark:hover:text-white"
+                  }`}
+              >
+                English
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+              className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              {t('blog.addNew') || "New Blog Post"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -273,6 +321,8 @@ export default function BlogsAdmin() {
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {blogs.map((blog) => {
           const status = getBlogStatus(blog);
+          const localized = getLocalizedData(blog);
+
           const statusColors = {
             published: "bg-Aquamarine/20 text-Salem dark:bg-Aquamarine/30",
             scheduled: "bg-LightYellow/20 text-amber-700 dark:bg-LightYellow/30",
@@ -288,18 +338,17 @@ export default function BlogsAdmin() {
           return (
             <div
               key={blog._id}
-              className={`relative rounded-xl border overflow-hidden transition-all duration-300 hover:shadow-md ${
-                status === "published"
+              className={`relative rounded-xl border overflow-hidden transition-all duration-300 hover:shadow-md ${status === "published"
                   ? "border-primary bg-gradient-to-br from-primary/5 to-primary/10"
                   : "border-PowderBlueBorder bg-white dark:bg-darkmode dark:border-dark_border"
-              }`}
+                }`}
             >
               {/* Blog Image */}
               {blog.image && (
                 <div className="h-40 bg-gray-200 dark:bg-dark_input overflow-hidden">
                   <img
                     src={blog.image}
-                    alt={blog.imageAlt || blog.title}
+                    alt={localized.imageAlt || localized.title}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -316,13 +365,21 @@ export default function BlogsAdmin() {
                   </span>
                 </div>
 
+                {/* Language Indicator */}
+                <div className="absolute top-4 left-4">
+                  <div className="flex items-center gap-1 bg-white/90 dark:bg-darkmode/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs">
+                    <Languages className="w-3 h-3" />
+                    <span className="font-medium">{displayLanguage.toUpperCase()}</span>
+                  </div>
+                </div>
+
                 {/* Blog Header */}
                 <div className="mb-4">
                   <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-2 line-clamp-2">
-                    {blog.title}
+                    {localized.title}
                   </h3>
                   <p className="text-sm text-SlateBlueText dark:text-darktext line-clamp-2">
-                    {blog.excerpt}
+                    {localized.excerpt}
                   </p>
                 </div>
 
@@ -338,24 +395,24 @@ export default function BlogsAdmin() {
                   </div>
                   <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                     <User className="w-4 h-4" />
-                    <span>{blog.author?.name || t('common.author') || "Unknown Author"}</span>
+                    <span>{localized.authorName || t('common.author') || "Unknown Author"}</span>
                   </div>
                 </div>
 
                 {/* Category & Tags */}
-                {blog.category && (
+                {localized.category && (
                   <div className="mb-3">
                     <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-medium">
-                      {blog.category}
+                      {localized.category}
                     </span>
                   </div>
                 )}
 
                 {/* Tags */}
-                {blog.tags && blog.tags.length > 0 && (
+                {localized.tags && localized.tags.length > 0 && (
                   <div className="mb-4">
                     <div className="flex flex-wrap gap-1">
-                      {blog.tags.slice(0, 3).map((tag, index) => (
+                      {localized.tags.slice(0, 3).map((tag, index) => (
                         <span
                           key={index}
                           className="px-2 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded text-xs"
@@ -363,9 +420,9 @@ export default function BlogsAdmin() {
                           {tag}
                         </span>
                       ))}
-                      {blog.tags.length > 3 && (
+                      {localized.tags.length > 3 && (
                         <span className="px-2 py-1 bg-PaleCyan dark:bg-dark_input text-SlateBlueText dark:text-darktext rounded text-xs">
-                          +{blog.tags.length - 3}
+                          +{localized.tags.length - 3}
                         </span>
                       )}
                     </div>

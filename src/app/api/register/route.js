@@ -2,12 +2,11 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import QRCode from "qrcode";
-import jwt from "jsonwebtoken";
 import User from "../../models/User";
+import Portfolio from "../../models/Portfolio";
 import Verification from "../../models/Verification";
 import { connectDB } from "@/lib/mongodb";
 
-const JWT_SECRET = process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const usernameRegex = /^[a-zA-Z0-9_]+$/;
 
@@ -26,7 +25,6 @@ function validatePayload({ name, email, password, username }) {
     errors.password = "Password must be at least 6 characters";
   }
   
-  // التحقق من الـ username إذا تم تقديمه
   if (username && username.trim() !== "") {
     if (username.length < 3 || username.length > 20) {
       errors.username = "Username must be between 3 and 20 characters";
@@ -38,7 +36,6 @@ function validatePayload({ name, email, password, username }) {
   return errors;
 }
 
-// دالة للتحقق من توفر username
 async function checkUsernameAvailability(username) {
   if (!username) return { available: true };
   
@@ -52,7 +49,6 @@ async function checkUsernameAvailability(username) {
   };
 }
 
-// دالة لتوليد username تلقائياً من الاسم
 async function generateUsernameFromName(name) {
   const baseUsername = name
     .toLowerCase()
@@ -62,18 +58,97 @@ async function generateUsernameFromName(name) {
   let username = baseUsername;
   let counter = 1;
   
-  // التأكد من أن الـ username فريد
   while (await User.findOne({ username })) {
     username = `${baseUsername}${counter}`;
     counter++;
     
-    // منع loop لا نهائية
     if (counter > 100) {
       throw new Error('Could not generate unique username');
     }
   }
   
   return username;
+}
+
+// دالة لإنشاء بورتفليو افتراضي
+async function createDefaultPortfolio(userId, userName, username) {
+  try {
+    console.log("🔄 Creating default portfolio for user:", username);
+    
+    const defaultPortfolio = await Portfolio.create({
+      userId,
+      title: `${userName}'s Portfolio`,
+      description: `Welcome to ${userName}'s professional portfolio. Explore my skills, projects, and experience.`,
+      skills: [
+        {
+          name: "JavaScript",
+          level: 75,
+          category: "Frontend",
+          icon: "🟨"
+        },
+        {
+          name: "React",
+          level: 70,
+          category: "Frontend", 
+          icon: "⚛️"
+        },
+        {
+          name: "Node.js",
+          level: 65,
+          category: "Backend",
+          icon: "🟢"
+        },
+        {
+          name: "HTML/CSS",
+          level: 85,
+          category: "Frontend",
+          icon: "🎨"
+        }
+      ],
+      projects: [
+        {
+          title: "Portfolio Website",
+          description: "A modern and responsive portfolio website to showcase my work and skills.",
+          technologies: ["Next.js", "React", "Tailwind CSS"],
+          status: "completed",
+          featured: true,
+          startDate: new Date(),
+          endDate: new Date()
+        },
+        {
+          title: "E-commerce Platform",
+          description: "Full-stack e-commerce application with user authentication and payment processing.",
+          technologies: ["React", "Node.js", "MongoDB", "Stripe"],
+          status: "in-progress",
+          featured: false,
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // منذ شهر
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // خلال شهر
+        }
+      ],
+      socialLinks: {
+        github: `https://github.com/${username}`,
+        linkedin: `https://linkedin.com/in/${username}`,
+        twitter: `https://twitter.com/${username}`
+      },
+      contactInfo: {
+        email: "", // سيتم تعبئته لاحقاً
+        phone: "",
+        location: "Add your location"
+      },
+      isPublished: true,
+      views: 0,
+      settings: {
+        theme: "dark", // 🔥 السمة المظلمة كإعداد افتراضي
+        layout: "standard"
+      }
+    });
+
+    console.log("✅ Default portfolio created successfully with dark theme");
+    return defaultPortfolio;
+  } catch (error) {
+    console.error("❌ Error creating default portfolio:", error);
+    throw error;
+  }
 }
 
 export async function POST(req) {
@@ -83,7 +158,6 @@ export async function POST(req) {
 
     console.log("🚀 Starting registration for:", email, "Username:", username || 'auto-generate');
 
-    // التحقق من القيم
     const errors = validatePayload({ name, email, password, username });
     if (Object.keys(errors).length) {
       return NextResponse.json({ 
@@ -95,7 +169,6 @@ export async function POST(req) {
 
     await connectDB();
 
-    // التحقق من أن البريد الإلكتروني تم التحقق منه
     const existingVerification = await Verification.findOne({
       email: email.toLowerCase()
     });
@@ -107,7 +180,6 @@ export async function POST(req) {
       }, { status: 400 });
     }
 
-    // تحقق من وجود إيميل سابقًا
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return NextResponse.json({ 
@@ -116,7 +188,6 @@ export async function POST(req) {
       }, { status: 409 });
     }
 
-    // التحقق من توفر username إذا تم تقديمه
     if (username && username.trim() !== "") {
       const usernameCheck = await checkUsernameAvailability(username);
       if (!usernameCheck.available) {
@@ -128,35 +199,28 @@ export async function POST(req) {
       }
     }
 
-    // تشفير الباسورد
     const hashedPassword = await bcrypt.hash(password, 10);
 
     console.log("🔑 Password hashed, generating user data...");
 
-    // توليد username إذا لم يتم تقديمه
     let finalUsername = username && username.trim() !== "" 
       ? username.toLowerCase().trim() 
       : await generateUsernameFromName(name);
 
     console.log("✅ Username generated:", finalUsername);
 
-    // توليد QR Code
     let qrCodeImage = "";
-    let qrToken = "";
+    let portfolioUrl = "";
 
     try {
-      const qrData = {
-        email: email.toLowerCase(),
-        name: name.trim(),
-        username: finalUsername,
-        role: role || "student",
-        timestamp: new Date().toISOString()
-      };
+      // 🔥 إنشاء رابط البورتفليو مباشرة
+      const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+      portfolioUrl = `${baseUrl}/portfolio/${finalUsername}`;
 
-      qrToken = jwt.sign(qrData, JWT_SECRET, { expiresIn: "1y" });
-      
-      // توليد QR Code
-      qrCodeImage = await QRCode.toDataURL(qrToken, {
+      console.log("🔗 Generating QR Code with portfolio URL:", portfolioUrl);
+
+      // توليد QR Code يحتوي على رابط البورتفليو مباشرة
+      qrCodeImage = await QRCode.toDataURL(portfolioUrl, {
         width: 300,
         margin: 2,
         color: {
@@ -165,14 +229,13 @@ export async function POST(req) {
         }
       });
 
-      console.log("✅ QR Code generated successfully");
+      console.log("✅ QR Code generated successfully with portfolio link");
 
     } catch (qrError) {
       console.error("❌ QR generation failed:", qrError);
-      // نستمر في إنشاء المستخدم حتى لو فشل توليد QR
     }
 
-    // إنشاء المستخدم مع جميع البيانات
+    // إنشاء المستخدم
     const newUser = await User.create({
       name: name.trim(),
       email: email.toLowerCase(),
@@ -180,42 +243,47 @@ export async function POST(req) {
       password: hashedPassword,
       role: role || "student",
       qrCode: qrCodeImage,
-      qrCodeData: qrToken,
+      qrCodeData: portfolioUrl, // 🔥 حفظ رابط البورتفليو بدلاً من التوكن
       profile: {
-        jobTitle: "Developer", // قيمة افتراضية
+        jobTitle: "Developer",
         bio: `Welcome to ${name.trim()}'s portfolio`
       }
     });
 
     console.log("🎉 User created successfully:", {
       id: newUser._id,
-      username: newUser.username,
-      hasQRCode: !!newUser.qrCode,
-      hasQRData: !!newUser.qrCodeData
+      username: newUser.username
     });
 
-    // التأكد من حفظ QR Code إذا فشل في الإنشاء الأولي
+    // 🔥 إنشاء بورتفليو افتراضي تلقائياً بعد التسجيل
+    try {
+      await createDefaultPortfolio(newUser._id, newUser.name, newUser.username);
+      console.log("🎯 Default portfolio with dark theme created automatically");
+    } catch (portfolioError) {
+      console.error("⚠️ Could not create default portfolio:", portfolioError);
+      // نستمر حتى لو فشل إنشاء البورتفليو
+    }
+
     if ((!newUser.qrCode || !newUser.qrCodeData) && qrCodeImage) {
       console.log("🔄 QR code not saved in create, using updateOne...");
       try {
-        const updateResult = await User.updateOne(
+        await User.updateOne(
           { _id: newUser._id },
           { 
             $set: { 
               qrCode: qrCodeImage, 
-              qrCodeData: qrToken 
+              qrCodeData: portfolioUrl 
             } 
           }
         );
         
-        console.log("📝 QR Code update result:", updateResult);
+        console.log("📝 QR Code updated successfully");
         
       } catch (updateError) {
         console.error("❌ QR Code update failed:", updateError);
       }
     }
 
-    // لا تُرجع الباسورد في الـ response
     const userResponse = {
       id: newUser._id,
       name: newUser.name,
@@ -223,23 +291,23 @@ export async function POST(req) {
       username: newUser.username,
       role: newUser.role,
       qrCode: newUser.qrCode,
+      portfolioUrl: portfolioUrl, // 🔥 إضافة رابط البورتفليو في الرد
       profileUrl: `/portfolio/${newUser.username}`,
       createdAt: newUser.createdAt,
     };
 
     console.log("✅ Registration completed successfully for:", userResponse.email);
-    console.log("🔗 Portfolio URL:", userResponse.profileUrl);
+    console.log("🔗 Portfolio URL:", userResponse.portfolioUrl);
 
     return NextResponse.json({ 
       success: true, 
-      message: "User registered successfully", 
+      message: "User registered successfully with default portfolio", 
       user: userResponse 
     }, { status: 201 });
     
   } catch (error) {
     console.error("💥 Register error:", error);
     
-    // معالجة أخطاء محددة
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       const message = field === 'username' 

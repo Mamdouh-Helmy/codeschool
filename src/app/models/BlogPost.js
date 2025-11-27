@@ -5,24 +5,14 @@ import mongoose from "mongoose";
 function generateSlug(title) {
   if (!title || typeof title !== 'string') return "";
   
-  // إنشاء slug أساسي باستخدام toLowerCase
   let slug = title
     .toLowerCase()
-    .trim();
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9\u0600-\u06FF\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\uac00-\ud7af\-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
   
-  // استبدال المسافات بشرطات
-  slug = slug.replace(/\s+/g, '-');
-  
-  // إزالة الأحرف الخاصة باستثناء الشرطات
-  slug = slug.replace(/[^a-z0-9\u0600-\u06FF\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\uac00-\ud7af\-]/g, '');
-  
-  // إزالة الشرطات المتكررة
-  slug = slug.replace(/-+/g, '-');
-  
-  // إزالة الشرطات من البداية والنهاية
-  slug = slug.replace(/^-+|-+$/g, '');
-  
-  // إذا كان الناتج فارغاً، ننشئ slug عشوائي
   if (!slug) {
     slug = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
@@ -32,22 +22,57 @@ function generateSlug(title) {
 
 const BlogPostSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true },
+    // البيانات بالعربية
+    title_ar: { 
+      type: String, 
+      required: function() {
+        // مطلوب إذا لم يكن title_en موجوداً
+        return !this.title_en || this.title_en.trim() === "";
+      } 
+    },
+    body_ar: { 
+      type: String, 
+      required: function() {
+        // مطلوب إذا لم يكن body_en موجوداً
+        return !this.body_en || this.body_en.trim() === "";
+      } 
+    },
+    excerpt_ar: { type: String, default: "" },
+    imageAlt_ar: { type: String, default: "" },
+    
+    // البيانات بالإنجليزية
+    title_en: { 
+      type: String, 
+      required: function() {
+        // مطلوب إذا لم يكن title_ar موجوداً
+        return !this.title_ar || this.title_ar.trim() === "";
+      } 
+    },
+    body_en: { 
+      type: String, 
+      required: function() {
+        // مطلوب إذا لم يكن body_ar موجوداً
+        return !this.body_ar || this.body_ar.trim() === "";
+      } 
+    },
+    excerpt_en: { type: String, default: "" },
+    imageAlt_en: { type: String, default: "" },
+    
+    // البيانات المشتركة
     slug: { type: String, unique: true, sparse: true },
-    body: { type: String, required: true },
     image: { type: String, default: "" },
-    imageAlt: { type: String, default: "" },
-    category: { type: String, default: "" },
-    excerpt: { type: String, default: "" },
+    category_ar: { type: String, default: "" },
+    category_en: { type: String, default: "" },
     publishDate: { type: Date, default: Date.now },
     author: {
-      id: { type: String, required: false },
-      name: { type: String, required: false },
-      email: { type: String, required: false },
+      name_ar: { type: String, default: "" },
+      name_en: { type: String, default: "" },
+      email: { type: String, default: "" },
       avatar: { type: String, default: "/images/default-avatar.jpg" },
       role: { type: String, default: "Author" }, 
     },
-    tags: [{ type: String }],
+    tags_ar: [{ type: String }],
+    tags_en: [{ type: String }],
     featured: { type: Boolean, default: false },
     readTime: { type: Number, default: 0 },
     status: {
@@ -60,20 +85,42 @@ const BlogPostSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// التحقق المخصص قبل الحفظ
 BlogPostSchema.pre("save", function (next) {
+  // التحقق من وجود عنوان في لغة واحدة على الأقل
+  if ((!this.title_ar || this.title_ar.trim() === "") && 
+      (!this.title_en || this.title_en.trim() === "")) {
+    return next(new Error("Title is required in at least one language"));
+  }
+
+  // التحقق من وجود محتوى في لغة واحدة على الأقل
+  if ((!this.body_ar || this.body_ar.trim() === "") && 
+      (!this.body_en || this.body_en.trim() === "")) {
+    return next(new Error("Content is required in at least one language"));
+  }
+
   try {
-    if (!this.slug || this.isModified("title")) {
-      this.slug = generateSlug(this.title);
+    // توليد slug من العنوان الإنجليزي أو العربي
+    if (!this.slug || this.isModified("title_en") || this.isModified("title_ar")) {
+      const titleToUse = this.title_en || this.title_ar;
+      this.slug = generateSlug(titleToUse);
     }
 
-    if (!this.excerpt && this.body) {
-      const plain = this.body.replace(/<[^>]*>/g, "");
-      this.excerpt =
-        plain.length > 150 ? plain.substring(0, 150) + "..." : plain;
+    // توليد excerpt تلقائي إذا لم يتم توفيره
+    if (!this.excerpt_ar && this.body_ar) {
+      const plain = this.body_ar.replace(/<[^>]*>/g, "");
+      this.excerpt_ar = plain.length > 150 ? plain.substring(0, 150) + "..." : plain;
     }
 
-    if (!this.readTime && this.body) {
-      const wordCount = this.body.replace(/<[^>]*>/g, "").split(/\s+/).length;
+    if (!this.excerpt_en && this.body_en) {
+      const plain = this.body_en.replace(/<[^>]*>/g, "");
+      this.excerpt_en = plain.length > 150 ? plain.substring(0, 150) + "..." : plain;
+    }
+
+    // حساب وقت القراءة
+    if (!this.readTime && (this.body_ar || this.body_en)) {
+      const content = this.body_ar || this.body_en;
+      const wordCount = content.replace(/<[^>]*>/g, "").split(/\s+/).length;
       this.readTime = Math.max(1, Math.ceil(wordCount / 200));
     }
   } catch (err) {

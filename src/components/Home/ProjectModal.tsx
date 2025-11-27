@@ -138,6 +138,7 @@ export default function ProjectModal({
                 className="w-full h-[60vh] rounded-2xl"
                 allow="autoplay; encrypted-media"
                 allowFullScreen
+                loading="lazy"
               />
             </div>
           ) : (

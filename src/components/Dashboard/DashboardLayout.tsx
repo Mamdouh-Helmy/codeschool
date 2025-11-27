@@ -95,6 +95,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       badge: createBadge(t('common.new') || "New"),
     },
     {
+      label: t('dashboard.sectionImagesHero') || "Section Images",
+      href: "/admin/sectionImagesHero", // هذا هو الباث الموجود حالياً
+      icon: "ion:images-outline",
+      badge: createBadge(t('common.new') || "New"),
+    },
+    {
       label: t('nav.settings') || "Settings",
       href: "/admin/settings",
       icon: "ion:settings-outline",

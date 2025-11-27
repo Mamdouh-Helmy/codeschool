@@ -1,11 +1,8 @@
 // app/api/auth/generate-qr/route.js
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
-import jwt from "jsonwebtoken";
 import User from "@/app/models/User";
 import { connectDB } from "@/lib/mongodb";
-
-const JWT_SECRET = process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET;
 
 export async function POST(req) {
   try {
@@ -28,28 +25,23 @@ export async function POST(req) {
       }, { status: 404 });
     }
 
-    // إنشاء رابط مباشر للمسح - تأكد من أن الرابط صحيح
+    // 🔥 إنشاء رابط البورتفليو مباشرة باستخدام username
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     
-    // إنشاء بيانات الـ QR
-    const qrData = {
-      userId: user._id.toString(),
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      timestamp: new Date().toISOString()
-    };
+    if (!user.username) {
+      return NextResponse.json({ 
+        success: false, 
+        message: "User does not have a username" 
+      }, { status: 400 });
+    }
 
-    // توقيع البيانات بـ JWT
-    const qrToken = jwt.sign(qrData, JWT_SECRET, { expiresIn: "1y" });
+    // الرابط المباشر للبورتفليو
+    const portfolioUrl = `${baseUrl}/portfolio/${user.username}`;
 
-    // الرابط الكامل مع التوكن - تأكد من الصيغة
-    const fullQrUrl = `${baseUrl}/scanner?token=${encodeURIComponent(qrToken)}`;
+    console.log("🔗 Generating QR Code with direct portfolio URL:", portfolioUrl);
 
-    console.log("🔗 QR URL to generate:", fullQrUrl);
-
-    // توليد QR Code يحتوي على الرابط
-    const qrCodeImage = await QRCode.toDataURL(fullQrUrl, {
+    // توليد QR Code يحتوي على رابط البورتفليو مباشرة
+    const qrCodeImage = await QRCode.toDataURL(portfolioUrl, {
       width: 300,
       margin: 2,
       color: {
@@ -64,18 +56,18 @@ export async function POST(req) {
       { 
         $set: { 
           qrCode: qrCodeImage, 
-          qrCodeData: qrToken 
+          qrCodeData: portfolioUrl // 🔥 حفظ رابط البورتفليو بدلاً من التوكن
         } 
       }
     );
 
-    console.log("✅ QR Code with URL saved to DB:", result.modifiedCount > 0);
+    console.log("✅ QR Code with portfolio URL saved to DB:", result.modifiedCount > 0);
 
     return NextResponse.json({
       success: true,
       qrCode: qrCodeImage,
-      qrData: qrToken,
-      qrUrl: fullQrUrl
+      portfolioUrl: portfolioUrl,
+      message: "QR code generated successfully with portfolio link"
     }, { status: 200 });
 
   } catch (error) {

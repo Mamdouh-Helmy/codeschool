@@ -45,8 +45,8 @@ export default function ContactSection({ portfolio, themeStyles }: ContactSectio
 
   const getButtonStyle = (): string => {
     // زر CTA يستخدم ألوان من السمة
-    if (themeStyles?.background.primary && themeStyles?.text.primary) {
-      return `${themeStyles.background.primary} ${themeStyles.text.primary} hover:opacity-90 font-semibold`;
+    if (themeStyles?.background.primary && themeStyles?.text.white) {
+      return `${themeStyles.background.primary} ${themeStyles.text.white} hover:opacity-90 font-semibold`;
     }
     return "bg-white text-blue-600 hover:bg-blue-50 font-semibold";
   };
@@ -57,6 +57,14 @@ export default function ContactSection({ portfolio, themeStyles }: ContactSectio
       return `${themeStyles.background.secondary} bg-opacity-30`;
     }
     return "bg-white/20";
+  };
+
+  const getIconColor = (): string => {
+    // لون الأيقونات
+    if (themeStyles?.text.white) {
+      return themeStyles.text.white;
+    }
+    return "text-white";
   };
 
   return (
@@ -79,7 +87,7 @@ export default function ContactSection({ portfolio, themeStyles }: ContactSectio
               className={`rounded-xl p-6 text-center hover:scale-105 transition-all duration-300 group ${getCardStyle()}`}
             >
               <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform ${getIconBackground()}`}>
-                <Mail className={`w-6 h-6 ${getTextColor('white')}`} />
+                <Mail className={`w-6 h-6 ${getIconColor()}`} />
               </div>
               <h3 className={`font-semibold mb-2 ${getTextColor('white')}`}>
                 {t("portfolio.public.email")}
@@ -97,7 +105,7 @@ export default function ContactSection({ portfolio, themeStyles }: ContactSectio
               className={`rounded-xl p-6 text-center hover:scale-105 transition-all duration-300 group ${getCardStyle()}`}
             >
               <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform ${getIconBackground()}`}>
-                <Phone className={`w-6 h-6 ${getTextColor('white')}`} />
+                <Phone className={`w-6 h-6 ${getIconColor()}`} />
               </div>
               <h3 className={`font-semibold mb-2 ${getTextColor('white')}`}>
                 {t("portfolio.public.phone")}
@@ -112,7 +120,7 @@ export default function ContactSection({ portfolio, themeStyles }: ContactSectio
           {contactInfo?.location && (
             <div className={`rounded-xl p-6 text-center group hover:scale-105 transition-all duration-300 ${getCardStyle()}`}>
               <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform ${getIconBackground()}`}>
-                <MapPin className={`w-6 h-6 ${getTextColor('white')}`} />
+                <MapPin className={`w-6 h-6 ${getIconColor()}`} />
               </div>
               <h3 className={`font-semibold mb-2 ${getTextColor('white')}`}>
                 {t("portfolio.public.location")}

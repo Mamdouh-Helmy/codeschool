@@ -8,7 +8,6 @@ const en = {
 
   "hero.title": "Empower Young Minds!",
   "hero.nextEvent": "Join our next {title} on {date}.",
-  "hero.webinar": "Join our next webinar on {date}.",
   "hero.readMore": "Read More",
   "hero.browseCourses": "Browse Courses",
   "hero.watchDemo": "Watch Demo",
@@ -1955,6 +1954,111 @@ const en = {
 
   "nav.createPortfolio": "Create Portfolio",
   "nav.myPortfolio": "My Portfolio",
+
+  "sectionImages.secondImageAlt": "Second image alt text",
+  "sectionImages.secondImageUrl": "Second image URL",
+  "dashboard.sectionImagesHero": "Section Images Hero",
+  "common.language": "Language",
+  "sectionImages.allSections": "All Sections",
+
+  // Section Names
+  "sectionNames.hero-section": "Hero Section",
+  "sectionNames.welcome-popup": "Welcome Popup",
+
+  // Hero Section
+  "heroSection.title": "Hero Section Data",
+  "heroSection.description": "Information for the hero section",
+  "heroSection.heroTitle": "Hero Title",
+  "heroSection.heroTitlePlaceholder": "Hero section title",
+  "heroSection.instructor1": "Instructor 1 Name",
+  "heroSection.instructor2": "Instructor 2 Name",
+  "heroSection.instructor1Role": "Instructor 1 Role",
+  "heroSection.instructor2Role": "Instructor 2 Role",
+  "heroSection.instructorPlaceholder": "Instructor name",
+  "heroSection.instructorRolePlaceholder": "Instructor role",
+
+  // Welcome Popup
+  "welcomePopup.title": "Welcome Popup Data",
+  "welcomePopup.description": "Information for the welcome popup",
+  "welcomePopup.welcomeTitle": "Welcome Title",
+  "welcomePopup.welcomeTitlePlaceholder": "Welcome popup title",
+  "welcomePopup.subtitle1": "Subtitle 1",
+  "welcomePopup.subtitle2": "Subtitle 2",
+  "welcomePopup.subtitlePlaceholder": "Subtitle",
+  "welcomePopup.feature1": "Feature 1",
+  "welcomePopup.feature2": "Feature 2",
+  "welcomePopup.feature3": "Feature 3",
+  "welcomePopup.feature4": "Feature 4",
+  "welcomePopup.feature5": "Feature 5",
+  "welcomePopup.feature6": "Feature 6",
+  "welcomePopup.featurePlaceholder": "Feature",
+
+  // Statistics
+  "statistics.title": "Numbers & Statistics",
+  "statistics.description": "Important numbers for displays",
+  "statistics.discount": "Discount (%)",
+  "statistics.happyParents": "Happy Parents",
+  "statistics.happyParentsPlaceholder": "250",
+  "statistics.graduates": "Graduates",
+  "statistics.graduatesPlaceholder": "130",
+  "heroSection.heroDescription": "Hero description",
+  "heroSection.heroDescriptionHint": "Enter the hero section description",
+  "heroSection.heroDescriptionPlaceholder": "Hero description placeholder",
+
+  // ... الترجمات الحالية
+  "hero.registerNow": "Register Now",
+  "hero.webinar": "Join our next webinar on {date}",
+
+  " webinarRegistration.title": "Register for Webinar",
+  "webinarRegistration.subtitle": "Complete your registration details",
+  "webinarRegistration.spotsAvailable": "spots available",
+  "webinarRegistration.personalInfo": "Personal Information",
+  "webinarRegistration.professionalInfo": "Professional Information",
+  "webinarRegistration.additionalInfo": "Additional Information",
+  "webinarRegistration.fullName": "Full Name",
+  "webinarRegistration.email": "Email Address",
+  "webinarRegistration.phone": "Phone Number",
+  "webinarRegistration.company": "Company/Organization",
+  "webinarRegistration.jobTitle": "Job Title",
+  "webinarRegistration.questions": "Questions for the Instructor",
+  "webinarRegistration.namePlaceholder": "Enter your full name",
+  "webinarRegistration.emailPlaceholder": "your@email.com",
+  "webinarRegistration.phonePlaceholder": "+1 (555) 123-4567",
+  "webinarRegistration.companyPlaceholder": "Your company name",
+  "webinarRegistration.jobTitlePlaceholder": "Your position",
+  "webinarRegistration.questionsPlaceholder":
+    "Any specific questions you'd like the instructor to address during the webinar...",
+  "webinarRegistration.terms":
+    "I agree to receive communications about this webinar and acknowledge that my information will be processed in accordance with the privacy policy.",
+  "webinarRegistration.registering": "Registering...",
+  "webinarRegistration.registerNow": "Register Now",
+  "webinarRegistration.loginNotice":
+    "Please make sure you are logged in to complete your registration.",
+  "portfolio.projects.status.in-progress": "In Progress",
+
+  "blogForm.language": "Language",
+  "blogForm.languagePlaceholder": "Select article language",
+  "blog.filterByLanguage": "Filter by language",
+  "blog.allLanguages": "All languages",
+  "blog.language.ar": "Arabic",
+  "blog.language.en": "English",
+
+  "blog.englishPosts": "English Posts",
+  "blog.linkedPosts": "Linked Posts",
+  "blog.arabicPosts": "Arabic Posts",
+  "blog.showLinkedOnly": "Show linked only",
+
+  "blogForm.translationSettings": "Translation Settings",
+  "blogForm.translationDescription":
+    "Manage translation options for this article",
+  "blogForm.linkTranslation": "Link with another language version",
+  "blogForm.noTranslation": "No translation available",
+  "blogForm.languageDescription":
+    "Select the language in which this article is written",
+
+  "pricing.addCustomBilling": "Add custom billing period",
+  "pricing.customBillingPlaceholder": "Enter custom billing period",
+  "pricing.selectBillingPeriod": "Select billing period",
 };
 
 export default en;

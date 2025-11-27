@@ -5,13 +5,18 @@ import { usePathname } from "next/navigation";
 import Header from "@/components/Layout/Header";
 import Footer from "@/components/Layout/Footer";
 
-const DASHBOARD_PREFIXES = ["/admin"];
+// تحديد الـ Routes اللي هتتعامل كـ Dashboard
+const DASHBOARD_PREFIXES: string[] = ["/admin"];
 
-const SiteWrapper = ({ children }: { children: ReactNode }) => {
-  const pathname = usePathname();
+interface SiteWrapperProps {
+  children: ReactNode;
+  heroDescription?: string; // اختياري
+}
 
-  const isDashboardRoute = useMemo(() => {
-    if (!pathname) return false;
+const SiteWrapper: React.FC<SiteWrapperProps> = ({ children, heroDescription }) => {
+  const pathname = usePathname() || "";
+
+  const isDashboardRoute = useMemo((): boolean => {
     return DASHBOARD_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   }, [pathname]);
 
@@ -21,7 +26,7 @@ const SiteWrapper = ({ children }: { children: ReactNode }) => {
 
   return (
     <>
-      <Header />
+      <Header heroDescription={heroDescription } />
       {children}
       <Footer />
     </>

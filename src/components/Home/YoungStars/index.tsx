@@ -32,6 +32,7 @@ const YoungStars = () => {
   const [leadersOpen, setLeadersOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   // Refs للأنيميشن
   const sectionRef = useRef<HTMLElement>(null);
@@ -43,6 +44,22 @@ const YoungStars = () => {
 
   const thumbnails = projects.slice(0, 8);
 
+  // ===== Auto Slide Change for Mobile =====
+  useEffect(() => {
+    if (thumbnails.length === 0 || !activeId) return;
+
+    const interval = setInterval(() => {
+      if (window.innerWidth < 768) { // للشاشات الصغيرة فقط
+        const currentIndex = thumbnails.findIndex(p => p._id === activeId);
+        const nextIndex = (currentIndex + 1) % thumbnails.length;
+        setActiveId(thumbnails[nextIndex]._id);
+        setCurrentIndex(nextIndex);
+      }
+    }, 6000); // كل 6 ثواني
+
+    return () => clearInterval(interval);
+  }, [thumbnails, activeId]);
+
   // ===== Fetch Projects =====
   useEffect(() => {
     const fetchProjects = async () => {
@@ -53,13 +70,14 @@ const YoungStars = () => {
 
         if (data?.success && Array.isArray(data.data)) {
           const featuredProjects = data.data.filter(
-            (p: Project) => p.featured === true 
+            (p: Project) => p.featured === true
           );
 
           setProjects(featuredProjects);
 
           if (featuredProjects.length > 0) {
             setActiveId(featuredProjects[0]._id);
+            setCurrentIndex(0);
           }
         }
       } catch (err) {
@@ -79,14 +97,14 @@ const YoungStars = () => {
 
     const ctx = gsap.context(() => {
       // أنيميشن للعنوان
-      gsap.fromTo(titleRef.current, 
-        { 
-          opacity: 0, 
+      gsap.fromTo(titleRef.current,
+        {
+          opacity: 0,
           y: 50,
-          rotationX: -45 
+          rotationX: -45
         },
-        { 
-          opacity: 1, 
+        {
+          opacity: 1,
           y: 0,
           rotationX: 0,
           duration: 1.2,
@@ -166,51 +184,53 @@ const YoungStars = () => {
         }
       );
 
-      // أنيميشن للثمبنيلز
-      gsap.fromTo(thumbnailsRef.current,
-        {
-          opacity: 0,
-          y: 40
-        },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 1,
-          delay: 0.8,
-          ease: "bounce.out",
-          scrollTrigger: {
-            trigger: thumbnailsRef.current,
-            start: "top 95%",
-            end: "bottom 20%",
-            toggleActions: "play none none reverse"
-          }
-        }
-      );
-
-      // أنيميشن للعناصر الداخلية في الثمبنيلز
-      if (thumbnailsRef.current) {
-        const thumbnailItems = thumbnailsRef.current.querySelectorAll(".thumbnail-item");
-        gsap.fromTo(thumbnailItems,
+      // أنيميشن للثمبنيلز (للشاشات الكبيرة فقط)
+      if (window.innerWidth >= 768) {
+        gsap.fromTo(thumbnailsRef.current,
           {
             opacity: 0,
-            scale: 0.5,
-            rotation: -180
+            y: 40
           },
           {
             opacity: 1,
-            scale: 1,
-            rotation: 0,
-            duration: 0.6,
-            stagger: 0.1,
-            ease: "back.out(1.7)",
+            y: 0,
+            duration: 1,
+            delay: 0.8,
+            ease: "bounce.out",
             scrollTrigger: {
               trigger: thumbnailsRef.current,
-              start: "top 85%",
+              start: "top 95%",
               end: "bottom 20%",
               toggleActions: "play none none reverse"
             }
           }
         );
+
+        // أنيميشن للعناصر الداخلية في الثمبنيلز
+        if (thumbnailsRef.current) {
+          const thumbnailItems = thumbnailsRef.current.querySelectorAll(".thumbnail-item");
+          gsap.fromTo(thumbnailItems,
+            {
+              opacity: 0,
+              scale: 0.5,
+              rotation: -180
+            },
+            {
+              opacity: 1,
+              scale: 1,
+              rotation: 0,
+              duration: 0.6,
+              stagger: 0.1,
+              ease: "back.out(1.7)",
+              scrollTrigger: {
+                trigger: thumbnailsRef.current,
+                start: "top 85%",
+                end: "bottom 20%",
+                toggleActions: "play none none reverse"
+              }
+            }
+          );
+        }
       }
 
       // أنيميشن للخلفية
@@ -273,12 +293,11 @@ const YoungStars = () => {
     responsive: [
       { breakpoint: 1024, settings: { slidesToShow: 3 } },
       { breakpoint: 768, settings: { slidesToShow: 2 } },
-      { breakpoint: 480, settings: { slidesToShow: 2 } },
+      { breakpoint: 480, settings: { slidesToShow: 1 } },
     ],
   };
 
   const handleThumbnailClick = (projectId: string) => {
-    // أنيميشن عند النقر على الثمبنيل
     const clickedThumb = document.querySelector(`[data-thumb="${projectId}"]`);
     if (clickedThumb) {
       gsap.fromTo(clickedThumb,
@@ -293,17 +312,22 @@ const YoungStars = () => {
         }
       );
     }
-    
+
     setActiveId(projectId);
+    setCurrentIndex(thumbnails.findIndex(p => p._id === projectId));
+  };
+
+  const handleDotClick = (index: number) => {
+    setActiveId(thumbnails[index]._id);
+    setCurrentIndex(index);
   };
 
   const activeProject = thumbnails.find((p) => p._id === activeId);
 
   return (
-    <section 
+    <section
       ref={sectionRef}
       className="bg-white/20 dark:bg-darkmode relative overflow-hidden"
-      
     >
       <div className="container mx-auto px-4 py-8 lg:py-16">
         <div className="grid lg:grid-cols-2 grid-cols-1 items-center gap-12 lg:gap-16 xl:gap-24">
@@ -316,100 +340,116 @@ const YoungStars = () => {
             ) : !activeProject ? (
               <div className="py-8 text-center text-SlateBlueText">No projects yet.</div>
             ) : (
-              <Slider {...settingsMain} key={activeId} className="pb-3">
-                <div>
-                  <div
-                    className="rounded-2xl overflow-hidden shadow-lg bg-white dark:bg-darkmode border border-PowderBlueBorder dark:border-dark_border cursor-pointer transform transition-transform duration-300 hover:scale-105"
-                    onClick={() => {
-                      setSelectedProject(activeProject);
-                      // أنيميشن عند النقر
-                      gsap.fromTo(".project-modal",
-                        { scale: 0.8, opacity: 0 },
-                        { scale: 1, opacity: 1, duration: 0.5 }
-                      );
-                    }}
-                  >
-                    {activeProject.video ? (
-                      activeProject.video.includes("youtube.com") || activeProject.video.includes("youtu.be") ? (
-                        <div className="relative rounded-2xl overflow-hidden bg-black">
-                          <iframe
-                            src={activeProject.video
-                              .replace("youtube.com/shorts/", "www.youtube.com/embed/")
-                              .replace("watch?v=", "embed/")
-                              .replace("youtu.be/", "www.youtube.com/embed/")}
-                            title={activeProject.title || "Project Video"}
-                            className="w-full h-80 rounded-2xl"
-                            allow="autoplay; encrypted-media"
-                            allowFullScreen
-                          />
-                        </div>
-                      ) : (
-                        <video
-                          src={activeProject.video}
-                          className="w-full h-80 object-cover rounded-2xl"
-                          loop
-                          autoPlay
-                          playsInline
-                          muted
-                        />
-                      )
-                    ) : activeProject.image ? (
-                      <img
-                        src={activeProject.image}
-                        alt={activeProject.title}
-                        className="w-full h-80 object-cover rounded-2xl transform transition-transform duration-500 hover:scale-110"
-                      />
-                    ) : (
-                      <div className="w-full h-64 flex items-center justify-center text-sm text-gray-500">
-                        No media
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Slider>
-            )}
-
-            {/* ===== Thumbnail Slider ===== */}
-            <div ref={thumbnailsRef}>
-              <Slider {...settingsThumbs} className="thumb mt-4">
-                {thumbnails.map((p) => (
-                  <div key={`thumb-${p._id}`} className="thumbnail-item">
+              <>
+                <Slider {...settingsMain} key={activeId} className="pb-3">
+                  <div>
                     <div
-                      data-thumb={p._id}
-                      className={`rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-300 transform hover:scale-105 ${
-                        p._id === activeId 
-                          ? "border-primary shadow-lg scale-105 ring-2 ring-primary/50" 
-                          : "border-transparent hover:border-primary/30"
-                      }`}
-                      onClick={() => handleThumbnailClick(p._id)}
+                      className="rounded-2xl overflow-hidden shadow-lg bg-white dark:bg-darkmode border border-PowderBlueBorder dark:border-dark_border cursor-pointer transform transition-transform duration-300 hover:scale-105"
+                      onClick={() => {
+                        setSelectedProject(activeProject);
+                        gsap.fromTo(".project-modal",
+                          { scale: 0.8, opacity: 0 },
+                          { scale: 1, opacity: 1, duration: 0.5 }
+                        );
+                      }}
                     >
-                      {p.image ? (
-                        <img 
-                          src={p.image} 
-                          alt={p.title} 
-                          className="w-full h-20 object-cover rounded-lg transform transition-transform duration-300 hover:scale-110" 
+                      {activeProject.video ? (
+                        activeProject.video.includes("youtube.com") || activeProject.video.includes("youtu.be") ? (
+                          <div className="relative rounded-2xl overflow-hidden bg-black">
+                            <iframe
+                              src={activeProject.video
+                                .replace("youtube.com/shorts/", "www.youtube.com/embed/")
+                                .replace("watch?v=", "embed/")
+                                .replace("youtu.be/", "www.youtube.com/embed/")}
+                              title={activeProject.title || "Project Video"}
+                              className="w-full h-80 rounded-2xl"
+                              allow="autoplay; encrypted-media"
+                              allowFullScreen
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : (
+                          <video
+                            src={activeProject.video}
+                            className="w-full h-80 object-cover rounded-2xl"
+                            loop
+                            autoPlay
+                            playsInline
+                            muted
+                          />
+                        )
+                      ) : activeProject.image ? (
+                        <img
+                          src={activeProject.image}
+                          alt={activeProject.title}
+                          className="w-full h-80 object-cover rounded-2xl transform transition-transform duration-500 hover:scale-110"
                         />
-                      ) : p.video ? (
-                        <div className="w-full h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center group">
-                          <svg className="w-8 h-8 text-gray-400 group-hover:text-primary transition-colors duration-300" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </div>
                       ) : (
-                        <div className="w-full h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center text-xs text-gray-500">
-                          No thumbnail
+                        <div className="w-full h-64 flex items-center justify-center text-sm text-gray-500">
+                          No media
                         </div>
                       )}
                     </div>
                   </div>
-                ))}
-              </Slider>
-            </div>
+                </Slider>
+
+                {/* ===== Thumbnail Slider للشاشات الكبيرة ===== */}
+                <div ref={thumbnailsRef} className="hidden md:block">
+                  <Slider {...settingsThumbs} className="thumb mt-4">
+                    {thumbnails.map((p) => (
+                      <div key={`thumb-${p._id}`} className="thumbnail-item">
+                        <div
+                          data-thumb={p._id}
+                          className={`rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-300 transform hover:scale-105 ${p._id === activeId
+                            ? "border-primary shadow-lg scale-105 ring-2 ring-primary/50"
+                            : "border-transparent hover:border-primary/30"
+                            }`}
+                          onClick={() => handleThumbnailClick(p._id)}
+                        >
+                          {p.image ? (
+                            <img
+                              src={p.image}
+                              alt={p.title}
+                              className="w-full h-20 object-cover rounded-lg transform transition-transform duration-300 hover:scale-110"
+                            />
+                          ) : p.video ? (
+                            <div className="w-full h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center group">
+                              <svg className="w-8 h-8 text-gray-400 group-hover:text-primary transition-colors duration-300" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                              </svg>
+                            </div>
+                          ) : (
+                            <div className="w-full h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center text-xs text-gray-500">
+                              No thumbnail
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </Slider>
+                </div>
+
+                {/* ===== Dots Navigation للشاشات الصغيرة ===== */}
+                <div className="md:hidden flex justify-center mt-6 gap-3">
+                  {thumbnails.map((_, index) => (
+                    <button
+                      key={`dot-${index}`}
+                      onClick={() => handleDotClick(index)}
+                      className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentIndex
+                          ? 'bg-primary scale-125'
+                          : 'bg-gray-300 hover:bg-gray-400'
+                        }`}
+                      aria-label={`Go to slide ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* ===== Right Section ===== */}
-          <div className="lg:pt-0 pt-8 w-full">
-            <h2 
+          <div className="lg:pt-0 pt- w-full">
+            <h2
               ref={titleRef}
               className="text-4xl lg:text-5xl font-bold text-MidnightNavyText dark:text-white leading-tight"
             >
@@ -419,7 +459,7 @@ const YoungStars = () => {
               </span>
             </h2>
 
-            <p 
+            <p
               ref={descriptionRef}
               className="text-xl font-normal text-SlateBlueText dark:text-gray-300 max-w-2xl lg:pt-8 pt-6 lg:pb-12 pb-8 leading-relaxed"
             >
@@ -431,7 +471,6 @@ const YoungStars = () => {
                 ref={buttonRef}
                 onClick={() => {
                   setLeadersOpen(true);
-                  // أنيميشن عند فتح المودال
                   gsap.fromTo(".leaders-modal",
                     { y: 100, opacity: 0 },
                     { y: 0, opacity: 1, duration: 0.5 }

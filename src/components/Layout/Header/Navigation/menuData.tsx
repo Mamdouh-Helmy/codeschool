@@ -39,7 +39,7 @@ export async function getHeaderData(locale: string = 'en'): Promise<HeaderItem[]
         href: "/blog" 
       },
       ...posts.map((post: any) => ({
-        label: post.title,
+        label: post.title_en,
         href: `/blog/${post.slug}`,
         // إضافة خاصية لتحديد أن هذا عنوان من API ولا يحتاج ترجمة
         isDynamic: true

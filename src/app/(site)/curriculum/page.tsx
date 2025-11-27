@@ -3,6 +3,7 @@ import HeroSub from "@/components/SharedComponent/HeroSub";
 import React from "react";
 import '@/Style/style.css'
 import { Metadata } from "next";
+import TicketSection from '@/components/Home/TicketSection';
 export const metadata: Metadata = {
   title: "curriculum | Codeschool",
 };
@@ -20,6 +21,7 @@ export default function CurriculumPage() {
         breadcrumbLinks={breadcrumbLinks}
       />
       <CurriculumTimeline />
+      <TicketSection />
     </>
   );
 }

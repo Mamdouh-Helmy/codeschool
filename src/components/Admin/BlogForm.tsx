@@ -1,3 +1,4 @@
+// components/BlogForm.tsx
 "use client";
 import { useState, useEffect } from "react";
 import {
@@ -16,6 +17,7 @@ import {
   Clock,
   Mail,
   Shield,
+  Languages,
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
 import RichTextEditor from "../Blog/RichTextEditor";
@@ -41,29 +43,44 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   };
 
   const [form, setForm] = useState(() => ({
-    title: initial?.title || "",
-    body: initial?.body || "",
+    // البيانات بالعربية
+    title_ar: initial?.title_ar || "",
+    body_ar: initial?.body_ar || "",
+    excerpt_ar: initial?.excerpt_ar || "",
+    imageAlt_ar: initial?.imageAlt_ar || "",
+    category_ar: initial?.category_ar || "",
+
+    // البيانات بالإنجليزية
+    title_en: initial?.title_en || "",
+    body_en: initial?.body_en || "",
+    excerpt_en: initial?.excerpt_en || "",
+    imageAlt_en: initial?.imageAlt_en || "",
+    category_en: initial?.category_en || "",
+
+    // البيانات المشتركة
     image: initial?.image || "",
-    imageAlt: initial?.imageAlt || "",
-    category: initial?.category || "",
-    excerpt: initial?.excerpt || "",
     publishDate: formatDateForInput(initial?.publishDate),
     author: {
-      name: initial?.author?.name || "",
+      name_ar: initial?.author?.name_ar || "",
+      name_en: initial?.author?.name_en || "",
       email: initial?.author?.email || "",
       avatar: initial?.author?.avatar || "",
       role: initial?.author?.role || "Author",
     },
-    tags: initial?.tags || [],
+    tags_ar: initial?.tags_ar || [],
+    tags_en: initial?.tags_en || [],
     featured: initial?.featured || false,
     status: initial?.status || "draft",
   }));
 
-  const [tags, setTags] = useState<string[]>(initial?.tags || []);
-  const [newTagInput, setNewTagInput] = useState("");
+  const [tagsAr, setTagsAr] = useState<string[]>(initial?.tags_ar || []);
+  const [tagsEn, setTagsEn] = useState<string[]>(initial?.tags_en || []);
+  const [newTagInputAr, setNewTagInputAr] = useState("");
+  const [newTagInputEn, setNewTagInputEn] = useState("");
   const [loading, setLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
   const [authorAvatarPreview, setAuthorAvatarPreview] = useState("");
+  const [activeLanguage, setActiveLanguage] = useState<"ar" | "en">("ar");
 
   // معاينة الصور
   useEffect(() => {
@@ -86,29 +103,51 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     }));
   };
 
-  // إضافة tag جديد
-  const addTag = () => {
-    const tag = newTagInput.trim();
-    if (tag && !tags.includes(tag)) {
-      const updatedTags = [...tags, tag];
-      setTags(updatedTags);
-      setNewTagInput("");
-      onChange("tags", updatedTags);
+  // إضافة tag جديد للعربية
+  const addTagAr = () => {
+    const tag = newTagInputAr.trim();
+    if (tag && !tagsAr.includes(tag)) {
+      const updatedTags = [...tagsAr, tag];
+      setTagsAr(updatedTags);
+      setNewTagInputAr("");
+      onChange("tags_ar", updatedTags);
     }
   };
 
-  // حذف tag
-  const removeTag = (index: number) => {
-    const updatedTags = tags.filter((_, i) => i !== index);
-    setTags(updatedTags);
-    onChange("tags", updatedTags);
+  // إضافة tag جديد للإنجليزية
+  const addTagEn = () => {
+    const tag = newTagInputEn.trim();
+    if (tag && !tagsEn.includes(tag)) {
+      const updatedTags = [...tagsEn, tag];
+      setTagsEn(updatedTags);
+      setNewTagInputEn("");
+      onChange("tags_en", updatedTags);
+    }
+  };
+
+  // حذف tag عربي
+  const removeTagAr = (index: number) => {
+    const updatedTags = tagsAr.filter((_, i) => i !== index);
+    setTagsAr(updatedTags);
+    onChange("tags_ar", updatedTags);
+  };
+
+  // حذف tag إنجليزي
+  const removeTagEn = (index: number) => {
+    const updatedTags = tagsEn.filter((_, i) => i !== index);
+    setTagsEn(updatedTags);
+    onChange("tags_en", updatedTags);
   };
 
   // إدخال بالزر Enter للـ tags
-  const handleTagKeyPress = (e: React.KeyboardEvent) => {
+  const handleTagKeyPress = (e: React.KeyboardEvent, language: "ar" | "en") => {
     if (e.key === "Enter") {
       e.preventDefault();
-      addTag();
+      if (language === "ar") {
+        addTagAr();
+      } else {
+        addTagEn();
+      }
     }
   };
 
@@ -147,10 +186,16 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   };
 
   // عند تغيير النص، توليد excerpt تلقائياً
-  const handleBodyChange = (value: string) => {
-    onChange("body", value);
-    if (!form.excerpt || form.excerpt === generateExcerpt(form.body)) {
-      onChange("excerpt", generateExcerpt(value));
+  const handleBodyChange = (value: string, language: "ar" | "en") => {
+    const field = language === "ar" ? "body_ar" : "body_en";
+    const excerptField = language === "ar" ? "excerpt_ar" : "excerpt_en";
+    
+    onChange(field, value);
+    
+    // توليد excerpt تلقائي إذا لم يتم توفيره
+    const currentExcerpt = language === "ar" ? form.excerpt_ar : form.excerpt_en;
+    if (!currentExcerpt || currentExcerpt === generateExcerpt(language === "ar" ? form.body_ar : form.body_en)) {
+      onChange(excerptField, generateExcerpt(value));
     }
   };
 
@@ -159,13 +204,17 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     setLoading(true);
 
     try {
+      // التأكد من أن tags_ar و tags_en موجودين في form
       const payload = {
         ...form,
-        tags,
+        tags_ar: tagsAr, // استخدام tagsAr مباشرة
+        tags_en: tagsEn, // استخدام tagsEn مباشرة
         publishDate: form.publishDate
           ? new Date(form.publishDate).toISOString()
           : new Date().toISOString(),
       };
+
+      console.log("Submitting payload:", payload); // للتصحيح
 
       const token = localStorage.getItem("token");
       if (!token) {
@@ -220,6 +269,48 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
 
   return (
     <form onSubmit={submit} className="space-y-6">
+      {/* Language Selector */}
+      <div className="bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+            <Languages className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
+              {t('blogForm.language') || "Language Selection"}
+            </h3>
+            <p className="text-12 text-SlateBlueText dark:text-darktext">
+              {t('blogForm.languageDescription') || "Select the language you want to edit"}
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveLanguage("ar")}
+            className={`flex-1 px-4 py-3 rounded-lg border transition-all duration-200 font-medium ${
+              activeLanguage === "ar" 
+                ? "bg-primary text-white border-primary" 
+                : "bg-white dark:bg-dark_input border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white"
+            }`}
+          >
+            العربية
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveLanguage("en")}
+            className={`flex-1 px-4 py-3 rounded-lg border transition-all duration-200 font-medium ${
+              activeLanguage === "en" 
+                ? "bg-primary text-white border-primary" 
+                : "bg-white dark:bg-dark_input border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white"
+            }`}
+          >
+            English
+          </button>
+        </div>
+      </div>
+
       {/* Basic Information */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
         <div className="flex items-center gap-3">
@@ -228,7 +319,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              {t('blogForm.basicInfo') || "Blog Information"}
+              {t('blogForm.basicInfo') || "Blog Information"} - {activeLanguage === "ar" ? "العربية" : "English"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
               {t('blogForm.basicInfoDescription') || "Basic details about the blog post"}
@@ -239,43 +330,58 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <FileText className="w-3 h-3 text-primary" />
-            {t('blogForm.title') || "Title"} *
+            {t('blogForm.title') || "Title"} * - {activeLanguage === "ar" ? "العربية" : "English"}
           </label>
           <input
             type="text"
-            value={form.title}
-            onChange={(e) => onChange("title", e.target.value)}
-            placeholder={t('blogForm.titlePlaceholder') || "Enter blog post title"}
+            value={activeLanguage === "ar" ? form.title_ar : form.title_en}
+            onChange={(e) => onChange(activeLanguage === "ar" ? "title_ar" : "title_en", e.target.value)}
+            placeholder={
+              activeLanguage === "ar" 
+                ? (t('blogForm.titlePlaceholder') || "أدخل عنوان المقال") 
+                : (t('blogForm.titlePlaceholder') || "Enter blog post title")
+            }
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             required
+            dir={activeLanguage === "ar" ? "rtl" : "ltr"}
           />
         </div>
 
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <FileText className="w-3 h-3 text-primary" />
-            {t('blogForm.excerpt') || "Excerpt"}
+            {t('blogForm.excerpt') || "Excerpt"} - {activeLanguage === "ar" ? "العربية" : "English"}
           </label>
           <textarea
-            value={form.excerpt}
-            onChange={(e) => onChange("excerpt", e.target.value)}
+            value={activeLanguage === "ar" ? form.excerpt_ar : form.excerpt_en}
+            onChange={(e) => onChange(activeLanguage === "ar" ? "excerpt_ar" : "excerpt_en", e.target.value)}
             rows={2}
-            placeholder={t('blogForm.excerptPlaceholder') || "Brief description of the blog post (auto-generated from content)"}
+            placeholder={
+              activeLanguage === "ar" 
+                ? (t('blogForm.excerptPlaceholder') || "وصف مختصر للمقال (يتم توليده تلقائياً من المحتوى)") 
+                : (t('blogForm.excerptPlaceholder') || "Brief description of the blog post (auto-generated from content)")
+            }
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200"
+            dir={activeLanguage === "ar" ? "rtl" : "ltr"}
           />
         </div>
 
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
             <FileText className="w-3 h-3 text-primary" />
-            {t('blogForm.category') || "Category"}
+            {t('blogForm.category') || "Category"} - {activeLanguage === "ar" ? "العربية" : "English"}
           </label>
           <input
             type="text"
-            value={form.category}
-            onChange={(e) => onChange("category", e.target.value)}
-            placeholder={t('blogForm.categoryPlaceholder') || "e.g., Technology, Business, Design"}
+            value={activeLanguage === "ar" ? form.category_ar : form.category_en}
+            onChange={(e) => onChange(activeLanguage === "ar" ? "category_ar" : "category_en", e.target.value)}
+            placeholder={
+              activeLanguage === "ar" 
+                ? "مثل: تكنولوجيا، أعمال، تصميم" 
+                : "e.g., Technology, Business, Design"
+            }
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+            dir={activeLanguage === "ar" ? "rtl" : "ltr"}
           />
         </div>
       </div>
@@ -288,7 +394,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              {t('blogForm.authorInfo') || "Author Information"}
+              {t('blogForm.authorInfo') || "Author Information"} - {activeLanguage === "ar" ? "العربية" : "English"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
               {t('blogForm.authorInfoDescription') || "Details about the author of this blog post"}
@@ -296,22 +402,27 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <User className="w-3 h-3 text-Aquamarine" />
-              {t('blogForm.authorName') || "Author Name"} *
-            </label>
-            <input
-              type="text"
-              value={form.author.name}
-              onChange={(e) => onChangeAuthor("name", e.target.value)}
-              placeholder={t('blogForm.authorName') || "Author name"}
-              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-              required
-            />
-          </div>
+        <div className="space-y-2">
+          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+            <User className="w-3 h-3 text-Aquamarine" />
+            {t('blogForm.authorName') || "Author Name"} * - {activeLanguage === "ar" ? "العربية" : "English"}
+          </label>
+          <input
+            type="text"
+            value={activeLanguage === "ar" ? form.author.name_ar : form.author.name_en}
+            onChange={(e) => onChangeAuthor(activeLanguage === "ar" ? "name_ar" : "name_en", e.target.value)}
+            placeholder={
+              activeLanguage === "ar" 
+                ? "اسم المؤلف" 
+                : "Author name"
+            }
+            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+            required
+            dir={activeLanguage === "ar" ? "rtl" : "ltr"}
+          />
+        </div>
 
+        <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Mail className="w-3 h-3 text-Aquamarine" />
@@ -325,9 +436,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
             />
           </div>
-        </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Shield className="w-3 h-3 text-Aquamarine" />
@@ -345,58 +454,57 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
               <option value="Guest">{t('blogForm.authorRoles.guest') || "Guest Writer"}</option>
             </select>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <Image className="w-3 h-3 text-Aquamarine" />
-              {t('blogForm.authorAvatar') || "Author Avatar"}
-            </label>
-            <div className="flex gap-3 items-start">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={form.author.avatar}
-                  onChange={(e) => onChangeAuthor("avatar", e.target.value)}
-                  placeholder={t('blogForm.avatarPlaceholder') || "Avatar URL or upload file"}
-                  className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-                />
-                <div className="mt-2">
-                  <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-Aquamarine/10 text-Aquamarine rounded-lg text-12 cursor-pointer hover:bg-Aquamarine/20 transition-colors">
-                    <Upload className="w-3 h-3" />
-                    {t('blogForm.uploadAvatar') || "Upload Avatar"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleAuthorAvatarUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  {authorAvatarPreview && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onChangeAuthor("avatar", "");
-                        setAuthorAvatarPreview("");
-                      }}
-                      className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      {t('blogForm.remove') || "Remove"}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {authorAvatarPreview && (
-                <div className="w-16 h-16 border border-PowderBlueBorder rounded-full overflow-hidden">
-                  <img
-                    src={authorAvatarPreview}
-                    alt="Author Avatar"
-                    className="w-full h-full object-cover"
+        <div className="space-y-2">
+          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+            {t('blogForm.authorAvatar') || "Author Avatar"}
+          </label>
+          <div className="flex gap-3 items-start">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={form.author.avatar}
+                onChange={(e) => onChangeAuthor("avatar", e.target.value)}
+                placeholder={t('blogForm.avatarPlaceholder') || "Avatar URL or upload file"}
+                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+              />
+              <div className="mt-2">
+                <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-Aquamarine/10 text-Aquamarine rounded-lg text-12 cursor-pointer hover:bg-Aquamarine/20 transition-colors">
+                  <Upload className="w-3 h-3" />
+                  {t('blogForm.uploadAvatar') || "Upload Avatar"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAuthorAvatarUpload}
+                    className="hidden"
                   />
-                </div>
-              )}
+                </label>
+                {authorAvatarPreview && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChangeAuthor("avatar", "");
+                      setAuthorAvatarPreview("");
+                    }}
+                    className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    {t('blogForm.remove') || "Remove"}
+                  </button>
+                )}
+              </div>
             </div>
+
+            {authorAvatarPreview && (
+              <div className="w-16 h-16 border border-PowderBlueBorder rounded-full overflow-hidden">
+                <img
+                  src={authorAvatarPreview}
+                  alt="Author Avatar"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -409,7 +517,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              {t('blogForm.content') || "Content"}
+              {t('blogForm.content') || "Content"} - {activeLanguage === "ar" ? "العربية" : "English"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
               {t('blogForm.contentDescription') || "Main content of the blog post (HTML/Markdown supported)"}
@@ -419,12 +527,16 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
 
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-            {t('blogForm.bodyContent') || "Body Content"} *
+            {t('blogForm.bodyContent') || "Body Content"} * - {activeLanguage === "ar" ? "العربية" : "English"}
           </label>
           <RichTextEditor
-            value={form.body}
-            onChange={handleBodyChange}
-            placeholder={t('blogForm.bodyPlaceholder') || "Write your blog post content here... HTML and Markdown are supported."}
+            value={activeLanguage === "ar" ? form.body_ar : form.body_en}
+            onChange={(value) => handleBodyChange(value, activeLanguage)}
+            placeholder={
+              activeLanguage === "ar" 
+                ? (t('blogForm.bodyPlaceholder') || "اكتب محتوى المقال هنا... يدعم HTML و Markdown.") 
+                : (t('blogForm.bodyPlaceholder') || "Write your blog post content here... HTML and Markdown are supported.")
+            }
           />
         </div>
       </div>
@@ -500,15 +612,95 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
 
         <div className="space-y-2">
           <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-            {t('blogForm.imageAlt') || "Image Alt Text"}
+            {t('blogForm.imageAlt') || "Image Alt Text"} - {activeLanguage === "ar" ? "العربية" : "English"}
           </label>
           <input
             type="text"
-            value={form.imageAlt}
-            onChange={(e) => onChange("imageAlt", e.target.value)}
-            placeholder={t('blogForm.imageAltPlaceholder') || "Description of the image for accessibility"}
+            value={activeLanguage === "ar" ? form.imageAlt_ar : form.imageAlt_en}
+            onChange={(e) => onChange(activeLanguage === "ar" ? "imageAlt_ar" : "imageAlt_en", e.target.value)}
+            placeholder={
+              activeLanguage === "ar" 
+                ? "وصف الصورة لإمكانية الوصول" 
+                : "Description of the image for accessibility"
+            }
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+            dir={activeLanguage === "ar" ? "rtl" : "ltr"}
           />
+        </div>
+      </div>
+
+      {/* Tags */}
+      <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+            <Tag className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
+              {t('blogForm.tags') || "Tags"} - {activeLanguage === "ar" ? "العربية" : "English"}
+            </h3>
+            <p className="text-12 text-SlateBlueText dark:text-darktext">
+              {t('blogForm.tagsDescription') || "Add tags for better categorization and search"}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={activeLanguage === "ar" ? newTagInputAr : newTagInputEn}
+                onChange={(e) => activeLanguage === "ar" ? setNewTagInputAr(e.target.value) : setNewTagInputEn(e.target.value)}
+                onKeyPress={(e) => handleTagKeyPress(e, activeLanguage)}
+                placeholder={
+                  activeLanguage === "ar" 
+                    ? "أدخل وسم (مثل: React، JavaScript، تطوير الويب)" 
+                    : "Enter a tag (e.g., React, JavaScript, Web Development)"
+                }
+                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+                dir={activeLanguage === "ar" ? "rtl" : "ltr"}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={activeLanguage === "ar" ? addTagAr : addTagEn}
+              disabled={activeLanguage === "ar" ? !newTagInputAr.trim() : !newTagInputEn.trim()}
+              className="px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              {t('common.add') || "Add"}
+            </button>
+          </div>
+
+          {(activeLanguage === "ar" ? tagsAr : tagsEn).length > 0 && (
+            <div className="space-y-2">
+              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+                {t('blogForm.addedTags') || "Added Tags"}:
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {(activeLanguage === "ar" ? tagsAr : tagsEn).map((tag, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white px-3 py-2 rounded-lg text-13"
+                  >
+                    <span>{tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => activeLanguage === "ar" ? removeTagAr(index) : removeTagEn(index)}
+                      className="text-red-500 hover:text-red-700 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <p className="text-11 text-SlateBlueText dark:text-darktext">
+            {t('blogForm.tagsHint') || "Press Enter or click Add to include multiple tags"}
+          </p>
         </div>
       </div>
 
@@ -580,76 +772,6 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
               </p>
             </div>
           </label>
-        </div>
-      </div>
-
-      {/* Tags */}
-      <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-            <Tag className="w-4 h-4 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              {t('blogForm.tags') || "Tags"}
-            </h3>
-            <p className="text-12 text-SlateBlueText dark:text-darktext">
-              {t('blogForm.tagsDescription') || "Add tags for better categorization and search"}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <input
-                type="text"
-                value={newTagInput}
-                onChange={(e) => setNewTagInput(e.target.value)}
-                onKeyPress={handleTagKeyPress}
-                placeholder={t('blogForm.tagsPlaceholder') || "Enter a tag (e.g., React, JavaScript, Web Development)"}
-                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={addTag}
-              disabled={!newTagInput.trim()}
-              className="px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              {t('common.add') || "Add"}
-            </button>
-          </div>
-
-          {tags.length > 0 && (
-            <div className="space-y-2">
-              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                {t('blogForm.addedTags') || "Added Tags"}:
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white px-3 py-2 rounded-lg text-13"
-                  >
-                    <span>{tag}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeTag(index)}
-                      className="text-red-500 hover:text-red-700 transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <p className="text-11 text-SlateBlueText dark:text-darktext">
-            {t('blogForm.tagsHint') || "Press Enter or click Add to include multiple tags"}
-          </p>
         </div>
       </div>
 

@@ -101,6 +101,10 @@ const Testimonials = () => {
     );
   }
 
+  if (testimonials.length === 0) {
+    return null;
+  }
+
   return (
     <section className="bg-IcyBreeze dark:bg-darklight testimonial">
       <div className="container space-y-8">

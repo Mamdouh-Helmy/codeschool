@@ -8,7 +8,7 @@ const PricingPlanSchema = new mongoose.Schema(
     currency: { type: String, default: "USD" },
     billingPeriod: {
       type: String,
-      enum: ["monthly", "quarterly", "yearly"],
+      // ✅ إزالة enum للسماح بأي فترة دفع
       default: "monthly",
     },
     features: [{ type: String }],
@@ -19,13 +19,19 @@ const PricingPlanSchema = new mongoose.Schema(
     type: { type: String, default: "standard" },
     discount: { type: Number, default: 0 },
     originalPrice: { type: Number },
-
-   
+    
+    // ✅ إضافة حقل جديد لتحديد إذا كانت الفترة مخصصة
+    isCustomBilling: { type: Boolean, default: false },
+    
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );
+
+// ✅ إضافة index للبحث السريع
+PricingPlanSchema.index({ billingPeriod: 1, isActive: 1 });
+PricingPlanSchema.index({ isPopular: 1, isActive: 1 });
 
 export default mongoose.models.PricingPlan ||
   mongoose.model("PricingPlan", PricingPlanSchema);

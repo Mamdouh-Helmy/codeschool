@@ -8,7 +8,6 @@ const ar = {
 
   "hero.title": "إطلاق طاقة المبدعين الصغار!",
   "hero.nextEvent": "انضم إلى فعالية {title} القادمة بتاريخ {date}.",
-  "hero.webinar": "انضم إلى ندوتنا القادمة بتاريخ {date}.",
   "hero.readMore": "اقرأ المزيد",
   "hero.browseCourses": "تصفح الدورات",
   "hero.watchDemo": "مشاهدة العرض",
@@ -1909,6 +1908,111 @@ const ar = {
   "portfolio.preview.addContent": "أضف المهارات والمشاريع لرؤيتها هنا",
   "nav.createPortfolio": "إنشاء بورتفليو",
   "nav.myPortfolio": "بورتفليو",
+
+  // في قسم sectionImages
+
+  "sectionImages.secondImageAlt": "النص البديل للصورة الثانية",
+
+  "sectionImages.secondImageUrl": "رابط الصورة الثانية",
+  "dashboard.sectionImagesHero": "صور رئيسية للأقسام",
+  "common.language": "اللغة",
+  "sectionImages.allSections": "جميع الأقسام",
+
+  // Section Names
+  "sectionNames.hero-section": "قسم الهيرو الرئيسي",
+  "sectionNames.welcome-popup": "نافذة الترحيب",
+
+  // Hero Section
+  "heroSection.title": "بيانات قسم الهيرو",
+  "heroSection.description": "معلومات لقسم الهيرو الرئيسي",
+  "heroSection.heroTitle": "عنوان الهيرو",
+  "heroSection.heroTitlePlaceholder": "عنوان قسم الهيرو",
+  "heroSection.instructor1": "اسم المدرب الأول",
+  "heroSection.instructor2": "اسم المدرب الثاني",
+  "heroSection.instructor1Role": "دور المدرب الأول",
+  "heroSection.instructor2Role": "دور المدرب الثاني",
+  "heroSection.instructorPlaceholder": "اسم المدرب",
+  "heroSection.instructorRolePlaceholder": "دور المدرب",
+
+  // Welcome Popup
+  "welcomePopup.title": "بيانات نافذة الترحيب",
+  "welcomePopup.description": "معلومات لنافذة الترحيب",
+  "welcomePopup.welcomeTitle": "عنوان الترحيب",
+  "welcomePopup.welcomeTitlePlaceholder": "عنوان نافذة الترحيب",
+  "welcomePopup.subtitle1": "العنوان الفرعي 1",
+  "welcomePopup.subtitle2": "العنوان الفرعي 2",
+  "welcomePopup.subtitlePlaceholder": "العنوان الفرعي",
+  "welcomePopup.feature1": "الميزة 1",
+  "welcomePopup.feature2": "الميزة 2",
+  "welcomePopup.feature3": "الميزة 3",
+  "welcomePopup.feature4": "الميزة 4",
+  "welcomePopup.feature5": "الميزة 5",
+  "welcomePopup.feature6": "الميزة 6",
+  "welcomePopup.featurePlaceholder": "الميزة",
+
+  // Statistics
+  "statistics.title": "الأرقام والإحصائيات",
+  "statistics.description": "أرقام مهمة للعرض",
+  "statistics.discount": "الخصم (%)",
+  "statistics.happyParents": "أولياء أمور راضون",
+  "statistics.happyParentsPlaceholder": "250",
+  "statistics.graduates": "الخريجون",
+  "statistics.graduatesPlaceholder": "130",
+
+  "heroSection.heroDescription": "وصف الهيرو",
+  "heroSection.heroDescriptionHint": "أدخل وصف قسم الهيرو",
+  "heroSection.heroDescriptionPlaceholder": "نص توضيحي لوصف الهيرو",
+
+  "hero.registerNow": "سجّل الآن",
+  "hero.webinar": "انضم إلى الويبنار القادم بتاريخ {date}",
+
+  "webinarRegistration.title": "التسجيل في الويبنار",
+  "webinarRegistration.subtitle": "أكمل بيانات التسجيل الخاصة بك",
+  "webinarRegistration.spotsAvailable": "أماكن متاحة",
+  "webinarRegistration.personalInfo": "المعلومات الشخصية",
+  "webinarRegistration.professionalInfo": "المعلومات المهنية",
+  "webinarRegistration.additionalInfo": "معلومات إضافية",
+  "webinarRegistration.fullName": "الاسم الكامل",
+  "webinarRegistration.email": "البريد الإلكتروني",
+  "webinarRegistration.phone": "رقم الهاتف",
+  "webinarRegistration.company": "الشركة/المؤسسة",
+  "webinarRegistration.jobTitle": "المسمى الوظيفي",
+  "webinarRegistration.questions": "أسئلة للمدرب",
+  "webinarRegistration.namePlaceholder": "أدخل اسمك الكامل",
+  "webinarRegistration.emailPlaceholder": "بريدك الإلكتروني",
+  "webinarRegistration.phonePlaceholder": "+20 0123456789",
+  "webinarRegistration.companyPlaceholder": "اسم شركتك",
+  "webinarRegistration.jobTitlePlaceholder": "وظيفتك",
+  "webinarRegistration.questionsPlaceholder":
+    "أي أسئلة محددة تود أن يجيب عليها المدرب أثناء الويبنار...",
+  "webinarRegistration.terms":
+    "أوافق على تلقي الإشعارات المتعلقة بهذا الويبنار وأقر بأن بياناتي ستتم معالجتها وفق سياسة الخصوصية.",
+  "webinarRegistration.registering": "جارٍ التسجيل...",
+  "webinarRegistration.registerNow": "سجّل الآن",
+  "webinarRegistration.loginNotice":
+    "يرجى التأكد من تسجيل الدخول لإكمال عملية التسجيل.",
+  "portfolio.projects.status.in-progress": "قيد التنفيذ",
+
+  "blogForm.language": "اللغة",
+  "blogForm.languagePlaceholder": "اختر لغة المقال",
+  "blog.filterByLanguage": "تصفية حسب اللغة",
+  "blog.allLanguages": "جميع اللغات",
+  "blog.language.ar": "العربية",
+  "blog.language.en": "الإنجليزية",
+
+  "blog.englishPosts": "المقالات الإنجليزية",
+  "blog.linkedPosts": "المقالات المرتبطة",
+  "blog.arabicPosts": "المقالات العربية",
+  "blog.showLinkedOnly": "عرض المرتبطة فقط",
+
+  "blogForm.translationSettings": "إعدادات الترجمة",
+  "blogForm.translationDescription": "إدارة خيارات الترجمة لهذا المقال",
+  "blogForm.linkTranslation": "ربط مع نسخة بلغة أخرى",
+  "blogForm.noTranslation": "لا توجد ترجمة متاحة",
+  "blogForm.languageDescription": "اختر اللغة التي كُتب بها هذا المقال",
+  "pricing.selectBillingPeriod": "اختر فترة الفوترة",
+  "pricing.addCustomBilling": "إضافة فترة فوترة مخصصة",
+  "pricing.customBillingPlaceholder": "أدخل فترة الفوترة المخصصة",
 };
 
 export default ar;

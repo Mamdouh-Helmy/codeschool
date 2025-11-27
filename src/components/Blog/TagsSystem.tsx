@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useI18n } from "@/i18n/I18nProvider";
 import { Tag, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "@/app/context/LocaleContext";
 
 interface TagsSystemProps {
   selectedTags: string[];
@@ -19,20 +20,22 @@ export default function TagsSystem({
   isFilter = false
 }: TagsSystemProps) {
   const { t } = useI18n();
+  const { locale } = useLocale();
   const router = useRouter();
   const [availableTags, setAvailableTags] = useState<string[]>(allTags);
   const [loading, setLoading] = useState(true);
 
-  // جلب جميع التاجات من الـ API
+  // جلب التاجات بناءً على اللغة الحالية
   useEffect(() => {
-    const fetchAllTags = async () => {
+    const fetchTags = async () => {
       try {
         setLoading(true);
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-        const response = await fetch(`${baseUrl}/api/blog/tags`);
+        const endpoint = locale === 'ar' ? '/api/blog/tags/ar' : '/api/blog/tags/en';
+        const response = await fetch(`${baseUrl}${endpoint}`);
         const data = await response.json();
         
-        console.log('📋 Tags API Response:', data);
+        console.log(`📋 ${locale.toUpperCase()} Tags API Response:`, data);
         
         if (data.success) {
           setAvailableTags(data.tags);
@@ -46,8 +49,8 @@ export default function TagsSystem({
       }
     };
 
-    fetchAllTags();
-  }, []);
+    fetchTags();
+  }, [locale]);
 
   const addTag = (tag: string) => {
     if (!selectedTags.includes(tag)) {
@@ -59,24 +62,16 @@ export default function TagsSystem({
     onTagsChange(selectedTags.filter(tag => tag !== tagToRemove));
   };
 
-  // دالة واحدة للتعامل مع التاجات
   const handleTagClick = (tag: string) => {
     if (isFilter) {
-      // في وضع الفلترة: اذهب إلى صفحة المدونة مع التاج
       console.log(`🎯 Filtering by tag: ${tag}`);
-      router.push(`/blog?tag=${encodeURIComponent(tag)}`);
+      router.push(`/blog?tag=${encodeURIComponent(tag)}&lang=${locale}`);
     } else {
-      // في وضع الإضافة: أضف التاج للقائمة المختارة
       addTag(tag);
     }
   };
 
   const popularTags = availableTags.slice(0, 15);
-
-  // حساب عدد المقالات لكل تاج
-  const getTagCount = (tag: string) => {
-    return availableTags.filter(t => t === tag).length;
-  };
 
   if (loading) {
     return (
@@ -145,11 +140,6 @@ export default function TagsSystem({
                 }`}
               >
                 {tag}
-                {/* {isFilter && (
-                  <span className="ml-1 text-xs opacity-70">
-                    ({getTagCount(tag)})
-                  </span>
-                )} */}
               </button>
             ))}
           </div>

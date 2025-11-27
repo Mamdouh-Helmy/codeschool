@@ -32,7 +32,7 @@ interface CurriculumStage {
 interface StageModalProps {
     stage: CurriculumStage;
     onClose: () => void;
-    onEnroll: (stageId: string) => void;
+    onEnroll: (stage: CurriculumStage) => void;
     t: (key: string) => string;
     locale: string;
 }
@@ -50,14 +50,14 @@ const StageModal = memo(({ stage, onClose, onEnroll, t, locale }: StageModalProp
                 { opacity: 0 },
                 { opacity: 1, duration: 0.3 }
             );
-            
+
             gsap.fromTo(contentRef.current,
-                { 
+                {
                     opacity: 0,
                     scale: 0.8,
-                    y: 50 
+                    y: 50
                 },
-                { 
+                {
                     opacity: 1,
                     scale: 1,
                     y: 0,
@@ -346,12 +346,12 @@ const StageModal = memo(({ stage, onClose, onEnroll, t, locale }: StageModalProp
     };
 
     return (
-        <div 
+        <div
             ref={modalRef}
             className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm"
             onClick={handleClose}
         >
-            <div 
+            <div
                 ref={contentRef}
                 className="relative bg-white dark:bg-darkmode rounded-xl sm:rounded-2xl shadow-xl w-full max-w-6xl mx-auto border border-PowderBlueBorder dark:border-dark_border max-h-[95vh] overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
@@ -500,7 +500,7 @@ const StageModal = memo(({ stage, onClose, onEnroll, t, locale }: StageModalProp
                                     </p>
 
                                     <button
-                                        onClick={() => onEnroll(stage._id || '')}
+                                        onClick={() => onEnroll(stage)}
                                         className="w-full bg-white text-primary hover:bg-white/90 py-2 px-3 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
                                     >
                                         <Rocket className="w-3 h-3 sm:w-4 sm:h-4" />

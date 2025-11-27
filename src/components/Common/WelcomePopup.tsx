@@ -25,11 +25,28 @@ interface WelcomePopupProps {
   onClose: () => void;
 }
 
-interface HeroImages {
+interface WelcomePopupData {
+  // الصور
   imageUrl?: string;
   secondImageUrl?: string;
   imageAlt?: string;
   secondImageAlt?: string;
+  
+  // بيانات الـ Welcome Popup
+  welcomeTitle?: string;
+  welcomeSubtitle1?: string;
+  welcomeSubtitle2?: string;
+  welcomeFeature1?: string;
+  welcomeFeature2?: string;
+  welcomeFeature3?: string;
+  welcomeFeature4?: string;
+  welcomeFeature5?: string;
+  welcomeFeature6?: string;
+  
+  // الأرقام
+  discount?: number;
+  happyParents?: string;
+  graduates?: string;
 }
 
 const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
@@ -37,26 +54,27 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
   const { t } = useI18n();
   const router = useRouter();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [heroImages, setHeroImages] = useState<HeroImages | null>(null);
+  const [welcomeData, setWelcomeData] = useState<WelcomePopupData | null>(null);
 
   const isRTL = locale === "ar";
   const direction = isRTL ? "rtl" : "ltr";
 
   useEffect(() => {
-    const fetchHeroImages = async () => {
+    const fetchWelcomeData = async () => {
       try {
-        const res = await fetch('/api/section-images?sectionName=hero-section&activeOnly=true');
+        // جلب بيانات الـ Welcome Popup المخصصة
+        const res = await fetch(`/api/section-images-hero?sectionName=welcome-popup&activeOnly=true&language=${locale}`);
         const result = await res.json();
         if (result.success && result.data.length > 0) {
-          setHeroImages(result.data[0]);
+          setWelcomeData(result.data[0]);
         }
       } catch (error) {
-        console.error('Error fetching hero images for popup:', error);
+        console.error('Error fetching welcome popup data:', error);
       }
     };
 
-    fetchHeroImages();
-  }, []);
+    fetchWelcomeData();
+  }, [locale]); // إضافة locale علشان البيانات تتغير مع تغيير اللغة
 
   const getImageSrc = (imageUrl: string | undefined, defaultImage: string): string => {
     if (!imageUrl) return defaultImage;
@@ -64,26 +82,27 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     return imageUrl;
   };
 
+  // استخدام البيانات من API أو الترجمات الافتراضية
   const slides = [
     {
-      title: t("hero.title") || "Empower Young Minds!",
-      subtitle: t("welcome.subtitle1") || "Transform your child's future with coding",
-      imageUrl: getImageSrc(heroImages?.imageUrl, "/images/hero/john.png"),
+      title: welcomeData?.welcomeTitle || t("hero.title") || "Empower Young Minds!",
+      subtitle: welcomeData?.welcomeSubtitle1 || t("welcome.subtitle1") || "Transform your child's future with coding",
+      imageUrl: getImageSrc(welcomeData?.imageUrl, "/images/hero/john.png"),
       features: [
-        t("welcome.feature1") || "Expert Coding Instructors",
-        t("welcome.feature2") || "Interactive Learning Platform",
-        t("welcome.feature3") || "Project-Based Curriculum",
+        welcomeData?.welcomeFeature1 || t("welcome.feature1") || "Expert Coding Instructors",
+        welcomeData?.welcomeFeature2 || t("welcome.feature2") || "Interactive Learning Platform",
+        welcomeData?.welcomeFeature3 || t("welcome.feature3") || "Project-Based Curriculum",
       ],
       icon: GraduationCap,
     },
     {
       title: t("welcome.specialOffer") || "Special Launch Offer!",
-      subtitle: t("welcome.subtitle2") || "Get 30% off on all courses",
-      imageUrl: getImageSrc(heroImages?.secondImageUrl, "/images/hero/maria.png"),
+      subtitle: welcomeData?.welcomeSubtitle2 || t("welcome.subtitle2") || "Get 30% off on all courses",
+      imageUrl: getImageSrc(welcomeData?.secondImageUrl, "/images/hero/maria.png"),
       features: [
-        t("welcome.feature4") || "All Age Groups (6-18)",
-        t("welcome.feature5") || "International Certificate",
-        t("welcome.feature6") || "Flexible Schedule",
+        welcomeData?.welcomeFeature4 || t("welcome.feature4") || "All Age Groups (6-18)",
+        welcomeData?.welcomeFeature5 || t("welcome.feature5") || "International Certificate",
+        welcomeData?.welcomeFeature6 || t("welcome.feature6") || "Flexible Schedule",
       ],
       icon: Heart,
     },
@@ -91,6 +110,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
 
   const currentSlideData = slides[currentSlide];
   const CurrentIcon = currentSlideData.icon;
+  const discount = welcomeData?.discount || 30;
 
   useEffect(() => {
     if (isOpen) {
@@ -139,7 +159,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     );
     onClose();
   };
-
+// console.log('Welcome Popup Data:', welcomeData);
   return (
     <AnimatePresence>
       {isOpen && (
@@ -213,7 +233,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                     <div className="bg-white/10 backdrop-blur-sm rounded-14 sm:rounded-22 p-3 sm:p-4 mb-4 sm:mb-6 mx-auto max-w-[280px]">
                       <Image
                         src={currentSlideData.imageUrl}
-                        alt="Welcome"
+                        alt={welcomeData?.imageAlt || "Welcome"}
                         width={200}
                         height={200}
                         className="w-20 h-20 sm:w-60 sm:h-60 md:w-40 md:h-40 object-contain mx-auto rounded-14"
@@ -293,7 +313,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                             <Gift className="w-5 h-5 sm:w-6 sm:h-6" />
                           </div>
                           <div>
-                            <div className="font-bold text-xl sm:text-24">30% OFF</div>
+                            <div className="font-bold text-xl sm:text-24">{discount}% OFF</div>
                             <div className="text-xs sm:text-sm opacity-90 font-medium">
                               {t("welcome.limitedTime") || "Limited Time Offer"}
                             </div>
@@ -377,7 +397,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                         <div className="flex items-center gap-1">
                           <Users className="w-4 h-4 text-primary" />
                           <span className="font-medium">
-                            {t("welcome.happyParents") || "Happy Parents"}
+                            {welcomeData?.happyParents || t("welcome.happyParents") || "Happy Parents"}
                           </span>
                         </div>
                       </div>

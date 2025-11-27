@@ -24,7 +24,6 @@ export default function PortfolioBuilder() {
       return;
     }
     
-    // جلب بيانات المستخدم من التوكن
     fetchUserWithToken(token);
   }, [router]);
 
@@ -76,23 +75,70 @@ export default function PortfolioBuilder() {
       if (data.success) {
         setPortfolio(data.portfolio);
       } else {
-        // إذا مفيش بورتفليو، ننشئ واحد افتراضي
+        // إذا مفيش بورتفليو، ننشئ واحد افتراضي مع السمة المظلمة
+        console.log("🔄 No portfolio found, creating default with dark theme...");
         const defaultPortfolio: PortfolioFormData = {
           title: t("portfolio.basic.titlePlaceholder"),
           description: "",
-          skills: [],
-          projects: [],
-          socialLinks: {},
+          skills: [
+            {
+              name: "JavaScript",
+              level: 75,
+              category: "Frontend",
+              icon: "🟨"
+            },
+            {
+              name: "React",
+              level: 70,
+              category: "Frontend", 
+              icon: "⚛️"
+            }
+          ],
+          projects: [
+            {
+              title: "Portfolio Website",
+              description: "A modern and responsive portfolio website to showcase my work and skills.",
+              technologies: ["Next.js", "React", "Tailwind CSS"],
+              status: "completed",
+              featured: true,
+              startDate: new Date(),
+              endDate: new Date(),
+            },
+          ],
+          socialLinks: {
+            github: `https://github.com/${user?.username}`,
+            linkedin: `https://linkedin.com/in/${user?.username}`
+          },
           contactInfo: {},
           isPublished: false,
           views: 0,
           settings: {
-            theme: "light",
+            theme: "dark", // 🔥 السمة المظلمة كإعداد افتراضي
             layout: "standard"
           },
           userId: user?.id || ""
         };
         setPortfolio(defaultPortfolio as Portfolio);
+        
+        // محاولة حفظ البورتفليو الافتراضي
+        try {
+          const saveRes = await fetch("/api/portfolio", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${currentToken}`,
+            },
+            body: JSON.stringify(defaultPortfolio),
+          });
+          
+          if (saveRes.ok) {
+            const savedData = await saveRes.json();
+            setPortfolio(savedData.portfolio);
+            console.log("✅ Default portfolio saved successfully");
+          }
+        } catch (saveError) {
+          console.error("❌ Could not save default portfolio:", saveError);
+        }
       }
     } catch (error) {
       console.error("Error fetching portfolio:", error);

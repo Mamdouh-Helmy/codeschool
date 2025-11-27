@@ -1,20 +1,17 @@
 // app/api/auth/scan-qr/route.js
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import User from "../../../models/User";
 import { connectDB } from "@/lib/mongodb";
 
-const JWT_SECRET = process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET;
-
 export async function POST(req) {
   try {
-    const { qrToken, scannedBy } = await req.json();
+    const { qrData } = await req.json(); // 🔥 تغيير من qrToken إلى qrData
 
-    if (!qrToken) {
+    if (!qrData) {
       return NextResponse.json(
         {
           success: false,
-          message: "QR token is required",
+          message: "QR data is required",
         },
         { status: 400 }
       );
@@ -22,26 +19,39 @@ export async function POST(req) {
 
     await connectDB();
 
-    // فك تشفير الـ QR token
-    let decoded;
-    try {
-      decoded = jwt.verify(qrToken, JWT_SECRET);
-      console.log("✅ Token decoded:", decoded);
-    } catch (err) {
-      console.error("❌ Token verification failed:", err);
+    console.log("🔍 Scanning QR with data:", qrData);
+
+    // 🔥 البحث عن المستخدم باستخدام رابط البورتفليو المخزن في qrCodeData
+    let scannedUser = null;
+    
+    // إذا كان الـ QR data هو رابط بورتفليو
+    if (qrData.includes('/portfolio/')) {
+      const username = qrData.split('/portfolio/')[1];
+      scannedUser = await User.findOne({ username }).select("-password");
+    } 
+    // إذا كان الـ QR data لا يزال توكن (للتوافق مع الإصدارات القديمة)
+    else if (qrData.includes('token=')) {
+      // معالجة التوكن للتوافق مع الإصدارات القديمة
+      const url = new URL(qrData);
+      const token = url.searchParams.get('token');
+      // يمكنك إضافة فك تشفير التوكن هنا إذا أردت
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid or expired QR code",
+          message: "QR code format outdated. Please generate new QR code.",
         },
-        { status: 401 }
+        { status: 400 }
       );
     }
+    // إذا كان الـ QR data هو username مباشر
+    else {
+      scannedUser = await User.findOne({ 
+        qrCodeData: qrData 
+      }).select("-password");
+    }
 
-    // البحث عن المستخدم الماسوح
-    const scannedUser = await User.findById(decoded.userId).select("-password");
     if (!scannedUser) {
-      console.error("❌ User not found with ID:", decoded.userId);
+      console.error("❌ User not found for QR data:", qrData);
       return NextResponse.json(
         {
           success: false,
@@ -51,80 +61,33 @@ export async function POST(req) {
       );
     }
 
-    // التحقق من أن الـ QR code صالح
-    if (scannedUser.qrCodeData !== qrToken) {
-      console.error(
-        "❌ QR code mismatch - stored:",
-        scannedUser.qrCodeData?.substring(0, 20),
-        "received:",
-        qrToken.substring(0, 20)
-      );
-      return NextResponse.json(
-        {
-          success: false,
-          message: "QR code is no longer valid",
-        },
-        { status: 401 }
-      );
-    }
+    console.log("✅ User found:", scannedUser.username);
 
     const userInfo = {
       id: scannedUser._id,
       name: scannedUser.name,
       email: scannedUser.email,
       role: scannedUser.role,
+      username: scannedUser.username,
       image: scannedUser.image,
       createdAt: scannedUser.createdAt,
     };
 
-    // إذا كان في scanner ID، يبقى في محاولة تسجيل حضور
-    if (scannedBy && scannedBy !== "anonymous") {
-      const scannerUser = await User.findById(scannedBy);
-
-      if (scannerUser) {
-        // التحقق من صلاحيات المسح
-        const allowedRoles = ["admin", "marketing", "instructor"];
-        if (allowedRoles.includes(scannerUser.role)) {
-          console.log("✅ Scanner has permission to record attendance");
-
-          // تسجيل الحضور (بدون استخدام Attendance model)
-          const attendanceData = {
-            id: new Date().getTime().toString(),
-            time: new Date().toISOString(),
-            scannedBy: scannerUser.name,
-            scanType: "attendance",
-          };
-
-          return NextResponse.json(
-            {
-              success: true,
-              message: `تم تسجيل حضور ${scannedUser.name} بنجاح`,
-              user: userInfo,
-              attendance: attendanceData,
-              scanType: "attendance",
-            },
-            { status: 200 }
-          );
-        } else {
-          console.log(
-            "❌ Scanner doesn't have permission. Role:",
-            scannerUser.role
-          );
-        }
-      } else {
-        console.log("❌ Scanner user not found with ID:", scannedBy);
-      }
-    }
+    // رابط البورتفليو
+    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const portfolioUrl = `${baseUrl}/portfolio/${scannedUser.username}`;
 
     return NextResponse.json(
       {
         success: true,
         message: `مرحباً ${scannedUser.name}`,
         user: userInfo,
-        scanType: scannedBy === decoded.userId ? "self-scan" : "info-only",
+        portfolioUrl: portfolioUrl,
+        scanType: "portfolio_redirect"
       },
       { status: 200 }
     );
+
   } catch (error) {
     console.error("💥 Scan QR error:", error);
     return NextResponse.json(

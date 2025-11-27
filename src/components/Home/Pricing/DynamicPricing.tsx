@@ -85,28 +85,28 @@ const DynamicPricing = () => {
       return;
     }
 
-    if (!auth?.isAuthenticated) {
-      try {
-        const sess = await fetch("/api/auth/session", { cache: "no-store" });
-        if (sess.ok) {
-          const sessJson = await sess.json();
-          if (!(sessJson?.success && sessJson?.loggedIn)) {
-            toast.error(t("eventTicket.pleaseLogin"));
+    // if (!auth?.isAuthenticated) {
+    //   try {
+    //     const sess = await fetch("/api/auth/session", { cache: "no-store" });
+    //     if (sess.ok) {
+    //       const sessJson = await sess.json();
+    //       if (!(sessJson?.success && sessJson?.loggedIn)) {
+    //         toast.error(t("eventTicket.pleaseLogin"));
           
-            return;
-          }
-        } else {
-          toast.error(t("eventTicket.pleaseLogin"));
+    //         return;
+    //       }
+    //     } else {
+    //       toast.error(t("eventTicket.pleaseLogin"));
          
-          return;
-        }
-      } catch (e) {
-        console.error("Session check failed:", e);
-        toast.error(t("eventTicket.pleaseLogin"));
+    //       return;
+    //     }
+    //   } catch (e) {
+    //     console.error("Session check failed:", e);
+    //     toast.error(t("eventTicket.pleaseLogin"));
        
-        return;
-      }
-    }
+    //     return;
+    //   }
+    // }
 
     const selectedPlanInfo = plans.find(p => p._id === planId || p.id === planId);
     if (!selectedPlanInfo) {

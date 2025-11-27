@@ -2,13 +2,15 @@
 import PublicPortfolio from '@/components/Portfolio/PublicPortfolio';
 import { Metadata } from "next";
 
-interface Props {
-  params: {
+// تعريف النوع الصحيح لـ params
+interface PageProps {
+  params: Promise<{
     username: string;
-  };
+  }>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  // استخدم await للحصول على params
   const { username } = await params;
   
   try {
@@ -38,12 +40,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
   
   return {
-    title: "Portfolio | Codeschool",
+    title: `${username}'s Portfolio | Codeschool`,
     description: "Professional portfolio showcase",
   };
 }
 
-export default async function PortfolioPage({ params }: Props) {
+export default async function PortfolioPage({ params }: PageProps) {
+  // استخدم await للحصول على params
   const { username } = await params;
   return <PublicPortfolio username={username} />;
 }

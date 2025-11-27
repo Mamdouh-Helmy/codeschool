@@ -1,15 +1,21 @@
+// src/app/api/contact/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Contact from "../../../models/Contact";
 import mongoose from "mongoose";
 
+// تعريف النوع الصحيح لـ params في Next.js 14
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteParams
 ) {
   try {
     await connectDB();
-    const { id } = params;
+    const { id } = await params; // استخدم await هنا
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -42,11 +48,11 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteParams
 ) {
   try {
     await connectDB();
-    const { id } = params;
+    const { id } = await params; // استخدم await هنا
     const body = await request.json();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -89,11 +95,11 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteParams
 ) {
   try {
     await connectDB();
-    const { id } = params;
+    const { id } = await params; // استخدم await هنا
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(

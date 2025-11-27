@@ -6,7 +6,7 @@ const portfolioSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    unique: true // كل user له portfolio واحد فقط
+    unique: true
   },
   title: {
     type: String,
@@ -90,7 +90,7 @@ const portfolioSchema = new mongoose.Schema({
     theme: {
       type: String,
       enum: ['light', 'dark', 'blue', 'green'],
-      default: 'light'
+      default: 'dark' // 🔥 تغيير الإعداد الافتراضي إلى dark
     },
     layout: {
       type: String,

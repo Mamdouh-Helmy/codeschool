@@ -1,4 +1,3 @@
-// src/app/layout.tsx
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
@@ -17,19 +16,43 @@ import { Toaster } from "react-hot-toast";
 
 const dmsans = DM_Sans({ subsets: ["latin"] });
 
+// ❗ بدون لغة
+async function getHeroDescription() {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
+    const res = await fetch(`${baseUrl}/api/hero-description`, {
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+    return data.heroDescription || "";
+  } catch (error) {
+    console.error("Failed to load hero description:", error);
+    return "";
+  }
+}
+
 export default async function RootLayout({
   children,
-}: Readonly<{
-  children: ReactNode;
-}>) {
+}: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
-  const initialLocale = (
-    cookieStore.get("app_locale")?.value === "ar" ? "ar" : "en"
-  ) as "en" | "ar";
+  const initialLocale =
+    (cookieStore.get("app_locale")?.value === "ar" ? "ar" : "en") as
+      | "en"
+      | "ar";
+
   const dir = initialLocale === "ar" ? "rtl" : "ltr";
+
+  // ⭐ جلب heroDescription بدون لغة
+  const heroDescription = await getHeroDescription();
 
   return (
     <html lang={initialLocale} dir={dir} suppressHydrationWarning>
+      <head>
+        <meta name="description" content={heroDescription} />
+      </head>
+
       <body className={dmsans.className}>
         <AuthDialogProvider>
           <SessionProviderComp session={null}>
@@ -43,11 +66,8 @@ export default async function RootLayout({
                   <Aoscompo>
                     <NextTopLoader />
 
-
-
-                    <SiteWrapper>   {/* تم نقل Toaster خارج ThemeProvider لتجنب مشاكل الـ theme */}
+                    <SiteWrapper heroDescription={heroDescription}>
                       <Toaster
-
                         containerStyle={{ zIndex: 9999 }}
                         toastOptions={{
                           className:
@@ -63,9 +83,14 @@ export default async function RootLayout({
                           },
                           duration: 4000,
                         }}
-                      /> {children}</SiteWrapper>
+                      />
+
+                      {children}
+                    </SiteWrapper>
+
                     <WelcomePopupManager />
                   </Aoscompo>
+
                   <ScrollToTop />
                 </ThemeProvider>
               </I18nProvider>

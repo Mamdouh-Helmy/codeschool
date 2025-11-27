@@ -1,3 +1,4 @@
+// src/app/blog/page.tsx
 "use client";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
@@ -7,19 +8,54 @@ import { useI18n } from "@/i18n/I18nProvider";
 import { Filter, X } from "lucide-react";
 import HeroSub from "@/components/SharedComponent/HeroSub";
 import TicketSection from "@/components/Home/TicketSection";
+import { useLocale } from "@/app/context/LocaleContext";
+import { Blog } from "@/types/blog"; // ✅ استيراد النوع من الملف المشترك
+
+// ✅ أنواع TypeScript - استخدام Blog من types/blog.ts
+interface ApiResponse {
+  success: boolean;
+  data?: Blog[];
+  message?: string;
+  pagination?: {
+    total: number;
+    page: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
+
+interface BreadcrumbLink {
+  href: string;
+  text: string;
+}
 
 export default function BlogPage() {
     const { t } = useI18n();
+    const { locale } = useLocale();
     const searchParams = useSearchParams();
     const [selectedTag, setSelectedTag] = useState<string>("");
-    const [blogs, setBlogs] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [blogs, setBlogs] = useState<Blog[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
-    const breadcrumbLinks = [
-        { href: "/", text: "Home" },
-        { href: "/blog", text: "Blog" },
+    // ✅ تحديث breadcrumb بناءً على اللغة
+    const breadcrumbLinks: BreadcrumbLink[] = [
+        { href: "/", text: locale === 'ar' ? "الرئيسية" : "Home" },
+        { href: "/blog", text: locale === 'ar' ? "المدونة" : "Blog" },
     ];
+
+    // ✅ تحديث الوصف بناءً على اللغة
+    const getDescription = (): string => {
+        if (selectedTag) {
+            return locale === 'ar' 
+                ? `المقالات الموسومة بـ "${selectedTag}"`
+                : `Posts tagged with "${selectedTag}"`;
+        }
+        return locale === 'ar'
+            ? "اكتشف ثروة من المواد الثاقبة المصممة بدقة لتزويدك بفهم شامل لأحدث الاتجاهات."
+            : "Discover a wealth of insightful materials meticulously crafted to provide you with a comprehensive understanding of the latest trends.";
+    };
 
     // جلب التاج من الـ URL
     useEffect(() => {
@@ -38,7 +74,8 @@ export default function BlogPage() {
                 // بناء الـ URL مع جميع الباراميترات
                 const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
                 const url = new URL('/api/blog', baseUrl);
-                url.searchParams.set('status', 'published'); // فقط المقالات المنشورة
+                url.searchParams.set('status', 'published');
+                url.searchParams.set('lang', locale); // إضافة اللغة
 
                 if (selectedTag) {
                     url.searchParams.set('tag', selectedTag);
@@ -52,11 +89,11 @@ export default function BlogPage() {
                     throw new Error(`HTTP error! status: ${res.status}`);
                 }
 
-                const data = await res.json();
+                const data: ApiResponse = await res.json();
 
                 console.log('📦 API Response:', data);
 
-                if (data.success) {
+                if (data.success && data.data) {
                     setBlogs(data.data);
                     console.log(`✅ Found ${data.data.length} posts with tag: ${selectedTag}`);
                 } else {
@@ -73,23 +110,31 @@ export default function BlogPage() {
         };
 
         fetchBlogs();
-    }, [selectedTag]);
+    }, [selectedTag, locale]);
 
     const clearFilter = () => {
         setSelectedTag("");
         // إزالة التاج من الـ URL
-        window.history.pushState({}, '', '/blog');
+        window.history.pushState({}, '', `/blog?lang=${locale}`);
+    };
+
+    // ✅ رسائل الخطأ بناءً على اللغة
+    const getErrorMessage = (): string => {
+        if (selectedTag) {
+            return locale === 'ar' 
+                ? `لا توجد مقالات موسومة بـ "${selectedTag}"`
+                : `No posts found with tag "${selectedTag}"`;
+        }
+        return locale === 'ar' 
+            ? "لم يتم العثور على مقالات"
+            : "No articles found";
     };
 
     return (
         <>
             <HeroSub
-                title="Blog"
-                description={
-                    selectedTag
-                        ? `Posts tagged with "${selectedTag}"`
-                        : "Discover a wealth of insightful materials meticulously crafted to provide you with a comprehensive understanding of the latest trends."
-                }
+                title={locale === 'ar' ? "المدونة" : "Blog"}
+                description={getDescription()}
                 breadcrumbLinks={breadcrumbLinks}
             />
 
@@ -122,8 +167,7 @@ export default function BlogPage() {
                                 onTagsChange={(tags) => {
                                     if (tags.length > 0) {
                                         setSelectedTag(tags[0]);
-
-                                        window.history.pushState({}, '', `/blog?tag=${encodeURIComponent(tags[0])}`);
+                                        window.history.pushState({}, '', `/blog?tag=${encodeURIComponent(tags[0])}&lang=${locale}`);
                                     } else {
                                         clearFilter();
                                     }
@@ -134,10 +178,14 @@ export default function BlogPage() {
                             {selectedTag && (
                                 <div className="mt-4 p-3 bg-primary/10 border border-primary/20 rounded-lg">
                                     <p className="text-primary font-medium">
-                                        {t("blog.showingTagged") || "Showing posts tagged with"}: <span className="font-bold">"{selectedTag}"</span>
+                                        {locale === 'ar' ? "عرض المقالات الموسومة بـ" : "Showing posts tagged with"}: 
+                                        <span className="font-bold"> "{selectedTag}"</span>
                                     </p>
-                                    <p className="text-sm text-SlateBlueText dark:text-darktext mt-1">
-                                        {blogs.length} {blogs.length === 1 ? t('blog.post') : t('blog.posts')} {t('blog.found') || 'found'}
+                                    <p className="text-sm text-SlateBlueText dark:text-gray-400 mt-1"> {/* ✅ إصلاح: dark:text-gray-400 بدلاً من dark:text-darktext */}
+                                        {blogs.length} {blogs.length === 1 
+                                            ? (locale === 'ar' ? 'مقال' : 'post') 
+                                            : (locale === 'ar' ? 'مقالات' : 'posts')} 
+                                        {locale === 'ar' ? ' تم العثور عليها' : ' found'}
                                     </p>
                                 </div>
                             )}
@@ -145,7 +193,7 @@ export default function BlogPage() {
                             {error && (
                                 <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                                     <p className="text-red-500 font-medium">
-                                        Error: {error}
+                                        {locale === 'ar' ? 'خطأ:' : 'Error:'} {error}
                                     </p>
                                 </div>
                             )}
@@ -157,7 +205,7 @@ export default function BlogPage() {
                         {loading ? (
                             <div className="text-center py-12">
                                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-                                <p className="text-SlateBlueText dark:text-darktext mt-4">
+                                <p className="text-SlateBlueText dark:text-gray-400 mt-4"> {/* ✅ إصلاح: dark:text-gray-400 */}
                                     {t("common.loading") || "Loading..."}
                                 </p>
                             </div>
@@ -177,18 +225,15 @@ export default function BlogPage() {
                             </div>
                         ) : (
                             <div className="text-center py-12 bg-white dark:bg-darkmode rounded-xl border border-PowderBlueBorder dark:border-dark_border">
-                                <p className="text-SlateBlueText dark:text-darktext text-lg">
-                                    {selectedTag
-                                        ? `${t("blog.noPostsWithTag") || "No posts found with tag"} "${selectedTag}"`
-                                        : (t("blog.noArticles") || "No articles found")
-                                    }
+                                <p className="text-SlateBlueText dark:text-gray-400 text-lg"> {/* ✅ إصلاح: dark:text-gray-400 */}
+                                    {getErrorMessage()}
                                 </p>
                                 {selectedTag && (
                                     <button
                                         onClick={clearFilter}
                                         className="mt-4 bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-lg transition-colors"
                                     >
-                                        {t("blog.showAllPosts") || "Show All Posts"}
+                                        {locale === 'ar' ? "عرض جميع المقالات" : "Show All Posts"}
                                     </button>
                                 )}
                             </div>

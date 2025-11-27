@@ -7,6 +7,7 @@ import StageCard from './StageCard';
 import StageModal from './StageModal';
 import TimelineAnimation from './TimelineAnimation';
 import { Rocket, Code, Sparkles } from 'lucide-react';
+import { compareSync } from 'bcryptjs';
 
 // الأنواع
 interface AgeRange {
@@ -114,7 +115,7 @@ const CurriculumTimeline = () => {
     }, [selectedAge, fetchStages]);
 
     const handleStageClick = useCallback((stage: CurriculumStage) => {
-        console.log('Stage clicked:', stage); // للتأكد من أن البيانات تصل
+        // console.log('Stage clicked:', stage); 
         setSelectedStage(stage);
         setShowStageModal(true);
     }, []);
@@ -124,25 +125,51 @@ const CurriculumTimeline = () => {
         setSelectedStage(null);
     }, []);
 
-    const handleEnroll = useCallback(async (stageId: string) => {
+    const handleEnroll = useCallback(async (stage: CurriculumStage) => {
         try {
+            // استخراج البيانات المطلوبة من الـ stage
+            const ageRange = typeof stage.age_range === 'object'
+                ? (locale === 'ar' ? stage.age_range.ar : stage.age_range.en)
+                : stage.age_range;
+
+            const languageType = typeof stage.language_type === 'object'
+                ? (locale === 'ar' ? stage.language_type.ar : stage.language_type.en)
+                : stage.language_type;
+
+            const stageTitle = locale === 'ar' ? stage.title_ar : stage.title_en;
+
             const res = await fetch('/api/enroll', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stageId }),
+                body: JSON.stringify({
+                    stageId: stage._id,
+                    stageTitle: stageTitle,
+                    ageRange: ageRange,
+                    platform: stage.platform,
+                    languageType: languageType,
+                    duration: stage.duration,
+                    studentName: 'طالب جديد', 
+                    phoneNumber: 'سيتم تقديمه عبر الواتساب',
+                    message: `أرغب في التسجيل في مرحلة ${stageTitle} للفئة العمرية ${ageRange}`
+                }),
             });
 
-            if (res.ok) {
-                alert(t('curriculum.enrollmentSuccess') || 'Enrollment successful!');
-                setShowStageModal(false);
+            const data = await res.json();
+
+            if (data.success) {
+                // فتح الواتساب في نافذة جديدة
+                window.open(data.data.whatsappUrl, '_blank', 'noopener,noreferrer');
+
+                // رسالة نجاح للمستخدم
+                // alert(t('curriculum.enrollmentSuccess') || 'تم فتح الواتساب، يرجى إكمال عملية التسجيل مع المسؤول');
             } else {
-                alert(t('curriculum.enrollmentError') || 'Error during enrollment');
+                // alert(t('curriculum.enrollmentError') || 'حدث خطأ أثناء التسجيل');
             }
         } catch (error) {
             console.error('Error enrolling:', error);
-            alert(t('curriculum.enrollmentError') || 'Error during enrollment');
+            // alert(t('curriculum.enrollmentError') || 'حدث خطأ أثناء التسجيل');
         }
-    }, [t]);
+    }, [t, locale]);
 
     const changeAgeGroup = useCallback(() => {
         sessionStorage.removeItem('ageSelected');
@@ -215,7 +242,7 @@ const CurriculumTimeline = () => {
                     {/* Timeline with Animation */}
                     <div className="relative" ref={timelineRef}>
                         <TimelineAnimation stagesCount={stages.length} />
-                        
+
                         {/* Stages */}
                         <div className="space-y-16">
                             {stages.map((stage, index) => (

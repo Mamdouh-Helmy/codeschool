@@ -35,6 +35,7 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
 
             if (data.success) {
                 setPortfolio(data.portfolio);
+                console.log("🎨 Portfolio theme:", data.portfolio.settings?.theme);
             } else {
                 setError(data.message || t("portfolio.public.notFound"));
                 toast.error(data.message || t("portfolio.status.loadFailed"));
@@ -67,7 +68,6 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
         }
     };
 
-    // دالة لتنسيق التاريخ
     const formatDate = (date: string | Date): string => {
         const dateObj = new Date(date);
         if (isNaN(dateObj.getTime())) return "Invalid Date";
@@ -79,24 +79,18 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
         });
     };
 
-    // تطبيق السمات المستقلة
-    const themeStyles = portfolio ? applyTheme(
-        portfolio.settings?.theme || 'light',
-        portfolio.settings?.layout || 'standard'
-    ) : null;
+    // تطبيق السمات - مع السمة المظلمة كإعداد افتراضي
+    const themeStyles = applyTheme(
+        portfolio?.settings?.theme || 'dark', // 🔥 السمة المظلمة كإعداد افتراضي
+        portfolio?.settings?.layout || 'standard'
+    );
 
-    // دالة مساعدة للحصول على ألوان النص بشكل آمن
     const getTextColor = (type: 'primary' | 'secondary' | 'muted' = 'primary'): string => {
-        if (!themeStyles) {
-            return type === 'primary' ? 'text-gray-900' :
-                type === 'secondary' ? 'text-gray-700' : 'text-gray-500';
-        }
         return themeStyles.text?.[type] ||
             (type === 'primary' ? 'text-gray-900' :
                 type === 'secondary' ? 'text-gray-700' : 'text-gray-500');
     };
 
-    // دالة للحصول على لون الأيقونات من السمة
     const getIconColor = (): string => {
         if (themeStyles?.skillFill) {
             const baseColor = themeStyles.skillFill;
@@ -107,7 +101,6 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
         return "text-blue-600";
     };
 
-    // دالة للحصول على لون الـ hover من السمة
     const getHoverColor = (): string => {
         if (themeStyles?.skillFill) {
             const baseColor = themeStyles.skillFill;
@@ -118,7 +111,6 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
         return "hover:text-blue-600";
     };
 
-    // دالة للحصول على نمط الزر الأساسي من السمة
     const getPrimaryButtonStyle = (): string => {
         if (themeStyles?.skillFill) {
             const baseColor = themeStyles.skillFill;
@@ -129,7 +121,6 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
         return "bg-blue-600 hover:bg-blue-700 text-white";
     };
 
-    // دالة للحصول على تأثير hover للزر الثانوي من السمة
     const getSecondaryButtonHover = (): string => {
         if (themeStyles?.background.secondary) {
             return `hover:${themeStyles.background.secondary}`;
@@ -139,7 +130,7 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <Loader />
             </div>
         );
@@ -147,15 +138,15 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
 
     if (error || !portfolio) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <div className="text-center">
-                    <div className="w-24 h-24 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-                        <Eye className="w-12 h-12 text-red-600" />
+                    <div className="w-24 h-24 mx-auto mb-4 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+                        <Eye className="w-12 h-12 text-red-600 dark:text-red-400" />
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
                         {t("portfolio.public.notFound")}
                     </h1>
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">
                         {error || t("portfolio.public.notFoundDescription")}
                     </p>
                     <button
@@ -171,10 +162,10 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
 
     return (
         <div className="container p-6 mx-auto bg-white dark:bg-[#1f2937] mt-32 mb-10 rounded-md">
-            <div className={`min-h-screen ${themeStyles?.container || "bg-gray-50"} pb-10 rounded-lg`}>
+            <div className={`min-h-screen ${themeStyles.container} pb-10 rounded-lg`}>
                 
                 {/* Action Bar */}
-                <div className={`border-b ${themeStyles?.border || "border-gray-200"} ${themeStyles?.background.primary || "bg-white"}`}>
+                <div className={`border-b ${themeStyles.border} ${themeStyles.background.primary}`}>
                     <div className="container mx-auto px-4 py-3">
                         <div className="flex justify-between items-center">
                             <div className={`text-sm ${getTextColor('muted')}`}>
@@ -194,7 +185,7 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
                                 <button
                                     onClick={() => window.print()}
                                     className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${
-                                        themeStyles?.border || "border-gray-300"
+                                        themeStyles.border
                                     } ${getTextColor('secondary')} ${getSecondaryButtonHover()}`}
                                 >
                                     <Download className="w-4 h-4" />
@@ -212,7 +203,7 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
 
                     {/* Contact Info Bar */}
                     {(portfolio.contactInfo?.email || portfolio.contactInfo?.phone || portfolio.contactInfo?.location) && (
-                        <div className={`p-6 mb-8 ${themeStyles?.card || "bg-white rounded-lg border border-gray-200"}`}>
+                        <div className={`p-6 mb-8 ${themeStyles.card}`}>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {portfolio.contactInfo.email && (
                                     <div className={`flex items-center gap-3 ${getTextColor('secondary')}`}>
@@ -261,7 +252,7 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
                 </div>
 
                 {/* Footer */}
-                <footer className={`border-t mt-12 ${themeStyles?.background.primary || "bg-white"} ${themeStyles?.border || "border-gray-200"}`}>
+                <footer className={`border-t mt-12 ${themeStyles.background.primary} ${themeStyles.border}`}>
                     <div className="container mx-auto px-4 py-6">
                         <div className={`text-center ${getTextColor('muted')}`}>
                             <p className="mb-2">© {new Date().getFullYear()} {portfolio.userId?.name || 'User'}&apos;s {t("portfolio.public.portfolio")}. {t("portfolio.public.builtWith")} Codeschool.</p>

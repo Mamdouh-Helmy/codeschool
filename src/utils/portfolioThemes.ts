@@ -7,6 +7,7 @@ export interface ThemeStyles {
     primary: string;
     secondary: string;
     muted: string;
+    white: string;
   };
   background: {
     primary: string;
@@ -18,6 +19,25 @@ export interface ThemeStyles {
 }
 
 export const applyTheme = (theme: string, layout: string): ThemeStyles => {
+  const defaultTheme = {
+    container: "bg-gray-900", // 🔥 تغيير الافتراضي إلى dark
+    header: "portfolio-header portfolio-header-dark",
+    card: "bg-gray-800 border border-gray-700 rounded-lg",
+    text: {
+      primary: "text-white",
+      secondary: "text-gray-300",
+      muted: "text-gray-400",
+      white: "text-white",
+    },
+    background: {
+      primary: "bg-gray-800",
+      secondary: "bg-gray-900",
+    },
+    border: "border-gray-700",
+    skillBar: "bg-gray-700",
+    skillFill: "bg-blue-400",
+  };
+
   const baseThemes = {
     light: {
       container: "bg-gray-50",
@@ -99,10 +119,8 @@ export const applyTheme = (theme: string, layout: string): ThemeStyles => {
     creative: "rounded-2xl shadow-xl",
   };
 
-  const selectedTheme =
-    baseThemes[theme as keyof typeof baseThemes] || baseThemes.light;
-  const selectedLayout =
-    layoutStyles[layout as keyof typeof layoutStyles] || layoutStyles.standard;
+  const selectedTheme = baseThemes[theme as keyof typeof baseThemes] || defaultTheme;
+  const selectedLayout = layoutStyles[layout as keyof typeof layoutStyles] || layoutStyles.standard;
 
   return {
     ...selectedTheme,

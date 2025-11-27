@@ -48,17 +48,14 @@ const Highlight = () => {
 
   const slides = [
     {
-      image: "/images/highlight/slide-1.png",
       title: t("highlight.slides.showcase"),
       videoUrl: "https://www.facebook.com/reel/1241224360842408"
     },
     {
-      image: "/images/highlight/slide-1.png",
       title: t("highlight.slides.competition"),
       videoUrl: "https://www.facebook.com/reel/846940067682949"
     },
     {
-      image: "/images/highlight/slide-1.png",
       title: t("highlight.slides.graduation"),
       videoUrl: "https://youtube.com/shorts/5N1bYifaCws?si=iy3qO9nS0WXymkM2"
     }
@@ -68,17 +65,14 @@ const Highlight = () => {
     {
       title: t("highlight.slides.showcase"),
       videoUrl: "https://www.facebook.com/reel/1241224360842408",
-      thumbnail: "/images/highlight/slide-1.png"
     },
     {
       title: t("highlight.slides.competition"),
       videoUrl: "https://www.facebook.com/reel/846940067682949",
-      thumbnail: "/images/highlight/slide-1.png"
     },
     {
       title: t("highlight.slides.graduation"),
       videoUrl: "https://youtube.com/shorts/5N1bYifaCws?si=iy3qO9nS0WXymkM2",
-      thumbnail: "/images/highlight/slide-1.png"
     },
   ];
 
@@ -124,51 +118,42 @@ const Highlight = () => {
 
   // دالة محسنة لتحويل الروابط إلى embed
   const getEmbedUrl = (url: string) => {
-    console.log("Original URL:", url); // للديباجنج
-
     // فيسبوك رييل
     if (url.includes('facebook.com/reel')) {
       const videoId = url.split('/reel/')[1];
       const embedUrl = `https://www.facebook.com/plugins/video.php?href=https%3A%2F%2Fwww.facebook.com%2Freel%2F${videoId}&show_text=0&width=500`;
-      console.log("Facebook Embed URL:", embedUrl);
       return embedUrl;
     }
     // فيسبوك عادي
     else if (url.includes('facebook.com/')) {
       const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=0&width=500`;
-      console.log("Facebook Embed URL:", embedUrl);
       return embedUrl;
     }
     // يوتيوب شورتس
     else if (url.includes('youtube.com/shorts/')) {
       const videoId = url.split('/shorts/')[1]?.split('?')[0];
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-      console.log("YouTube Shorts Embed URL:", embedUrl);
       return embedUrl;
     }
     // يوتيوب عادي
     else if (url.includes('youtube.com/watch?v=')) {
       const videoId = url.split('v=')[1]?.split('&')[0];
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-      console.log("YouTube Embed URL:", embedUrl);
       return embedUrl;
     }
     // youtu.be
     else if (url.includes('youtu.be/')) {
       const videoId = url.split('youtu.be/')[1]?.split('?')[0];
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-      console.log("YouTube Embed URL:", embedUrl);
       return embedUrl;
     }
     // تيك توك
     else if (url.includes('tiktok.com')) {
       const videoId = url.split('/video/')[1]?.split('?')[0];
       const embedUrl = `https://www.tiktok.com/embed/v2/${videoId}`;
-      console.log("TikTok Embed URL:", embedUrl);
       return embedUrl;
     }
 
-    console.log("Returning original URL:", url);
     return url;
   };
 
@@ -255,25 +240,22 @@ const Highlight = () => {
                 <Slider {...settings}>
                   {slides.map((slide, index) => (
                     <div key={index} className="outline-none px-2">
-                      <div
-                        className="relative group rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500 cursor-pointer"
-                        onClick={(e) => openModal(slide.videoUrl, e)}
-                      >
-                        <div className="relative aspect-[4/3] rounded-3xl overflow-hidden">
-                          <Image
-                            src={slide.image}
-                            alt={slide.title}
-                            fill
-                            quality={95}
-                            className="object-cover transition-transform duration-700 group-hover:scale-110"
+                      <div className="relative group rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500">
+                        <div className="relative aspect-[4/3] rounded-3xl overflow-hidden bg-gray-100 dark:bg-dark_input">
+                          
+                          {/* 🔥 الفيديو نفسه مباشرة بدون أي ماسك */}
+                          <iframe
+                            className="w-full h-full"
+                            src={getEmbedUrl(slide.videoUrl)}
+                            title={slide.title}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                            loading="lazy"
                           />
-
-                          {/* Gradient Overlay */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
-
+                          
                           {/* Content Overlay */}
-                          <div className="absolute bottom-6 left-6 right-6">
-                            <h3 className="text-2xl font-bold text-white mb-2">
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
+                            <h3 className="text-xl font-bold text-white mb-2">
                               {slide.title}
                             </h3>
                             <div className="flex items-center justify-between">
@@ -284,14 +266,6 @@ const Highlight = () => {
                                 {index + 1}/{slides.length}
                               </span>
                             </div>
-                          </div>
-
-                          {/* Play Button */}
-                          <div
-                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 group/play bg-white/95 hover:bg-white text-primary rounded-full w-16 h-16 lg:w-20 lg:h-20 flex items-center justify-center shadow-2xl transition-all duration-500 hover:scale-110 hover:shadow-3xl border border-primary/20"
-                            aria-label={t("highlight.playVideo")}
-                          >
-                            <Play className="w-6 h-6 lg:w-8 lg:h-8 fill-primary ml-1 group-hover/play:scale-110 transition-transform duration-300" />
                           </div>
                         </div>
                       </div>
@@ -388,24 +362,23 @@ const Highlight = () => {
                         closeAllVideosModal();
                       }}
                     >
-                      <div className="relative aspect-video overflow-hidden">
-                        <Image
-                          src={video.thumbnail}
-                          alt={video.title}
-                          fill
-                          className="object-cover transition-transform duration-500 group-hover:scale-110"
+                      <div className="relative aspect-video overflow-hidden bg-gray-100 dark:bg-dark_input">
+                        {/* 🔥 الفيديو نفسه في الشبكة */}
+                        <iframe
+                          className="w-full h-full"
+                          src={getEmbedUrl(video.videoUrl)}
+                          title={video.title}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          loading="lazy"
                         />
-                        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all duration-300" />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 group-hover:bg-white text-primary rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all duration-300 group-hover:scale-110">
-                          <Play className="w-5 h-5 fill-primary ml-0.5" />
-                        </div>
                       </div>
                       <div className="p-4">
                         <h4 className="font-semibold text-MidnightNavyText dark:text-white text-lg mb-2">
                           {video.title}
                         </h4>
                         <p className="text-sm text-SlateBlueText dark:text-gray-400">
-                          {t("highlight.clickToWatch") || "Click to watch"}
+                          {t("highlight.clickToWatch") || "Click to watch full screen"}
                         </p>
                       </div>
                     </div>

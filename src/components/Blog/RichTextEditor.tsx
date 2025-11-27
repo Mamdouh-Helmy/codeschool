@@ -77,6 +77,20 @@ interface CssModalData {
   className?: string;
 }
 
+// تعريف نوع الزر في الـ toolbar
+interface ToolbarButton {
+  icon: React.ComponentType<{ className?: string }>;
+  action: string;
+  title: string;
+  customAction?: () => void;
+  disabled?: boolean;
+}
+
+interface ToolbarGroup {
+  name: string;
+  buttons: ToolbarButton[];
+}
+
 export default function RichTextEditor({
   value,
   onChange,
@@ -818,7 +832,7 @@ export default function RichTextEditor({
     return { __html: html };
   };
 
-  const toolbarGroups = [
+  const toolbarGroups: ToolbarGroup[] = [
     {
       name: "history",
       buttons: [
@@ -940,7 +954,7 @@ export default function RichTextEditor({
                       type="button"
                       onClick={() => customAction ? customAction() : formatAction(action)}
                       title={title}
-                      disabled={disabled}
+                      disabled={disabled || false}
                       className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${disabled
                         ? 'opacity-50 cursor-not-allowed text-gray-400'
                         : 'hover:bg-white dark:hover:bg-darkmode text-MidnightNavyText dark:text-white'
