@@ -10,10 +10,9 @@ const DASHBOARD_PREFIXES: string[] = ["/admin"];
 
 interface SiteWrapperProps {
   children: ReactNode;
-  heroDescription?: string; // اختياري
 }
 
-const SiteWrapper: React.FC<SiteWrapperProps> = ({ children, heroDescription }) => {
+const SiteWrapper: React.FC<SiteWrapperProps> = ({ children }) => {
   const pathname = usePathname() || "";
 
   const isDashboardRoute = useMemo((): boolean => {
@@ -26,7 +25,7 @@ const SiteWrapper: React.FC<SiteWrapperProps> = ({ children, heroDescription }) 
 
   return (
     <>
-      <Header heroDescription={heroDescription } />
+      <Header />
       {children}
       <Footer />
     </>

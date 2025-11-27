@@ -16,23 +16,6 @@ import { Toaster } from "react-hot-toast";
 
 const dmsans = DM_Sans({ subsets: ["latin"] });
 
-// ❗ بدون لغة
-async function getHeroDescription() {
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-
-    const res = await fetch(`${baseUrl}/api/hero-description`, {
-      cache: "no-store",
-    });
-
-    const data = await res.json();
-    return data.heroDescription || "";
-  } catch (error) {
-    console.error("Failed to load hero description:", error);
-    return "";
-  }
-}
-
 export default async function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
@@ -44,13 +27,10 @@ export default async function RootLayout({
 
   const dir = initialLocale === "ar" ? "rtl" : "ltr";
 
-  // ⭐ جلب heroDescription بدون لغة
-  const heroDescription = await getHeroDescription();
-
   return (
     <html lang={initialLocale} dir={dir} suppressHydrationWarning>
       <head>
-        <meta name="description" content={heroDescription} />
+        <meta name="description" content="وصف الموقع الافتراضي" />
       </head>
 
       <body className={dmsans.className}>
@@ -66,7 +46,7 @@ export default async function RootLayout({
                   <Aoscompo>
                     <NextTopLoader />
 
-                    <SiteWrapper heroDescription={heroDescription}>
+                    <SiteWrapper>
                       <Toaster
                         containerStyle={{ zIndex: 9999 }}
                         toastOptions={{

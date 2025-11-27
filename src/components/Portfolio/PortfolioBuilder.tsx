@@ -103,6 +103,7 @@ export default function PortfolioBuilder() {
               featured: true,
               startDate: new Date(),
               endDate: new Date(),
+              images: [], // الحقل المطلوب فقط
             },
           ],
           socialLinks: {

@@ -515,7 +515,7 @@ const SectionImagesAdminHero: React.FC = () => {
           setOpen(false);
           setEditing(null);
         }}
-        size="lg"
+        
       >
         <SectionImageHeroForm
           initial={editing}

@@ -61,6 +61,9 @@ interface LanguageOption {
   label: string;
 }
 
+// Helper type for dynamic form field access
+type FormField = keyof FormData;
+
 const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, onClose, onSaved }) => {
   const { t } = useI18n();
   const [form, setForm] = useState<FormData>({
@@ -101,7 +104,7 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
     if (form.secondImageUrl) setSecondImagePreview(form.secondImageUrl);
   }, [form.imageUrl, form.secondImageUrl]);
 
-  const onChange = (field: keyof FormData, value: any): void => {
+  const onChange = (field: FormField, value: any): void => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
@@ -165,6 +168,12 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
     { value: "ar", label: "العربية" },
     { value: "en", label: "English" },
   ];
+
+  // Helper function to safely access welcome feature fields
+  const getWelcomeFeatureValue = (num: number): string => {
+    const fieldName = `welcomeFeature${num}` as keyof FormData;
+    return form[fieldName] as string;
+  };
 
   return (
     <form onSubmit={submit} className="space-y-6 ">
@@ -395,8 +404,7 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
             />
           </div>
 
-
-          {/* Hero Description - الحقل الجديد */}
+          {/* Hero Description */}
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <FileEdit className="w-3 h-3" />
@@ -539,8 +547,8 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
                 </label>
                 <input
                   type="text"
-                  value={form[`welcomeFeature${num}` as keyof FormData]}
-                  onChange={(e) => onChange(`welcomeFeature${num}` as keyof FormData, e.target.value)}
+                  value={getWelcomeFeatureValue(num)}
+                  onChange={(e) => onChange(`welcomeFeature${num}` as FormField, e.target.value)}
                   placeholder={t('welcomePopup.featurePlaceholder') || `Feature ${num}`}
                   className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
                 />
