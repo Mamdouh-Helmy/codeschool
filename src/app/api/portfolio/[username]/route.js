@@ -4,20 +4,26 @@ import Portfolio from '../../../models/Portfolio';
 import User from '../../../models/User';
 import { connectDB } from '@/lib/mongodb';
 
-export async function GET(req, { params }) {
+export async function GET(req, context) {
   try {
     await connectDB();
     
+    // استخراج username من params بشكل صحيح
+    const { params } = context;
     const { username } = await params;
 
     console.log('🔍 Searching for user with username:', username);
 
-    // البحث عن المستخدم باليوزرنيم
+    if (!username) {
+      return NextResponse.json(
+        { success: false, message: 'Username is required' },
+        { status: 400 }
+      );
+    }
+
+    // البحث عن المستخدم باليوزرنيم فقط
     const user = await User.findOne({ 
-      $or: [
-        { username: username },
-        { name: { $regex: new RegExp(username, 'i') } }
-      ]
+      username: username.toLowerCase().trim() 
     });
 
     console.log('👤 User found:', user ? user.username : 'No user found');
@@ -29,48 +35,56 @@ export async function GET(req, { params }) {
       );
     }
 
-    // 🔥 التحقق من جميع البورتفليوهات أولاً
-    const allPortfolios = await Portfolio.find({ userId: user._id });
-    console.log('📊 All portfolios for user:', allPortfolios.length);
-    
-    allPortfolios.forEach((p, i) => {
-      console.log(`📁 Portfolio ${i + 1}:`, {
-        id: p._id,
-        title: p.title,
-        isPublished: p.isPublished,
-        userId: p.userId
-      });
-    });
-
-    // البحث عن البورتفليو المنشور فقط
+    // البحث عن البورتفليو المنشور
     const portfolio = await Portfolio.findOne({ 
       userId: user._id, 
       isPublished: true 
-    }).populate('userId', 'name email image username role profile');
+    }).populate('userId', 'name email image username role profile socialLinks');
 
     console.log('📁 Published portfolio found:', portfolio ? portfolio.title : 'No published portfolio found');
 
     if (!portfolio) {
-      // 🔥 إرجاع رسالة أكثر وضوحاً
+      // التحقق إذا كان هناك أي بورتفليو غير منشور
+      const anyPortfolio = await Portfolio.findOne({ userId: user._id });
+      
       return NextResponse.json(
         { 
           success: false, 
-          message: allPortfolios.length > 0 
+          message: anyPortfolio 
             ? 'Portfolio exists but is not published' 
-            : 'No portfolio found for this user'
+            : 'No portfolio found for this user',
+          hasUnpublished: !!anyPortfolio
         },
         { status: 404 }
       );
     }
 
-    // 🔥 تأكد من وجود جميع الحقول المطلوبة
+    // بناء بيانات البورتفليو
     const portfolioData = {
-      ...portfolio.toObject(),
-      socialLinks: portfolio.socialLinks || {},
-      contactInfo: portfolio.contactInfo || {},
+      _id: portfolio._id,
+      title: portfolio.title,
+      description: portfolio.description,
       skills: portfolio.skills || [],
       projects: portfolio.projects || [],
-      settings: portfolio.settings || { theme: 'light', layout: 'standard' }
+      socialLinks: portfolio.socialLinks || {},
+      contactInfo: portfolio.contactInfo || {},
+      isPublished: portfolio.isPublished,
+      views: portfolio.views,
+      settings: portfolio.settings || { 
+        theme: 'light', 
+        layout: 'standard' 
+      },
+      userId: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        username: user.username,
+        role: user.role,
+        profile: user.profile || {}
+      },
+      createdAt: portfolio.createdAt,
+      updatedAt: portfolio.updatedAt
     };
 
     // زيادة عدد المشاهدات
@@ -82,10 +96,15 @@ export async function GET(req, { params }) {
       success: true,
       portfolio: portfolioData
     });
+
   } catch (error) {
     console.error('❌ Get public portfolio error:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { 
+        success: false, 
+        message: 'Internal server error',
+        error: error.message 
+      },
       { status: 500 }
     );
   }

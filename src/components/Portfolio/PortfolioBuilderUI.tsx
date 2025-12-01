@@ -199,13 +199,13 @@ export default function PortfolioBuilderUI({
             {saving ? t("portfolio.builder.saving") : t("portfolio.builder.save")}
           </button>
 
-          <button
+          {/* <button
             onClick={() => setShowPreview(!showPreview)}
             className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center gap-2"
           >
             <Eye className="w-5 h-5" />
             {showPreview ? t("portfolio.builder.hidePreview") : t("portfolio.builder.livePreview")}
-          </button>
+          </button> */}
         </div>
       </div>
 

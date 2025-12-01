@@ -2059,6 +2059,29 @@ const en = {
   "pricing.addCustomBilling": "Add custom billing period",
   "pricing.customBillingPlaceholder": "Enter custom billing period",
   "pricing.selectBillingPeriod": "Select billing period",
+  "testimonials.form.imageTips":
+    "Upload a clear personal photo. Avoid logos or low-quality images.",
+  "portfolio.public.hi": "Hello",
+  "portfolio.public.welcome": "Welcome to the portfolio",
+  "portfolio.public.noSkills": "No skills are currently displayed",
+  "portfolio.public.skillsTitle": "Skills",
+  "portfolio.public.skillsSubtitle": "Explore the skills I excel in",
+  "portfolio.public.skillsDesc":
+    "Here you'll find a collection of the skills I use to build projects and deliver the best results.",
+  "portfolio.public.projectsTitle": "Projects",
+  "portfolio.public.projectsSubtitle": "Browse the key projects I've worked on",
+  "portfolio.public.projectsDesc":
+    "Here you can explore a selection of my completed work, showcasing my experience and quality of delivery.",
+  "portfolio.public.portfolio.public.allRightsReserved": "All rights reserved",
+  "portfolio.newsletter.title": "Newsletter",
+  "portfolio.newsletter.description":
+    "Subscribe to receive the latest updates and articles directly to your inbox.",
+  "portfolio.newsletter.subscribing": "Subscribing...",
+  "portfolio.newsletter.subscribe": "Subscribe",
+  "portfolio.newsletter.placeholder": "Enter your email",
+  "portfolio.public.allRightsReserved": "All rights reserved",
+  "portfolio.public.portfolio": "Portfolio",
+  "portfolio.public.send": "Send",
 };
 
 export default en;

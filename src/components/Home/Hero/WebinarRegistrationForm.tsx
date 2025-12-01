@@ -33,8 +33,6 @@ interface FormData {
   name: string;
   email: string;
   phone: string;
-  company: string;
-  jobTitle: string;
   questions: string;
 }
 
@@ -45,19 +43,17 @@ interface WebinarRegistrationFormProps {
   onSuccess: () => void;
 }
 
-const WebinarRegistrationForm: React.FC<WebinarRegistrationFormProps> = ({ 
-  webinar, 
-  isOpen, 
-  onClose, 
-  onSuccess 
+const WebinarRegistrationForm: React.FC<WebinarRegistrationFormProps> = ({
+  webinar,
+  isOpen,
+  onClose,
+  onSuccess
 }) => {
   const { t } = useI18n();
   const [formData, setFormData] = useState<FormData>({
     name: "",
     email: "",
     phone: "",
-    company: "",
-    jobTitle: "",
     questions: ""
   });
   const [loading, setLoading] = useState<boolean>(false);
@@ -77,8 +73,6 @@ const WebinarRegistrationForm: React.FC<WebinarRegistrationFormProps> = ({
             name: result.user.name,
             email: result.user.email,
             phone: result.user.profile?.phone || "",
-            company: result.user.profile?.company || "",
-            jobTitle: result.user.profile?.jobTitle || ""
           }));
         }
       } catch (error) {
@@ -136,7 +130,7 @@ const WebinarRegistrationForm: React.FC<WebinarRegistrationFormProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div 
+      <div
         className="bg-white dark:bg-darkmode rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
@@ -148,7 +142,7 @@ const WebinarRegistrationForm: React.FC<WebinarRegistrationFormProps> = ({
           >
             <X className="w-4 h-4 text-gray-600 dark:text-darktext" />
           </button>
-          
+
           <div className="flex items-center gap-3 mt-10 mb-4">
             <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
               <Calendar className="w-6 h-6 text-primary" />
@@ -168,23 +162,23 @@ const WebinarRegistrationForm: React.FC<WebinarRegistrationFormProps> = ({
             <h3 className="font-semibold text-MidnightNavyText dark:text-white text-lg">
               {webinar.title}
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <div className="flex items-center gap-2 text-SlateBlueText dark:text-darktext">
                 <Calendar className="w-4 h-4" />
                 <span>{webinar.formattedDate}</span>
               </div>
-              
+
               <div className="flex items-center gap-2 text-SlateBlueText dark:text-darktext">
                 <Clock className="w-4 h-4" />
                 <span>{webinar.formattedTime}</span>
               </div>
-              
+
               <div className="flex items-center gap-2 text-SlateBlueText dark:text-darktext">
                 <User className="w-4 h-4" />
                 <span>{webinar.instructor}</span>
               </div>
-              
+
               <div className="flex items-center gap-2 text-SlateBlueText dark:text-darktext">
                 <Users className="w-4 h-4" />
                 <span>{availableSpots} {t("webinarRegistration.spotsAvailable") || "spots available"}</span>
@@ -252,46 +246,6 @@ const WebinarRegistrationForm: React.FC<WebinarRegistrationFormProps> = ({
             </div>
           </div>
 
-          {/* Professional Information */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-primary" />
-              {t("webinarRegistration.professionalInfo") || "Professional Information"}
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-                  <Building className="w-4 h-4 text-primary" />
-                  {t("webinarRegistration.company") || "Company/Organization"}
-                </label>
-                <input
-                  type="text"
-                  name="company"
-                  value={formData.company}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                  placeholder={t("webinarRegistration.companyPlaceholder") || "Your company name"}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-primary" />
-                  {t("webinarRegistration.jobTitle") || "Job Title"}
-                </label>
-                <input
-                  type="text"
-                  name="jobTitle"
-                  value={formData.jobTitle}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                  placeholder={t("webinarRegistration.jobTitlePlaceholder") || "Your position"}
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Additional Questions */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
@@ -339,7 +293,7 @@ const WebinarRegistrationForm: React.FC<WebinarRegistrationFormProps> = ({
               >
                 {t("common.cancel") || "Cancel"}
               </button>
-              
+
               <button
                 type="submit"
                 disabled={loading}

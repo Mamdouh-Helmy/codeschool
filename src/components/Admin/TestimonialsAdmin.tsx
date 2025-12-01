@@ -1,19 +1,20 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import {
-  User,
-  Star,
-  Plus,
-  Edit,
-  Trash2,
-  MessageSquare,
-  Award,
-  Users,
-  TrendingUp,
-  Filter,
-  Search,
-} from "lucide-react";
+
+// استيراد الأيقونات بشكل منفرد
+import { User } from "lucide-react";
+import { Star } from "lucide-react";
+import { Plus } from "lucide-react";
+import { Edit } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { MessageSquare } from "lucide-react";
+import { Award } from "lucide-react";
+import { Users } from "lucide-react";
+import { TrendingUp } from "lucide-react";
+import { Filter } from "lucide-react";
+import { Search } from "lucide-react";
+
 import Modal from "./Modal";
 import TestimonialForm from "./TestimonialForm";
 import { useI18n } from "@/i18n/I18nProvider";

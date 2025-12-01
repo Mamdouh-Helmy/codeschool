@@ -70,6 +70,7 @@ const Testimonials = () => {
       try {
         const res = await fetch("/api/testimonials?featured=true&limit=5");
         const data = await res.json();
+        console.log("Fetched testimonials:", data.data); // Debug log
         setTestimonials(data.data || []);
       } catch (error) {
         console.error("Error fetching testimonials:", error);
@@ -80,15 +81,21 @@ const Testimonials = () => {
     fetchTestimonials();
   }, []);
 
+  // إعدادات السلايدر الأساسية
   const settings = {
     dots: false,
-    infinite: true,
-    speed: 700,
+    infinite: testimonials.length > 1, // infinite فقط لو فيه أكثر من slide
+    speed: 500,
     slidesToShow: 1,
     slidesToScroll: 1,
-    autoplay: true,
+    autoplay: false, // إيقاف التشغيل التلقائي
     rtl: isArabic,
     arrows: false,
+    swipe: true,
+    draggable: true,
+    touchMove: true,
+    adaptiveHeight: false,
+    className: "testimonials-slider", // إضافة كلاس للتحديد
   };
 
   if (loading) {
@@ -105,23 +112,38 @@ const Testimonials = () => {
     return null;
   }
 
+
   return (
     <section className="bg-IcyBreeze dark:bg-darklight testimonial">
       <div className="container space-y-8">
+        {/* إضافة ستايل للتأكد من أن السلايدر شغال */}
+        <style jsx>{`
+          .testimonials-slider {
+            position: relative;
+          }
+          .testimonials-slider .slick-slide {
+            padding: 0 10px;
+          }
+          .testimonials-slider .slick-track {
+            display: flex;
+            align-items: center;
+          }
+        `}</style>
+
         <Slider {...settings}>
-          {testimonials.map((testimonial) => {
-            // normalize student image: could be data:, raw base64, external url, or local path
+          {testimonials.map((testimonial, index) => {
+            console.log(`Rendering testimonial ${index}:`, testimonial); // Debug log
+
             const imgRaw = testimonial.studentImage;
             let studentImageFallback = "/images/hero/john.png";
 
-            const { src: studentSrc, useImgTag: studentUseImgTag } =
-              getImageInfo(
-                imgRaw && String(imgRaw).startsWith("data:")
+            const { src: studentSrc } = getImageInfo(
+              imgRaw && String(imgRaw).startsWith("data:")
+                ? imgRaw
+                : imgRaw
                   ? imgRaw
-                  : imgRaw
-                    ? imgRaw
-                    : null
-              );
+                  : null
+            );
 
             const finalImageSrc = studentSrc || studentImageFallback;
 
@@ -148,14 +170,14 @@ const Testimonials = () => {
               : "md:ml-20 ml-0 text-left";
 
             return (
-              <div key={testimonial._id || testimonial.id}>
-                <div className="grid md:grid-cols-12 grid-cols-1 items-center">
+              <div key={testimonial._id || testimonial.id || index} className="slide-item">
+                <div className="grid md:grid-cols-12 grid-cols-1 items-center gap-6">
+                  {/* Big decorative image - hidden on mobile */}
                   <div
                     className={`col-span-4 relative hidden lg:block overflow-hidden bg-LightSkyBlue ${isArabic ? "md:order-2" : "md:order-1"
                       }`}
                     style={decorativeStyle}
                   >
-                    {/* big decorative image */}
                     <img
                       src={finalImageSrc}
                       alt={testimonial.studentName || "testimonial"}
@@ -168,6 +190,7 @@ const Testimonials = () => {
                     />
                   </div>
 
+                  {/* Content */}
                   <div
                     className={`col-span-8 ${isArabic ? "md:order-1" : "md:order-2"
                       } ${contentSpacingClass}`}
@@ -176,14 +199,16 @@ const Testimonials = () => {
                       {t("testimonials.heading")}
                     </h2>
 
-                    <p className="text-lg font-normal text-SlateBlueText dark:text-opacity-80 py-5 max-w-632">
+                    <p className="text-lg font-normal text-SlateBlueText dark:text-opacity-80 py-5 truncate">
                       "{testimonial.comment || t("testimonials.noComment")}"
                     </p>
+
 
                     <div
                       className={`flex items-center gap-6 ${isArabic ? "justify-end" : "justify-start"
                         }`}
                     >
+                      {/* Small profile image */}
                       <div
                         className="rounded-full overflow-hidden bg-gray-200 flex items-center justify-center"
                         style={{

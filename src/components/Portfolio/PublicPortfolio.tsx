@@ -8,6 +8,7 @@ import PortfolioHeader from "./public/PortfolioHeader";
 import SkillsShowcase from "./public/SkillsShowcase";
 import ProjectsGallery from "./public/ProjectsGallery";
 import ContactSection from "./public/ContactSection";
+import PortfolioFooter from "./public/PortfolioFooter";
 import { PublicPortfolio as PublicPortfolioType, PortfolioApiResponse } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 import { applyTheme } from "@/utils/portfolioThemes";
@@ -71,7 +72,7 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
     const formatDate = (date: string | Date): string => {
         const dateObj = new Date(date);
         if (isNaN(dateObj.getTime())) return "Invalid Date";
-        
+
         return dateObj.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
@@ -161,9 +162,9 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
     }
 
     return (
-        <div className="container p-6 mx-auto bg-white dark:bg-[#1f2937] mt-32 mb-10 rounded-md">
-            <div className={`min-h-screen ${themeStyles.container} pb-10 rounded-lg`}>
-                
+        <div className="container mx-auto mt-32 mb-10 rounded-md">
+            <div className={`min-h-screen ${themeStyles.container}  rounded-lg`}>
+
                 {/* Action Bar */}
                 <div className={`border-b ${themeStyles.border} ${themeStyles.background.primary}`}>
                     <div className="container mx-auto px-4 py-3">
@@ -196,75 +197,28 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
                     </div>
                 </div>
 
-                {/* Main Content */}
-                <div className="container mx-auto px-4 py-8">
-                    {/* Header Section */}
-                    <PortfolioHeader portfolio={portfolio} themeStyles={themeStyles} />
+                {/* Header Section */}
+                <PortfolioHeader portfolio={portfolio} />
 
-                    {/* Contact Info Bar */}
-                    {(portfolio.contactInfo?.email || portfolio.contactInfo?.phone || portfolio.contactInfo?.location) && (
-                        <div className={`p-6 mb-8 ${themeStyles.card}`}>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {portfolio.contactInfo.email && (
-                                    <div className={`flex items-center gap-3 ${getTextColor('secondary')}`}>
-                                        <Mail className={`w-5 h-5 ${getIconColor()}`} />
-                                        <a
-                                            href={`mailto:${portfolio.contactInfo.email}`}
-                                            className={`transition-colors ${getHoverColor()}`}
-                                        >
-                                            {portfolio.contactInfo.email}
-                                        </a>
-                                    </div>
-                                )}
-                                {portfolio.contactInfo.phone && (
-                                    <div className={`flex items-center gap-3 ${getTextColor('secondary')}`}>
-                                        <Phone className={`w-5 h-5 ${getIconColor()}`} />
-                                        <a
-                                            href={`tel:${portfolio.contactInfo.phone}`}
-                                            className={`transition-colors ${getHoverColor()}`}
-                                        >
-                                            {portfolio.contactInfo.phone}
-                                        </a>
-                                    </div>
-                                )}
-                                {portfolio.contactInfo.location && (
-                                    <div className={`flex items-center gap-3 ${getTextColor('secondary')}`}>
-                                        <MapPin className={`w-5 h-5 ${getIconColor()}`} />
-                                        <span>{portfolio.contactInfo.location}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                {/* Skills Section */}
+                {portfolio.skills && portfolio.skills.length > 0 && (
+                    <SkillsShowcase portfolio={{
+                        skillsTitle: portfolio.title || "My Skills",
+                        skillsSubtitle: portfolio.description || "Technical Proficiencies",
+                        skillsDesc: "Here are my technical skills and proficiency levels",
+                        skills: portfolio.skills
+                    }} />
+                )}
 
-                    {/* Skills Section */}
-                    {portfolio.skills && portfolio.skills.length > 0 && (
-                        <SkillsShowcase skills={portfolio.skills} themeStyles={themeStyles} />
-                    )}
+                {/* Projects Section */}
+                {portfolio.projects && portfolio.projects.length > 0 && (
+                    <ProjectsGallery projects={portfolio.projects} themeStyles={themeStyles} />
+                )}
 
-                    {/* Projects Section */}
-                    {portfolio.projects && portfolio.projects.length > 0 && (
-                        <ProjectsGallery projects={portfolio.projects} themeStyles={themeStyles} />
-                    )}
+                {/* Contact Section */}
+                <ContactSection portfolio={portfolio} themeStyles={themeStyles} />
 
-                    {/* Contact Section */}
-                    <ContactSection portfolio={portfolio} themeStyles={themeStyles} />
-                </div>
-
-                {/* Footer */}
-                <footer className={`border-t mt-12 ${themeStyles.background.primary} ${themeStyles.border}`}>
-                    <div className="container mx-auto px-4 py-6">
-                        <div className={`text-center ${getTextColor('muted')}`}>
-                            <p className="mb-2">© {new Date().getFullYear()} {portfolio.userId?.name || 'User'}&apos;s {t("portfolio.public.portfolio")}. {t("portfolio.public.builtWith")} Codeschool.</p>
-                            {portfolio.createdAt && portfolio.updatedAt && (
-                                <p className="text-xs opacity-75">
-                                    Portfolio created on {formatDate(portfolio.createdAt)} • 
-                                    Last updated {formatDate(portfolio.updatedAt)}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                </footer>
+                <PortfolioFooter portfolio={portfolio} />
             </div>
         </div>
     );

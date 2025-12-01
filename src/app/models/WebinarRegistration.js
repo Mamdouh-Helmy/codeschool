@@ -27,14 +27,7 @@ const WebinarRegistrationSchema = new mongoose.Schema(
       type: String,
       default: ""
     },
-    company: {
-      type: String,
-      default: ""
-    },
-    jobTitle: {
-      type: String,
-      default: ""
-    },
+    
     questions: {
       type: String,
       default: ""

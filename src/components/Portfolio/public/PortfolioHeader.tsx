@@ -1,320 +1,219 @@
 // components/Portfolio/public/PortfolioHeader.tsx
 "use client";
-import {
-    Github,
-    Linkedin,
-    Twitter,
-    Globe,
-    Youtube,
-    Instagram,
-    Facebook,
-    Dribbble,
-    Mail,
-    MapPin,
-    Briefcase
-} from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import headerImg from "../../../../public/images/portfolio/img/header-img.svg";
+import banner from "../../../../public/images/portfolio/img/banner-bg.png";
+// import "animate.css";
+import TrackVisibility from "react-on-screen";
+import Image from "next/image";
+import { ArrowRight } from "lucide-react";
 import { PublicPortfolio, SocialLinks } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
-import { ThemeStyles } from "@/utils/portfolioThemes";
 
 interface PortfolioHeaderProps {
     portfolio: PublicPortfolio;
-    themeStyles?: ThemeStyles;
 }
 
-const SocialIcon = ({ platform, url, themeStyles }: {
-    platform: keyof SocialLinks;
-    url: string;
-    themeStyles?: ThemeStyles;
-}) => {
+export default function PortfolioHeader({ portfolio }: PortfolioHeaderProps) {
     const { t } = useI18n();
+    const { userId, description, socialLinks, contactInfo } = portfolio;
 
-    const icons = {
-        github: Github,
-        linkedin: Linkedin,
-        twitter: Twitter,
-        youtube: Youtube,
-        instagram: Instagram,
-        facebook: Facebook,
-        website: Globe,
-        dribbble: Dribbble,
-    };
+    // Typing effect states
+    const [loopNum, setLoopNum] = useState(0);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [text, setText] = useState("");
+    const [delta, setDelta] = useState(300 - Math.random() * 100);
+    const [index, setIndex] = useState(1);
 
-    const Icon = icons[platform];
+    // Use job titles for typing effect
+    const toRotate = userId?.profile?.jobTitle
+        ? [userId.profile.jobTitle]
+        : ["Web Developer", "Designer", "Freelancer"];
 
-    // دالة محسنة للحصول على نمط الأزرار بناءً على السمة
-    const getSocialButtonStyle = (): string => {
-        // استخدام نمط ثابت يعمل مع جميع السمات
-        return "bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-all duration-300";
-    };
+    const period = 2000;
 
-    const titles = {
-        github: t("portfolio.social.github"),
-        linkedin: t("portfolio.social.linkedin"),
-        twitter: t("portfolio.social.twitter"),
-        youtube: t("portfolio.social.youtube"),
-        instagram: t("portfolio.social.instagram"),
-        facebook: t("portfolio.social.facebook"),
-        website: t("portfolio.social.website"),
-        dribbble: t("portfolio.social.dribbble"),
-    };
+    // Memoize the tick function
+    const tick = useCallback(() => {
+        let i = loopNum % toRotate.length;
+        let fullText = toRotate[i];
+        let updatedText = isDeleting
+            ? fullText.substring(0, text.length - 1)
+            : fullText.substring(0, text.length + 1);
 
-    return (
-        <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`p-3 rounded-xl group relative ${getSocialButtonStyle()}`}
-            title={titles[platform]}
-        >
-            <Icon className="w-5 h-5" />
-            {/* Tooltip */}
-            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                {titles[platform]}
-            </div>
-        </a>
-    );
-};
+        setText(updatedText);
 
-export default function PortfolioHeader({ portfolio, themeStyles }: PortfolioHeaderProps) {
-    const { t } = useI18n();
-    const { userId, title, description, socialLinks, contactInfo } = portfolio;
-
-    // دالة مساعدة للحصول على ألوان النص بشكل آمن
-    const getTextColor = (type: 'primary' | 'secondary' | 'muted' = 'primary'): string => {
-        if (!themeStyles) {
-            return type === 'primary' ? 'text-gray-900' : 
-                   type === 'secondary' ? 'text-gray-700' : 'text-gray-500';
+        if (isDeleting) {
+            setDelta((prevDelta) => prevDelta / 2);
         }
-        return themeStyles.text?.[type] || 
-            (type === 'primary' ? 'text-gray-900' : 
-             type === 'secondary' ? 'text-gray-700' : 'text-gray-500');
-    };
 
-    // دالة للحصول على لون الأيقونات من السمة
-    const getIconColor = (): string => {
-        if (themeStyles?.skillFill) {
-            const baseColor = themeStyles.skillFill;
-            if (baseColor.includes('blue')) return 'text-blue-600';
-            if (baseColor.includes('green')) return 'text-green-600';
-            if (baseColor.includes('gray')) return 'text-gray-600';
+        if (!isDeleting && updatedText === fullText) {
+            setIsDeleting(true);
+            setIndex((prevIndex) => prevIndex - 1);
+            setDelta(period);
+        } else if (isDeleting && updatedText === "") {
+            setIsDeleting(false);
+            setLoopNum(loopNum + 1);
+            setIndex(1);
+            setDelta(500);
+        } else {
+            setIndex((prevIndex) => prevIndex + 1);
         }
-        return "text-blue-600";
-    };
+    }, [loopNum, toRotate, isDeleting, text, period]);
 
-    // دالة للحصول على لون الـ hover من السمة
-    const getHoverColor = (): string => {
-        if (themeStyles?.skillFill) {
-            const baseColor = themeStyles.skillFill;
-            if (baseColor.includes('blue')) return 'hover:text-blue-600';
-            if (baseColor.includes('green')) return 'hover:text-green-600';
-            if (baseColor.includes('gray')) return 'hover:text-gray-600';
-        }
-        return "hover:text-blue-600";
-    };
+    useEffect(() => {
+        let ticker = setInterval(() => {
+            tick();
+        }, delta);
 
-    // دالة للحصول على نمط الزر الأساسي من السمة
-    const getPrimaryButtonStyle = (): string => {
-        if (themeStyles?.skillFill) {
-            const baseColor = themeStyles.skillFill;
-            if (baseColor.includes('blue')) return 'bg-blue-600 hover:bg-blue-700 text-white';
-            if (baseColor.includes('green')) return 'bg-green-600 hover:bg-green-700 text-white';
-            if (baseColor.includes('gray')) return 'bg-gray-600 hover:bg-gray-700 text-white';
-        }
-        return "bg-blue-600 hover:bg-blue-700 text-white";
-    };
+        return () => {
+            clearInterval(ticker);
+        };
+    }, [text, delta, tick]);
 
-    // دالة للحصول على تأثير hover للزر الثانوي من السمة
-    const getSecondaryButtonHover = (): string => {
-        if (themeStyles?.background.secondary) {
-            return `hover:${themeStyles.background.secondary}`;
-        }
-        return "hover:bg-gray-50";
-    };
-
-    // تطبيق السمات المستقلة
-    const getHeaderBackground = (): string => {
-        if (themeStyles?.header) {
-            return themeStyles.header;
-        }
-        return "portfolio-header portfolio-header-light";
-    };
-
-    const getContainerStyle = (): string => {
-        if (themeStyles?.card) {
-            return themeStyles.card;
-        }
-        return "bg-white rounded-2xl shadow-lg border border-gray-200";
-    };
-
-    const getStatsBackground = (): string => {
-        if (themeStyles?.background.primary) {
-            return themeStyles.background.primary;
-        }
-        return "bg-white";
-    };
-
-    const getContactBarBackground = (): string => {
-        if (themeStyles?.background.secondary) {
-            return themeStyles.background.secondary;
-        }
-        return "bg-gray-50";
-    };
-
-    // 🔥 إصلاح المشكلة: التحقق من وجود socialLinks قبل استخدام Object.entries
+    // Get social links if available
     const activeSocialLinks = socialLinks
         ? Object.entries(socialLinks).filter(([_, url]) =>
             url && typeof url === 'string' && url.trim() !== ""
         ) as [keyof SocialLinks, string][]
         : [];
 
-    const userProfile = userId?.profile || {};
-    const userJobInfo = userProfile.jobTitle || userProfile.company;
 
     return (
-        <div className={`overflow-hidden ${getContainerStyle()}`}>
-            {/* Hero Section with Gradient */}
-            <div className={`px-4 sm:px-6 lg:px-8 py-8 sm:py-12 ${getHeaderBackground()}`}>
-                <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 lg:gap-8 max-w-6xl mx-auto">
-                    {/* Avatar */}
-                    <div className="flex-shrink-0">
-                        <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl">
-                            <img
-                                src={userId?.image || "/images/default-avatar.jpg"}
-                                alt={userId?.name || 'User'}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.src = "/images/default-avatar.jpg";
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 text-center lg:text-left">
-                        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 leading-tight text-white">
-                            {title}
-                        </h1>
-
-                        <p className="text-white text-lg sm:text-xl opacity-90 mb-6 leading-relaxed max-w-3xl">
-                            {description}
-                        </p>
-
-                        {/* User Info Row */}
-                        <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 sm:gap-4 mb-6 flex-wrap">
-                            {/* Name and Role */}
-                            <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
-                                <span className="font-semibold text-white">
-                                    {t("portfolio.public.by")} {userId?.name || 'User'}
-                                </span>
-                                {userId?.role && (
-                                    <span className="px-2 py-1 bg-white/20 text-white rounded-full text-sm font-medium">
-                                        {userId.role}
+        <section
+            className="banner mt-0 py-[260px] bg-cover bg-no-repeat bg-top"
+            style={{
+                backgroundImage: `url(${banner.src})`,
+            }}
+            id="home"
+        >
+            <div className="container mx-auto">
+                <div className="flex flex-wrap items-center">
+                    {/* Left Column - Text Content */}
+                    <div className="w-full md:w-6/12 xl:w-7/12">
+                        <TrackVisibility>
+                            {({ isVisible }) => (
+                                <div
+                                    className={
+                                        isVisible ? "animate__animated animate__fadeIn" : ""
+                                    }
+                                >
+                                    {/* Welcome Tag */}
+                                    <span className="tagline mt-20 md:mt-0 font-bold tracking-[0.8px] px-2 py-1 bg-gradient-to-r text-white from-pink-500 to-purple-500 bg-opacity-50 border-none rounded-sm text-[20px] mb-4 inline-block">
+                                        {t("portfolio.public.welcome") || "Welcome to my Portfolio"}
                                     </span>
-                                )}
-                            </div>
 
-                            {/* Job Info */}
-                            {userJobInfo && (
-                                <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
-                                    <Briefcase className="w-4 h-4 text-white/80" />
-                                    <span className="text-white/90 text-sm">{userJobInfo}</span>
-                                </div>
-                            )}
-
-                            {/* Location */}
-                            {contactInfo?.location && (
-                                <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
-                                    <MapPin className="w-4 h-4 text-white/80" />
-                                    <span className="text-white/90 text-sm">{contactInfo.location}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Social Links */}
-                        {activeSocialLinks.length > 0 && (
-                            <div className="flex justify-center lg:justify-start gap-3 flex-wrap">
-                                {activeSocialLinks.map(([platform, url]) => (
-                                    <SocialIcon
-                                        key={platform}
-                                        platform={platform}
-                                        url={url}
-                                        themeStyles={themeStyles}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Contact Bar */}
-            {(contactInfo?.email || contactInfo?.phone) && (
-                <div className={`border-t ${getContactBarBackground()} ${themeStyles?.border || "border-gray-200"}`}>
-                    <div className="px-4 sm:px-6 lg:px-8 py-4">
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-6xl mx-auto">
-                            <div className={`text-sm ${getTextColor('muted')}`}>
-                                {t("portfolio.public.available")}
-                            </div>
-
-                            <div className="flex items-center gap-4 flex-wrap justify-center">
-                                {contactInfo.email && (
-                                    <a
-                                        href={`mailto:${contactInfo.email}`}
-                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors duration-200 ${getPrimaryButtonStyle()}`}
-                                    >
-                                        <Mail className="w-4 h-4" />
-                                        <span className="text-sm font-medium">{t("portfolio.public.contact")}</span>
-                                    </a>
-                                )}
-
-                                {contactInfo.phone && (
-                                    <a
-                                        href={`tel:${contactInfo.phone}`}
-                                        className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors duration-200 ${
-                                            themeStyles?.border || "border-gray-300"
-                                        } ${
-                                            getTextColor('secondary')
-                                        } ${getSecondaryButtonHover()}`}
-                                    >
-                                        <span className="text-sm font-medium">
-                                            {t("common.call")}: {contactInfo.phone}
+                                    {/* Main Title with Typing Effect */}
+                                    <h1 className="800px:text-[65px] text-3xl font-bold tracking-[0.8px] leading-none mb-5 text-white capitalize">
+                                        {t("portfolio.public.hi") || "Hi!"} I&apos;m {userId?.name || 'User'}{" "}
+                                        <span
+                                            className="txt-rotate border-r-[0.08em] border-gray-500"
+                                            data-period="1000"
+                                            data-rotate={toRotate}
+                                        >
+                                            <span className="wrap">{text}</span>
                                         </span>
-                                    </a>
-                                )}
-                            </div>
-                        </div>
+                                    </h1>
+
+                                    {/* Description */}
+                                    <p className="text-gray-400 text-[18px] tracking-[0.8px] leading-[1.5em] w-[96%] mb-10">
+                                        {description || t("portfolio.public.defaultDescription")}
+                                    </p>
+
+                                    {/* Connect Button */}
+                                    {contactInfo?.phone && (
+                                        <a
+                                            href={`tel:${contactInfo.phone}`}
+                                            className="text-white font-bold text-[20px] mt-15 tracking-[0.8px] flex items-center hover:opacity-80 transition-opacity duration-300"
+                                            onClick={() => console.log("connect")}
+                                        >
+                                            {t("portfolio.public.letsConnect") || "Let's Connect"}
+                                            <ArrowRight
+                                                className="ml-2 text-[25px] transition-transform duration-300 group-hover:translate-x-1"
+                                            />
+                                        </a>
+                                    )}
+
+                                    {/* Social Links (Optional - يمكن إضافتها إذا كنت تريدها) */}
+                                    {activeSocialLinks.length > 0 && (
+                                        <div className="mt-8 flex gap-3">
+                                            {activeSocialLinks.slice(0, 4).map(([platform, url]) => (
+                                                <a
+                                                    key={platform}
+                                                    href={url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all duration-300"
+                                                    title={platform}
+                                                >
+                                                    {/* يمكنك إضافة أيقونات هنا إذا أردت */}
+                                                    <span className="text-sm font-medium">
+                                                        {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                                                    </span>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </TrackVisibility>
                     </div>
-                </div>
-            )}
 
-            {/* Stats Bar */}
-            <div className={`border-t ${getStatsBackground()} ${themeStyles?.border || "border-gray-200"}`}>
-                <div className="px-4 sm:px-6 lg:px-8 py-4">
-                    <div className={`flex items-center justify-center gap-4 sm:gap-6 lg:gap-8 text-sm ${getTextColor('muted')} flex-wrap`}>
-                        <div className="text-center">
-                            <div className={`text-2xl font-bold ${getIconColor()}`}>{portfolio.views || 0}</div>
-                            <div className="text-xs">{t("portfolio.settings.totalViews")}</div>
-                        </div>
+                    {/* Right Column - Image */}
+                    <div className="w-full md:w-6/12 xl:w-5/12">
+                        <TrackVisibility>
+                            {({ isVisible }) => (
+                                <div
+                                    className={
+                                        isVisible ? "animate__animated animate__zoomIn" : ""
+                                    }
+                                >
+                                    <Image
+                                        src={userId?.image || headerImg}
+                                        alt={userId?.name || 'User'}
+                                        className="animate-[updown_3s_linear_infinite] rounded-full mt-10 md:mt-0 w-[200px] h-[200px] md:w-[350px] md:h-[350px] "
+                                        width={1000}
+                                        height={1000}
+                                        style={{
 
-                        <div className="text-center">
-                            <div className={`text-2xl font-bold ${getIconColor()}`}>{portfolio.skills?.length || 0}</div>
-                            <div className="text-xs">{t("portfolio.settings.skillsCount")}</div>
-                        </div>
+                                            objectFit: 'cover',
 
-                        <div className="text-center">
-                            <div className={`text-2xl font-bold ${getIconColor()}`}>{portfolio.projects?.length || 0}</div>
-                            <div className="text-xs">{t("portfolio.settings.projectsCount")}</div>
-                        </div>
-
-                        <div className="text-center">
-                            <div className={`text-2xl font-bold ${getIconColor()}`}>{activeSocialLinks.length}</div>
-                            <div className="text-xs">{t("portfolio.settings.socialLinksCount")}</div>
-                        </div>
+                                            boxShadow: '0 0 30px rgba(0, 0, 0, 0.3)'
+                                        }}
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.src = headerImg.src;
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </TrackVisibility>
                     </div>
                 </div>
             </div>
-        </div>
+
+            {/* Custom CSS for updown animation */}
+            <style jsx>{`
+                @keyframes updown {
+                    0%, 100% {
+                        transform: translateY(0);
+                    }
+                    50% {
+                        transform: translateY(-20px);
+                    }
+                }
+                
+                .txt-rotate {
+                    display: inline-block;
+                }
+                
+                .wrap {
+                    display: inline-block;
+                }
+                
+                .mt-15 {
+                    margin-top: 15px;
+                }
+            `}</style>
+        </section>
     );
 }

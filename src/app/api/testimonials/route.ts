@@ -4,9 +4,31 @@ import Testimonial from "../../models/Testimonial";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
-const JWT_SECRET =
-  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
+const JWT_SECRET = process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
 export const revalidate = 60;
+
+// زيادة حجم الـ body limit
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '4mb', // زيادة من القيمة الافتراضية
+    },
+  },
+};
+
+// دالة مساعدة لتحليل الـ response بشكل آمن
+async function safeJsonResponse(response: Response) {
+  try {
+    const text = await response.text();
+    if (!text) {
+      return { success: false, message: "Empty response" };
+    }
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("Error parsing JSON response:", error);
+    return { success: false, message: "Invalid JSON response" };
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +44,8 @@ export async function GET(request: NextRequest) {
 
     const testimonials = await Testimonial.find(query)
       .sort({ rating: -1, createdAt: -1 })
-      .limit(limit);
+      .limit(limit)
+      .lean(); // استخدام lean() لأداء أفضل
 
     console.log("📦 Found testimonials:", testimonials.length);
 
@@ -40,6 +63,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// دالة مساعدة لتحسين معالجة الصور
+function optimizeImageData(imageData: string): string {
+  if (!imageData) return "";
+  
+  // إذا كانت صورة base64 كبيرة جداً، نقوم بضغطها
+  if (imageData.startsWith('data:image') && imageData.length > 100000) {
+    console.log("Large image detected, consider compressing before upload");
+    // هنا يمكن إضافة منطق لضغط الصورة
+    // للآن نرجعها كما هي لكن مع تحذير
+    return imageData;
+  }
+  
+  return imageData;
+}
+
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
@@ -53,7 +91,18 @@ export async function POST(request: NextRequest) {
     }
 
     const decoded: any = jwt.verify(token, JWT_SECRET);
-    const body = await request.json();
+    
+    // قراءة الـ body مرة واحدة فقط
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError);
+      return NextResponse.json(
+        { success: false, message: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
 
     const userId = body.userId || body.studentId;
     let validUserId = null;
@@ -62,10 +111,13 @@ export async function POST(request: NextRequest) {
       validUserId = userId;
     }
 
+    // تحسين معالجة الصور
+    const optimizedStudentImage = optimizeImageData(body.studentImage || "");
+
     const testimonial = await Testimonial.create({
       userId: validUserId || decoded.id,
       studentName: body.studentName || decoded.name || "Anonymous",
-      studentImage: body.studentImage || decoded.image || "",
+      studentImage: optimizedStudentImage,
       courseId: body.courseId || "",
       courseTitle: body.courseTitle || "",
       rating: body.rating || 5,
@@ -113,7 +165,16 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError);
+      return NextResponse.json(
+        { success: false, message: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
 
     const userId = body.userId || body.studentId;
     let validUserId = null;
@@ -126,9 +187,12 @@ export async function PUT(request: NextRequest) {
       validUserId = decoded.id;
     }
 
+    // تحسين معالجة الصور
+    const optimizedStudentImage = optimizeImageData(body.studentImage || "");
+
     const updateData: any = {
       studentName: body.studentName,
-      studentImage: body.studentImage,
+      studentImage: optimizedStudentImage,
       userId: validUserId,
       courseId: body.courseId,
       courseTitle: body.courseTitle,
@@ -137,6 +201,13 @@ export async function PUT(request: NextRequest) {
       featured: body.featured,
       isActive: body.isActive,
     };
+
+    // إزالة الحقول الفارغة
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined || updateData[key] === null) {
+        delete updateData[key];
+      }
+    });
 
     const updatedTestimonial = await Testimonial.findByIdAndUpdate(
       id,

@@ -2013,6 +2013,29 @@ const ar = {
   "pricing.selectBillingPeriod": "اختر فترة الفوترة",
   "pricing.addCustomBilling": "إضافة فترة فوترة مخصصة",
   "pricing.customBillingPlaceholder": "أدخل فترة الفوترة المخصصة",
+  "testimonials.form.imageTips":
+    "ارفع صورة شخصية واضحة. تجنب الشعارات أو الصور منخفضة الجودة.",
+  "portfolio.public.hi": "مرحباً",
+  "portfolio.public.welcome": "أهلاً بك في معرض الأعمال",
+  "portfolio.public.noSkills": "لا توجد مهارات معروضة حالياً",
+  "portfolio.public.skillsTitle": "المهارات",
+  "portfolio.public.skillsSubtitle": "استكشف المهارات التي أتميز بها",
+  "portfolio.public.skillsDesc":
+    "هنا ستجد مجموعة من المهارات التي أمتلكها والتي أستخدمها في تنفيذ المشاريع وتقديم أفضل النتائج.",
+  "portfolio.public.projectsTitle": "المشاريع",
+  "portfolio.public.projectsSubtitle": "استعرض أبرز المشاريع التي عملت عليها",
+  "portfolio.public.projectsDesc":
+    "هنا يمكنك مشاهدة مجموعة من أعمالي التي قمت بتنفيذها، والتي تعكس خبرتي وجودة عملي.",
+  "portfolio.public.portfolio.public.allRightsReserved": "جميع الحقوق محفوظة",
+  "portfolio.newsletter.title": "النشرة الإخبارية",
+  "portfolio.newsletter.description":
+    "اشترك ليصلك آخر التحديثات والمقالات مباشرة عبر بريدك.",
+  "portfolio.newsletter.subscribing": "جاري الاشتراك...",
+  "portfolio.newsletter.subscribe": "اشترك",
+  "portfolio.newsletter.placeholder": "أدخل بريدك الإلكتروني",
+  "portfolio.public.allRightsReserved": "جميع الحقوق محفوظة",
+  "portfolio.public.portfolio": "الملف الشخصي",
+  "portfolio.public.send": "إرسال",
 };
 
 export default ar;

@@ -12,7 +12,9 @@ const JWT_SECRET = process.env.JWT_SIGN_SECRET || "change_this";
 async function verifyToken(request) {
   try {
     const authHeader = request.headers.get("authorization") || "";
-    let token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    let token = authHeader.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : null;
 
     if (!token) {
       const cookie = request.headers.get("cookie") || "";
@@ -26,7 +28,7 @@ async function verifyToken(request) {
 
     const payload = jwt.verify(token, JWT_SECRET);
     const userId = payload.id || payload._id;
-    
+
     await connectDB();
     const user = await User.findById(userId);
     return user;
@@ -38,7 +40,7 @@ async function verifyToken(request) {
 export async function POST(request) {
   try {
     await connectDB();
-    
+
     // التحقق من المستخدم المسجل دخول
     const user = await verifyToken(request);
     if (!user) {
@@ -49,7 +51,7 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { webinarId, name, email, phone, company, jobTitle, questions } = body;
+    const { webinarId, name, email, phone, questions } = body;
 
     if (!webinarId) {
       return NextResponse.json(
@@ -70,15 +72,15 @@ export async function POST(request) {
     // التحقق إذا كان المستخدم مسجل بالفعل
     const existingRegistration = await WebinarRegistration.findOne({
       webinar: webinarId,
-      $or: [
-        { user: user._id },
-        { email: email.toLowerCase() }
-      ]
+      $or: [{ user: user._id }, { email: email.toLowerCase() }],
     });
 
     if (existingRegistration) {
       return NextResponse.json(
-        { success: false, message: "You are already registered for this webinar" },
+        {
+          success: false,
+          message: "You are already registered for this webinar",
+        },
         { status: 400 }
       );
     }
@@ -98,29 +100,30 @@ export async function POST(request) {
       name: name || user.name,
       email: email || user.email,
       phone: phone || "",
-      company: company || "",
-      jobTitle: jobTitle || "",
-      questions: questions || ""
+
+      questions: questions || "",
     });
 
     // تحديث عدد المسجلين في الويبنار
     await Webinar.findByIdAndUpdate(webinarId, {
-      $inc: { currentAttendees: 1 }
+      $inc: { currentAttendees: 1 },
     });
 
     return NextResponse.json({
       success: true,
       data: registration,
       message: "Successfully registered for the webinar",
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     console.error("POST /api/webinars/register error:", error);
-    
+
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, message: "You are already registered for this webinar" },
+        {
+          success: false,
+          message: "You are already registered for this webinar",
+        },
         { status: 400 }
       );
     }

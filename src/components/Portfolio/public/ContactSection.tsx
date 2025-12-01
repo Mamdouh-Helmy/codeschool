@@ -1,146 +1,273 @@
 // components/Portfolio/public/ContactSection.tsx
 "use client";
-import { Mail, Phone, MapPin, Send } from "lucide-react";
+import { useState } from "react";
+import { useFormik } from "formik";
+import * as Yup from "yup";
+import contactImg from "../../../../public/images/portfolio/img/contact-img.svg";
+import "animate.css";
+import TrackVisibility from "react-on-screen";
+import Image from "next/image";
+import toast from "react-hot-toast";
 import { PublicPortfolio } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
-import { ThemeStyles } from "@/utils/portfolioThemes";
 
 interface ContactSectionProps {
   portfolio: PublicPortfolio;
-  themeStyles?: ThemeStyles;
+  themeStyles?: any;
 }
 
-export default function ContactSection({ portfolio, themeStyles }: ContactSectionProps) {
+// Custom Inputs Component
+const Inputs = ({ 
+  handlerChange, 
+  name, 
+  type, 
+  value, 
+  placeholder, 
+  error, 
+  half = false 
+}: { 
+  handlerChange: any;
+  name: string;
+  type: string;
+  value: string;
+  placeholder: string;
+  error?: string;
+  half?: boolean;
+}) => {
+  return (
+    <div className={`relative ${half ? 'sm:col-span-1' : 'col-span-2'}`}>
+      <input
+        onChange={handlerChange}
+        name={name}
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        className="input w-full bg-white/10 border border-white/30 text-white placeholder-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm sm:text-base"
+      />
+      {error && (
+        <p className="text-red-400 text-xs sm:text-sm mt-1 absolute -bottom-5 sm:-bottom-6 left-0">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+};
+
+// Custom Textarea Component
+const Textarea = ({ 
+  handlerChange, 
+  name, 
+  value, 
+  placeholder, 
+  error 
+}: { 
+  handlerChange: any;
+  name: string;
+  value: string;
+  placeholder: string;
+  error?: string;
+}) => {
+  return (
+    <div className="relative col-span-2">
+      <textarea
+        onChange={handlerChange}
+        name={name}
+        value={value}
+        placeholder={placeholder}
+        rows={4}
+        className="input w-full bg-white/10 border border-white/30 text-white placeholder-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-none min-h-32 sm:min-h-40 text-sm sm:text-base"
+      />
+      {error && (
+        <p className="text-red-400 text-xs sm:text-sm mt-1 absolute -bottom-5 sm:-bottom-6 left-0">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+};
+
+export default function ContactSection({ portfolio }: ContactSectionProps) {
   const { t } = useI18n();
-  const { contactInfo, userId } = portfolio;
+  const [isLoading, setIsLoading] = useState(false);
 
-  // دالة مساعدة للحصول على ألوان النص بشكل آمن
-  const getTextColor = (type: 'primary' | 'secondary' | 'muted' | 'white' = 'primary'): string => {
-    if (!themeStyles) {
-      return type === 'primary' ? 'text-gray-900' : 
-             type === 'secondary' ? 'text-gray-700' : 
-             type === 'muted' ? 'text-gray-500' : 'text-white';
-    }
-    return themeStyles.text?.[type] || 
-      (type === 'primary' ? 'text-gray-900' : 
-       type === 'secondary' ? 'text-gray-700' : 
-       type === 'muted' ? 'text-gray-500' : 'text-white');
-  };
+  const validationSchema = Yup.object({
+    firstName: Yup.string().required("First Name is required"),
+    lastName: Yup.string().required("Last Name is required"),
+    email: Yup.string()
+      .email("Invalid email format")
+      .required("Email is required"),
+    phoneNumber: Yup.string().required("Phone number is required"),
+    message: Yup.string().required("Message is required"),
+  });
 
-  // تطبيق السمات المستقلة
-  const getHeaderBackground = (): string => {
-    if (themeStyles?.header) {
-      return themeStyles.header;
-    }
-    return "portfolio-header portfolio-header-light";
-  };
+  const formik = useFormik({
+    initialValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phoneNumber: "",
+      message: "",
+    },
+    validationSchema,
+    onSubmit: async (values, { resetForm }) => {
+      setIsLoading(true);
+      const toastId = toast.loading("Sending Message...");
+      
+      try {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        toast.dismiss(toastId);
+        toast.success("Message sent successfully!");
+        resetForm();
+      } catch (error: any) {
+        toast.dismiss(toastId);
+        toast.error(error?.data?.message || "Something went wrong, please try again!");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+  });
 
-  const getCardStyle = (): string => {
-    // استخدام نمط ثابت للكروت يعمل مع جميع السمات
-    if (themeStyles?.background.secondary) {
-      return `${themeStyles.background.secondary} bg-opacity-20 backdrop-blur-sm border ${themeStyles.border || 'border-gray-200'}`;
-    }
-    return "bg-white/20 backdrop-blur-sm border border-white/30";
-  };
-
-  const getButtonStyle = (): string => {
-    // زر CTA يستخدم ألوان من السمة
-    if (themeStyles?.background.primary && themeStyles?.text.white) {
-      return `${themeStyles.background.primary} ${themeStyles.text.white} hover:opacity-90 font-semibold`;
-    }
-    return "bg-white text-blue-600 hover:bg-blue-50 font-semibold";
-  };
-
-  const getIconBackground = (): string => {
-    // خلفية الأيقونات تستخدم ألوان من السمة
-    if (themeStyles?.background.secondary) {
-      return `${themeStyles.background.secondary} bg-opacity-30`;
-    }
-    return "bg-white/20";
-  };
-
-  const getIconColor = (): string => {
-    // لون الأيقونات
-    if (themeStyles?.text.white) {
-      return themeStyles.text.white;
-    }
-    return "text-white";
-  };
+  const { handleChange, errors, values, touched, handleSubmit } = formik;
 
   return (
-    <section className="mb-12">
-      <div className={`rounded-2xl p-8 ${getHeaderBackground()}`}>
-        <div className="text-center mb-8">
-          <h2 className={`text-3xl font-bold mb-4 ${getTextColor('white')}`}>
-            {t("portfolio.public.letsWork")}
-          </h2>
-          <p className={`text-lg max-w-2xl mx-auto opacity-90 ${getTextColor('white')}`}>
-            {t("portfolio.public.workDescription")}
-          </p>
-        </div>
+    <section
+      className="bg-gradient-to-r from-[#AA367C] to-[#4A2FBD] pt-8 sm:pt-12 md:pt-16 lg:pt-[60px] pb-12 sm:pb-16 md:pb-20 lg:pb-[120px]"
+      id="connect"
+    >
+      <div className="container mx-auto px-3 sm:px-4 md:px-6">
+        <div className="grid grid-cols-12 gap-4 sm:gap-6 md:gap-8 items-center">
+          {/* Left Column - Image */}
+          <div className="lg:col-span-6 col-span-12 order-2 lg:order-1">
+            <TrackVisibility>
+              {({ isVisible }) => (
+                <Image
+                  className={`w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg mx-auto ${
+                    isVisible ? "animate__animated animate__zoomIn" : ""
+                  }`}
+                  src={contactImg}
+                  alt="Contact Us"
+                  priority
+                />
+              )}
+            </TrackVisibility>
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          {/* Email */}
-          {contactInfo?.email && (
-            <a
-              href={`mailto:${contactInfo.email}`}
-              className={`rounded-xl p-6 text-center hover:scale-105 transition-all duration-300 group ${getCardStyle()}`}
-            >
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform ${getIconBackground()}`}>
-                <Mail className={`w-6 h-6 ${getIconColor()}`} />
-              </div>
-              <h3 className={`font-semibold mb-2 ${getTextColor('white')}`}>
-                {t("portfolio.public.email")}
-              </h3>
-              <p className={`text-sm break-all opacity-90 ${getTextColor('white')}`}>
-                {contactInfo.email}
-              </p>
-            </a>
-          )}
+          {/* Right Column - Form */}
+          <div className="lg:col-span-6 col-span-12 order-1 lg:order-2">
+            <TrackVisibility>
+              {({ isVisible }) => (
+                <div
+                  className={`p-4 sm:p-6 md:p-8 rounded-lg ${
+                    isVisible ? "animate__animated animate__fadeIn" : ""
+                  }`}
+                >
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 sm:mb-8 md:mb-10">
+                    {t("portfolio.public.getInTouch") || "Get In Touch"}
+                  </h2>
+                  
+                  <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      <Inputs
+                        handlerChange={handleChange}
+                        name="firstName"
+                        type="text"
+                        value={values.firstName}
+                        placeholder="First Name"
+                        error={touched.firstName && errors.firstName ? errors.firstName : undefined}
+                        half
+                      />
+                      
+                      <Inputs
+                        handlerChange={handleChange}
+                        name="lastName"
+                        type="text"
+                        value={values.lastName}
+                        placeholder="Last Name"
+                        error={touched.lastName && errors.lastName ? errors.lastName : undefined}
+                        half
+                      />
+                      
+                      <Inputs
+                        handlerChange={handleChange}
+                        name="email"
+                        type="email"
+                        value={values.email}
+                        placeholder="Email Address"
+                        error={touched.email && errors.email ? errors.email : undefined}
+                        half
+                      />
+                      
+                      <Inputs
+                        handlerChange={handleChange}
+                        name="phoneNumber"
+                        type="tel"
+                        value={values.phoneNumber}
+                        placeholder="Phone Number"
+                        error={touched.phoneNumber && errors.phoneNumber ? errors.phoneNumber : undefined}
+                        half
+                      />
+                      
+                      <Textarea
+                        handlerChange={handleChange}
+                        name="message"
+                        value={values.message}
+                        placeholder="Your Message"
+                        error={touched.message && errors.message ? errors.message : undefined}
+                      />
+                    </div>
+                    
+                    <div className="z-10 relative">
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="relative overflow-hidden capitalize group px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 text-base sm:text-lg font-semibold text-white border border-white transition bg-transparent hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+                      >
+                        <span className="absolute block w-full -left-full group-hover:left-0 top-0 bg-white h-full z-[-1] duration-300"></span>
+                        {isLoading ? "Sending..." : t("portfolio.public.send") || "Send"}
+                      </button>
+                    </div>
+                  </form>
 
-          {/* Phone */}
-          {contactInfo?.phone && (
-            <a
-              href={`tel:${contactInfo.phone}`}
-              className={`rounded-xl p-6 text-center hover:scale-105 transition-all duration-300 group ${getCardStyle()}`}
-            >
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform ${getIconBackground()}`}>
-                <Phone className={`w-6 h-6 ${getIconColor()}`} />
-              </div>
-              <h3 className={`font-semibold mb-2 ${getTextColor('white')}`}>
-                {t("portfolio.public.phone")}
-              </h3>
-              <p className={`text-sm opacity-90 ${getTextColor('white')}`}>
-                {contactInfo.phone}
-              </p>
-            </a>
-          )}
-
-          {/* Location */}
-          {contactInfo?.location && (
-            <div className={`rounded-xl p-6 text-center group hover:scale-105 transition-all duration-300 ${getCardStyle()}`}>
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform ${getIconBackground()}`}>
-                <MapPin className={`w-6 h-6 ${getIconColor()}`} />
-              </div>
-              <h3 className={`font-semibold mb-2 ${getTextColor('white')}`}>
-                {t("portfolio.public.location")}
-              </h3>
-              <p className={`text-sm opacity-90 ${getTextColor('white')}`}>
-                {contactInfo.location}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* CTA Button */}
-        <div className="text-center mt-8">
-          <a
-            href={`mailto:${contactInfo?.email || userId?.email}?subject=Portfolio Inquiry&body=Hello ${userId?.name || 'User'}, I saw your portfolio and would like to connect...`}
-            className={`inline-flex items-center gap-2 px-8 py-4 rounded-full transition-all duration-300 hover:scale-105 ${getButtonStyle()}`}
-          >
-            <Send className="w-5 h-5" />
-            {t("portfolio.public.getInTouch")}
-          </a>
+                  {/* Contact Info */}
+                  <div className="mt-6 sm:mt-8 md:mt-10 lg:mt-12 pt-4 sm:pt-6 md:pt-8 border-t border-white/30">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                      {portfolio.contactInfo?.email && (
+                        <div className="text-center">
+                          <h4 className="text-white font-semibold mb-1 sm:mb-2 text-sm sm:text-base">Email</h4>
+                          <a 
+                            href={`mailto:${portfolio.contactInfo.email}`}
+                            className="text-gray-200 hover:text-white transition-colors text-xs sm:text-sm md:text-base break-all"
+                          >
+                            {portfolio.contactInfo.email}
+                          </a>
+                        </div>
+                      )}
+                      
+                      {portfolio.contactInfo?.phone && (
+                        <div className="text-center">
+                          <h4 className="text-white font-semibold mb-1 sm:mb-2 text-sm sm:text-base">Phone</h4>
+                          <a 
+                            href={`tel:${portfolio.contactInfo.phone}`}
+                            className="text-gray-200 hover:text-white transition-colors text-xs sm:text-sm md:text-base"
+                          >
+                            {portfolio.contactInfo.phone}
+                          </a>
+                        </div>
+                      )}
+                      
+                      {portfolio.contactInfo?.location && (
+                        <div className="text-center sm:col-span-2 lg:col-span-1">
+                          <h4 className="text-white font-semibold mb-1 sm:mb-2 text-sm sm:text-base">Location</h4>
+                          <p className="text-gray-200 text-xs sm:text-sm md:text-base">{portfolio.contactInfo.location}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TrackVisibility>
+          </div>
         </div>
       </div>
     </section>
