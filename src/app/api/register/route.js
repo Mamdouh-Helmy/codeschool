@@ -1,4 +1,3 @@
-// app/api/register/route.js
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import QRCode from "qrcode";
@@ -11,6 +10,8 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const usernameRegex = /^[a-zA-Z0-9_]+$/;
 
 function validatePayload({ name, email, password, username }) {
+  console.log("🔍 Validating payload:", { name, email, password: password ? "***" : "missing", username });
+  
   const errors = {};
   
   if (!name || typeof name !== "string" || name.trim().length < 2) {
@@ -39,35 +40,60 @@ function validatePayload({ name, email, password, username }) {
 async function checkUsernameAvailability(username) {
   if (!username) return { available: true };
   
-  const existingUser = await User.findOne({ 
-    username: username.toLowerCase().trim() 
-  });
-  
-  return {
-    available: !existingUser,
-    existingUser: existingUser ? existingUser.email : null
-  };
+  try {
+    const existingUser = await User.findOne({ 
+      username: username.toLowerCase().trim() 
+    });
+    
+    return {
+      available: !existingUser,
+      existingUser: existingUser ? existingUser.email : null
+    };
+  } catch (error) {
+    console.error("Error checking username availability:", error);
+    return { available: false, error: error.message };
+  }
 }
 
 async function generateUsernameFromName(name) {
-  const baseUsername = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-    .substring(0, 15);
-  
-  let username = baseUsername;
-  let counter = 1;
-  
-  while (await User.findOne({ username })) {
-    username = `${baseUsername}${counter}`;
-    counter++;
+  try {
+    console.log("🔧 Generating username from name:", name);
     
-    if (counter > 100) {
-      throw new Error('Could not generate unique username');
+    const baseUsername = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .substring(0, 15);
+    
+    // إذا كان الاسم قصيراً جداً أو يحتوي على رموز غير صالحة
+    if (!baseUsername || baseUsername.length < 3) {
+      const fallbackUsername = `user${Date.now().toString().slice(-6)}`;
+      console.log("📛 Name too short, using fallback:", fallbackUsername);
+      return fallbackUsername;
     }
+    
+    let username = baseUsername;
+    let counter = 1;
+    
+    console.log("🔎 Checking username availability:", username);
+    
+    // التحقق من أن الاسم فريد
+    while (await User.findOne({ username })) {
+      username = `${baseUsername}${counter}`;
+      counter++;
+      
+      if (counter > 10) {
+        const uniqueUsername = `user${Date.now().toString().slice(-8)}`;
+        console.log("🔄 Too many attempts, using unique:", uniqueUsername);
+        return uniqueUsername;
+      }
+    }
+    
+    console.log("✅ Username generated:", username);
+    return username;
+  } catch (error) {
+    console.error("❌ Error generating username:", error);
+    return `user${Date.now().toString().slice(-8)}`;
   }
-  
-  return username;
 }
 
 // دالة لإنشاء بورتفليو افتراضي
@@ -121,8 +147,8 @@ async function createDefaultPortfolio(userId, userName, username) {
           technologies: ["React", "Node.js", "MongoDB", "Stripe"],
           status: "in-progress",
           featured: false,
-          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // منذ شهر
-          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // خلال شهر
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
         }
       ],
       socialLinks: {
@@ -131,19 +157,19 @@ async function createDefaultPortfolio(userId, userName, username) {
         twitter: `https://twitter.com/${username}`
       },
       contactInfo: {
-        email: "", // سيتم تعبئته لاحقاً
+        email: "",
         phone: "",
         location: "Add your location"
       },
       isPublished: true,
       views: 0,
       settings: {
-        theme: "dark", // 🔥 السمة المظلمة كإعداد افتراضي
+        theme: "dark",
         layout: "standard"
       }
     });
 
-    console.log("✅ Default portfolio created successfully with dark theme");
+    console.log("✅ Default portfolio created successfully");
     return defaultPortfolio;
   } catch (error) {
     console.error("❌ Error creating default portfolio:", error);
@@ -153,13 +179,23 @@ async function createDefaultPortfolio(userId, userName, username) {
 
 export async function POST(req) {
   try {
+    console.log("🚀 ============ REGISTRATION STARTED ============");
+    
     const body = await req.json();
     const { name, email, password, role, username } = body;
 
-    console.log("🚀 Starting registration for:", email, "Username:", username || 'auto-generate');
+    console.log("📝 Registration data received:", { 
+      name: name ? "✓" : "✗", 
+      email: email ? "✓" : "✗",
+      password: password ? "***" : "✗",
+      username: username || 'auto-generate',
+      role: role || 'student'
+    });
 
+    // التحقق من البيانات
     const errors = validatePayload({ name, email, password, username });
     if (Object.keys(errors).length) {
+      console.error("❌ Validation errors:", errors);
       return NextResponse.json({ 
         success: false, 
         message: "Validation failed", 
@@ -167,30 +203,41 @@ export async function POST(req) {
       }, { status: 400 });
     }
 
+    console.log("🔌 Connecting to database...");
     await connectDB();
+    console.log("✅ Database connected");
 
+    // التحقق من التحقق السابق
     const existingVerification = await Verification.findOne({
-      email: email.toLowerCase()
+      email: email.toLowerCase(),
+      verified: true
     });
 
-    if (existingVerification) {
+    if (!existingVerification) {
+      console.log("❌ Email not verified yet");
       return NextResponse.json({ 
         success: false, 
         message: "Email not verified. Please complete verification first." 
       }, { status: 400 });
     }
 
+    // التحقق من البريد الإلكتروني الموجود
+    console.log("🔎 Checking for existing user with email:", email.toLowerCase());
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
+      console.log("❌ Email already registered");
       return NextResponse.json({ 
         success: false, 
         message: "Email already registered" 
       }, { status: 409 });
     }
 
+    // التحقق من username إذا تم توفيره
     if (username && username.trim() !== "") {
+      console.log("🔎 Checking username availability:", username);
       const usernameCheck = await checkUsernameAvailability(username);
       if (!usernameCheck.available) {
+        console.log("❌ Username already taken");
         return NextResponse.json({
           success: false,
           message: "Username is already taken",
@@ -199,29 +246,32 @@ export async function POST(req) {
       }
     }
 
+    // تشفير كلمة المرور
+    console.log("🔑 Hashing password...");
     const hashedPassword = await bcrypt.hash(password, 10);
+    console.log("✅ Password hashed");
 
-    console.log("🔑 Password hashed, generating user data...");
-
+    // توليد username إذا لم يتم توفيره
     let finalUsername = username && username.trim() !== "" 
       ? username.toLowerCase().trim() 
       : await generateUsernameFromName(name);
 
-    console.log("✅ Username generated:", finalUsername);
+    console.log("🎯 Final username:", finalUsername);
 
     let qrCodeImage = "";
     let portfolioUrl = "";
 
     try {
-      // 🔥 إنشاء رابط البورتفليو مباشرة
+      // إنشاء رابط البورتفليو
       const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
       portfolioUrl = `${baseUrl}/portfolio/${finalUsername}`;
 
-      console.log("🔗 Generating QR Code with portfolio URL:", portfolioUrl);
+      console.log("🔗 Portfolio URL:", portfolioUrl);
+      console.log("🎨 Generating QR Code...");
 
-      // توليد QR Code يحتوي على رابط البورتفليو مباشرة
+      // توليد QR Code
       qrCodeImage = await QRCode.toDataURL(portfolioUrl, {
-        width: 300,
+        width: 200,
         margin: 2,
         color: {
           dark: '#000000',
@@ -229,61 +279,48 @@ export async function POST(req) {
         }
       });
 
-      console.log("✅ QR Code generated successfully with portfolio link");
+      console.log("✅ QR Code generated successfully");
 
     } catch (qrError) {
       console.error("❌ QR generation failed:", qrError);
+      qrCodeImage = "";
     }
 
-    // إنشاء المستخدم
-    const newUser = await User.create({
+    // إنشاء المستخدم (بدون تفعيل middleware المعقد)
+    console.log("👤 Creating user in database...");
+    const newUser = new User({
       name: name.trim(),
       email: email.toLowerCase(),
       username: finalUsername,
       password: hashedPassword,
       role: role || "student",
       qrCode: qrCodeImage,
-      qrCodeData: portfolioUrl, // 🔥 حفظ رابط البورتفليو بدلاً من التوكن
-      profile: {
-        jobTitle: "Developer",
-        bio: `Welcome to ${name.trim()}'s portfolio`
-      }
+      qrCodeData: portfolioUrl,
+      emailVerified: true
     });
 
-    console.log("🎉 User created successfully:", {
-      id: newUser._id,
-      username: newUser.username
-    });
+    await newUser.save();
+    console.log("🎉 User created successfully:", newUser._id);
 
-    // 🔥 إنشاء بورتفليو افتراضي تلقائياً بعد التسجيل
+    // إنشاء بورتفليو افتراضي تلقائياً
     try {
+      console.log("📁 Creating default portfolio...");
       await createDefaultPortfolio(newUser._id, newUser.name, newUser.username);
-      console.log("🎯 Default portfolio with dark theme created automatically");
+      console.log("✅ Default portfolio created");
     } catch (portfolioError) {
       console.error("⚠️ Could not create default portfolio:", portfolioError);
       // نستمر حتى لو فشل إنشاء البورتفليو
     }
 
-    if ((!newUser.qrCode || !newUser.qrCodeData) && qrCodeImage) {
-      console.log("🔄 QR code not saved in create, using updateOne...");
-      try {
-        await User.updateOne(
-          { _id: newUser._id },
-          { 
-            $set: { 
-              qrCode: qrCodeImage, 
-              qrCodeData: portfolioUrl 
-            } 
-          }
-        );
-        
-        console.log("📝 QR Code updated successfully");
-        
-      } catch (updateError) {
-        console.error("❌ QR Code update failed:", updateError);
-      }
+    // حذف سجل التحقق بعد التسجيل الناجح
+    try {
+      await Verification.deleteOne({ email: email.toLowerCase() });
+      console.log("🧹 Verification record cleaned up");
+    } catch (cleanupError) {
+      console.error("⚠️ Could not clean up verification:", cleanupError);
     }
 
+    // إعداد رد النجاح
     const userResponse = {
       id: newUser._id,
       name: newUser.name,
@@ -291,13 +328,13 @@ export async function POST(req) {
       username: newUser.username,
       role: newUser.role,
       qrCode: newUser.qrCode,
-      portfolioUrl: portfolioUrl, // 🔥 إضافة رابط البورتفليو في الرد
+      portfolioUrl: portfolioUrl,
       profileUrl: `/portfolio/${newUser.username}`,
       createdAt: newUser.createdAt,
     };
 
-    console.log("✅ Registration completed successfully for:", userResponse.email);
-    console.log("🔗 Portfolio URL:", userResponse.portfolioUrl);
+    console.log("✅ ============ REGISTRATION COMPLETED ============");
+    console.log("📋 User registered successfully");
 
     return NextResponse.json({ 
       success: true, 
@@ -306,13 +343,17 @@ export async function POST(req) {
     }, { status: 201 });
     
   } catch (error) {
-    console.error("💥 Register error:", error);
+    console.error("💥 ============ REGISTRATION ERROR ============");
+    console.error("Error name:", error.name);
+    console.error("Error message:", error.message);
     
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       const message = field === 'username' 
         ? 'Username is already taken' 
         : 'Email is already registered';
+      
+      console.error("❌ Duplicate key error:", { field, message });
       
       return NextResponse.json({ 
         success: false, 
@@ -323,7 +364,7 @@ export async function POST(req) {
     
     return NextResponse.json({ 
       success: false, 
-      message: "Internal server error" 
+      message: "Internal server error"
     }, { status: 500 });
   }
 }

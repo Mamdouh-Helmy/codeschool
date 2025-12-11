@@ -1,35 +1,36 @@
-// models/Verification.js
 import mongoose from "mongoose";
 
-const VerificationSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
+const VerificationSchema = new mongoose.Schema(
+  {
+    email: {
+      type: String,
+      required: true,
+      lowercase: true,
+      index: true,
+    },
+    otp: {
+      type: String,
+      required: true,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+      index: { expires: '10m' }, // ينتهي بعد 10 دقائق تلقائياً
+    },
+    verified: {
+      type: Boolean,
+      default: false,
+    },
+    attempts: {
+      type: Number,
+      default: 0,
+    }
   },
-  otp: {
-    type: String,
-    required: true,
-  },
-  expiresAt: {
-    type: Date,
-    required: true,
-  },
-  verified: {
-    type: Boolean,
-    default: false,
-  },
-  attempts: {
-    type: Number,
-    default: 0,
-  },
-}, {
-  timestamps: true,
-});
+  { timestamps: true }
+);
 
-// تنظيف السجلات المنتهية كل ساعة
-VerificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// إنشاء indexes
+VerificationSchema.index({ email: 1, otp: 1 });
 
-export default mongoose.models.Verification || 
-       mongoose.model("Verification", VerificationSchema);
+console.log("✅ Verification Schema loaded successfully");
+export default mongoose.models.Verification || mongoose.model("Verification", VerificationSchema);

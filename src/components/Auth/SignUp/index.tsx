@@ -35,12 +35,14 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
   // دالة إرسال رمز التحقق
   const sendVerificationCode = async () => {
     if (!form.email) {
-      toast.error(t("auth.validation.requiredEmail"));
+      toast.error(t("auth.validation.requiredEmail") || "Email is required");
       return;
     }
 
     setLoading(true);
     try {
+      console.log("📨 Sending verification code to:", form.email);
+      
       const res = await fetch("/api/send-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,7 +54,7 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
       if (result.success) {
         setOtpSent(true);
         setStep(2);
-        toast.success(t("auth.verificationSent"));
+        toast.success(t("auth.verificationSent") || "Verification code sent to your email");
 
         // تفعيل عداد إعادة الإرسال
         setCanResend(false);
@@ -67,11 +69,15 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
             return prev - 1;
           });
         }, 1000);
+        
+        console.log("✅ Verification code sent successfully");
       } else {
-        toast.error(result.message || t("auth.verificationFailed"));
+        console.error("❌ Failed to send verification:", result.message);
+        toast.error(result.message || (t("auth.verificationFailed") || "Failed to send verification code"));
       }
     } catch (error) {
-      toast.error(t("auth.verificationFailed"));
+      console.error("💥 Error sending verification:", error);
+      toast.error(t("auth.verificationFailed") || "Failed to send verification code");
     } finally {
       setLoading(false);
     }
@@ -79,12 +85,14 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
 
   const verifyOtp = async () => {
     if (!form.otp || form.otp.length !== 6) {
-      toast.error(t("auth.validation.invalidOtp"));
+      toast.error(t("auth.validation.invalidOtp") || "Please enter a valid 6-digit code");
       return;
     }
 
     setLoading(true);
     try {
+      console.log("🔐 Verifying OTP for:", form.email);
+      
       const res = await fetch("/api/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,24 +105,27 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
       const result = await res.json();
 
       if (result.success) {
-        toast.success(t("auth.emailVerified"));
+        toast.success(t("auth.emailVerified") || "Email verified successfully!");
 
         setTimeout(async () => {
           await completeRegistration();
         }, 500);
       } else {
-        toast.error(result.message || t("auth.invalidOtp"));
+        console.error("❌ OTP verification failed:", result.message);
+        toast.error(result.message || (t("auth.invalidOtp") || "Invalid verification code"));
         setLoading(false);
       }
     } catch (error) {
-      console.error("Verification error:", error);
-      toast.error(t("auth.verificationFailed"));
+      console.error("💥 Verification error:", error);
+      toast.error(t("auth.verificationFailed") || "Verification failed");
       setLoading(false);
     }
   };
 
   const completeRegistration = async () => {
     try {
+      console.log("👤 Completing registration for:", form.email);
+      
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -128,32 +139,36 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
       const result = await res.json();
 
       if (!res.ok) {
+        console.error("❌ Registration failed:", result);
+        
         if (res.status === 409) {
           toast.error(
-            "هذا البريد الإلكتروني مسجل بالفعل. حاول تسجيل الدخول بدلاً من ذلك."
+            "This email is already registered. Try logging in instead."
           );
           setTimeout(() => {
             router.push("/signin");
           }, 2000);
         } else if (res.status === 400) {
           toast.error(
-            result.message || "لم يتم التحقق من البريد الإلكتروني بعد"
+            result.message || "Email not verified yet"
           );
           setCanResend(true);
           setResendTimer(0);
         } else {
-          toast.error(result.message || t("auth.registrationFailed"));
+          toast.error(result.message || (t("auth.registrationFailed") || "Registration failed"));
         }
         setLoading(false);
         return;
       }
 
       if (result.success) {
-        toast.success(t("auth.registrationSuccess"));
+        console.log("✅ Registration successful:", result.user);
+        toast.success(t("auth.registrationSuccess") || "Account created successfully!");
 
-        // 🔥 التعديل الجديد: تسجيل الدخول التلقائي بعد التسجيل الناجح
+        // تسجيل الدخول التلقائي بعد التسجيل الناجح
         try {
-          // محاولة تسجيل الدخول تلقائياً
+          console.log("🔐 Attempting auto login...");
+          
           const loginRes = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -176,14 +191,16 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
               onSuccess(loginData.user);
             }
 
-            toast.success(t("auth.autoLoginSuccess") || "تم تسجيل الدخول تلقائياً بنجاح!");
+            toast.success(t("auth.autoLoginSuccess") || "Logged in automatically!");
 
             // إغلاق modal التسجيل
             if (signUpOpen) signUpOpen(false);
 
             // إظهار dialog النجاح
-            authDialog?.setIsSuccessDialogOpen(true);
-            setTimeout(() => authDialog?.setIsSuccessDialogOpen(false), 1100);
+            if (authDialog?.setIsSuccessDialogOpen) {
+              authDialog.setIsSuccessDialogOpen(true);
+              setTimeout(() => authDialog.setIsSuccessDialogOpen(false), 1100);
+            }
 
             // التوجيه بناءً على دور المستخدم
             setTimeout(() => {
@@ -194,17 +211,14 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
               }
             }, 600);
           } else {
-            // إذا فشل تسجيل الدخول التلقائي، نفتح modal تسجيل الدخول
             throw new Error("Auto login failed");
           }
         } catch (loginError) {
-          console.error("Auto login failed:", loginError);
+          console.error("❌ Auto login failed:", loginError);
           // فتح modal تسجيل الدخول يدوياً
-          toast.success(t("auth.registrationSuccessManualLogin") || "تم إنشاء الحساب بنجاح! يرجى تسجيل الدخول.");
+          toast.success(t("auth.registrationSuccessManualLogin") || "Account created! Please log in.");
           if (signUpOpen) signUpOpen(false);
 
-          // يمكنك هنا فتح modal تسجيل الدخول بدلاً من التوجيه
-          // أو ترك المستخدم يسجل الدخول يدوياً
           setTimeout(() => {
             router.push("/signin");
           }, 1200);
@@ -214,8 +228,8 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
         setLoading(false);
       }
     } catch (error) {
-      console.error("Registration error:", error);
-      toast.error(t("auth.registrationFailed"));
+      console.error("💥 Registration error:", error);
+      toast.error(t("auth.registrationFailed") || "Registration failed");
       setLoading(false);
     }
   };
@@ -225,7 +239,7 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
 
     if (step === 1) {
       if (!form.name || !form.email || !form.password) {
-        toast.error(t("auth.fillAllFields"));
+        toast.error(t("auth.fillAllFields") || "Please fill all fields");
         return;
       }
       await sendVerificationCode();
@@ -247,7 +261,7 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
           <span className="z-1 relative my-8 block text-center">
             <span className="-z-1 absolute left-0 top-1/2 block h-px w-full bg-border dark:bg-dark_border"></span>
             <span className="text-body-secondary relative z-10 inline-block bg-white dark:bg-darklight px-3 text-base">
-              {t("auth.signUpWith")}
+              {t("auth.signUpWith") || "Or sign up with"}
             </span>
           </span>
 
@@ -255,7 +269,7 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
             <div className="mb-[18px]">
               <input
                 type="text"
-                placeholder={t("auth.name")}
+                placeholder={t("auth.name") || "Full Name"}
                 name="name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -267,7 +281,7 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
             <div className="mb-[22px]">
               <input
                 type="email"
-                placeholder={t("auth.email")}
+                placeholder={t("auth.email") || "Email Address"}
                 name="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -279,11 +293,12 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
             <div className="mb-[22px]">
               <input
                 type="password"
-                placeholder={t("auth.password")}
+                placeholder={t("auth.password") || "Password"}
                 name="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required
+                minLength={6}
                 className="w-full rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary"
               />
             </div>
@@ -297,10 +312,10 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
                 {loading ? (
                   <>
                     <Loader />
-                    <span className="pl-2">{t("auth.sendingCode")}</span>
+                    <span className="pl-2">{t("auth.sendingCode") || "Sending Code..."}</span>
                   </>
                 ) : (
-                  t("auth.sendVerification")
+                  t("auth.sendVerification") || "Send Verification Code"
                 )}
               </button>
             </div>
@@ -311,19 +326,19 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
       {step === 2 && (
         <div className="text-center">
           <h3 className="text-xl font-semibold mb-4">
-            {t("auth.verifyEmail")}
+            {t("auth.verifyEmail") || "Verify Your Email"}
           </h3>
           <p className="mb-6 text-gray-600">
-            {t("auth.verificationCodeSent")} <strong>{form.email}</strong>
+            {t("auth.verificationCodeSent") || "We sent a verification code to"} <strong>{form.email}</strong>
           </p>
           <form onSubmit={handleSubmit}>
             <div className="mb-6">
               <input
                 type="text"
-                placeholder={t("auth.enterOtp")}
+                placeholder={t("auth.enterOtp") || "Enter 6-digit code"}
                 value={form.otp}
                 onChange={(e) =>
-                  setForm({ ...form, otp: e.target.value.replace(/\D/g, "") })
+                  setForm({ ...form, otp: e.target.value.replace(/\D/g, "").substring(0, 6) })
                 }
                 maxLength={6}
                 className="w-full text-center text-2xl font-bold rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-dark outline-none transition placeholder:text-gray-300 focus:border-primary"
@@ -339,32 +354,34 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
                 {loading ? (
                   <>
                     <Loader />
-                    <span className="pl-2">{t("auth.verifying")}</span>
+                    <span className="pl-2">{t("auth.verifying") || "Verifying..."}</span>
                   </>
                 ) : (
-                  t("auth.verifyAndRegister")
+                  t("auth.verifyAndRegister") || "Verify & Register"
                 )}
               </button>
             </div>
 
             <div className="text-center">
               <button
+                type="button"
                 onClick={sendVerificationCode}
                 disabled={!canResend || loading}
                 className="text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {canResend
-                  ? t("auth.resendCode")
-                  : `${t("auth.resendIn")} ${resendTimer}s`}
+                  ? t("auth.resendCode") || "Resend Code"
+                  : `${t("auth.resendIn") || "Resend in"} ${resendTimer}s`}
               </button>
             </div>
 
             <div className="mt-4">
               <button
+                type="button"
                 onClick={() => setStep(1)}
                 className="text-gray-600 hover:text-primary text-sm"
               >
-                {t("auth.backToEdit")}
+                {t("auth.backToEdit") || "Back to edit details"}
               </button>
             </div>
           </form>
@@ -372,23 +389,23 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
       )}
 
       <p className="text-body-secondary mb-4 text-base">
-        {t("auth.privacyAgreement")}{" "}
+        {t("auth.privacyAgreement") || "By signing up, you agree to our"}{" "}
         <a href="/terms" className="text-primary hover:underline">
-          {t("auth.termsOfService")}
+          {t("auth.termsOfService") || "Terms of Service"}
         </a>{" "}
-        {t("auth.and")}{" "}
+        {t("auth.and") || "and"}{" "}
         <a href="/privacy" className="text-primary hover:underline">
-          {t("auth.privacyPolicy")}
+          {t("auth.privacyPolicy") || "Privacy Policy"}
         </a>
       </p>
 
       <p className="text-body-secondary text-base">
-        {t("auth.haveAccount")}
+        {t("auth.haveAccount") || "Already have an account?"}
         <Link
           href="/signin"
           className="pl-2 text-primary hover:bg-darkprimary hover:underline"
         >
-          {t("auth.signIn")}
+          {t("auth.signIn") || "Sign In"}
         </Link>
       </p>
     </>

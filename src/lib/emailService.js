@@ -1,4 +1,4 @@
-// lib/emailService.js - إصدار متوافق مع جميع برامج البريد
+// lib/emailService.js - إصدار معدل
 import nodemailer from "nodemailer";
 
 export async function sendVerificationEmail(email, otp) {
@@ -8,10 +8,16 @@ export async function sendVerificationEmail(email, otp) {
     console.log("OTP:", otp);
     console.log("-------------------");
 
+    // إرجاع كائن بدلاً من boolean
+    const result = {
+      success: true,
+      message: "Email sent successfully"
+    };
+
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || "smtp.gmail.com",
-        port: process.env.SMTP_PORT || 587,
+        port: parseInt(process.env.SMTP_PORT) || 587,
         secure: false,
         auth: {
           user: process.env.SMTP_USER,
@@ -415,11 +421,19 @@ export async function sendVerificationEmail(email, otp) {
 
       await transporter.sendMail(mailOptions);
       console.log(`✅ Professional email with images sent to: ${email}`);
+      result.message = `Email sent successfully to ${email}`;
+    } else {
+      console.log("ℹ️ SMTP not configured, only printing OTP to console");
+      result.message = "SMTP not configured, OTP printed to console";
     }
 
-    return true;
+    return result;
   } catch (error) {
-    console.error("Email error, but continuing:", error.message);
-    return true;
+    console.error("❌ Email sending error:", error.message);
+    return {
+      success: false,
+      error: error.message,
+      message: "Failed to send email"
+    };
   }
 }

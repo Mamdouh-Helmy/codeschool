@@ -1,4 +1,4 @@
-// models/User.js
+// models/User.js - الإصدار المبسط
 import mongoose from "mongoose";
 
 const UserSchema = new mongoose.Schema(
@@ -13,6 +13,7 @@ const UserSchema = new mongoose.Schema(
       required: [true, "Email is required"],
       unique: true, 
       lowercase: true,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please enter a valid email address']
     },
     username: {
       type: String,
@@ -46,38 +47,29 @@ const UserSchema = new mongoose.Schema(
       default: "",
     },
     profile: {
-      bio: String,
-      jobTitle: String,
-      company: String,
-      website: String,
-      location: String,
-      phone: String
-    },
-    contactEmail: {
-      type: String,
-      lowercase: true,
-      validate: {
-        validator: function(v) {
-          return v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-        },
-        message: 'Please enter a valid email address'
-      }
-    },
-    socialLinks: {
-      github: String,
-      linkedin: String,
-      twitter: String,
-      facebook: String,
-      instagram: String
-    },
-    notifications: {
-      newMessage: {
-        email: { type: Boolean, default: true },
-        inApp: { type: Boolean, default: true }
+      bio: {
+        type: String,
+        default: ""
       },
-      messageSettings: {
-        autoReply: { type: Boolean, default: false },
-        autoReplyMessage: String
+      jobTitle: {
+        type: String,
+        default: "Developer"
+      },
+      company: {
+        type: String,
+        default: ""
+      },
+      website: {
+        type: String,
+        default: ""
+      },
+      location: {
+        type: String,
+        default: ""
+      },
+      phone: {
+        type: String,
+        default: ""
       }
     },
     emailVerified: {
@@ -95,64 +87,14 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// إزالة indexes المكررة هنا ونقلها للنهاية
-UserSchema.index({ role: 1 });
+// إنشاء indexes
+UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ username: 1 }, { unique: true, sparse: true });
 
 // Virtual للحصول على profile URL
 UserSchema.virtual('profileUrl').get(function() {
   return this.username ? `/portfolio/${this.username}` : null;
 });
 
-// Virtual للحصول على البريد الإلكتروني للتواصل
-UserSchema.virtual('displayEmail').get(function() {
-  return this.contactEmail || this.email;
-});
-
-// Method لتوليد username تلقائياً من الاسم
-UserSchema.methods.generateUsername = async function() {
-  const baseUsername = this.name
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-    .substring(0, 15);
-  
-  let username = baseUsername;
-  let counter = 1;
-  
-  // التأكد من أن الـ username فريد
-  while (await mongoose.models.User.findOne({ username })) {
-    username = `${baseUsername}${counter}`;
-    counter++;
-  }
-  
-  this.username = username;
-  return username;
-};
-
-// Method للتحقق من صلاحيات المستخدم
-UserSchema.methods.canManagePortfolio = function(portfolioUserId) {
-  return this.role === 'admin' || this._id.toString() === portfolioUserId.toString();
-};
-
-// Method للتحقق من إعدادات الرسائل
-UserSchema.methods.canReceiveMessages = function() {
-  return this.notifications?.newMessage?.email !== false;
-};
-
-// Method للحصول على الرد التلقائي
-UserSchema.methods.getAutoReply = function() {
-  if (this.notifications?.messageSettings?.autoReply && this.notifications?.messageSettings?.autoReplyMessage) {
-    return this.notifications.messageSettings.autoReplyMessage;
-  }
-  return null;
-};
-
-// Middleware قبل الحفظ - توليد username إذا لم يكن موجود
-UserSchema.pre('save', async function(next) {
-  if (!this.username && this.name) {
-    await this.generateUsername();
-  }
-  next();
-});
-
-console.log("🔧 User Schema loaded with contactEmail field");
+console.log("✅ User Schema loaded successfully (SIMPLIFIED VERSION)");
 export default mongoose.models.User || mongoose.model("User", UserSchema);

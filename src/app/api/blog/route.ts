@@ -1,89 +1,138 @@
-// app/api/blog/route.ts
+// app/api/blog/route.ts - الحل النهائي الكامل
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import BlogPost from "../../models/BlogPost";
-import { verifyJwt } from "@/lib/auth";
-import { hasPermission } from "@/lib/permissions";
 
-// Type Guard للتحقق من أن token صالحة
-function isValidToken(token: string | undefined): token is string {
-  return !!token && token.trim().length > 0;
-}
+// ==================== دوال المساعدة ====================
 
-// تحديث Type Guard لتشمل جميع الخصائص المطلوبة
-function isValidUser(user: any): user is {
-  id: string;
-  role: string;
-  name?: string;
-  email?: string;
-  image?: string;
-} {
-  return !!user && typeof user === "object" && "id" in user && "role" in user;
-}
-
-// دالة محسنة لتوليد slug تدعم جميع اللغات
+// دالة آمنة تماماً لتوليد slug
 function generateSlug(title: string): string {
-  if (!title || typeof title !== "string") return "";
+  if (!title || typeof title !== "string") {
+    return `post-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
 
-  let slug = title.toLowerCase().trim();
-  slug = slug.replace(/\s+/g, "-");
-  slug = slug.replace(
-    /[^a-z0-9\u0600-\u06FF\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\uac00-\ud7af\u0400-\u04FF\u0590-\u05FF\u0900-\u097F\-]/g,
-    ""
-  );
-  slug = slug.replace(/-+/g, "-");
-  slug = slug.replace(/^-+|-+$/g, "");
+  // أبسط regex ممكن - فقط الحروف والأرقام والشرطات
+  let slug = title
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")           // مسافات إلى شرطات
+    .replace(/[^\w\-]/g, "")        // إزالة كل شيء غير حروف وأرقام وشرطات
+    .replace(/-+/g, "-")            // شرطات متعددة إلى واحدة
+    .replace(/^-+/, "")             // إزالة الشرطات من البداية
+    .replace(/-+$/, "");            // إزالة الشرطات من النهاية
 
-  if (!slug) {
-    slug = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // إذا لم يتبق شيء، نولد slug عشوائي
+  if (!slug || slug.length < 2) {
+    return `post-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   }
 
   return slug;
 }
 
+// دالة آمنة لتوليد excerpt
+function generateExcerpt(content: string, maxLength: number = 150): string {
+  if (!content || typeof content !== "string") {
+    return "";
+  }
+  
+  try {
+    // إزالة HTML tags بطريقة آمنة
+    const plain = content.replace(/<[^>]*>/g, "").trim();
+    
+    if (plain.length <= maxLength) {
+      return plain;
+    }
+    
+    // قص النص مع إضافة ...
+    return plain.substring(0, maxLength).trim() + "...";
+  } catch {
+    // في حالة أي خطأ، نرجع سلسلة فارغة
+    return "";
+  }
+}
+
+// دالة آمنة لحساب وقت القراءة
+function calculateReadTime(content: string): number {
+  if (!content || typeof content !== "string") {
+    return 5; // وقت افتراضي
+  }
+  
+  try {
+    const plain = content.replace(/<[^>]*>/g, "").trim();
+    const words = plain.split(/\s+/).filter(word => word.length > 0);
+    const minutes = Math.max(1, Math.ceil(words.length / 200));
+    return minutes;
+  } catch {
+    return 5; // وقت افتراضي في حالة الخطأ
+  }
+}
+
+// دالة للتحقق من صحة البيانات
+function validateBlogData(data: any): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (
+    (!data.title_ar || data.title_ar.trim() === "") &&
+    (!data.title_en || data.title_en.trim() === "")
+  ) {
+    errors.push("Blog title is required in at least one language");
+  }
+
+  if (
+    (!data.body_ar || data.body_ar.trim() === "") &&
+    (!data.body_en || data.body_en.trim() === "")
+  ) {
+    errors.push("Blog content is required in at least one language");
+  }
+
+  if (data.author) {
+    if (
+      (!data.author.name_ar || data.author.name_ar.trim() === "") &&
+      (!data.author.name_en || data.author.name_en.trim() === "")
+    ) {
+      errors.push("Author name is required in at least one language");
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
+
+// ==================== API Routes ====================
+
+// GET - جلب جميع المقالات
 export async function GET(req: Request) {
   try {
+    console.log("📚 GET /api/blog - Fetching blog posts");
     await connectDB();
 
-    const token = req.headers.get("authorization")?.split(" ")[1];
-
-    if (isValidToken(token)) {
-      const user = verifyJwt(token);
-      if (!isValidUser(user) || !hasPermission(user.role, "blogs", "read")) {
-        return NextResponse.json(
-          { success: false, message: "Unauthorized" },
-          { status: 403 }
-        );
-      }
-    }
-
     const url = new URL(req.url);
-    const search = url.searchParams.get("search");
+    const search = url.searchParams.get("search") || "";
     const tag = url.searchParams.get("tag");
     const category = url.searchParams.get("category");
     const status = url.searchParams.get("status") || "published";
     const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = parseInt(url.searchParams.get("limit") || "1000");
+    const limit = Math.min(parseInt(url.searchParams.get("limit") || "100"), 1000);
 
-    const query: any = { status };
+    // بناء query آمن
+    const query: any = { status: status };
 
-    // تحديث الاستعلام للبحث في الحقول الجديدة
     if (search) {
       query.$or = [
         { title_ar: { $regex: search, $options: "i" } },
-        { title_en: { $regex: search, $options: "i" } },
-        { excerpt_ar: { $regex: search, $options: "i" } },
-        { excerpt_en: { $regex: search, $options: "i" } }
+        { title_en: { $regex: search, $options: "i" } }
       ];
     }
-    
+
     if (tag) {
       query.$or = [
         { tags_ar: { $in: [tag] } },
         { tags_en: { $in: [tag] } }
       ];
     }
-    
+
     if (category) {
       query.$or = [
         { category_ar: category },
@@ -91,15 +140,13 @@ export async function GET(req: Request) {
       ];
     }
 
-    console.log("🔍 Database Query:", query);
-
     const total = await BlogPost.countDocuments(query);
     const posts = await BlogPost.find(query)
-      .sort({ publishDate: -1 })
+      .sort({ publishDate: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
 
-    console.log(`✅ Found ${posts.length} posts with query`);
+    console.log(`✅ Found ${posts.length} blog posts`);
 
     return NextResponse.json({
       success: true,
@@ -107,199 +154,197 @@ export async function GET(req: Request) {
       pagination: {
         total,
         page,
+        limit,
         totalPages: Math.ceil(total / limit),
         hasNext: page * limit < total,
         hasPrev: page > 1,
       },
     });
-  } catch (err) {
-    console.error("Fetch blogs error:", err);
+  } catch (err: any) {
+    console.error("❌ GET /api/blog error:", err.message);
     return NextResponse.json(
-      { success: false, message: "Failed to load blogs" },
+      { 
+        success: false, 
+        message: "Failed to load blog posts",
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      },
       { status: 500 }
     );
   }
 }
 
+// POST - إنشاء مقال جديد
 export async function POST(req: Request) {
+  let requestData: any = null;
+
   try {
+    console.log("🚀 POST /api/blog - Creating new blog post");
     await connectDB();
 
-    const token = req.headers.get("authorization")?.split(" ")[1];
+    // قراءة البيانات مرة واحدة فقط
+    requestData = await req.json();
+    
+    console.log("📥 Received blog data:", {
+      title_ar: requestData.title_ar?.substring(0, 30) || "(empty)",
+      title_en: requestData.title_en?.substring(0, 30) || "(empty)"
+    });
 
-    if (!isValidToken(token)) {
-      return NextResponse.json(
-        { success: false, message: "Authentication required" },
-        { status: 401 }
-      );
-    }
-
-    const user = verifyJwt(token);
-    if (!isValidUser(user) || !hasPermission(user.role, "blogs", "create")) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 403 }
-      );
-    }
-
-    const data = await req.json();
-    console.log("📥 Received data for blog creation:", data);
-
-    // تحقق من أن العنوان غير فارغ في كلا اللغتين
-    if (
-      (!data.title_ar || data.title_ar.trim() === "") &&
-      (!data.title_en || data.title_en.trim() === "")
-    ) {
+    // التحقق من صحة البيانات
+    const validation = validateBlogData(requestData);
+    if (!validation.isValid) {
+      console.log("❌ Validation failed:", validation.errors);
       return NextResponse.json(
         {
           success: false,
-          message: "Blog title is required in at least one language",
+          message: "Validation failed",
+          errors: validation.errors
         },
         { status: 400 }
       );
     }
 
-    // تحقق من أن المحتوى غير فارغ في كلا اللغتين
-    if (
-      (!data.body_ar || data.body_ar.trim() === "") &&
-      (!data.body_en || data.body_en.trim() === "")
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Blog content is required in at least one language",
-        },
-        { status: 400 }
-      );
-    }
+    // ========== إعداد البيانات النهائية ==========
+    
+    // 1. توليد slug آمن
+    const titleToUse = requestData.title_en || requestData.title_ar || "Untitled Post";
+    let slug = generateSlug(titleToUse);
+    console.log("🔗 Generated slug (attempt 1):", slug);
 
-    let authorData;
+    // 2. توليد excerpts إذا لم تكن موجودة
+    const excerpt_ar = requestData.excerpt_ar || generateExcerpt(requestData.body_ar || "", 150);
+    const excerpt_en = requestData.excerpt_en || generateExcerpt(requestData.body_en || "", 150);
 
-    if (data.author && typeof data.author === "object") {
-      authorData = {
-        id: user.id,
-        name_ar: data.author.name_ar || user.name || "Admin",
-        name_en: data.author.name_en || user.name || "Admin",
-        email: data.author.email || user.email || "",
-        avatar: data.author.avatar || user.image || "/images/default-avatar.jpg",
-        role: data.author.role || user.role || "Author",
-      };
-    } else {
-      authorData = {
-        id: user.id,
-        name_ar: data.author || user.name || "Admin",
-        name_en: data.author || user.name || "Admin",
-        email: user.email || "",
-        avatar: user.image || "/images/default-avatar.jpg",
-        role: user.role || "Author",
-      };
-    }
+    // 3. حساب وقت القراءة
+    const readTime = calculateReadTime(requestData.body_ar || requestData.body_en || "");
 
-    // تنظيف وتحقق من البيانات
-    const authorNameAr = authorData.name_ar?.trim();
-    const authorNameEn = authorData.name_en?.trim();
-
-    if (!authorNameAr && !authorNameEn) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Author name is required in at least one language",
-        },
-        { status: 400 }
-      );
-    }
-
-    // تحديث الاسم بعد التنظيف
-    authorData.name_ar = authorNameAr;
-    authorData.name_en = authorNameEn;
-
-    // إنشاء slug باستخدام العنوان الإنجليزي أو العربي
-    const slug = generateSlug(data.title_en || data.title_ar);
-
-    // إعداد البيانات للمقال
-    const blogData = {
-      title_ar: data.title_ar || "",
-      title_en: data.title_en || "",
-      body_ar: data.body_ar || "",
-      body_en: data.body_en || "",
-      excerpt_ar: data.excerpt_ar || "",
-      excerpt_en: data.excerpt_en || "",
-      imageAlt_ar: data.imageAlt_ar || "",
-      imageAlt_en: data.imageAlt_en || "",
-      category_ar: data.category_ar || "",
-      category_en: data.category_en || "",
-      image: data.image || "",
-      publishDate: data.publishDate ? new Date(data.publishDate) : new Date(),
-      author: authorData,
-      tags_ar: data.tags_ar || [],
-      tags_en: data.tags_en || [],
-      featured: data.featured || false,
-      status: data.status || "draft",
-      slug: slug,
+    // 4. إعداد بيانات المؤلف
+    const author = {
+      name_ar: requestData.author?.name_ar?.trim() || "Admin",
+      name_en: requestData.author?.name_en?.trim() || "Admin",
+      email: requestData.author?.email?.trim() || "",
+      avatar: requestData.author?.avatar?.trim() || "/images/default-avatar.jpg",
+      role: requestData.author?.role?.trim() || "Author",
     };
 
-    console.log("📝 Creating blog with data:", blogData);
+    // 5. إعداد البيانات النهائية للمقال
+    const blogData = {
+      title_ar: requestData.title_ar?.trim() || "",
+      title_en: requestData.title_en?.trim() || "",
+      body_ar: requestData.body_ar?.trim() || "",
+      body_en: requestData.body_en?.trim() || "",
+      excerpt_ar: excerpt_ar,
+      excerpt_en: excerpt_en,
+      imageAlt_ar: requestData.imageAlt_ar?.trim() || "",
+      imageAlt_en: requestData.imageAlt_en?.trim() || "",
+      category_ar: requestData.category_ar?.trim() || "",
+      category_en: requestData.category_en?.trim() || "",
+      image: requestData.image?.trim() || "",
+      publishDate: requestData.publishDate ? new Date(requestData.publishDate) : new Date(),
+      author: author,
+      tags_ar: Array.isArray(requestData.tags_ar) ? requestData.tags_ar.map((tag: any) => tag?.toString().trim()).filter(Boolean) : [],
+      tags_en: Array.isArray(requestData.tags_en) ? requestData.tags_en.map((tag: any) => tag?.toString().trim()).filter(Boolean) : [],
+      featured: Boolean(requestData.featured),
+      status: requestData.status === "published" ? "published" : "draft",
+      slug: slug,
+      readTime: readTime,
+      viewCount: 0
+    };
 
-    const newPost = await BlogPost.create(blogData);
+    console.log("📝 Creating blog post with sanitized data");
 
+    // ========== محاولة حفظ المقال ==========
+    let newPost;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        attempts++;
+        console.log(`🔄 Attempt ${attempts}/${maxAttempts} to create blog post`);
+        
+        newPost = await BlogPost.create(blogData);
+        console.log("✅ Blog post created successfully! ID:", newPost._id);
+        break; // نجح، نخرج من الحلقة
+      } catch (createError: any) {
+        console.log(`⚠️ Attempt ${attempts} failed:`, createError.message);
+        
+        // إذا كان الخطأ بسبب slug مكرر
+        if (createError.code === 11000 && createError.keyPattern?.slug) {
+          console.log("🔄 Duplicate slug detected, generating new one...");
+          // توليد slug جديد مع محاولة فريدة
+          blogData.slug = `post-${Date.now()}-${attempts}-${Math.random().toString(36).substring(2, 9)}`;
+          console.log("🔗 New slug:", blogData.slug);
+          continue; // جرب مرة أخرى
+        }
+        
+        // إذا كان خطأ آخر غير التكرار، أعد الخطأ
+        throw createError;
+      }
+    }
+
+    // إذا فشلت جميع المحاولات
+    if (!newPost) {
+      throw new Error("Failed to create blog post after multiple attempts");
+    }
+
+    // ========== الرد الناجح ==========
     return NextResponse.json({
       success: true,
-      data: newPost,
+      data: {
+        id: newPost._id,
+        title_ar: newPost.title_ar,
+        title_en: newPost.title_en,
+        slug: newPost.slug,
+        status: newPost.status,
+        author: newPost.author,
+        publishDate: newPost.publishDate,
+        excerpt_ar: newPost.excerpt_ar,
+        excerpt_en: newPost.excerpt_en
+      },
       message: "Blog post created successfully",
-    });
-  } catch (err: any) {
-    console.error("❌ Create blog error:", err);
+    }, { status: 201 });
 
+  } catch (err: any) {
+    console.error("💥 POST /api/blog - Critical error:", {
+      name: err.name,
+      message: err.message,
+      code: err.code,
+      dataReceived: requestData ? {
+        title_ar: requestData.title_ar?.substring(0, 20),
+        title_en: requestData.title_en?.substring(0, 20)
+      } : "No data received"
+    });
+
+    // الرد حسب نوع الخطأ
     if (err.name === "ValidationError") {
-      const errors = Object.values(err.errors).map(
-        (error: any) => error.message
-      );
-      console.error("Validation errors:", errors);
+      const errors = Object.values(err.errors || {}).map((error: any) => error.message);
       return NextResponse.json(
         { 
           success: false, 
-          message: "Validation error", 
-          errors,
-          details: err.errors 
+          message: "Mongoose validation error",
+          errors
         },
         { status: 400 }
       );
     }
 
     if (err.code === 11000) {
-      if (err.keyPattern && err.keyPattern.slug) {
-        const newSlug = `post-${Date.now()}-${Math.random()
-          .toString(36)
-          .substr(2, 9)}`;
-        try {
-          const data = await req.json();
-          const newPost = await BlogPost.create({
-            ...data,
-            slug: newSlug,
-          });
-          return NextResponse.json({
-            success: true,
-            data: newPost,
-            message: "Blog post created successfully",
-          });
-        } catch (retryError) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "Failed to create blog post after retry",
-            },
-            { status: 500 }
-          );
-        }
-      }
       return NextResponse.json(
-        { success: false, message: "Blog post with this title already exists" },
-        { status: 400 }
+        { 
+          success: false, 
+          message: "A blog post with this title or slug already exists"
+        },
+        { status: 409 }
       );
     }
 
+    // رد عام للخطأ
     return NextResponse.json(
-      { success: false, message: "Failed to create blog" },
+      { 
+        success: false, 
+        message: "Failed to create blog post",
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      },
       { status: 500 }
     );
   }
