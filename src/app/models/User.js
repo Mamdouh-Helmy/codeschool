@@ -17,7 +17,7 @@ const UserSchema = new mongoose.Schema(
     username: {
       type: String,
       unique: true,
-      sparse: true, // يسمح بقيم null
+      sparse: true,
       trim: true,
       lowercase: true,
       match: [/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers and underscores']
@@ -53,12 +53,32 @@ const UserSchema = new mongoose.Schema(
       location: String,
       phone: String
     },
+    contactEmail: {
+      type: String,
+      lowercase: true,
+      validate: {
+        validator: function(v) {
+          return v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        },
+        message: 'Please enter a valid email address'
+      }
+    },
     socialLinks: {
       github: String,
       linkedin: String,
       twitter: String,
       facebook: String,
       instagram: String
+    },
+    notifications: {
+      newMessage: {
+        email: { type: Boolean, default: true },
+        inApp: { type: Boolean, default: true }
+      },
+      messageSettings: {
+        autoReply: { type: Boolean, default: false },
+        autoReplyMessage: String
+      }
     },
     emailVerified: {
       type: Boolean,
@@ -75,14 +95,17 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// Index إضافي للـ username للبحث السريع
-UserSchema.index({ username: 1 });
-UserSchema.index({ email: 1 });
+// إزالة indexes المكررة هنا ونقلها للنهاية
 UserSchema.index({ role: 1 });
 
 // Virtual للحصول على profile URL
 UserSchema.virtual('profileUrl').get(function() {
   return this.username ? `/portfolio/${this.username}` : null;
+});
+
+// Virtual للحصول على البريد الإلكتروني للتواصل
+UserSchema.virtual('displayEmail').get(function() {
+  return this.contactEmail || this.email;
 });
 
 // Method لتوليد username تلقائياً من الاسم
@@ -110,6 +133,19 @@ UserSchema.methods.canManagePortfolio = function(portfolioUserId) {
   return this.role === 'admin' || this._id.toString() === portfolioUserId.toString();
 };
 
+// Method للتحقق من إعدادات الرسائل
+UserSchema.methods.canReceiveMessages = function() {
+  return this.notifications?.newMessage?.email !== false;
+};
+
+// Method للحصول على الرد التلقائي
+UserSchema.methods.getAutoReply = function() {
+  if (this.notifications?.messageSettings?.autoReply && this.notifications?.messageSettings?.autoReplyMessage) {
+    return this.notifications.messageSettings.autoReplyMessage;
+  }
+  return null;
+};
+
 // Middleware قبل الحفظ - توليد username إذا لم يكن موجود
 UserSchema.pre('save', async function(next) {
   if (!this.username && this.name) {
@@ -118,5 +154,5 @@ UserSchema.pre('save', async function(next) {
   next();
 });
 
-console.log("🔧 User Schema loaded with username field");
+console.log("🔧 User Schema loaded with contactEmail field");
 export default mongoose.models.User || mongoose.model("User", UserSchema);

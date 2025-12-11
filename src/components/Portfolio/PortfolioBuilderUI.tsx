@@ -18,7 +18,6 @@ import SkillsSection from "./sections/SkillsSection";
 import ProjectsSection from "./sections/ProjectsSection";
 import SocialLinksSection from "./sections/SocialLinksSection";
 import SettingsSection from "./sections/SettingsSection";
-import PreviewPanel from "./PreviewPanel";
 import { Portfolio, PortfolioFormData } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -138,12 +137,7 @@ export default function PortfolioBuilderUI({
             </h1>
           </div>
           
-          {/* <button
-            onClick={() => setShowPreview(!showPreview)}
-            className="p-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-          >
-            <Eye className="w-5 h-5" />
-          </button> */}
+  
         </div>
       </div>
 
@@ -240,12 +234,7 @@ export default function PortfolioBuilderUI({
           </div>
         </div>
 
-        {/* Preview */}
-        {showPreview && (
-          <div className="lg:w-1/2 border-t lg:border-t-0 lg:border-l border-gray-200 dark:border-dark_border">
-            <PreviewPanel portfolio={formData} />
-          </div>
-        )}
+       
       </div>
     </div>
   );

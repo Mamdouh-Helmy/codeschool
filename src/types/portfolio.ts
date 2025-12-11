@@ -139,6 +139,41 @@ export interface PortfolioErrorResponse {
   errors?: Record<string, string>;
 }
 
+// أنواع الرسائل
+export interface ContactFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  message: string;
+}
+
+export interface ContactMessage {
+  _id?: string;
+  portfolioId: string;
+  senderInfo: ContactFormData;
+  read: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface ContactResponse {
+  success: boolean;
+  message: string;
+  data?: ContactMessage;
+}
+
+export interface SendMessageData {
+  portfolioId: string;
+  senderInfo: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phoneNumber: string;
+  };
+  message: string;
+}
+
 // أنواع للـ props
 export interface PortfolioHeaderProps {
   portfolio: PublicPortfolio;
@@ -158,6 +193,7 @@ export interface ProjectsGalleryProps {
 export interface ContactSectionProps {
   portfolio: PublicPortfolio;
   themeStyles?: ThemeStyles;
+  onMessageSent?: () => void;
 }
 
 export interface PortfolioBuilderProps {
@@ -239,6 +275,12 @@ export interface PortfolioBuilderState {
 export interface PublicPortfolioState {
   portfolio: PublicPortfolio | null;
   loading: boolean;
+  error: string | null;
+}
+
+export interface ContactFormState {
+  submitting: boolean;
+  success: boolean;
   error: string | null;
 }
 

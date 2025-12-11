@@ -91,13 +91,26 @@ export default function ContactSection({ portfolio }: ContactSectionProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const validationSchema = Yup.object({
-    firstName: Yup.string().required("First Name is required"),
-    lastName: Yup.string().required("Last Name is required"),
+    firstName: Yup.string()
+      .required("First Name is required")
+      .min(2, "First name is too short")
+      .max(50, "First name is too long"),
+    lastName: Yup.string()
+      .required("Last Name is required")
+      .min(2, "Last name is too short")
+      .max(50, "Last name is too long"),
     email: Yup.string()
-      .email("Invalid email format")
-      .required("Email is required"),
-    phoneNumber: Yup.string().required("Phone number is required"),
-    message: Yup.string().required("Message is required"),
+      .email("Invalid email address")
+      .required("Email is required")
+      .max(100, "Email is too long"),
+    phoneNumber: Yup.string()
+      .required("Phone number is required")
+      .matches(/^[0-9+\-\s()]{10,20}$/, "Invalid phone number")
+      .max(20, "Phone number is too long"),
+    message: Yup.string()
+      .required("Message is required")
+      .min(10, "Message should be at least 10 characters")
+      .max(2000, "Message is too long (max 2000 characters)")
   });
 
   const formik = useFormik({
@@ -114,14 +127,65 @@ export default function ContactSection({ portfolio }: ContactSectionProps) {
       const toastId = toast.loading("Sending Message...");
       
       try {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
+        // إرسال الرسالة إلى API
+        const response = await fetch('/api/portfolio/contact', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            portfolioId: portfolio._id,
+            senderInfo: {
+              firstName: values.firstName.trim(),
+              lastName: values.lastName.trim(),
+              email: values.email.trim(),
+              phoneNumber: values.phoneNumber.trim()
+            },
+            message: values.message.trim()
+          })
+        });
+
+        const data = await response.json();
+
         toast.dismiss(toastId);
-        toast.success("Message sent successfully!");
-        resetForm();
+        
+        if (data.success) {
+          toast.success("Message sent successfully!");
+          resetForm();
+          
+          // إظهار معلومات تأكيد إضافية
+          toast.custom((t) => (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-green-800 font-medium">
+                ✅ Message sent to {portfolio.userId?.name || 'portfolio owner'}
+              </p>
+              <p className="text-green-600 text-sm mt-1">
+                A confirmation email has been sent to {values.email}
+              </p>
+            </div>
+          ));
+        } else {
+          // عرض الأخطاء إذا وجدت
+          if (data.errors && Array.isArray(data.errors)) {
+            data.errors.forEach((error: string) => {
+              toast.error(error, { duration: 4000 });
+            });
+          } else {
+            toast.error(data.message || "Failed to send message");
+          }
+        }
       } catch (error: any) {
         toast.dismiss(toastId);
-        toast.error(error?.data?.message || "Something went wrong, please try again!");
+        
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+          toast.error("Unable to connect to server. Please check your internet connection.", {
+            duration: 5000
+          });
+        } else {
+          toast.error("Something went wrong, please try again!");
+        }
+        
+        console.error("Send message error:", error);
       } finally {
         setIsLoading(false);
       }
