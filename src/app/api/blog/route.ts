@@ -63,7 +63,7 @@ export async function GET(req: Request) {
     const category = url.searchParams.get("category");
     const status = url.searchParams.get("status") || "published";
     const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = parseInt(url.searchParams.get("limit") || "100");
+    const limit = parseInt(url.searchParams.get("limit") || "1000");
 
     const query: any = { status };
 

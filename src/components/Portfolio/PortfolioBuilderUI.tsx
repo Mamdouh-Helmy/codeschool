@@ -138,12 +138,12 @@ export default function PortfolioBuilderUI({
             </h1>
           </div>
           
-          <button
+          {/* <button
             onClick={() => setShowPreview(!showPreview)}
             className="p-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
           >
             <Eye className="w-5 h-5" />
-          </button>
+          </button> */}
         </div>
       </div>
 
