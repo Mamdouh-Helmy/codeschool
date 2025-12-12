@@ -1,37 +1,63 @@
-// app/api/blog/[slug]/route.ts
+// app/api/blog/[slug]/route.ts - الحل النهائي
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import BlogPost from "../../../models/BlogPost";
 import mongoose from "mongoose";
 
-// =============== GET - جلب مقال واحد ===============
+// ==================== دوال المساعدة ====================
+
+// دالة آمنة لتوليد slug
+function generateSlug(title: string): string {
+  if (!title || typeof title !== "string") {
+    return `post-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  // أبسط regex ممكن
+  let slug = title
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w\-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "");
+
+  if (!slug || slug.length < 2) {
+    return `post-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  return slug;
+}
+
+// ==================== API Routes ====================
+
+// GET - جلب مقال واحد
 export async function GET(
   req: Request,
   context: { params: Promise<{ slug: string }> }
 ) {
   try {
-    console.log("📖 GET /api/blog/[slug] - Starting...");
-    
+    console.log("📖 GET /api/blog/[slug]");
+    await connectDB();
+
     const { slug } = await context.params;
     
     if (!slug || slug.trim() === "") {
       return NextResponse.json(
-        { success: false, message: "Slug parameter is required" },
+        { success: false, message: "Slug is required" },
         { status: 400 }
       );
     }
 
-    await connectDB();
-    console.log("✅ Database connected");
+    // التحقق إذا كان ID أم slug
+    const isObjectId = mongoose.Types.ObjectId.isValid(slug);
+    const query = isObjectId ? { _id: slug } : { slug: slug.trim() };
 
-    // تنظيف الـ slug
-    const cleanSlug = slug.trim();
-    
-    // البحث بالـ slug
-    const post = await BlogPost.findOne({ slug: cleanSlug });
-    
+    console.log("🔍 Searching for post with query:", query);
+    const post = await BlogPost.findOne(query);
+
     if (!post) {
-      console.log("❌ Post not found with slug:", cleanSlug);
+      console.log("❌ Post not found");
       return NextResponse.json(
         { success: false, message: "Blog post not found" },
         { status: 404 }
@@ -39,21 +65,12 @@ export async function GET(
     }
 
     console.log("✅ Post found:", post._id);
-    
-    // زيادة عدد المشاهدات
-    await BlogPost.updateOne(
-      { _id: post._id },
-      { $inc: { viewCount: 1 } }
-    );
-
     return NextResponse.json({
       success: true,
       data: post
     });
-
   } catch (err: any) {
     console.error("❌ GET /api/blog/[slug] error:", err.message);
-    
     return NextResponse.json(
       { 
         success: false, 
@@ -65,65 +82,48 @@ export async function GET(
   }
 }
 
-// =============== PUT - تحديث مقال ===============
+// PUT - تحديث مقال
 export async function PUT(
   req: Request,
   context: { params: Promise<{ slug: string }> }
 ) {
   try {
-    console.log("✏️ PUT /api/blog/[slug] - Starting...");
-    
+    console.log("✏️ PUT /api/blog/[slug]");
+    await connectDB();
+
     const { slug } = await context.params;
-    const requestData = await req.json();
-    
+    const body = await req.json();
+
     if (!slug || slug.trim() === "") {
       return NextResponse.json(
-        { success: false, message: "Slug parameter is required" },
+        { success: false, message: "Slug is required" },
         { status: 400 }
       );
     }
 
-    await connectDB();
-    console.log("✅ Database connected");
+    // التحقق إذا كان ID أم slug
+    const isObjectId = mongoose.Types.ObjectId.isValid(slug);
+    const query = isObjectId ? { _id: slug } : { slug: slug.trim() };
 
-    const cleanSlug = slug.trim();
-    
-    // تحضير بيانات التحديث
-    const updateData: any = { ...requestData };
-    
-    // إذا تم تحديث العنوان، نولد slug جديد
-    if (updateData.title_ar || updateData.title_en) {
-      const titleToUse = updateData.title_en || updateData.title_ar || "untitled";
-      const newSlug = titleToUse
-        .toString()
-        .toLowerCase()
-        .trim()
-        .replace(/\s+/g, '-')
-        .replace(/[^\w\-]/g, '')
-        .replace(/\-\-+/g, '-')
-        .replace(/^-+/, '')
-        .replace(/-+$/, '');
-      
-      updateData.slug = `${newSlug}-${Date.now().toString(36)}`;
+    // إذا تم تحديث العنوان، نحدث الـ slug
+    const updateData: any = { ...body, updatedAt: new Date() };
+    if (body.title_en || body.title_ar) {
+      const newTitle = body.title_en || body.title_ar;
+      updateData.slug = generateSlug(newTitle);
     }
 
-    // إضافة timestamp للتحديث
-    updateData.updatedAt = new Date();
-
-    console.log("🔄 Updating post with slug:", cleanSlug);
-    console.log("📝 Update data:", Object.keys(updateData));
-
-    // البحث والتحديث
-    const updatedPost = await BlogPost.findOneAndUpdate(
-      { slug: cleanSlug },
+    console.log("🔄 Updating post with query:", query);
+    const updated = await BlogPost.findOneAndUpdate(
+      query,
       updateData,
       { 
-        new: true, // إرجاع الوثيقة المحدثة
-        runValidators: true // تشغيل validators
+        new: true, 
+        runValidators: true,
+        context: 'query' // إصلاح لبعض المشاكل في validators
       }
     );
 
-    if (!updatedPost) {
+    if (!updated) {
       console.log("❌ Post not found for update");
       return NextResponse.json(
         { success: false, message: "Blog post not found" },
@@ -131,14 +131,12 @@ export async function PUT(
       );
     }
 
-    console.log("✅ Post updated successfully:", updatedPost._id);
-    
+    console.log("✅ Post updated successfully:", updated._id);
     return NextResponse.json({
       success: true,
-      data: updatedPost,
+      data: updated,
       message: "Blog post updated successfully"
     });
-
   } catch (err: any) {
     console.error("❌ PUT /api/blog/[slug] error:", {
       name: err.name,
@@ -148,27 +146,8 @@ export async function PUT(
 
     if (err.code === 11000) {
       return NextResponse.json(
-        { 
-          success: false, 
-          message: "A blog post with this slug already exists"
-        },
+        { success: false, message: "A blog post with this title already exists" },
         { status: 409 }
-      );
-    }
-
-    if (err.name === 'ValidationError') {
-      const errors = Object.values(err.errors || {}).map((error: any) => ({
-        field: error.path,
-        message: error.message
-      }));
-      
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: "Validation failed",
-          errors 
-        },
-        { status: 400 }
       );
     }
 
@@ -183,33 +162,32 @@ export async function PUT(
   }
 }
 
-// =============== DELETE - حذف مقال ===============
+// DELETE - حذف مقال
 export async function DELETE(
   req: Request,
   context: { params: Promise<{ slug: string }> }
 ) {
   try {
-    console.log("🗑️ DELETE /api/blog/[slug] - Starting...");
-    
+    console.log("🗑️ DELETE /api/blog/[slug]");
+    await connectDB();
+
     const { slug } = await context.params;
-    
+
     if (!slug || slug.trim() === "") {
       return NextResponse.json(
-        { success: false, message: "Slug parameter is required" },
+        { success: false, message: "Slug is required" },
         { status: 400 }
       );
     }
 
-    await connectDB();
-    console.log("✅ Database connected");
+    // التحقق إذا كان ID أم slug
+    const isObjectId = mongoose.Types.ObjectId.isValid(slug);
+    const query = isObjectId ? { _id: slug } : { slug: slug.trim() };
 
-    const cleanSlug = slug.trim();
-    
-    console.log("🗑️ Deleting post with slug:", cleanSlug);
-    
-    const deletedPost = await BlogPost.findOneAndDelete({ slug: cleanSlug });
-    
-    if (!deletedPost) {
+    console.log("🗑️ Deleting post with query:", query);
+    const deleted = await BlogPost.findOneAndDelete(query);
+
+    if (!deleted) {
       console.log("❌ Post not found for deletion");
       return NextResponse.json(
         { success: false, message: "Blog post not found" },
@@ -217,21 +195,13 @@ export async function DELETE(
       );
     }
 
-    console.log("✅ Post deleted successfully:", deletedPost._id);
-    
+    console.log("✅ Post deleted successfully:", deleted._id);
     return NextResponse.json({
       success: true,
-      message: "Blog post deleted successfully",
-      data: {
-        id: deletedPost._id,
-        title_ar: deletedPost.title_ar,
-        title_en: deletedPost.title_en
-      }
+      message: "Blog post deleted successfully"
     });
-
   } catch (err: any) {
     console.error("❌ DELETE /api/blog/[slug] error:", err.message);
-    
     return NextResponse.json(
       { 
         success: false, 

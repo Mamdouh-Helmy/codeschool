@@ -1,167 +1,49 @@
-// models/BlogPost.js
+// models/BlogPost.js - الحل النهائي
 import mongoose from "mongoose";
 
 const BlogPostSchema = new mongoose.Schema(
   {
     // البيانات بالعربية
-    title_ar: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
-    body_ar: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
-    excerpt_ar: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
-    imageAlt_ar: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
+    title_ar: { type: String, default: "" },
+    body_ar: { type: String, default: "" },
+    excerpt_ar: { type: String, default: "" },
+    imageAlt_ar: { type: String, default: "" },
     
     // البيانات بالإنجليزية
-    title_en: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
-    body_en: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
-    excerpt_en: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
-    imageAlt_en: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
+    title_en: { type: String, default: "" },
+    body_en: { type: String, default: "" },
+    excerpt_en: { type: String, default: "" },
+    imageAlt_en: { type: String, default: "" },
     
     // البيانات المشتركة
-    slug: { 
-      type: String, 
-      unique: true,
-      index: true,
-      trim: true
-    },
-    image: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
-    category_ar: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
-    category_en: { 
-      type: String, 
-      default: "",
-      trim: true
-    },
-    publishDate: { 
-      type: Date, 
-      default: Date.now 
-    },
+    slug: { type: String, unique: true },
+    image: { type: String, default: "" },
+    category_ar: { type: String, default: "" },
+    category_en: { type: String, default: "" },
+    publishDate: { type: Date, default: Date.now },
     author: {
-      name_ar: { 
-        type: String, 
-        default: "Admin",
-        trim: true
-      },
-      name_en: { 
-        type: String, 
-        default: "Admin",
-        trim: true
-      },
-      email: { 
-        type: String, 
-        default: "",
-        trim: true,
-        lowercase: true
-      },
-      avatar: { 
-        type: String, 
-        default: "/images/default-avatar.jpg",
-        trim: true
-      },
-      role: { 
-        type: String, 
-        default: "Author",
-        trim: true
-      }, 
+      name_ar: { type: String, default: "Admin" },
+      name_en: { type: String, default: "Admin" },
+      email: { type: String, default: "" },
+      avatar: { type: String, default: "/images/default-avatar.jpg" },
+      role: { type: String, default: "Author" }, 
     },
-    tags_ar: [{ 
-      type: String,
-      trim: true
-    }],
-    tags_en: [{ 
-      type: String,
-      trim: true
-    }],
-    featured: { 
-      type: Boolean, 
-      default: false 
-    },
-    readTime: { 
-      type: Number, 
-      default: 0,
-      min: 0
-    },
+    tags_ar: [{ type: String }],
+    tags_en: [{ type: String }],
+    featured: { type: Boolean, default: false },
+    readTime: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ["draft", "published"],
       default: "draft",
     },
-    viewCount: { 
-      type: Number, 
-      default: 0,
-      min: 0
-    },
+    viewCount: { type: Number, default: 0 },
   },
-  { 
-    timestamps: true,
-    // تعطيل virtuals
-    toJSON: { 
-      virtuals: false,
-      transform: function(doc, ret) {
-        delete ret.__v;
-        delete ret.updatedAt;
-        return ret;
-      }
-    },
-    toObject: { 
-      virtuals: false,
-      transform: function(doc, ret) {
-        delete ret.__v;
-        delete ret.updatedAt;
-        return ret;
-      }
-    }
-  }
+  { timestamps: true }
 );
 
-// NO MIDDLEWARE AT ALL - تعليق مؤقت لأي middleware
-// BlogPostSchema.pre('save', async function(next) {
-//   console.log('Middleware disabled');
-//   next();
-// });
+// 🚨 إزالة كامل الـ middleware المسبب للمشاكل
+// لا يوجد pre-save أو أي middleware
 
-console.log("✅ BlogPost Schema loaded (CLEAN - NO MIDDLEWARE)");
-
-// التحقق من وجود الموديل مسبقاً لتجنب إعادة التسجيل
-if (mongoose.models && mongoose.models.BlogPost) {
-  delete mongoose.models.BlogPost;
-}
-
-export default mongoose.model("BlogPost", BlogPostSchema);
+console.log("✅ BlogPost Schema loaded (NO MIDDLEWARE)");
+export default mongoose.models.BlogPost || mongoose.model("BlogPost", BlogPostSchema);

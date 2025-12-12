@@ -189,9 +189,9 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   const handleBodyChange = (value: string, language: "ar" | "en") => {
     const field = language === "ar" ? "body_ar" : "body_en";
     const excerptField = language === "ar" ? "excerpt_ar" : "excerpt_en";
-    
+
     onChange(field, value);
-    
+
     // توليد excerpt تلقائي إذا لم يتم توفيره
     const currentExcerpt = language === "ar" ? form.excerpt_ar : form.excerpt_en;
     if (!currentExcerpt || currentExcerpt === generateExcerpt(language === "ar" ? form.body_ar : form.body_en)) {
@@ -207,18 +207,33 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
       // التأكد من أن tags_ar و tags_en موجودين في form
       const payload = {
         ...form,
-        tags_ar: tagsAr, // استخدام tagsAr مباشرة
-        tags_en: tagsEn, // استخدام tagsEn مباشرة
+        tags_ar: tagsAr,
+        tags_en: tagsEn,
         publishDate: form.publishDate
           ? new Date(form.publishDate).toISOString()
           : new Date().toISOString(),
       };
 
-      console.log("Submitting payload:", payload); // للتصحيح
+      console.log("Submitting payload:", payload);
+
+      // إضافة تحقق من البيانات المطلوبة
+      if (!form.title_ar && !form.title_en) {
+        alert("الرجاء إدخال عنوان المقال بالعربية أو الإنجليزية");
+        setLoading(false);
+        return;
+      }
+
+      if (!form.body_ar && !form.body_en) {
+        alert("الرجاء إدخال محتوى المقال بالعربية أو الإنجليزية");
+        setLoading(false);
+        return;
+      }
 
       const token = localStorage.getItem("token");
       if (!token) {
-        throw new Error("Authentication required. Please log in.");
+        alert("Authentication required. Please log in.");
+        setLoading(false);
+        return;
       }
 
       const method = initial?._id ? "PUT" : "POST";
@@ -226,42 +241,69 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         ? `/api/blog/${encodeURIComponent(initial._id)}`
         : "/api/blog";
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const responseText = await res.text();
-
-      if (!res.ok) {
-        let errorMessage = `HTTP error! status: ${res.status}`;
-        try {
-          const errorData = JSON.parse(responseText);
-          errorMessage = errorData.message || errorMessage;
-        } catch {
-          errorMessage = responseText || errorMessage;
-        }
-        throw new Error(errorMessage);
-      }
+      // إضافة timeout للطلب
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 ثانية
 
       try {
-        const result = JSON.parse(responseText);
+        const res = await fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          let errorMessage = `HTTP error! status: ${res.status}`;
+          try {
+            const errorData = await res.json();
+            errorMessage = errorData.message || errorMessage;
+            if (errorData.errors) {
+              errorMessage += `\n${errorData.errors.join("\n")}`;
+            }
+          } catch {
+            // إذا فشل تحليل JSON، نحاول قراءة النص
+            const text = await res.text();
+            if (text) errorMessage = text;
+          }
+          throw new Error(errorMessage);
+        }
+
+        const result = await res.json();
+
         if (result.success) {
+          alert(result.message || "تم حفظ المقال بنجاح!");
           onSaved();
           onClose();
         } else {
           throw new Error(result.message || "Operation failed");
         }
-      } catch (parseError) {
-        throw new Error("Invalid response from server");
+      } catch (fetchError: any) {
+        if (fetchError.name === 'AbortError') {
+          throw new Error("Request timeout. Please check your connection and try again.");
+        }
+        throw fetchError;
       }
     } catch (err: any) {
       console.error("Error:", err);
-      alert(`An error occurred: ${err.message}`);
+
+      // عرض رسالة خطأ مناسبة
+      let errorMessage = err.message || "An error occurred";
+
+      if (errorMessage.includes("Failed to fetch")) {
+        errorMessage = "Connection failed. Please check your internet connection.";
+      } else if (errorMessage.includes("timeout")) {
+        errorMessage = "Request timeout. Server might be busy, please try again.";
+      } else if (errorMessage.includes("Database")) {
+        errorMessage = "Database connection error. Please try again later.";
+      }
+
+      alert(`Error: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -284,27 +326,25 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
             </p>
           </div>
         </div>
-        
+
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => setActiveLanguage("ar")}
-            className={`flex-1 px-4 py-3 rounded-lg border transition-all duration-200 font-medium ${
-              activeLanguage === "ar" 
-                ? "bg-primary text-white border-primary" 
+            className={`flex-1 px-4 py-3 rounded-lg border transition-all duration-200 font-medium ${activeLanguage === "ar"
+                ? "bg-primary text-white border-primary"
                 : "bg-white dark:bg-dark_input border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white"
-            }`}
+              }`}
           >
             العربية
           </button>
           <button
             type="button"
             onClick={() => setActiveLanguage("en")}
-            className={`flex-1 px-4 py-3 rounded-lg border transition-all duration-200 font-medium ${
-              activeLanguage === "en" 
-                ? "bg-primary text-white border-primary" 
+            className={`flex-1 px-4 py-3 rounded-lg border transition-all duration-200 font-medium ${activeLanguage === "en"
+                ? "bg-primary text-white border-primary"
                 : "bg-white dark:bg-dark_input border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white"
-            }`}
+              }`}
           >
             English
           </button>
@@ -337,8 +377,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
             value={activeLanguage === "ar" ? form.title_ar : form.title_en}
             onChange={(e) => onChange(activeLanguage === "ar" ? "title_ar" : "title_en", e.target.value)}
             placeholder={
-              activeLanguage === "ar" 
-                ? (t('blogForm.titlePlaceholder') || "أدخل عنوان المقال") 
+              activeLanguage === "ar"
+                ? (t('blogForm.titlePlaceholder') || "أدخل عنوان المقال")
                 : (t('blogForm.titlePlaceholder') || "Enter blog post title")
             }
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
@@ -357,8 +397,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
             onChange={(e) => onChange(activeLanguage === "ar" ? "excerpt_ar" : "excerpt_en", e.target.value)}
             rows={2}
             placeholder={
-              activeLanguage === "ar" 
-                ? (t('blogForm.excerptPlaceholder') || "وصف مختصر للمقال (يتم توليده تلقائياً من المحتوى)") 
+              activeLanguage === "ar"
+                ? (t('blogForm.excerptPlaceholder') || "وصف مختصر للمقال (يتم توليده تلقائياً من المحتوى)")
                 : (t('blogForm.excerptPlaceholder') || "Brief description of the blog post (auto-generated from content)")
             }
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200"
@@ -376,8 +416,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
             value={activeLanguage === "ar" ? form.category_ar : form.category_en}
             onChange={(e) => onChange(activeLanguage === "ar" ? "category_ar" : "category_en", e.target.value)}
             placeholder={
-              activeLanguage === "ar" 
-                ? "مثل: تكنولوجيا، أعمال، تصميم" 
+              activeLanguage === "ar"
+                ? "مثل: تكنولوجيا، أعمال، تصميم"
                 : "e.g., Technology, Business, Design"
             }
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
@@ -412,8 +452,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
             value={activeLanguage === "ar" ? form.author.name_ar : form.author.name_en}
             onChange={(e) => onChangeAuthor(activeLanguage === "ar" ? "name_ar" : "name_en", e.target.value)}
             placeholder={
-              activeLanguage === "ar" 
-                ? "اسم المؤلف" 
+              activeLanguage === "ar"
+                ? "اسم المؤلف"
                 : "Author name"
             }
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
@@ -533,8 +573,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
             value={activeLanguage === "ar" ? form.body_ar : form.body_en}
             onChange={(value) => handleBodyChange(value, activeLanguage)}
             placeholder={
-              activeLanguage === "ar" 
-                ? (t('blogForm.bodyPlaceholder') || "اكتب محتوى المقال هنا... يدعم HTML و Markdown.") 
+              activeLanguage === "ar"
+                ? (t('blogForm.bodyPlaceholder') || "اكتب محتوى المقال هنا... يدعم HTML و Markdown.")
                 : (t('blogForm.bodyPlaceholder') || "Write your blog post content here... HTML and Markdown are supported.")
             }
           />
@@ -619,8 +659,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
             value={activeLanguage === "ar" ? form.imageAlt_ar : form.imageAlt_en}
             onChange={(e) => onChange(activeLanguage === "ar" ? "imageAlt_ar" : "imageAlt_en", e.target.value)}
             placeholder={
-              activeLanguage === "ar" 
-                ? "وصف الصورة لإمكانية الوصول" 
+              activeLanguage === "ar"
+                ? "وصف الصورة لإمكانية الوصول"
                 : "Description of the image for accessibility"
             }
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
@@ -654,8 +694,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                 onChange={(e) => activeLanguage === "ar" ? setNewTagInputAr(e.target.value) : setNewTagInputEn(e.target.value)}
                 onKeyPress={(e) => handleTagKeyPress(e, activeLanguage)}
                 placeholder={
-                  activeLanguage === "ar" 
-                    ? "أدخل وسم (مثل: React، JavaScript، تطوير الويب)" 
+                  activeLanguage === "ar"
+                    ? "أدخل وسم (مثل: React، JavaScript، تطوير الويب)"
                     : "Enter a tag (e.g., React, JavaScript, Web Development)"
                 }
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
