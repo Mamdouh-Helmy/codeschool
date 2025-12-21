@@ -2036,6 +2036,176 @@ const ar = {
   "portfolio.public.allRightsReserved": "جميع الحقوق محفوظة",
   "portfolio.public.portfolio": "الملف الشخصي",
   "portfolio.public.send": "إرسال",
+
+  // في قسم Dashboard
+  "dashboard.students": "إدارة الطلاب",
+
+  // في أي مكان مناسب أضف:
+  "students.management": "إدارة الطلاب",
+  "students.managementDescription":
+    "إدارة ملفات الطلاب، متابعة التقدم الأكاديمي، وتنظيم عمليات التسجيل",
+  "students.addNew": "إضافة طالب جديد",
+  "students.totalStudents": "إجمالي الطلاب",
+  "students.activeStudents": "الطلاب النشطون",
+  "students.graduated": "الخريجون",
+  "students.avgCourses": "متوسط عدد الكورسات",
+  "students.searchPlaceholder":
+    "ابحث بالاسم أو البريد الإلكتروني أو رقم القيد...",
+  "students.status.active": "نشط",
+  "students.status.suspended": "موقوف",
+  "students.status.graduated": "متخرج",
+  "students.status.dropped": "منسحب",
+  "students.level.beginner": "مبتدئ",
+  "students.level.intermediate": "متوسط",
+  "students.level.advanced": "متقدم",
+  "students.source.website": "الموقع الإلكتروني",
+  "students.source.referral": "ترشيح",
+  "students.source.marketing": "تسويق",
+  "students.source.walkin": "حضور مباشر",
+
+  // أضف في القسم المناسب مع الترجمات الحالية
+
+  // Student Management Keys
+  "students.allStatuses": "جميع الحالات",
+  "students.allLevels": "جميع المستويات",
+  "students.allSources": "جميع المصادر",
+  "students.refresh": "تحديث",
+  "students.noStudents": "لم يتم العثور على طلاب",
+  "students.noStudentsDescription": "لم يتم إنشاء ملفات طلاب بعد.",
+  "students.createFirstButton": "أنشئ أول طالب لك",
+  "students.clearFilters": "مسح الفلاتر",
+
+  // Student Status
+
+  // Student Form Keys
+  "studentForm.studentInfo": "معلومات الطالب",
+  "studentForm.selectExisting": "اختر طالبًا موجودًا أو أنشئ جديدًا",
+  "studentForm.studentName": "اسم الطالب *",
+  "studentForm.email": "البريد الإلكتروني *",
+  "studentForm.phone": "رقم الهاتف *",
+  "studentForm.whatsappNumber": "رقم الواتساب *",
+  "studentForm.dateOfBirth": "تاريخ الميلاد *",
+  "studentForm.gender": "الجنس *",
+  "studentForm.nationalId": "رقم الهوية الوطنية *",
+  "studentForm.address": "العنوان",
+  "studentForm.street": "الشارع",
+  "studentForm.city": "المدينة",
+  "studentForm.state": "المحافظة",
+  "studentForm.postalCode": "الرمز البريدي",
+  "studentForm.country": "الدولة",
+
+  // Guardian Information
+  "studentForm.guardianInfo": "معلومات ولي الأمر",
+  "studentForm.guardianDescription": "تفاصيل ولي الأمر",
+  "studentForm.guardianName": "اسم ولي الأمر *",
+  "studentForm.relationship": "العلاقة *",
+  "studentForm.guardianPhone": "الهاتف *",
+  "studentForm.guardianWhatsApp": "الواتساب",
+  "studentForm.guardianEmail": "البريد الإلكتروني",
+
+  // Enrollment Information
+  "studentForm.enrollmentInfo": "معلومات التسجيل",
+  "studentForm.enrollmentDescription": "تفاصيل تسجيل الطالب",
+  "studentForm.source": "المصدر *",
+  "studentForm.status": "الحالة",
+  "studentForm.academicLevel": "المستوى الأكاديمي",
+  "studentForm.referredBy": "تمت الإحالة بواسطة",
+  "studentForm.groupIds": "معرفات المجموعات",
+
+  // Communication Preferences
+  "studentForm.communicationPrefs": "تفضيلات التواصل",
+  "studentForm.communicationDescription": "إعدادات الإشعارات واللغة",
+  "studentForm.preferredLanguage": "اللغة المفضلة",
+  "studentForm.language.ar": "العربية",
+  "studentForm.language.en": "الإنجليزية",
+  "studentForm.marketingOptIn": "استلام اتصالات التسويق",
+  "studentForm.notificationChannels": "قنوات الإشعارات",
+  "studentForm.whatsapp": "الواتساب",
+  "studentForm.sms": "الرسائل النصية",
+
+  // Student Selection States
+  "studentForm.existingStudent": "تم اختيار طالب موجود. لا حاجة لكلمة مرور.",
+  "studentForm.manualEntry":
+    "تم اختيار إدخال يدوي. مطلوب كلمة مرور لإنشاء الحساب.",
+  "studentForm.newStudent": "طالب جديد. مطلوب كلمة مرور لإنشاء الحساب.",
+
+  // User Account Creation
+  "studentForm.createAccount": "إنشاء حساب مستخدم",
+  "studentForm.accountDescription": "سيتم إنشاء حساب مستخدم جديد تلقائيًا",
+  "studentForm.password": "كلمة المرور *",
+  "studentForm.passwordMin": "(6 أحرف على الأقل)",
+  "studentForm.confirmPassword": "تأكيد كلمة المرور *",
+  "studentForm.accountIncludes": "سيشمل الحساب:",
+  "studentForm.fullProfile": "ملف مستخدم كامل",
+  "studentForm.portfolio": "حافظة احترافية",
+  "studentForm.qrCode": "رمز QR شخصي",
+  "studentForm.emailVerified": "البريد الإلكتروني مفعل تلقائيًا",
+
+  // Advanced Options
+  "studentForm.advancedOptions": "خيارات متقدمة",
+  "studentForm.showAdvanced": "إظهار المتقدم",
+  "studentForm.hideAdvanced": "إخفاء المتقدم",
+
+  // Actions
+  "studentForm.cancel": "إلغاء",
+  "studentForm.updateStudent": "تحديث الطالب",
+  "studentForm.createStudent": "إنشاء طالب وحساب",
+  "studentForm.updating": "جاري التحديث...",
+  "studentForm.creating": "جاري الإنشاء...",
+
+  // Table Headers
+  "students.table.student": "الطالب",
+  "students.table.enrollment": "التسجيل",
+  "students.table.status": "الحالة",
+  "students.table.level": "المستوى",
+  "students.table.contact": "الاتصال",
+  "students.table.enrolled": "تاريخ التسجيل",
+  "students.table.actions": "الإجراءات",
+
+  // Table Content
+  "students.table.noEmail": "لا يوجد بريد إلكتروني",
+  "students.table.noPhone": "لا يوجد هاتف",
+  "students.table.hasWhatsApp": "واتساب",
+  "students.table.enrollmentNumber": "رقم التسجيل",
+
+  // Gender Options
+  "studentForm.gender.male": "ذكر",
+  "studentForm.gender.female": "أنثى",
+  "studentForm.gender.other": "آخر",
+
+  // Success Messages
+  "students.savedSuccess": "تم حفظ الطالب بنجاح",
+  "students.updatedSuccess": "تم تحديث الطالب بنجاح",
+  "students.createdSuccess": "تم إنشاء الطالب بنجاح",
+  "students.deletedSuccess": "تم حذف الطالب بنجاح",
+
+  // Error Messages
+  "students.loadError": "فشل في تحميل الطلاب",
+  "students.saveError": "فشل في حفظ الطالب",
+  "students.deleteError": "فشل في حذف الطالب",
+  "students.deleteConfirm": "هل أنت متأكد من رغبتك في حذف هذا الطالب؟",
+  "students.deleteWarning": "لا يمكن التراجع عن هذا الإجراء.",
+
+  // Validation Messages
+  "students.validation.requiredFields": "يرجى ملء جميع الحقول المطلوبة",
+  "students.validation.passwordLength":
+    "يجب أن تكون كلمة المرور 6 أحرف على الأقل",
+  "students.validation.passwordsMatch": "كلمات المرور غير متطابقة",
+
+  // Pagination
+  "students.pagination.showing": "عرض",
+  "students.pagination.to": "إلى",
+  "students.pagination.of": "من",
+  "students.pagination.students": "طالب",
+  "students.pagination.previous": "السابق",
+  "students.pagination.next": "التالي",
+  "students.pagination.page": "صفحة",
+
+  // Stats Cards
+  "students.stats.total": "إجمالي الطلاب",
+  "students.stats.active": "الطلاب النشطين",
+  "students.stats.graduated": "المتخرجين",
+  "students.stats.avgCourses": "متوسط المواد",
 };
 
 export default ar;

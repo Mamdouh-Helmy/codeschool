@@ -2082,6 +2082,178 @@ const en = {
   "portfolio.public.allRightsReserved": "All rights reserved",
   "portfolio.public.portfolio": "Portfolio",
   "portfolio.public.send": "Send",
+
+  // في قسم Dashboard
+  "dashboard.students": "Students Management",
+
+  // في أي مكان مناسب أضف:
+  "students.management": "Students Management",
+  "students.managementDescription":
+    "Manage student profiles, track academic progress, and handle enrollments",
+  "students.addNew": "Add New Student",
+  "students.totalStudents": "Total Students",
+  "students.activeStudents": "Active Students",
+  "students.graduated": "Graduated",
+  "students.avgCourses": "Avg. Courses",
+  "students.searchPlaceholder":
+    "Search by name, email, or enrollment number...",
+  "students.status.active": "Active",
+  "students.status.suspended": "Suspended",
+  "students.status.graduated": "Graduated",
+  "students.status.dropped": "Dropped",
+  "students.level.beginner": "Beginner",
+  "students.level.intermediate": "Intermediate",
+  "students.level.advanced": "Advanced",
+  "students.source.website": "Website",
+  "students.source.referral": "Referral",
+  "students.source.marketing": "Marketing",
+  "students.source.walkin": "Walk-in",
+
+  // أضف في القسم المناسب مع الترجمات الحالية
+
+  // Student Management Keys
+  "students.allStatuses": "All Statuses",
+  "students.allLevels": "All Levels",
+  "students.allSources": "All Sources",
+  "students.refresh": "Refresh",
+  "students.noStudents": "No students found",
+  "students.noStudentsDescription":
+    "No student profiles have been created yet.",
+  "students.createFirstButton": "Create Your First Student",
+  "students.clearFilters": "Clear Filters",
+
+  // Student Form Keys
+  "studentForm.studentInfo": "Student Information",
+  "studentForm.selectExisting": "Select existing student or create new one",
+  "studentForm.studentName": "Student Name *",
+  "studentForm.email": "Email *",
+  "studentForm.phone": "Phone Number *",
+  "studentForm.whatsappNumber": "WhatsApp Number *",
+  "studentForm.dateOfBirth": "Date of Birth *",
+  "studentForm.gender": "Gender *",
+  "studentForm.nationalId": "National ID *",
+  "studentForm.address": "Address",
+  "studentForm.street": "Street",
+  "studentForm.city": "City",
+  "studentForm.state": "State/Province",
+  "studentForm.postalCode": "Postal Code",
+  "studentForm.country": "Country",
+
+  // Guardian Information
+  "studentForm.guardianInfo": "Guardian Information",
+  "studentForm.guardianDescription": "Parent or guardian details",
+  "studentForm.guardianName": "Guardian Name *",
+  "studentForm.relationship": "Relationship *",
+  "studentForm.guardianPhone": "Phone *",
+  "studentForm.guardianWhatsApp": "WhatsApp",
+  "studentForm.guardianEmail": "Email",
+
+  // Enrollment Information
+  "studentForm.enrollmentInfo": "Enrollment Information",
+  "studentForm.enrollmentDescription": "Student enrollment details",
+  "studentForm.source": "Source *",
+  "studentForm.status": "Status",
+  "studentForm.academicLevel": "Academic Level",
+  "studentForm.referredBy": "Referred By",
+  "studentForm.groupIds": "Group IDs",
+
+  // Communication Preferences
+  "studentForm.communicationPrefs": "Communication Preferences",
+  "studentForm.communicationDescription": "Notification and language settings",
+  "studentForm.preferredLanguage": "Preferred Language",
+  "studentForm.language.ar": "العربية (Arabic)",
+  "studentForm.language.en": "English",
+  "studentForm.marketingOptIn": "Receive marketing communications",
+  "studentForm.notificationChannels": "Notification Channels",
+  "studentForm.whatsapp": "WhatsApp",
+  "studentForm.sms": "SMS",
+
+  // Student Selection States
+  "studentForm.existingStudent":
+    "Existing student selected. No password required.",
+  "studentForm.manualEntry":
+    "Manual entry selected. Password required for account creation.",
+  "studentForm.newStudent":
+    "New student. Password required for account creation.",
+
+  // User Account Creation
+  "studentForm.createAccount": "Create User Account",
+  "studentForm.accountDescription":
+    "New user account will be created automatically",
+  "studentForm.password": "Password *",
+  "studentForm.passwordMin": "(min 6 characters)",
+  "studentForm.confirmPassword": "Confirm Password *",
+  "studentForm.accountIncludes": "Account will include:",
+  "studentForm.fullProfile": "Full user profile",
+  "studentForm.portfolio": "Professional portfolio",
+  "studentForm.qrCode": "Personal QR code",
+  "studentForm.emailVerified": "Email verified automatically",
+
+  // Advanced Options
+  "studentForm.advancedOptions": "Advanced Options",
+  "studentForm.showAdvanced": "Show Advanced",
+  "studentForm.hideAdvanced": "Hide Advanced",
+
+  // Actions
+  "studentForm.cancel": "Cancel",
+  "studentForm.updateStudent": "Update Student",
+  "studentForm.createStudent": "Create Student & Account",
+  "studentForm.updating": "Updating...",
+  "studentForm.creating": "Creating...",
+
+  // Table Headers
+  "students.table.student": "Student",
+  "students.table.enrollment": "Enrollment",
+  "students.table.status": "Status",
+  "students.table.level": "Level",
+  "students.table.contact": "Contact",
+  "students.table.enrolled": "Enrolled",
+  "students.table.actions": "Actions",
+
+  // Table Content
+  "students.table.noEmail": "No email",
+  "students.table.noPhone": "No phone",
+  "students.table.hasWhatsApp": "WhatsApp",
+  "students.table.enrollmentNumber": "Enrollment Number",
+
+  // Gender Options
+  "studentForm.gender.male": "Male",
+  "studentForm.gender.female": "Female",
+  "studentForm.gender.other": "Other",
+
+  // Success Messages
+  "students.savedSuccess": "Student saved successfully",
+  "students.updatedSuccess": "Student updated successfully",
+  "students.createdSuccess": "Student created successfully",
+  "students.deletedSuccess": "Student deleted successfully",
+
+  // Error Messages
+  "students.loadError": "Failed to load students",
+  "students.saveError": "Failed to save student",
+  "students.deleteError": "Failed to delete student",
+  "students.deleteConfirm": "Are you sure you want to delete this student?",
+  "students.deleteWarning": "This action cannot be undone.",
+
+  // Validation Messages
+  "students.validation.requiredFields": "Please fill all required fields",
+  "students.validation.passwordLength":
+    "Password must be at least 6 characters",
+  "students.validation.passwordsMatch": "Passwords do not match",
+
+  // Pagination
+  "students.pagination.showing": "Showing",
+  "students.pagination.to": "to",
+  "students.pagination.of": "of",
+  "students.pagination.students": "students",
+  "students.pagination.previous": "Previous",
+  "students.pagination.next": "Next",
+  "students.pagination.page": "Page",
+
+  // Stats Cards
+  "students.stats.total": "Total Students",
+  "students.stats.active": "Active Students",
+  "students.stats.graduated": "Graduated",
+  "students.stats.avgCourses": "Avg. Courses",
 };
 
 export default en;
