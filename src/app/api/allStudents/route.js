@@ -13,7 +13,7 @@ export async function POST(req) {
     // التحقق من صلاحية الأدمن
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
-      console.log('❌ Admin authorization failed');
+      console.log('❌ Admin authorization failed Retrn');
       return authCheck.response;
     }
 
