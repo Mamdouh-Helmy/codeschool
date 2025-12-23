@@ -2254,6 +2254,10 @@ const en = {
   "students.stats.active": "Active Students",
   "students.stats.graduated": "Graduated",
   "students.stats.avgCourses": "Avg. Courses",
+
+  "blogForm.imageRequirements": "Image Requirements",
+  "blogForm.changeImage": "Change Image",
+  "blogForm.removeImage": "Remove Image",
 };
 
 export default en;

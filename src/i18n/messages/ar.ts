@@ -2206,6 +2206,10 @@ const ar = {
   "students.stats.active": "الطلاب النشطين",
   "students.stats.graduated": "المتخرجين",
   "students.stats.avgCourses": "متوسط المواد",
+
+  "blogForm.imageRequirements": "متطلبات الصورة",
+  "blogForm.changeImage": "تغيير الصورة",
+  "blogForm.removeImage": "حذف الصورة",
 };
 
 export default ar;
