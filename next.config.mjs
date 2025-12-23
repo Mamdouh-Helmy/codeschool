@@ -6,31 +6,16 @@ const nextConfig = {
       {
         source: "/uploads/:path*",
         headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-          {
-            key: "Access-Control-Allow-Origin",
-            value: "*",
-          },
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
         ],
       },
       {
         source: "/api/:path*",
         headers: [
-          {
-            key: "Access-Control-Allow-Origin",
-            value: "*",
-          },
-          {
-            key: "Access-Control-Allow-Methods",
-            value: "GET, POST, PUT, DELETE, OPTIONS",
-          },
-          {
-            key: "Access-Control-Allow-Headers",
-            value: "Content-Type, Authorization",
-          },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Access-Control-Allow-Methods", value: "GET, POST, PUT, DELETE, OPTIONS" },
+          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" },
         ],
       },
     ];
@@ -39,24 +24,9 @@ const nextConfig = {
   // ========== إعدادات الصور ==========
   images: {
     remotePatterns: [
-      // الصور المحلية
-      {
-        protocol: "http",
-        hostname: "localhost",
-        port: "3000",
-        pathname: "/uploads/**",
-      },
-      {
-        protocol: "http",
-        hostname: "127.0.0.1",
-        port: "3000",
-        pathname: "/uploads/**",
-      },
-      // الصور الخارجية الشائعة
-      {
-        protocol: "https",
-        hostname: "**",
-      },
+      { protocol: "http", hostname: "localhost", port: "3000", pathname: "/uploads/**" },
+      { protocol: "http", hostname: "127.0.0.1", port: "3000", pathname: "/uploads/**" },
+      { protocol: "https", hostname: "**" },
     ],
     formats: ["image/avif", "image/webp"],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
@@ -65,9 +35,10 @@ const nextConfig = {
     dangerouslyAllowSVG: true,
   },
 
-  // ========== إعدادات التحسين ==========  experimental: {
-    serverComponentsExternalPackages: ["mongoose", "sharp"],
-  
+  // ========== إعدادات التحسين ==========
+  experimental: {
+    serverExternalPackages: ["mongoose", "sharp"], // بدل serverComponentsExternalPackages
+  },
 
   // ========== إعدادات Webpack ==========
   webpack: (config, { isServer }) => {
@@ -79,12 +50,11 @@ const nextConfig = {
       };
     }
 
-    // تحسين حجم الحزمة
     config.optimization = {
       ...config.optimization,
       splitChunks: {
         chunks: "all",
-        maxSize: 200000, // 200KB
+        maxSize: 200000,
         cacheGroups: {
           default: false,
           vendors: false,
@@ -109,7 +79,6 @@ const nextConfig = {
 
   // ========== إعدادات أخرى ==========
   reactStrictMode: true,
-  swcMinify: true,
   compress: true,
   generateEtags: true,
   poweredByHeader: false,
@@ -119,17 +88,8 @@ const nextConfig = {
 
   // ========== إعدادات الـ Environment ==========
   env: {
-    MAX_FILE_SIZE: "5242880", // 5MB
+    MAX_FILE_SIZE: "5242880",
     ALLOWED_IMAGE_TYPES: "image/jpeg,image/jpg,image/png,image/webp,image/gif",
-  },
-
-  // ========== إعدادات الـ API Body Parser ==========
-  api: {
-    bodyParser: {
-      sizeLimit: "10mb",
-    },
-    responseLimit: "10mb",
-    externalResolver: true,
   },
 
   // ========== إعدادات الـ Static Files ==========
