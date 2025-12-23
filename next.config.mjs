@@ -35,11 +35,6 @@ const nextConfig = {
     dangerouslyAllowSVG: true,
   },
 
-  // ========== إعدادات التحسين ==========
-  experimental: {
-    serverExternalPackages: ["mongoose", "sharp"], // بدل serverComponentsExternalPackages
-  },
-
   // ========== إعدادات Webpack ==========
   webpack: (config, { isServer }) => {
     if (!isServer) {
