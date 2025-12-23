@@ -1,4 +1,3 @@
-// components/BlogForm.tsx
 "use client";
 import { useState, useEffect } from "react";
 import {
@@ -82,6 +81,35 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   const [authorAvatarPreview, setAuthorAvatarPreview] = useState("");
   const [activeLanguage, setActiveLanguage] = useState<"ar" | "en">("ar");
 
+  // دالة لرفع الصور إلى السيرفر
+  const uploadImageToServer = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    console.log("🔼 Uploading image to server...");
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Upload failed:", errorText);
+      throw new Error("فشل في اتصال السيرفر");
+    }
+
+    const data = await response.json();
+    
+    if (!data.success) {
+      console.error("❌ Upload failed:", data.message);
+      throw new Error(data.message || "فشل رفع الصورة");
+    }
+
+    console.log("✅ Image uploaded successfully:", data.url);
+    return data.url;
+  };
+
   // معاينة الصور
   useEffect(() => {
     if (form.image) {
@@ -152,30 +180,87 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   };
 
   // معالجة رفع صورة المقال
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setImagePreview(result);
-        onChange("image", result);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    // التحقق من نوع الملف
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("نوع الملف غير مدعوم. يرجى استخدام صورة (JPEG, PNG, WebP)");
+      return;
+    }
+
+    // التحقق من الحجم (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert("حجم الملف كبير جداً. الحد الأقصى 5MB");
+      return;
+    }
+
+    const previousLoading = loading;
+    setLoading(true);
+    
+    try {
+      // عرض معاينة محلية
+      const localPreview = URL.createObjectURL(file);
+      setImagePreview(localPreview);
+
+      // رفع الملف إلى السيرفر
+      const imageUrl = await uploadImageToServer(file);
+      
+      // حفظ الرابط في الحالة
+      onChange("image", imageUrl);
+
+      // تنظيف المعاينة المحلية بعد ثانية
+      setTimeout(() => {
+        URL.revokeObjectURL(localPreview);
+      }, 1000);
+
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      alert(`خطأ في رفع الصورة: ${error.message}`);
+      setImagePreview("");
+    } finally {
+      setLoading(previousLoading);
     }
   };
 
   // معالجة رفع صورة المؤلف
-  const handleAuthorAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAuthorAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setAuthorAvatarPreview(result);
-        onChangeAuthor("avatar", result);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("نوع الملف غير مدعوم. يرجى استخدام صورة (JPEG, PNG, WebP)");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("حجم الملف كبير جداً. الحد الأقصى 2MB");
+      return;
+    }
+
+    const previousLoading = loading;
+    setLoading(true);
+    
+    try {
+      const localPreview = URL.createObjectURL(file);
+      setAuthorAvatarPreview(localPreview);
+
+      const imageUrl = await uploadImageToServer(file);
+      onChangeAuthor("avatar", imageUrl);
+
+      setTimeout(() => {
+        URL.revokeObjectURL(localPreview);
+      }, 1000);
+
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      alert(`خطأ في رفع الصورة: ${error.message}`);
+      setAuthorAvatarPreview("");
+    } finally {
+      setLoading(previousLoading);
     }
   };
 
@@ -214,7 +299,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           : new Date().toISOString(),
       };
 
-      console.log("Submitting payload:", payload);
+      console.log("Submitting payload (without base64):", payload);
 
       // إضافة تحقق من البيانات المطلوبة
       if (!form.title_ar && !form.title_en) {
@@ -241,69 +326,43 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         ? `/api/blog/${encodeURIComponent(initial._id)}`
         : "/api/blog";
 
-      // إضافة timeout للطلب
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 ثانية
+      // إرسال البيانات
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-      try {
-        const res = await fetch(url, {
-          method,
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!res.ok) {
-          let errorMessage = `HTTP error! status: ${res.status}`;
-          try {
-            const errorData = await res.json();
-            errorMessage = errorData.message || errorMessage;
-            if (errorData.errors) {
-              errorMessage += `\n${errorData.errors.join("\n")}`;
-            }
-          } catch {
-            // إذا فشل تحليل JSON، نحاول قراءة النص
-            const text = await res.text();
-            if (text) errorMessage = text;
+      if (!res.ok) {
+        let errorMessage = `HTTP error! status: ${res.status}`;
+        try {
+          const errorData = await res.json();
+          errorMessage = errorData.message || errorMessage;
+          if (errorData.errors) {
+            errorMessage += `\n${errorData.errors.join("\n")}`;
           }
-          throw new Error(errorMessage);
+        } catch {
+          const text = await res.text();
+          if (text) errorMessage = text;
         }
+        throw new Error(errorMessage);
+      }
 
-        const result = await res.json();
+      const result = await res.json();
 
-        if (result.success) {
-          alert(result.message || "تم حفظ المقال بنجاح!");
-          onSaved();
-          onClose();
-        } else {
-          throw new Error(result.message || "Operation failed");
-        }
-      } catch (fetchError: any) {
-        if (fetchError.name === 'AbortError') {
-          throw new Error("Request timeout. Please check your connection and try again.");
-        }
-        throw fetchError;
+      if (result.success) {
+        alert(result.message || "تم حفظ المقال بنجاح!");
+        onSaved();
+        onClose();
+      } else {
+        throw new Error(result.message || "Operation failed");
       }
     } catch (err: any) {
       console.error("Error:", err);
-
-      // عرض رسالة خطأ مناسبة
-      let errorMessage = err.message || "An error occurred";
-
-      if (errorMessage.includes("Failed to fetch")) {
-        errorMessage = "Connection failed. Please check your internet connection.";
-      } else if (errorMessage.includes("timeout")) {
-        errorMessage = "Request timeout. Server might be busy, please try again.";
-      } else if (errorMessage.includes("Database")) {
-        errorMessage = "Database connection error. Please try again later.";
-      }
-
-      alert(`Error: ${errorMessage}`);
+      alert(`خطأ: ${err.message || "حدث خطأ غير معروف"}`);
     } finally {
       setLoading(false);
     }
@@ -518,6 +577,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                     accept="image/*"
                     onChange={handleAuthorAvatarUpload}
                     className="hidden"
+                    disabled={loading}
                   />
                 </label>
                 {authorAvatarPreview && (
@@ -603,47 +663,79 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </label>
 
           <div className="flex gap-4 items-start">
-            <div className="flex-1">
-              <input
-                type="text"
-                value={form.image}
-                onChange={(e) => onChange("image", e.target.value)}
-                placeholder={t('blogForm.imagePlaceholder') || "Image URL or upload file"}
-                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-              />
-              <div className="mt-2">
-                <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
-                  <Upload className="w-3 h-3" />
-                  {t('blogForm.uploadImage') || "Upload Image"}
+            <div className="flex-1 space-y-3">
+              {/* رابط الصورة بعد الرفع */}
+              {form.image && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm">تم رفع الصورة بنجاح</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={form.image}
+                    readOnly
+                    className="w-full mt-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-sm text-gray-500 dark:text-gray-400"
+                  />
+                </div>
+              )}
+
+              {/* زر الرفع */}
+              <div>
+                <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary/10 text-primary rounded-lg text-13 font-medium cursor-pointer hover:bg-primary/20 transition-colors border border-primary/20">
+                  <Upload className="w-4 h-4" />
+                  {form.image ? (t('blogForm.changeImage') || "Change Image") : (t('blogForm.uploadImage') || "Upload Image")}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
                     onChange={handleImageUpload}
                     className="hidden"
+                    disabled={loading}
                   />
                 </label>
-                {imagePreview && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange("image", "");
-                      setImagePreview("");
-                    }}
-                    className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    {t('blogForm.remove') || "Remove"}
-                  </button>
-                )}
+                
+                <div className="text-11 text-SlateBlueText dark:text-darktext mt-2">
+                  {t('blogForm.imageRequirements') || "الحد الأقصى: 5MB • JPEG, PNG, WebP"}
+                </div>
               </div>
+
+              {loading && (
+                <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  {t('blogForm.uploading') || "جاري رفع الصورة..."}
+                </div>
+              )}
+
+              {form.image && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange("image", "");
+                    setImagePreview("");
+                  }}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 font-medium hover:bg-red-500/20 transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  {t('blogForm.removeImage') || "حذف الصورة"}
+                </button>
+              )}
             </div>
 
+            {/* معاينة الصورة */}
             {imagePreview && (
-              <div className="w-20 h-20 border border-PowderBlueBorder rounded-lg overflow-hidden">
+              <div className="w-24 h-24 border-2 border-dashed border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden bg-gray-50 dark:bg-dark_input flex items-center justify-center">
                 <img
                   src={imagePreview}
-                  alt="Blog Preview"
+                  alt="Preview"
                   className="w-full h-full object-cover"
+                  onLoad={() => {
+                    // عندما يتم تحميل الصورة، نعيد تحديث المعاينة إذا كان الرابط مختلفاً
+                    if (imagePreview.startsWith('blob:') && form.image && form.image !== imagePreview) {
+                      setImagePreview(form.image);
+                    }
+                  }}
                 />
               </div>
             )}

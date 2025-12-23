@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import BlogPost from "../../models/BlogPost";
+import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
+import path from "path";
+import { v4 as uuidv4 } from "uuid";
 
 // ==================== دوال المساعدة ====================
 
@@ -79,6 +83,54 @@ function validateBlogData(data: any): { isValid: boolean; errors: string[] } {
   };
 }
 
+// دالة لرفع الصور إلى السيرفر
+async function uploadImageToServer(file: File): Promise<string> {
+  try {
+    console.log("🔼 Uploading image to server...");
+
+    // إنشاء مجلد uploads إذا لم يكن موجوداً
+    const uploadDir = path.join(process.cwd(), "public", "uploads");
+    if (!existsSync(uploadDir)) {
+      await mkdir(uploadDir, { recursive: true });
+      console.log("📁 Created uploads directory");
+    }
+
+    // التحقق من نوع الملف
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error("نوع الملف غير مدعوم. يرجى استخدام صورة (JPEG, PNG, WebP, GIF)");
+    }
+
+    // التحقق من حجم الملف (5MB كحد أقصى)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new Error("حجم الملف كبير جداً. الحد الأقصى 5MB");
+    }
+
+    // توليد اسم فريد للملف
+    const fileExt = path.extname(file.name);
+    const fileName = `${uuidv4()}${fileExt}`;
+    const filePath = path.join(uploadDir, fileName);
+
+    console.log(`🔄 Saving file as: ${fileName}`);
+
+    // تحويل الملف إلى buffer وحفظه
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    await writeFile(filePath, buffer);
+
+    // إرجاع رابط الملف
+    const fileUrl = `/uploads/${fileName}`;
+
+    console.log(`✅ File uploaded successfully: ${fileUrl}`);
+    return fileUrl;
+
+  } catch (error: any) {
+    console.error("💥 Upload error:", error);
+    throw new Error(error.message || "حدث خطأ أثناء رفع الملف");
+  }
+}
+
 // ==================== POST - إنشاء مقال جديد ====================
 
 export async function POST(req: Request) {
@@ -107,14 +159,71 @@ export async function POST(req: Request) {
 
     // قراءة البيانات
     try {
-      requestData = await req.json();
+      // التحقق مما إذا كانت البيانات FormData أو JSON
+      const contentType = req.headers.get("content-type") || "";
+      
+      if (contentType.includes("multipart/form-data")) {
+        // استقبال FormData
+        const formData = await req.formData();
+        requestData = Object.fromEntries(formData.entries());
+        
+        // معالجة ملفات الصور إذا وجدت
+        const imageFile = formData.get("image") as File;
+        if (imageFile && imageFile.size > 0) {
+          console.log(`📸 Processing image file: ${imageFile.name}`);
+          try {
+            const imageUrl = await uploadImageToServer(imageFile);
+            requestData.image = imageUrl;
+          } catch (uploadError: any) {
+            return NextResponse.json(
+              {
+                success: false,
+                message: uploadError.message,
+                error: "Image upload failed"
+              },
+              { status: 400 }
+            );
+          }
+        }
+
+        const avatarFile = formData.get("author.avatar") as File;
+        if (avatarFile && avatarFile.size > 0) {
+          console.log(`👤 Processing avatar file: ${avatarFile.name}`);
+          try {
+            const avatarUrl = await uploadImageToServer(avatarFile);
+            requestData.author = requestData.author || {};
+            requestData.author.avatar = avatarUrl;
+          } catch (uploadError: any) {
+            return NextResponse.json(
+              {
+                success: false,
+                message: uploadError.message,
+                error: "Avatar upload failed"
+              },
+              { status: 400 }
+            );
+          }
+        }
+
+        // تحويل البيانات النصية من JSON strings إذا كانت
+        if (typeof requestData.data === "string") {
+          const parsedData = JSON.parse(requestData.data);
+          requestData = { ...requestData, ...parsedData };
+        }
+
+      } else {
+        // استقبال JSON مباشرة
+        requestData = await req.json();
+      }
+      
       console.log("📥 Received blog data");
     } catch (parseError: any) {
-      console.error("❌ Failed to parse request body:", parseError.message);
+      console.error("❌ Failed to parse request:", parseError.message);
       return NextResponse.json(
         { 
           success: false, 
-          message: "Invalid JSON data" 
+          message: "Invalid request data format",
+          error: parseError.message
         },
         { status: 400 }
       );
@@ -246,7 +355,8 @@ export async function POST(req: Request) {
         author: newPost.author,
         publishDate: newPost.publishDate,
         excerpt_ar: newPost.excerpt_ar,
-        excerpt_en: newPost.excerpt_en
+        excerpt_en: newPost.excerpt_en,
+        image: newPost.image
       },
       message: "Blog post created successfully",
     }, { status: 201 });
@@ -379,4 +489,20 @@ export async function GET(req: Request) {
       { status: 200 } // نرجع 200 مع بيانات فارغة
     );
   }
+}
+
+// ==================== OPTIONS - دعم CORS ====================
+
+export async function OPTIONS() {
+  return NextResponse.json(
+    {},
+    {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    }
+  );
 }
