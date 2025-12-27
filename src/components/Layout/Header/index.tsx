@@ -1,8 +1,7 @@
-// components/Header/Header.tsx
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState, useCallback } from "react";
 import Logo from "./Logo";
 import HeaderLink from "../Header/Navigation/HeaderLink";
 import MobileHeaderLink from "../Header/Navigation/MobileHeaderLink";
@@ -31,6 +30,43 @@ type LocalUser = {
   [key: string]: any;
 };
 
+// ✅ Cache خارج المكون لمنع إعادة الإنشاء
+let userCache: {
+  data: LocalUser | null;
+  timestamp: number;
+} | null = null;
+const CACHE_DURATION = 2 * 60 * 1000; // 2 دقيقة
+
+// ✅ Rate limiter لطلبات fetchUser
+class UserFetchLimiter {
+  private lastFetchTime = 0;
+  private isFetching = false;
+  private readonly COOLDOWN = 30000; // 30 ثانية بين الطلبات
+  
+  async fetchWithCooldown(fetchFn: () => Promise<any>): Promise<any> {
+    const now = Date.now();
+    
+    if (this.isFetching) {
+      return null;
+    }
+    
+    if (now - this.lastFetchTime < this.COOLDOWN && userCache) {
+      return userCache.data;
+    }
+    
+    this.isFetching = true;
+    try {
+      const result = await fetchFn();
+      this.lastFetchTime = now;
+      return result;
+    } finally {
+      this.isFetching = false;
+    }
+  }
+}
+
+const userFetchLimiter = new UserFetchLimiter();
+
 const Header: React.FC = () => {
   const pathUrl = usePathname();
   const { theme, setTheme } = useTheme();
@@ -50,17 +86,18 @@ const Header: React.FC = () => {
 
   const { headerData, loading } = useHeaderData();
 
-  const handleScroll = () => setSticky(window.scrollY >= 80);
+  // ✅ تحسين handleScroll باستخدام debounce
+  const handleScroll = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    setSticky(window.scrollY >= 80);
+  }, []);
 
-  const handleClickOutside = (event: MouseEvent) => {
+  const handleClickOutside = useCallback((event: MouseEvent) => {
     if (signInRef.current && !signInRef.current.contains(event.target as Node))
       setIsSignInOpen(false);
     if (signUpRef.current && !signUpRef.current.contains(event.target as Node))
       setIsSignUpOpen(false);
-    if (
-      profileRef.current &&
-      !profileRef.current.contains(event.target as Node)
-    )
+    if (profileRef.current && !profileRef.current.contains(event.target as Node))
       setIsProfileOpen(false);
     if (
       mobileMenuRef.current &&
@@ -68,16 +105,26 @@ const Header: React.FC = () => {
       navbarOpen
     )
       setNavbarOpen(false);
-  };
+  }, [navbarOpen]);
 
+  // ✅ تحسين useEffect مع debounce لـ scroll
   useEffect(() => {
-    window.addEventListener("scroll", handleScroll);
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      document.removeEventListener("mousedown", handleClickOutside);
+    let timeoutId: NodeJS.Timeout;
+    
+    const debouncedHandleScroll = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleScroll, 50);
     };
-  }, [navbarOpen, isSignInOpen, isSignUpOpen, isProfileOpen]);
+    
+    window.addEventListener("scroll", debouncedHandleScroll);
+    document.addEventListener("mousedown", handleClickOutside);
+    
+    return () => {
+      window.removeEventListener("scroll", debouncedHandleScroll);
+      document.removeEventListener("mousedown", handleClickOutside);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [handleScroll, handleClickOutside]);
 
   const authDialog = useContext(AuthDialogContext);
   const { locale, toggleLocale } = useLocale();
@@ -85,56 +132,137 @@ const Header: React.FC = () => {
 
   const [localUser, setLocalUser] = useState<LocalUser | null>(null);
   const [loadingUser, setLoadingUser] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const USER_ENDPOINT = "/api/users/me";
 
-  // Fetch user data using stored token
-  const fetchUserWithToken = async (token: string) => {
+  // ✅ Ref لتتبع ما إذا تم جلب البيانات مسبقاً
+  const hasFetched = useRef(false);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ تحسين fetchUser مع retry limit و caching
+  const fetchUserWithToken = useCallback(async (token: string, retryCount = 0) => {
+    if (retryCount > 2) {
+      console.error("Max retries reached");
+      setFetchError(true);
+      return null;
+    }
+
+    // ✅ التحقق من الـ cache أولاً
+    const now = Date.now();
+    if (userCache && now - userCache.timestamp < CACHE_DURATION) {
+      setLocalUser(userCache.data);
+      return userCache.data;
+    }
+
     try {
       setLoadingUser(true);
+      setFetchError(false);
+
       const res = await fetch(USER_ENDPOINT, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        // ✅ إضافة timeout للطلب
+        signal: AbortSignal.timeout(5000),
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        console.error("Fetch user error:", res.status, text);
-        localStorage.removeItem("token");
-        setLocalUser(null);
-        return;
+        if (res.status === 401) {
+          localStorage.removeItem("token");
+          userCache = null;
+          setLocalUser(null);
+          return null;
+        }
+        
+        if (retryCount < 2) {
+          // ✅ exponential backoff
+          const delay = 1000 * Math.pow(2, retryCount);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return fetchUserWithToken(token, retryCount + 1);
+        }
+        
+        throw new Error(`HTTP ${res.status}`);
       }
 
       const data = await res.json();
       if (data?.success && data.user) {
+        // ✅ حفظ في الـ cache
+        userCache = {
+          data: data.user,
+          timestamp: now
+        };
+        
         setLocalUser(data.user);
+        setFetchError(false);
+        return data.user;
       } else {
         setLocalUser(null);
         localStorage.removeItem("token");
+        userCache = null;
+        return null;
       }
     } catch (err) {
       console.error("Error fetching user:", err);
+      setFetchError(true);
       setLocalUser(null);
       localStorage.removeItem("token");
+      userCache = null;
+      return null;
     } finally {
       setLoadingUser(false);
     }
-  };
-
-  // Check token on mount
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      fetchUserWithToken(token);
-    }
   }, []);
 
-  // Handler لتحديث بيانات المستخدم من ProfileModal
-  const handleProfileUpdate = (updatedUser: LocalUser) => {
+  // ✅ تحسين useEffect مع rate limiting
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    
+    if (!token || hasFetched.current) {
+      return;
+    }
+
+    hasFetched.current = true;
+
+    // ✅ استخدام rate limiter
+    userFetchLimiter.fetchWithCooldown(async () => {
+      return fetchUserWithToken(token);
+    });
+
+    // ✅ تنظيف عند unmount
+    return () => {
+      hasFetched.current = false;
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
+  }, [fetchUserWithToken]);
+
+  // ✅ إضافة effect للاستماع لتغيرات localStorage (لتحديث حالة المستخدم)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'token' && !e.newValue) {
+        setLocalUser(null);
+        userCache = null;
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  const handleProfileUpdate = useCallback((updatedUser: LocalUser) => {
     setLocalUser(updatedUser);
-  };
+    // ✅ تحديث الـ cache
+    userCache = {
+      data: updatedUser,
+      timestamp: Date.now()
+    };
+  }, []);
 
   const handleSignOut = async () => {
     try {
@@ -144,13 +272,13 @@ const Header: React.FC = () => {
 
       localStorage.removeItem("token");
       setLocalUser(null);
+      userCache = null;
       router.push("/");
     } catch (error) {
       console.error("حدث خطأ أثناء تسجيل الخروج:", error);
     }
   };
 
-  // 🔥 دالة للتحقق مما إذا كان المستخدم يمكنه الوصول للبورتفليو
   const canAccessPortfolio = localUser &&
     (localUser.role === "student" || localUser.role === "admin" || localUser.role === "marketing");
 
@@ -158,10 +286,11 @@ const Header: React.FC = () => {
     <>
       <div className="relative"></div>
       <header
-        className={`fixed h-24 top-0 py-1 z-50 w-full bg-transparent transition-all ${sticky
+        className={`fixed h-24 top-0 py-1 z-50 w-full bg-transparent transition-all ${
+          sticky
             ? "shadow-lg dark:shadow-darkmd bg-white dark:bg-secondary"
             : "shadow-none"
-          }`}
+        }`}
       >
         <div className="container">
           <div className="flex items-center justify-between py-6">
@@ -172,60 +301,60 @@ const Header: React.FC = () => {
                   <HeaderLink key={index} item={item} />
                 ))}
 
-                {/* 🔥 رابط إنشاء البورتفليو - يظهر لأي مستخدم مسجل (user, admin, marketing) */}
                 {canAccessPortfolio && (
                   <li>
                     <Link
                       href="/portfolio/builder"
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/portfolio/builder"
+                      className={`text-base font-medium transition-colors duration-200 ${
+                        pathUrl === "/portfolio/builder"
                           ? "text-primary"
                           : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
+                      }`}
                     >
                       {t("nav.createPortfolio") || "إنشاء بورتفليو"}
                     </Link>
                   </li>
                 )}
 
-                {/* 🔥 رابط عرض البورتفليو - يظهر لأي مستخدم مسجل */}
                 {canAccessPortfolio && localUser?.username && (
                   <li>
                     <Link
                       href={`/portfolio/${localUser.username}`}
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === `/portfolio/${localUser.username}`
+                      className={`text-base font-medium transition-colors duration-200 ${
+                        pathUrl === `/portfolio/${localUser.username}`
                           ? "text-primary"
                           : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
+                      }`}
                     >
                       {t("nav.myPortfolio") || "بورتفليو"}
                     </Link>
                   </li>
                 )}
 
-                {/* يظهر فقط لو المستخدم أدمن */}
                 {localUser?.role === "admin" && (
                   <li>
                     <Link
                       href="/admin"
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/admin"
+                      className={`text-base font-medium transition-colors duration-200 ${
+                        pathUrl === "/admin"
                           ? "text-primary"
                           : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
+                      }`}
                     >
                       {t("nav.dashboard")}
                     </Link>
                   </li>
                 )}
 
-                {/* يظهر فقط لو المستخدم marketing */}
                 {localUser?.role === "marketing" && (
                   <li>
                     <Link
                       href="/marketing/blogs"
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/marketing/blogs"
+                      className={`text-base font-medium transition-colors duration-200 ${
+                        pathUrl === "/marketing/blogs"
                           ? "text-primary"
                           : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
+                      }`}
                     >
                       {t("nav.addBlog") || "إضافة مدونة"}
                     </Link>
@@ -248,16 +377,15 @@ const Header: React.FC = () => {
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                 className="flex h-8 w-8 items-center justify-center text-body-color duration-300 dark:text-white"
               >
-                {/* أيقونة القمر - تظهر في الوضع الفاتح فقط */}
                 <svg
                   viewBox="0 0 23 23"
-                  className={`h-8 w-8 text-dark dark:hidden ${!sticky && pathUrl === "/" && "text-white"
-                    }`}
+                  className={`h-8 w-8 text-dark dark:hidden ${
+                    !sticky && pathUrl === "/" && "text-white"
+                  }`}
                 >
                   <path d="M16.6111 15.855C17.591 15.1394 18.3151 14.1979 18.7723 13.1623C16.4824 13.4065 14.1342 12.4631 12.6795 10.4711C11.2248 8.47905 11.0409 5.95516 11.9705 3.84818C10.8449 3.9685 9.72768 4.37162 8.74781 5.08719C5.7759 7.25747 5.12529 11.4308 7.29558 14.4028C9.46586 17.3747 13.6392 18.0253 16.6111 15.855Z" />
                 </svg>
 
-                {/* أيقونة الشمس - تظهر في الوضع الداكن فقط */}
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -280,32 +408,30 @@ const Header: React.FC = () => {
               </button>
 
               {localUser ? (
-                <>
-                  <button
-                    onClick={() => setIsProfileOpen(true)}
-                    className="flex items-center space-x-2 rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-                  >
-                    <img
-                      src={
-                        localUser.image && localUser.image.length > 0
-                          ? localUser.image
-                          : DEFAULT_AVATAR
+                <button
+                  onClick={() => setIsProfileOpen(true)}
+                  className="flex items-center space-x-2 rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+                >
+                  <img
+                    src={
+                      localUser.image && localUser.image.length > 0
+                        ? localUser.image
+                        : DEFAULT_AVATAR
+                    }
+                    alt="user avatar"
+                    className="h-9 w-9 rounded-full object-cover border-2 border-transparent hover:border-primary transition-all duration-200"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      if (!img.dataset.fallback) {
+                        img.src = DEFAULT_AVATAR;
+                        img.dataset.fallback = "true";
                       }
-                      alt="user avatar"
-                      className="h-9 w-9 rounded-full object-cover border-2 border-transparent hover:border-primary transition-all duration-200"
-                      onError={(e) => {
-                        const img = e.target as HTMLImageElement;
-                        if (!img.dataset.fallback) {
-                          img.src = DEFAULT_AVATAR;
-                          img.dataset.fallback = "true";
-                        }
-                      }}
-                    />
-                    <span className="hidden lg:block text-sm font-medium dark:text-white">
-                      {localUser.name || localUser.email}
-                    </span>
-                  </button>
-                </>
+                    }}
+                  />
+                  <span className="hidden lg:block text-sm font-medium dark:text-white">
+                    {localUser.name || localUser.email}
+                  </span>
+                </button>
               ) : (
                 <>
                   <Link
@@ -338,16 +464,19 @@ const Header: React.FC = () => {
                 aria-label="Toggle menu"
               >
                 <span
-                  className={`block w-6 h-0.5 bg-black dark:bg-white transition-all duration-200 ${navbarOpen ? "rotate-45 translate-y-2" : ""
-                    }`}
+                  className={`block w-6 h-0.5 bg-black dark:bg-white transition-all duration-200 ${
+                    navbarOpen ? "rotate-45 translate-y-2" : ""
+                  }`}
                 ></span>
                 <span
-                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${navbarOpen ? "opacity-0" : ""
-                    }`}
+                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${
+                    navbarOpen ? "opacity-0" : ""
+                  }`}
                 ></span>
                 <span
-                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${navbarOpen ? "-rotate-45 -translate-y-2" : ""
-                    }`}
+                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${
+                    navbarOpen ? "-rotate-45 -translate-y-2" : ""
+                  }`}
                 ></span>
               </button>
             </div>
@@ -358,11 +487,11 @@ const Header: React.FC = () => {
           <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 z-40" />
         )}
 
-        {/* قائمة الموبايل */}
         <div
           ref={mobileMenuRef}
-          className={`lg:hidden fixed top-0 right-0 h-full w-full bg-white dark:bg-darkmode shadow-lg transform transition-transform duration-300 max-w-64 ${navbarOpen ? "translate-x-0" : "translate-x-full"
-            } z-50`}
+          className={`lg:hidden fixed top-0 right-0 h-full w-full bg-white dark:bg-darkmode shadow-lg transform transition-transform duration-300 max-w-64 ${
+            navbarOpen ? "translate-x-0" : "translate-x-full"
+          } z-50`}
         >
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-bold text-black dark:text-SlateBlueText">
@@ -396,7 +525,6 @@ const Header: React.FC = () => {
                 <MobileHeaderLink key={index} item={item} />
               ))}
 
-            {/* 🔥 رابط إنشاء البورتفليو في الموبايل - لأي مستخدم مسجل */}
             {canAccessPortfolio && (
               <Link
                 href="/portfolio/builder"
@@ -407,7 +535,6 @@ const Header: React.FC = () => {
               </Link>
             )}
 
-            {/* 🔥 رابط عرض البورتفليو في الموبايل - لأي مستخدم مسجل */}
             {canAccessPortfolio && localUser?.username && (
               <Link
                 href={`/portfolio/${localUser.username}`}
@@ -418,7 +545,6 @@ const Header: React.FC = () => {
               </Link>
             )}
 
-            {/* Dashboard للأدمن فقط */}
             {localUser?.role === "admin" && (
               <Link
                 href="/admin"
@@ -429,7 +555,6 @@ const Header: React.FC = () => {
               </Link>
             )}
 
-            {/* إضافة مدونة لـ marketing فقط */}
             {localUser?.role === "marketing" && (
               <Link
                 href="/marketing/blogs"
@@ -515,28 +640,30 @@ const Header: React.FC = () => {
           </nav>
         </div>
 
-        {/* Dialogs */}
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isSuccessDialogOpen
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
+            authDialog?.isSuccessDialogOpen
               ? "opacity-100 transform translate-y-0"
               : "opacity-0 transform -translate-y-4 pointer-events-none"
-            }`}
+          }`}
         >
           <SuccessfullLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isFailedDialogOpen
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
+            authDialog?.isFailedDialogOpen
               ? "opacity-100 transform translate-y-0"
               : "opacity-0 transform -translate-y-4 pointer-events-none"
-            }`}
+          }`}
         >
           <FailedLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isUserRegistered
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
+            authDialog?.isUserRegistered
               ? "opacity-100 transform translate-y-0"
               : "opacity-0 transform -translate-y-4 pointer-events-none"
-            }`}
+          }`}
         >
           <UserRegistered />
         </div>
@@ -558,15 +685,14 @@ const Header: React.FC = () => {
               />
             </button>
             <Signin
-              signInOpen={(value: boolean) =>
-                setIsSignInOpen(value)
-              }
+              signInOpen={(value: boolean) => setIsSignInOpen(value)}
               onSuccess={(userData) => {
                 setLocalUser(userData);
-                localStorage.setItem(
-                  "user",
-                  JSON.stringify(userData)
-                );
+                // ✅ تحديث الـ cache
+                userCache = {
+                  data: userData,
+                  timestamp: Date.now()
+                };
               }}
             />
           </div>
@@ -589,12 +715,14 @@ const Header: React.FC = () => {
               />
             </button>
             <SignUp
-              signUpOpen={(value: boolean) =>
-                setIsSignUpOpen(value)
-              }
+              signUpOpen={(value: boolean) => setIsSignUpOpen(value)}
               onSuccess={(userData) => {
                 setLocalUser(userData);
-                // لا حاجة لتخزين user في localStorage لأننا نخزن token فقط
+                // ✅ تحديث الـ cache
+                userCache = {
+                  data: userData,
+                  timestamp: Date.now()
+                };
               }}
             />
           </div>

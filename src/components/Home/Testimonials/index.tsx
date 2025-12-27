@@ -70,7 +70,6 @@ const Testimonials = () => {
       try {
         const res = await fetch("/api/testimonials?featured=true&limit=5");
         const data = await res.json();
-        console.log("Fetched testimonials:", data.data); // Debug log
         setTestimonials(data.data || []);
       } catch (error) {
         console.error("Error fetching testimonials:", error);

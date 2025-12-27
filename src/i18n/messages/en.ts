@@ -2258,6 +2258,8 @@ const en = {
   "blogForm.imageRequirements": "Image Requirements",
   "blogForm.changeImage": "Change Image",
   "blogForm.removeImage": "Remove Image",
+
+  "highlight.slides.studentProjects": "Student Projects",
 };
 
 export default en;

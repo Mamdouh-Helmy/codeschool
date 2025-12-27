@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useRouter } from "next/navigation";
@@ -49,32 +49,135 @@ interface WelcomePopupData {
   graduates?: string;
 }
 
+// ✅ Cache خارج المكون
+let welcomeDataCache: {
+  data: WelcomePopupData | null;
+  timestamp: number;
+  locale: string;
+} | null = null;
+const WELCOME_CACHE_DURATION = 10 * 60 * 1000; // 10 دقائق
+
 const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
   const { locale } = useLocale();
   const { t } = useI18n();
   const router = useRouter();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [welcomeData, setWelcomeData] = useState<WelcomePopupData | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const isRTL = locale === "ar";
   const direction = isRTL ? "rtl" : "ltr";
 
+  // ✅ Refs لمنع memory leaks
+  const isMounted = useRef(true);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const animationRef = useRef<number | null>(null);
+
+  // ✅ تحسين fetchWelcomeData
   useEffect(() => {
+    if (!isOpen) return;
+
+    let isSubscribed = true;
+    const controller = new AbortController();
+
     const fetchWelcomeData = async () => {
       try {
-        // جلب بيانات الـ Welcome Popup المخصصة
-        const res = await fetch(`/api/section-images-hero?sectionName=welcome-popup&activeOnly=true&language=${locale}`);
+        // ✅ التحقق من الـ cache أولاً
+        if (
+          welcomeDataCache &&
+          Date.now() - welcomeDataCache.timestamp < WELCOME_CACHE_DURATION &&
+          welcomeDataCache.locale === locale
+        ) {
+          if (isSubscribed) {
+            setWelcomeData(welcomeDataCache.data);
+          }
+          return;
+        }
+
+        setLoading(true);
+        const res = await fetch(`/api/section-images-hero?sectionName=welcome-popup&activeOnly=true&language=${locale}`, {
+          signal: controller.signal,
+          cache: 'force-cache',
+          headers: {
+            'Cache-Control': 'max-age=600' // 10 دقائق
+          }
+        });
+
+        if (controller.signal.aborted) return;
+
         const result = await res.json();
-        if (result.success && result.data.length > 0) {
+        if (isSubscribed && result.success && result.data.length > 0) {
+          // ✅ حفظ في الـ cache
+          welcomeDataCache = {
+            data: result.data[0],
+            timestamp: Date.now(),
+            locale
+          };
           setWelcomeData(result.data[0]);
         }
-      } catch (error) {
-        console.error('Error fetching welcome popup data:', error);
+      } catch (error: any) {
+        if (error.name !== 'AbortError' && isSubscribed) {
+          console.error('Error fetching welcome popup data:', error);
+        }
+      } finally {
+        if (isSubscribed) {
+          setLoading(false);
+        }
       }
     };
 
     fetchWelcomeData();
-  }, [locale]); // إضافة locale علشان البيانات تتغير مع تغيير اللغة
+
+    return () => {
+      isSubscribed = false;
+      controller.abort();
+    };
+  }, [isOpen, locale]);
+
+  // ✅ تحسين الـ interval مع cleanup
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // ✅ استخدام requestAnimationFrame بدل setInterval لتحسين الأداء
+    let lastTime = 0;
+    const slideDuration = 5000; // 5 ثواني
+
+    const animate = (time: number) => {
+      if (!lastTime) lastTime = time;
+      const delta = time - lastTime;
+
+      if (delta >= slideDuration) {
+        setCurrentSlide((prev) => (prev + 1) % slides.length);
+        lastTime = time;
+      }
+
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isOpen]);
+
+  // ✅ تنظيف عند unmount
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
 
   const getImageSrc = (imageUrl: string | undefined, defaultImage: string): string => {
     if (!imageUrl) return defaultImage;
@@ -82,8 +185,8 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     return imageUrl;
   };
 
-  // استخدام البيانات من API أو الترجمات الافتراضية
-  const slides = [
+  // ✅ استخدام useMemo للـ slides لمنع إعادة الإنشاء
+  const slides = React.useMemo(() => [
     {
       title: welcomeData?.welcomeTitle || t("hero.title") || "Empower Young Minds!",
       subtitle: welcomeData?.welcomeSubtitle1 || t("welcome.subtitle1") || "Transform your child's future with coding",
@@ -106,20 +209,11 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
       ],
       icon: Heart,
     },
-  ];
+  ], [welcomeData, t]);
 
   const currentSlideData = slides[currentSlide];
   const CurrentIcon = currentSlideData.icon;
   const discount = welcomeData?.discount || 30;
-
-  useEffect(() => {
-    if (isOpen) {
-      const interval = setInterval(() => {
-        setCurrentSlide((prev) => (prev + 1) % slides.length);
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [isOpen, slides.length]);
 
   const handleWhatsAppContact = () => {
     const number = "201140474129";
@@ -159,7 +253,18 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     );
     onClose();
   };
-// console.log('Welcome Popup Data:', welcomeData);
+
+  // ✅ إضافة loading state
+  if (loading && isOpen) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white dark:bg-darkmode rounded-xl p-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -237,6 +342,8 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                         width={200}
                         height={200}
                         className="w-20 h-20 sm:w-60 sm:h-60 md:w-40 md:h-40 object-contain mx-auto rounded-14"
+                        loading="lazy"
+                        decoding="async"
                       />
                     </div>
 

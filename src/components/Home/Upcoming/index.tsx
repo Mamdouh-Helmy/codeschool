@@ -16,7 +16,7 @@ type WebinarItem = {
   _id?: string;
   title: string;
   date: string;
-  time: string; // 🔥 أضفنا time هنا
+  time: string;
   speakers?: Speaker[];
   instructor?: string;
   instructorImage?: string;
@@ -43,7 +43,6 @@ const getImageInfo = (img?: string | null) => {
   const isLocal = /^\//.test(raw);
   const isGif = /\.gif(\?|#|$)/i.test(raw) || /^data:image\/gif/i.test(raw);
 
-  // heuristic to detect raw base64 string
   const base64Regex = /^[A-Za-z0-9+/=\s]+$/;
   const looksLikeBase64 =
     !isDataUri && !isHttp && !isLocal && raw.length > 100 && base64Regex.test(raw.replace(/\s+/g, ""));
@@ -62,11 +61,9 @@ const getImageInfo = (img?: string | null) => {
   }
 
   if (isLocal) {
-    // local -> use next/image for optimization, except gif (keep animation)
     return { src: raw, useImgTag: isGif, isGif };
   }
 
-  // fallback: assume relative path without leading slash
   const assumed = raw.startsWith("/") ? raw : `/${raw}`;
   const assumedIsGif = /\.gif(\?|#|$)/i.test(assumed);
   return { src: assumed, useImgTag: assumedIsGif, isGif: assumedIsGif };
@@ -83,11 +80,13 @@ const Upcoming = () => {
   const isWebinarUpcoming = (webinar: WebinarItem) => {
     const now = new Date();
     
-    // إنشاء تاريخ الويبنار مع الوقت
-    const webinarDateTime = new Date(`${webinar.date}T${webinar.time}`);
-    
-    // مقارنة التاريخ والوقت مع الوقت الحالي
-    return webinarDateTime > now;
+    try {
+      const webinarDateTime = new Date(`${webinar.date}T${webinar.time || '23:59:59'}`);
+      return webinarDateTime > now;
+    } catch (error) {
+      console.error('Error parsing date:', webinar.date, webinar.time);
+      return false;
+    }
   };
 
   useEffect(() => {
@@ -99,16 +98,12 @@ const Upcoming = () => {
         if (result.success) {
           const webinars = result.data || [];
           
-          // 🔥 فلترة الويبنارات: فقط التي لم تنته بعد
           const upcoming = webinars
             .filter((webinar: WebinarItem) => {
-              // تحقق إذا كان الويبنار له تاريخ ووقت
               if (!webinar.date || !webinar.time) return false;
-              
-              // استخدم الدالة للتحقق
               return isWebinarUpcoming(webinar);
             })
-            .slice(0, 8); // أخذ أول 2 فقط
+            .slice(0, 8);
 
           setUpcomingWebinars(upcoming);
         } else {

@@ -6,7 +6,7 @@ import Header from "@/components/Layout/Header";
 import Footer from "@/components/Layout/Footer";
 
 // تحديد الـ Routes اللي هتتعامل كـ Dashboard
-const DASHBOARD_PREFIXES: string[] = ["/admin"];
+const DASHBOARD_PREFIXES: string[] = ["/admin", "/dashboard"];
 
 interface SiteWrapperProps {
   children: ReactNode;
@@ -15,6 +15,7 @@ interface SiteWrapperProps {
 const SiteWrapper: React.FC<SiteWrapperProps> = ({ children }) => {
   const pathname = usePathname() || "";
 
+  // ✅ استخدام useMemo لتحسين الأداء
   const isDashboardRoute = useMemo((): boolean => {
     return DASHBOARD_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   }, [pathname]);

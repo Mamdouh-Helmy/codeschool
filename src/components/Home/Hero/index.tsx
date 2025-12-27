@@ -1,10 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
-import WebinarRegistrationForm from "./WebinarRegistrationForm"; // سننشئ هذا المكون
+import WebinarRegistrationForm from "./WebinarRegistrationForm";
 
 interface HeroImages {
   imageUrl?: string;
@@ -31,6 +31,15 @@ interface Webinar {
   currentAttendees: number;
 }
 
+// ✅ Cache خارج المكون لمنع إعادة جلب البيانات
+let heroDataCache: {
+  heroImages: HeroImages | null;
+  nextWebinar: Webinar | null;
+  timestamp: number;
+  locale: string;
+} | null = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 دقائق
+
 const Hero = () => {
   const { t } = useI18n();
   const { locale } = useLocale();
@@ -40,36 +49,111 @@ const Hero = () => {
   const [heroImages, setHeroImages] = useState<HeroImages | null>(null);
   const [nextWebinar, setNextWebinar] = useState<Webinar | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // ✅ Refs لمنع race conditions
+  const isMounted = useRef(true);
+  const fetchController = useRef<AbortController | null>(null);
 
- // في الـ Hero component
-useEffect(() => {
-  const fetchData = async () => {
-    try {
-      // جلب بيانات الـ Hero
-      const heroRes = await fetch(`/api/section-images-hero?sectionName=hero-section&activeOnly=true&language=${locale}`);
-      const heroResult = await heroRes.json();
-      if (heroResult.success && heroResult.data.length > 0) {
-        setHeroImages(heroResult.data[0]);
-      }
-
-      // جلب الويبنار القادم
-      const webinarRes = await fetch('/api/webinars/next');
-      const webinarResult = await webinarRes.json();
-      
-      // console.log('Webinar API Response:', webinarResult); 
-      
-      if (webinarResult.success && webinarResult.data) {
-        setNextWebinar(webinarResult.data);
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
+  // ✅ تحسين fetchData مع caching و abort
+  useEffect(() => {
+    isMounted.current = true;
+    
+    // إلغاء أي طلب سابق
+    if (fetchController.current) {
+      fetchController.current.abort();
     }
-  };
+    
+    fetchController.current = new AbortController();
+    const signal = fetchController.current.signal;
 
-  fetchData();
-}, [locale]);
+    const fetchData = async () => {
+      // ✅ التحقق من الـ cache أولاً
+      if (
+        heroDataCache &&
+        Date.now() - heroDataCache.timestamp < CACHE_DURATION &&
+        heroDataCache.locale === locale
+      ) {
+        if (isMounted.current) {
+          setHeroImages(heroDataCache.heroImages);
+          setNextWebinar(heroDataCache.nextWebinar);
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setLoading(true);
+        
+        // ✅ جلب البيانات بالتوازي مع Promise.all
+        const [heroRes, webinarRes] = await Promise.all([
+          fetch(`/api/section-images-hero?sectionName=hero-section&activeOnly=true&language=${locale}`, {
+            signal,
+            cache: 'force-cache', // استخدام cache المتصفح
+            headers: {
+              'Cache-Control': 'max-age=300' // 5 دقائق
+            }
+          }),
+          fetch('/api/webinars/next', {
+            signal,
+            cache: 'force-cache',
+            headers: {
+              'Cache-Control': 'max-age=60' // 1 دقيقة للـ webinars
+            }
+          })
+        ]);
+
+        // ✅ التحقق من الـ abort
+        if (signal.aborted) return;
+
+        const [heroResult, webinarResult] = await Promise.all([
+          heroRes.json(),
+          webinarRes.json()
+        ]);
+
+        if (!isMounted.current) return;
+
+        let heroData: HeroImages | null = null;
+        if (heroResult.success && heroResult.data.length > 0) {
+          heroData = heroResult.data[0];
+        }
+
+        let webinarData: Webinar | null = null;
+        if (webinarResult.success && webinarResult.data) {
+          webinarData = webinarResult.data;
+        }
+
+        // ✅ حفظ في الـ cache
+        heroDataCache = {
+          heroImages: heroData,
+          nextWebinar: webinarData,
+          timestamp: Date.now(),
+          locale
+        };
+
+        setHeroImages(heroData);
+        setNextWebinar(webinarData);
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.log('Fetch aborted');
+          return;
+        }
+        console.error('Error fetching data:', error);
+      } finally {
+        if (isMounted.current) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      isMounted.current = false;
+      if (fetchController.current) {
+        fetchController.current.abort();
+      }
+    };
+  }, [locale]); // ✅ الاعتماد فقط على locale
 
   // استخدام الوصف من API أو الترجمات الافتراضية
   const fullText = heroImages?.heroDescription || t("hero.description");
@@ -99,6 +183,7 @@ useEffect(() => {
     && t("hero.webinar", { date: nextWebinar.formattedDate })
    
 
+  // ✅ تحسين الـ render
   return (
     <section className="dark:bg-darkmode pt-40 md:pt-22">
       <div className="container">
@@ -114,6 +199,7 @@ useEffect(() => {
                 <button
                   onClick={() => setShowRegistration(true)}
                   className="hover:underline cursor-pointer"
+                  disabled={loading}
                 >
                   {webinarText}
                 </button>
@@ -141,6 +227,7 @@ useEffect(() => {
               <button
                 onClick={() => setShowFullText(true)}
                 className="ml-2 text-[#8c52ff] underline font-semibold"
+                disabled={loading}
               >
                 {t("hero.readMore")}
               </button>
@@ -166,68 +253,58 @@ useEffect(() => {
                 data-aos-delay="600"
                 data-aos-duration="1000"
                 className="btn_outline btn-2 hover-outline-slide-down group"
+                disabled={loading}
               >
                 <span className="!flex !items-center gap-14">
                   <i className="bg-[url('/images/hero/calander.svg')] bg-no-repeat bg-contain w-6 h-6 inline-block group-hover:bg-[url('/images/hero/calander-hover-white.svg')] filter brightness-0"></i>
                   {t("hero.watchDemo")}
                 </span>
               </button>
-
-              {/* {nextWebinar && (
-                <button
-                  onClick={() => setShowRegistration(true)}
-                  data-aos="fade-up"
-                  data-aos-delay="700"
-                  data-aos-duration="1000"
-                  className="btn btn-3 bg-[#ffbd59] hover:bg-[#ffa726] text-white rounded-lg overflow-hidden"
-                >
-                  <span className="!flex !items-center gap-14">
-                    <i className="bg-[url('/images/hero/webinar.svg')] bg-no-repeat bg-contain w-6 h-6 inline-block"></i>
-                    {t("hero.registerNow") || "Register Now"}
-                  </span>
-                </button>
-              )} */}
             </div>
           </div>
 
-          {/* باقي الكود بدون تغيير */}
-          <div
-            data-aos="fade-left"
-            data-aos-delay="200"
-            data-aos-duration="1000"
-            className="col-span-6 lg:flex hidden items-center gap-3"
-            dir="ltr"
-          >
-            <div className="bg-[#ffbd59] relative rounded-tl-166 rounded-br-166 w-full" dir="ltr">
-              <img
-                src={getImageSrc(heroImages?.imageUrl, "/images/hero/john.png")}
-                alt={heroImages?.imageAlt || "hero"}
-                width={400}
-                height={500}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-              <div className="bg-[#8c52ff] rounded-22 shadow-hero-box py-4 px-5 absolute top-16 -left-20">
-                <p className="text-lg font-bold text-white">{instructor1Name}</p>
-                <p className="text-base font-medium text-white text-center">{instructor1Role}</p>
+          {/* الصور - فقط إذا لم يكن loading */}
+          {!loading && (
+            <div
+              data-aos="fade-left"
+              data-aos-delay="200"
+              data-aos-duration="1000"
+              className="col-span-6 lg:flex hidden items-center gap-3"
+              dir="ltr"
+            >
+              <div className="bg-[#ffbd59] relative rounded-tl-166 rounded-br-166 w-full" dir="ltr">
+                <img
+                  src={getImageSrc(heroImages?.imageUrl, "/images/hero/john.png")}
+                  alt={heroImages?.imageAlt || "hero"}
+                  width={400}
+                  height={500}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="bg-[#8c52ff] rounded-22 shadow-hero-box py-4 px-5 absolute top-16 -left-20">
+                  <p className="text-lg font-bold text-white">{instructor1Name}</p>
+                  <p className="text-base font-medium text-white text-center">{instructor1Role}</p>
+                </div>
               </div>
-            </div>
 
-            <div className="bg-primary relative rounded-tr-166 rounded-bl-166 w-full mt-32">
-              <img
-                src={getImageSrc(heroImages?.secondImageUrl, "/images/hero/maria.png")}
-                alt={heroImages?.secondImageAlt || "hero"}
-                width={400}
-                height={500}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-              <div className="bg-[#ffbd59] rounded-22 shadow-hero-box py-4 px-5 absolute top-24 -right-20 xl:inline-block hidden">
-                <p className="text-lg font-bold text-white">{instructor2Name}</p>
-                <p className="text-base font-medium text-white text-center">{instructor2Role}</p>
+              <div className="bg-primary relative rounded-tr-166 rounded-bl-166 w-full mt-32">
+                <img
+                  src={getImageSrc(heroImages?.secondImageUrl, "/images/hero/maria.png")}
+                  alt={heroImages?.secondImageAlt || "hero"}
+                  width={400}
+                  height={500}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="bg-[#ffbd59] rounded-22 shadow-hero-box py-4 px-5 absolute top-24 -right-20 xl:inline-block hidden">
+                  <p className="text-lg font-bold text-white">{instructor2Name}</p>
+                  <p className="text-base font-medium text-white text-center">{instructor2Role}</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -255,8 +332,13 @@ useEffect(() => {
           onClose={closeModal}
           onSuccess={() => {
             closeModal();
-            // يمكن إضافة toast message هنا
-            alert("تم التسجيل في الندوة بنجاح!");
+            // تحديث الـ cache بعد التسجيل
+            if (heroDataCache) {
+              heroDataCache.nextWebinar = {
+                ...nextWebinar,
+                currentAttendees: nextWebinar.currentAttendees + 1
+              };
+            }
           }}
         />
       )}
@@ -277,6 +359,7 @@ useEffect(() => {
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 title="Code School Demo"
+                loading="lazy"
               />
             </div>
             <button onClick={closeModal} className="absolute top-3 right-3 text-[#8c52ff] text-xl font-bold hover:opacity-80">×</button>

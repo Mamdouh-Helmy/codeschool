@@ -9,7 +9,7 @@ import NextTopLoader from "nextjs-toploader";
 import SiteWrapper from "./SiteWrapper";
 import WelcomePopupManager from "@/components/Common/WelcomePopupManager";
 import type { ReactNode } from "react";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { LocaleProvider } from "./context/LocaleContext";
 import { I18nProvider } from "@/i18n/I18nProvider";
 import { Toaster } from "react-hot-toast";
@@ -19,11 +19,13 @@ const dmsans = DM_Sans({ subsets: ["latin"] });
 export default async function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
-  const cookieStore = await cookies();
-  const initialLocale =
-    (cookieStore.get("app_locale")?.value === "ar" ? "ar" : "en") as
-      | "en"
-      | "ar";
+  // ✅ استخدام headers بدل cookies (أخف على الأداء)
+  const headersList = await headers();
+  const cookieHeader = headersList.get("cookie") || "";
+  
+  // استخراج locale من الـ cookie string
+  const localeMatch = cookieHeader.match(/app_locale=([^;]+)/);
+  const initialLocale = (localeMatch?.[1] === "ar" ? "ar" : "en") as "en" | "ar";
 
   const dir = initialLocale === "ar" ? "rtl" : "ltr";
 
@@ -44,7 +46,11 @@ export default async function RootLayout({
                   defaultTheme="system"
                 >
                   <Aoscompo>
-                    <NextTopLoader />
+                    <NextTopLoader 
+                      color="#2563eb"
+                      height={3}
+                      showSpinner={false}
+                    />
 
                     <SiteWrapper>
                       <Toaster

@@ -167,6 +167,9 @@ const BoxSlider = () => {
     }
     
     if (webinarDate < today) return "past";
+    
+    // إذا كان يوم مستقبلي وليس فيه webinar
+    if (!hasWebinar) return "future-no-webinar";
     return "soon";
   };
 
@@ -261,7 +264,7 @@ const BoxSlider = () => {
               boxClasses = "bg-IcyBreeze dark:bg-darklight border-2 border-primary shadow-lg";
               dayClasses = "text-primary";
               dateClasses = "text-primary";
-            } else if (status === "soon" && !dayData.hasWebinar) {
+            } else if (status === "future-no-webinar") {
               // 🔥 إذا كان يوم مستقبلي وليس فيه webinar
               boxClasses = "bg-gray-300 dark:bg-gray-700 opacity-90 cursor-default";
               dayClasses = "text-gray-500";

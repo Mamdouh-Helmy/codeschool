@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Image from "next/image";
 import { Project } from "@/lib/types";
 
@@ -7,15 +7,25 @@ interface ProjectModalProps {
   project: Project;
   isOpen: boolean;
   onClose: () => void;
-  isOwner?: boolean; // For download button visibility
+  isOwner?: boolean;
 }
 
 const ProjectModal = ({ project, isOpen, onClose, isOwner = false }: ProjectModalProps) => {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  if (!isOpen) return null;
+  // ✅ تنظيف الفيديو عند إغلاق المودال
+  useEffect(() => {
+    if (!isOpen) {
+      setIsVideoPlaying(false);
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      }
+    }
+  }, [isOpen]);
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     if (project.projectType === 'image' && project.content.imageUrl) {
       const link = document.createElement('a');
       link.href = project.content.imageUrl;
@@ -24,14 +34,15 @@ const ProjectModal = ({ project, isOpen, onClose, isOwner = false }: ProjectModa
       link.click();
       document.body.removeChild(link);
     }
-  };
+  }, [project]);
 
-  const handlePortfolioClick = () => {
+  const handlePortfolioClick = useCallback(() => {
     if (project.content.portfolioUrl) {
       window.open(project.content.portfolioUrl, '_blank');
     }
-  };
+  }, [project]);
 
+  // ✅ Memoized video resolver
   const resolvedVideo = useMemo(() => {
     if (project.projectType !== 'video' || !project.content.videoUrl) return null;
     const url = project.content.videoUrl;
@@ -48,22 +59,42 @@ const ProjectModal = ({ project, isOpen, onClose, isOwner = false }: ProjectModa
     return { type: 'file', src: url } as const;
   }, [project]);
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
+  // ✅ تحسين تشغيل الفيديو
   useEffect(() => {
     if (project.projectType === 'video' && resolvedVideo && resolvedVideo.type === 'file' && isVideoPlaying && videoRef.current) {
       const v = videoRef.current;
-      v.muted = false;
+      v.muted = true; // ✅ البدء muted لتجنب مشاكل autoplay
       v.loop = true;
-      v.play().catch(() => {
-        // Fallback: some browsers block autoplay with sound; try muted autoplay then unmute
-        v.muted = true;
-        v.play().then(() => setTimeout(() => { v.muted = false; }, 500));
-      });
+      
+      const playPromise = v.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            // ✅ محاولة unmute بعد التشغيل
+            setTimeout(() => {
+              if (v) v.muted = false;
+            }, 1000);
+          })
+          .catch((error) => {
+            console.error("Video playback failed:", error);
+          });
+      }
     }
   }, [isVideoPlaying, project, resolvedVideo]);
 
-  const renderContent = () => {
+  // ✅ إغلاق المودال عند الضغط على ESC
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
+  const renderContent = useCallback(() => {
     switch (project.projectType) {
       case 'video':
         return (
@@ -77,6 +108,7 @@ const ProjectModal = ({ project, isOpen, onClose, isOwner = false }: ProjectModa
                   controls
                   autoPlay
                   playsInline
+                  preload="metadata"
                 />
               ) : (
                 <iframe
@@ -85,6 +117,7 @@ const ProjectModal = ({ project, isOpen, onClose, isOwner = false }: ProjectModa
                   allow="autoplay; fullscreen"
                   allowFullScreen
                   title={project.title}
+                  loading="lazy"
                 />
               ))
             ) : (
@@ -94,10 +127,12 @@ const ProjectModal = ({ project, isOpen, onClose, isOwner = false }: ProjectModa
                   alt={project.title}
                   fill
                   className="object-cover rounded-lg"
+                  sizes="(max-width: 768px) 100vw, 800px"
                 />
                 <button
                   onClick={() => setIsVideoPlaying(true)}
                   className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors duration-200 rounded-lg"
+                  aria-label="Play video"
                 >
                   <div className="w-20 h-20 bg-white/90 rounded-full flex items-center justify-center hover:scale-110 transition-transform duration-200">
                     <svg className="w-8 h-8 text-primary ml-1" fill="currentColor" viewBox="0 0 24 24">
@@ -118,6 +153,7 @@ const ProjectModal = ({ project, isOpen, onClose, isOwner = false }: ProjectModa
               alt={project.content.imageAlt || project.title}
               fill
               className="object-contain rounded-lg"
+              sizes="(max-width: 768px) 100vw, 800px"
             />
             {isOwner && (
               <button
@@ -174,21 +210,31 @@ const ProjectModal = ({ project, isOpen, onClose, isOwner = false }: ProjectModa
           </div>
         );
     }
-  };
+  }, [project, isVideoPlaying, resolvedVideo, isOwner, handleDownload, handlePortfolioClick]);
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-darkmode rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white dark:bg-darkmode rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-4">
-            <Image
-              src={project.studentImage || "/images/students/default.jpg"}
-              alt={project.studentName}
-              width={50}
-              height={50}
-              className="rounded-full"
-            />
+            <div className="w-12 h-12 relative">
+              <Image
+                src={project.studentImage || "/images/students/default.jpg"}
+                alt={project.studentName}
+                fill
+                className="rounded-full object-cover"
+                sizes="48px"
+              />
+            </div>
             <div>
               <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white">
                 {project.title}
@@ -201,6 +247,7 @@ const ProjectModal = ({ project, isOpen, onClose, isOwner = false }: ProjectModa
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl font-bold"
+            aria-label="Close modal"
           >
             ×
           </button>

@@ -1,24 +1,34 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import WelcomePopup from "./WelcomePopup";
 
 const WelcomePopupManager = () => {
     const [showWelcomePopup, setShowWelcomePopup] = useState(false);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
+        // ✅ استخدام requestAnimationFrame بدل setTimeout لتحسين الأداء
+        const checkAndShowPopup = () => {
+            const isHomePage = window.location.pathname === "/";
+            const hasSeenPopup = sessionStorage.getItem("welcomePopupSeen");
 
-        const isHomePage = window.location.pathname === "/";
-        const hasSeenPopup = sessionStorage.getItem("welcomePopupSeen");
+            if (isHomePage && !hasSeenPopup) {
+                timerRef.current = setTimeout(() => {
+                    setShowWelcomePopup(true);
+                    sessionStorage.setItem("welcomePopupSeen", "true");
+                }, 2000);
+            }
+        };
 
-        if (isHomePage && !hasSeenPopup) {
+        // ✅ تأخير التنفيذ قليلاً لمنع التأثير على التحميل الأولي
+        const delayedCheck = setTimeout(checkAndShowPopup, 100);
 
-            const timer = setTimeout(() => {
-                setShowWelcomePopup(true);
-                sessionStorage.setItem("welcomePopupSeen", "true");
-            }, 2000);
-
-            return () => clearTimeout(timer);
-        }
+        return () => {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current);
+            }
+            clearTimeout(delayedCheck);
+        };
     }, []);
 
     const handleCloseWelcomePopup = () => {

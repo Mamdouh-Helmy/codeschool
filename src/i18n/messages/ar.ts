@@ -2210,6 +2210,8 @@ const ar = {
   "blogForm.imageRequirements": "متطلبات الصورة",
   "blogForm.changeImage": "تغيير الصورة",
   "blogForm.removeImage": "حذف الصورة",
+
+  "highlight.slides.studentProjects": "مشاريع الطلاب",
 };
 
 export default ar;

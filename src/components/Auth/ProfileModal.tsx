@@ -1,11 +1,14 @@
-// components/Profile/ProfileModal.jsx
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { signOut } from "next-auth/react";
 import toast, { Toaster } from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 
 const DEFAULT_AVATAR = "/images/default-avatar.jpg";
+
+// ✅ Cache خارج المكون
+const profileCache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 دقائق
 
 type Props = {
   onClose?: () => void;
@@ -67,13 +70,49 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
   const [qrCode, setQrCode] = useState("");
   const { t } = useI18n();
 
+  // ✅ Refs لمنع memory leaks
+  const isMounted = useRef(true);
+  const qrGenerationTimeout = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
+    isMounted.current = true;
+    
+    return () => {
+      isMounted.current = false;
+      if (qrGenerationTimeout.current) {
+        clearTimeout(qrGenerationTimeout.current);
+      }
+    };
+  }, []);
+
+  // ✅ تحسين useEffect مع cleanup
+  useEffect(() => {
+    let isSubscribed = true;
+    const controller = new AbortController();
+
     const fetchUser = async () => {
       try {
         const token =
           typeof window !== "undefined" ? localStorage.getItem("token") : null;
         if (!token) {
-          toast.error(t("auth.validation.required"));
+          if (isSubscribed) {
+            toast.error(t("auth.validation.required"));
+          }
+          return;
+        }
+
+        // ✅ التحقق من الـ cache أولاً
+        const cacheKey = `user_${token.substring(0, 20)}`;
+        const cachedData = profileCache.get(cacheKey);
+        
+        if (cachedData && Date.now() - cachedData.timestamp < CACHE_DURATION) {
+          if (isSubscribed) {
+            setUserData(cachedData.data);
+            setName(cachedData.data.name || "");
+            setEmail(cachedData.data.email || t("common.none"));
+            setImagePreview(cachedData.data.image || null);
+            setQrCode(cachedData.data.qrCode || "");
+          }
           return;
         }
 
@@ -83,34 +122,54 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          signal: controller.signal,
         });
 
         const data = await res.json();
-        if (res.ok && data.success) {
-          setUserData(data.user);
-          setName(data.user.name || "");
-          setEmail(data.user.email || t("common.none"));
-          setImagePreview(data.user.image || null);
-          setQrCode(data.user.qrCode || "");
-        } else {
-          if (res.status === 401) {
-            toast.error(t("profile.sessionExpired"));
-            localStorage.removeItem("token");
-            onClose && onClose();
+        if (isSubscribed) {
+          if (res.ok && data.success) {
+            // ✅ حفظ في الـ cache
+            profileCache.set(cacheKey, {
+              data: data.user,
+              timestamp: Date.now()
+            });
+            
+            setUserData(data.user);
+            setName(data.user.name || "");
+            setEmail(data.user.email || t("common.none"));
+            setImagePreview(data.user.image || null);
+            setQrCode(data.user.qrCode || "");
           } else {
-            toast.error(data?.message || t("common.error"));
+            if (res.status === 401) {
+              toast.error(t("profile.sessionExpired"));
+              localStorage.removeItem("token");
+              if (onClose) onClose();
+            } else {
+              toast.error(data?.message || t("common.error"));
+            }
           }
         }
       } catch (err) {
-        console.error("Fetch user error:", err);
-        toast.error(t("common.error"));
+        if (err.name !== 'AbortError' && isSubscribed) {
+          console.error("Fetch user error:", err);
+          toast.error(t("common.error"));
+        }
       }
     };
 
     fetchUser();
-  }, [onClose, t]);
+
+    return () => {
+      isSubscribed = false;
+      controller.abort();
+    };
+  }, [onClose]); // ❌ إزالة dependency على 't'
 
   const handleShowQR = async () => {
+    if (qrGenerationTimeout.current) {
+      clearTimeout(qrGenerationTimeout.current);
+    }
+
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -124,34 +183,42 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
         return;
       }
 
-      const response = await fetch("/api/auth/generate-qr", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          userId: userData._id, 
-        }),
-      });
+      // ✅ استخدام debounce لمنع توليد QR متكرر
+      qrGenerationTimeout.current = setTimeout(async () => {
+        try {
+          const response = await fetch("/api/auth/generate-qr", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              userId: userData._id, 
+            }),
+          });
 
-      const data = await response.json();
+          const data = await response.json();
 
-      if (data.success) {
-        setQrCode(data.qrCode);
-        setShowQR(true);
+          if (data.success) {
+            setQrCode(data.qrCode);
+            setShowQR(true);
 
-        const updatedUser = {
-          ...userData,
-          qrCode: data.qrCode,
-          qrCodeData: data.qrData,
-        };
-        setUserData(updatedUser);
-        if (onProfileUpdate) onProfileUpdate(updatedUser);
-      } else {
-        console.error("❌ QR generation failed:", data.message);
-        toast.error(data.message || "فشل توليد QR code");
-      }
+            const updatedUser = {
+              ...userData,
+              qrCode: data.qrCode,
+              qrCodeData: data.qrData,
+            };
+            setUserData(updatedUser);
+            if (onProfileUpdate) onProfileUpdate(updatedUser);
+          } else {
+            console.error("❌ QR generation failed:", data.message);
+            toast.error(data.message || "فشل توليد QR code");
+          }
+        } catch (error) {
+          console.error("💥 Show QR error:", error);
+          toast.error("حدث خطأ أثناء توليد QR code");
+        }
+      }, 300); // debounce 300ms
     } catch (error) {
       console.error("💥 Show QR error:", error);
       toast.error("حدث خطأ أثناء توليد QR code");
@@ -168,10 +235,15 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       return;
     }
 
-    const base64 = await fileToBase64(file);
-    setImagePreview(base64);
-    setImageFile(file);
-    setErrors((prev) => ({ ...prev, image: "" }));
+    try {
+      const base64 = await fileToBase64(file);
+      setImagePreview(base64);
+      setImageFile(file);
+      setErrors((prev) => ({ ...prev, image: "" }));
+    } catch (error) {
+      console.error("Error converting image:", error);
+      toast.error("حدث خطأ في تحويل الصورة");
+    }
   };
 
   const handleChangeName = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -245,7 +317,9 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
         if (res.status === 401) {
           toast.error(t("profile.sessionExpired"));
           localStorage.removeItem("token");
-          onClose && onClose();
+          // ✅ تنظيف الـ cache
+          profileCache.delete(`user_${token.substring(0, 20)}`);
+          if (onClose) onClose();
           await signOut({ callbackUrl: "/" });
           return;
         }
@@ -263,12 +337,18 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
 
       if (onProfileUpdate) onProfileUpdate(updatedUser);
 
+      // ✅ تحديث الـ cache
+      profileCache.set(`user_${token.substring(0, 20)}`, {
+        data: updatedUser,
+        timestamp: Date.now()
+      });
+
       // إعادة تعيين كلمة المرور بعد الحفظ الناجح
       setPassword("");
       setErrors((prev) => ({ ...prev, password: "" }));
 
       setLoading(false);
-      onClose && onClose();
+      if (onClose) onClose();
     } catch (err) {
       console.error("Update error:", err);
       toast.error(t("common.error"));
@@ -283,6 +363,8 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       });
 
       localStorage.removeItem("token");
+      // ✅ تنظيف جميع الـ caches
+      profileCache.clear();
       await signOut({ callbackUrl: "/" });
     } catch (error) {
       console.error("Sign out error:", error);
@@ -342,6 +424,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
                 src={imagePreview || userData?.image || DEFAULT_AVATAR}
                 alt="avatar"
                 className="w-full h-full object-cover"
+                loading="lazy" // ✅ lazy loading للصورة
               />
             </div>
 
@@ -524,6 +607,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
                     src={qrCode}
                     alt="QR Code"
                     className="mx-auto w-48 sm:w-56 border border-gray-200 dark:border-gray-600 rounded-lg"
+                    loading="lazy" // ✅ lazy loading
                   />
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-3 sm:mt-4 px-2">
                     {t("profile.qrInstructions")}

@@ -58,6 +58,10 @@ const Highlight = () => {
     {
       title: t("highlight.slides.graduation"),
       videoUrl: "https://youtube.com/shorts/5N1bYifaCws?si=iy3qO9nS0WXymkM2"
+    },
+    {
+      title: t("highlight.slides.studentProjects") || "مشاريع الطلاب",
+      videoUrl: "https://youtube.com/shorts/Xl6WWxK8HWY?si=vhUt4IfSGuMIVz_j"
     }
   ];
 
@@ -74,9 +78,13 @@ const Highlight = () => {
       title: t("highlight.slides.graduation"),
       videoUrl: "https://youtube.com/shorts/5N1bYifaCws?si=iy3qO9nS0WXymkM2",
     },
+    {
+      title: t("highlight.slides.studentProjects") || "مشاريع الطلاب",
+      videoUrl: "https://youtube.com/shorts/Xl6WWxK8HWY?si=vhUt4IfSGuMIVz_j",
+    },
   ];
 
-  var settings = {
+  const settings = {
     dots: true,
     infinite: true,
     speed: 500,
@@ -89,10 +97,11 @@ const Highlight = () => {
     beforeChange: (current: number, next: number) => setCurrentSlide(next),
     customPaging: (i: number) => (
       <div
-        className={`w-3 h-3 rounded-full transition-all duration-300 ${i === currentSlide
-          ? "bg-primary scale-125"
-          : "bg-primary/30 hover:bg-primary/50"
-          }`}
+        className={`w-3 h-3 rounded-full transition-all duration-300 ${
+          i === currentSlide
+            ? "bg-primary scale-125"
+            : "bg-primary/30 hover:bg-primary/50"
+        }`}
       />
     ),
     appendDots: (dots: React.ReactNode) => (
