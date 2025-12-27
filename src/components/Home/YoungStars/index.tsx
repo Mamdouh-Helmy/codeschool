@@ -40,7 +40,7 @@ const YoungStars = () => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
   const thumbnailsRef = useRef<HTMLDivElement>(null);
-  
+
   // ✅ Refs لتتبع الحالة السابقة
   const hasFetched = useRef(false);
   const isAnimating = useRef(false);
@@ -82,7 +82,7 @@ const YoungStars = () => {
   // ✅ تحسين fetchProjects مع caching
   useEffect(() => {
     if (hasFetched.current) return;
-    
+
     const fetchProjects = async () => {
       try {
         setLoading(true);
@@ -98,9 +98,9 @@ const YoungStars = () => {
         });
 
         clearTimeout(timeoutId);
-        
+
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        
+
         const data = await res.json();
 
         if (data?.success && Array.isArray(data.data)) {
@@ -125,7 +125,7 @@ const YoungStars = () => {
     };
 
     fetchProjects();
-    
+
     return () => {
       // تنظيف عند unmount
       hasFetched.current = false;
@@ -135,7 +135,7 @@ const YoungStars = () => {
   // ✅ تحسين الـ interval مع cleanup
   useEffect(() => {
     if (thumbnails.length === 0 || !activeId || isAnimating.current) return;
-    
+
     const isMobile = window.innerWidth < 768;
     if (!isMobile) {
       if (intervalRef.current) {
@@ -152,15 +152,15 @@ const YoungStars = () => {
 
     intervalRef.current = setInterval(() => {
       if (isAnimating.current || thumbnails.length === 0) return;
-      
+
       isAnimating.current = true;
       const currentIdx = thumbnails.findIndex(p => p._id === activeId);
       const nextIndex = (currentIdx + 1) % thumbnails.length;
-      
+
       // ✅ استخدام batch update لتقليل re-renders
       setActiveId(thumbnails[nextIndex]._id);
       setCurrentIndex(nextIndex);
-      
+
       // ✅ إعادة تعيين flag بعد وقت قصير
       setTimeout(() => {
         isAnimating.current = false;
@@ -221,9 +221,12 @@ const YoungStars = () => {
               id: `animation-${index}`
             }
           });
-          
+
           tl.fromTo(anim.element, anim.from, anim.to);
-          scrollTriggerRef.current.push(tl.scrollTrigger);
+          if (tl.scrollTrigger) {
+            scrollTriggerRef.current.push(tl.scrollTrigger);
+          }
+
         }
       });
 
@@ -245,7 +248,7 @@ const YoungStars = () => {
             }
           }
         );
-        
+
         if (bgAnimation.scrollTrigger) {
           scrollTriggerRef.current.push(bgAnimation.scrollTrigger);
         }
@@ -271,7 +274,7 @@ const YoungStars = () => {
             }
           }
         );
-        
+
         if (thumbnailAnimation.scrollTrigger) {
           scrollTriggerRef.current.push(thumbnailAnimation.scrollTrigger);
         }
@@ -291,9 +294,9 @@ const YoungStars = () => {
     if (!sliderRef.current || !activeId || isAnimating.current) return;
 
     isAnimating.current = true;
-    
+
     gsap.killTweensOf(sliderRef.current);
-    
+
     gsap.fromTo(sliderRef.current,
       {
         scale: 0.95,
@@ -316,9 +319,9 @@ const YoungStars = () => {
   // ✅ handleThumbnailClick مع debounce
   const handleThumbnailClick = useCallback((projectId: string) => {
     if (isAnimating.current || activeId === projectId) return;
-    
+
     isAnimating.current = true;
-    
+
     const clickedThumb = document.querySelector(`[data-thumb="${projectId}"]`);
     if (clickedThumb) {
       gsap.fromTo(clickedThumb,
@@ -331,7 +334,7 @@ const YoungStars = () => {
           onComplete: () => {
             setActiveId(projectId);
             setCurrentIndex(thumbnails.findIndex(p => p._id === projectId));
-            
+
             setTimeout(() => {
               isAnimating.current = false;
             }, 100);
@@ -341,7 +344,7 @@ const YoungStars = () => {
     } else {
       setActiveId(projectId);
       setCurrentIndex(thumbnails.findIndex(p => p._id === projectId));
-      
+
       setTimeout(() => {
         isAnimating.current = false;
       }, 100);
@@ -350,11 +353,11 @@ const YoungStars = () => {
 
   const handleDotClick = useCallback((index: number) => {
     if (isAnimating.current || currentIndex === index) return;
-    
+
     isAnimating.current = true;
     setActiveId(thumbnails[index]._id);
     setCurrentIndex(index);
-    
+
     setTimeout(() => {
       isAnimating.current = false;
     }, 100);
@@ -373,15 +376,15 @@ const YoungStars = () => {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      
+
       // تنظيف الـ ScrollTriggers
       scrollTriggerRef.current.forEach(trigger => trigger.kill());
       scrollTriggerRef.current = [];
-      
+
       // تنظيف الـ refs
       isAnimating.current = false;
       hasFetched.current = false;
-      
+
       // تنظيف GSAP
       gsap.killTweensOf("*");
     };
@@ -467,11 +470,10 @@ const YoungStars = () => {
                 <div key={`thumb-${p._id}`} className="thumbnail-item">
                   <div
                     data-thumb={p._id}
-                    className={`rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-300 transform hover:scale-105 ${
-                      p._id === activeId
+                    className={`rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-300 transform hover:scale-105 ${p._id === activeId
                         ? "border-primary shadow-lg scale-105 ring-2 ring-primary/50"
                         : "border-transparent hover:border-primary/30"
-                    }`}
+                      }`}
                     onClick={() => handleThumbnailClick(p._id)}
                   >
                     {p.image ? (
@@ -507,11 +509,10 @@ const YoungStars = () => {
               <button
                 key={`dot-${index}`}
                 onClick={() => handleDotClick(index)}
-                className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                  index === currentIndex
+                className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentIndex
                     ? 'bg-primary scale-125'
                     : 'bg-gray-300 hover:bg-gray-400'
-                }`}
+                  }`}
                 aria-label={`Go to slide ${index + 1}`}
                 disabled={isAnimating.current}
               />
