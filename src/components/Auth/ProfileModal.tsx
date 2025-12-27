@@ -76,7 +76,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
 
   useEffect(() => {
     isMounted.current = true;
-    
+
     return () => {
       isMounted.current = false;
       if (qrGenerationTimeout.current) {
@@ -104,7 +104,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
         // ✅ التحقق من الـ cache أولاً
         const cacheKey = `user_${token.substring(0, 20)}`;
         const cachedData = profileCache.get(cacheKey);
-        
+
         if (cachedData && Date.now() - cachedData.timestamp < CACHE_DURATION) {
           if (isSubscribed) {
             setUserData(cachedData.data);
@@ -133,7 +133,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
               data: data.user,
               timestamp: Date.now()
             });
-            
+
             setUserData(data.user);
             setName(data.user.name || "");
             setEmail(data.user.email || t("common.none"));
@@ -149,12 +149,20 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
             }
           }
         }
-      } catch (err) {
-        if (err.name !== 'AbortError' && isSubscribed) {
+      } catch (err: unknown) {
+        if (
+          err instanceof DOMException &&
+          err.name === "AbortError"
+        ) {
+          return;
+        }
+
+        if (isSubscribed) {
           console.error("Fetch user error:", err);
           toast.error(t("common.error"));
         }
       }
+
     };
 
     fetchUser();
@@ -193,7 +201,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
               Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({
-              userId: userData._id, 
+              userId: userData._id,
             }),
           });
 
@@ -387,7 +395,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
   return (
     <div className="w-full max-w-lg mx-auto bg-white dark:bg-darklight p-3 sm:p-4 md:p-6">
       <Toaster />
-      
+
       {/* الهيدر */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6">
         <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white text-center sm:text-left">
@@ -415,7 +423,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6" noValidate>
-        
+
         {/* قسم الصورة والمعلومات */}
         <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
           <div className="relative">
@@ -494,9 +502,8 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
               value={name}
               onChange={handleChangeName}
               placeholder={t("auth.name")}
-              className={`w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent px-3 sm:px-4 py-2.5 sm:py-3 text-gray-900 dark:text-white outline-none transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary dark:focus:border-primary text-sm sm:text-base ${
-                errors.name ? "border-red-500" : ""
-              }`}
+              className={`w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent px-3 sm:px-4 py-2.5 sm:py-3 text-gray-900 dark:text-white outline-none transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary dark:focus:border-primary text-sm sm:text-base ${errors.name ? "border-red-500" : ""
+                }`}
             />
             {errors.name && (
               <p className="text-sm text-red-500 mt-1 sm:mt-2">{t(errors.name)}</p>
@@ -512,9 +519,8 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
               value={password}
               onChange={handleChangePassword}
               placeholder={t("auth.newPassword")}
-              className={`w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent px-3 sm:px-4 py-2.5 sm:py-3 text-gray-900 dark:text-white outline-none transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary dark:focus:border-primary text-sm sm:text-base ${
-                errors.password ? "border-red-500" : ""
-              }`}
+              className={`w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent px-3 sm:px-4 py-2.5 sm:py-3 text-gray-900 dark:text-white outline-none transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary dark:focus:border-primary text-sm sm:text-base ${errors.password ? "border-red-500" : ""
+                }`}
             />
             {errors.password && (
               <p className="text-sm text-red-500 mt-1 sm:mt-2">{t(errors.password)}</p>
