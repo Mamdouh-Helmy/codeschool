@@ -92,83 +92,48 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
-  // دالة لإرسال رسالة الترحيب عبر WhatsApp
-  const sendWhatsAppWelcomeMessage = async (studentData) => {
-    try {
-      console.log("📱 Starting WhatsApp welcome message process...");
-      
-      // تنظيف رقم WhatsApp
-      let whatsappNumber = studentData.personalInfo.whatsappNumber.replace(/\s+/g, '');
+ // دالة جديدة لإرسال رسالة الترحيب عبر WhatsApp
+const sendWhatsAppWelcomeMessage = async (studentData) => {
+  try {
+    console.log("📱 Starting WhatsApp welcome message process...");
 
-      // إضافة كود الدولة إذا لم يكن موجوداً
-      if (!whatsappNumber.startsWith('+')) {
-        // التحقق إذا كان الرقم مصري (يبدأ بـ 01)
-        if (whatsappNumber.startsWith('01') && whatsappNumber.length >= 10) {
-          whatsappNumber = '+20' + whatsappNumber.substring(1);
-          console.log("🇪🇬 Detected Egyptian number, added country code: +20");
-        } else if (whatsappNumber.startsWith('1') && whatsappNumber.length >= 10) {
-          // إذا بدأ بـ 1 بدون 0
-          whatsappNumber = '+20' + whatsappNumber;
-          console.log("🇪🇬 Detected Egyptian number (without 0), added country code: +20");
-        } else {
-          // إذا لم نتمكن من التعرف، نتركه كما هو (سيفشل لاحقاً)
-          console.log("⚠️ Could not determine country code, using number as-is");
-        }
-      }
+    // استخدام service مباشرة
+    const { wapilotService } = await import('@/app/services/wapilot-service');
+    
+    console.log("🔍 Wapilot service mode:", wapilotService.mode);
 
-      // التحقق من صحة الرقم النهائي
-      const whatsappRegex = /^\+[1-9]\d{1,14}$/;
-      if (!whatsappRegex.test(whatsappNumber)) {
-        console.error("❌ Invalid WhatsApp number format:", whatsappNumber);
-        toast.error("Invalid WhatsApp number format");
-        return false;
-      }
+    // إرسال الرسالة باستخدام الخدمة
+    const result = await wapilotService.sendCustomWelcomeMessage(
+      studentData.personalInfo.whatsappNumber,
+      studentData.personalInfo.fullName,
+      studentData.communicationPreferences?.preferredLanguage || 'ar'
+    );
 
-      console.log("✅ Cleaned WhatsApp number:", whatsappNumber);
-
-      // اختيار الرسالة بناءً على اللغة المفضلة
-      let welcomeMessage;
-      if (studentData.communicationPreferences.preferredLanguage === 'en') {
-        welcomeMessage = `🎉 Welcome to Code School!\n\nHello ${studentData.personalInfo.fullName},\n\nWe're thrilled to have you join our coding community! 🚀\n\nHere's to an amazing learning journey ahead!\n\nBest regards,\nThe Code School Team 💻✨`;
-      } else {
-        welcomeMessage = `🎉 أهلاً وسهلاً بك في Code School!\n\nمرحباً ${studentData.personalInfo.fullName}،\n\nنحن سعداء جداً بانضمامك إلى مجتمع البرمجة لدينا! 🚀\n\nنتمنى لك رحلة تعلم رائعة وممتعة!\n\nمع أطيب التحيات،\nفريق Code School 💻✨`;
-      }
-
-      console.log("📝 Message to send:", welcomeMessage);
-
-      // إرسال الرسالة عبر API الخاص بنا
-      const response = await fetch('/api/whatsapp/send-welcome', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phoneNumber: whatsappNumber,
-          message: welcomeMessage,
-          studentName: studentData.personalInfo.fullName,
-          studentEmail: studentData.personalInfo.email,
-          language: studentData.communicationPreferences.preferredLanguage
-        }),
+    if (result.success) {
+      console.log('✅ WhatsApp welcome message sent successfully!', {
+        mode: result.mode,
+        simulated: result.simulated
       });
-
-      const result = await response.json();
       
-      if (result.success) {
-        console.log('✅ WhatsApp welcome message sent successfully!');
-        toast.success(`📱 Welcome message sent to ${studentData.personalInfo.fullName}!`);
-        return true;
+      if (result.simulated) {
+        toast.success(`📱 Simulation: Welcome message prepared for ${studentData.personalInfo.fullName}! (Not sent in simulation)`);
       } else {
-        console.warn('⚠️ WhatsApp message sending failed:', result.message);
-        toast.error(`Failed to send WhatsApp message: ${result.message}`);
-        return false;
+        toast.success(`✅ WhatsApp sent to ${studentData.personalInfo.fullName}!`);
       }
-      
-    } catch (error) {
-      console.error('❌ Error sending WhatsApp message:', error);
-      toast.error('Error sending WhatsApp message');
+      return true;
+    } else {
+      console.warn('⚠️ WhatsApp message sending failed:', result.message);
+      toast.error(`Failed to send WhatsApp message: ${result.message}`);
       return false;
     }
-  };
+
+  } catch (error) {
+    console.error('❌ Error sending WhatsApp message:', error);
+    toast.error('Error sending WhatsApp message');
+    return false;
+  }
+};
+
 
   // جلب جميع الطلاب عند تحميل المكون
   useEffect(() => {
@@ -378,8 +343,8 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     }
 
     setLoading(true);
-    const toastId = toast.loading(selectedStudent ? 
-      t("studentForm.updating") : 
+    const toastId = toast.loading(selectedStudent ?
+      t("studentForm.updating") :
       t("studentForm.creating"));
 
     try {
@@ -448,11 +413,11 @@ export default function StudentForm({ initial, onClose, onSaved }) {
           : t("students.createdSuccess");
 
         toast.success(successMessage, { id: toastId });
-        
+
         // 🔥 إرسال رسالة الترحيب عبر WhatsApp فوراً للطلاب الجدد
         if (!selectedStudent || selectedStudent.isManual) {
           console.log("📱 Preparing to send WhatsApp welcome message...");
-          
+
           // استخدام setTimeout لإرسال الرسالة بعد تأخير بسيط
           setTimeout(async () => {
             try {
@@ -465,7 +430,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
             }
           }, 1500);
         }
-        
+
         onSaved();
         onClose();
       } else {

@@ -1,149 +1,138 @@
 import { NextResponse } from 'next/server';
-
-// يمكنك استبدال هذه الدالة بخدمة الواتساب التي تستخدمها
-async function sendWhatsAppMessage(phoneNumber, message) {
-  try {
-    // هنا يمكنك استخدام أي خدمة WhatsApp مثل:
-    // 1. Twilio
-    // 2. WhatsApp Business API
-    // 3. أي خدمة أخرى
-    
-    // مثال باستخدام Twilio (افتراضي)
-    if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-      const twilioResponse = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Basic ' + Buffer.from(
-              `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
-            ).toString('base64'),
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            From: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER || '+14155238886'}`,
-            To: `whatsapp:${phoneNumber}`,
-            Body: message
-          })
-        }
-      );
-      
-      return await twilioResponse.json();
-    }
-    
-    // إذا لم يتم تكوين Twilio، نستخدم محاكاة للاختبار
-    console.log('📱 Simulating WhatsApp message to:', phoneNumber);
-    console.log('📝 Message:', message);
-    
-    return { 
-      success: true, 
-      sid: 'simulated_' + Date.now(),
-      status: 'sent',
-      message: 'Message simulated (configure WhatsApp service for real sending)'
-    };
-    
-  } catch (error) {
-    console.error('Error in WhatsApp service:', error);
-    throw error;
-  }
-}
+import { wapilotService } from '@/app/services/wapilot-service';
+import { requireAdmin } from '@/utils/authMiddleware';
 
 export async function POST(req) {
   try {
-    const { phoneNumber, message, studentName, studentEmail, language } = await req.json();
+    console.log('📱 WhatsApp welcome message endpoint called');
+    
+    // التحقق من صلاحية الأدمن
+    const authCheck = await requireAdmin(req);
+    if (!authCheck.authorized) {
+      console.log('❌ Admin authorization failed for WhatsApp API');
+      return authCheck.response;
+    }
 
-    console.log('📱 WhatsApp API called with:', {
-      phoneNumber,
-      studentName,
-      studentEmail,
-      language,
-      messageLength: message.length
+    const body = await req.json();
+    const { phoneNumber, message, studentName, studentEmail, language } = body;
+
+    // التحقق من البيانات
+    if (!phoneNumber) {
+      return NextResponse.json(
+        { success: false, message: 'Phone number is required' },
+        { status: 400 }
+      );
+    }
+
+    // التحقق من حالة الخدمة
+    const serviceStatus = await wapilotService.getServiceStatus();
+    console.log('🔍 WhatsApp service status:', serviceStatus);
+
+    let result;
+    
+    if (studentName) {
+      // إرسال رسالة ترحيب مخصصة
+      result = await wapilotService.sendCustomWelcomeMessage(
+        phoneNumber, 
+        studentName, 
+        language || 'ar'
+      );
+    } else if (message) {
+      // إرسال رسالة نصية مخصصة
+      result = await wapilotService.sendCustomMessage(phoneNumber, message);
+    } else {
+      return NextResponse.json(
+        { success: false, message: 'Either message or studentName is required' },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'WhatsApp message sent successfully',
+      data: {
+        studentName,
+        studentEmail,
+        phoneNumber,
+        language,
+        mode: serviceStatus.mode,
+        messageId: result.messageId,
+        sentAt: new Date().toISOString(),
+        simulated: result.simulated || false
+      }
     });
 
-    // التحقق من البيانات المطلوبة
-    if (!phoneNumber || !message) {
-      return NextResponse.json({
-        success: false,
-        message: 'Phone number and message are required'
-      }, { status: 400 });
-    }
-
-    // تنظيف وتنسيق رقم الهاتف
-    const cleanPhoneNumber = phoneNumber.trim();
-    
-    // التحقق من صحة الرقم
-    const phoneRegex = /^\+[1-9]\d{1,14}$/;
-    if (!phoneRegex.test(cleanPhoneNumber)) {
-      return NextResponse.json({
-        success: false,
-        message: 'Invalid phone number format',
-        providedNumber: cleanPhoneNumber,
-        expectedFormat: 'International format starting with +'
-      }, { status: 400 });
-    }
-
-    // إرسال الرسالة
-    console.log('🚀 Sending WhatsApp message to:', cleanPhoneNumber);
-    const result = await sendWhatsAppMessage(cleanPhoneNumber, message);
-
-    // تسجيل النتيجة
-    const logData = {
-      timestamp: new Date().toISOString(),
-      studentName,
-      studentEmail,
-      phoneNumber: cleanPhoneNumber,
-      language,
-      messageLength: message.length,
-      result: result.success ? 'sent' : 'failed',
-      details: result
-    };
-
-    console.log('📝 WhatsApp message log:', logData);
-
-    if (result.success || result.sid) {
-      return NextResponse.json({
-        success: true,
-        message: 'WhatsApp welcome message sent successfully',
-        data: {
-          studentName,
-          phoneNumber: cleanPhoneNumber,
-          language,
-          timestamp: new Date().toISOString(),
-          messagePreview: message.substring(0, 50) + '...',
-          serviceResponse: result
-        }
-      });
-    } else {
-      return NextResponse.json({
-        success: false,
-        message: 'Failed to send WhatsApp message',
-        error: result.error || result.message || 'Unknown error',
-        details: result
-      }, { status: 500 });
-    }
-
   } catch (error) {
-    console.error('❌ Error in WhatsApp API:', error);
-    
-    return NextResponse.json({
-      success: false,
-      message: 'Internal server error while sending WhatsApp message',
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    }, { status: 500 });
+    console.error('❌ Error in WhatsApp endpoint:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        message: 'Failed to send WhatsApp message',
+        error: error.message 
+      },
+      { status: 500 }
+    );
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    success: true,
-    message: 'WhatsApp API is running',
-    endpoints: {
-      POST: '/api/whatsapp/send-welcome'
-    },
-    configuration: {
-      hasTwilio: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-      environment: process.env.NODE_ENV
+// GET: التحقق من حالة الخدمة
+export async function GET(req) {
+  try {
+    // التحقق من صلاحية الأدمن
+    const authCheck = await requireAdmin(req);
+    if (!authCheck.authorized) {
+      return authCheck.response;
     }
-  });
+
+    const status = await wapilotService.getServiceStatus();
+    
+    return NextResponse.json({
+      success: true,
+      data: status,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error checking service status:', error);
+    return NextResponse.json(
+      { success: false, message: 'Failed to check service status' },
+      { status: 500 }
+    );
+  }
+}
+
+// 🔥 POST: اختبار مباشر
+export async function PUT(req) {
+  try {
+    const authCheck = await requireAdmin(req);
+    if (!authCheck.authorized) {
+      return authCheck.response;
+    }
+
+    const body = await req.json();
+    const { phoneNumber, testMessage } = body;
+
+    if (!phoneNumber) {
+      return NextResponse.json(
+        { success: false, message: 'Phone number required for test' },
+        { status: 400 }
+      );
+    }
+
+    const result = await wapilotService.directTest(
+      phoneNumber, 
+      testMessage || '🧪 Test message from Code School WhatsApp API'
+    );
+
+    return NextResponse.json({
+      success: result.success,
+      message: result.success ? 'Test completed successfully' : 'Test failed',
+      data: result
+    });
+  } catch (error) {
+    console.error('❌ Error in test endpoint:', error);
+    return NextResponse.json(
+      { success: false, message: 'Test failed', error: error.message },
+      { status: 500 }
+    );
+  }
 }

@@ -9,11 +9,16 @@ import mongoose from 'mongoose';
 export async function POST(req) {
   try {
     console.log('🚀 Starting student creation process...');
+    console.log('🔍 Environment check:', {
+      WHATSAPP_API_TOKEN: process.env.WHATSAPP_API_TOKEN ? 'Configured' : 'Not configured',
+      WHATSAPP_INSTANCE_ID: process.env.WHATSAPP_INSTANCE_ID || 'Not set',
+      NODE_ENV: process.env.NODE_ENV || 'development'
+    });
 
     // التحقق من صلاحية الأدمن
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
-      console.log('❌ Admin authorization failed Retrn');
+      console.log('❌ Admin authorization failed Return');
       return authCheck.response;
     }
 
@@ -114,6 +119,14 @@ export async function POST(req) {
     const enrollmentNumber = await generateEnrollmentNumber();
     console.log('✅ Enrollment number generated:', enrollmentNumber);
 
+    // 🔥 تحديد وضع WhatsApp بناءً على وجود Token
+    const whatsappMode = process.env.WHATSAPP_API_TOKEN ? 'production' : 'simulation';
+    console.log('📱 WhatsApp Mode determined:', {
+      mode: whatsappMode,
+      hasToken: !!process.env.WHATSAPP_API_TOKEN,
+      hasInstanceId: !!process.env.WHATSAPP_INSTANCE_ID
+    });
+
     // إنشاء سجل الطالب
     console.log('📝 Creating student record...');
     const newStudent = new Student({
@@ -123,7 +136,11 @@ export async function POST(req) {
         createdBy: adminUser.id,
         lastModifiedBy: adminUser.id,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        whatsappWelcomeSent: false,
+        whatsappStatus: 'pending',
+        // 🔥 التعديل الهام: تحديد الوضع بناءً على وجود Token
+        whatsappMode: whatsappMode
       }
     });
 
@@ -134,22 +151,102 @@ export async function POST(req) {
 
     // 🔥 **تنفيذ WhatsApp Automation (بشكل غير متزامن)**
     console.log('📱 Triggering WhatsApp automation...');
-    
+    console.log('📊 Automation details:', {
+      studentId: savedStudent._id,
+      whatsappNumber: savedStudent.personalInfo.whatsappNumber,
+      mode: whatsappMode,
+      willSend: whatsappMode === 'production'
+    });
+
     // تشغيل الاتوميشن في الخلفية دون انتظار
     setTimeout(async () => {
       try {
         console.log('🔄 Starting WhatsApp automation in background...');
         
-        // استيراد ديناميكي لتجنب التبعيات الدائرية
-        const { whatsappService } = await import('@/app/services/whatsappService');
-        const whatsappResult = await whatsappService.sendWelcomeMessage(savedStudent);
+        // استيراد خدمة wapilot
+        const { wapilotService } = await import('@/app/services/wapilot-service');
         
-        console.log('✅ WhatsApp automation completed:', whatsappResult);
+        console.log('🔧 Wapilot service loaded, mode:', wapilotService.mode);
+        
+        // إرسال رسالة الترحيب (عربي + إنجليزي)
+        const whatsappResult = await wapilotService.sendWelcomeMessage(savedStudent);
+        
+        console.log('📦 WhatsApp automation result:', whatsappResult);
+        
+        if (whatsappResult.success) {
+          console.log('✅ WhatsApp automation completed successfully:', {
+            studentName: savedStudent.personalInfo.fullName,
+            whatsappNumber: whatsappResult.whatsappNumber,
+            mode: whatsappResult.simulated ? 'SIMULATION' : 'PRODUCTION',
+            messageId: whatsappResult.messageId,
+            serviceMode: wapilotService.mode
+          });
+          
+          // تحديث سجل الطالب بإشارة أن الرسالة أرسلت
+          try {
+            await Student.findByIdAndUpdate(savedStudent._id, {
+              $set: {
+                'metadata.whatsappWelcomeSent': true,
+                'metadata.whatsappSentAt': new Date(),
+                'metadata.whatsappMessageId': whatsappResult.messageId,
+                'metadata.whatsappStatus': 'sent',
+                'metadata.whatsappMode': whatsappResult.simulated ? 'simulation' : 'production'
+              }
+            });
+            console.log('✅ Student record updated with WhatsApp info');
+          } catch (updateError) {
+            console.error('❌ Error updating student record:', updateError);
+          }
+          
+        } else if (whatsappResult.skipped) {
+          console.log('⚠️ WhatsApp automation skipped:', whatsappResult.reason);
+          
+          try {
+            await Student.findByIdAndUpdate(savedStudent._id, {
+              $set: {
+                'metadata.whatsappWelcomeSent': false,
+                'metadata.whatsappStatus': 'skipped',
+                'metadata.whatsappSkipReason': whatsappResult.reason
+              }
+            });
+          } catch (updateError) {
+            console.error('❌ Error updating student record:', updateError);
+          }
+          
+        } else {
+          console.warn('⚠️ WhatsApp automation failed:', whatsappResult);
+          
+          try {
+            await Student.findByIdAndUpdate(savedStudent._id, {
+              $set: {
+                'metadata.whatsappWelcomeSent': false,
+                'metadata.whatsappStatus': 'failed',
+                'metadata.whatsappError': whatsappResult.reason || 'Unknown error'
+              }
+            });
+          } catch (updateError) {
+            console.error('❌ Error updating student record:', updateError);
+          }
+        }
         
       } catch (automationError) {
         console.error('❌ WhatsApp automation failed:', automationError);
+        
+        // تسجيل الخطأ في سجل الطالب
+        try {
+          await Student.findByIdAndUpdate(savedStudent._id, {
+            $set: {
+              'metadata.whatsappWelcomeSent': false,
+              'metadata.whatsappStatus': 'error',
+              'metadata.whatsappError': automationError.message,
+              'metadata.whatsappErrorAt': new Date()
+            }
+          });
+        } catch (updateError) {
+          console.error('❌ Error updating student record:', updateError);
+        }
       }
-    }, 0);
+    }, 2000); // تأخير 2 ثانية لضمان اكتمال حفظ الطالب
 
     // إرجاع الاستجابة الناجحة
     return NextResponse.json({
@@ -165,12 +262,17 @@ export async function POST(req) {
           email: savedStudent.personalInfo.email,
           status: savedStudent.enrollmentInfo.status,
           whatsappNumber: savedStudent.personalInfo.whatsappNumber,
-          hasUserAccount: !!cleanData.authUserId
+          hasUserAccount: !!cleanData.authUserId,
+          language: 'Dual (Arabic + English)'
         },
-        automation: {
+        whatsappAutomation: {
           triggered: true,
-          message: 'WhatsApp welcome automation has been triggered in background',
-          note: 'Check server logs for automation results'
+          status: 'processing',
+          note: 'Dual-language WhatsApp welcome message is being sent in background',
+          mode: whatsappMode,
+          willSend: whatsappMode === 'production',
+          features: ['arabic', 'english', 'auto-number-formatting'],
+          estimatedTime: '5-10 seconds'
         }
       }
     }, { status: 201 });
@@ -243,6 +345,7 @@ export async function GET(req) {
     const search = searchParams.get('search');
     const level = searchParams.get('level');
     const source = searchParams.get('source');
+    const whatsappStatus = searchParams.get('whatsappStatus');
 
     // بناء استعلام البحث
     const query = { isDeleted: false };
@@ -257,6 +360,10 @@ export async function GET(req) {
 
     if (source) {
       query['enrollmentInfo.source'] = source;
+    }
+
+    if (whatsappStatus) {
+      query['metadata.whatsappStatus'] = whatsappStatus;
     }
 
     if (search) {
@@ -293,14 +400,29 @@ export async function GET(req) {
       enrollmentInfo: student.enrollmentInfo,
       academicInfo: student.academicInfo,
       communicationPreferences: student.communicationPreferences,
+      metadata: student.metadata,
       createdAt: student.metadata.createdAt,
       createdBy: student.metadata.createdBy,
-      authUserId: student.authUserId
+      authUserId: student.authUserId,
+      whatsappStatus: student.metadata?.whatsappStatus || 'pending',
+      whatsappSentAt: student.metadata?.whatsappSentAt,
+      whatsappMessageId: student.metadata?.whatsappMessageId,
+      whatsappMode: student.metadata?.whatsappMode || 'simulation'
     }));
+
+    // 🔥 إضافة إحصائيات WhatsApp
+    const whatsappStats = {
+      total: totalStudents,
+      sent: await Student.countDocuments({ ...query, 'metadata.whatsappStatus': 'sent' }),
+      pending: await Student.countDocuments({ ...query, 'metadata.whatsappStatus': 'pending' }),
+      failed: await Student.countDocuments({ ...query, 'metadata.whatsappStatus': 'failed' }),
+      error: await Student.countDocuments({ ...query, 'metadata.whatsappStatus': 'error' })
+    };
 
     return NextResponse.json({
       success: true,
       data: formattedStudents,
+      whatsappStats,
       pagination: {
         page,
         limit,
@@ -575,6 +697,111 @@ export async function DELETE(req, { params }) {
         error: error.message,
         ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
       },
+      { status: 500 }
+    );
+  }
+}
+
+// 🔥 POST: إعادة إرسال رسالة WhatsApp
+export async function PATCH(req, { params }) {
+  try {
+    console.log(`🔄 Resending WhatsApp message for student: ${params.id}`);
+    
+    // التحقق من صلاحية الأدمن
+    const authCheck = await requireAdmin(req);
+    if (!authCheck.authorized) {
+      console.log('❌ Admin authorization failed');
+      return authCheck.response;
+    }
+
+    await connectDB();
+
+    const { id } = params;
+
+    // التحقق من صحة معرف MongoDB
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid student ID format' },
+        { status: 400 }
+      );
+    }
+
+    // التحقق من وجود الطالب
+    const student = await Student.findOne({ _id: id, isDeleted: false });
+    if (!student) {
+      return NextResponse.json(
+        { success: false, message: 'Student not found' },
+        { status: 404 }
+      );
+    }
+
+    // تحديث حالة الطالب إلى قيد المعالجة
+    await Student.findByIdAndUpdate(id, {
+      $set: {
+        'metadata.whatsappStatus': 'pending',
+        'metadata.whatsappError': null,
+        'metadata.updatedAt': new Date()
+      }
+    });
+
+    // 🔥 تشغيل WhatsApp automation في الخلفية
+    setTimeout(async () => {
+      try {
+        console.log('🔄 Starting WhatsApp resend in background...');
+        
+        const { wapilotService } = await import('@/app/services/wapilot-service');
+        const whatsappResult = await wapilotService.sendWelcomeMessage(student);
+        
+        if (whatsappResult.success) {
+          console.log('✅ WhatsApp message resent successfully');
+          
+          await Student.findByIdAndUpdate(id, {
+            $set: {
+              'metadata.whatsappWelcomeSent': true,
+              'metadata.whatsappSentAt': new Date(),
+              'metadata.whatsappMessageId': whatsappResult.messageId,
+              'metadata.whatsappStatus': 'sent',
+              'metadata.whatsappMode': whatsappResult.simulated ? 'simulation' : 'production'
+            }
+          });
+        } else {
+          console.warn('⚠️ WhatsApp resend failed:', whatsappResult);
+          
+          await Student.findByIdAndUpdate(id, {
+            $set: {
+              'metadata.whatsappStatus': 'failed',
+              'metadata.whatsappError': whatsappResult.reason || 'Unknown error'
+            }
+          });
+        }
+      } catch (error) {
+        console.error('❌ WhatsApp resend error:', error);
+        
+        await Student.findByIdAndUpdate(id, {
+          $set: {
+            'metadata.whatsappStatus': 'error',
+            'metadata.whatsappError': error.message
+          }
+        });
+      }
+    }, 1000);
+
+    return NextResponse.json({
+      success: true,
+      message: 'WhatsApp message resend triggered successfully',
+      data: {
+        studentId: student._id,
+        studentName: student.personalInfo.fullName,
+        whatsappNumber: student.personalInfo.whatsappNumber,
+        status: 'resending',
+        estimatedTime: '5-10 seconds'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error resending WhatsApp:', error);
+    return NextResponse.json(
+      { success: false, message: 'Failed to resend WhatsApp message', error: error.message },
       { status: 500 }
     );
   }

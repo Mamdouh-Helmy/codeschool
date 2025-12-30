@@ -165,6 +165,36 @@ const StudentSchema = new mongoose.Schema({
     lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
+    },
+    // حقول جديدة لتتبع WhatsApp
+    whatsappWelcomeSent: {
+      type: Boolean,
+      default: false
+    },
+    whatsappSentAt: {
+      type: Date
+    },
+    whatsappMessageId: {
+      type: String
+    },
+    whatsappStatus: {
+      type: String,
+      enum: ['pending', 'sent', 'failed', 'skipped', 'error', 'resent'],
+      default: 'pending'
+    },
+    whatsappSkipReason: {
+      type: String
+    },
+    whatsappError: {
+      type: String
+    },
+    whatsappErrorAt: {
+      type: Date
+    },
+    whatsappMode: {
+      type: String,
+      enum: ['production', 'simulation'],
+      default: 'simulation'
     }
   },
 
@@ -188,6 +218,8 @@ StudentSchema.index({ 'personalInfo.nationalId': 1 }, { unique: true });
 StudentSchema.index({ 'enrollmentInfo.status': 1 });
 StudentSchema.index({ 'personalInfo.email': 1 });
 StudentSchema.index({ authUserId: 1 }, { unique: true, sparse: true });
+StudentSchema.index({ 'metadata.whatsappStatus': 1 });
+StudentSchema.index({ 'metadata.whatsappWelcomeSent': 1 });
 
 // Prevent returning deleted students by default
 StudentSchema.pre('find', function() {
