@@ -166,7 +166,7 @@ const StudentSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },
-    // حقول جديدة لتتبع WhatsApp
+    // حقول WhatsApp الأساسية
     whatsappWelcomeSent: {
       type: Boolean,
       default: false
@@ -195,6 +195,55 @@ const StudentSchema = new mongoose.Schema({
       type: String,
       enum: ['production', 'simulation'],
       default: 'simulation'
+    },
+    whatsappMessagesCount: {
+      type: Number,
+      default: 0
+    },
+    
+    // حقول اختيار اللغة
+    whatsappLanguageSelected: {
+      type: Boolean,
+      default: false
+    },
+    whatsappLanguageSelection: {
+      type: String,
+      enum: ['1', '2', null],
+      default: null
+    },
+    whatsappLanguageSelectedAt: {
+      type: Date
+    },
+    whatsappLanguageConfirmed: {
+      type: Boolean,
+      default: false
+    },
+    whatsappLanguageConfirmationAt: {
+      type: Date
+    },
+    
+    // حقول تأكيد اللغة
+    whatsappConfirmationSent: {
+      type: Boolean,
+      default: false
+    },
+    whatsappConfirmationSentAt: {
+      type: Date
+    },
+    whatsappConfirmationError: {
+      type: String
+    },
+    whatsappConfirmationErrorAt: {
+      type: Date
+    },
+    
+    // إحصائيات إضافية
+    whatsappTotalMessages: {
+      type: Number,
+      default: 0
+    },
+    whatsappLastInteraction: {
+      type: Date
     }
   },
 
@@ -220,6 +269,9 @@ StudentSchema.index({ 'personalInfo.email': 1 });
 StudentSchema.index({ authUserId: 1 }, { unique: true, sparse: true });
 StudentSchema.index({ 'metadata.whatsappStatus': 1 });
 StudentSchema.index({ 'metadata.whatsappWelcomeSent': 1 });
+StudentSchema.index({ 'metadata.whatsappLanguageSelected': 1 });
+StudentSchema.index({ 'metadata.whatsappConfirmationSent': 1 });
+StudentSchema.index({ 'communicationPreferences.preferredLanguage': 1 });
 
 // Prevent returning deleted students by default
 StudentSchema.pre('find', function() {

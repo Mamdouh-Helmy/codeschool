@@ -92,48 +92,46 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
- // دالة جديدة لإرسال رسالة الترحيب عبر WhatsApp
-const sendWhatsAppWelcomeMessage = async (studentData) => {
-  try {
-    console.log("📱 Starting WhatsApp welcome message process...");
+  // دالة جديدة لإرسال رسالة الترحيب عبر WhatsApp
+  const sendWhatsAppWelcomeMessage = async (studentData) => {
+    try {
+      console.log("📱 Starting WhatsApp welcome message process...");
 
-    // استخدام service مباشرة
-    const { wapilotService } = await import('@/app/services/wapilot-service');
-    
-    console.log("🔍 Wapilot service mode:", wapilotService.mode);
-
-    // إرسال الرسالة باستخدام الخدمة
-    const result = await wapilotService.sendCustomWelcomeMessage(
-      studentData.personalInfo.whatsappNumber,
-      studentData.personalInfo.fullName,
-      studentData.communicationPreferences?.preferredLanguage || 'ar'
-    );
-
-    if (result.success) {
-      console.log('✅ WhatsApp welcome message sent successfully!', {
-        mode: result.mode,
-        simulated: result.simulated
-      });
+      // استخدام service مباشرة
+      const { wapilotService } = await import('@/app/services/wapilot-service');
       
-      if (result.simulated) {
-        toast.success(`📱 Simulation: Welcome message prepared for ${studentData.personalInfo.fullName}! (Not sent in simulation)`);
+      console.log("🔍 Wapilot service mode:", wapilotService.mode);
+
+      // إرسال الرسالتين (ترحيب + اختيار اللغة)
+      const result = await wapilotService.sendWelcomeMessages(
+        studentData.personalInfo.fullName,
+        studentData.personalInfo.whatsappNumber
+      );
+
+      if (result.success) {
+        console.log('✅ WhatsApp welcome messages sent successfully!', {
+          mode: result.mode,
+          simulated: result.simulated
+        });
+        
+        if (result.simulated) {
+          toast.success(`📱 Simulation: Welcome messages prepared for ${studentData.personalInfo.fullName}! (Not sent in simulation)`);
+        } else {
+          toast.success(`✅ WhatsApp messages sent to ${studentData.personalInfo.fullName}!`);
+        }
+        return true;
       } else {
-        toast.success(`✅ WhatsApp sent to ${studentData.personalInfo.fullName}!`);
+        console.warn('⚠️ WhatsApp message sending failed:', result.message);
+        toast.error(`Failed to send WhatsApp message: ${result.message}`);
+        return false;
       }
-      return true;
-    } else {
-      console.warn('⚠️ WhatsApp message sending failed:', result.message);
-      toast.error(`Failed to send WhatsApp message: ${result.message}`);
+
+    } catch (error) {
+      console.error('❌ Error sending WhatsApp message:', error);
+      toast.error('Error sending WhatsApp message');
       return false;
     }
-
-  } catch (error) {
-    console.error('❌ Error sending WhatsApp message:', error);
-    toast.error('Error sending WhatsApp message');
-    return false;
-  }
-};
-
+  };
 
   // جلب جميع الطلاب عند تحميل المكون
   useEffect(() => {
@@ -414,9 +412,9 @@ const sendWhatsAppWelcomeMessage = async (studentData) => {
 
         toast.success(successMessage, { id: toastId });
 
-        // 🔥 إرسال رسالة الترحيب عبر WhatsApp فوراً للطلاب الجدد
+        // 🔥 إرسال رسائل الترحيب عبر WhatsApp فوراً للطلاب الجدد
         if (!selectedStudent || selectedStudent.isManual) {
-          console.log("📱 Preparing to send WhatsApp welcome message...");
+          console.log("📱 Preparing to send WhatsApp welcome messages...");
 
           // استخدام setTimeout لإرسال الرسالة بعد تأخير بسيط
           setTimeout(async () => {
@@ -1082,6 +1080,9 @@ const sendWhatsAppWelcomeMessage = async (studentData) => {
                 <option value="ar">{t("studentForm.language.ar")}</option>
                 <option value="en">{t("studentForm.language.en")}</option>
               </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                سيتم تأكيد هذه اللغة مع الطالب عبر WhatsApp
+              </p>
             </div>
 
             <div className="space-y-2">

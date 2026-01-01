@@ -105,11 +105,6 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       href: "/admin/allStudents",
       icon: "ion:school-outline",
       badge: createBadge(t('common.new') || "New"),
-    },    {
-      label: t('dashboard.whatsapp-status') || "Whatsapp Status",
-      href: "/admin/whatsapp-status",
-      icon: "ion:school-outline",
-      badge: createBadge(t('common.new') || "New"),
     },
     {
       label: t('nav.settings') || "Settings",

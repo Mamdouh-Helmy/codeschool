@@ -8,104 +8,77 @@ const FORCE_PRODUCTION = true;
 
 class WapilotService {
   constructor() {
-    console.log('🔍 DEBUG ENV VARIABLES:');
-    console.log('- NODE_ENV:', process.env.NODE_ENV);
-    console.log('- WHATSAPP_API_TOKEN exists:', !!process.env.WHATSAPP_API_TOKEN);
-    console.log('- WHATSAPP_INSTANCE_ID:', process.env.WHATSAPP_INSTANCE_ID);
-    console.log('- WHATSAPP_API_URL:', process.env.WHATSAPP_API_URL);
-    
-    this.baseURL = process.env.WHATSAPP_API_URL || 'https://api.wapilot.net/api/v2';
+    console.log("🔍 WhatsApp Service Initialization:");
+    console.log("- NODE_ENV:", process.env.NODE_ENV);
+    console.log(
+      "- WHATSAPP_API_TOKEN exists:",
+      !!process.env.WHATSAPP_API_TOKEN
+    );
+    console.log("- WHATSAPP_INSTANCE_ID:", process.env.WHATSAPP_INSTANCE_ID);
+    console.log("- WHATSAPP_API_URL:", process.env.WHATSAPP_API_URL);
+
+    this.baseURL =
+      process.env.WHATSAPP_API_URL || "https://api.wapilot.net/api/v2";
     this.apiToken = process.env.WHATSAPP_API_TOKEN;
     this.instanceId = process.env.WHATSAPP_INSTANCE_ID;
-    
+
     // 🔥 الحل: اجبر PRODUCTION إذا كان هناك Token
     this.isEnabled = !!this.apiToken && !!this.instanceId;
-    
+
     // 🔥 تحديد الوضع: PRODUCTION إذا كان هناك Token، وإلا SIMULATION
-    this.mode = (FORCE_PRODUCTION || (this.isEnabled && process.env.NODE_ENV === 'production')) 
-      ? 'PRODUCTION' 
-      : 'SIMULATION';
-    
-    console.log('📱 Wapilot WhatsApp Service initialized:', {
+    this.mode =
+      FORCE_PRODUCTION ||
+      (this.isEnabled && process.env.NODE_ENV === "production")
+        ? "PRODUCTION"
+        : "SIMULATION";
+
+    console.log("📱 Wapilot WhatsApp Service initialized:", {
       enabled: this.isEnabled,
-      instance: this.instanceId ? 'Configured' : 'Not configured',
+      instance: this.instanceId ? "Configured" : "Not configured",
       mode: this.mode,
-      tokenPreview: this.apiToken ? this.apiToken.substring(0, 10) + '...' : 'No token',
-      instanceId: this.instanceId
+      tokenPreview: this.apiToken
+        ? this.apiToken.substring(0, 10) + "..."
+        : "No token",
+      instanceId: this.instanceId,
     });
   }
 
   /**
-   * إعداد رسالة الترحيب بالعربية والإنجليزية معاً
+   * إعداد رسالة الترحيب الأولى بالعربية والإنجليزية معاً
    */
-  prepareWelcomeMessage(student) {
-    const enrollmentDate = new Date().toLocaleDateString('ar-SA', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-
-    const englishDate = new Date().toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-
+  prepareFirstWelcomeMessage(studentName) {
     return `🎉 أهلاً وسهلاً بك في Code School! | Welcome to Code School!
 
-مرحباً ${student.personalInfo.fullName} 👋 | Hello ${student.personalInfo.fullName} 👋
+مرحباً ${studentName} 👋 | Hello ${studentName} 👋
 
 يسعدنا جداً انضمامك إلى مجتمع البرمجة لدينا! 🚀
-We're thrilled to have you join our coding community! 🚀
-
-🎯 **معلومات تسجيلك | Your Enrollment Info:**
-• رقم التسجيل | Enrollment Number: ${student.enrollmentNumber}
-• تاريخ التسجيل | Enrollment Date: ${enrollmentDate} | ${englishDate}
-• المستوى | Level: ${student.academicInfo?.level || 'Beginner'}
-
-📞 **للتواصل معنا | Contact Us:**
-يمكنك التواصل مع فريق الدعم عبر واتساب هذا الرقم للرد على استفساراتك.
-You can reach our support team via WhatsApp for any inquiries.
-
-💻 **ما يمكنك توقعه | What to Expect:**
-1. مواد تعليمية متكاملة | Comprehensive learning materials
-2. مشاريع عملية حقيقية | Real-world practical projects
-3. متابعة مستمرة من المدربين | Continuous guidance from instructors
-4. شهادة معتمدة بعد الإنهاء | Accredited certificate upon completion
-
-نتمنى لك رحلة تعلم ممتعة ومليئة بالإنجازات! 🌟
-Wishing you an exciting and rewarding learning journey! 🌟
-
-مع أطيب التحيات، | Best regards,
-فريق Code School 💻✨ | The Code School Team 💻✨`;
+We're thrilled to have you join our coding community! 🚀`;
   }
 
   /**
-   * إعداد رسالة ترحيب مخصصة (بدون إنشاء طالب)
+   * إعداد رسالة اختيار اللغة المفضلة
    */
-  prepareCustomWelcomeMessage(studentName, language = 'ar') {
-    const currentDate = new Date();
-    
-    if (language === 'en') {
-      const englishDate = currentDate.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-      
-      return `🎉 Welcome to Code School!\n\nHello ${studentName} 👋\n\nWe're thrilled to have you join our coding community! 🚀\n\n📅 Welcome Date: ${englishDate}\n\n💻 What to Expect:\n• Comprehensive learning materials\n• Real-world practical projects\n• Continuous guidance from instructors\n• Accredited certificate upon completion\n\n📞 Contact our support team via WhatsApp for any inquiries.\n\nWishing you an exciting and rewarding learning journey! 🌟\n\nBest regards,\nThe Code School Team 💻✨`;
+  prepareLanguageSelectionMessage() {
+    return `🌍 **اختر لغتك المفضلة | Choose Your Preferred Language:**
+
+يرجى الرد برقم الخيار المفضل لديك:
+Please reply with your preferred option number:
+
+1. 🇸🇦 العربية (Arabic)
+2. 🇺🇸 الإنجليزية (English)
+
+سيتم تسجيل تفضيلك اللغوي تلقائياً في نظامنا.
+Your language preference will be automatically recorded in our system.`;
+  }
+
+  /**
+   * إعداد رسالة تأكيد اختيار اللغة
+   */
+  prepareLanguageConfirmationMessage(studentName, selectedLanguage) {
+    if (selectedLanguage === "en") {
+      return `✅ Language preference confirmed!\n\nDear ${studentName},\n\nYour language preference has been set to English.\n\nAll future communications will be in English.\n\nThank you for choosing Code School! 🚀\n\nBest regards,\nThe Code School Team 💻✨`;
     } else {
-      const arabicDate = currentDate.toLocaleDateString('ar-SA', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-      
-      return `🎉 أهلاً وسهلاً بك في Code School!\n\nمرحباً ${studentName} 👋\n\nيسعدنا جداً انضمامك إلى مجتمع البرمجة لدينا! 🚀\n\n📅 تاريخ الترحيب: ${arabicDate}\n\n💻 ما يمكنك توقعه:\n• مواد تعليمية متكاملة\n• مشاريع عملية حقيقية\n• متابعة مستمرة من المدربين\n• شهادة معتمدة بعد الإنهاء\n\n📞 يمكنك التواصل مع فريق الدعم عبر واتساب للرد على استفساراتك.\n\nنتمنى لك رحلة تعلم ممتعة ومليئة بالإنجازات! 🌟\n\nمع أطيب التحيات،\nفريق Code School 💻✨`;
+      return `✅ تم تأكيد تفضيل اللغة!\n\nعزيزي/عزيزتي ${studentName}،\n\nتم تعيين تفضيل لغتك إلى العربية.\n\nجميع المراسلات المستقبلية ستكون باللغة العربية.\n\nشكراً لاختيارك Code School! 🚀\n\nمع أطيب التحيات،\nفريق Code School 💻✨`;
     }
   }
 
@@ -117,35 +90,38 @@ Wishing you an exciting and rewarding learning journey! 🌟
 
     try {
       // تنظيف الرقم من المسافات والأصفار الزائدة
-      let cleanNumber = phoneNumber.toString().replace(/\s+/g, '').replace(/^0+/, '');
+      let cleanNumber = phoneNumber
+        .toString()
+        .replace(/\s+/g, "")
+        .replace(/^0+/, "");
 
       // إضافة كود الدولة المصري إذا لم يكن موجوداً
-      if (!cleanNumber.startsWith('+')) {
+      if (!cleanNumber.startsWith("+")) {
         // إذا كان الرقم يبدأ بـ 1 (مصري بدون +20)
-        if (cleanNumber.startsWith('1') && cleanNumber.length >= 10) {
-          cleanNumber = '+20' + cleanNumber;
-        } else if (cleanNumber.startsWith('01')) {
+        if (cleanNumber.startsWith("1") && cleanNumber.length >= 10) {
+          cleanNumber = "+20" + cleanNumber;
+        } else if (cleanNumber.startsWith("01")) {
           // إذا كان الرقم يبدأ بـ 01 (التنسيق المصري الشائع)
-          cleanNumber = '+20' + cleanNumber.substring(1);
+          cleanNumber = "+20" + cleanNumber.substring(1);
         } else if (cleanNumber.length >= 10) {
           // افتراض أنه رقم مصري وإضافة +20
-          cleanNumber = '+20' + cleanNumber;
+          cleanNumber = "+20" + cleanNumber;
         } else {
           // إذا كان الرقم قصيراً، إضافة +20 وإزالة أي أصفار في البداية
-          cleanNumber = '+20' + cleanNumber.replace(/^0+/, '');
+          cleanNumber = "+20" + cleanNumber.replace(/^0+/, "");
         }
       }
 
       // التحقق من صحة الرقم النهائي
       const whatsappRegex = /^\+[1-9]\d{1,14}$/;
       if (!whatsappRegex.test(cleanNumber)) {
-        console.error('❌ Invalid WhatsApp number format:', cleanNumber);
+        console.error("❌ Invalid WhatsApp number format:", cleanNumber);
         return null;
       }
 
       return cleanNumber;
     } catch (error) {
-      console.error('❌ Error preparing phone number:', error);
+      console.error("❌ Error preparing phone number:", error);
       return null;
     }
   }
@@ -157,57 +133,56 @@ Wishing you an exciting and rewarding learning journey! 🌟
     try {
       // 🔥 التحقق من Token و Instance
       if (!this.apiToken || !this.instanceId) {
-        throw new Error('WhatsApp API Token or Instance ID not configured');
+        throw new Error("WhatsApp API Token or Instance ID not configured");
       }
 
       const apiUrl = `${this.baseURL}/${this.instanceId}/send-message`;
-      
-      console.log('📤 SENDING REAL WHATSAPP MESSAGE:', {
+
+      console.log("📤 SENDING REAL WHATSAPP MESSAGE:", {
         url: apiUrl,
         to: phoneNumber,
         instance: this.instanceId,
-        tokenPreview: this.apiToken.substring(0, 10) + '...',
-        messageLength: messageText.length
+        tokenPreview: this.apiToken.substring(0, 10) + "...",
+        messageLength: messageText.length,
       });
 
       const response = await fetch(apiUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'token': this.apiToken
+          "Content-Type": "application/json",
+          token: this.apiToken,
         },
         body: JSON.stringify({
-          chat_id: phoneNumber.replace('+', ''), // wapilot يتطلب الرقم بدون +
+          chat_id: phoneNumber.replace("+", ""), // wapilot يتطلب الرقم بدون +
           text: messageText,
-          priority: 0 // أولوية عادية
-        })
+          priority: 0, // أولوية عادية
+        }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        console.error('❌ wapilot API error:', result);
+        console.error("❌ wapilot API error:", result);
         throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
       }
 
-      console.log('✅ WhatsApp message sent successfully via wapilot:', {
+      console.log("✅ WhatsApp message sent successfully via wapilot:", {
         messageId: result.id,
-        status: 'sent',
+        status: "sent",
         to: phoneNumber,
-        mode: 'PRODUCTION'
+        mode: "PRODUCTION",
       });
 
       return {
         success: true,
         messageId: result.id,
         data: result,
-        sentVia: 'wapilot',
+        sentVia: "wapilot",
         simulated: false,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
-
     } catch (error) {
-      console.error('❌ wapilot API error:', error);
+      console.error("❌ wapilot API error:", error);
       throw error;
     }
   }
@@ -216,195 +191,150 @@ Wishing you an exciting and rewarding learning journey! 🌟
    * محاكاة إرسال الرسالة (للاختبار والتطوير)
    */
   async simulateSendMessage(phoneNumber, messageText) {
-    console.log('🔧 SIMULATION: Sending WhatsApp message');
-    
+    console.log("🔧 SIMULATION: Sending WhatsApp message");
+
     // محاكاة تأخير الشبكة
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
     const simulatedResponse = {
       success: true,
       simulated: true,
       messageId: `sim-${Date.now()}`,
-      sentVia: 'simulation',
+      sentVia: "simulation",
       timestamp: new Date(),
       debug: {
         to: phoneNumber,
         messageLength: messageText.length,
-        hasArabic: messageText.includes('أهلاً'),
-        hasEnglish: messageText.includes('Welcome'),
-        timestamp: new Date().toISOString()
-      }
+        hasArabic: messageText.includes("أهلاً"),
+        hasEnglish: messageText.includes("Welcome"),
+        timestamp: new Date().toISOString(),
+      },
     };
 
-    console.log('✅ SIMULATION: Message sent successfully', simulatedResponse.debug);
-    
+    console.log(
+      "✅ SIMULATION: Message sent successfully",
+      simulatedResponse.debug
+    );
+
     return simulatedResponse;
   }
 
   /**
-   * إرسال رسالة ترحيب للطالب الجديد
+   * إرسال رسائل الترحيب الثلاثة (ترحيب + اختيار اللغة)
    */
-  async sendWelcomeMessage(student) {
+  async sendWelcomeMessages(studentName, phoneNumber) {
     try {
-      console.log('🎯 WhatsApp automation for student:', {
-        enrollmentNumber: student.enrollmentNumber,
-        name: student.personalInfo?.fullName,
-        whatsappNumber: student.personalInfo?.whatsappNumber,
-        mode: this.mode
+      console.log("🎯 WhatsApp automation for student:", {
+        name: studentName,
+        whatsappNumber: phoneNumber,
+        mode: this.mode,
       });
 
-      // التحقق الأساسي
-      if (!student) {
-        throw new Error('Student data is required');
-      }
-
       // التحقق من وجود رقم WhatsApp
-      if (!student.personalInfo?.whatsappNumber) {
-        console.log('⚠️ WhatsApp number not provided, skipping...');
+      if (!phoneNumber) {
+        console.log("⚠️ WhatsApp number not provided, skipping...");
         return {
           success: false,
           skipped: true,
-          reason: 'WhatsApp number not provided'
+          reason: "WhatsApp number not provided",
         };
       }
 
       // تحضير الرقم
-      const preparedNumber = this.preparePhoneNumber(student.personalInfo.whatsappNumber);
+      const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) {
-        console.error('❌ Could not prepare WhatsApp number');
+        console.error("❌ Could not prepare WhatsApp number");
         return {
           success: false,
-          reason: 'Invalid WhatsApp number format'
+          reason: "Invalid WhatsApp number format",
         };
       }
 
-      // إعداد الرسالة (عربي + إنجليزي معاً)
-      const messageText = this.prepareWelcomeMessage(student);
-      
-      console.log('📝 Prepared dual-language message:', {
+      // إعداد الرسالة الأولى (ترحيب)
+      const firstMessage = this.prepareFirstWelcomeMessage(studentName);
+
+      // إعداد الرسالة الثانية (اختيار اللغة)
+      const secondMessage = this.prepareLanguageSelectionMessage();
+
+      console.log("📝 Prepared dual-language welcome messages:", {
         to: preparedNumber,
-        length: messageText.length,
-        preview: messageText.substring(0, 150) + '...',
-        mode: this.mode
+        studentName: studentName,
+        firstMessageLength: firstMessage.length,
+        secondMessageLength: secondMessage.length,
+        mode: this.mode,
       });
 
-      // 🔥 إرسال الرسالة بناءً على الوضع
-      let sendResult;
-      if (this.mode === 'PRODUCTION') {
-        console.log('🚀 SENDING REAL MESSAGE (PRODUCTION MODE)');
-        sendResult = await this.sendMessageViaWapilot(preparedNumber, messageText);
+      // 🔥 إرسال الرسالتين بناءً على الوضع
+      let firstResult, secondResult;
+
+      if (this.mode === "PRODUCTION") {
+        console.log("🚀 SENDING REAL MESSAGES (PRODUCTION MODE)");
+
+        // إرسال الرسالة الأولى
+        firstResult = await this.sendMessageViaWapilot(
+          preparedNumber,
+          firstMessage
+        );
+
+        // انتظار 2 ثانية ثم إرسال الرسالة الثانية
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        secondResult = await this.sendMessageViaWapilot(
+          preparedNumber,
+          secondMessage
+        );
       } else {
-        console.log('🔧 SIMULATING MESSAGE (SIMULATION MODE)');
-        sendResult = await this.simulateSendMessage(preparedNumber, messageText);
+        console.log("🔧 SIMULATING MESSAGES (SIMULATION MODE)");
+
+        // محاكاة إرسال الرسالة الأولى
+        firstResult = await this.simulateSendMessage(
+          preparedNumber,
+          firstMessage
+        );
+
+        // محاكاة إرسال الرسالة الثانية بعد تأخير
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        secondResult = await this.simulateSendMessage(
+          preparedNumber,
+          secondMessage
+        );
       }
 
       // تسجيل النجاح
       await this.logMessage({
-        status: 'sent',
-        messageId: sendResult.messageId,
-        recipient: preparedNumber,
-        studentName: student.personalInfo.fullName,
-        enrollmentNumber: student.enrollmentNumber,
-        dualLanguage: true,
-        simulated: sendResult.simulated || false,
-        mode: this.mode,
-        timestamp: new Date()
-      });
-
-      return {
-        ...sendResult,
-        studentId: student._id,
-        enrollmentNumber: student.enrollmentNumber,
-        studentName: student.personalInfo.fullName,
-        whatsappNumber: preparedNumber,
-        mode: this.mode,
-        messagePreview: messageText.substring(0, 150) + '...'
-      };
-
-    } catch (error) {
-      console.error('❌ Error in sendWelcomeMessage:', error);
-      
-      // تسجيل الخطأ
-      await this.logMessage({
-        status: 'error',
-        recipient: student?.personalInfo?.whatsappNumber,
-        error: error.message,
-        studentId: student?._id,
-        enrollmentNumber: student?.enrollmentNumber,
-        mode: this.mode,
-        timestamp: new Date()
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * إرسال رسالة ترحيب مخصصة (بدون إنشاء طالب)
-   */
-  async sendCustomWelcomeMessage(phoneNumber, studentName, language = 'ar') {
-    try {
-      console.log('🎯 Sending custom welcome message:', {
-        phoneNumber,
-        studentName,
-        language,
-        mode: this.mode
-      });
-
-      // تحضير الرقم
-      const preparedNumber = this.preparePhoneNumber(phoneNumber);
-      if (!preparedNumber) {
-        throw new Error('Invalid phone number format');
-      }
-
-      // إعداد الرسالة بناءً على اللغة
-      const messageText = this.prepareCustomWelcomeMessage(studentName, language);
-
-      console.log('📝 Prepared message:', {
-        length: messageText.length,
-        preview: messageText.substring(0, 150) + '...',
-        mode: this.mode
-      });
-
-      // 🔥 إرسال الرسالة بناءً على الوضع
-      let sendResult;
-      if (this.mode === 'PRODUCTION') {
-        sendResult = await this.sendMessageViaWapilot(preparedNumber, messageText);
-      } else {
-        sendResult = await this.simulateSendMessage(preparedNumber, messageText);
-      }
-
-      // تسجيل النجاح
-      await this.logMessage({
-        status: 'sent',
-        messageId: sendResult.messageId,
+        status: "sent",
+        messageId: secondResult.messageId,
         recipient: preparedNumber,
         studentName: studentName,
-        language: language,
-        simulated: sendResult.simulated || false,
+        messagesSent: 2,
+        firstMessagePreview: firstMessage.substring(0, 50) + "...",
+        secondMessagePreview: secondMessage.substring(0, 50) + "...",
+        simulated: secondResult.simulated || false,
         mode: this.mode,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       return {
-        ...sendResult,
-        studentName,
+        success: true,
+        messages: [
+          { type: "welcome", result: firstResult },
+          { type: "language_selection", result: secondResult },
+        ],
+        studentName: studentName,
         whatsappNumber: preparedNumber,
-        language,
         mode: this.mode,
-        messagePreview: messageText.substring(0, 150) + '...'
+        totalMessages: 2,
       };
-
     } catch (error) {
-      console.error('❌ Error in sendCustomWelcomeMessage:', error);
-      
+      console.error("❌ Error in sendWelcomeMessages:", error);
+
       // تسجيل الخطأ
       await this.logMessage({
-        status: 'error',
+        status: "error",
         recipient: phoneNumber,
         error: error.message,
+        studentName: studentName,
         mode: this.mode,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       throw error;
@@ -412,75 +342,88 @@ Wishing you an exciting and rewarding learning journey! 🌟
   }
 
   /**
-   * إرسال رسالة مخصصة
+   * إرسال رسالة تأكيد اللغة
    */
-  async sendCustomMessage(phoneNumber, messageText) {
+  async sendLanguageConfirmationMessage(
+    phoneNumber,
+    studentName,
+    selectedLanguage
+  ) {
     try {
-      const preparedNumber = this.preparePhoneNumber(phoneNumber);
-      if (!preparedNumber) {
-        throw new Error('Invalid phone number format');
+      console.log("📱 Sending language confirmation on SERVER:", {
+        phoneNumber,
+        studentName,
+        selectedLanguage,
+        mode: this.mode,
+      });
+
+      // تأكد من أن الرقم بصيغة +20
+      let preparedNumber = phoneNumber;
+      if (!preparedNumber.startsWith("+")) {
+        preparedNumber = `+${preparedNumber}`;
       }
 
-      let sendResult;
-      if (this.mode === 'PRODUCTION') {
-        sendResult = await this.sendMessageViaWapilot(preparedNumber, messageText);
+      if (!preparedNumber.startsWith("+20")) {
+        preparedNumber = `+20${preparedNumber.replace(/^\+/, "")}`;
+      }
+
+      // رسالة التأكيد
+      let messageText;
+      if (selectedLanguage === "en") {
+        messageText = `✅ Language preference confirmed!\n\nDear ${studentName},\n\nYour language preference has been set to English.\n\nAll future communications will be in English.\n\nThank you for choosing Code School! 🚀\n\nBest regards,\nThe Code School Team 💻✨`;
       } else {
-        sendResult = await this.simulateSendMessage(preparedNumber, messageText);
+        messageText = `✅ تم تأكيد تفضيل اللغة!\n\nعزيزي/عزيزتي ${studentName}،\n\nتم تعيين تفضيل لغتك إلى العربية.\n\nجميع المراسلات المستقبلية ستكون باللغة العربية.\n\nشكراً لاختيارك Code School! 🚀\n\nمع أطيب التحيات،\nفريق Code School 💻✨`;
+      }
+
+      console.log("📝 Message prepared:", {
+        to: preparedNumber,
+        length: messageText.length,
+      });
+
+      // الإرسال الفعلي
+      let sendResult;
+      if (this.mode === "PRODUCTION" && this.apiToken && this.instanceId) {
+        console.log("🚀 SENDING REAL MESSAGE TO:", preparedNumber);
+
+        const apiUrl = `${this.baseURL}/${this.instanceId}/send-message`;
+
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            token: this.apiToken,
+          },
+          body: JSON.stringify({
+            chat_id: preparedNumber.replace("+", ""),
+            text: messageText,
+            priority: 0,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
+        }
+
+        sendResult = {
+          success: true,
+          messageId: result.id,
+          simulated: false,
+        };
+      } else {
+        console.log("🔧 SIMULATION MODE (not sending real message)");
+        sendResult = {
+          success: true,
+          messageId: `sim-${Date.now()}`,
+          simulated: true,
+        };
       }
 
       return sendResult;
     } catch (error) {
-      console.error('❌ Error sending custom message:', error);
+      console.error("❌ Error sending confirmation:", error);
       throw error;
-    }
-  }
-
-  /**
-   * التحقق من حالة الخدمة
-   */
-  async checkServiceStatus() {
-    try {
-      if (!this.isEnabled) {
-        return {
-          enabled: false,
-          status: 'NOT_CONFIGURED',
-          message: 'Service not configured. Check environment variables.',
-          timestamp: new Date()
-        };
-      }
-
-      // محاولة جلب حالة الـ instance
-      const statusUrl = `${this.baseURL}/instances/${this.instanceId}/status`;
-      
-      const response = await fetch(statusUrl, {
-        headers: {
-          'token': this.apiToken
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          enabled: true,
-          status: 'ACTIVE',
-          instanceStatus: data,
-          timestamp: new Date()
-        };
-      } else {
-        return {
-          enabled: false,
-          status: 'ERROR',
-          error: `API returned ${response.status}`,
-          timestamp: new Date()
-        };
-      }
-    } catch (error) {
-      return {
-        enabled: false,
-        status: 'ERROR',
-        error: error.message,
-        timestamp: new Date()
-      };
     }
   }
 
@@ -491,23 +434,23 @@ Wishing you an exciting and rewarding learning journey! 🌟
     try {
       const logEntry = {
         ...logData,
-        service: 'wapilot-whatsapp',
+        service: "wapilot-whatsapp",
         environment: this.mode,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
-      console.log('📝 WhatsApp Log:', {
+      console.log("📝 WhatsApp Log:", {
         status: logEntry.status,
         recipient: logEntry.recipient,
         studentName: logEntry.studentName,
         simulated: logEntry.simulated || false,
         mode: this.mode,
-        timestamp: logEntry.timestamp
+        timestamp: logEntry.timestamp,
       });
-      
+
       return logEntry;
     } catch (error) {
-      console.error('❌ Error logging message:', error);
+      console.error("❌ Error logging message:", error);
     }
   }
 
@@ -515,57 +458,135 @@ Wishing you an exciting and rewarding learning journey! 🌟
    * التحقق من تكوين الخدمة
    */
   async getServiceStatus() {
-    const serviceStatus = await this.checkServiceStatus();
-    
-    return {
+    const serviceStatus = {
       enabled: this.isEnabled,
       configured: !!this.apiToken && !!this.instanceId,
       instanceId: this.instanceId,
-      apiToken: this.apiToken ? '***' + this.apiToken.slice(-4) : 'Not set',
+      apiToken: this.apiToken ? "***" + this.apiToken.slice(-4) : "Not set",
       mode: this.mode,
-      serviceStatus: serviceStatus,
       lastChecked: new Date(),
-      features: ['dual-language', 'auto-format-numbers', 'simulation-mode', 'production-mode']
+      features: [
+        "dual-language",
+        "language-selection",
+        "language-confirmation",
+        "auto-format-numbers",
+        "simulation-mode",
+        "production-mode",
+      ],
     };
+
+    return serviceStatus;
   }
 
   /**
-   * 🔥 اختبار مباشر للخدمة
+   * معالجة رد الطالب على اختيار اللغة
    */
-  async directTest(phoneNumber, message = 'Test from Code School WhatsApp Service') {
+  async processLanguageSelection(phoneNumber, response) {
     try {
-      console.log('🧪 DIRECT TEST:', {
+      console.log("🎯 Processing language selection response:", {
         phoneNumber,
-        mode: this.mode,
-        hasToken: !!this.apiToken,
-        hasInstance: !!this.instanceId
+        response,
       });
 
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) {
-        throw new Error('Invalid phone number');
+        throw new Error("Invalid phone number format");
       }
 
-      let result;
-      if (this.mode === 'PRODUCTION') {
-        result = await this.sendMessageViaWapilot(preparedNumber, message);
-      } else {
-        result = await this.simulateSendMessage(preparedNumber, message);
+      // استيراد النماذج والمكتبات المطلوبة
+      const { connectDB } = await import("@/lib/mongodb");
+      const Student = (await import("@/models/Student")).default;
+
+      await connectDB();
+
+      // البحث عن الطالب برقم WhatsApp
+      const student = await Student.findOne({
+        "personalInfo.whatsappNumber": {
+          $regex: preparedNumber.replace("+", ""),
+          $options: "i",
+        },
+        isDeleted: false,
+      });
+
+      if (!student) {
+        console.log(
+          "⚠️ Student not found with WhatsApp number:",
+          preparedNumber
+        );
+        return {
+          success: false,
+          message: "Student not found",
+        };
+      }
+
+      const selectedLanguage = response === "1" ? "ar" : "en";
+      const studentName = student.personalInfo.fullName;
+
+      console.log("📊 Processing for student:", {
+        studentId: student._id,
+        studentName,
+        currentLanguage: student.communicationPreferences?.preferredLanguage,
+        newLanguage: selectedLanguage,
+        response,
+      });
+
+      // 1. تحديث قاعدة البيانات
+      const updateResult = await Student.findByIdAndUpdate(
+        student._id,
+        {
+          $set: {
+            "communicationPreferences.preferredLanguage": selectedLanguage,
+            "metadata.updatedAt": new Date(),
+            "metadata.whatsappLanguageSelected": true,
+            "metadata.whatsappLanguageSelection": response,
+            "metadata.whatsappLanguageSelectedAt": new Date(),
+            "metadata.whatsappLanguageConfirmed": true,
+            "metadata.whatsappLanguageConfirmationAt": new Date(),
+            "metadata.whatsappConfirmationSent": false,
+          },
+        },
+        { new: true }
+      );
+
+      console.log("✅ Database updated successfully:", {
+        studentId: student._id,
+        oldLanguage: student.communicationPreferences?.preferredLanguage,
+        newLanguage: selectedLanguage,
+        updatedAt: new Date(),
+      });
+
+      // 2. إرسال رسالة تأكيد
+      const confirmationResult = await this.sendLanguageConfirmationMessage(
+        phoneNumber,
+        studentName,
+        selectedLanguage
+      );
+
+      // 3. تحديث قاعدة البيانات بإرسال التأكيد
+      if (confirmationResult.success) {
+        await Student.findByIdAndUpdate(student._id, {
+          $set: {
+            "metadata.whatsappConfirmationSent": true,
+            "metadata.whatsappConfirmationSentAt": new Date(),
+            "metadata.whatsappMessagesCount": 3,
+          },
+        });
       }
 
       return {
         success: true,
-        test: 'direct',
-        result,
-        mode: this.mode,
-        timestamp: new Date()
+        studentId: student._id,
+        studentName,
+        selectedLanguage,
+        response,
+        confirmationSent: true,
+        confirmationResult,
       };
     } catch (error) {
-      console.error('❌ Direct test failed:', error);
+      console.error("❌ Error processing language selection:", error);
       return {
         success: false,
         error: error.message,
-        mode: this.mode
       };
     }
   }
