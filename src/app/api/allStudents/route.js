@@ -17,6 +17,18 @@ export async function POST(req) {
       NODE_ENV: process.env.NODE_ENV || "development",
     });
 
+    // 🔍 **التشخيص: تحقق من كل الدوال والواردات**
+    console.log("🔍 Diagnostic - Function check:", {
+      NextResponse: typeof NextResponse,
+      connectDB: typeof connectDB,
+      Student: Student ? "Model exists" : "Model undefined",
+      StudentModel: Student?.prototype?.save ? "Has save method" : "No save method",
+      User: User ? "User model exists" : "User model undefined",
+      requireAdmin: typeof requireAdmin,
+      mongoose: typeof mongoose,
+      generateEnrollmentNumber: typeof generateEnrollmentNumber
+    });
+
     // التحقق من صلاحية الأدمن
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
@@ -144,7 +156,11 @@ export async function POST(req) {
 
     // إنشاء سجل الطالب
     console.log("📝 Creating student record...");
-    const newStudent = new Student({
+    
+    // 🔍 **التشخيص: تحقق من نموذج الطالب قبل الإنشاء**
+    console.log("🔍 Creating Student instance...");
+    
+    const studentDataToSave = {
       ...cleanData,
       enrollmentNumber,
       metadata: {
@@ -160,12 +176,78 @@ export async function POST(req) {
         whatsappMessagesCount: 0,
         whatsappTotalMessages: 0,
       },
-    });
+    };
+
+    console.log("📋 Student data to save:", JSON.stringify(studentDataToSave, null, 2));
+
+    // 🔧 **الحل: استخدام new Student() بشكل صحيح**
+    let newStudent;
+    try {
+      newStudent = new Student(studentDataToSave);
+      console.log("✅ Student instance created successfully");
+      console.log("🔍 Student instance methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(newStudent)));
+    } catch (createError) {
+      console.error("❌ Error creating Student instance:", createError);
+      throw new Error(`Failed to create student instance: ${createError.message}`);
+    }
 
     // الحفظ في قاعدة البيانات
     console.log("💾 Saving student to database...");
-    const savedStudent = await newStudent.save();
-    console.log("✅ Student saved successfully:", savedStudent._id);
+    console.log("🔍 About to call save()...");
+    
+    let savedStudent;
+    try {
+      savedStudent = await newStudent.save();
+      console.log("✅ Student saved successfully:", {
+        id: savedStudent._id,
+        enrollmentNumber: savedStudent.enrollmentNumber,
+        name: savedStudent.personalInfo.fullName
+      });
+    } catch (saveError) {
+      console.error("❌ Error saving student to database:", {
+        message: saveError.message,
+        name: saveError.name,
+        code: saveError.code,
+        errors: saveError.errors,
+        stack: saveError.stack
+      });
+      
+      // معالجة أخطاء فريدة MongoDB
+      if (saveError.code === 11000) {
+        const field = Object.keys(saveError.keyPattern)[0];
+        console.error("❌ Duplicate field error:", field);
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Data already exists: ${field}`,
+            field: field,
+            value: saveError.keyValue[field],
+          },
+          { status: 409 }
+        );
+      }
+
+      // معالجة أخطاء التحقق من صحة Mongoose
+      if (saveError.name === 'ValidationError') {
+        const errors = Object.values(saveError.errors).map((err) => ({
+          field: err.path,
+          message: err.message,
+        }));
+
+        console.error("❌ Validation errors:", errors);
+
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Validation failed",
+            errors: errors,
+          },
+          { status: 400 }
+        );
+      }
+      
+      throw saveError;
+    }
 
     // 🔥 **تنفيذ WhatsApp Automation (بشكل غير متزامن)**
     console.log("📱 Triggering WhatsApp automation...");
