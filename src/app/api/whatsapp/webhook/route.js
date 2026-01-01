@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Student from '../../../models/Student';
-import { wapilotService } from '@/app/services/wapilot-service';
+import { wapilotService } from '../../../services/wapilot-service';
 
 export async function POST(req) {
   try {

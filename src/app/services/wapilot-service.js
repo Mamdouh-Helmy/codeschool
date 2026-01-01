@@ -495,7 +495,7 @@ Your language preference will be automatically recorded in our system.`;
 
       // استيراد النماذج والمكتبات المطلوبة
       const { connectDB } = await import("@/lib/mongodb");
-      const Student = (await import("@/models/Student")).default;
+      const Student = (await import("../models/Student")).default;
 
       await connectDB();
 
