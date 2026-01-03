@@ -26,7 +26,7 @@ const StudentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     unique: true,
-    sparse: true  // للسماح بالقيم الفارغة مع unique
+    sparse: true
   },
 
   // Auto-generated enrollment number
@@ -166,11 +166,20 @@ const StudentSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },
-    // حقول WhatsApp الأساسية
+    
+    // 🔥 حقول WhatsApp الأساسية والمحسنة
     whatsappWelcomeSent: {
       type: Boolean,
       default: false
     },
+    whatsappInteractiveSent: {
+      type: Boolean,
+      default: false
+    },
+    whatsappButtons: [{
+      id: String,
+      title: String
+    }],
     whatsappSentAt: {
       type: Date
     },
@@ -201,19 +210,38 @@ const StudentSchema = new mongoose.Schema({
       default: 0
     },
     
-    // حقول اختيار اللغة
+    // 🔥 حقول اختيار اللغة والتفاعل (FIXED!)
     whatsappLanguageSelected: {
       type: Boolean,
       default: false
     },
     whatsappLanguageSelection: {
       type: String,
-      enum: ['1', '2', null],
+      // ✅ الحل: إضافة IDs الأزرار إلى enum
+      enum: ['1', '2', 'arabic_btn', 'english_btn', null],
       default: null
     },
     whatsappLanguageSelectedAt: {
       type: Date
     },
+    whatsappButtonSelected: {
+      type: String
+    },
+    whatsappButtonSelectedAt: {
+      type: Date
+    },
+    whatsappResponseReceived: {
+      type: Boolean,
+      default: false
+    },
+    whatsappResponse: {
+      type: String
+    },
+    whatsappResponseAt: {
+      type: Date
+    },
+    
+    // 🔥 حقول تأكيد اللغة
     whatsappLanguageConfirmed: {
       type: Boolean,
       default: false
@@ -221,8 +249,6 @@ const StudentSchema = new mongoose.Schema({
     whatsappLanguageConfirmationAt: {
       type: Date
     },
-    
-    // حقول تأكيد اللغة
     whatsappConfirmationSent: {
       type: Boolean,
       default: false
@@ -237,13 +263,16 @@ const StudentSchema = new mongoose.Schema({
       type: Date
     },
     
-    // إحصائيات إضافية
+    // 🔥 إحصائيات إضافية
     whatsappTotalMessages: {
       type: Number,
       default: 0
     },
     whatsappLastInteraction: {
       type: Date
+    },
+    whatsappConversationId: {
+      type: String
     }
   },
 
@@ -269,9 +298,12 @@ StudentSchema.index({ 'personalInfo.email': 1 });
 StudentSchema.index({ authUserId: 1 }, { unique: true, sparse: true });
 StudentSchema.index({ 'metadata.whatsappStatus': 1 });
 StudentSchema.index({ 'metadata.whatsappWelcomeSent': 1 });
+StudentSchema.index({ 'metadata.whatsappInteractiveSent': 1 });
 StudentSchema.index({ 'metadata.whatsappLanguageSelected': 1 });
 StudentSchema.index({ 'metadata.whatsappConfirmationSent': 1 });
 StudentSchema.index({ 'communicationPreferences.preferredLanguage': 1 });
+StudentSchema.index({ 'metadata.whatsappResponseReceived': 1 });
+StudentSchema.index({ 'metadata.whatsappButtonSelected': 1 });
 
 // Prevent returning deleted students by default
 StudentSchema.pre('find', function() {
@@ -285,6 +317,24 @@ StudentSchema.pre('findOne', function() {
 // Update timestamp before save
 StudentSchema.pre('save', function(next) {
   this.metadata.updatedAt = Date.now();
+  next();
+});
+
+// 🔥 Middleware لتحديث الحقول المترابطة
+StudentSchema.pre('save', function(next) {
+  // إذا تم اختيار اللغة، تحديث الحقول المترابطة
+  if (this.metadata.whatsappLanguageSelected && !this.metadata.whatsappLanguageSelectedAt) {
+    this.metadata.whatsappLanguageSelectedAt = new Date();
+    this.metadata.whatsappResponseReceived = true;
+    this.metadata.whatsappResponse = this.metadata.whatsappLanguageSelection;
+    this.metadata.whatsappResponseAt = new Date();
+  }
+  
+  // إذا تم الضغط على زر، تحديث الحقول المترابطة
+  if (this.metadata.whatsappButtonSelected && !this.metadata.whatsappButtonSelectedAt) {
+    this.metadata.whatsappButtonSelectedAt = new Date();
+  }
+  
   next();
 });
 

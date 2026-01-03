@@ -17,22 +17,9 @@ export async function POST(req) {
       NODE_ENV: process.env.NODE_ENV || "development",
     });
 
-    // 🔍 **التشخيص: تحقق من كل الدوال والواردات**
-    console.log("🔍 Diagnostic - Function check:", {
-      NextResponse: typeof NextResponse,
-      connectDB: typeof connectDB,
-      Student: Student ? "Model exists" : "Model undefined",
-      StudentModel: Student?.prototype?.save ? "Has save method" : "No save method",
-      User: User ? "User model exists" : "User model undefined",
-      requireAdmin: typeof requireAdmin,
-      mongoose: typeof mongoose,
-      generateEnrollmentNumber: typeof generateEnrollmentNumber
-    });
-
-    // التحقق من صلاحية الأدمن
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
-      console.log("❌ Admin authorization failed Return");
+      console.log("❌ Admin authorization failed");
       return authCheck.response;
     }
 
@@ -42,14 +29,9 @@ export async function POST(req) {
     await connectDB();
     console.log("✅ Database connected");
 
-    // تحليل بيانات الطلب
     const studentData = await req.json();
-    console.log(
-      "📥 Received student data:",
-      JSON.stringify(studentData, null, 2)
-    );
+    console.log("📥 Received student data:", JSON.stringify(studentData, null, 2));
 
-    // التحقق من البيانات المطلوبة (بدون authUserId)
     const requiredFields = [
       "personalInfo.fullName",
       "personalInfo.email",
@@ -65,9 +47,7 @@ export async function POST(req) {
     ];
 
     const missingFields = requiredFields.filter((field) => {
-      const value = field
-        .split(".")
-        .reduce((obj, key) => obj && obj[key], studentData);
+      const value = field.split(".").reduce((obj, key) => obj && obj[key], studentData);
       return value === undefined || value === null || value === "";
     });
 
@@ -83,15 +63,12 @@ export async function POST(req) {
       );
     }
 
-    // تنظيف البيانات
     const cleanData = {
       ...studentData,
-      // إذا كان authUserId فارغًا، ضععه null
       authUserId:
         studentData.authUserId && studentData.authUserId.trim() !== ""
           ? studentData.authUserId
           : null,
-      // تنظيف referredBy
       enrollmentInfo: {
         ...studentData.enrollmentInfo,
         referredBy:
@@ -102,7 +79,6 @@ export async function POST(req) {
       },
     };
 
-    // التحقق من وجود المستخدم فقط إذا تم إرسال authUserId
     if (cleanData.authUserId) {
       console.log("🔍 Checking user exists...");
       const userExists = await User.findById(cleanData.authUserId);
@@ -118,7 +94,6 @@ export async function POST(req) {
       }
       console.log("✅ User found:", userExists.email);
 
-      // التحقق من أن المستخدم ليس لديه طالب مسجل مسبقًا
       const existingStudent = await Student.findOne({
         authUserId: cleanData.authUserId,
         isDeleted: false,
@@ -139,26 +114,24 @@ export async function POST(req) {
       console.log("📝 Creating student without user account link");
     }
 
-    // توليد رقم التسجيل
     console.log("🔢 Generating enrollment number...");
     const enrollmentNumber = await generateEnrollmentNumber();
     console.log("✅ Enrollment number generated:", enrollmentNumber);
 
-    // 🔥 تحديد وضع WhatsApp بناءً على وجود Token
-    const whatsappMode = process.env.WHATSAPP_API_TOKEN
-      ? "production"
-      : "simulation";
+    const whatsappMode = process.env.WHATSAPP_API_TOKEN ? "production" : "simulation";
     console.log("📱 WhatsApp Mode determined:", {
       mode: whatsappMode,
       hasToken: !!process.env.WHATSAPP_API_TOKEN,
       hasInstanceId: !!process.env.WHATSAPP_INSTANCE_ID,
     });
 
-    // إنشاء سجل الطالب
     console.log("📝 Creating student record...");
     
-    // 🔍 **التشخيص: تحقق من نموذج الطالب قبل الإنشاء**
-    console.log("🔍 Creating Student instance...");
+    // ✅ إعداد بيانات WhatsApp التفاعلية
+    const whatsappButtons = [
+      { id: "arabic_btn", title: "العربية 🇸🇦" },
+      { id: "english_btn", title: "English 🇺🇸" }
+    ];
     
     const studentDataToSave = {
       ...cleanData,
@@ -168,40 +141,48 @@ export async function POST(req) {
         lastModifiedBy: adminUser.id,
         createdAt: new Date(),
         updatedAt: new Date(),
+        
+        // ✅ حقول WhatsApp المحسنة للأزرار
         whatsappWelcomeSent: false,
+        whatsappInteractiveSent: false,
+        whatsappButtons: whatsappButtons,
         whatsappStatus: "pending",
         whatsappMode: whatsappMode,
-        whatsappLanguageSelected: false,
-        whatsappConfirmationSent: false,
         whatsappMessagesCount: 0,
         whatsappTotalMessages: 0,
+        
+        // حقول اختيار اللغة
+        whatsappLanguageSelected: false,
+        whatsappLanguageSelection: null,
+        whatsappButtonSelected: null,
+        whatsappResponseReceived: false,
+        
+        // حقول التأكيد
+        whatsappLanguageConfirmed: false,
+        whatsappConfirmationSent: false,
+        
+        // المحادثة
+        whatsappConversationId: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       },
     };
 
-    console.log("📋 Student data to save:", JSON.stringify(studentDataToSave, null, 2));
+    console.log("📋 Student data to save:", {
+      name: studentDataToSave.personalInfo.fullName,
+      whatsappNumber: studentDataToSave.personalInfo.whatsappNumber,
+      buttons: whatsappButtons.length,
+      mode: whatsappMode
+    });
 
-    // 🔧 **الحل: استخدام new Student() بشكل صحيح**
-    let newStudent;
-    try {
-      newStudent = new Student(studentDataToSave);
-      console.log("✅ Student instance created successfully");
-      console.log("🔍 Student instance methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(newStudent)));
-    } catch (createError) {
-      console.error("❌ Error creating Student instance:", createError);
-      throw new Error(`Failed to create student instance: ${createError.message}`);
-    }
-
-    // الحفظ في قاعدة البيانات
-    console.log("💾 Saving student to database...");
-    console.log("🔍 About to call save()...");
-    
     let savedStudent;
     try {
+      const newStudent = new Student(studentDataToSave);
       savedStudent = await newStudent.save();
+      
       console.log("✅ Student saved successfully:", {
         id: savedStudent._id,
         enrollmentNumber: savedStudent.enrollmentNumber,
-        name: savedStudent.personalInfo.fullName
+        name: savedStudent.personalInfo.fullName,
+        whatsappNumber: savedStudent.personalInfo.whatsappNumber
       });
     } catch (saveError) {
       console.error("❌ Error saving student to database:", {
@@ -209,10 +190,8 @@ export async function POST(req) {
         name: saveError.name,
         code: saveError.code,
         errors: saveError.errors,
-        stack: saveError.stack
       });
       
-      // معالجة أخطاء فريدة MongoDB
       if (saveError.code === 11000) {
         const field = Object.keys(saveError.keyPattern)[0];
         console.error("❌ Duplicate field error:", field);
@@ -227,7 +206,6 @@ export async function POST(req) {
         );
       }
 
-      // معالجة أخطاء التحقق من صحة Mongoose
       if (saveError.name === 'ValidationError') {
         const errors = Object.values(saveError.errors).map((err) => ({
           field: err.path,
@@ -249,7 +227,6 @@ export async function POST(req) {
       throw saveError;
     }
 
-    // 🔥 **تنفيذ WhatsApp Automation (بشكل غير متزامن)**
     console.log("📱 Triggering WhatsApp automation...");
     console.log("📊 Automation details:", {
       studentId: savedStudent._id,
@@ -257,30 +234,26 @@ export async function POST(req) {
       whatsappNumber: savedStudent.personalInfo.whatsappNumber,
       mode: whatsappMode,
       willSend: whatsappMode === "production",
-      messages: "Welcome + Language selection",
+      messages: "Welcome + Interactive language selection with buttons",
       totalMessages: 2,
-      process: [
-        "Step 1: Send welcome message",
-        "Step 2: Send language selection request",
-        "Step 3: Wait for student response (1 or 2)",
-        "Step 4: Update language preference in database",
+      buttons: whatsappButtons,
+      flow: [
+        "Step 1: Send welcome message (Arabic + English)",
+        "Step 2: Send interactive message with 2 BUTTONS",
+        "Step 3: Student clicks button (arabic_btn or english_btn)",
+        "Step 4: Webhook receives response and updates database",
         "Step 5: Send confirmation message in selected language"
       ]
     });
 
-    // تشغيل الاتوميشن في الخلفية دون انتظار
     setTimeout(async () => {
       try {
         console.log("🔄 Starting WhatsApp automation in background...");
 
-        // استيراد خدمة wapilot
-        const { wapilotService } = await import(
-          "@/app/services/wapilot-service"
-        );
+        const { wapilotService } = await import("@/app/services/wapilot-service");
 
         console.log("🔧 Wapilot service loaded, mode:", wapilotService.mode);
 
-        // إرسال رسالتي الترحيب (عربي + إنجليزي + اختيار اللغة)
         const whatsappResult = await wapilotService.sendWelcomeMessages(
           savedStudent.personalInfo.fullName,
           savedStudent.personalInfo.whatsappNumber
@@ -294,26 +267,34 @@ export async function POST(req) {
             whatsappNumber: whatsappResult.whatsappNumber,
             mode: whatsappResult.mode,
             messagesSent: whatsappResult.totalMessages || 2,
-            serviceMode: wapilotService.mode,
-            nextStep: "Waiting for student language selection (1 or 2)"
+            interactive: true,
+            buttons: whatsappResult.buttons,
+            nextStep: "Waiting for student button click"
           });
 
-          // تحديث سجل الطالب بإشارة أن الرسالة أرسلت
           try {
-            await Student.findByIdAndUpdate(savedStudent._id, {
-              $set: {
-                "metadata.whatsappWelcomeSent": true,
-                "metadata.whatsappSentAt": new Date(),
-                "metadata.whatsappMessageId": whatsappResult.messages?.[1]?.result?.messageId,
-                "metadata.whatsappStatus": "sent",
-                "metadata.whatsappMode": whatsappResult.mode,
-                "metadata.whatsappMessagesCount": whatsappResult.totalMessages || 2,
-                "metadata.whatsappTotalMessages": whatsappResult.totalMessages || 2,
-                "metadata.updatedAt": new Date(),
-                "metadata.whatsappLanguageSelected": false,
-                "metadata.whatsappConfirmationSent": false
+            const updateData = {
+              "metadata.whatsappWelcomeSent": true,
+              "metadata.whatsappInteractiveSent": true,
+              "metadata.whatsappSentAt": new Date(),
+              "metadata.whatsappStatus": "sent",
+              "metadata.whatsappMode": whatsappResult.mode,
+              "metadata.whatsappMessagesCount": whatsappResult.totalMessages || 2,
+              "metadata.whatsappTotalMessages": whatsappResult.totalMessages || 2,
+              "metadata.updatedAt": new Date()
+            };
+
+            if (whatsappResult.messages && whatsappResult.messages.length > 1) {
+              const secondMessage = whatsappResult.messages[1];
+              if (secondMessage.result && secondMessage.result.messageId) {
+                updateData["metadata.whatsappMessageId"] = secondMessage.result.messageId;
               }
+            }
+
+            await Student.findByIdAndUpdate(savedStudent._id, {
+              $set: updateData
             });
+            
             console.log("✅ Student record updated with WhatsApp info");
           } catch (updateError) {
             console.error("❌ Error updating student record:", updateError);
@@ -325,6 +306,7 @@ export async function POST(req) {
             await Student.findByIdAndUpdate(savedStudent._id, {
               $set: {
                 "metadata.whatsappWelcomeSent": false,
+                "metadata.whatsappInteractiveSent": false,
                 "metadata.whatsappStatus": "skipped",
                 "metadata.whatsappSkipReason": whatsappResult.reason,
                 "metadata.updatedAt": new Date(),
@@ -340,9 +322,9 @@ export async function POST(req) {
             await Student.findByIdAndUpdate(savedStudent._id, {
               $set: {
                 "metadata.whatsappWelcomeSent": false,
+                "metadata.whatsappInteractiveSent": false,
                 "metadata.whatsappStatus": "failed",
-                "metadata.whatsappError":
-                  whatsappResult.reason || "Unknown error",
+                "metadata.whatsappError": whatsappResult.reason || "Unknown error",
                 "metadata.updatedAt": new Date(),
               }
             });
@@ -353,11 +335,11 @@ export async function POST(req) {
       } catch (automationError) {
         console.error("❌ WhatsApp automation failed:", automationError);
 
-        // تسجيل الخطأ في سجل الطالب
         try {
           await Student.findByIdAndUpdate(savedStudent._id, {
             $set: {
               "metadata.whatsappWelcomeSent": false,
+              "metadata.whatsappInteractiveSent": false,
               "metadata.whatsappStatus": "error",
               "metadata.whatsappError": automationError.message,
               "metadata.whatsappErrorAt": new Date(),
@@ -368,9 +350,8 @@ export async function POST(req) {
           console.error("❌ Error updating student record:", updateError);
         }
       }
-    }, 2000); // تأخير 2 ثانية لضمان اكتمال حفظ الطالب
+    }, 2000);
 
-    // إرجاع الاستجابة الناجحة
     return NextResponse.json(
       {
         success: true,
@@ -387,50 +368,61 @@ export async function POST(req) {
             whatsappNumber: savedStudent.personalInfo.whatsappNumber,
             hasUserAccount: !!cleanData.authUserId,
             language: savedStudent.communicationPreferences.preferredLanguage,
-            initialLanguage: "ar (default)",
-            whatsappMessages: "2 messages sent (Welcome + Language selection)"
+            whatsappMode: whatsappMode,
+            conversationId: savedStudent.metadata.whatsappConversationId
           },
           whatsappAutomation: {
             triggered: true,
             status: "processing",
             messages: {
-              sent: 2,
-              pending: 1
+              total: 2,
+              sent: 0,
+              pending: 2
             },
-            message1: "Welcome message (Arabic + English)",
-            message2: "Language selection request (Reply with 1 for Arabic, 2 for English)",
-            confirmationMessage: "Will be sent after language selection",
+            messageFlow: [
+              {
+                step: 1,
+                type: "welcome",
+                content: "Welcome message (Arabic + English)",
+                status: "pending"
+              },
+              {
+                step: 2,
+                type: "interactive_buttons",
+                content: "Language selection with interactive buttons",
+                buttons: whatsappButtons,
+                status: "pending"
+              },
+              {
+                step: 3,
+                type: "confirmation",
+                content: "Will be sent after button click",
+                status: "waiting"
+              }
+            ],
+            interactiveButtons: whatsappButtons,
             mode: whatsappMode,
             willSend: whatsappMode === "production",
-            features: [
-              "arabic",
-              "english",
-              "language-selection",
-              "language-confirmation",
-              "auto-number-formatting",
-              "database-update",
-              "webhook-support"
-            ],
-            process: [
-              "Step 1: Send welcome message (Arabic + English)",
-              "Step 2: Send language selection request",
-              "Step 3: Wait for student response (1 or 2)",
-              "Step 4: Update language preference in database",
-              "Step 5: Send confirmation message in selected language"
-            ],
-            estimatedTime: "5-10 seconds for initial messages",
             webhook: {
               url: "/api/whatsapp/webhook",
               status: "active",
               method: "POST",
-              supported_responses: ["1", "2"],
-              description: "Receives language selection and sends confirmation"
+              supported_responses: ["arabic_btn", "english_btn", "1", "2"],
+              description: "Receives button clicks and updates language preference"
             },
-            language_options: {
-              "1": "Arabic (العربية)",
-              "2": "English (الإنجليزية)",
-              default: "Arabic (العربية)"
-            }
+            expectedResponse: {
+              "arabic_btn": "Arabic (العربية)",
+              "english_btn": "English (الإنجليزية)",
+              "1": "Arabic (fallback)",
+              "2": "English (fallback)"
+            },
+            notes: [
+              "Student will receive two messages immediately",
+              "Second message has 2 INTERACTIVE BUTTONS",
+              "Student clicks button to choose language",
+              "System automatically updates database",
+              "Confirmation message sent in chosen language"
+            ]
           }
         }
       },
@@ -439,7 +431,6 @@ export async function POST(req) {
   } catch (error) {
     console.error("❌ Error creating student:", error);
 
-    // معالجة أخطاء فريدة MongoDB
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       console.error("❌ Duplicate field error:", field);
@@ -454,7 +445,6 @@ export async function POST(req) {
       );
     }
 
-    // معالجة أخطاء التحقق من صحة Mongoose
     if (error.name === "ValidationError") {
       const errors = Object.values(error.errors).map((err) => ({
         field: err.path,
@@ -488,7 +478,6 @@ export async function POST(req) {
 // GET: الحصول على جميع الطلاب (مع التصفية والتخطيط)
 export async function GET(req) {
   try {
-    // التحقق من صلاحية الأدمن
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
       return authCheck.response;
@@ -496,7 +485,6 @@ export async function GET(req) {
 
     await connectDB();
 
-    // الحصول على معاملات البحث والترشيح
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
@@ -506,28 +494,20 @@ export async function GET(req) {
     const source = searchParams.get("source");
     const whatsappStatus = searchParams.get("whatsappStatus");
     const language = searchParams.get("language");
+    const hasWhatsappResponse = searchParams.get("hasWhatsappResponse");
 
-    // بناء استعلام البحث
     const query = { isDeleted: false };
 
-    if (status) {
-      query["enrollmentInfo.status"] = status;
-    }
-
-    if (level) {
-      query["academicInfo.level"] = level;
-    }
-
-    if (source) {
-      query["enrollmentInfo.source"] = source;
-    }
-
-    if (whatsappStatus) {
-      query["metadata.whatsappStatus"] = whatsappStatus;
-    }
-
-    if (language) {
-      query["communicationPreferences.preferredLanguage"] = language;
+    if (status) query["enrollmentInfo.status"] = status;
+    if (level) query["academicInfo.level"] = level;
+    if (source) query["enrollmentInfo.source"] = source;
+    if (whatsappStatus) query["metadata.whatsappStatus"] = whatsappStatus;
+    if (language) query["communicationPreferences.preferredLanguage"] = language;
+    
+    if (hasWhatsappResponse === "true") {
+      query["metadata.whatsappResponseReceived"] = true;
+    } else if (hasWhatsappResponse === "false") {
+      query["metadata.whatsappResponseReceived"] = false;
     }
 
     if (search) {
@@ -540,25 +520,20 @@ export async function GET(req) {
       ];
     }
 
-    // حساب التخطيط
     const totalStudents = await Student.countDocuments(query);
     const totalPages = Math.ceil(totalStudents / limit);
     const skip = (page - 1) * limit;
 
-    // جلب البيانات مع التخطيط
     const students = await Student.find(query)
       .populate("authUserId", "name email role")
       .populate("metadata.createdBy", "name email")
-      .populate(
-        "enrollmentInfo.referredBy",
-        "personalInfo.fullName enrollmentNumber"
-      )
+      .populate("enrollmentInfo.referredBy", "personalInfo.fullName enrollmentNumber")
       .sort({ "metadata.createdAt": -1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
-    // تنسيق البيانات للإرجاع
+    // ✅ تنسيق البيانات مع دعم الأزرار التفاعلية
     const formattedStudents = students.map((student) => ({
       id: student._id,
       enrollmentNumber: student.enrollmentNumber,
@@ -571,18 +546,26 @@ export async function GET(req) {
       createdAt: student.metadata.createdAt,
       createdBy: student.metadata.createdBy,
       authUserId: student.authUserId,
+      
+      // ✅ حقول WhatsApp المحسنة مع الأزرار
       whatsappStatus: student.metadata?.whatsappStatus || "pending",
+      whatsappInteractiveSent: student.metadata?.whatsappInteractiveSent || false,
+      whatsappButtons: student.metadata?.whatsappButtons || [],
       whatsappSentAt: student.metadata?.whatsappSentAt,
       whatsappMessageId: student.metadata?.whatsappMessageId,
       whatsappMode: student.metadata?.whatsappMode || "simulation",
       whatsappLanguageSelected: student.metadata?.whatsappLanguageSelected || false,
       whatsappLanguageSelection: student.metadata?.whatsappLanguageSelection,
+      whatsappButtonSelected: student.metadata?.whatsappButtonSelected,
+      whatsappResponseReceived: student.metadata?.whatsappResponseReceived || false,
+      whatsappResponse: student.metadata?.whatsappResponse,
       whatsappConfirmationSent: student.metadata?.whatsappConfirmationSent || false,
       whatsappMessagesCount: student.metadata?.whatsappMessagesCount || 0,
       language: student.communicationPreferences?.preferredLanguage || "ar",
+      conversationId: student.metadata?.whatsappConversationId
     }));
 
-    // 🔥 إضافة إحصائيات WhatsApp
+    // ✅ إحصائيات WhatsApp المحسنة مع الأزرار
     const whatsappStats = {
       total: totalStudents,
       sent: await Student.countDocuments({
@@ -601,6 +584,14 @@ export async function GET(req) {
         ...query,
         "metadata.whatsappStatus": "error",
       }),
+      interactiveSent: await Student.countDocuments({
+        ...query,
+        "metadata.whatsappInteractiveSent": true,
+      }),
+      responseReceived: await Student.countDocuments({
+        ...query,
+        "metadata.whatsappResponseReceived": true,
+      }),
       languageStats: {
         arabic: await Student.countDocuments({
           ...query,
@@ -616,10 +607,20 @@ export async function GET(req) {
           ...query,
           "metadata.whatsappConfirmationSent": true,
         }),
-        pending: await Student.countDocuments({
+        pendingConfirmation: await Student.countDocuments({
           ...query,
           "metadata.whatsappLanguageSelected": true,
           "metadata.whatsappConfirmationSent": false,
+        }),
+      },
+      buttonStats: {
+        arabicSelected: await Student.countDocuments({
+          ...query,
+          "metadata.whatsappButtonSelected": { $in: ["1", "arabic_btn"] },
+        }),
+        englishSelected: await Student.countDocuments({
+          ...query,
+          "metadata.whatsappButtonSelected": { $in: ["2", "english_btn"] },
         }),
       }
     };
@@ -653,6 +654,8 @@ export async function GET(req) {
   }
 }
 
+// PUT, DELETE, PATCH methods remain the same...
+// (باقي الدوال كما هي بدون تغيير)
 // PUT: تحديث طالب
 export async function PUT(req, { params }) {
   try {
