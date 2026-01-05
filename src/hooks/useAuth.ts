@@ -1,6 +1,6 @@
 // hooks/useAuth.ts
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 
 interface User {
   id: string;
@@ -20,39 +20,39 @@ export function useAuth() {
 
   const checkAuth = () => {
     try {
-      const token = localStorage.getItem('token');
-      const userData = localStorage.getItem('user');
-      
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("user");
+
       if (token && userData) {
         setUser(JSON.parse(userData));
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      console.error("Auth check failed:", error);
     } finally {
       setLoading(false);
     }
   };
 
   const login = (token: string, userData: User) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
     // Remove cookie
-    document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    
+    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
     setUser(null);
-    window.location.href = '/';
+    window.location.href = "/";
   };
 
   const hasRole = (roles: string | string[]) => {
     if (!user) return false;
-    
+
     const requiredRoles = Array.isArray(roles) ? roles : [roles];
     return requiredRoles.includes(user.role);
   };

@@ -63,7 +63,6 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       href: "/admin/schedules",
       icon: "ion:time-outline",
     },
-    // رابط جديد لإدارة الصور
     {
       label: t('dashboard.sectionImages') || "Section Images",
       href: "/admin/sectionImages",
@@ -96,7 +95,7 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
     },
     {
       label: t('dashboard.sectionImagesHero') || "Section Images",
-      href: "/admin/sectionImagesHero", // هذا هو الباث الموجود حالياً
+      href: "/admin/sectionImagesHero",
       icon: "ion:images-outline",
       badge: createBadge(t('common.new') || "New"),
     },
@@ -107,11 +106,16 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       badge: createBadge(t('common.new') || "New"),
     },
     {
+      label: t('dashboard.courses') || "Courses",
+      href: "/admin/courses",
+      icon: "ion:book-outline",
+      badge: createBadge(t('common.new') || "New"),
+    },
+    {
       label: t('nav.settings') || "Settings",
       href: "/admin/settings",
       icon: "ion:settings-outline",
     },
-
   ];
 
   const activePath = useMemo(() => {

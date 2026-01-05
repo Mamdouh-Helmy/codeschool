@@ -8,18 +8,23 @@ const FORCE_PRODUCTION = true;
 class WapilotService {
   constructor() {
     console.log("🔍 WhatsApp Service Initialization:");
-    
-    this.baseURL = process.env.WHATSAPP_API_URL || "https://api.wapilot.net/api/v2";
+
+    this.baseURL =
+      process.env.WHATSAPP_API_URL || "https://api.wapilot.net/api/v2";
     this.apiToken = process.env.WHATSAPP_API_TOKEN;
     this.instanceId = process.env.WHATSAPP_INSTANCE_ID;
     this.isEnabled = !!this.apiToken && !!this.instanceId;
-    this.mode = FORCE_PRODUCTION || (this.isEnabled && process.env.NODE_ENV === "production") ? "PRODUCTION" : "SIMULATION";
+    this.mode =
+      FORCE_PRODUCTION ||
+      (this.isEnabled && process.env.NODE_ENV === "production")
+        ? "PRODUCTION"
+        : "SIMULATION";
 
     console.log("📱 Wapilot WhatsApp Service initialized:", {
       enabled: this.isEnabled,
       instance: this.instanceId ? "Configured" : "Not configured",
       mode: this.mode,
-      interactiveSupport: "✅ YES - List Messages Enabled"
+      interactiveSupport: "✅ YES - List Messages Enabled",
     });
   }
 
@@ -85,7 +90,10 @@ Best regards,
     if (!phoneNumber) return null;
 
     try {
-      let cleanNumber = phoneNumber.toString().replace(/\s+/g, "").replace(/^0+/, "");
+      let cleanNumber = phoneNumber
+        .toString()
+        .replace(/\s+/g, "")
+        .replace(/^0+/, "");
 
       if (!cleanNumber.startsWith("+")) {
         if (cleanNumber.startsWith("1") && cleanNumber.length >= 10) {
@@ -123,7 +131,7 @@ Best regards,
       const messagePayload = {
         chat_id: phoneNumber.replace("+", ""),
         text: messageText,
-        priority: 0
+        priority: 0,
       };
 
       console.log("📤 Sending text message:", {
@@ -136,7 +144,7 @@ Best regards,
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "token": this.apiToken,
+          token: this.apiToken,
         },
         body: JSON.stringify(messagePayload),
       });
@@ -190,8 +198,8 @@ Best regards,
           description: description,
           footer: "Code School 💻",
           button: buttonText,
-          sections: sections
-        }
+          sections: sections,
+        },
       };
 
       console.log("📤 Sending List Message:", {
@@ -199,14 +207,14 @@ Best regards,
         to: phoneNumber,
         title: title,
         sections: sections.length,
-        payload: JSON.stringify(messagePayload, null, 2)
+        payload: JSON.stringify(messagePayload, null, 2),
       });
 
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "token": this.apiToken,
+          token: this.apiToken,
         },
         body: JSON.stringify(messagePayload),
       });
@@ -222,7 +230,7 @@ Best regards,
         messageId: result.id,
         status: "sent",
         to: phoneNumber,
-        interactive: true
+        interactive: true,
       });
 
       return {
@@ -261,7 +269,10 @@ Best regards,
       },
     };
 
-    console.log("✅ SIMULATION: Message sent successfully", simulatedResponse.debug);
+    console.log(
+      "✅ SIMULATION: Message sent successfully",
+      simulatedResponse.debug
+    );
 
     return simulatedResponse;
   }
@@ -276,7 +287,7 @@ Best regards,
         whatsappNumber: phoneNumber,
         mode: this.mode,
         interactive: true,
-        messageType: "list_message"
+        messageType: "list_message",
       });
 
       if (!phoneNumber) {
@@ -317,7 +328,7 @@ Best regards,
 
         // انتظار 3 ثوانٍ ثم إرسال List Message
         await new Promise((resolve) => setTimeout(resolve, 3000));
-        
+
         // ✅ List Message مع خيارات اللغة
         secondResult = await this.sendListMessage(
           preparedNumber,
@@ -331,25 +342,30 @@ Best regards,
                 {
                   rowId: "arabic_lang",
                   title: "🇸🇦 العربية",
-                  description: "اختر العربية كلغة مفضلة | Choose Arabic as preferred language"
+                  description:
+                    "اختر العربية كلغة مفضلة | Choose Arabic as preferred language",
                 },
                 {
                   rowId: "english_lang",
                   title: "🇺🇸 English",
-                  description: "Choose English as preferred language | اختر الإنجليزية كلغة مفضلة"
-                }
-              ]
-            }
+                  description:
+                    "Choose English as preferred language | اختر الإنجليزية كلغة مفضلة",
+                },
+              ],
+            },
           ]
         );
       } else {
         console.log("🔧 SIMULATING MESSAGES WITH LIST INTERACTION");
 
-        firstResult = await this.simulateSendMessage(preparedNumber, firstMessage);
+        firstResult = await this.simulateSendMessage(
+          preparedNumber,
+          firstMessage
+        );
         await new Promise((resolve) => setTimeout(resolve, 3000));
         secondResult = await this.simulateSendMessage(
-          preparedNumber, 
-          "Language Selection List", 
+          preparedNumber,
+          "Language Selection List",
           true
         );
       }
@@ -399,7 +415,11 @@ Best regards,
     }
   }
 
-  async sendLanguageConfirmationMessage(phoneNumber, studentName, selectedLanguage) {
+  async sendLanguageConfirmationMessage(
+    phoneNumber,
+    studentName,
+    selectedLanguage
+  ) {
     try {
       console.log("📱 Sending language confirmation:", {
         phoneNumber,
@@ -417,7 +437,10 @@ Best regards,
         preparedNumber = `+20${preparedNumber.replace(/^\+/, "")}`;
       }
 
-      const messageText = this.prepareLanguageConfirmationMessage(studentName, selectedLanguage);
+      const messageText = this.prepareLanguageConfirmationMessage(
+        studentName,
+        selectedLanguage
+      );
 
       let sendResult;
       if (this.mode === "PRODUCTION" && this.apiToken && this.instanceId) {
@@ -478,14 +501,27 @@ Best regards,
 
       const student = await Student.findOne({
         $or: [
-          { "personalInfo.whatsappNumber": { $regex: preparedNumber.replace("+", ""), $options: "i" } },
-          { "personalInfo.whatsappNumber": { $regex: preparedNumber, $options: "i" } }
+          {
+            "personalInfo.whatsappNumber": {
+              $regex: preparedNumber.replace("+", ""),
+              $options: "i",
+            },
+          },
+          {
+            "personalInfo.whatsappNumber": {
+              $regex: preparedNumber,
+              $options: "i",
+            },
+          },
         ],
         isDeleted: false,
       });
 
       if (!student) {
-        console.log("⚠️ Student not found with WhatsApp number:", preparedNumber);
+        console.log(
+          "⚠️ Student not found with WhatsApp number:",
+          preparedNumber
+        );
         return {
           success: false,
           message: "Student not found",
@@ -494,22 +530,27 @@ Best regards,
 
       let selectedLanguage;
       let responseText = response.toString().trim();
-      
+
       // ✅ معالجة ردود List Message (rowId)
-      if (responseText === "arabic_lang" || 
-          responseText === "1" || 
-          responseText.includes("العربية") ||
-          responseText.toLowerCase().includes("arabic")) {
+      if (
+        responseText === "arabic_lang" ||
+        responseText === "1" ||
+        responseText.includes("العربية") ||
+        responseText.toLowerCase().includes("arabic")
+      ) {
         selectedLanguage = "ar";
-      } else if (responseText === "english_lang" || 
-                 responseText === "2" || 
-                 responseText.includes("English") ||
-                 responseText.toLowerCase().includes("english")) {
+      } else if (
+        responseText === "english_lang" ||
+        responseText === "2" ||
+        responseText.includes("English") ||
+        responseText.toLowerCase().includes("english")
+      ) {
         selectedLanguage = "en";
       } else {
         return {
           success: false,
-          message: "اختيار غير صحيح. اختر من القائمة.\nInvalid selection. Choose from the list.",
+          message:
+            "اختيار غير صحيح. اختر من القائمة.\nInvalid selection. Choose from the list.",
         };
       }
 
@@ -521,7 +562,7 @@ Best regards,
         currentLanguage: student.communicationPreferences?.preferredLanguage,
         newLanguage: selectedLanguage,
         response: responseText,
-        via: "list_message"
+        via: "list_message",
       });
 
       await Student.findByIdAndUpdate(
@@ -605,8 +646,8 @@ Best regards,
       ],
       listOptions: [
         { rowId: "arabic_lang", title: "🇸🇦 العربية", sets: "ar" },
-        { rowId: "english_lang", title: "🇺🇸 English", sets: "en" }
-      ]
+        { rowId: "english_lang", title: "🇺🇸 English", sets: "en" },
+      ],
     };
   }
 }
