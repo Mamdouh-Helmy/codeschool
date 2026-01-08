@@ -11,7 +11,7 @@ const addressSchema = new mongoose.Schema({
 const currentCourseSchema = new mongoose.Schema({
   courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
   enrolledDate: { type: Date, default: Date.now },
-  progressPercentage: { type: Number, default: 0, min: 0, max: 100 }
+  progressPercentage: { type: Number, default: 0 }
 });
 
 const notificationChannelsSchema = new mongoose.Schema({
@@ -21,7 +21,7 @@ const notificationChannelsSchema = new mongoose.Schema({
 });
 
 const StudentSchema = new mongoose.Schema({
-  // Reference to User model (غير إجباري)
+  // Reference to User model
   authUserId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -40,36 +40,28 @@ const StudentSchema = new mongoose.Schema({
   personalInfo: {
     fullName: {
       type: String,
-      required: [true, 'Full name is required'],
       trim: true
     },
     email: {
       type: String,
-      required: [true, 'Email is required'],
-      lowercase: true,
-      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please enter a valid email address']
+      lowercase: true
     },
     phone: {
-      type: String,
-      required: [true, 'Phone number is required']
+      type: String
     },
     whatsappNumber: {
-      type: String,
-      required: [true, 'WhatsApp number is required']
+      type: String
     },
     dateOfBirth: {
-      type: Date,
-      required: [true, 'Date of birth is required']
+      type: Date
     },
     gender: {
-      type: String,
-      enum: ['Male', 'Female', 'Other'],
-      required: [true, 'Gender is required']
+      type: String
     },
     nationalId: {
       type: String,
-      required: [true, 'National ID is required'],
-      unique: true
+      unique: true,
+      sparse: true
     },
     address: addressSchema
   },
@@ -77,16 +69,13 @@ const StudentSchema = new mongoose.Schema({
   // Guardian Information
   guardianInfo: {
     name: {
-      type: String,
-      required: [true, 'Guardian name is required']
+      type: String
     },
     relationship: {
-      type: String,
-      required: [true, 'Relationship is required']
+      type: String
     },
     phone: {
-      type: String,
-      required: [true, 'Guardian phone is required']
+      type: String
     },
     whatsappNumber: {
       type: String
@@ -110,8 +99,7 @@ const StudentSchema = new mongoose.Schema({
     },
     source: {
       type: String,
-      enum: ['Website', 'Referral', 'Marketing', 'Walk-in'],
-      required: [true, 'Enrollment source is required']
+      enum: ['Website', 'Referral', 'Marketing', 'Walk-in']
     },
     referredBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -159,15 +147,14 @@ const StudentSchema = new mongoose.Schema({
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
+      ref: 'User'
     },
     lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },
     
-    // 🔥 حقول WhatsApp الأساسية والمحسنة
+    // WhatsApp Fields
     whatsappWelcomeSent: {
       type: Boolean,
       default: false
@@ -210,14 +197,13 @@ const StudentSchema = new mongoose.Schema({
       default: 0
     },
     
-    // 🔥 حقول اختيار اللغة والتفاعل (FIXED!)
+    // Language Selection Fields
     whatsappLanguageSelected: {
       type: Boolean,
       default: false
     },
     whatsappLanguageSelection: {
       type: String,
-      // ✅ الحل: إضافة IDs الأزرار إلى enum
       enum: ['1', '2', 'arabic_btn', 'english_btn', null],
       default: null
     },
@@ -241,7 +227,7 @@ const StudentSchema = new mongoose.Schema({
       type: Date
     },
     
-    // 🔥 حقول تأكيد اللغة
+    // Language Confirmation Fields
     whatsappLanguageConfirmed: {
       type: Boolean,
       default: false
@@ -263,7 +249,7 @@ const StudentSchema = new mongoose.Schema({
       type: Date
     },
     
-    // 🔥 إحصائيات إضافية
+    // Additional Statistics
     whatsappTotalMessages: {
       type: Number,
       default: 0
@@ -292,7 +278,7 @@ const StudentSchema = new mongoose.Schema({
 // Indexes for better performance
 StudentSchema.index({ enrollmentNumber: 1 }, { unique: true, sparse: true });
 StudentSchema.index({ 'personalInfo.whatsappNumber': 1 });
-StudentSchema.index({ 'personalInfo.nationalId': 1 }, { unique: true });
+StudentSchema.index({ 'personalInfo.nationalId': 1 }, { unique: true, sparse: true });
 StudentSchema.index({ 'enrollmentInfo.status': 1 });
 StudentSchema.index({ 'personalInfo.email': 1 });
 StudentSchema.index({ authUserId: 1 }, { unique: true, sparse: true });
@@ -316,26 +302,43 @@ StudentSchema.pre('findOne', function() {
 
 // Update timestamp before save
 StudentSchema.pre('save', function(next) {
-  this.metadata.updatedAt = Date.now();
-  next();
+  try {
+    if (!this.metadata) {
+      this.metadata = {};
+    }
+    this.metadata.updatedAt = new Date();
+    next();
+  } catch (error) {
+    console.error("Error in pre-save middleware (timestamp):", error);
+    next(error);
+  }
 });
 
-// 🔥 Middleware لتحديث الحقول المترابطة
+// Middleware لتحديث الحقول المترابطة
 StudentSchema.pre('save', function(next) {
-  // إذا تم اختيار اللغة، تحديث الحقول المترابطة
-  if (this.metadata.whatsappLanguageSelected && !this.metadata.whatsappLanguageSelectedAt) {
-    this.metadata.whatsappLanguageSelectedAt = new Date();
-    this.metadata.whatsappResponseReceived = true;
-    this.metadata.whatsappResponse = this.metadata.whatsappLanguageSelection;
-    this.metadata.whatsappResponseAt = new Date();
+  try {
+    if (!this.metadata) {
+      return next();
+    }
+    
+    // إذا تم اختيار اللغة، تحديث الحقول المترابطة
+    if (this.metadata.whatsappLanguageSelected && !this.metadata.whatsappLanguageSelectedAt) {
+      this.metadata.whatsappLanguageSelectedAt = new Date();
+      this.metadata.whatsappResponseReceived = true;
+      this.metadata.whatsappResponse = this.metadata.whatsappLanguageSelection;
+      this.metadata.whatsappResponseAt = new Date();
+    }
+    
+    // إذا تم الضغط على زر، تحديث الحقول المترابطة
+    if (this.metadata.whatsappButtonSelected && !this.metadata.whatsappButtonSelectedAt) {
+      this.metadata.whatsappButtonSelectedAt = new Date();
+    }
+    
+    next();
+  } catch (error) {
+    console.error("Error in pre-save middleware (whatsapp):", error);
+    next(error);
   }
-  
-  // إذا تم الضغط على زر، تحديث الحقول المترابطة
-  if (this.metadata.whatsappButtonSelected && !this.metadata.whatsappButtonSelectedAt) {
-    this.metadata.whatsappButtonSelectedAt = new Date();
-  }
-  
-  next();
 });
 
 export default mongoose.models.Student || mongoose.model('Student', StudentSchema);

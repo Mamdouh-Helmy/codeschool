@@ -238,9 +238,15 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     return null;
   };
 
-  // اختيار طالب من القائمة
+  // اختيار طالب من القائمة - فقط التحقق من التكرار للطلاب الموجودين
   const handleStudentSelect = (student) => {
     if (!student.isManual) {
+      // التحقق من أن الطالب لم يتم اختياره من قبل
+      if (selectedStudent?._id === student._id) {
+        toast.error("هذا الطالب مختار بالفعل");
+        return;
+      }
+      
       // طالب موجود في قاعدة البيانات
       setSelectedStudent(student);
       onChange('personalInfo.fullName', student.name);
@@ -303,43 +309,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
 
-    // التحقق من الحقول المطلوبة
-    const requiredFields = [
-      'personalInfo.fullName',
-      'personalInfo.email',
-      'personalInfo.phone',
-      'personalInfo.whatsappNumber',
-      'personalInfo.dateOfBirth',
-      'personalInfo.gender',
-      'personalInfo.nationalId',
-      'guardianInfo.name',
-      'guardianInfo.relationship',
-      'guardianInfo.phone',
-      'enrollmentInfo.source'
-    ];
-
-    const missingFields = requiredFields.filter(field => {
-      const value = field.split('.').reduce((obj, key) => obj && obj[key], form);
-      return !value || value.toString().trim() === '';
-    });
-
-    if (missingFields.length > 0) {
-      toast.error(t("students.validation.requiredFields"));
-      return;
-    }
-
-    // التحقق من كلمة المرور للطلاب الجدد
-    if (!selectedStudent) {
-      if (!password || password.length < 6) {
-        toast.error(t("students.validation.passwordLength"));
-        return;
-      }
-      if (password !== passwordConfirm) {
-        toast.error(t("students.validation.passwordsMatch"));
-        return;
-      }
-    }
-
     setLoading(true);
     const toastId = toast.loading(selectedStudent ?
       t("studentForm.updating") :
@@ -349,7 +318,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       let userId = form.authUserId;
 
       // إذا كان طالباً جديداً بدون حساب سابق
-      if (!selectedStudent) {
+      if (!selectedStudent || (selectedStudent && selectedStudent.isManual)) {
         console.log("👤 Creating new user account for student...");
 
         // 1. إنشاء حساب المستخدم
@@ -375,38 +344,14 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       }
 
       // إعداد بيانات الطالب للإرسال
-      // ✅ إصلاح مشكلة التاريخ على السيرفر - استخدام T12:00:00 لتجنب مشاكل timezone
       let dateOfBirthISO = null;
       if (form.personalInfo.dateOfBirth) {
         try {
-          // التحقق من صحة التاريخ قبل التحويل
           const dateStr = form.personalInfo.dateOfBirth;
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-            throw new Error("Invalid date format. Expected YYYY-MM-DD");
-          }
-          
-          // استخدام T12:00:00 لتجنب مشاكل timezone على السيرفر
           const dateObj = new Date(dateStr + 'T12:00:00');
           
-          // التحقق من أن التاريخ صحيح
           if (isNaN(dateObj.getTime())) {
             throw new Error("Invalid date value");
-          }
-          
-          // ✅ التحقق من أن التاريخ ليس في المستقبل
-          const today = new Date();
-          today.setHours(23, 59, 59, 999);
-          
-          if (dateObj > today) {
-            throw new Error("تاريخ الميلاد لا يمكن أن يكون في المستقبل");
-          }
-          
-          // ✅ التحقق من أن التاريخ منطقي (مثلاً ليس قبل 150 سنة)
-          const minDate = new Date();
-          minDate.setFullYear(minDate.getFullYear() - 150);
-          
-          if (dateObj < minDate) {
-            throw new Error("تاريخ الميلاد غير منطقي");
           }
           
           dateOfBirthISO = dateObj.toISOString();
@@ -446,10 +391,8 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       const result = await res.json();
 
       if (!res.ok) {
-        // ✅ تحسين رسائل الخطأ
         let errorMessage = result.message || `HTTP error! status: ${res.status}`;
         
-        // إضافة تفاصيل إضافية من الـ response
         if (result.errors && Array.isArray(result.errors)) {
           const errorDetails = result.errors.map(err => `${err.field}: ${err.message}`).join(', ');
           errorMessage += ` - ${errorDetails}`;
@@ -469,11 +412,10 @@ export default function StudentForm({ initial, onClose, onSaved }) {
 
         toast.success(successMessage, { id: toastId });
 
-        // 🔥 إرسال رسائل الترحيب عبر WhatsApp فوراً للطلاب الجدد
+        // إرسال رسائل الترحيب عبر WhatsApp فوراً للطلاب الجدد
         if (!selectedStudent || selectedStudent.isManual) {
           console.log("📱 Preparing to send WhatsApp welcome messages...");
 
-          // استخدام setTimeout لإرسال الرسالة بعد تأخير بسيط
           setTimeout(async () => {
             try {
               const messageSent = await sendWhatsAppWelcomeMessage(form);
@@ -536,7 +478,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                 onFocus={handleInputFocus}
                 placeholder={t("testimonials.form.searchStudent")}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200 pr-10 disabled:opacity-50"
-                required
                 disabled={loading}
               />
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -697,7 +638,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
             onChange={(e) => onChange('personalInfo.email', e.target.value)}
             placeholder="student@example.com"
             className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-            required
             disabled={selectedStudent && !selectedStudent.isManual}
           />
           {selectedStudent && !selectedStudent.isManual && (
@@ -729,7 +669,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
                   <Lock className="w-3 h-3" />
                   {t("studentForm.password")}
-                  <span className="text-xs text-gray-500">{t("studentForm.passwordMin")}</span>
                 </label>
                 <input
                   type="password"
@@ -737,8 +676,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className="w-full px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white bg-white/50"
-                  required
-                  minLength={6}
                 />
               </div>
 
@@ -753,7 +690,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   onChange={(e) => setPasswordConfirm(e.target.value)}
                   placeholder="••••••••"
                   className="w-full px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white bg-white/50"
-                  required
                 />
               </div>
             </div>
@@ -815,7 +751,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
               onChange={(e) => onChange('personalInfo.phone', e.target.value)}
               placeholder="+201234567890"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              required
             />
           </div>
 
@@ -829,7 +764,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
               onChange={(e) => onChange('personalInfo.whatsappNumber', e.target.value)}
               placeholder="01234567890"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              required
             />
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {t("studentForm.whatsappNote") || "Enter Egyptian number (e.g., 01234567890). Country code will be added automatically."}
@@ -847,7 +781,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
               value={form.personalInfo.dateOfBirth}
               onChange={(e) => onChange('personalInfo.dateOfBirth', e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              required
               max={new Date().toISOString().split('T')[0]}
             />
           </div>
@@ -860,7 +793,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
               value={form.personalInfo.gender}
               onChange={(e) => onChange('personalInfo.gender', e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              required
             >
               <option value="Male">{t("studentForm.gender.male")}</option>
               <option value="Female">{t("studentForm.gender.female")}</option>
@@ -878,7 +810,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
               onChange={(e) => onChange('personalInfo.nationalId', e.target.value)}
               placeholder="12345678901234"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              required
             />
           </div>
         </div>
@@ -977,7 +908,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
               onChange={(e) => onChange('guardianInfo.name', e.target.value)}
               placeholder={t("studentForm.guardianName")}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              required
             />
           </div>
 
@@ -991,7 +921,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
               onChange={(e) => onChange('guardianInfo.relationship', e.target.value)}
               placeholder={t("studentForm.relationship")}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              required
             />
           </div>
         </div>
@@ -1007,7 +936,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
               onChange={(e) => onChange('guardianInfo.phone', e.target.value)}
               placeholder="+201234567890"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              required
             />
           </div>
 
@@ -1064,7 +992,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
               value={form.enrollmentInfo.source}
               onChange={(e) => onChange('enrollmentInfo.source', e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              required
             >
               <option value="Website">{t("students.source.website")}</option>
               <option value="Referral">{t("students.source.referral")}</option>
@@ -1137,9 +1064,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                 <option value="ar">{t("studentForm.language.ar")}</option>
                 <option value="en">{t("studentForm.language.en")}</option>
               </select>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                سيتم تأكيد هذه اللغة مع الطالب عبر WhatsApp
-              </p>
             </div>
 
             <div className="space-y-2">

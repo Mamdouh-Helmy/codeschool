@@ -32,102 +32,8 @@ export async function POST(req) {
     const studentData = await req.json();
     console.log("📥 Received student data:", JSON.stringify(studentData, null, 2));
 
-    const requiredFields = [
-      "personalInfo.fullName",
-      "personalInfo.email",
-      "personalInfo.phone",
-      "personalInfo.whatsappNumber",
-      "personalInfo.dateOfBirth",
-      "personalInfo.gender",
-      "personalInfo.nationalId",
-      "guardianInfo.name",
-      "guardianInfo.relationship",
-      "guardianInfo.phone",
-      "enrollmentInfo.source",
-    ];
-
-    const missingFields = requiredFields.filter((field) => {
-      const value = field.split(".").reduce((obj, key) => obj && obj[key], studentData);
-      return value === undefined || value === null || value === "";
-    });
-
-    if (missingFields.length > 0) {
-      console.log("❌ Missing required fields:", missingFields);
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Missing required fields",
-          fields: missingFields,
-        },
-        { status: 400 }
-      );
-    }
-
-    // ✅ التحقق من صحة التاريخ وتحويله بشكل آمن
-    let dateOfBirth = studentData.personalInfo?.dateOfBirth;
-    if (dateOfBirth) {
-      try {
-        // إذا كان string، تحويله لـ Date object
-        if (typeof dateOfBirth === 'string') {
-          const dateObj = new Date(dateOfBirth);
-          if (isNaN(dateObj.getTime())) {
-            throw new Error("Invalid date format");
-          }
-          
-          // ✅ التحقق من أن التاريخ ليس في المستقبل
-          const today = new Date();
-          today.setHours(23, 59, 59, 999); // نهاية اليوم
-          
-          if (dateObj > today) {
-            console.error("❌ Date of birth is in the future:", dateOfBirth);
-            return NextResponse.json(
-              {
-                success: false,
-                message: "تاريخ الميلاد لا يمكن أن يكون في المستقبل",
-                error: "Date of birth cannot be in the future",
-              },
-              { status: 400 }
-            );
-          }
-          
-          // ✅ التحقق من أن التاريخ منطقي (مثلاً ليس قبل 150 سنة)
-          const minDate = new Date();
-          minDate.setFullYear(minDate.getFullYear() - 150);
-          
-          if (dateObj < minDate) {
-            console.error("❌ Date of birth is too old:", dateOfBirth);
-            return NextResponse.json(
-              {
-                success: false,
-                message: "تاريخ الميلاد غير منطقي",
-                error: "Date of birth is too old",
-              },
-              { status: 400 }
-            );
-          }
-          
-          dateOfBirth = dateObj;
-          console.log("✅ Date of birth validated:", dateOfBirth);
-        }
-      } catch (dateError) {
-        console.error("❌ Date parsing error:", dateError);
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Invalid date of birth format",
-            error: dateError.message,
-          },
-          { status: 400 }
-        );
-      }
-    }
-
     const cleanData = {
       ...studentData,
-      personalInfo: {
-        ...studentData.personalInfo,
-        dateOfBirth: dateOfBirth, // استخدام التاريخ المحول
-      },
       authUserId:
         studentData.authUserId && studentData.authUserId.trim() !== ""
           ? studentData.authUserId
@@ -190,7 +96,6 @@ export async function POST(req) {
 
     console.log("📝 Creating student record...");
     
-    // ✅ إعداد بيانات WhatsApp التفاعلية
     const whatsappButtons = [
       { id: "arabic_btn", title: "العربية 🇸🇦" },
       { id: "english_btn", title: "English 🇺🇸" }
@@ -205,7 +110,6 @@ export async function POST(req) {
         createdAt: new Date(),
         updatedAt: new Date(),
         
-        // ✅ حقول WhatsApp المحسنة للأزرار
         whatsappWelcomeSent: false,
         whatsappInteractiveSent: false,
         whatsappButtons: whatsappButtons,
@@ -214,17 +118,14 @@ export async function POST(req) {
         whatsappMessagesCount: 0,
         whatsappTotalMessages: 0,
         
-        // حقول اختيار اللغة
         whatsappLanguageSelected: false,
         whatsappLanguageSelection: null,
         whatsappButtonSelected: null,
         whatsappResponseReceived: false,
         
-        // حقول التأكيد
         whatsappLanguageConfirmed: false,
         whatsappConfirmationSent: false,
         
-        // المحادثة
         whatsappConversationId: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       },
     };
@@ -270,7 +171,7 @@ export async function POST(req) {
       }
 
       if (saveError.name === 'ValidationError') {
-        const errors = Object.values(saveError.errors).map((err) => ({
+        const errors = Object.values(saveError.errors || {}).map((err) => ({
           field: err.path,
           message: err.message,
         }));
@@ -280,10 +181,24 @@ export async function POST(req) {
         return NextResponse.json(
           {
             success: false,
-            message: "Validation failed",
+            message: "فشل التحقق من البيانات",
+            error: "Validation failed",
             errors: errors,
           },
           { status: 400 }
+        );
+      }
+
+      if (saveError.name === "TypeError" && saveError.message && saveError.message.includes("is not a function")) {
+        console.error("❌ TypeError - function call error:", saveError.message, saveError.stack);
+        return NextResponse.json(
+          {
+            success: false,
+            message: "خطأ في معالجة البيانات. يرجى المحاولة مرة أخرى.",
+            error: "Internal processing error",
+            details: process.env.NODE_ENV === "development" ? saveError.message : undefined,
+          },
+          { status: 500 }
         );
       }
       
@@ -502,7 +417,6 @@ export async function POST(req) {
       keyValue: error.keyValue,
     });
 
-    // Handle duplicate key errors
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0] || "unknown";
       console.error("❌ Duplicate field error:", field);
@@ -518,7 +432,6 @@ export async function POST(req) {
       );
     }
 
-    // Handle validation errors
     if (error.name === "ValidationError") {
       const errors = Object.values(error.errors || {}).map((err) => ({
         field: err.path,
@@ -538,7 +451,6 @@ export async function POST(req) {
       );
     }
 
-    // Handle CastError (invalid ObjectId, etc.)
     if (error.name === "CastError") {
       console.error("❌ Cast error:", error.path, error.value);
       return NextResponse.json(
@@ -553,7 +465,23 @@ export async function POST(req) {
       );
     }
 
-    // Generic error response
+    if (error.name === "TypeError" && error.message && error.message.includes("is not a function")) {
+      console.error("❌ TypeError - function call error:", {
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          message: "خطأ في معالجة البيانات. يرجى المحاولة مرة أخرى.",
+          error: "Internal processing error",
+          details: process.env.NODE_ENV === "development" ? error.message : undefined,
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -572,7 +500,7 @@ export async function POST(req) {
   }
 }
 
-// GET: الحصول على جميع الطلاب (مع التصفية والتخطيط)
+// GET: الحصول على جميع الطلاب
 export async function GET(req) {
   try {
     const authCheck = await requireAdmin(req);
@@ -630,7 +558,6 @@ export async function GET(req) {
       .limit(limit)
       .lean();
 
-    // ✅ تنسيق البيانات مع دعم الأزرار التفاعلية
     const formattedStudents = students.map((student) => ({
       id: student._id,
       enrollmentNumber: student.enrollmentNumber,
@@ -644,7 +571,6 @@ export async function GET(req) {
       createdBy: student.metadata.createdBy,
       authUserId: student.authUserId,
       
-      // ✅ حقول WhatsApp المحسنة مع الأزرار
       whatsappStatus: student.metadata?.whatsappStatus || "pending",
       whatsappInteractiveSent: student.metadata?.whatsappInteractiveSent || false,
       whatsappButtons: student.metadata?.whatsappButtons || [],
@@ -662,7 +588,6 @@ export async function GET(req) {
       conversationId: student.metadata?.whatsappConversationId
     }));
 
-    // ✅ إحصائيات WhatsApp المحسنة مع الأزرار
     const whatsappStats = {
       total: totalStudents,
       sent: await Student.countDocuments({
@@ -751,14 +676,11 @@ export async function GET(req) {
   }
 }
 
-// PUT, DELETE, PATCH methods remain the same...
-// (باقي الدوال كما هي بدون تغيير)
 // PUT: تحديث طالب
 export async function PUT(req, { params }) {
   try {
     console.log(`✏️ Updating student with ID: ${params.id}`);
 
-    // التحقق من صلاحية الأدمن
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
       console.log("❌ Admin authorization failed");
@@ -773,12 +695,8 @@ export async function PUT(req, { params }) {
     const { id } = params;
     const updateData = await req.json();
 
-    console.log(
-      "📥 Update data received:",
-      JSON.stringify(updateData, null, 2)
-    );
+    console.log("📥 Update data received:", JSON.stringify(updateData, null, 2));
 
-    // التحقق من صحة معرف MongoDB
     if (!mongoose.Types.ObjectId.isValid(id)) {
       console.log(`❌ Invalid student ID format: ${id}`);
       return NextResponse.json(
@@ -787,7 +705,6 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // التحقق من وجود الطالب وغير محذوف
     const existingStudent = await Student.findOne({
       _id: id,
       isDeleted: false,
@@ -801,15 +718,12 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // تنظيف البيانات
     const cleanUpdateData = {
       ...updateData,
-      // إذا كان authUserId فارغًا، ضععه null
       authUserId:
         updateData.authUserId && updateData.authUserId.trim() !== ""
           ? updateData.authUserId
           : null,
-      // تنظيف referredBy
       enrollmentInfo: updateData.enrollmentInfo
         ? {
             ...updateData.enrollmentInfo,
@@ -822,7 +736,6 @@ export async function PUT(req, { params }) {
         : undefined,
     };
 
-    // إعداد بيانات التحديث
     const updatePayload = {
       ...cleanUpdateData,
       "metadata.lastModifiedBy": adminUser.id,
@@ -831,7 +744,6 @@ export async function PUT(req, { params }) {
 
     console.log("🔄 Executing database update...");
 
-    // تنفيذ التحديث مع التحقق من الصحة
     const updatedStudent = await Student.findOneAndUpdate(
       { _id: id, isDeleted: false },
       { $set: updatePayload },
@@ -852,9 +764,7 @@ export async function PUT(req, { params }) {
       );
     }
 
-    console.log(
-      `✅ Student updated successfully: ${updatedStudent.enrollmentNumber}`
-    );
+    console.log(`✅ Student updated successfully: ${updatedStudent.enrollmentNumber}`);
 
     return NextResponse.json(
       {
@@ -876,7 +786,6 @@ export async function PUT(req, { params }) {
   } catch (error) {
     console.error(`❌ Error updating student ${params.id}:`, error);
 
-    // معالجة أخطاء فريدة MongoDB
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       console.error(`❌ Duplicate field error: ${field}`, error.keyValue);
@@ -892,7 +801,6 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // معالجة أخطاء التحقق من صحة Mongoose
     if (error.name === "ValidationError") {
       const errors = Object.values(error.errors).map((err) => ({
         field: err.path,
@@ -928,7 +836,6 @@ export async function DELETE(req, { params }) {
   try {
     console.log(`🗑️ Soft deleting student with ID: ${params.id}`);
 
-    // التحقق من صلاحية الأدمن
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
       console.log("❌ Admin authorization failed");
@@ -942,7 +849,6 @@ export async function DELETE(req, { params }) {
 
     const { id } = params;
 
-    // التحقق من صحة معرف MongoDB
     if (!mongoose.Types.ObjectId.isValid(id)) {
       console.log(`❌ Invalid student ID format: ${id}`);
       return NextResponse.json(
@@ -951,7 +857,6 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // التحقق من أن الطالب موجود وغير محذوف مسبقاً
     const existingStudent = await Student.findOne({
       _id: id,
       isDeleted: false,
@@ -969,7 +874,6 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // حذف طري (Soft Delete)
     const deletedStudent = await Student.findOneAndUpdate(
       { _id: id, isDeleted: false },
       {
@@ -995,9 +899,7 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    console.log(
-      `✅ Student soft deleted successfully: ${deletedStudent.enrollmentNumber}`
-    );
+    console.log(`✅ Student soft deleted successfully: ${deletedStudent.enrollmentNumber}`);
 
     return NextResponse.json(
       {
@@ -1029,12 +931,11 @@ export async function DELETE(req, { params }) {
   }
 }
 
-// 🔥 PATCH: إعادة إرسال رسالة WhatsApp
+// PATCH: إعادة إرسال رسالة WhatsApp
 export async function PATCH(req, { params }) {
   try {
     console.log(`🔄 Resending WhatsApp message for student: ${params.id}`);
 
-    // التحقق من صلاحية الأدمن
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
       console.log("❌ Admin authorization failed");
@@ -1045,7 +946,6 @@ export async function PATCH(req, { params }) {
 
     const { id } = params;
 
-    // التحقق من صحة معرف MongoDB
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid student ID format" },
@@ -1053,7 +953,6 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    // التحقق من وجود الطالب
     const student = await Student.findOne({ _id: id, isDeleted: false });
     if (!student) {
       return NextResponse.json(
@@ -1062,7 +961,6 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    // تحديث حالة الطالب إلى قيد المعالجة
     await Student.findByIdAndUpdate(id, {
       $set: {
         "metadata.whatsappStatus": "pending",
@@ -1071,14 +969,11 @@ export async function PATCH(req, { params }) {
       },
     });
 
-    // 🔥 تشغيل WhatsApp automation في الخلفية
     setTimeout(async () => {
       try {
         console.log("🔄 Starting WhatsApp resend in background...");
 
-        const { wapilotService } = await import(
-          "@/app/services/wapilot-service"
-        );
+        const { wapilotService } = await import("@/app/services/wapilot-service");
         const whatsappResult = await wapilotService.sendWelcomeMessages(
           student.personalInfo.fullName,
           student.personalInfo.whatsappNumber
@@ -1104,8 +999,7 @@ export async function PATCH(req, { params }) {
           await Student.findByIdAndUpdate(id, {
             $set: {
               "metadata.whatsappStatus": "failed",
-              "metadata.whatsappError":
-                whatsappResult.reason || "Unknown error",
+              "metadata.whatsappError": whatsappResult.reason || "Unknown error",
               "metadata.updatedAt": new Date(),
             }
           });
