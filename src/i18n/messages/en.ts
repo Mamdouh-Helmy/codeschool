@@ -2331,6 +2331,80 @@ const en = {
   "courses.featuredDescription": "Highlight this course as featured",
   "courses.activeCourse": "Active Course",
   "courses.activeDescription": "Make this course visible to students",
+
+  // Course Form Translations
+  "courses.titleRequired": "Course title is required",
+  "courses.descriptionRequired": "Course description is required",
+  "courses.moduleTitle": "Module title is required",
+  "courses.exactlyLessons": "Each module must have exactly 6 lessons",
+  "courses.lessonTitle": "Lesson title is required",
+  "courses.sessionCount": "Each lesson must have exactly 2 sessions",
+  "courses.loginRequired": "Please login to create a course",
+  "courses.validationFailed": "Please fix validation errors",
+  "courses.createdSuccess": "Course created successfully",
+  "courses.updatedSuccess": "Course updated successfully",
+  "courses.saveFailed": "Failed to save course",
+  "courses.projectEmpty": "Project name cannot be empty",
+
+  // Common UI Translations
+  "courses.addModule": "Add Module",
+  "courses.modules": "modules",
+  "courses.module": "Module",
+  "courses.sessions": "Sessions",
+  "courses.moduleProjects": "Module Projects",
+
+  // Additional course translations
+  "courses.curriculumOptional":
+    "Curriculum is optional. Add modules with lessons to structure your course content. Each module must have exactly 6 lessons.",
+
+  // Form Section Headers
+  "courses.form.section.basicInfo": "Basic Course Information",
+  "courses.form.section.curriculum": "Course Curriculum Structure",
+  "courses.form.section.instructors": "Assigned Instructors",
+
+  // Buttons and Actions
+  "courses.form.addLesson": "Add New Lesson",
+  "courses.form.removeLesson": "Remove Lesson",
+  "courses.form.addProject": "Add Project",
+  "courses.form.removeProject": "Remove Project",
+  "courses.form.selectInstructors": "Select Instructors",
+  "courses.form.manageModules": "Manage Modules",
+
+  // Validation Messages
+  "courses.form.validation.minPrice": "Price must be 0 or more",
+  "courses.form.validation.maxInstructors":
+    "You can select up to 5 instructors",
+  "courses.form.validation.thumbnailUrl": "Please enter a valid image URL",
+
+  // Status Messages
+  "courses.form.status.draft": "Draft",
+  "courses.form.status.published": "Published",
+  "courses.form.status.archived": "Archived",
+
+  // Tooltips and Help Text
+  "courses.form.help.moduleOrder": "Module number determines display order",
+  "courses.form.help.lessonSessions":
+    "Each lesson contains 2 sessions (theory + practice)",
+  "courses.form.help.projectIdeas":
+    "Add practical projects for students to apply what they learn",
+  "courses.form.help.instructorSelection":
+    "Students can see assigned instructors for the course",
+
+  // Placeholders
+  "courses.form.placeholder.moduleTitle": "e.g., Introduction to HTML",
+  "courses.form.placeholder.moduleDescription":
+    "Brief description of what this module covers...",
+  "courses.form.placeholder.lessonTitle": "e.g., HTML Fundamentals",
+  "courses.form.placeholder.projectName": "e.g., Build a Simple Webpage",
+  "courses.form.placeholder.searchInstructors": "Search for an instructor...",
+
+  // Confirmation Messages
+  "courses.form.confirm.deleteModule":
+    "Are you sure you want to delete this module?",
+  "courses.form.confirm.deleteLesson":
+    "Are you sure you want to delete this lesson?",
+  "courses.form.confirm.unsavedChanges":
+    "You have unsaved changes. Do you want to continue?",
 };
 
 export default en;

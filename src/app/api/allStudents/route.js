@@ -63,8 +63,37 @@ export async function POST(req) {
       );
     }
 
+    // ✅ التحقق من صحة التاريخ وتحويله بشكل آمن
+    let dateOfBirth = studentData.personalInfo?.dateOfBirth;
+    if (dateOfBirth) {
+      try {
+        // إذا كان string، تحويله لـ Date object
+        if (typeof dateOfBirth === 'string') {
+          const dateObj = new Date(dateOfBirth);
+          if (isNaN(dateObj.getTime())) {
+            throw new Error("Invalid date format");
+          }
+          dateOfBirth = dateObj;
+        }
+      } catch (dateError) {
+        console.error("❌ Date parsing error:", dateError);
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid date of birth format",
+            error: dateError.message,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const cleanData = {
       ...studentData,
+      personalInfo: {
+        ...studentData.personalInfo,
+        dateOfBirth: dateOfBirth, // استخدام التاريخ المحول
+      },
       authUserId:
         studentData.authUserId && studentData.authUserId.trim() !== ""
           ? studentData.authUserId

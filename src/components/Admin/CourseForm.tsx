@@ -1,696 +1,892 @@
-// components/Admin/CourseForm.tsx
 "use client";
-import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth"; // استخدم custom hook
+import React, { useState, useEffect } from "react";
+import toast from "react-hot-toast";
+import { useAuth } from "@/hooks/useAuth";
 import {
-    BookOpen,
-    Image,
-    DollarSign,
-    Users,
-    X,
-    Save,
-    Plus,
-    Trash2,
-    ChevronDown,
-    Star,
-    Upload,
-    List,
-    Briefcase,
+  Save,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
 
-interface Props {
-    initial?: any;
-    onClose: () => void;
-    onSaved: () => void;
+interface Lesson {
+  title: string;
+  description?: string;
+  order: number;
+  sessionsCount: number;
 }
 
-interface User {
-    _id: string;
+interface Module {
+  title: string;
+  description?: string;
+  order: number;
+  lessons: Lesson[];
+  projects: string[];
+}
+
+interface Course {
+  _id?: string;
+  title: string;
+  description: string;
+  level: "beginner" | "intermediate" | "advanced";
+  curriculum: Module[];
+  projects: string[];
+  instructors: string[];
+  price: number;
+  isActive: boolean;
+  featured: boolean;
+  thumbnail?: string;
+  createdBy?: {
+    id: string;
     name: string;
     email: string;
     role: string;
+  };
 }
 
-interface CurriculumItem {
-    title: string;
-    description: string;
-    order: number;
+interface CourseFormProps {
+  initial?: Course | null;
+  onClose: () => void;
+  onSaved: () => void;
 }
 
-export default function CourseForm({ initial, onClose, onSaved }: Props) {
-    const { t } = useI18n();
-    const { user, loading: authLoading } = useAuth(); // استخدم custom hook
+export default function CourseForm({
+  initial,
+  onClose,
+  onSaved,
+}: CourseFormProps) {
+  const { t } = useI18n();
+  const { user, loading: authLoading } = useAuth();
 
-    const [form, setForm] = useState(() => ({
-        title: initial?.title || "",
-        description: initial?.description || "",
-        level: initial?.level || "beginner",
-        price: initial?.price || 0,
-        thumbnail: initial?.thumbnail || "",
-        isActive: initial?.isActive ?? true,
-        featured: initial?.featured || false,
-    }));
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [expandedModules, setExpandedModules] = useState<Set<number>>(
+    new Set([0])
+  );
+  const [instructorsList, setInstructorsList] = useState<any[]>([]);
+  const [instructorsLoading, setInstructorsLoading] = useState(true);
+  const [newProjectInputs, setNewProjectInputs] = useState<Record<number, string>>({});
 
-    const [curriculum, setCurriculum] = useState<CurriculumItem[]>(
-        initial?.curriculum || []
-    );
-    const [projects, setProjects] = useState<string[]>(initial?.projects || []);
-    const [instructors, setInstructors] = useState<string[]>(
-        initial?.instructors?.map((i: any) => i._id || i) || []
-    );
+  const [form, setForm] = useState<Course>({
+    title: "",
+    description: "",
+    level: "beginner",
+    curriculum: [],
+    projects: [],
+    instructors: [],
+    price: 0,
+    isActive: true,
+    featured: false,
+    thumbnail: "",
+    ...initial,
+  });
 
-    const [newCurriculumItem, setNewCurriculumItem] = useState({
-        title: "",
-        description: "",
-    });
-    const [newProject, setNewProject] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [thumbnailPreview, setThumbnailPreview] = useState("");
-    const [users, setUsers] = useState<User[]>([]);
-    const [usersLoading, setUsersLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                setUsersLoading(true);
-                const res = await fetch("/api/instructor", { cache: "no-store" });
-                const json = await res.json();
-
-                if (json.success) {
-                    setUsers(json.data);
-                }
-            } catch (err) {
-                console.error("Error fetching users:", err);
-            } finally {
-                setUsersLoading(false);
-            }
-        };
-
-        fetchUsers();
-    }, []);
-
-    useEffect(() => {
-        if (form.thumbnail) {
-            setThumbnailPreview(form.thumbnail);
-        }
-    }, [form.thumbnail]);
-
-    const onChange = (field: string, value: any) => {
-        setForm((prev) => ({ ...prev, [field]: value }));
-    };
-
-    const addCurriculumItem = () => {
-        if (newCurriculumItem.title.trim()) {
-            const item: CurriculumItem = {
-                ...newCurriculumItem,
-                order: curriculum.length + 1,
-            };
-            setCurriculum([...curriculum, item]);
-            setNewCurriculumItem({ title: "", description: "" });
-        }
-    };
-
-    const removeCurriculumItem = (index: number) => {
-        const updated = curriculum.filter((_, i) => i !== index);
-        const reordered = updated.map((item, idx) => ({ ...item, order: idx + 1 }));
-        setCurriculum(reordered);
-    };
-
-    const addProject = () => {
-        const project = newProject.trim();
-        if (project && !projects.includes(project)) {
-            setProjects([...projects, project]);
-            setNewProject("");
-        }
-    };
-
-    const removeProject = (index: number) => {
-        setProjects(projects.filter((_, i) => i !== index));
-    };
-
-    const toggleInstructor = (userId: string) => {
-        if (instructors.includes(userId)) {
-            setInstructors(instructors.filter((id) => id !== userId));
-        } else {
-            setInstructors([...instructors, userId]);
-        }
-    };
-
-    const handleThumbnailUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const result = e.target?.result as string;
-                setThumbnailPreview(result);
-                onChange("thumbnail", result);
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
-            addProject();
-        }
-    };
-
-    const submit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-
-        try {
-            // التحقق من وجود بيانات المستخدم
-            if (!user?.id) {
-                alert(t("courses.loginRequired") || "Please login to create a course");
-                setLoading(false);
-                return;
-            }
-
-            const payload = {
-                ...form,
-                curriculum,
-                projects,
-                instructors,
-                createdBy: initial?.createdBy || {
-                    id: user.id, // استخدام الـ id الحقيقي من user
-                    name: user.name || "Admin",
-                    email: user.email || "",
-                    role: user.role || "admin",
-                },
-            };
-
-            const method = initial?._id ? "PUT" : "POST";
-            const url = initial?._id
-                ? `/api/courses/${initial._id}`
-                : "/api/courses";
-
-            const res = await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-
-            if (res.ok) {
-                onSaved();
-                onClose();
-            } else {
-                const errorData = await res.json();
-                alert(`Failed to save course: ${errorData.error || errorData.message}`);
-            }
-        } catch (err) {
-            console.error("Error:", err);
-            alert("An error occurred while saving the course.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // عرض loading أثناء التحقق من المستخدم
-    if (authLoading) {
-        return (
-            <div className="flex justify-center items-center p-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-        );
+  useEffect(() => {
+    if (initial) {
+      setForm(initial);
+      setExpandedModules(new Set([0]));
     }
-    
+  }, [initial]);
+
+  useEffect(() => {
+    const fetchInstructors = async () => {
+      try {
+        setInstructorsLoading(true);
+        const res = await fetch("/api/instructor", { cache: "no-store" });
+        const json = await res.json();
+
+        if (json.success) {
+          setInstructorsList(json.data);
+        }
+      } catch (err) {
+        console.error("Error fetching instructors:", err);
+      } finally {
+        setInstructorsLoading(false);
+      }
+    };
+
+    fetchInstructors();
+  }, []);
+
+  const toggleModule = (index: number) => {
+    setExpandedModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const addModule = () => {
+    const newModule: Module = {
+      title: "",
+      description: "",
+      order: form.curriculum.length + 1,
+      lessons: Array(6)
+        .fill(null)
+        .map((_, i) => ({
+          title: "",
+          description: "",
+          order: i + 1,
+          sessionsCount: 2,
+        })),
+      projects: [],
+    };
+    setForm((prev) => ({
+      ...prev,
+      curriculum: [...prev.curriculum, newModule],
+    }));
+    setExpandedModules((prev) => new Set(prev).add(form.curriculum.length));
+  };
+
+  const removeModule = (moduleIndex: number) => {
+    setForm((prev) => ({
+      ...prev,
+      curriculum: prev.curriculum.filter((_, i) => i !== moduleIndex),
+    }));
+  };
+
+  const updateModule = (
+    moduleIndex: number,
+    field: "title" | "description" | "order",
+    value: string | number
+  ) => {
+    setForm((prev) => {
+      const updated = [...prev.curriculum];
+      updated[moduleIndex] = {
+        ...updated[moduleIndex],
+        [field]: value,
+      };
+      return { ...prev, curriculum: updated };
+    });
+  };
+
+  const updateLesson = (
+    moduleIndex: number,
+    lessonIndex: number,
+    field: "title" | "description" | "order",
+    value: string | number
+  ) => {
+    setForm((prev) => {
+      const updated = [...prev.curriculum];
+      updated[moduleIndex].lessons[lessonIndex] = {
+        ...updated[moduleIndex].lessons[lessonIndex],
+        [field]: value,
+        sessionsCount: 2,
+      };
+      return { ...prev, curriculum: updated };
+    });
+  };
+
+  const addProjectToModule = (moduleIndex: number) => {
+    const projectText = newProjectInputs[moduleIndex]?.trim();
+    if (!projectText) {
+      toast.error(t("courses.projectEmpty") || "Project name cannot be empty");
+      return;
+    }
+
+    setForm((prev) => {
+      const updated = [...prev.curriculum];
+      updated[moduleIndex] = {
+        ...updated[moduleIndex],
+        projects: [...(updated[moduleIndex].projects || []), projectText],
+      };
+      return { ...prev, curriculum: updated };
+    });
+
+    setNewProjectInputs((prev) => ({ ...prev, [moduleIndex]: "" }));
+  };
+
+  const removeProjectFromModule = (moduleIndex: number, projectIndex: number) => {
+    setForm((prev) => {
+      const updated = [...prev.curriculum];
+      updated[moduleIndex] = {
+        ...updated[moduleIndex],
+        projects: updated[moduleIndex].projects.filter((_, i) => i !== projectIndex),
+      };
+      return { ...prev, curriculum: updated };
+    });
+  };
+
+  const toggleInstructor = (instructorId: string) => {
+    setForm((prev) => {
+      const currentInstructors = prev.instructors || [];
+      if (currentInstructors.includes(instructorId)) {
+        return {
+          ...prev,
+          instructors: currentInstructors.filter((id) => id !== instructorId),
+        };
+      } else {
+        return {
+          ...prev,
+          instructors: [...currentInstructors, instructorId],
+        };
+      }
+    });
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!form.title.trim()) {
+      newErrors.title = t("courses.titleRequired") || "Title is required";
+    }
+
+    if (!form.description.trim()) {
+      newErrors.description =
+        t("courses.descriptionRequired") || "Description is required";
+    }
+
+    if (form.curriculum.length > 0) {
+      form.curriculum.forEach((module, mIdx) => {
+        if (!module.title.trim()) {
+          newErrors[`module_${mIdx}_title`] =
+            t("courses.moduleTitle") || "Module title is required";
+        }
+
+        if (module.lessons.length !== 6) {
+          newErrors[`module_${mIdx}_lessons`] =
+            t("courses.exactlyLessons") ||
+            "Each module must have exactly 6 lessons";
+        }
+
+        module.lessons.forEach((lesson, lIdx) => {
+          if (!lesson.title.trim()) {
+            newErrors[`module_${mIdx}_lesson_${lIdx}_title`] =
+              t("courses.lessonTitle") || "Lesson title is required";
+          }
+
+          if (lesson.sessionsCount !== 2) {
+            newErrors[`module_${mIdx}_lesson_${lIdx}_sessions`] =
+              t("courses.sessionCount") ||
+              "Each lesson must have exactly 2 sessions";
+          }
+        });
+      });
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!user?.id) {
+      toast.error(
+        t("courses.loginRequired") || "Please login to create a course"
+      );
+      return;
+    }
+
+    if (!validateForm()) {
+      toast.error(
+        t("courses.validationFailed") || "Please fix validation errors"
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const method = initial?._id ? "PUT" : "POST";
+      const url = initial?._id
+        ? `/api/courses/${initial._id}`
+        : "/api/courses";
+
+      const payload = {
+        title: form.title,
+        description: form.description,
+        level: form.level,
+        curriculum: form.curriculum,
+        projects: form.projects,
+        instructors: form.instructors,
+        price: form.price,
+        isActive: form.isActive,
+        featured: form.featured,
+        thumbnail: form.thumbnail,
+        createdBy: initial?.createdBy || {
+          id: user.id,
+          name: user.name || "Admin",
+          email: user.email || "",
+          role: user.role || "admin",
+        },
+      };
+
+      console.log("📤 Sending request:", { method, url, payload });
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+
+      console.log("📥 Response:", { status: res.status, json });
+
+      if (!res.ok) {
+        if (json.details && Array.isArray(json.details)) {
+          toast.error(json.details[0]);
+          console.error("Validation errors:", json.details);
+        } else {
+          toast.error(json.error || "Failed to save course");
+        }
+        return;
+      }
+
+      toast.success(
+        method === "POST"
+          ? t("courses.createdSuccess") || "Course created successfully"
+          : t("courses.updatedSuccess") || "Course updated successfully"
+      );
+      onSaved();
+      onClose();
+    } catch (err) {
+      console.error("❌ Error saving course:", err);
+      toast.error(t("courses.saveFailed") || "Failed to save course");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (authLoading) {
     return (
-        <form onSubmit={submit} className="space-y-6">
-            {/* Basic Information */}
-            <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                        <BookOpen className="w-4 h-4 text-primary" />
-                    </div>
-                    <div>
-                        <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-                            {t("courses.basicInfo") || "Course Information"}
-                        </h3>
-                        <p className="text-12 text-SlateBlueText dark:text-darktext">
-                            {t("courses.basicInfoDescription") ||
-                                "Basic details about the course"}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-                            <BookOpen className="w-3 h-3 text-primary" />
-                            {t("courses.title") || "Course Title"} *
-                        </label>
-                        <input
-                            type="text"
-                            value={form.title}
-                            onChange={(e) => onChange("title", e.target.value)}
-                            placeholder={
-                                t("courses.titlePlaceholder") || "e.g., Web Development"
-                            }
-                            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-                            required
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-                            <ChevronDown className="w-3 h-3 text-primary" />
-                            {t("courses.level") || "Level"} *
-                        </label>
-                        <div className="relative">
-                            <select
-                                value={form.level}
-                                onChange={(e) => onChange("level", e.target.value)}
-                                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200 appearance-none pr-10"
-                                required
-                            >
-                                <option value="beginner">
-                                    {t("courses.beginner") || "Beginner"}
-                                </option>
-                                <option value="intermediate">
-                                    {t("courses.intermediate") || "Intermediate"}
-                                </option>
-                                <option value="advanced">
-                                    {t("courses.advanced") || "Advanced"}
-                                </option>
-                            </select>
-                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                                <ChevronDown className="w-4 h-4 text-SlateBlueText dark:text-darktext" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-                        <BookOpen className="w-3 h-3 text-primary" />
-                        {t("courses.description") || "Description"} *
-                    </label>
-                    <textarea
-                        value={form.description}
-                        onChange={(e) => onChange("description", e.target.value)}
-                        rows={3}
-                        placeholder={
-                            t("courses.descriptionPlaceholder") ||
-                            "Describe the course content, what students will learn..."
-                        }
-                        className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200"
-                        required
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-                        <DollarSign className="w-3 h-3 text-primary" />
-                        {t("courses.price") || "Price"} *
-                    </label>
-                    <input
-                        type="number"
-                        value={form.price}
-                        onChange={(e) => onChange("price", parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        min="0"
-                        step="0.01"
-                        className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-                        required
-                    />
-                </div>
-            </div>
-
-            {/* Thumbnail */}
-            <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-Aquamarine/10 rounded-lg flex items-center justify-center">
-                        <Image className="w-4 h-4 text-Aquamarine" />
-                    </div>
-                    <div>
-                        <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-                            {t("courses.thumbnail") || "Course Thumbnail"}
-                        </h3>
-                        <p className="text-12 text-SlateBlueText dark:text-darktext">
-                            {t("courses.thumbnailDescription") || "Upload course thumbnail"}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="flex gap-4 items-start">
-                    <div className="flex-1">
-                        <input
-                            type="text"
-                            value={form.thumbnail}
-                            onChange={(e) => onChange("thumbnail", e.target.value)}
-                            placeholder={
-                                t("courses.thumbnailPlaceholder") || "Image URL or upload file"
-                            }
-                            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-                        />
-                        <div className="mt-2">
-                            <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-12 cursor-pointer hover:bg-primary/20 transition-colors">
-                                <Upload className="w-3 h-3" />
-                                {t("courses.uploadThumbnail") || "Upload Thumbnail"}
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleThumbnailUpload}
-                                    className="hidden"
-                                />
-                            </label>
-                        </div>
-                    </div>
-
-                    {thumbnailPreview && (
-                        <div className="w-20 h-20 border border-PowderBlueBorder rounded-lg overflow-hidden">
-                            <img
-                                src={thumbnailPreview}
-                                alt="Preview"
-                                className="w-full h-full object-cover"
-                            />
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Curriculum */}
-            <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-ElectricAqua/10 rounded-lg flex items-center justify-center">
-                        <List className="w-4 h-4 text-ElectricAqua" />
-                    </div>
-                    <div>
-                        <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-                            {t("courses.curriculum") || "Curriculum"}
-                        </h3>
-                        <p className="text-12 text-SlateBlueText dark:text-darktext">
-                            {t("courses.curriculumDescription") || "Add course lessons"}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                    <div className="space-y-2">
-                        <input
-                            type="text"
-                            value={newCurriculumItem.title}
-                            onChange={(e) =>
-                                setNewCurriculumItem({
-                                    ...newCurriculumItem,
-                                    title: e.target.value,
-                                })
-                            }
-                            placeholder={
-                                t("courses.lessonTitlePlaceholder") || "Lesson title"
-                            }
-                            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-                        />
-                        <textarea
-                            value={newCurriculumItem.description}
-                            onChange={(e) =>
-                                setNewCurriculumItem({
-                                    ...newCurriculumItem,
-                                    description: e.target.value,
-                                })
-                            }
-                            placeholder={
-                                t("courses.lessonDescriptionPlaceholder") || "Lesson description"
-                            }
-                            rows={2}
-                            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 resize-none transition-all duration-200"
-                        />
-                        <button
-                            type="button"
-                            onClick={addCurriculumItem}
-                            disabled={!newCurriculumItem.title.trim()}
-                            className="w-full px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            <Plus className="w-4 h-4" />
-                            {t("courses.addLesson") || "Add Lesson"}
-                        </button>
-                    </div>
-
-                    {curriculum.length > 0 && (
-                        <div className="space-y-2">
-                            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                                {t("courses.addedLessons") || "Added Lessons"}:
-                            </label>
-                            <div className="space-y-2">
-                                {curriculum.map((item, index) => (
-                                    <div
-                                        key={index}
-                                        className="flex items-start gap-2 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white p-3 rounded-lg"
-                                    >
-                                        <div className="flex-1">
-                                            <p className="font-semibold text-13">
-                                                {index + 1}. {item.title}
-                                            </p>
-                                            {item.description && (
-                                                <p className="text-12 text-SlateBlueText dark:text-darktext mt-1">
-                                                    {item.description}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeCurriculumItem(index)}
-                                            className="text-red-500 hover:text-red-700 transition-colors"
-                                        >
-                                            <Trash2 className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Projects */}
-            <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-Aquamarine/10 rounded-lg flex items-center justify-center">
-                        <Briefcase className="w-4 h-4 text-Aquamarine" />
-                    </div>
-                    <div>
-                        <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-                            {t("courses.projects") || "Projects"}
-                        </h3>
-                        <p className="text-12 text-SlateBlueText dark:text-darktext">
-                            {t("courses.projectsDescription") || "Add course projects"}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                    <div className="flex gap-2">
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                value={newProject}
-                                onChange={(e) => setNewProject(e.target.value)}
-                                onKeyPress={handleKeyPress}
-                                placeholder={
-                                    t("courses.projectPlaceholder") || "Enter project name"
-                                }
-                                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
-                            />
-                        </div>
-                        <button
-                            type="button"
-                            onClick={addProject}
-                            disabled={!newProject.trim()}
-                            className="px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-13 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                            <Plus className="w-4 h-4" />
-                            {t("common.add") || "Add"}
-                        </button>
-                    </div>
-
-                    {projects.length > 0 && (
-                        <div className="space-y-2">
-                            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                                {t("courses.addedProjects") || "Added Projects"}:
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                                {projects.map((project, index) => (
-                                    <div
-                                        key={index}
-                                        className="flex items-center gap-2 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white px-3 py-2 rounded-lg text-13"
-                                    >
-                                        <span>{project}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeProject(index)}
-                                            className="text-red-500 hover:text-red-700 transition-colors"
-                                        >
-                                            <Trash2 className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <p className="text-11 text-SlateBlueText dark:text-darktext">
-                        {t("courses.projectsHint") ||
-                            "Press Enter or click Add to include multiple projects"}
-                    </p>
-                </div>
-            </div>
-
-            {/* Instructors */}
-            <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                        <Users className="w-4 h-4 text-primary" />
-                    </div>
-                    <div>
-                        <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-                            {t("courses.instructors") || "Instructors"}
-                        </h3>
-                        <p className="text-12 text-SlateBlueText dark:text-darktext">
-                            {t("courses.instructorsDescription") ||
-                                "Select course instructors"}
-                        </p>
-                    </div>
-                </div>
-
-                {usersLoading ? (
-                    <p className="text-13 text-SlateBlueText dark:text-darktext">
-                        {t("courses.loadingInstructors") || "Loading instructors..."}
-                    </p>
-                ) : (
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {users.length === 0 ? (
-                            <p className="text-13 text-SlateBlueText dark:text-darktext">
-                                {t("courses.noInstructors") || "No instructors available"}
-                            </p>
-                        ) : (
-                            users.map((user) => (
-                                <label
-                                    key={user._id}
-                                    className="flex items-center gap-3 p-3 border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-IcyBreeze dark:hover:bg-dark_input transition-all duration-200 cursor-pointer"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={instructors.includes(user._id)}
-                                        onChange={() => toggleInstructor(user._id)}
-                                        className="w-4 h-4 text-primary focus:ring-primary border-PowderBlueBorder rounded"
-                                    />
-                                    <div className="flex-1">
-                                        <p className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                                            {user.name}
-                                        </p>
-                                        <p className="text-11 text-SlateBlueText dark:text-darktext">
-                                            {user.email}
-                                        </p>
-                                    </div>
-                                </label>
-                            ))
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* Settings */}
-            <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                        <Save className="w-4 h-4 text-primary" />
-                    </div>
-                    <div>
-                        <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-                            {t("courses.settings") || "Settings"}
-                        </h3>
-                        <p className="text-12 text-SlateBlueText dark:text-darktext">
-                            {t("courses.settingsDescription") ||
-                                "Course visibility and status"}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                    <label className="flex items-center space-x-3 p-3 border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-IcyBreeze dark:hover:bg-dark_input transition-all duration-200 cursor-pointer group">
-                        <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                            <Star className="w-3 h-3 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={form.featured}
-                                    onChange={(e) => onChange("featured", e.target.checked)}
-                                    className="w-4 h-4 text-primary focus:ring-primary border-PowderBlueBorder rounded"
-                                />
-                                <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                                    {t("courses.featuredCourse") || "Featured Course"}
-                                </span>
-                            </div>
-                            <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                                {t("courses.featuredDescription") ||
-                                    "Highlight this course as featured"}
-                            </p>
-                        </div>
-                    </label>
-
-                    <label className="flex items-center space-x-3 p-3 border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-IcyBreeze dark:hover:bg-dark_input transition-all duration-200 cursor-pointer group">
-                        <div className="w-8 h-8 bg-Aquamarine/10 rounded flex items-center justify-center group-hover:bg-Aquamarine/20 transition-colors">
-                            <Save className="w-3 h-3 text-Aquamarine" />
-                        </div>
-                        <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={form.isActive}
-                                    onChange={(e) => onChange("isActive", e.target.checked)}
-                                    className="w-4 h-4 text-Aquamarine focus:ring-Aquamarine border-PowderBlueBorder rounded"
-                                />
-                                <span className="text-13 font-medium text-MidnightNavyText dark:text-white">
-                                    {t("courses.activeCourse") || "Active Course"}
-                                </span>
-                            </div>
-                            <p className="text-11 text-SlateBlueText dark:text-darktext mt-1 ml-6">
-                                {t("courses.activeDescription") ||
-                                    "Make this course visible to students"}
-                            </p>
-                        </div>
-                    </label>
-                </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight hover:shadow-md flex items-center justify-center gap-2"
-                >
-                    <X className="w-3 h-3" />
-                    {t("common.cancel") || "Cancel"}
-                </button>
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                    {loading ? (
-                        <>
-                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            {t("common.saving") || "Saving..."}
-                        </>
-                    ) : initial ? (
-                        <>
-                            <Save className="w-3 h-3" />
-                            {t("courses.updateCourse") || "Update Course"}
-                        </>
-                    ) : (
-                        <>
-                            <Plus className="w-3 h-3" />
-                            {t("courses.createCourse") || "Create Course"}
-                        </>
-                    )}
-                </button>
-            </div>
-        </form>
+      <div className="flex justify-center items-center p-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
     );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {user && (
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/50 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+          <p className="text-sm text-blue-700 dark:text-blue-300">
+            <span className="font-semibold">{user.name}</span>
+            {" - "}
+            <span className="text-xs">{user.email}</span>
+          </p>
+        </div>
+      )}
+
+      {/* Basic Info Section */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
+          <span className="w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">
+            1
+          </span>
+          {t("courses.basicInfo") || "Basic Information"}
+        </h3>
+
+        {/* Title */}
+        <div>
+          <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
+            {t("courses.title") || "Course Title"}
+            <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={form.title}
+            onChange={(e) => {
+              setForm({ ...form, title: e.target.value });
+              if (errors.title) setErrors({ ...errors, title: "" });
+            }}
+            placeholder="e.g., Web Development Fundamentals"
+            className={`w-full px-4 py-2 rounded-lg border transition-colors bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${
+              errors.title
+                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                : "border-PowderBlueBorder dark:border-dark_border focus:border-primary focus:ring-primary/20"
+            } focus:outline-none focus:ring-4`}
+          />
+          {errors.title && (
+            <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {errors.title}
+            </p>
+          )}
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
+            {t("courses.description") || "Description"}
+            <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={form.description}
+            onChange={(e) => {
+              setForm({ ...form, description: e.target.value });
+              if (errors.description) setErrors({ ...errors, description: "" });
+            }}
+            placeholder="Describe what students will learn..."
+            rows={3}
+            className={`w-full px-4 py-2 rounded-lg border transition-colors bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${
+              errors.description
+                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                : "border-PowderBlueBorder dark:border-dark_border focus:border-primary focus:ring-primary/20"
+            } focus:outline-none focus:ring-4 resize-none`}
+          />
+          {errors.description && (
+            <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {errors.description}
+            </p>
+          )}
+        </div>
+
+        {/* Level and Price */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
+              {t("courses.level") || "Level"}
+            </label>
+            <select
+              value={form.level}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  level: e.target.value as
+                    | "beginner"
+                    | "intermediate"
+                    | "advanced",
+                })
+              }
+              className="w-full px-4 py-2 rounded-lg border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary"
+            >
+              <option value="beginner">
+                {t("courses.beginner") || "Beginner"}
+              </option>
+              <option value="intermediate">
+                {t("courses.intermediate") || "Intermediate"}
+              </option>
+              <option value="advanced">
+                {t("courses.advanced") || "Advanced"}
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
+              {t("courses.price") || "Price ($)"}
+            </label>
+            <input
+              type="number"
+              value={form.price}
+              onChange={(e) =>
+                setForm({ ...form, price: parseFloat(e.target.value) || 0 })
+              }
+              placeholder="0"
+              min="0"
+              step="0.01"
+              className="w-full px-4 py-2 rounded-lg border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary"
+            />
+          </div>
+        </div>
+
+        {/* Flags */}
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) =>
+                setForm({ ...form, isActive: e.target.checked })
+              }
+              className="w-4 h-4 rounded border-PowderBlueBorder accent-primary"
+            />
+            <span className="text-sm text-MidnightNavyText dark:text-white">
+              {t("courses.active") || "Active"}
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.featured}
+              onChange={(e) =>
+                setForm({ ...form, featured: e.target.checked })
+              }
+              className="w-4 h-4 rounded border-PowderBlueBorder accent-primary"
+            />
+            <span className="text-sm text-MidnightNavyText dark:text-white">
+              {t("courses.featured") || "Featured"}
+            </span>
+          </label>
+        </div>
+      </div>
+
+      {/* Curriculum Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
+            <span className="w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">
+              2
+            </span>
+            {t("courses.curriculum") || "Curriculum"}
+            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+              {form.curriculum.length} {t("courses.modules") || "modules"}
+            </span>
+          </h3>
+          <button
+            type="button"
+            onClick={addModule}
+            className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            {t("courses.addModule") || "Add Module"}
+          </button>
+        </div>
+
+        {form.curriculum.length === 0 && (
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/50 rounded-lg flex gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              {t("courses.curriculumOptional") ||
+                "Curriculum is optional. Add modules with lessons to structure your course content. Each module must have exactly 6 lessons."}
+            </p>
+          </div>
+        )}
+
+        {/* Modules List */}
+        <div className="space-y-3">
+          {form.curriculum.map((module, moduleIndex) => {
+            const isExpanded = expandedModules.has(moduleIndex);
+            const moduleTitleError = errors[`module_${moduleIndex}_title`];
+            const moduleLessonsError =
+              errors[`module_${moduleIndex}_lessons`];
+
+            return (
+              <div
+                key={moduleIndex}
+                className="border border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden"
+              >
+                {/* Module Header */}
+                <div
+                  className="p-4 bg-gray-50 dark:bg-dark_input flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-dark_input/80 transition-colors"
+                  onClick={() => toggleModule(moduleIndex)}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      {isExpanded ? (
+                        <ChevronUp className="w-5 h-5 text-primary" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-SlateBlueText dark:text-darktext" />
+                      )}
+                      <div>
+                        <h4 className="font-semibold text-MidnightNavyText dark:text-white">
+                          {module.title ||
+                            `${t("courses.module") || "Module"} ${
+                              moduleIndex + 1
+                            }`}
+                        </h4>
+                        <p className="text-xs text-SlateBlueText dark:text-darktext">
+                          {module.lessons.length}{" "}
+                          {t("courses.lessons") || "lessons"}
+                          {module.projects && module.projects.length > 0 && (
+                            <span className="ml-2">
+                              • {module.projects.length}{" "}
+                              {t("courses.projects") || "projects"}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeModule(moduleIndex);
+                    }}
+                    className="p-2 text-SlateBlueText dark:text-darktext hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Module Content */}
+                {isExpanded && (
+                  <div className="p-4 space-y-4 border-t border-PowderBlueBorder dark:border-dark_border">
+                    {/* Module Title */}
+                    <div>
+                      <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-1">
+                        {t("courses.moduleTitle") || "Module Title"}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={module.title}
+                        onChange={(e) =>
+                          updateModule(moduleIndex, "title", e.target.value)
+                        }
+                        placeholder="e.g., HTML Basics"
+                        className={`w-full px-3 py-2 rounded-lg border transition-colors bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white text-sm ${
+                          moduleTitleError
+                            ? "border-red-500 focus:ring-red-500/20"
+                            : "border-PowderBlueBorder dark:border-dark_border focus:ring-primary/20"
+                        } focus:outline-none focus:ring-4 focus:border-primary`}
+                      />
+                      {moduleTitleError && (
+                        <p className="text-red-500 text-xs mt-1">
+                          {moduleTitleError}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Module Description */}
+                    <div>
+                      <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-1">
+                        {t("courses.description") || "Description"}
+                      </label>
+                      <textarea
+                        value={module.description || ""}
+                        onChange={(e) =>
+                          updateModule(
+                            moduleIndex,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Optional module description"
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-lg border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary resize-none"
+                      />
+                    </div>
+
+                    {/* Module Projects Section */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white">
+                        {t("courses.moduleProjects") || "Module Projects"}
+                      </label>
+                      
+                      {/* Projects List */}
+                      {module.projects && module.projects.length > 0 && (
+                        <div className="space-y-2 mb-2">
+                          {module.projects.map((project, projectIndex) => (
+                            <div
+                              key={projectIndex}
+                              className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/20 rounded-lg"
+                            >
+                              <span className="flex-1 text-sm text-MidnightNavyText dark:text-white">
+                                {projectIndex + 1}. {project}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeProjectFromModule(moduleIndex, projectIndex)
+                                }
+                                className="p-1 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add Project Input */}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newProjectInputs[moduleIndex] || ""}
+                          onChange={(e) =>
+                            setNewProjectInputs((prev) => ({
+                              ...prev,
+                              [moduleIndex]: e.target.value,
+                            }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addProjectToModule(moduleIndex);
+                            }
+                          }}
+                          placeholder="Add a project for this module..."
+                          className="flex-1 px-3 py-2 rounded-lg border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addProjectToModule(moduleIndex)}
+                          className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium flex items-center gap-1"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {t("common.add") || "Add"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {moduleLessonsError && (
+                      <p className="text-red-500 text-xs flex items-center gap-1 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                        <AlertCircle className="w-3 h-3" />
+                        {moduleLessonsError}
+                      </p>
+                    )}
+
+                    {/* Lessons */}
+                    <div className="space-y-3 bg-gray-50 dark:bg-dark_input p-3 rounded-lg">
+                      <p className="text-xs font-semibold text-SlateBlueText dark:text-darktext uppercase tracking-wide">
+                        {t("courses.lessons") || "Lessons"} (
+                        {module.lessons.length}/6)
+                      </p>
+
+                      {module.lessons.map((lesson, lessonIndex) => {
+                        const lessonTitleError =
+                          errors[
+                            `module_${moduleIndex}_lesson_${lessonIndex}_title`
+                          ];
+
+                        return (
+                          <div
+                            key={lessonIndex}
+                            className="bg-white dark:bg-dark_border rounded p-3 space-y-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-semibold">
+                                {lessonIndex + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={lesson.title}
+                                onChange={(e) =>
+                                  updateLesson(
+                                    moduleIndex,
+                                    lessonIndex,
+                                    "title",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder={`Lesson ${lessonIndex + 1} title`}
+                                className={`flex-1 px-2 py-1 rounded border text-sm bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white ${
+                                  lessonTitleError
+                                    ? "border-red-500 focus:ring-red-500/20"
+                                    : "border-PowderBlueBorder dark:border-dark_border focus:ring-primary/20"
+                                } focus:outline-none focus:ring-4 focus:border-primary`}
+                              />
+                              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded text-xs font-semibold whitespace-nowrap">
+                                <span>2x</span>
+                                <span className="text-xs">
+                                  {t("courses.sessions") || "Sessions"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {lessonTitleError && (
+                              <p className="text-red-500 text-xs ml-8">
+                                {lessonTitleError}
+                              </p>
+                            )}
+
+                            {lesson.description && (
+                              <p className="text-xs text-SlateBlueText dark:text-darktext ml-8">
+                                {lesson.description}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Instructors Section */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
+          <span className="w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">
+            3
+          </span>
+          {t("courses.instructors") || "Instructors"}
+        </h3>
+
+        {instructorsLoading ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            <span className="ml-2 text-sm text-SlateBlueText dark:text-darktext">
+              {t("common.loading") || "Loading instructors..."}
+            </span>
+          </div>
+        ) : instructorsList.length === 0 ? (
+          <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900/50 rounded-lg">
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              {t("courses.noInstructors") || "No instructors available"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {instructorsList.map((instructor) => (
+              <label
+                key={instructor._id}
+                className="flex items-center gap-3 p-3 border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-IcyBreeze dark:hover:bg-dark_input transition-all cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={form.instructors.includes(instructor._id)}
+                  onChange={() => toggleInstructor(instructor._id)}
+                  className="w-4 h-4 text-primary focus:ring-primary border-PowderBlueBorder rounded"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-MidnightNavyText dark:text-white">
+                    {instructor.name}
+                  </p>
+                  <p className="text-xs text-SlateBlueText dark:text-darktext">
+                    {instructor.email}
+                  </p>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {form.instructors.length > 0 && (
+          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+            <p className="text-xs font-medium text-primary">
+              ✅ {form.instructors.length} instructor(s) selected
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-3 pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 px-4 py-2 rounded-lg border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input transition-colors font-semibold"
+        >
+          {t("common.cancel") || "Cancel"}
+        </button>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex-1 bg-primary hover:bg-primary/90 disabled:bg-primary/50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              {t("common.saving") || "Saving..."}
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4" />
+              {t("common.save") || "Save Course"}
+            </>
+          )}
+        </button>
+      </div>
+    </form>
+  );
 }

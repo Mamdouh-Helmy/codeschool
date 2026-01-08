@@ -1,78 +1,36 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // ========== إعدادات الـ API ==========
-  async headers() {
-    return [
-      {
-        source: "/uploads/:path*",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-          { key: "Access-Control-Allow-Origin", value: "*" },
-        ],
-      },
-      {
-        source: "/api/:path*",
-        headers: [
-          { key: "Access-Control-Allow-Origin", value: "*" },
-          { key: "Access-Control-Allow-Methods", value: "GET, POST, PUT, DELETE, OPTIONS" },
-          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" },
-        ],
-      },
-    ];
-  },
-
-  // ========== إعدادات الصور ==========
-  images: {
-    remotePatterns: [
-      { protocol: "http", hostname: "localhost", port: "3000", pathname: "/uploads/**" },
-      { protocol: "http", hostname: "127.0.0.1", port: "3000", pathname: "/uploads/**" },
-      { protocol: "https", hostname: "**" },
-    ],
-    formats: ["image/avif", "image/webp"],
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    minimumCacheTTL: 60,
-    dangerouslyAllowSVG: true,
-  },
-
-  // ========== إعدادات Webpack ==========
   webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        fs: false,
-        path: false,
-        crypto: false,
-      };
+    if (isServer) {
+      config.externals.push({
+        'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
+      });
     }
-
-    config.optimization = {
-      ...config.optimization,
-      splitChunks: {
-        chunks: "all",
-        maxSize: 200000,
-        cacheGroups: {
-          default: false,
-          vendors: false,
-          react: {
-            test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
-            name: "react",
-            chunks: "all",
-            priority: 20,
-          },
-          ui: {
-            test: /[\\/]node_modules[\\/](lucide-react|react-hot-toast)[\\/]/,
-            name: "ui",
-            chunks: "all",
-            priority: 10,
-          },
-        },
-      },
+    
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+      dns: false,
+      child_process: false,
+      'timers/promises': false,
+      async_hooks: false,
+      crypto: false,
+      stream: false,
+      http: false,
+      https: false,
+      zlib: false,
+      path: false,
+      os: false,
+      url: false,
+      assert: false,
+      util: false,
     };
-
+    
     return config;
   },
-
-  // ========== إعدادات أخرى ==========
+  
   reactStrictMode: true,
   compress: true,
   generateEtags: true,
@@ -80,15 +38,19 @@ const nextConfig = {
   trailingSlash: false,
   skipMiddlewareUrlNormalize: true,
   skipTrailingSlashRedirect: true,
-
-  // ========== إعدادات الـ Environment ==========
+  
   env: {
     MAX_FILE_SIZE: "5242880",
     ALLOWED_IMAGE_TYPES: "image/jpeg,image/jpg,image/png,image/webp,image/gif",
   },
-
-  // ========== إعدادات الـ Static Files ==========
+  
+  images: {
+    domains: ['codeschool.online', 'localhost'],
+    formats: ['image/webp'],
+  },
+  
   staticPageGenerationTimeout: 180,
+  
   outputFileTracingExcludes: {
     "*": [
       "node_modules/@swc/core-linux-x64-gnu",
@@ -96,6 +58,8 @@ const nextConfig = {
       "node_modules/@esbuild/linux-x64",
     ],
   },
+  
+  serverComponentsExternalPackages: ['mongoose'],
 };
 
 export default nextConfig;

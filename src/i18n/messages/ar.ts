@@ -2281,6 +2281,75 @@ const ar = {
   "courses.featuredDescription": "تسليط الضوء على هذه الدورة كمميزة",
   "courses.activeCourse": "دورة نشطة",
   "courses.activeDescription": "جعل هذه الدورة مرئية للطلاب",
+
+  // Course Form Translations
+  "courses.titleRequired": "عنوان الدورة مطلوب",
+  "courses.descriptionRequired": "وصف الدورة مطلوب",
+  "courses.moduleTitle": "عنوان الوحدة مطلوب",
+  "courses.exactlyLessons": "يجب أن تحتوي كل وحدة على 6 دروس بالضبط",
+  "courses.lessonTitle": "عنوان الدرس مطلوب",
+  "courses.sessionCount": "يجب أن يحتوي كل درس على جلستين بالضبط",
+  "courses.loginRequired": "يرجى تسجيل الدخول لإنشاء دورة",
+  "courses.validationFailed": "يرجى تصحيح الأخطاء في التحقق",
+  "courses.createdSuccess": "تم إنشاء الدورة بنجاح",
+  "courses.updatedSuccess": "تم تحديث الدورة بنجاح",
+  "courses.saveFailed": "فشل في حفظ الدورة",
+  "courses.projectEmpty": "اسم المشروع لا يمكن أن يكون فارغاً",
+
+  // Common UI Translations
+  "courses.addModule": "إضافة وحدة",
+  "courses.modules": "وحدة",
+  "courses.module": "وحدة",
+  "courses.sessions": "جلسات",
+  "courses.moduleProjects": "مشاريع الوحدة",
+
+  // Additional course translations
+  "courses.curriculumOptional":
+    "المنهج اختياري. أضف وحدات مع دروس لهيكلة محتوى دورتك. يجب أن تحتوي كل وحدة على 6 دروس بالضبط.",
+
+  // Form Section Headers
+  "courses.form.section.basicInfo": "معلومات الدورة الأساسية",
+  "courses.form.section.curriculum": "هيكل المنهج الدراسي",
+  "courses.form.section.instructors": "المدرسون المعينون",
+
+  // Buttons and Actions
+  "courses.form.addLesson": "إضافة درس جديد",
+  "courses.form.removeLesson": "حذف الدرس",
+  "courses.form.addProject": "إضافة مشروع",
+  "courses.form.removeProject": "حذف المشروع",
+  "courses.form.selectInstructors": "اختر المدرسين",
+  "courses.form.manageModules": "إدارة الوحدات",
+
+  // Validation Messages
+  "courses.form.validation.minPrice": "يجب أن يكون السعر 0 أو أكثر",
+  "courses.form.validation.maxInstructors": "يمكنك اختيار حتى 5 مدرسين",
+  "courses.form.validation.thumbnailUrl": "يرجى إدخال رابط صورة صالح",
+
+  // Status Messages
+  "courses.form.status.draft": "مسودة",
+  "courses.form.status.published": "منشور",
+  "courses.form.status.archived": "مؤرشف",
+
+  // Tooltips and Help Text
+  "courses.form.help.moduleOrder": "رقم الوحدة يحدد ترتيب العرض",
+  "courses.form.help.lessonSessions": "كل درس يحتوي على جلستين (نظري + عملي)",
+  "courses.form.help.projectIdeas": "أضف مشاريع عملية لتطبيق ما تعلمه الطلاب",
+  "courses.form.help.instructorSelection":
+    "يمكن للطلاب رؤية المدرسين المعينين للدورة",
+
+  // Placeholders
+  "courses.form.placeholder.moduleTitle": "مثال: مقدمة في HTML",
+  "courses.form.placeholder.moduleDescription":
+    "وصف مختصر لما ستغطيه هذه الوحدة...",
+  "courses.form.placeholder.lessonTitle": "مثال: أساسيات HTML",
+  "courses.form.placeholder.projectName": "مثال: بناء صفحة ويب بسيطة",
+  "courses.form.placeholder.searchInstructors": "ابحث عن مدرس...",
+
+  // Confirmation Messages
+  "courses.form.confirm.deleteModule": "هل أنت متأكد من حذف هذه الوحدة؟",
+  "courses.form.confirm.deleteLesson": "هل أنت متأكد من حذف هذا الدرس؟",
+  "courses.form.confirm.unsavedChanges":
+    "لديك تغييرات غير محفوظة. هل تريد المتابعة؟",
 };
 
 export default ar;

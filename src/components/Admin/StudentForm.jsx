@@ -375,12 +375,34 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       }
 
       // إعداد بيانات الطالب للإرسال
+      // ✅ إصلاح مشكلة التاريخ على السيرفر - استخدام T12:00:00 لتجنب مشاكل timezone
+      let dateOfBirthISO = null;
+      if (form.personalInfo.dateOfBirth) {
+        try {
+          // التحقق من صحة التاريخ قبل التحويل
+          const dateStr = form.personalInfo.dateOfBirth;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            throw new Error("Invalid date format. Expected YYYY-MM-DD");
+          }
+          // استخدام T12:00:00 لتجنب مشاكل timezone على السيرفر
+          dateOfBirthISO = new Date(dateStr + 'T12:00:00').toISOString();
+          
+          // التحقق من أن التاريخ صحيح
+          if (isNaN(new Date(dateOfBirthISO).getTime())) {
+            throw new Error("Invalid date value");
+          }
+        } catch (dateError) {
+          console.error("❌ Date conversion error:", dateError);
+          throw new Error(`تاريخ الميلاد غير صحيح: ${dateError.message}`);
+        }
+      }
+      
       const studentPayload = {
         ...form,
         authUserId: userId,
         personalInfo: {
           ...form.personalInfo,
-          dateOfBirth: new Date(form.personalInfo.dateOfBirth).toISOString()
+          dateOfBirth: dateOfBirthISO
         }
       };
 
@@ -390,7 +412,10 @@ export default function StudentForm({ initial, onClose, onSaved }) {
         ? `/api/allStudents/${initial.id}`
         : "/api/allStudents";
 
-      console.log("📤 Submitting student data...");
+      console.log("📤 Submitting student data...", {
+        dateOfBirth: dateOfBirthISO,
+        hasAuthUserId: !!userId
+      });
 
       // إرسال بيانات الطالب
       const res = await fetch(url, {
@@ -402,7 +427,20 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       const result = await res.json();
 
       if (!res.ok) {
-        throw new Error(result.message || `HTTP error! status: ${res.status}`);
+        // ✅ تحسين رسائل الخطأ
+        let errorMessage = result.message || `HTTP error! status: ${res.status}`;
+        
+        // إضافة تفاصيل إضافية من الـ response
+        if (result.errors && Array.isArray(result.errors)) {
+          const errorDetails = result.errors.map(err => `${err.field}: ${err.message}`).join(', ');
+          errorMessage += ` - ${errorDetails}`;
+        }
+        
+        if (result.field) {
+          errorMessage += ` - Field: ${result.field}, Value: ${result.value}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       if (result.success) {

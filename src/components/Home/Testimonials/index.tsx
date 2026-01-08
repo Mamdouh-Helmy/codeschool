@@ -198,7 +198,7 @@ const Testimonials = () => {
                       {t("testimonials.heading")}
                     </h2>
 
-                    <p className="text-lg font-normal text-SlateBlueText dark:text-opacity-80 py-5 truncate">
+                    <p className="text-lg font-normal text-SlateBlueText dark:text-opacity-80 py-5 ">
                       "{testimonial.comment || t("testimonials.noComment")}"
                     </p>
 
