@@ -188,7 +188,8 @@ export async function POST(request) {
 
     console.log("📝 Creating course in database...");
     
-    const course = await Course.create({
+    // ✅ تنظيف البيانات قبل الحفظ
+    const courseData = {
       title: title.trim(),
       description: description.trim(),
       level,
@@ -198,9 +199,23 @@ export async function POST(request) {
       price: price || 0,
       isActive: isActive !== undefined ? isActive : true,
       featured: featured !== undefined ? featured : false,
-      thumbnail: thumbnail || undefined,
-      createdBy,
+      thumbnail: thumbnail && thumbnail.trim() !== "" ? thumbnail.trim() : undefined,
+      createdBy: {
+        id: createdBy.id,
+        name: createdBy.name,
+        email: createdBy.email,
+        role: createdBy.role,
+      },
+    };
+
+    console.log("📋 Course data prepared:", {
+      title: courseData.title,
+      level: courseData.level,
+      curriculumModules: courseData.curriculum.length,
+      instructors: courseData.instructors.length,
     });
+    
+    const course = await Course.create(courseData);
 
     const populatedCourse = await Course.findById(course._id).populate(
       "instructors",
@@ -223,19 +238,22 @@ export async function POST(request) {
       name: error.name,
       code: error.code,
       stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      errors: error.errors,
+      keyPattern: error.keyPattern,
+      keyValue: error.keyValue,
     });
 
     // Handle Mongoose validation errors
     if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors)
-        .map((err) => err.message)
+      const messages = Object.values(error.errors || {})
+        .map((err) => err.message || err.toString())
         .join("; ");
       console.error("❌ Validation errors:", messages);
       return NextResponse.json(
         {
           success: false,
           error: "Validation failed",
-          message: "Validation failed",
+          message: "فشل التحقق من البيانات",
           details: messages,
         },
         { status: 400 }
@@ -244,24 +262,61 @@ export async function POST(request) {
 
     // Handle duplicate key errors
     if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+      const field = Object.keys(error.keyPattern || {})[0] || "unknown";
       console.error("❌ Duplicate field error:", field);
       return NextResponse.json(
         {
           success: false,
           error: `Duplicate ${field}`,
-          message: `A course with this ${field} already exists`,
+          message: `الكورس موجود مسبقاً: ${field}`,
           field: field,
         },
         { status: 409 }
       );
     }
 
+    // Handle CastError (invalid ObjectId, etc.)
+    if (error.name === "CastError") {
+      console.error("❌ Cast error:", error.path, error.value);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid value for field: ${error.path}`,
+          message: `قيمة غير صحيحة للحقل: ${error.path}`,
+          field: error.path,
+          value: error.value,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Handle TypeError (like "e is not a function")
+    if (error.name === "TypeError" && error.message.includes("is not a function")) {
+      console.error("❌ TypeError - function call error:", error.message);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Internal validation error",
+          message: "خطأ في التحقق من البيانات. يرجى التحقق من صحة البيانات المدخلة.",
+          details: error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Generic error response
     return NextResponse.json(
       {
         success: false,
         error: error.message || "Failed to create course",
-        message: error.message || "Failed to create course",
+        message: error.message || "فشل في إنشاء الكورس",
+        ...(process.env.NODE_ENV === "development" && {
+          stack: error.stack,
+          details: {
+            name: error.name,
+            code: error.code,
+          },
+        }),
       },
       { status: 500 }
     );

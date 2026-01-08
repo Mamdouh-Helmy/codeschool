@@ -2,29 +2,56 @@
 import mongoose from "mongoose";
 
 // Custom validators
-const validateLessonsCount = (lessons) => {
+const validateLessonsCount = function(lessons) {
   if (!Array.isArray(lessons)) return false;
   return lessons.length === 6;
 };
 
-const validateSessionsCount = (lesson) => {
+const validateSessionsCount = function(lesson) {
+  if (!lesson || typeof lesson !== 'object') return false;
   return lesson.sessionsCount === 2;
 };
 
 const validateCurriculum = function (curriculum) {
-  if (!curriculum || curriculum.length === 0) {
-    return true; // Curriculum is optional
-  }
+  try {
+    if (!curriculum || curriculum.length === 0) {
+      return true; // Curriculum is optional
+    }
 
-  return curriculum.every((module) => {
-    // Validate module has exactly 6 lessons
-    if (!validateLessonsCount(module.lessons)) {
+    if (!Array.isArray(curriculum)) {
       return false;
     }
 
-    // Validate each lesson has sessionsCount = 2
-    return module.lessons.every((lesson) => validateSessionsCount(lesson));
-  });
+    for (let i = 0; i < curriculum.length; i++) {
+      const module = curriculum[i];
+      
+      if (!module || typeof module !== 'object') {
+        return false;
+      }
+      
+      // Validate module has exactly 6 lessons
+      if (!validateLessonsCount(module.lessons)) {
+        return false;
+      }
+
+      // Validate each lesson has sessionsCount = 2
+      if (!Array.isArray(module.lessons)) {
+        return false;
+      }
+      
+      for (let j = 0; j < module.lessons.length; j++) {
+        const lesson = module.lessons[j];
+        if (!validateSessionsCount(lesson)) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  } catch (err) {
+    console.error("Error in validateCurriculum:", err);
+    return false;
+  }
 };
 
 const LessonSchema = new mongoose.Schema(
@@ -70,7 +97,9 @@ const ModuleSchema = new mongoose.Schema(
     lessons: {
       type: [LessonSchema],
       validate: {
-        validator: validateLessonsCount,
+        validator: function(lessons) {
+          return validateLessonsCount(lessons);
+        },
         message: "Each module must have exactly 6 lessons",
       },
     },
@@ -108,7 +137,9 @@ const CourseSchema = new mongoose.Schema(
       type: [ModuleSchema],
       default: [],
       validate: {
-        validator: validateCurriculum,
+        validator: function(curriculum) {
+          return validateCurriculum(curriculum);
+        },
         message:
           "Invalid curriculum structure. Each module must have exactly 6 lessons, and each lesson must have sessionsCount = 2",
       },

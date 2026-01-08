@@ -73,7 +73,41 @@ export async function POST(req) {
           if (isNaN(dateObj.getTime())) {
             throw new Error("Invalid date format");
           }
+          
+          // ✅ التحقق من أن التاريخ ليس في المستقبل
+          const today = new Date();
+          today.setHours(23, 59, 59, 999); // نهاية اليوم
+          
+          if (dateObj > today) {
+            console.error("❌ Date of birth is in the future:", dateOfBirth);
+            return NextResponse.json(
+              {
+                success: false,
+                message: "تاريخ الميلاد لا يمكن أن يكون في المستقبل",
+                error: "Date of birth cannot be in the future",
+              },
+              { status: 400 }
+            );
+          }
+          
+          // ✅ التحقق من أن التاريخ منطقي (مثلاً ليس قبل 150 سنة)
+          const minDate = new Date();
+          minDate.setFullYear(minDate.getFullYear() - 150);
+          
+          if (dateObj < minDate) {
+            console.error("❌ Date of birth is too old:", dateOfBirth);
+            return NextResponse.json(
+              {
+                success: false,
+                message: "تاريخ الميلاد غير منطقي",
+                error: "Date of birth is too old",
+              },
+              { status: 400 }
+            );
+          }
+          
           dateOfBirth = dateObj;
+          console.log("✅ Date of birth validated:", dateOfBirth);
         }
       } catch (dateError) {
         console.error("❌ Date parsing error:", dateError);
@@ -458,24 +492,35 @@ export async function POST(req) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("❌ Error creating student:", error);
+    console.error("❌ Error creating student:", {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      errors: error.errors,
+      keyPattern: error.keyPattern,
+      keyValue: error.keyValue,
+    });
 
+    // Handle duplicate key errors
     if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+      const field = Object.keys(error.keyPattern || {})[0] || "unknown";
       console.error("❌ Duplicate field error:", field);
       return NextResponse.json(
         {
           success: false,
-          message: `Data already exists: ${field}`,
+          message: `البيانات موجودة مسبقاً: ${field}`,
+          error: `Data already exists: ${field}`,
           field: field,
-          value: error.keyValue[field],
+          value: error.keyValue?.[field],
         },
         { status: 409 }
       );
     }
 
+    // Handle validation errors
     if (error.name === "ValidationError") {
-      const errors = Object.values(error.errors).map((err) => ({
+      const errors = Object.values(error.errors || {}).map((err) => ({
         field: err.path,
         message: err.message,
       }));
@@ -485,19 +530,42 @@ export async function POST(req) {
       return NextResponse.json(
         {
           success: false,
-          message: "Validation failed",
+          message: "فشل التحقق من البيانات",
+          error: "Validation failed",
           errors: errors,
         },
         { status: 400 }
       );
     }
 
+    // Handle CastError (invalid ObjectId, etc.)
+    if (error.name === "CastError") {
+      console.error("❌ Cast error:", error.path, error.value);
+      return NextResponse.json(
+        {
+          success: false,
+          message: `قيمة غير صحيحة للحقل: ${error.path}`,
+          error: `Invalid value for field: ${error.path}`,
+          field: error.path,
+          value: error.value,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Generic error response
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to create student",
-        error: error.message,
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+        message: error.message || "فشل في إنشاء الطالب",
+        error: error.message || "Failed to create student",
+        ...(process.env.NODE_ENV === "development" && {
+          stack: error.stack,
+          details: {
+            name: error.name,
+            code: error.code,
+          },
+        }),
       },
       { status: 500 }
     );

@@ -384,13 +384,32 @@ export default function StudentForm({ initial, onClose, onSaved }) {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
             throw new Error("Invalid date format. Expected YYYY-MM-DD");
           }
+          
           // استخدام T12:00:00 لتجنب مشاكل timezone على السيرفر
-          dateOfBirthISO = new Date(dateStr + 'T12:00:00').toISOString();
+          const dateObj = new Date(dateStr + 'T12:00:00');
           
           // التحقق من أن التاريخ صحيح
-          if (isNaN(new Date(dateOfBirthISO).getTime())) {
+          if (isNaN(dateObj.getTime())) {
             throw new Error("Invalid date value");
           }
+          
+          // ✅ التحقق من أن التاريخ ليس في المستقبل
+          const today = new Date();
+          today.setHours(23, 59, 59, 999);
+          
+          if (dateObj > today) {
+            throw new Error("تاريخ الميلاد لا يمكن أن يكون في المستقبل");
+          }
+          
+          // ✅ التحقق من أن التاريخ منطقي (مثلاً ليس قبل 150 سنة)
+          const minDate = new Date();
+          minDate.setFullYear(minDate.getFullYear() - 150);
+          
+          if (dateObj < minDate) {
+            throw new Error("تاريخ الميلاد غير منطقي");
+          }
+          
+          dateOfBirthISO = dateObj.toISOString();
         } catch (dateError) {
           console.error("❌ Date conversion error:", dateError);
           throw new Error(`تاريخ الميلاد غير صحيح: ${dateError.message}`);
