@@ -241,12 +241,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   // اختيار طالب من القائمة - فقط التحقق من التكرار للطلاب الموجودين
   const handleStudentSelect = (student) => {
     if (!student.isManual) {
-      // التحقق من أن الطالب لم يتم اختياره من قبل
-      if (selectedStudent?._id === student._id) {
-        toast.error("هذا الطالب مختار بالفعل");
-        return;
-      }
-      
       // طالب موجود في قاعدة البيانات
       setSelectedStudent(student);
       onChange('personalInfo.fullName', student.name);
