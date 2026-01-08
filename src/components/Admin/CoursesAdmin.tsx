@@ -23,17 +23,28 @@ import Modal from "./Modal";
 import CourseForm from "./CourseForm";
 import { useI18n } from "@/i18n/I18nProvider";
 
+interface Lesson {
+    title: string;
+    description?: string;
+    order: number;
+    sessionsCount: number;
+}
+
+interface Module {
+    title: string;
+    description?: string;
+    order: number;
+    lessons: Lesson[];
+    projects: string[];
+}
+
 interface Course {
     _id: string;
     title: string;
     slug: string;
     description: string;
     level: "beginner" | "intermediate" | "advanced";
-    curriculum: {
-        title: string;
-        description: string;
-        order: number;
-    }[];
+    curriculum: Module[];
     projects: string[];
     instructors: any[];
     price: number;
@@ -538,7 +549,7 @@ export default function CoursesAdmin() {
                 }}
             >
                 <CourseForm
-                    initial={editing}
+                    initial={editing || undefined}
                     onClose={() => {
                         setOpen(false);
                         setEditing(null);

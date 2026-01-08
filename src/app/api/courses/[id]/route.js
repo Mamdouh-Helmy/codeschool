@@ -118,45 +118,64 @@ export async function GET(request, { params }) {
 
 export async function PUT(request, { params }) {
   try {
+    console.log(`✏️ Updating course with ID: ${params.id}`);
+    
     await connectDB();
+    console.log("✅ Database connected");
 
     const { id } = params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.log("❌ Invalid course ID format:", id);
       return NextResponse.json(
         {
           success: false,
           error: "Invalid course ID",
+          message: "Invalid course ID format",
         },
         { status: 400 }
       );
     }
 
     const body = await request.json();
+    console.log("📥 Update data received:", JSON.stringify(body, null, 2));
 
     // Validate curriculum structure if provided in update
     if (body.curriculum !== undefined) {
+      console.log("🔍 Validating curriculum structure...");
       const curriculumValidation = validateCurriculumStructure(
         body.curriculum
       );
       if (!curriculumValidation.valid) {
+        console.log("❌ Curriculum validation failed:", curriculumValidation.errors);
         return NextResponse.json(
           {
             success: false,
             error: "Invalid curriculum structure",
+            message: "Invalid curriculum structure",
             details: curriculumValidation.errors,
           },
           { status: 400 }
         );
       }
+      console.log("✅ Curriculum validation passed");
     }
+
+    // Clean and prepare update data
+    const updateData = {
+      ...body,
+      updatedAt: new Date(),
+    };
+
+    // Trim string fields if they exist
+    if (updateData.title) updateData.title = updateData.title.trim();
+    if (updateData.description) updateData.description = updateData.description.trim();
+
+    console.log("🔄 Executing database update...");
 
     const course = await Course.findByIdAndUpdate(
       id,
-      {
-        ...body,
-        updatedAt: new Date(),
-      },
+      { $set: updateData },
       {
         new: true,
         runValidators: true,
@@ -165,36 +184,61 @@ export async function PUT(request, { params }) {
       .populate("instructors", "name email");
 
     if (!course) {
+      console.log("❌ Course not found:", id);
       return NextResponse.json(
         {
           success: false,
           error: "Course not found",
+          message: "Course not found",
         },
         { status: 404 }
       );
     }
 
-    console.log("✅ Course updated:", id);
+    console.log("✅ Course updated successfully:", id);
 
     return NextResponse.json({
       success: true,
       data: course,
+      message: "Course updated successfully",
     });
   } catch (error) {
-    console.error("❌ Error updating course:", error);
+    console.error("❌ Error updating course:", {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
 
     // Handle Mongoose validation errors
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors)
         .map((err) => err.message)
         .join("; ");
+      console.error("❌ Validation errors:", messages);
       return NextResponse.json(
         {
           success: false,
           error: "Validation failed",
+          message: "Validation failed",
           details: messages,
         },
         { status: 400 }
+      );
+    }
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      console.error("❌ Duplicate field error:", field);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Duplicate ${field}`,
+          message: `A course with this ${field} already exists`,
+          field: field,
+        },
+        { status: 409 }
       );
     }
 
@@ -202,6 +246,7 @@ export async function PUT(request, { params }) {
       {
         success: false,
         error: error.message || "Failed to update course",
+        message: error.message || "Failed to update course",
       },
       { status: 500 }
     );

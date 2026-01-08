@@ -58,8 +58,6 @@ const nextConfig = {
       "node_modules/@esbuild/linux-x64",
     ],
   },
-  
-  serverComponentsExternalPackages: ['mongoose'],
 };
 
 export default nextConfig;

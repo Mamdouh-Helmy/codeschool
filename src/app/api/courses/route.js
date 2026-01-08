@@ -114,9 +114,13 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    console.log("🚀 Starting course creation process...");
+    
     await connectDB();
+    console.log("✅ Database connected");
 
     const body = await request.json();
+    console.log("📥 Received course data:", JSON.stringify(body, null, 2));
 
     const {
       title,
@@ -134,10 +138,12 @@ export async function POST(request) {
 
     // Required field validation
     if (!title || !description || !level) {
+      console.log("❌ Missing required fields");
       return NextResponse.json(
         {
           success: false,
           error: "Title, description, and level are required",
+          message: "Title, description, and level are required",
         },
         { status: 400 }
       );
@@ -150,10 +156,12 @@ export async function POST(request) {
       !createdBy.email ||
       !createdBy.role
     ) {
+      console.log("❌ Missing createdBy information");
       return NextResponse.json(
         {
           success: false,
           error: "createdBy information (id, name, email, role) is required",
+          message: "createdBy information (id, name, email, role) is required",
         },
         { status: 400 }
       );
@@ -161,22 +169,28 @@ export async function POST(request) {
 
     // Validate curriculum structure if provided
     if (curriculum && curriculum.length > 0) {
+      console.log("🔍 Validating curriculum structure...");
       const curriculumValidation = validateCurriculumStructure(curriculum);
       if (!curriculumValidation.valid) {
+        console.log("❌ Curriculum validation failed:", curriculumValidation.errors);
         return NextResponse.json(
           {
             success: false,
             error: "Invalid curriculum structure",
+            message: "Invalid curriculum structure",
             details: curriculumValidation.errors,
           },
           { status: 400 }
         );
       }
+      console.log("✅ Curriculum validation passed");
     }
 
+    console.log("📝 Creating course in database...");
+    
     const course = await Course.create({
-      title,
-      description,
+      title: title.trim(),
+      description: description.trim(),
       level,
       curriculum: curriculum || [],
       projects: projects || [],
@@ -184,7 +198,7 @@ export async function POST(request) {
       price: price || 0,
       isActive: isActive !== undefined ? isActive : true,
       featured: featured !== undefined ? featured : false,
-      thumbnail,
+      thumbnail: thumbnail || undefined,
       createdBy,
     });
 
@@ -193,30 +207,53 @@ export async function POST(request) {
       "name email"
     );
 
-    console.log("✅ Course created:", course._id);
+    console.log("✅ Course created successfully:", course._id);
 
     return NextResponse.json(
       {
         success: true,
         data: populatedCourse,
+        message: "Course created successfully",
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error("❌ Error creating course:", error);
+    console.error("❌ Error creating course:", {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
 
     // Handle Mongoose validation errors
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors)
         .map((err) => err.message)
         .join("; ");
+      console.error("❌ Validation errors:", messages);
       return NextResponse.json(
         {
           success: false,
           error: "Validation failed",
+          message: "Validation failed",
           details: messages,
         },
         { status: 400 }
+      );
+    }
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      console.error("❌ Duplicate field error:", field);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Duplicate ${field}`,
+          message: `A course with this ${field} already exists`,
+          field: field,
+        },
+        { status: 409 }
       );
     }
 
@@ -224,6 +261,7 @@ export async function POST(request) {
       {
         success: false,
         error: error.message || "Failed to create course",
+        message: error.message || "Failed to create course",
       },
       { status: 500 }
     );
