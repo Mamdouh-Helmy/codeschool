@@ -53,9 +53,14 @@ const validateCurriculumStructure = (curriculum) => {
         );
       }
 
-      if (lesson.sessionsCount !== 2) {
+      // التحقق من رقم السيشن الصحيح
+      // Lessons 1-2 → Session 1
+      // Lessons 3-4 → Session 2
+      // Lessons 5-6 → Session 3
+      const expectedSession = Math.ceil(lesson.order / 2);
+      if (lesson.sessionNumber !== expectedSession) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionsCount must be 2 (found ${lesson.sessionsCount})`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionNumber must be ${expectedSession} for lesson order ${lesson.order} (found ${lesson.sessionNumber}). System: Lessons 1-2→Session 1, Lessons 3-4→Session 2, Lessons 5-6→Session 3`
         );
       }
     });
@@ -170,6 +175,8 @@ export async function POST(request) {
     // Validate curriculum structure if provided
     if (curriculum && curriculum.length > 0) {
       console.log("🔍 Validating curriculum structure...");
+      console.log("📊 Curriculum details:", JSON.stringify(curriculum, null, 2));
+      
       const curriculumValidation = validateCurriculumStructure(curriculum);
       if (!curriculumValidation.valid) {
         console.log("❌ Curriculum validation failed:", curriculumValidation.errors);
@@ -177,7 +184,7 @@ export async function POST(request) {
           {
             success: false,
             error: "Invalid curriculum structure",
-            message: "Invalid curriculum structure",
+            message: "Invalid curriculum structure - 6 Lessons must have 3 Sessions (Lessons 1-2→S1, 3-4→S2, 5-6→S3)",
             details: curriculumValidation.errors,
           },
           { status: 400 }
@@ -212,6 +219,8 @@ export async function POST(request) {
       title: courseData.title,
       level: courseData.level,
       curriculumModules: courseData.curriculum.length,
+      totalLessons: courseData.curriculum.reduce((sum, m) => sum + (m.lessons?.length || 0), 0),
+      totalSessions: courseData.curriculum.length * 3, // كل module له 3 سيشنات
       instructors: courseData.instructors.length,
     });
     
@@ -223,12 +232,17 @@ export async function POST(request) {
     );
 
     console.log("✅ Course created successfully:", course._id);
+    console.log("📊 Course structure:", {
+      modules: populatedCourse.curriculum.length,
+      lessons: populatedCourse.curriculum.reduce((sum, m) => sum + m.lessons.length, 0),
+      sessions: populatedCourse.curriculum.length * 3,
+    });
 
     return NextResponse.json(
       {
         success: true,
         data: populatedCourse,
-        message: "Course created successfully",
+        message: "Course created successfully with 3 sessions per module (2 lessons per session)",
       },
       { status: 201 }
     );
@@ -253,7 +267,7 @@ export async function POST(request) {
         {
           success: false,
           error: "Validation failed",
-          message: "فشل التحقق من البيانات",
+          message: "فشل التحقق من البيانات - تأكد من أن كل Module يحتوي على 6 حصص مع 3 سيشنات",
           details: messages,
         },
         { status: 400 }

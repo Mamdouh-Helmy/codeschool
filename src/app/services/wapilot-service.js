@@ -1,6 +1,6 @@
 /**
  * WhatsApp Automation Service using Wapilot API
- * ✅ CORRECT: Using List Messages (/send-list) for interactive selection
+ * ✅ UPDATED: Accepts custom messages from form
  */
 
 const FORCE_PRODUCTION = true;
@@ -177,8 +177,7 @@ Best regards,
   }
 
   /**
-   * ✅ CORRECT: إرسال List Message (القائمة التفاعلية)
-   * هذا هو الـ endpoint الصحيح الوحيد للتفاعل في Wapilot
+   * ✅ إرسال List Message (القائمة التفاعلية)
    */
   async sendListMessage(phoneNumber, title, description, buttonText, sections) {
     try {
@@ -186,10 +185,8 @@ Best regards,
         throw new Error("WhatsApp API Token or Instance ID not configured");
       }
 
-      // ✅ استخدام /send-list endpoint (الوحيد المدعوم للتفاعل)
       const apiUrl = `${this.baseURL}/${this.instanceId}/send-list`;
 
-      // ✅ التنسيق الصحيح بناءً على Wapilot Documentation
       const messagePayload = {
         chat_id: phoneNumber.replace("+", ""),
         priority: 0,
@@ -279,8 +276,12 @@ Best regards,
 
   /**
    * ✅ إرسال رسائل الترحيب مع List Message للتفاعل
+   * @param {string} studentName - اسم الطالب
+   * @param {string} phoneNumber - رقم الجوال
+   * @param {string} customFirstMessage - الرسالة الأولى المخصصة من المستخدم
+   * @param {string} customSecondMessage - الرسالة الثانية المخصصة من المستخدم
    */
-  async sendWelcomeMessages(studentName, phoneNumber) {
+  async sendWelcomeMessages(studentName, phoneNumber, customFirstMessage, customSecondMessage) {
     try {
       console.log("🎯 WhatsApp automation for student:", {
         name: studentName,
@@ -288,6 +289,7 @@ Best regards,
         mode: this.mode,
         interactive: true,
         messageType: "list_message",
+        hasCustomMessages: !!(customFirstMessage || customSecondMessage)
       });
 
       if (!phoneNumber) {
@@ -308,12 +310,15 @@ Best regards,
         };
       }
 
-      const firstMessage = this.prepareFirstWelcomeMessage(studentName);
+      // استخدام الرسائل المخصصة أو الافتراضية
+      const firstMessage = customFirstMessage || this.prepareFirstWelcomeMessage(studentName);
+      const secondMessage = customSecondMessage || "اختر اللغة المفضلة / Choose your preferred language";
 
       console.log("📝 Prepared welcome messages:", {
         to: preparedNumber,
         studentName: studentName,
         firstMessageLength: firstMessage.length,
+        secondMessageLength: secondMessage.length,
         messageType: "list_message",
         mode: this.mode,
       });
@@ -332,9 +337,9 @@ Best regards,
         // ✅ List Message مع خيارات اللغة
         secondResult = await this.sendListMessage(
           preparedNumber,
-          "🌍 Language | اللغة", // العنوان (قصير)
-          "يرجى اختيار اللغة المفضلة لديك من القائمة أدناه.\nPlease select your preferred language from the list below.", // الوصف
-          "Choose | اختر", // نص الزر (أقل من 20 حرف)
+          "🌍 Language | اللغة",
+          secondMessage,
+          "Choose | اختر",
           [
             {
               title: "Available Languages",
@@ -365,7 +370,7 @@ Best regards,
         await new Promise((resolve) => setTimeout(resolve, 3000));
         secondResult = await this.simulateSendMessage(
           preparedNumber,
-          "Language Selection List",
+          secondMessage,
           true
         );
       }
@@ -381,6 +386,7 @@ Best regards,
         interactive: true,
         simulated: secondResult.simulated || false,
         mode: this.mode,
+        hasCustomMessages: !!(customFirstMessage || customSecondMessage),
         timestamp: new Date(),
       });
 
@@ -531,7 +537,7 @@ Best regards,
       let selectedLanguage;
       let responseText = response.toString().trim();
 
-      // ✅ معالجة ردود List Message (rowId)
+      // معالجة ردود List Message
       if (
         responseText === "arabic_lang" ||
         responseText === "1" ||
@@ -637,10 +643,11 @@ Best regards,
         "auto-confirmation",
         "webhook-processing",
         "database-sync",
+        "✅ CUSTOM-MESSAGES (User-defined content)",
       ],
       messageFlow: [
-        "Message 1: Welcome (plain text)",
-        "Message 2: Language selection with Interactive List",
+        "Message 1: Welcome (custom or default text)",
+        "Message 2: Language selection with Interactive List (custom or default)",
         "Student clicks on list option",
         "Message 3: Confirmation in selected language",
       ],

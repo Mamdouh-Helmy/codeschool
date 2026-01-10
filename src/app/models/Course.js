@@ -7,9 +7,10 @@ const validateLessonsCount = function(lessons) {
   return lessons.length === 6;
 };
 
-const validateSessionsCount = function(lesson) {
+const validateSessionNumber = function(lesson) {
   if (!lesson || typeof lesson !== 'object') return false;
-  return lesson.sessionsCount === 2;
+  // يجب أن يكون رقم السيشن بين 1 و 3
+  return lesson.sessionNumber >= 1 && lesson.sessionNumber <= 3;
 };
 
 const validateCurriculum = function (curriculum) {
@@ -34,14 +35,14 @@ const validateCurriculum = function (curriculum) {
         return false;
       }
 
-      // Validate each lesson has sessionsCount = 2
+      // Validate each lesson has valid sessionNumber (1, 2, or 3)
       if (!Array.isArray(module.lessons)) {
         return false;
       }
       
       for (let j = 0; j < module.lessons.length; j++) {
         const lesson = module.lessons[j];
-        if (!validateSessionsCount(lesson)) {
+        if (!validateSessionNumber(lesson)) {
           return false;
         }
       }
@@ -70,11 +71,22 @@ const LessonSchema = new mongoose.Schema(
       min: 1,
       max: 6,
     },
-    sessionsCount: {
+    sessionNumber: {
       type: Number,
       required: true,
-      enum: [2],
-      default: 2,
+      min: 1,
+      max: 3,
+      validate: {
+        validator: function(value) {
+          // التحقق من أن رقم السيشن يتناسب مع ترتيب الحصة
+          // Lesson 1,2 → Session 1
+          // Lesson 3,4 → Session 2
+          // Lesson 5,6 → Session 3
+          const expectedSession = Math.ceil(this.order / 2);
+          return value === expectedSession;
+        },
+        message: "Session number must match lesson order (Lessons 1-2: Session 1, Lessons 3-4: Session 2, Lessons 5-6: Session 3)"
+      }
     },
   },
   { _id: true }
@@ -100,13 +112,17 @@ const ModuleSchema = new mongoose.Schema(
         validator: function(lessons) {
           return validateLessonsCount(lessons);
         },
-        message: "Each module must have exactly 6 lessons",
+        message: "Each module must have exactly 6 lessons (3 sessions: 2 lessons per session)",
       },
     },
     projects: {
       type: [String],
       default: [],
     },
+    totalSessions: {
+      type: Number,
+      default: 3, // دائماً 3 سيشنات لكل 6 حصص
+    }
   },
   { _id: true }
 );
@@ -141,7 +157,7 @@ const CourseSchema = new mongoose.Schema(
           return validateCurriculum(curriculum);
         },
         message:
-          "Invalid curriculum structure. Each module must have exactly 6 lessons, and each lesson must have sessionsCount = 2",
+          "Invalid curriculum structure. Each module must have exactly 6 lessons with 3 sessions (2 lessons per session)",
       },
     },
     projects: [
@@ -212,14 +228,20 @@ CourseSchema.pre("save", function (next) {
   next();
 });
 
-// Ensure each lesson's sessionsCount is always 2 before saving
+// تعيين رقم السيشن تلقائياً لكل حصة حسب ترتيبها
 CourseSchema.pre("save", function (next) {
   if (this.curriculum && this.curriculum.length > 0) {
     this.curriculum.forEach((module) => {
       if (module.lessons) {
         module.lessons.forEach((lesson) => {
-          lesson.sessionsCount = 2;
+          // حساب رقم السيشن من ترتيب الحصة
+          // Lesson 1,2 → Session 1
+          // Lesson 3,4 → Session 2
+          // Lesson 5,6 → Session 3
+          lesson.sessionNumber = Math.ceil(lesson.order / 2);
         });
+        // تعيين إجمالي عدد السيشنات
+        module.totalSessions = 3;
       }
     });
   }

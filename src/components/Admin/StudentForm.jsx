@@ -25,7 +25,8 @@ import {
   GlobeIcon,
   Hash,
   AlertCircle,
-  Check
+  Check,
+  Info
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -75,6 +76,10 @@ export default function StudentForm({ initial, onClose, onSaved }) {
         sms: false
       },
       marketingOptIn: initial?.communicationPreferences?.marketingOptIn || true
+    },
+    whatsappCustomMessages: {
+      firstMessage: initial?.whatsappCustomMessages?.firstMessage || "",
+      secondMessage: initial?.whatsappCustomMessages?.secondMessage || ""
     }
   }));
 
@@ -105,7 +110,9 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       // إرسال الرسالتين (ترحيب + اختيار اللغة)
       const result = await wapilotService.sendWelcomeMessages(
         studentData.personalInfo.fullName,
-        studentData.personalInfo.whatsappNumber
+        studentData.personalInfo.whatsappNumber,
+        studentData.whatsappCustomMessages?.firstMessage,
+        studentData.whatsappCustomMessages?.secondMessage
       );
 
       if (result.success) {
@@ -238,16 +245,14 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     return null;
   };
 
-  // اختيار طالب من القائمة - فقط التحقق من التكرار للطلاب الموجودين
+  // اختيار طالب من القائمة
   const handleStudentSelect = (student) => {
     if (!student.isManual) {
-      // طالب موجود في قاعدة البيانات
       setSelectedStudent(student);
       onChange('personalInfo.fullName', student.name);
       onChange('personalInfo.email', student.email);
       onChange('authUserId', student._id);
     } else {
-      // طالب يدوي
       setSelectedStudent(null);
       onChange('personalInfo.fullName', student.name);
       onChange('personalInfo.email', form.personalInfo.email || "");
@@ -265,7 +270,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     onChange('personalInfo.fullName', value);
     setStudentSearch(value);
 
-    // إذا كتب اسم جديد، نزيل الطالب المختار
     if (selectedStudent && value !== selectedStudent.name) {
       setSelectedStudent(null);
       onChange('authUserId', "");
@@ -372,7 +376,11 @@ export default function StudentForm({ initial, onClose, onSaved }) {
 
       console.log("📤 Submitting student data...", {
         dateOfBirth: dateOfBirthISO,
-        hasAuthUserId: !!userId
+        hasAuthUserId: !!userId,
+        whatsappMessages: {
+          firstMessage: form.whatsappCustomMessages?.firstMessage ? "✓" : "✗",
+          secondMessage: form.whatsappCustomMessages?.secondMessage ? "✓" : "✗"
+        }
       });
 
       // إرسال بيانات الطالب
@@ -641,7 +649,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
           )}
         </div>
 
-        {/* Password Fields - تظهر فقط للطلاب الجدد أو اليدويين */}
+        {/* Password Fields */}
         {(!selectedStudent || (selectedStudent && selectedStudent.isManual)) && form.personalInfo.fullName && (
           <div className="space-y-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="flex items-center gap-3">
@@ -1111,6 +1119,77 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   </label>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* WhatsApp Custom Messages */}
+      <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+            <MessageCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+          </div>
+          <div>
+            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
+              رسائل WhatsApp المخصصة
+            </h3>
+            <p className="text-12 text-SlateBlueText dark:text-darktext">
+              قم بتخصيص محتوى الرسائل التي سيتلقاها الطالب
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {/* First Message */}
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+              <span className="flex items-center justify-center w-5 h-5 bg-primary/20 text-primary text-10 font-bold rounded">1</span>
+              الرسالة الأولى (First Message)
+            </label>
+            <textarea
+              value={form.whatsappCustomMessages?.firstMessage || ""}
+              onChange={(e) => onChange('whatsappCustomMessages.firstMessage', e.target.value)}
+              placeholder="أدخل محتوى الرسالة الأولى التي ستصل للطالب..."
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white resize-none h-28"
+            />
+            <div className="flex justify-between items-center text-xs text-SlateBlueText dark:text-darktext">
+              <p>ستُرسل كرسالة نصية عادية</p>
+              <span>{(form.whatsappCustomMessages?.firstMessage || "").length} حرف</span>
+            </div>
+          </div>
+
+          {/* Second Message */}
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+              <span className="flex items-center justify-center w-5 h-5 bg-primary/20 text-primary text-10 font-bold rounded">2</span>
+              الرسالة الثانية (Second Message)
+            </label>
+            <textarea
+              value={form.whatsappCustomMessages?.secondMessage || ""}
+              onChange={(e) => onChange('whatsappCustomMessages.secondMessage', e.target.value)}
+              placeholder="أدخل محتوى الرسالة الثانية (رسالة اختيار اللغة)..."
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white resize-none h-28"
+            />
+            <div className="flex justify-between items-center text-xs text-SlateBlueText dark:text-darktext">
+              <p>ستُرسل مع أزرار تفاعلية (العربية/English)</p>
+              <span>{(form.whatsappCustomMessages?.secondMessage || "").length} حرف</span>
+            </div>
+          </div>
+
+          {/* Preview Info */}
+          <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                <p className="font-medium">ملاحظات مهمة:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>الرسالة الأولى: رسالة نصية عادية (Text Message)</li>
+                  <li>الرسالة الثانية: رسالة مع أزرار تفاعلية (Interactive List)</li>
+                  <li>سيتم إرسالهما تلقائياً بعد تسجيل بيانات الطالب</li>
+                  <li>الطالب سيختار اللغة من الأزرار التفاعلية</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>

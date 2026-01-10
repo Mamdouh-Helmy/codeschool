@@ -17,7 +17,7 @@ interface Lesson {
   title: string;
   description?: string;
   order: number;
-  sessionsCount: number;
+  sessionNumber: number; // 1, 2, or 3
 }
 
 interface Module {
@@ -26,6 +26,7 @@ interface Module {
   order: number;
   lessons: Lesson[];
   projects: string[];
+  totalSessions: number; // Always 3
 }
 
 interface Course {
@@ -124,6 +125,21 @@ export default function CourseForm({
     });
   };
 
+  // Helper function to calculate sessionNumber from lesson order
+  const calculateSessionNumber = (lessonOrder: number): number => {
+    return Math.ceil(lessonOrder / 2);
+  };
+
+  // Helper function to get session color
+  const getSessionColor = (sessionNumber: number): string => {
+    const colors = {
+      1: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+      2: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+      3: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+    };
+    return colors[sessionNumber as keyof typeof colors] || colors[1];
+  };
+
   const addModule = () => {
     const newModule: Module = {
       title: "",
@@ -135,9 +151,10 @@ export default function CourseForm({
           title: "",
           description: "",
           order: i + 1,
-          sessionsCount: 2,
+          sessionNumber: calculateSessionNumber(i + 1),
         })),
       projects: [],
+      totalSessions: 3,
     };
     setForm((prev) => ({
       ...prev,
@@ -176,10 +193,13 @@ export default function CourseForm({
   ) => {
     setForm((prev) => {
       const updated = [...prev.curriculum];
+      const currentLesson = updated[moduleIndex].lessons[lessonIndex];
+      const newOrder = field === "order" ? Number(value) : currentLesson.order;
+      
       updated[moduleIndex].lessons[lessonIndex] = {
-        ...updated[moduleIndex].lessons[lessonIndex],
+        ...currentLesson,
         [field]: value,
-        sessionsCount: 2,
+        sessionNumber: calculateSessionNumber(newOrder),
       };
       return { ...prev, curriculum: updated };
     });
@@ -248,25 +268,26 @@ export default function CourseForm({
       form.curriculum.forEach((module, mIdx) => {
         if (!module.title.trim()) {
           newErrors[`module_${mIdx}_title`] =
-            t("courses.moduleTitle") || "Module title is required";
+            t("courses.moduleTitleRequired") || "Module title is required";
         }
 
         if (module.lessons.length !== 6) {
           newErrors[`module_${mIdx}_lessons`] =
-            t("courses.exactlyLessons") ||
-            "Each module must have exactly 6 lessons";
+            t("courses.exact6Lessons") ||
+            "Each module must have exactly 6 lessons (3 sessions)";
         }
 
         module.lessons.forEach((lesson, lIdx) => {
           if (!lesson.title.trim()) {
             newErrors[`module_${mIdx}_lesson_${lIdx}_title`] =
-              t("courses.lessonTitle") || "Lesson title is required";
+              t("courses.lessonTitleRequired") || "Lesson title is required";
           }
 
-          if (lesson.sessionsCount !== 2) {
-            newErrors[`module_${mIdx}_lesson_${lIdx}_sessions`] =
-              t("courses.sessionCount") ||
-              "Each lesson must have exactly 2 sessions";
+          // Verify sessionNumber matches lesson order
+          const expectedSession = calculateSessionNumber(lesson.order);
+          if (lesson.sessionNumber !== expectedSession) {
+            newErrors[`module_${mIdx}_lesson_${lIdx}_session`] =
+              `Session number mismatch: Lesson ${lesson.order} should be in Session ${expectedSession}`;
           }
         });
       });
@@ -304,7 +325,14 @@ export default function CourseForm({
         title: form.title,
         description: form.description,
         level: form.level,
-        curriculum: form.curriculum,
+        curriculum: form.curriculum.map(module => ({
+          ...module,
+          totalSessions: 3,
+          lessons: module.lessons.map(lesson => ({
+            ...lesson,
+            sessionNumber: calculateSessionNumber(lesson.order)
+          }))
+        })),
         projects: form.projects,
         instructors: form.instructors,
         price: form.price,
@@ -336,7 +364,7 @@ export default function CourseForm({
           toast.error(json.details[0]);
           console.error("Validation errors:", json.details);
         } else {
-          toast.error(json.error || "Failed to save course");
+          toast.error(json.error || json.message || "Failed to save course");
         }
         return;
       }
@@ -545,12 +573,38 @@ export default function CourseForm({
           </button>
         </div>
 
+        {/* Sessions System Info */}
+        <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-900/50 rounded-lg">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                {t("courses.sessionsSystemTitle") || "📚 Sessions System (3 Sessions for 6 Lessons)"}
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className={`p-2 rounded ${getSessionColor(1)}`}>
+                  <div className="font-bold">Session 1</div>
+                  <div>Lessons 1 & 2</div>
+                </div>
+                <div className={`p-2 rounded ${getSessionColor(2)}`}>
+                  <div className="font-bold">Session 2</div>
+                  <div>Lessons 3 & 4</div>
+                </div>
+                <div className={`p-2 rounded ${getSessionColor(3)}`}>
+                  <div className="font-bold">Session 3</div>
+                  <div>Lessons 5 & 6</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {form.curriculum.length === 0 && (
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/50 rounded-lg flex gap-3">
             <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-blue-700 dark:text-blue-300">
               {t("courses.curriculumOptional") ||
-                "Curriculum is optional. Add modules with lessons to structure your course content. Each module must have exactly 6 lessons."}
+                "Curriculum is optional. Add modules with lessons to structure your course content. Each module must have exactly 6 lessons organized in 3 sessions."}
             </p>
           </div>
         )}
@@ -560,8 +614,7 @@ export default function CourseForm({
           {form.curriculum.map((module, moduleIndex) => {
             const isExpanded = expandedModules.has(moduleIndex);
             const moduleTitleError = errors[`module_${moduleIndex}_title`];
-            const moduleLessonsError =
-              errors[`module_${moduleIndex}_lessons`];
+            const moduleLessonsError = errors[`module_${moduleIndex}_lessons`];
 
             return (
               <div
@@ -589,7 +642,7 @@ export default function CourseForm({
                         </h4>
                         <p className="text-xs text-SlateBlueText dark:text-darktext">
                           {module.lessons.length}{" "}
-                          {t("courses.lessons") || "lessons"}
+                          {t("courses.lessons") || "lessons"} • 3 {t("courses.sessions") || "sessions"}
                           {module.projects && module.projects.length > 0 && (
                             <span className="ml-2">
                               • {module.projects.length}{" "}
@@ -710,7 +763,7 @@ export default function CourseForm({
                               addProjectToModule(moduleIndex);
                             }
                           }}
-                          placeholder="Add a project for this module..."
+                          placeholder={t("courses.addProjectPlaceholder") || "Add a project for this module..."}
                           className="flex-1 px-3 py-2 rounded-lg border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary"
                         />
                         <button
@@ -731,18 +784,15 @@ export default function CourseForm({
                       </p>
                     )}
 
-                    {/* Lessons */}
+                    {/* Lessons Section */}
                     <div className="space-y-3 bg-gray-50 dark:bg-dark_input p-3 rounded-lg">
                       <p className="text-xs font-semibold text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                        {t("courses.lessons") || "Lessons"} (
-                        {module.lessons.length}/6)
+                        {t("courses.lessons") || "Lessons"} ({module.lessons.length}/6)
                       </p>
 
                       {module.lessons.map((lesson, lessonIndex) => {
-                        const lessonTitleError =
-                          errors[
-                            `module_${moduleIndex}_lesson_${lessonIndex}_title`
-                          ];
+                        const lessonTitleError = errors[`module_${moduleIndex}_lesson_${lessonIndex}_title`];
+                        const sessionNum = lesson.sessionNumber;
 
                         return (
                           <div
@@ -771,23 +821,14 @@ export default function CourseForm({
                                     : "border-PowderBlueBorder dark:border-dark_border focus:ring-primary/20"
                                 } focus:outline-none focus:ring-4 focus:border-primary`}
                               />
-                              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded text-xs font-semibold whitespace-nowrap">
-                                <span>2x</span>
-                                <span className="text-xs">
-                                  {t("courses.sessions") || "Sessions"}
-                                </span>
+                              <div className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${getSessionColor(sessionNum)}`}>
+                                S{sessionNum}
                               </div>
                             </div>
 
                             {lessonTitleError && (
                               <p className="text-red-500 text-xs ml-8">
                                 {lessonTitleError}
-                              </p>
-                            )}
-
-                            {lesson.description && (
-                              <p className="text-xs text-SlateBlueText dark:text-darktext ml-8">
-                                {lesson.description}
                               </p>
                             )}
                           </div>
@@ -853,7 +894,7 @@ export default function CourseForm({
         {form.instructors.length > 0 && (
           <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
             <p className="text-xs font-medium text-primary">
-              ✅ {form.instructors.length} instructor(s) selected
+              ✅ {form.instructors.length} {t("courses.instructorsSelected") || "instructor(s) selected"}
             </p>
           </div>
         )}
