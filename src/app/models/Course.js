@@ -2,13 +2,13 @@
 import mongoose from "mongoose";
 
 // Custom validators
-const validateLessonsCount = function(lessons) {
+const validateLessonsCount = function (lessons) {
   if (!Array.isArray(lessons)) return false;
   return lessons.length === 6;
 };
 
-const validateSessionNumber = function(lesson) {
-  if (!lesson || typeof lesson !== 'object') return false;
+const validateSessionNumber = function (lesson) {
+  if (!lesson || typeof lesson !== "object") return false;
   // يجب أن يكون رقم السيشن بين 1 و 3
   return lesson.sessionNumber >= 1 && lesson.sessionNumber <= 3;
 };
@@ -25,11 +25,11 @@ const validateCurriculum = function (curriculum) {
 
     for (let i = 0; i < curriculum.length; i++) {
       const module = curriculum[i];
-      
-      if (!module || typeof module !== 'object') {
+
+      if (!module || typeof module !== "object") {
         return false;
       }
-      
+
       // Validate module has exactly 6 lessons
       if (!validateLessonsCount(module.lessons)) {
         return false;
@@ -39,7 +39,7 @@ const validateCurriculum = function (curriculum) {
       if (!Array.isArray(module.lessons)) {
         return false;
       }
-      
+
       for (let j = 0; j < module.lessons.length; j++) {
         const lesson = module.lessons[j];
         if (!validateSessionNumber(lesson)) {
@@ -47,7 +47,7 @@ const validateCurriculum = function (curriculum) {
         }
       }
     }
-    
+
     return true;
   } catch (err) {
     console.error("Error in validateCurriculum:", err);
@@ -77,7 +77,7 @@ const LessonSchema = new mongoose.Schema(
       min: 1,
       max: 3,
       validate: {
-        validator: function(value) {
+        validator: function (value) {
           // التحقق من أن رقم السيشن يتناسب مع ترتيب الحصة
           // Lesson 1,2 → Session 1
           // Lesson 3,4 → Session 2
@@ -85,8 +85,9 @@ const LessonSchema = new mongoose.Schema(
           const expectedSession = Math.ceil(this.order / 2);
           return value === expectedSession;
         },
-        message: "Session number must match lesson order (Lessons 1-2: Session 1, Lessons 3-4: Session 2, Lessons 5-6: Session 3)"
-      }
+        message:
+          "Session number must match lesson order (Lessons 1-2: Session 1, Lessons 3-4: Session 2, Lessons 5-6: Session 3)",
+      },
     },
   },
   { _id: true }
@@ -109,10 +110,11 @@ const ModuleSchema = new mongoose.Schema(
     lessons: {
       type: [LessonSchema],
       validate: {
-        validator: function(lessons) {
+        validator: function (lessons) {
           return validateLessonsCount(lessons);
         },
-        message: "Each module must have exactly 6 lessons (3 sessions: 2 lessons per session)",
+        message:
+          "Each module must have exactly 6 lessons (3 sessions: 2 lessons per session)",
       },
     },
     projects: {
@@ -122,7 +124,7 @@ const ModuleSchema = new mongoose.Schema(
     totalSessions: {
       type: Number,
       default: 3, // دائماً 3 سيشنات لكل 6 حصص
-    }
+    },
   },
   { _id: true }
 );
@@ -153,7 +155,7 @@ const CourseSchema = new mongoose.Schema(
       type: [ModuleSchema],
       default: [],
       validate: {
-        validator: function(curriculum) {
+        validator: function (curriculum) {
           return validateCurriculum(curriculum);
         },
         message:

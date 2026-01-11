@@ -34,7 +34,7 @@ import AddStudentsToGroup from "./AddStudentsToGroup";
 import { useI18n } from "@/i18n/I18nProvider";
 
 export default function GroupsAdmin() {
-    const { t } = useI18n();
+    const { t, language } = useI18n();
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
@@ -62,6 +62,8 @@ export default function GroupsAdmin() {
     const [addStudentsModalOpen, setAddStudentsModalOpen] = useState(false);
     const [selectedGroupForStudents, setSelectedGroupForStudents] = useState(null);
     const router = useRouter();
+
+    const isRTL = language === "ar";
 
     // تحميل المجموعات
     const loadGroups = async () => {
@@ -94,11 +96,11 @@ export default function GroupsAdmin() {
                     setStats(json.stats);
                 }
             } else {
-                toast.error(json.error || "Failed to load groups");
+                toast.error(json.error || t("groups.load.failed"));
             }
         } catch (err) {
             console.error("Error loading groups:", err);
-            toast.error("Failed to load groups");
+            toast.error(t("groups.load.failed"));
         } finally {
             setLoading(false);
         }
@@ -114,7 +116,7 @@ export default function GroupsAdmin() {
 
     const onSaved = async () => {
         await loadGroups();
-        toast.success("Group saved successfully!");
+        toast.success(t("groups.saved.success"));
     };
 
     const onEdit = (group) => {
@@ -133,7 +135,7 @@ export default function GroupsAdmin() {
             }
         } catch (err) {
             console.error("Error viewing group:", err);
-            toast.error("Failed to load group");
+            toast.error(t("groups.view.failed"));
         }
     };
 
@@ -146,10 +148,13 @@ export default function GroupsAdmin() {
                             !
                         </div>
                         <div className="flex-1">
-                            <p className="text-16 font-semibold">Delete Group</p>
-                            <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                                Are you sure you want to delete <strong>{name}</strong>? All sessions will be cancelled.
-                            </p>
+                            <p className="text-16 font-semibold">{t("groups.delete.title")}</p>
+                            <p 
+                                className="text-14 mt-1 text-slate-500 dark:text-darktext"
+                                dangerouslySetInnerHTML={{
+                                    __html: t("groups.delete.message", { name })
+                                }}
+                            />
                         </div>
                     </div>
                     <div className="flex justify-end gap-2 mt-4">
@@ -157,7 +162,7 @@ export default function GroupsAdmin() {
                             className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
                             onClick={() => toast.dismiss(toastInstance.id)}
                         >
-                            Cancel
+                            {t("groups.delete.cancel")}
                         </button>
                         <button
                             className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
@@ -170,18 +175,18 @@ export default function GroupsAdmin() {
 
                                     if (res.ok) {
                                         await loadGroups();
-                                        toast.success("Group deleted successfully");
+                                        toast.success(t("groups.delete.success"));
                                     } else {
                                         const error = await res.json();
-                                        toast.error(error.error || "Failed to delete group");
+                                        toast.error(error.error || t("groups.delete.failed"));
                                     }
                                 } catch (err) {
                                     console.error("Error deleting group:", err);
-                                    toast.error("Failed to delete group");
+                                    toast.error(t("groups.delete.failed"));
                                 }
                             }}
                         >
-                            Delete
+                            {t("groups.delete.confirm")}
                         </button>
                     </div>
                 </div>
@@ -199,10 +204,13 @@ export default function GroupsAdmin() {
                             <PlayCircle className="w-5 h-5" />
                         </div>
                         <div className="flex-1">
-                            <p className="text-16 font-semibold">Activate Group</p>
-                            <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                                Activate <strong>{name}</strong>? This will generate all sessions automatically.
-                            </p>
+                            <p className="text-16 font-semibold">{t("groups.activate.title")}</p>
+                            <p 
+                                className="text-14 mt-1 text-slate-500 dark:text-darktext"
+                                dangerouslySetInnerHTML={{
+                                    __html: t("groups.activate.message", { name })
+                                }}
+                            />
                         </div>
                     </div>
                     <div className="flex justify-end gap-2 mt-4">
@@ -210,13 +218,13 @@ export default function GroupsAdmin() {
                             className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
                             onClick={() => toast.dismiss(toastInstance.id)}
                         >
-                            Cancel
+                            {t("groups.activate.cancel")}
                         </button>
                         <button
                             className="px-3 py-1 bg-green-600 text-white rounded-14 text-15 hover:bg-green-700 shadow-sm"
                             onClick={async () => {
                                 toast.dismiss(toastInstance.id);
-                                const loadingToast = toast.loading("Activating group...");
+                                const loadingToast = toast.loading(t("groups.activate.loading"));
                                 try {
                                     const res = await fetch(`/api/groups/${id}/activate`, {
                                         method: "POST",
@@ -226,21 +234,21 @@ export default function GroupsAdmin() {
 
                                     if (res.ok) {
                                         await loadGroups();
-                                        toast.success("Group activated! Sessions are being generated...", {
+                                        toast.success(t("groups.activate.success"), {
                                             id: loadingToast
                                         });
                                     } else {
-                                        toast.error(result.error || "Failed to activate group", {
+                                        toast.error(result.error || t("groups.activate.failed"), {
                                             id: loadingToast
                                         });
                                     }
                                 } catch (err) {
                                     console.error("Error activating group:", err);
-                                    toast.error("Failed to activate group", { id: loadingToast });
+                                    toast.error(t("groups.activate.failed"), { id: loadingToast });
                                 }
                             }}
                         >
-                            Activate
+                            {t("groups.activate.confirm")}
                         </button>
                     </div>
                 </div>
@@ -250,7 +258,7 @@ export default function GroupsAdmin() {
     };
 
     const onAddStudents = (groupId) => {
-         console.log(`📋 Opening Add Students modal for group: ${groupId}`);
+        console.log(`📋 Opening Add Students modal for group: ${groupId}`);
         setSelectedGroupForStudents(groupId);
         setAddStudentsModalOpen(true);
     };
@@ -265,10 +273,20 @@ export default function GroupsAdmin() {
         }
     };
 
+    const getStatusText = (status) => {
+        switch (status) {
+            case 'active': return t(`groups.filters.status.active`);
+            case 'draft': return t(`groups.filters.status.draft`);
+            case 'completed': return t(`groups.filters.status.completed`);
+            case 'cancelled': return t(`groups.filters.status.cancelled`);
+            default: return status;
+        }
+    };
+
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         try {
-            return new Date(dateString).toLocaleDateString('en-US', {
+            return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric'
@@ -287,7 +305,7 @@ export default function GroupsAdmin() {
     }
 
     return (
-        <div className="space-y-4 md:space-y-6 p-2 md:p-0">
+        <div className={`space-y-4 md:space-y-6 p-2 md:p-0 ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'}>
             {/* Header */}
             <div className="bg-white dark:bg-darkmode rounded-xl shadow-sm p-4 md:p-6 border border-PowderBlueBorder dark:border-dark_border">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -298,10 +316,10 @@ export default function GroupsAdmin() {
                             </div>
                             <div>
                                 <h1 className="text-xl md:text-2xl font-bold text-MidnightNavyText dark:text-white">
-                                    Groups Management
+                                    {t("groups.title")}
                                 </h1>
                                 <p className="text-xs md:text-sm text-SlateBlueText dark:text-darktext">
-                                    Manage course groups, sessions, and students
+                                    {t("groups.subtitle")}
                                 </p>
                             </div>
                         </div>
@@ -314,7 +332,7 @@ export default function GroupsAdmin() {
                         className="bg-primary hover:bg-primary/90 text-white px-4 py-2.5 md:px-6 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 w-full md:w-auto justify-center"
                     >
                         <Plus className="w-4 h-4" />
-                        Create New Group
+                        {t("groups.createNew")}
                     </button>
                 </div>
             </div>
@@ -325,7 +343,7 @@ export default function GroupsAdmin() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                                Total
+                                {t("groups.stats.total")}
                             </p>
                             <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
                                 {stats.total}
@@ -341,7 +359,7 @@ export default function GroupsAdmin() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                                Active
+                                {t("groups.stats.active")}
                             </p>
                             <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
                                 {stats.active}
@@ -357,7 +375,7 @@ export default function GroupsAdmin() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                                Draft
+                                {t("groups.stats.draft")}
                             </p>
                             <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
                                 {stats.draft}
@@ -373,7 +391,7 @@ export default function GroupsAdmin() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                                Completed
+                                {t("groups.stats.completed")}
                             </p>
                             <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
                                 {stats.completed}
@@ -389,7 +407,7 @@ export default function GroupsAdmin() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                                Cancelled
+                                {t("groups.stats.cancelled")}
                             </p>
                             <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
                                 {stats.cancelled}
@@ -407,13 +425,13 @@ export default function GroupsAdmin() {
                 <div className="space-y-3 md:space-y-0 md:flex md:items-center md:gap-4">
                     <div className="flex-1">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400`} />
                             <input
                                 type="text"
-                                placeholder="Search groups..."
+                                placeholder={t("groups.filters.search")}
                                 value={filters.search}
                                 onChange={(e) => handleFilterChange('search', e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
+                                className={`w-full ${isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white`}
                             />
                         </div>
                     </div>
@@ -424,11 +442,11 @@ export default function GroupsAdmin() {
                             onChange={(e) => handleFilterChange('status', e.target.value)}
                             className="px-3 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
                         >
-                            <option value="">All Statuses</option>
-                            <option value="draft">Draft</option>
-                            <option value="active">Active</option>
-                            <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
+                            <option value="">{t("groups.filters.allStatuses")}</option>
+                            <option value="draft">{t("groups.filters.status.draft")}</option>
+                            <option value="active">{t("groups.filters.status.active")}</option>
+                            <option value="completed">{t("groups.filters.status.completed")}</option>
+                            <option value="cancelled">{t("groups.filters.status.cancelled")}</option>
                         </select>
 
                         <button
@@ -436,7 +454,7 @@ export default function GroupsAdmin() {
                             className="px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg flex items-center gap-2 text-sm"
                         >
                             <RefreshCw className="w-4 h-4" />
-                            <span className="hidden md:inline">Refresh</span>
+                            <span className="hidden md:inline">{t("groups.filters.refresh")}</span>
                         </button>
                     </div>
                 </div>
@@ -449,25 +467,25 @@ export default function GroupsAdmin() {
                         <thead className="bg-gray-50 dark:bg-dark_input">
                             <tr>
                                 <th className="py-3 px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    Group
+                                    {t("groups.table.group")}
                                 </th>
                                 <th className="py-3 px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    Course
+                                    {t("groups.table.course")}
                                 </th>
                                 <th className="py-3 px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    Status
+                                    {t("groups.table.status")}
                                 </th>
                                 <th className="py-3 px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    Students
+                                    {t("groups.table.students")}
                                 </th>
                                 <th className="py-3 px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    Sessions
+                                    {t("groups.table.sessions")}
                                 </th>
                                 <th className="py-3 px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    Schedule
+                                    {t("groups.table.schedule")}
                                 </th>
                                 <th className="py-3 px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    Actions
+                                    {t("groups.table.actions")}
                                 </th>
                             </tr>
                         </thead>
@@ -495,17 +513,20 @@ export default function GroupsAdmin() {
                                     </td>
                                     <td className="py-3 px-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(group.status)}`}>
-                                            {group.status}
+                                            {getStatusText(group.status)}
                                         </span>
                                     </td>
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-2">
                                             <Users className="w-4 h-4 text-gray-400" />
                                             <span className="text-sm">
-                                                {group.studentsCount}/{group.maxStudents}
+                                                {t("groups.studentsCount", { 
+                                                    current: group.studentsCount, 
+                                                    max: group.maxStudents 
+                                                })}
                                             </span>
                                             {group.isFull && (
-                                                <span className="text-xs text-red-600">Full</span>
+                                                <span className="text-xs text-red-600">{t("groups.full")}</span>
                                             )}
                                         </div>
                                     </td>
@@ -514,10 +535,10 @@ export default function GroupsAdmin() {
                                             {group.sessionsGenerated ? (
                                                 <span className="text-green-600 flex items-center gap-1">
                                                     <CheckCircle className="w-3 h-3" />
-                                                    {group.totalSessions} sessions
+                                                    {t("groups.sessionsGenerated", { count: group.totalSessions })}
                                                 </span>
                                             ) : (
-                                                <span className="text-gray-400">Not generated</span>
+                                                <span className="text-gray-400">{t("groups.sessionsNotGenerated")}</span>
                                             )}
                                         </div>
                                     </td>
@@ -539,7 +560,7 @@ export default function GroupsAdmin() {
                                                 <button
                                                     onClick={() => onActivate(group.id, group.name)}
                                                     className="p-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors"
-                                                    title="Activate"
+                                                    title={t("groups.actions.activate")}
                                                 >
                                                     <PlayCircle className="w-4 h-4 text-green-600" />
                                                 </button>
@@ -548,7 +569,7 @@ export default function GroupsAdmin() {
                                                 <button
                                                     onClick={() => onAddStudents(group.id)}
                                                     className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
-                                                    title="Add Students"
+                                                    title={t("groups.actions.addStudents")}
                                                 >
                                                     <UserPlus className="w-4 h-4 text-blue-600" />
                                                 </button>
@@ -557,7 +578,7 @@ export default function GroupsAdmin() {
                                                 <button
                                                     onClick={() => router.push(`/admin/sessions?groupId=${group.id}`)}
                                                     className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors"
-                                                    title="View Sessions"
+                                                    title={t("groups.actions.viewSessions")}
                                                 >
                                                     <Calendar className="w-4 h-4 text-purple-600" />
                                                 </button>
@@ -565,27 +586,26 @@ export default function GroupsAdmin() {
                                             <button
                                                 onClick={() => onView(group.id)}
                                                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                                                title="View"
+                                                title={t("groups.actions.view")}
                                             >
                                                 <Eye className="w-4 h-4 text-blue-600" />
                                             </button>
                                             <button
                                                 onClick={() => onEdit(group)}
                                                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                                                title="Edit"
+                                                title={t("groups.actions.edit")}
                                             >
                                                 <Edit className="w-4 h-4 text-primary" />
                                             </button>
                                             <button
                                                 onClick={() => onDelete(group.id, group.name)}
                                                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                                                title="Delete"
+                                                title={t("groups.actions.delete")}
                                             >
                                                 <Trash2 className="w-4 h-4 text-red-600" />
                                             </button>
                                         </div>
                                     </td>
-
                                 </tr>
                             ))}
                         </tbody>
@@ -599,12 +619,12 @@ export default function GroupsAdmin() {
                             <Users className="w-8 h-8 text-primary" />
                         </div>
                         <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-2">
-                            No Groups Found
+                            {t("groups.noGroupsFound")}
                         </h3>
                         <p className="text-sm text-SlateBlueText dark:text-darktext mb-6">
                             {filters.search || filters.status
-                                ? "No groups match your filters"
-                                : "Get started by creating your first group"}
+                                ? t("groups.noGroupsFoundDesc")
+                                : t("groups.getStarted")}
                         </p>
                         {!filters.search && !filters.status && (
                             <button
@@ -612,7 +632,7 @@ export default function GroupsAdmin() {
                                 className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
                             >
                                 <Plus className="w-4 h-4" />
-                                Create First Group
+                                {t("groups.createFirst")}
                             </button>
                         )}
                     </div>
@@ -623,8 +643,11 @@ export default function GroupsAdmin() {
                     <div className="px-4 py-3 border-t border-PowderBlueBorder dark:border-dark_border">
                         <div className="flex items-center justify-between">
                             <div className="text-xs text-SlateBlueText dark:text-darktext">
-                                Showing {(pagination.page - 1) * pagination.limit + 1} to{" "}
-                                {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} groups
+                                {t("groups.pagination.showing", {
+                                    from: (pagination.page - 1) * pagination.limit + 1,
+                                    to: Math.min(pagination.page * pagination.limit, pagination.total),
+                                    total: pagination.total
+                                })}
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
@@ -642,7 +665,10 @@ export default function GroupsAdmin() {
                                     <ChevronLeft className="w-4 h-4" />
                                 </button>
                                 <span className="px-3 py-1 text-sm">
-                                    Page {pagination.page} of {pagination.totalPages}
+                                    {t("groups.pagination.page", {
+                                        current: pagination.page,
+                                        total: pagination.totalPages
+                                    })}
                                 </span>
                                 <button
                                     onClick={() => handleFilterChange('page', pagination.page + 1)}
@@ -664,10 +690,10 @@ export default function GroupsAdmin() {
                 )}
             </div>
 
-            {/* Modal */}
+            {/* Group Form Modal */}
             <Modal
                 open={modalOpen}
-                title={editingGroup ? "Edit Group" : "Create New Group"}
+                title={editingGroup ? t("groups.modal.edit") : t("groups.modal.create")}
                 onClose={() => {
                     setModalOpen(false);
                     setEditingGroup(null);
@@ -684,10 +710,10 @@ export default function GroupsAdmin() {
                 />
             </Modal>
 
-
+            {/* Add Students Modal */}
             <Modal
                 open={addStudentsModalOpen}
-                title="Add Students to Group"
+                title={t("groups.modal.addStudents")}
                 onClose={() => {
                     setAddStudentsModalOpen(false);
                     setSelectedGroupForStudents(null);

@@ -2405,6 +2405,498 @@ const en = {
     "Are you sure you want to delete this lesson?",
   "courses.form.confirm.unsavedChanges":
     "You have unsaved changes. Do you want to continue?",
+
+  "groups.title": "Groups Management",
+  "groups.subtitle": "Manage course groups, sessions, and students",
+  "groups.createNew": "Create New Group",
+  "groups.createFirst": "Create First Group",
+  "groups.noGroupsFound": "No Groups Found",
+  "groups.noGroupsFoundDesc": "No groups match your filters",
+  "groups.getStarted": "Get started by creating your first group",
+
+  // Stats
+  "groups.stats.total": "Total",
+  "groups.stats.active": "Active",
+  "groups.stats.draft": "Draft",
+  "groups.stats.completed": "Completed",
+  "groups.stats.cancelled": "Cancelled",
+
+  // Filters
+  "groups.filters.search": "Search groups...",
+  "groups.filters.allStatuses": "All Statuses",
+  "groups.filters.refresh": "Refresh",
+  "groups.filters.status.draft": "Draft",
+  "groups.filters.status.active": "Active",
+  "groups.filters.status.completed": "Completed",
+  "groups.filters.status.cancelled": "Cancelled",
+
+  // Table Headers
+  "groups.table.group": "Group",
+  "groups.table.course": "Course",
+  "groups.table.status": "Status",
+  "groups.table.students": "Students",
+  "groups.table.sessions": "Sessions",
+  "groups.table.schedule": "Schedule",
+  "groups.table.actions": "Actions",
+
+  // Group Details
+  "groups.code": "Group Code",
+  "groups.studentsCount": "{current}/{max}",
+  "groups.full": "Full",
+  "groups.sessionsGenerated": "{count} sessions",
+  "groups.sessionsNotGenerated": "Not generated",
+
+  // Actions
+  "groups.actions.activate": "Activate",
+  "groups.actions.addStudents": "Add Students",
+  "groups.actions.viewSessions": "View Sessions",
+  "groups.actions.view": "View",
+  "groups.actions.edit": "Edit",
+  "groups.actions.delete": "Delete",
+
+  // Modals
+  "groups.modal.edit": "Edit Group",
+  "groups.modal.create": "Create New Group",
+  "groups.modal.addStudents": "Add Students to Group",
+
+  // Delete Confirmation
+  "groups.delete.title": "Delete Group",
+  "groups.delete.message":
+    "Are you sure you want to delete <strong>{name}</strong>? All sessions will be cancelled.",
+  "groups.delete.cancel": "Cancel",
+  "groups.delete.confirm": "Delete",
+  "groups.delete.success": "Group deleted successfully",
+  "groups.delete.failed": "Failed to delete group",
+
+  // Activate Confirmation
+  "groups.activate.title": "Activate Group",
+  "groups.activate.message":
+    "Activate <strong>{name}</strong>? This will generate all sessions automatically.",
+  "groups.activate.cancel": "Cancel",
+  "groups.activate.confirm": "Activate",
+  "groups.activate.loading": "Activating group...",
+  "groups.activate.success": "Group activated! Sessions are being generated...",
+  "groups.activate.failed": "Failed to activate group",
+
+  // Messages
+  "groups.saved.success": "Group saved successfully!",
+  "groups.load.failed": "Failed to load groups",
+  "groups.view.failed": "Failed to load group",
+
+  // Pagination
+  "groups.pagination.showing": "Showing {from} to {to} of {total} groups",
+  "groups.pagination.page": "Page {current} of {total}",
+
+  // Group Form Translations
+  "groups.form.name": "Group Name",
+  "groups.form.nameRequired": "Group name is required",
+  "groups.form.namePlaceholder": "e.g., Python Group - Spring 2025",
+
+  "groups.form.code": "Group Code",
+  "groups.form.codeAuto": "Auto-generated",
+
+  "groups.form.course": "Course",
+  "groups.form.courseRequired": "Course selection is required",
+  "groups.form.selectCourse": "Select Course",
+
+  "groups.form.maxStudents": "Maximum Students",
+  "groups.form.maxStudentsMin": "Maximum must be 1 or more",
+
+  "groups.form.startDate": "Start Date",
+  "groups.form.startDateRequired": "Start date is required",
+
+  "groups.form.daysOfWeek": "Days of Week (Select 3)",
+  "groups.form.daysRequired": "Must select exactly 3 days",
+  "groups.form.days.sunday": "Sunday",
+  "groups.form.days.monday": "Monday",
+  "groups.form.days.tuesday": "Tuesday",
+  "groups.form.days.wednesday": "Wednesday",
+  "groups.form.days.thursday": "Thursday",
+  "groups.form.days.friday": "Friday",
+  "groups.form.days.saturday": "Saturday",
+
+  "groups.form.timeFrom": "Time From",
+  "groups.form.timeFromRequired": "Start time is required",
+
+  "groups.form.timeTo": "Time To",
+  "groups.form.timeToRequired": "End time is required",
+
+  "groups.form.price": "Price",
+  "groups.form.priceMin": "Price must be 0 or more",
+
+  "groups.form.paymentType": "Payment Type",
+  "groups.form.paymentType.full": "Full Payment",
+  "groups.form.paymentType.installments": "Installments",
+
+  "groups.form.installments": "Number of Installments",
+  "groups.form.installmentsMin": "Must be 2 or more installments",
+
+  "groups.form.amountPerInstallment": "Amount Per Installment",
+
+  "groups.form.automation": "Automation Settings",
+  "groups.form.whatsappEnabled": "Enable WhatsApp Notifications",
+  "groups.form.welcomeMessage": "Welcome Message",
+  "groups.form.reminderEnabled": "Session Reminders",
+  "groups.form.reminderBefore": "Remind Before (hours)",
+  "groups.form.notifyGuardian": "Notify Guardian on Absence",
+  "groups.form.notifySessionUpdate": "Notify Session Updates",
+  "groups.form.completionMessage": "Completion Message",
+
+  "groups.form.submit": "Save Group",
+  "groups.form.cancel": "Cancel",
+  "groups.form.creating": "Creating...",
+  "groups.form.updating": "Updating...",
+
+  // Add Students Form
+  "groups.addStudents.title": "Add Students to Group",
+  "groups.addStudents.search": "Search for student...",
+  "groups.addStudents.available": "Available Students",
+  "groups.addStudents.noStudents": "No students available",
+  "groups.addStudents.select": "Select",
+  "groups.addStudents.selected": "Selected",
+  "groups.addStudents.add": "Add to Group",
+  "groups.addStudents.cancel": "Cancel",
+  "groups.addStudents.success": "Student added successfully",
+  "groups.addStudents.failed": "Failed to add student",
+
+  "groups.form.automation.whatsappEnabled": "Enable WhatsApp automation",
+  "groups.form.automation.welcomeMessage":
+    "Send welcome message to new students",
+  "groups.form.automation.reminderEnabled": "Send session reminders",
+  "groups.form.automation.reminderBefore": "Reminder before (hours)",
+  "groups.form.automation.notifyGuardianOnAbsence":
+    "Notify guardians of absent students",
+  "groups.form.automation.notifyOnSessionUpdate": "Notify on session changes",
+  "groups.form.automation.completionMessage": "Send completion message",
+
+  "groups.form.update": "Update Group",
+  "groups.form.create": "Create Group",
+
+  // Form Sections
+  "groups.form.sections.basicInfo": "Basic Information",
+  "groups.form.sections.instructors": "Instructors",
+  "groups.form.sections.schedule": "Schedule",
+  "groups.form.sections.pricing": "Pricing",
+  "groups.form.sections.automation": "WhatsApp Automation",
+
+  // Loading Messages
+  "groups.form.loading.courses": "Loading courses...",
+  "groups.form.loading.instructors": "Loading instructors...",
+  "groups.form.noInstructors": "No instructors available",
+
+  // Help Messages
+  "groups.form.help.scheduleInfo": "3 Days Schedule",
+  "groups.form.help.day1": "• Day 1: Lessons 1-2 (First Session)",
+  "groups.form.help.day2": "• Day 2: Lessons 3-4 (Second Session)",
+  "groups.form.help.day3": "• Day 3: Lessons 5-6 (Third Session)",
+  "groups.form.help.selectedDays":
+    "Selected: {count}/3 days ({day} is required)",
+
+  // Success Messages
+  "groups.form.messages.firstDaySelected":
+    "First day ({day}) auto-selected. Please select 2 more days.",
+  "groups.form.messages.firstDayWillBe": "First day will be: {day}",
+  "groups.form.messages.creating": "Creating group...",
+  "groups.form.messages.updating": "Updating group...",
+  "groups.form.messages.created": "Group created successfully!",
+  "groups.form.messages.updated": "Group updated successfully!",
+
+  // Error Messages
+  "groups.form.errors.loadCourses": "Failed to load courses",
+  "groups.form.errors.loadInstructors": "Failed to load instructors",
+  "groups.form.errors.requiredFields": "Please fill all required fields",
+  "groups.form.errors.exactly3Days":
+    "Please select exactly 3 days (including start date day)",
+  "groups.form.errors.cannotRemoveFirstDay":
+    "Cannot remove {day} (first day based on start date)",
+  "groups.form.errors.maxDays": "Maximum 3 days allowed",
+  "groups.form.errors.firstDayRequired":
+    "First day must be {day} (based on start date)",
+  "groups.form.errors.saveFailed": "Failed to save group",
+
+  // Add Students to Group Translations
+  "addStudents.title": "Add Students to Group",
+  "addStudents.search.placeholder":
+    "Search students by name, email, or enrollment number...",
+  "addStudents.search.noResults": "No students match your search",
+  "addStudents.search.noAvailable": "No available students",
+
+  "addStudents.stats.current": "Current",
+  "addStudents.stats.maximum": "Maximum",
+  "addStudents.stats.available": "Available",
+
+  "addStudents.warnings.fullGroup": "Group is Full",
+  "addStudents.warnings.fullGroupDesc":
+    "This group has reached its maximum capacity.",
+
+  "addStudents.labels.enrollment": "Enrollment",
+
+  "addStudents.message.title": "WhatsApp Message Template",
+  "addStudents.message.variablesTitle": "Use these variables (will auto-fill):",
+  "addStudents.message.writeMessage": "Write your message:",
+  "addStudents.message.copyTemplate": "Copy template",
+  "addStudents.message.characters": "characters",
+  "addStudents.message.previewTitle": "Live Preview:",
+
+  "addStudents.preview.defaults.studentName": "Student",
+  "addStudents.preview.defaults.courseName": "Course",
+  "addStudents.preview.defaults.startDate": "Not specified",
+  "addStudents.preview.defaults.timeFrom": "00:00",
+  "addStudents.preview.defaults.timeTo": "00:00",
+
+  "addStudents.buttons.cancel": "Cancel",
+  "addStudents.buttons.adding": "Adding...",
+  "addStudents.buttons.addStudent": "Add Student & Send Message",
+
+  "addStudents.messages.adding": "Adding student to group...",
+  "addStudents.messages.success":
+    "Student added and message sent successfully! 🎉",
+  "addStudents.messages.copied": "Message template copied!",
+
+  "addStudents.errors.loadGroup": "Failed to load group",
+  "addStudents.errors.loadStudents": "Failed to load students",
+  "addStudents.errors.loadFailed": "Failed to load data",
+  "addStudents.errors.groupNotFound": "Group not found",
+  "addStudents.errors.selectStudent": "Please select a student",
+  "addStudents.errors.enterMessage": "Please enter a message for the student",
+  "addStudents.errors.invalidStudent": "Invalid student selected",
+  "addStudents.errors.addFailed": "Failed to add student",
+  "dashboard.groups": "Groups",
+
+  // Sessions Management - Main
+  "sessions.title": "Sessions Management",
+  "sessions.groupCode": "Group Code",
+
+  // Buttons
+  "sessions.buttons.viewStudents": "View Students",
+  "sessions.buttons.backToGroups": "Back to Groups",
+  "sessions.buttons.refresh": "Refresh",
+  "sessions.buttons.goToGroups": "Go to Groups",
+  "sessions.buttons.viewDetails": "View Details",
+  "sessions.buttons.edit": "Edit",
+  "sessions.buttons.manageAttendance": "Manage Attendance",
+
+  // Table Headers
+  "sessions.table.session": "Session",
+  "sessions.table.dateTime": "Date & Time",
+  "sessions.table.status": "Status",
+  "sessions.table.attendance": "Attendance",
+  "sessions.table.actions": "Actions",
+  "sessions.table.module": "Module",
+  "sessions.table.lessons": "Lessons",
+
+  // Filters
+  "sessions.filters.allStatuses": "All Statuses",
+  "sessions.filters.scheduled": "Scheduled",
+  "sessions.filters.completed": "Completed",
+  "sessions.filters.cancelled": "Cancelled",
+  "sessions.filters.postponed": "Postponed",
+  "sessions.filters.upcoming": "Upcoming",
+  "sessions.filters.past": "Past",
+
+  // Status
+  "sessions.status.scheduled": "Scheduled",
+  "sessions.status.completed": "Completed",
+  "sessions.status.cancelled": "Cancelled",
+  "sessions.status.postponed": "Postponed",
+
+  // Attendance
+  "sessions.attendance.taken": "Taken",
+  "sessions.attendance.notTaken": "Not Taken",
+
+  // Errors
+  "sessions.errors.noGroupSelected": "No group selected",
+  "sessions.errors.selectGroupFirst": "Please select a group first",
+  "sessions.errors.loadFailed": "Failed to load sessions",
+  "sessions.errors.loadDetailsFailed": "Failed to load session details",
+  "sessions.errors.updateFailed": "Failed to update session",
+  "sessions.errors.noSessionsFound": "No sessions found",
+  "sessions.errors.noMatchingFilters": "No sessions match the selected filters",
+  "sessions.errors.activateGroup":
+    "Sessions will appear here after activating the group",
+
+  // Attendance Modal
+  "sessions.attendance.title": "Attendance",
+  "sessions.attendance.to": "To",
+  "sessions.attendance.id": "ID",
+
+  // Attendance Stats
+  "sessions.attendance.stats.total": "Total",
+  "sessions.attendance.stats.present": "Present",
+  "sessions.attendance.stats.absent": "Absent",
+  "sessions.attendance.stats.late": "Late",
+  "sessions.attendance.stats.excused": "Excused",
+
+  // Attendance Filters
+  "sessions.attendance.filters.allStudents": "All Students",
+  "sessions.attendance.filters.present": "Present",
+  "sessions.attendance.filters.absent": "Absent",
+
+  // Attendance Status
+  "sessions.attendance.status.present": "Present",
+  "sessions.attendance.status.absent": "Absent",
+  "sessions.attendance.status.late": "Late",
+  "sessions.attendance.status.excused": "Excused",
+
+  // Attendance Messages
+  "sessions.attendance.messages.saved": "Attendance saved successfully",
+  "sessions.attendance.messages.templateCopied": "Template copied to clipboard",
+
+  // Attendance Errors
+  "sessions.attendance.errors.loadFailed": "Failed to load attendance data",
+  "sessions.attendance.errors.saveFailed": "Failed to save attendance",
+
+  // Attendance Defaults
+  "sessions.attendance.defaults.studentName": "Student",
+  "sessions.attendance.defaults.guardianName": "Guardian",
+  "sessions.attendance.defaults.sessionName": "Session",
+  "sessions.attendance.defaults.session": "Session",
+  "sessions.attendance.defaults.date": "Not specified",
+  "sessions.attendance.defaults.time": "Not specified",
+  "sessions.attendance.defaults.unknown": "Unknown",
+
+  // Attendance Templates
+  "sessions.attendance.templates.absent":
+    "📢 Absence Notification\n\nDear {guardianName},\n\nWe noticed that {studentName} was absent from today’s session:\n\n📚 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\nReason: [Write the reason here]\n\nPlease contact us if you have any questions.\n\nProgramming School Team 💻",
+
+  "sessions.attendance.templates.late":
+    "⏰ Late Arrival Notification\n\nDear {guardianName},\n\n{studentName} arrived late to today’s session:\n\n📚 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\nPlease ensure punctuality in upcoming sessions.\n\nProgramming School Team 💻",
+
+  "sessions.attendance.templates.excused":
+    "ℹ️ Excused Absence Notification\n\nDear {guardianName},\n\n{studentName} was excused from today’s session:\n\n📚 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\nReason: [Write the reason here]\n\nProgramming School Team 💻",
+
+  // Attendance Message Editor
+  "sessions.attendance.hideEditor": "Hide Message Editor",
+  "sessions.attendance.showEditor": "Write a Message to Guardian",
+  "sessions.attendance.message.toGuardian": "Message to Guardian",
+  "sessions.attendance.message.optional": "Optional",
+  "sessions.attendance.message.optionalDesc":
+    "If no custom message is written, a default message will be sent automatically based on attendance status ({status}).",
+  "sessions.attendance.message.availableVariables": "Available Variables",
+  "sessions.attendance.message.writeCustom":
+    "Write your custom message (optional):",
+  "sessions.attendance.message.copyTemplate": "Copy Template",
+  "sessions.attendance.message.characters": "Characters",
+  "sessions.attendance.message.customReady": "Custom message is ready",
+  "sessions.attendance.message.defaultWillBeUsed":
+    "Default message will be used",
+  "sessions.attendance.message.preview": "Preview",
+  "sessions.attendance.message.whatGuardianWillReceive":
+    "What the guardian will receive",
+
+  // Attendance Buttons
+  "sessions.attendance.buttons.cancel": "Cancel",
+  "sessions.attendance.buttons.saving": "Saving...",
+  "sessions.attendance.buttons.saveAttendance": "Save Attendance",
+
+  // Students List Modal
+  "sessions.students.title": "Group Students",
+  "sessions.students.total": "Total Students",
+  "sessions.students.defaults.unknown": "Unknown",
+  "sessions.students.buttons.close": "Close",
+
+  "sessions.students.selectSession": "Select Session",
+  "sessions.students.allSession": "All Sessions",
+  "sessions.students.students": "Students",
+  "sessions.students.of": "of",
+  "sessions.students.showing": "Showing",
+
+  "sessions.edit.labels.status": "Status",
+  "sessions.edit.labels.meetingLink": "Meeting Link",
+  "sessions.edit.labels.recordingLink": "Recording Link",
+  "sessions.edit.labels.instructorNotes": "Instructor Notes",
+
+  "sessions.edit.buttons.saveChanges": "Save Changes",
+  "sessions.edit.buttons.cancel": "Cancel",
+
+  "sessions.edit.status.scheduled": "Scheduled",
+  "sessions.edit.status.completed": "Completed",
+  "sessions.edit.status.cancelled": "Cancelled",
+  "sessions.edit.status.postponed": "Postponed",
+
+  "sessions.details.title": "Session Details",
+  "sessions.details.basicInfo": "Basic Information",
+  "sessions.details.session": "Session",
+  "sessions.details.module": "Module",
+  "sessions.details.time": "Time",
+  "sessions.details.date": "Date",
+  "sessions.details.attendanceTaken": "Attendance Taken",
+  "sessions.details.status": "Status",
+  "sessions.details.links": "Links",
+  "sessions.details.meetingLink": "Meeting Link",
+  "sessions.details.attendanceStats": "Attendance Statistics",
+  "sessions.details.instructorNotes": "Instructor Notes",
+
+  "sessions.details.stats.present": "Present",
+  "sessions.details.stats.excused": "Excused",
+  "sessions.details.stats.late": "Late",
+  "sessions.details.stats.absent": "Absent",
+
+  "sessions.attendance.noStudentsFound": "No students found",
+  "sessions.attendance.noMatchingFilter":
+    "No students match the selected filter",
+
+  "sessions.edit.notifyStudents.title": "Notify Students via WhatsApp",
+  "sessions.edit.notifyStudents.writeMessage": "Write your message",
+  "sessions.edit.notifyStudents.copyTemplate": "Copy Template",
+  "sessions.edit.notifyStudents.characters": "Characters",
+
+  "sessions.edit.placeholders.cancelled":
+    "Example: The session has been cancelled. Please explain the reason here.",
+
+  "sessions.edit.defaults.se": "Session",
+  "sessions.edit.defaults.le": "Lesson",
+  "sessions.edit.defaults.mo": "Module",
+  "sessions.edit.defaults.co": "Course",
+
+  "sessions.edit.title": "Edit Session",
+  "sessions.edit.to": "to",
+  "sessions.edit.placeholders.meetingLink": "https://meet.example.com/...",
+  "sessions.edit.placeholders.recordingLink": "https://youtube.com/...",
+  "sessions.edit.placeholders.instructorNotes": "Write session notes here...",
+  "sessions.edit.placeholders.postponed":
+    "Example: The session has been postponed. Please explain the new date here.",
+
+  "sessions.edit.notifyStudents.availableVariables": "Available Variables",
+
+  "sessions.edit.notifyStudents.messageReady": "Message is ready",
+  "sessions.edit.notifyStudents.livePreview": "Live Preview",
+  "sessions.edit.notifyStudents.whatStudentsWillSee": "What students will see",
+  "sessions.edit.templates.cancelled":
+    "📢 Session Cancelled\n\nDear student,\n\nWe regret to inform you that the session {sessionName} scheduled for {date} at {time} has been cancelled.\n\nReason: [Write reason here]\n\nWe apologize for any inconvenience.\n\nProgramming School Team 💻",
+  "sessions.edit.templates.postponed":
+    "📅 Session Postponed\n\nDear student,\n\nThe session {sessionName} scheduled for {date} at {time} has been postponed.\n\nNew date: [Write new date here]\n\nWe'll keep you updated with the new schedule.\n\nProgramming School Team 💻",
+  "sessions.edit.defaults.sessionName": "Session",
+  "sessions.edit.defaults.session": "Session",
+  "sessions.edit.defaults.lesson": "Lesson",
+  "sessions.edit.defaults.module": "Module",
+  "sessions.edit.defaults.course": "Course",
+  "sessions.edit.defaults.date": "Not specified",
+  "sessions.edit.defaults.time": "Not specified",
+  "sessions.edit.messages.templateCopied": "Template copied to clipboard",
+  "sessions.edit.messages.updated": "Session updated successfully",
+  "sessions.edit.errors.writeMessage":
+    "Please write a message to notify students",
+
+  "sessions.edit.buttons.saving": "Saving...",
+
+  "sessions.details.yes": "Yes",
+  "sessions.details.no": "No",
+
+  "sessions.details.stats.total": "Total",
+
+  "sessions.details.buttons.close": "Close",
+
+  // Students List Modal (additional)
+  "sessions.students.noStudentsFound": "No students found",
+  "sessions.students.noStudentsInGroup": "No students in this group",
+  "sessions.students.noMatchingFilter": "No students match the selected filter",
+  "sessions.students.loadingAttendance": "Loading attendance...",
+  "sessions.students.filters.allStudents": "All Students",
+  "sessions.students.filters.present": "Present",
+  "sessions.students.filters.absent": "Absent",
+
+  "sessions.attendance.addStudentsFirst": "Add students to the group first",
 };
 
 export default en;

@@ -118,12 +118,6 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       badge: createBadge(t('common.new') || "New"),
     },
     {
-      label: t('dashboard.sessions') || "sessions",
-      href: "/admin/sessions",
-      icon: "ion:book-outline",
-      badge: createBadge(t('common.new') || "New"),
-    },
-    {
       label: t('nav.settings') || "Settings",
       href: "/admin/settings",
       icon: "ion:settings-outline",

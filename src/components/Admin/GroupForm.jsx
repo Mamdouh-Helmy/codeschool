@@ -15,8 +15,10 @@ import {
   AlertCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export default function GroupForm({ initial, onClose, onSaved }) {
+  const { t, language } = useI18n();
   const [form, setForm] = useState({
     name: initial?.name || "",
     courseId: initial?.courseId?._id || initial?.courseId || "",
@@ -54,13 +56,31 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [instructorsLoading, setInstructorsLoading] = useState(true);
 
-  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const isRTL = language === "ar";
+  
+  // Days of week based on language
+  const daysOfWeek = language === 'ar' 
+    ? ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+    : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  // English days mapping for calculations
+  const englishDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   // ✅ Helper: Get day name from date
   const getDayNameFromDate = (dateString) => {
     if (!dateString) return null;
     const date = new Date(dateString);
-    return daysOfWeek[date.getDay()];
+    const dayIndex = date.getDay(); // 0=Sunday, 1=Monday, etc.
+    
+    // Return in current language
+    return daysOfWeek[dayIndex];
+  };
+
+  // ✅ Helper: Get English day name for calculations
+  const getEnglishDayNameFromDate = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return englishDays[date.getDay()];
   };
 
   // Load courses and instructors
@@ -78,7 +98,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         setCoursesLoading(false);
       } catch (err) {
         console.error("❌ Error loading courses:", err);
-        toast.error("Failed to load courses");
+        toast.error(t("groups.form.errors.loadCourses"));
         setCoursesLoading(false);
       }
 
@@ -94,29 +114,31 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         setInstructorsLoading(false);
       } catch (err) {
         console.error("❌ Error loading instructors:", err);
-        toast.error("Failed to load instructors");
+        toast.error(t("groups.form.errors.loadInstructors"));
         setInstructorsLoading(false);
       }
     };
 
     loadData();
-  }, []);
+  }, [t]);
 
   // ✅ Handle startDate change - auto-select first day
   const handleStartDateChange = (dateString) => {
     const firstDay = getDayNameFromDate(dateString);
+    const englishDay = getEnglishDayNameFromDate(dateString);
     
     setForm(prev => ({
       ...prev,
       schedule: {
         ...prev.schedule,
         startDate: dateString,
-        daysOfWeek: firstDay ? [firstDay] : [] // ✅ Auto-select first day
+        // Store in English for backend
+        daysOfWeek: englishDay ? [englishDay] : [] 
       }
     }));
 
     if (firstDay) {
-      toast.success(`First day (${firstDay}) auto-selected. Please select 2 more days.`);
+      toast.success(t("groups.form.messages.firstDaySelected", { day: firstDay }));
     }
   };
 
@@ -134,21 +156,26 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   };
 
   const toggleDay = (day) => {
-    const firstDay = getDayNameFromDate(form.schedule.startDate);
+    const englishFirstDay = getEnglishDayNameFromDate(form.schedule.startDate);
+    const currentFirstDay = getDayNameFromDate(form.schedule.startDate);
+
+    // Find corresponding English day
+    const dayIndex = daysOfWeek.indexOf(day);
+    const englishDay = englishDays[dayIndex];
 
     // ✅ Prevent removing first day
-    if (day === firstDay && form.schedule.daysOfWeek.includes(day)) {
-      toast.error(`Cannot remove ${day} (first day based on start date)`);
+    if (englishDay === englishFirstDay && form.schedule.daysOfWeek.includes(englishDay)) {
+      toast.error(t("groups.form.errors.cannotRemoveFirstDay", { day: currentFirstDay }));
       return;
     }
 
     setForm(prev => {
       const currentDays = prev.schedule.daysOfWeek;
-      const isSelected = currentDays.includes(day);
+      const isSelected = currentDays.includes(englishDay);
 
       // ✅ If trying to add and already have 3 days
       if (!isSelected && currentDays.length >= 3) {
-        toast.error("Maximum 3 days allowed");
+        toast.error(t("groups.form.errors.maxDays"));
         return prev;
       }
 
@@ -157,8 +184,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         schedule: {
           ...prev.schedule,
           daysOfWeek: isSelected
-            ? currentDays.filter(d => d !== day)
-            : [...currentDays, day]
+            ? currentDays.filter(d => d !== englishDay)
+            : [...currentDays, englishDay]
         }
       };
     });
@@ -177,23 +204,26 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     e.preventDefault();
     setLoading(true);
 
-    const toastId = toast.loading(initial ? "Updating group..." : "Creating group...");
+    const toastId = toast.loading(
+      initial ? t("groups.form.messages.updating") : t("groups.form.messages.creating")
+    );
 
     try {
       // Validation
       if (!form.name || !form.courseId || !form.maxStudents) {
-        throw new Error("Please fill all required fields");
+        throw new Error(t("groups.form.errors.requiredFields"));
       }
 
       // ✅ Validate exactly 3 days
       if (form.schedule.daysOfWeek.length !== 3) {
-        throw new Error("Please select exactly 3 days (including start date day)");
+        throw new Error(t("groups.form.errors.exactly3Days"));
       }
 
       // ✅ Validate first day matches startDate
-      const firstDay = getDayNameFromDate(form.schedule.startDate);
-      if (!form.schedule.daysOfWeek.includes(firstDay)) {
-        throw new Error(`First day must be ${firstDay} (based on start date)`);
+      const englishFirstDay = getEnglishDayNameFromDate(form.schedule.startDate);
+      if (!form.schedule.daysOfWeek.includes(englishFirstDay)) {
+        const firstDayName = getDayNameFromDate(form.schedule.startDate);
+        throw new Error(t("groups.form.errors.firstDayRequired", { day: firstDayName }));
       }
 
       // Prepare data
@@ -218,18 +248,19 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       const result = await res.json();
 
       if (!res.ok) {
-        throw new Error(result.error || "Failed to save group");
+        throw new Error(result.error || t("groups.form.errors.saveFailed"));
       }
 
-      toast.success(initial ? "Group updated successfully!" : "Group created successfully!", {
-        id: toastId
-      });
+      toast.success(
+        initial ? t("groups.form.messages.updated") : t("groups.form.messages.created"),
+        { id: toastId }
+      );
 
       onSaved();
       onClose();
     } catch (err) {
       console.error("Error saving group:", err);
-      toast.error(err.message || "Failed to save group", { id: toastId });
+      toast.error(err.message || t("groups.form.errors.saveFailed"), { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -238,8 +269,15 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   // ✅ Get first day from startDate
   const firstDayName = getDayNameFromDate(form.schedule.startDate);
 
+  // Helper to check if day is selected (for display)
+  const isDaySelected = (day) => {
+    const dayIndex = daysOfWeek.indexOf(day);
+    const englishDay = englishDays[dayIndex];
+    return form.schedule.daysOfWeek.includes(englishDay);
+  };
+
   return (
-    <form onSubmit={submit} className="space-y-6 pr-2">
+    <form onSubmit={submit} className="space-y-6 pr-2" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Basic Info */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border">
         <div className="flex items-center gap-3">
@@ -247,20 +285,20 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             <Hash className="w-4 h-4 text-primary" />
           </div>
           <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-            Basic Information
+            {t("groups.form.sections.basicInfo")}
           </h3>
         </div>
 
         <div className="space-y-4">
           <div>
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-              Group Name *
+              {t("groups.form.name")} *
             </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => onChange('name', e.target.value)}
-              placeholder="Frontend Development - Batch 7"
+              placeholder={t("groups.form.namePlaceholder")}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
               required
             />
@@ -268,11 +306,11 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
           <div>
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-              Course *
+              {t("groups.form.course")} *
             </label>
             {coursesLoading ? (
               <div className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-gray-50 dark:bg-dark_input">
-                <span className="text-sm text-gray-500">Loading courses...</span>
+                <span className="text-sm text-gray-500">{t("groups.form.loading.courses")}</span>
               </div>
             ) : (
               <select
@@ -282,7 +320,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                 required
                 disabled={coursesLoading}
               >
-                <option value="">Select a course...</option>
+                <option value="">{t("groups.form.selectCourse")}...</option>
                 {courses.map(course => (
                   <option key={course._id} value={course._id}>
                     {course.title} ({course.level})
@@ -294,7 +332,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
           <div>
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-              Maximum Students *
+              {t("groups.form.maxStudents")} *
             </label>
             <input
               type="number"
@@ -315,17 +353,17 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
           <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-            Instructors
+            {t("groups.form.sections.instructors")}
           </h3>
         </div>
 
         {instructorsLoading ? (
           <div className="text-center py-4">
-            <span className="text-sm text-gray-500">Loading instructors...</span>
+            <span className="text-sm text-gray-500">{t("groups.form.loading.instructors")}</span>
           </div>
         ) : instructors.length === 0 ? (
           <div className="text-center py-4 text-sm text-gray-500">
-            No instructors available
+            {t("groups.form.noInstructors")}
           </div>
         ) : (
           <div className="space-y-2">
@@ -362,14 +400,14 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
           </div>
           <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-            Schedule
+            {t("groups.form.sections.schedule")}
           </h3>
         </div>
 
         <div className="space-y-4">
           <div>
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-              Start Date *
+              {t("groups.form.startDate")} *
             </label>
             <input
               type="date"
@@ -381,27 +419,29 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             />
             {firstDayName && (
               <p className="text-xs text-primary mt-1">
-                First day will be: {firstDayName}
+                {t("groups.form.messages.firstDayWillBe", { day: firstDayName })}
               </p>
             )}
           </div>
 
           <div>
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-              Days of Week * (Select exactly 3 days)
+              {t("groups.form.daysOfWeek")}
             </label>
             
             {/* ✅ Info message */}
             <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <div className="text-xs text-blue-800 dark:text-blue-300">
-                <p className="font-medium mb-1">3 Days Schedule:</p>
-                <p>• Day 1: Lessons 1-2 (First Session)</p>
-                <p>• Day 2: Lessons 3-4 (Second Session)</p>
-                <p>• Day 3: Lessons 5-6 (Third Session)</p>
+                <p className="font-medium mb-1">{t("groups.form.help.scheduleInfo")}:</p>
+                <p>{t("groups.form.help.day1")}</p>
+                <p>{t("groups.form.help.day2")}</p>
+                <p>{t("groups.form.help.day3")}</p>
                 <p className="mt-1 text-blue-600 dark:text-blue-400">
-                  Selected: {form.schedule.daysOfWeek.length}/3 days
-                  {firstDayName && ` (${firstDayName} is required)`}
+                  {t("groups.form.help.selectedDays", { 
+                    count: form.schedule.daysOfWeek.length,
+                    day: firstDayName 
+                  })}
                 </p>
               </div>
             </div>
@@ -409,7 +449,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             <div className="grid grid-cols-7 gap-2">
               {daysOfWeek.map(day => {
                 const isFirstDay = day === firstDayName;
-                const isSelected = form.schedule.daysOfWeek.includes(day);
+                const isSelected = isDaySelected(day);
                 const isDisabled = !form.schedule.startDate || (isFirstDay && isSelected);
 
                 return (
@@ -426,7 +466,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                     } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {day.slice(0, 3)}
+                    {language === 'ar' ? day.slice(0, 3) : day.slice(0, 3)}
                     {isFirstDay && isSelected && (
                       <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-darkmode"></span>
                     )}
@@ -439,7 +479,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-                Time From *
+                {t("groups.form.timeFrom")} *
               </label>
               <input
                 type="time"
@@ -452,7 +492,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
             <div>
               <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-                Time To *
+                {t("groups.form.timeTo")} *
               </label>
               <input
                 type="time"
@@ -473,14 +513,14 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400" />
           </div>
           <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-            Pricing
+            {t("groups.form.sections.pricing")}
           </h3>
         </div>
 
         <div className="space-y-4">
           <div>
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-              Price (EGP) *
+              {t("groups.form.price")} *
             </label>
             <input
               type="number"
@@ -495,15 +535,15 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
           <div>
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-              Payment Type
+              {t("groups.form.paymentType")}
             </label>
             <select
               value={form.pricing.paymentType}
               onChange={(e) => onChange('pricing.paymentType', e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
             >
-              <option value="full">Full Payment</option>
-              <option value="installments">Installments</option>
+              <option value="full">{t("groups.form.paymentType.full")}</option>
+              <option value="installments">{t("groups.form.paymentType.installments")}</option>
             </select>
           </div>
         </div>
@@ -516,18 +556,18 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             <Bell className="w-4 h-4 text-orange-600 dark:text-orange-400" />
           </div>
           <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-            WhatsApp Automation
+            {t("groups.form.sections.automation")}
           </h3>
         </div>
 
         <div className="space-y-3">
           {Object.entries({
-            whatsappEnabled: "Enable WhatsApp automation",
-            welcomeMessage: "Send welcome message to new students",
-            reminderEnabled: "Send session reminders",
-            notifyGuardianOnAbsence: "Notify guardians of absent students",
-            notifyOnSessionUpdate: "Notify on session changes",
-            completionMessage: "Send completion message"
+            whatsappEnabled: t("groups.form.automation.whatsappEnabled"),
+            welcomeMessage: t("groups.form.automation.welcomeMessage"),
+            reminderEnabled: t("groups.form.automation.reminderEnabled"),
+            notifyGuardianOnAbsence: t("groups.form.automation.notifyGuardianOnAbsence"),
+            notifyOnSessionUpdate: t("groups.form.automation.notifyOnSessionUpdate"),
+            completionMessage: t("groups.form.automation.completionMessage")
           }).map(([key, label]) => (
             <div key={key} className="flex items-center justify-between p-3 border border-PowderBlueBorder dark:border-dark_border rounded-lg">
               <span className="text-sm text-MidnightNavyText dark:text-white">{label}</span>
@@ -546,7 +586,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           {form.automation.reminderEnabled && (
             <div>
               <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-                Reminder Before (hours)
+                {t("groups.form.automation.reminderBefore")}
               </label>
               <input
                 type="number"
@@ -571,7 +611,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50"
           >
             <X className="w-4 h-4" />
-            Cancel
+            {t("groups.form.cancel")}
           </button>
           <button
             type="submit"
@@ -581,12 +621,12 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             {loading ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                {initial ? "Updating..." : "Creating..."}
+                {initial ? t("groups.form.updating") : t("groups.form.creating")}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                {initial ? "Update Group" : "Create Group"}
+                {initial ? t("groups.form.update") : t("groups.form.create")}
               </>
             )}
           </button>

@@ -1,11 +1,12 @@
-// components/admin/AddStudentsToGroup.jsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { UserPlus, Search, X, CheckCircle, AlertCircle, Users, Loader2, MessageCircle, Info, Copy } from "lucide-react";
 import toast from "react-hot-toast";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded }) {
+  const { t, language } = useI18n();
   const [students, setStudents] = useState([]);
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -13,9 +14,19 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const [search, setSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
   
-  // ✅ الرسائل المخصصة - يكتبها المستخدم
   const [customMessage, setCustomMessage] = useState("");
   const [previewMessage, setPreviewMessage] = useState("");
+
+  const isRTL = language === "ar";
+
+  // Default messages based on language
+  useEffect(() => {
+    const defaultMessage = isRTL 
+      ? "🎓 مرحباً {studentName}\nتم إضافتك بنجاح إلى {groupName}\nالكورس: {courseName}\nالبدء: {startDate}\nالوقت: {timeFrom} - {timeTo}"
+      : "🎓 Hello {studentName}\nYou have been successfully added to {groupName}\nCourse: {courseName}\nStart: {startDate}\nTime: {timeFrom} - {timeTo}";
+    
+    setCustomMessage(defaultMessage);
+  }, [isRTL]);
 
   useEffect(() => {
     if (groupId) {
@@ -33,20 +44,14 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       });
       
       if (!groupRes.ok) {
-        throw new Error(`Failed to load group: ${groupRes.status}`);
+        throw new Error(t("addStudents.errors.loadGroup"));
       }
 
       const groupData = await groupRes.json();
       
       if (!groupData.success) {
-        throw new Error(groupData.error || 'Failed to load group');
+        throw new Error(groupData.error || t("addStudents.errors.loadGroup"));
       }
-
-      console.log(`✅ Group loaded:`, {
-        id: groupData.data._id,
-        name: groupData.data.name,
-        studentsCount: groupData.data.students?.length || 0
-      });
       
       setGroup(groupData.data);
 
@@ -55,13 +60,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       });
 
       if (!studentsRes.ok) {
-        throw new Error(`Failed to load students: ${studentsRes.status}`);
+        throw new Error(t("addStudents.errors.loadStudents"));
       }
 
       const studentsData = await studentsRes.json();
 
       if (!studentsData.success) {
-        throw new Error(studentsData.error || 'Failed to load students');
+        throw new Error(studentsData.error || t("addStudents.errors.loadStudents"));
       }
 
       const groupStudentIds = (groupData.data.students || []).map(s => {
@@ -78,24 +83,31 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
     } catch (error) {
       console.error("❌ Error loading data:", error);
-      toast.error(error.message || "Failed to load data");
+      toast.error(error.message || t("addStudents.errors.loadFailed"));
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ إنشاء معاينة الرسالة بالحقول المملوءة تلقائياً
   const generatePreview = (message) => {
     if (!selectedStudent || !group || !message) return "";
 
-    const studentName = selectedStudent.personalInfo?.fullName || "الطالب";
+    const studentName = selectedStudent.personalInfo?.fullName || t("addStudents.preview.defaults.studentName");
     const groupName = group.name;
-    const courseName = group.courseSnapshot?.title || group.course?.title || "الكورس";
-    const startDate = new Date(group.schedule?.startDate).toLocaleDateString('ar-EG');
-    const timeFrom = group.schedule?.timeFrom || "00:00";
-    const timeTo = group.schedule?.timeTo || "00:00";
+    const courseName = group.courseSnapshot?.title || group.course?.title || t("addStudents.preview.defaults.courseName");
+    
+    const startDate = group.schedule?.startDate 
+      ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? 'ar-EG' : 'en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      : t("addStudents.preview.defaults.startDate");
+    
+    const timeFrom = group.schedule?.timeFrom || t("addStudents.preview.defaults.timeFrom");
+    const timeTo = group.schedule?.timeTo || t("addStudents.preview.defaults.timeTo");
 
-    // استبدال المتغيرات في الرسالة
     let preview = message
       .replace(/\{studentName\}/g, studentName)
       .replace(/\{groupName\}/g, groupName)
@@ -107,44 +119,35 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     return preview;
   };
 
-  // ✅ تحديث المعاينة عند تغيير الرسالة أو الطالب
   useEffect(() => {
     if (selectedStudent && customMessage) {
       const preview = generatePreview(customMessage);
       setPreviewMessage(preview);
     }
-  }, [customMessage, selectedStudent, group]);
+  }, [customMessage, selectedStudent, group, isRTL]);
 
   const handleAddStudent = async () => {
     if (!selectedStudent) {
-      toast.error("Please select a student");
+      toast.error(t("addStudents.errors.selectStudent"));
       return;
     }
 
     if (!customMessage.trim()) {
-      toast.error("Please enter a message for the student");
+      toast.error(t("addStudents.errors.enterMessage"));
       return;
     }
 
     const studentId = selectedStudent._id || selectedStudent.id;
     
     if (!studentId) {
-      console.error("❌ No student ID found:", selectedStudent);
-      toast.error("Invalid student selected");
+      toast.error(t("addStudents.errors.invalidStudent"));
       return;
     }
 
     setAdding(true);
-    const loadingToast = toast.loading("Adding student to group...");
+    const loadingToast = toast.loading(t("addStudents.messages.adding"));
 
     try {
-      console.log(`\n📤 ========== ADDING STUDENT TO GROUP ==========`);
-      console.log(`Student ID: ${studentId}`);
-      console.log(`Student Name: ${selectedStudent.personalInfo?.fullName}`);
-      console.log(`Group ID: ${groupId}`);
-      console.log(`Custom Message Length: ${customMessage.length}`);
-
-      // ✅ الرسالة النهائية مع الحقول المستبدلة
       const finalMessage = generatePreview(customMessage);
 
       const payload = {
@@ -152,8 +155,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         customMessage: finalMessage,
         sendWhatsApp: true
       };
-
-      console.log(`📦 Final message to send:`, finalMessage);
 
       const res = await fetch(`/api/groups/${groupId}/add-student`, {
         method: "POST",
@@ -167,8 +168,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       const result = await res.json();
 
       if (res.ok && result.success) {
-        console.log(`✅ Student added successfully!`);
-        toast.success("Student added and message sent! 🎉", { id: loadingToast });
+        toast.success(t("addStudents.messages.success"), { id: loadingToast });
         
         setStudents(prev => prev.filter(s => {
           const sid = s._id || s.id;
@@ -186,23 +186,21 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         setTimeout(() => loadData(), 1000);
 
       } else {
-        const errorMessage = result.error || result.message || "Failed to add student";
-        console.error(`❌ Add student failed:`, errorMessage);
+        const errorMessage = result.error || result.message || t("addStudents.errors.addFailed");
         toast.error(errorMessage, { id: loadingToast });
       }
 
     } catch (error) {
       console.error("❌ Error adding student:", error);
-      toast.error(error.message || "Failed to add student", { id: loadingToast });
+      toast.error(error.message || t("addStudents.errors.addFailed"), { id: loadingToast });
     } finally {
       setAdding(false);
     }
   };
 
-  // ✅ نسخ الرسالة للحافظة
   const copyToClipboard = () => {
     navigator.clipboard.writeText(customMessage);
-    toast.success("Message template copied!");
+    toast.success(t("addStudents.messages.copied"));
   };
 
   const filteredStudents = students.filter(student => {
@@ -230,7 +228,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     return (
       <div className="text-center p-8">
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <p className="text-gray-600 dark:text-gray-400">Group not found</p>
+        <p className="text-gray-600 dark:text-gray-400">{t("addStudents.errors.groupNotFound")}</p>
       </div>
     );
   }
@@ -241,7 +239,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const isFull = availableSeats <= 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Group Info */}
       <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-6 rounded-lg border border-primary/20">
         <h3 className="text-xl font-bold mb-2">{group.name}</h3>
@@ -253,17 +251,17 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           <div className="text-center">
             <Users className="w-5 h-5 mx-auto mb-1 text-primary" />
             <div className="text-2xl font-bold">{currentCount}</div>
-            <div className="text-xs text-gray-500">Current</div>
+            <div className="text-xs text-gray-500">{t("addStudents.stats.current")}</div>
           </div>
           <div className="text-center">
             <Users className="w-5 h-5 mx-auto mb-1 text-gray-400" />
             <div className="text-2xl font-bold">{maxStudents}</div>
-            <div className="text-xs text-gray-500">Maximum</div>
+            <div className="text-xs text-gray-500">{t("addStudents.stats.maximum")}</div>
           </div>
           <div className="text-center">
             <Users className="w-5 h-5 mx-auto mb-1 text-green-500" />
             <div className="text-2xl font-bold">{availableSeats}</div>
-            <div className="text-xs text-gray-500">Available</div>
+            <div className="text-xs text-gray-500">{t("addStudents.stats.available")}</div>
           </div>
         </div>
       </div>
@@ -274,9 +272,11 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-red-900 dark:text-red-100 mb-1">Group is Full</h4>
+              <h4 className="font-semibold text-red-900 dark:text-red-100 mb-1">
+                {t("addStudents.warnings.fullGroup")}
+              </h4>
               <p className="text-sm text-red-700 dark:text-red-300">
-                This group has reached its maximum capacity.
+                {t("addStudents.warnings.fullGroupDesc")}
               </p>
             </div>
           </div>
@@ -285,13 +285,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400`} />
         <input
           type="text"
-          placeholder="Search students by name, email, or enrollment number..."
+          placeholder={t("addStudents.search.placeholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
+          className={`w-full ${isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-3 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white`}
         />
       </div>
 
@@ -301,7 +301,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
             <p className="text-gray-500 dark:text-gray-400">
-              {search ? "No students match your search" : "No available students"}
+              {search ? t("addStudents.search.noResults") : t("addStudents.search.noAvailable")}
             </p>
           </div>
         ) : (
@@ -338,7 +338,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
                     <div className="flex flex-wrap gap-2 text-xs">
                       <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">
-                        Enrollment: {student.enrollmentNumber}
+                        {t("addStudents.labels.enrollment")}: {student.enrollmentNumber}
                       </span>
                       {student.personalInfo?.whatsappNumber && (
                         <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded flex items-center gap-1">
@@ -368,13 +368,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             <MessageCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
               <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">
-                WhatsApp Message Template
+                {t("addStudents.message.title")}
               </h4>
 
               {/* Available Variables */}
               <div className="bg-white dark:bg-dark_input rounded p-3 mb-3 border border-blue-200 dark:border-blue-800">
                 <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  📌 Use these variables (will auto-fill):
+                  📌 {t("addStudents.message.variablesTitle")}
                 </p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
@@ -387,13 +387,16 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                     {`{courseName}`} → {group.courseSnapshot?.title || group.course?.title}
                   </div>
                   <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{startDate}`} → {new Date(group.schedule?.startDate).toLocaleDateString('ar-EG')}
+                    {`{startDate}`} → {group.schedule?.startDate 
+                      ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? 'ar-EG' : 'en-US')
+                      : t("addStudents.preview.defaults.startDate")
+                    }
                   </div>
                   <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{timeFrom}`} → {group.schedule?.timeFrom}
+                    {`{timeFrom}`} → {group.schedule?.timeFrom || t("addStudents.preview.defaults.timeFrom")}
                   </div>
                   <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{timeTo}`} → {group.schedule?.timeTo}
+                    {`{timeTo}`} → {group.schedule?.timeTo || t("addStudents.preview.defaults.timeTo")}
                   </div>
                 </div>
               </div>
@@ -402,26 +405,30 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Write your message:
+                    {t("addStudents.message.writeMessage")}
                   </label>
                   <button
                     onClick={copyToClipboard}
                     className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1"
                   >
                     <Copy className="w-3 h-3" />
-                    Copy template
+                    {t("addStudents.message.copyTemplate")}
                   </button>
                 </div>
 
                 <textarea
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
-                  placeholder="Example: 🎓 مرحباً {studentName}&#10;تم إضافتك بنجاح إلى {groupName}&#10;الكورس: {courseName}&#10;البدء: {startDate}&#10;الوقت: {timeFrom} - {timeTo}"
+                  placeholder={isRTL 
+                    ? "🎓 مرحباً {studentName}\nتم إضافتك بنجاح إلى {groupName}\nالكورس: {courseName}\nالبدء: {startDate}\nالوقت: {timeFrom} - {timeTo}"
+                    : "🎓 Hello {studentName}\nYou have been added to {groupName}\nCourse: {courseName}\nStart: {startDate}\nTime: {timeFrom} - {timeTo}"
+                  }
                   className="w-full px-3 py-2.5 border border-blue-300 dark:border-blue-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white resize-none h-32 font-mono text-sm"
+                  dir={isRTL ? 'rtl' : 'ltr'}
                 />
 
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {customMessage.length} characters
+                  {customMessage.length} {t("addStudents.message.characters")}
                 </div>
               </div>
 
@@ -429,9 +436,12 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
               {previewMessage && (
                 <div className="bg-white dark:bg-dark_input rounded p-3 border border-blue-200 dark:border-blue-800">
                   <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    📋 Live Preview:
+                    📋 {t("addStudents.message.previewTitle")}
                   </p>
-                  <div className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 max-h-40 overflow-y-auto">
+                  <div 
+                    className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 max-h-40 overflow-y-auto"
+                    dir={isRTL ? 'rtl' : 'ltr'}
+                  >
                     {previewMessage}
                   </div>
                 </div>
@@ -448,7 +458,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           disabled={adding}
           className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Cancel
+          {t("addStudents.buttons.cancel")}
         </button>
         
         <button
@@ -459,12 +469,12 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           {adding ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Adding...
+              {t("addStudents.buttons.adding")}
             </>
           ) : (
             <>
               <UserPlus className="w-4 h-4" />
-              Add Student & Send Message
+              {t("addStudents.buttons.addStudent")}
             </>
           )}
         </button>

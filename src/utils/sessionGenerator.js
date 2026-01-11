@@ -317,9 +317,19 @@ export async function generateSessionsForGroup(groupId, group, userId) {
         continue;
       }
 
-      console.log(`   🗓️  Week ${weekIndex + 1} dates:`);
+      // ✅ ترتيب التواريخ زمنياً (من الأقدم للأحدث) قبل ربط الجلسات
+      const sortedWeekDays = [...weekDays].sort((a, b) => {
+        return new Date(a) - new Date(b);
+      });
+
+      console.log(`   🗓️  Week ${weekIndex + 1} dates (before sorting):`);
       weekDays.forEach((date, idx) => {
         console.log(`      Day ${idx + 1}: ${date.toISOString().split('T')[0]} (${getDayName(date.getDay())})`);
+      });
+
+      console.log(`   🗓️  Week ${weekIndex + 1} dates (after sorting by date):`);
+      sortedWeekDays.forEach((date, idx) => {
+        console.log(`      Day ${idx + 1}: ${date.toISOString().split('T')[0]} (${getDayName(date.getDay())}) - Session ${idx + 1}`);
       });
 
       // ✅ إنشاء 3 سيشنات لهذه الوحدة
@@ -346,9 +356,12 @@ export async function generateSessionsForGroup(groupId, group, userId) {
 
       // لكل سيشن من الـ 3 سيشنات
       for (const sessionGroup of sessionGroups) {
-        // التاريخ المناسب لهذا السيشن (اليوم المناسب)
+        // ✅ التاريخ المناسب لهذا السيشن (مرتب حسب التاريخ - الأقدم أولاً)
+        // Session 1 → أول تاريخ (الأقدم)
+        // Session 2 → ثاني تاريخ
+        // Session 3 → ثالث تاريخ (الأحدث)
         const dayIndex = sessionGroup.sessionNumber - 1; // 0, 1, 2
-        const scheduledDate = new Date(weekDays[dayIndex]);
+        const scheduledDate = new Date(sortedWeekDays[dayIndex]);
         
         // تحضير عنوان السيشن
         const lessonTitles = sessionGroup.lessons.map(l => l.title).join(' & ');

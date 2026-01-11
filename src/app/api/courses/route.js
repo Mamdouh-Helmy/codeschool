@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Course from "../../models/Course";
+import User from "../../models/User"; // ✅ CRITICAL: Import User model
 
 // Helper: Validate curriculum structure
 const validateCurriculumStructure = (curriculum) => {
@@ -14,28 +15,24 @@ const validateCurriculumStructure = (curriculum) => {
   curriculum.forEach((module, moduleIndex) => {
     // Check module has required fields
     if (!module.title || module.title.trim() === "") {
-      errors.push(
-        `Module ${moduleIndex + 1}: title is required`
-      );
+      errors.push(`Module ${moduleIndex + 1}: title is required`);
     }
 
     if (module.order === undefined || module.order === null) {
-      errors.push(
-        `Module ${moduleIndex + 1}: order is required`
-      );
+      errors.push(`Module ${moduleIndex + 1}: order is required`);
     }
 
     // Check lessons count
     if (!Array.isArray(module.lessons)) {
-      errors.push(
-        `Module ${moduleIndex + 1}: lessons must be an array`
-      );
+      errors.push(`Module ${moduleIndex + 1}: lessons must be an array`);
       return;
     }
 
     if (module.lessons.length !== 6) {
       errors.push(
-        `Module ${moduleIndex + 1}: must have exactly 6 lessons (found ${module.lessons.length})`
+        `Module ${moduleIndex + 1}: must have exactly 6 lessons (found ${
+          module.lessons.length
+        })`
       );
     }
 
@@ -43,13 +40,17 @@ const validateCurriculumStructure = (curriculum) => {
     module.lessons.forEach((lesson, lessonIndex) => {
       if (!lesson.title || lesson.title.trim() === "") {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: title is required`
+          `Module ${moduleIndex + 1}, Lesson ${
+            lessonIndex + 1
+          }: title is required`
         );
       }
 
       if (lesson.order === undefined || lesson.order === null) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: order is required`
+          `Module ${moduleIndex + 1}, Lesson ${
+            lessonIndex + 1
+          }: order is required`
         );
       }
 
@@ -60,7 +61,13 @@ const validateCurriculumStructure = (curriculum) => {
       const expectedSession = Math.ceil(lesson.order / 2);
       if (lesson.sessionNumber !== expectedSession) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionNumber must be ${expectedSession} for lesson order ${lesson.order} (found ${lesson.sessionNumber}). System: Lessons 1-2→Session 1, Lessons 3-4→Session 2, Lessons 5-6→Session 3`
+          `Module ${moduleIndex + 1}, Lesson ${
+            lessonIndex + 1
+          }: sessionNumber must be ${expectedSession} for lesson order ${
+            lesson.order
+          } (found ${
+            lesson.sessionNumber
+          }). System: Lessons 1-2→Session 1, Lessons 3-4→Session 2, Lessons 5-6→Session 3`
         );
       }
     });
@@ -82,16 +89,32 @@ export async function GET(request) {
     const skip = (page - 1) * limit;
 
     const total = await Course.countDocuments();
-    const courses = await Course.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("instructors", "name email")
-      .lean();
+
+    // ✅ FIX: Populate with proper error handling
+    let courses;
+    try {
+      courses = await Course.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("instructors", "name email")
+        .lean();
+    } catch (populateError) {
+      console.warn(
+        "⚠️ Warning: Could not populate instructors:",
+        populateError.message
+      );
+      // Fallback: fetch without populate
+      courses = await Course.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    }
 
     const totalPages = Math.ceil(total / limit);
 
-    console.log("✅ Courses fetched from DB");
+    console.log("✅ Courses fetched from DB:", courses.length);
 
     return NextResponse.json({
       success: true,
@@ -120,7 +143,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     console.log("🚀 Starting course creation process...");
-    
+
     await connectDB();
     console.log("✅ Database connected");
 
@@ -175,16 +198,23 @@ export async function POST(request) {
     // Validate curriculum structure if provided
     if (curriculum && curriculum.length > 0) {
       console.log("🔍 Validating curriculum structure...");
-      console.log("📊 Curriculum details:", JSON.stringify(curriculum, null, 2));
-      
+      console.log(
+        "📊 Curriculum details:",
+        JSON.stringify(curriculum, null, 2)
+      );
+
       const curriculumValidation = validateCurriculumStructure(curriculum);
       if (!curriculumValidation.valid) {
-        console.log("❌ Curriculum validation failed:", curriculumValidation.errors);
+        console.log(
+          "❌ Curriculum validation failed:",
+          curriculumValidation.errors
+        );
         return NextResponse.json(
           {
             success: false,
             error: "Invalid curriculum structure",
-            message: "Invalid curriculum structure - 6 Lessons must have 3 Sessions (Lessons 1-2→S1, 3-4→S2, 5-6→S3)",
+            message:
+              "Invalid curriculum structure - 6 Lessons must have 3 Sessions (Lessons 1-2→S1, 3-4→S2, 5-6→S3)",
             details: curriculumValidation.errors,
           },
           { status: 400 }
@@ -194,7 +224,7 @@ export async function POST(request) {
     }
 
     console.log("📝 Creating course in database...");
-    
+
     // ✅ تنظيف البيانات قبل الحفظ
     const courseData = {
       title: title.trim(),
@@ -206,7 +236,8 @@ export async function POST(request) {
       price: price || 0,
       isActive: isActive !== undefined ? isActive : true,
       featured: featured !== undefined ? featured : false,
-      thumbnail: thumbnail && thumbnail.trim() !== "" ? thumbnail.trim() : undefined,
+      thumbnail:
+        thumbnail && thumbnail.trim() !== "" ? thumbnail.trim() : undefined,
       createdBy: {
         id: createdBy.id,
         name: createdBy.name,
@@ -219,22 +250,38 @@ export async function POST(request) {
       title: courseData.title,
       level: courseData.level,
       curriculumModules: courseData.curriculum.length,
-      totalLessons: courseData.curriculum.reduce((sum, m) => sum + (m.lessons?.length || 0), 0),
+      totalLessons: courseData.curriculum.reduce(
+        (sum, m) => sum + (m.lessons?.length || 0),
+        0
+      ),
       totalSessions: courseData.curriculum.length * 3, // كل module له 3 سيشنات
       instructors: courseData.instructors.length,
     });
-    
+
     const course = await Course.create(courseData);
 
-    const populatedCourse = await Course.findById(course._id).populate(
-      "instructors",
-      "name email"
-    );
+    // ✅ FIX: Populate with error handling
+    let populatedCourse;
+    try {
+      populatedCourse = await Course.findById(course._id).populate(
+        "instructors",
+        "name email"
+      );
+    } catch (populateError) {
+      console.warn(
+        "⚠️ Warning: Could not populate instructors:",
+        populateError.message
+      );
+      populatedCourse = course;
+    }
 
     console.log("✅ Course created successfully:", course._id);
     console.log("📊 Course structure:", {
       modules: populatedCourse.curriculum.length,
-      lessons: populatedCourse.curriculum.reduce((sum, m) => sum + m.lessons.length, 0),
+      lessons: populatedCourse.curriculum.reduce(
+        (sum, m) => sum + m.lessons.length,
+        0
+      ),
       sessions: populatedCourse.curriculum.length * 3,
     });
 
@@ -242,7 +289,8 @@ export async function POST(request) {
       {
         success: true,
         data: populatedCourse,
-        message: "Course created successfully with 3 sessions per module (2 lessons per session)",
+        message:
+          "Course created successfully with 3 sessions per module (2 lessons per session)",
       },
       { status: 201 }
     );
@@ -267,7 +315,8 @@ export async function POST(request) {
         {
           success: false,
           error: "Validation failed",
-          message: "فشل التحقق من البيانات - تأكد من أن كل Module يحتوي على 6 حصص مع 3 سيشنات",
+          message:
+            "فشل التحقق من البيانات - تأكد من أن كل Module يحتوي على 6 حصص مع 3 سيشنات",
           details: messages,
         },
         { status: 400 }
@@ -305,13 +354,17 @@ export async function POST(request) {
     }
 
     // Handle TypeError (like "e is not a function")
-    if (error.name === "TypeError" && error.message.includes("is not a function")) {
+    if (
+      error.name === "TypeError" &&
+      error.message.includes("is not a function")
+    ) {
       console.error("❌ TypeError - function call error:", error.message);
       return NextResponse.json(
         {
           success: false,
           error: "Internal validation error",
-          message: "خطأ في التحقق من البيانات. يرجى التحقق من صحة البيانات المدخلة.",
+          message:
+            "خطأ في التحقق من البيانات. يرجى التحقق من صحة البيانات المدخلة.",
           details: error.message,
         },
         { status: 500 }

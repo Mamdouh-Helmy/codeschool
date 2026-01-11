@@ -221,8 +221,6 @@ ${group.instructors?.[0]?.name ? `👨‍🏫 المدرب: ${group.instructors[
   }
 }
 
-// services/groupAutomation.js - داخل دالة onGroupActivated
-
 /**
  * EVENT 1: Group Activated
  * Triggers: Session generation + Instructor notification
@@ -265,17 +263,15 @@ export async function onGroupActivated(groupId, userId) {
 
     // ✅ FIX: حذف الفهرس القديم أولاً إذا كان موجوداً
     try {
-      // محاولة حذف الفهرس المسبب للمشكلة
       await Session.collection.dropIndex(
         "groupId_1_moduleIndex_1_lessonIndex_1_sessionIndex_1"
       );
       console.log("✅ Deleted problematic duplicate index");
     } catch (dropError) {
-      // الفهرس قد لا يكون موجوداً، هذا مقبول
       console.log("ℹ️  Index not found or already deleted");
     }
 
-    // ✅ FIX: حذف أي سيشنات قديمة أولاً قبل إنشاء جديدة (حذف فعلي، ليس soft delete)
+    // ✅ FIX: حذف أي سيشنات قديمة أولاً قبل إنشاء جديدة
     console.log("🗑️  Hard deleting any existing sessions...");
     const deleteResult = await Session.deleteMany({
       groupId: groupId,
@@ -326,14 +322,12 @@ export async function onGroupActivated(groupId, userId) {
           console.log("ℹ️  Index may already exist:", indexError.message);
         }
 
-        // حفظ السيشنات الجديدة
         const insertResult = await Session.insertMany(sessionsResult.sessions, {
-          ordered: false, // Continue on duplicate errors
+          ordered: false,
         });
 
         console.log(`✅ Successfully saved ${insertResult.length} sessions`);
 
-        // ✅ Update group with sessions info
         await Group.findByIdAndUpdate(groupId, {
           $set: {
             sessionsGenerated: true,
@@ -355,14 +349,7 @@ export async function onGroupActivated(groupId, userId) {
         console.log(`   Last session: ${sessionsResult.endDate}`);
       } catch (insertError) {
         console.error("❌ Error inserting sessions:", insertError);
-        console.error("❌ Error details:", {
-          code: insertError.code,
-          message: insertError.message,
-          keyPattern: insertError.keyPattern,
-          keyValue: insertError.keyValue,
-        });
 
-        // إذا كان خطأ مكرر، حاول إدراج السيشنات بشكل منفرد
         if (insertError.code === 11000) {
           console.log(
             "🔄 Trying to insert sessions individually with conflict resolution..."
@@ -374,8 +361,7 @@ export async function onGroupActivated(groupId, userId) {
 
           for (const sessionData of sessionsResult.sessions) {
             try {
-              // ✅ FIX: استخدم findOneAndUpdate مع upsert
-              const result = await Session.findOneAndUpdate(
+              await Session.findOneAndUpdate(
                 {
                   groupId: sessionData.groupId,
                   moduleIndex: sessionData.moduleIndex,
@@ -390,16 +376,9 @@ export async function onGroupActivated(groupId, userId) {
               );
 
               successCount++;
-              console.log(
-                `✅ Session ${sessionData.sessionNumber} saved/updated`
-              );
             } catch (individualError) {
               errorCount++;
               errors.push(individualError.message);
-              console.error(
-                `❌ Failed to save session ${sessionData.sessionNumber}:`,
-                individualError.message
-              );
             }
           }
 
@@ -415,15 +394,9 @@ export async function onGroupActivated(groupId, userId) {
             console.log(
               `✅ Saved ${successCount} sessions (${errorCount} failed)`
             );
-
-            if (errorCount > 0) {
-              console.log("❌ Errors:", errors.slice(0, 3));
-            }
           } else {
             throw new Error(
-              `Failed to save any sessions. All ${errorCount} attempts failed. Errors: ${errors.join(
-                "; "
-              )}`
+              `Failed to save any sessions. All ${errorCount} attempts failed.`
             );
           }
         } else {
@@ -440,7 +413,6 @@ export async function onGroupActivated(groupId, userId) {
         console.log(
           `📤 Notify instructor: ${instructor.name} (${instructor.email})`
         );
-        // TODO: Implement instructor notification via WhatsApp
       }
     }
 
@@ -456,14 +428,7 @@ export async function onGroupActivated(groupId, userId) {
   } catch (error) {
     console.error("❌ Error in onGroupActivated:", error);
 
-    // Log specific error details
     if (error.code === 11000) {
-      console.error("Duplicate key error details:");
-      console.error("Error code:", error.code);
-      console.error("Error pattern:", error.keyPattern);
-      console.error("Error value:", error.keyValue);
-
-      // ✅ محاولة إصلاح الفهارس
       try {
         await Session.syncIndexes();
         console.log("🔄 Attempted to sync indexes");
@@ -572,18 +537,20 @@ export async function sendSessionReminders(sessionId) {
 }
 
 /**
- * EVENT 4: Attendance Submitted
+ * EVENT 4: Attendance Submitted - ✅ FIXED VERSION
+ * يسمح بإعادة إرسال الرسائل عند تحديث الحضور
  */
-export async function onAttendanceSubmitted(sessionId) {
+export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
   try {
     console.log(`🎯 EVENT: Attendance Submitted - ${sessionId}`);
+    console.log(`📝 Custom Messages Provided: ${Object.keys(customMessages).length}`);
 
     const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .populate("courseId");
+      .populate('groupId')
+      .populate('courseId');
 
     if (!session) {
-      throw new Error("Session not found");
+      throw new Error('Session not found');
     }
 
     const group = session.groupId;
@@ -592,77 +559,164 @@ export async function onAttendanceSubmitted(sessionId) {
       !group.automation?.whatsappEnabled ||
       !group.automation?.notifyGuardianOnAbsence
     ) {
-      console.log("⚠️ Guardian notifications disabled");
-      return { success: false, reason: "Notifications disabled" };
+      console.log('⚠️ Guardian notifications disabled');
+      return { success: false, reason: 'Notifications disabled' };
     }
 
-    if (session.automationEvents?.absentNotificationsSent) {
-      console.log("⚠️ Absence notifications already sent");
-      return { success: false, reason: "Already sent" };
-    }
+    // ✅ REMOVED: التحقق من إرسال سابق - السماح بإعادة الإرسال
+    console.log('📱 Guardian notifications enabled - proceeding...');
 
-    const absentStudentIds = session.attendance
-      .filter((a) => a.status === "absent")
+    // ✅ Get students who need notifications (absent, late, or excused)
+    const studentsNeedingNotification = session.attendance
+      .filter((a) => ["absent", "late", "excused"].includes(a.status))
       .map((a) => a.studentId);
 
-    if (absentStudentIds.length === 0) {
-      console.log("✅ No absent students");
-      return { success: true, absentCount: 0 };
+    if (studentsNeedingNotification.length === 0) {
+      console.log('✅ No students needing guardian notification');
+      
+      // ✅ Reset the flag if no notifications needed
+      await Session.findByIdAndUpdate(sessionId, {
+        $set: {
+          "automationEvents.absentNotificationsSent": false,
+          "automationEvents.absentNotificationsSentAt": null,
+        },
+      });
+      
+      return { success: true, notificationCount: 0 };
     }
 
     console.log(
-      `📤 Notifying guardians of ${absentStudentIds.length} absent students...`
+      `📤 Notifying guardians of ${studentsNeedingNotification.length} students...`
     );
 
-    const absentStudents = await Student.find({
-      _id: { $in: absentStudentIds },
+    const students = await Student.find({
+      _id: { $in: studentsNeedingNotification },
       isDeleted: false,
     });
 
     let successCount = 0;
     let failCount = 0;
+    const notificationResults = [];
 
-    for (const student of absentStudents) {
+    for (const student of students) {
       const guardianWhatsApp = student.guardianInfo?.whatsappNumber;
+      const studentId = student._id.toString();
 
       if (!guardianWhatsApp) {
         failCount++;
+        notificationResults.push({
+          studentId,
+          studentName: student.personalInfo?.fullName,
+          status: "failed",
+          reason: "No guardian WhatsApp number",
+        });
+        console.log(`⚠️ No guardian WhatsApp for ${student.personalInfo?.fullName}`);
         continue;
       }
 
-      const absenceMessage = prepareAbsenceNotificationMessage(
-        student.guardianInfo.name || "Guardian",
-        student.personalInfo.fullName,
-        session,
-        group,
-        student.communicationPreferences?.preferredLanguage || "ar"
+      // ✅ الحصول على حالة الطالب
+      const attendanceRecord = session.attendance.find(
+        (a) => a.studentId.toString() === studentId
       );
+      const studentStatus = attendanceRecord?.status || "absent";
+
+      // ✅ استخدام الرسالة المخصصة إذا كانت موجودة
+      let messageContent;
+
+      if (customMessages && customMessages[studentId]) {
+        messageContent = processCustomMessage(
+          customMessages[studentId],
+          student,
+          session,
+          group,
+          studentStatus
+        );
+        console.log(
+          `📝 Using custom message for ${student.personalInfo?.fullName}`
+        );
+      } else {
+        messageContent = prepareAbsenceNotificationMessage(
+          student.guardianInfo?.name || "Guardian",
+          student.personalInfo?.fullName,
+          session,
+          group,
+          studentStatus,
+          student.communicationPreferences?.preferredLanguage || "ar"
+        );
+        console.log(
+          `📝 Using default message for ${student.personalInfo?.fullName}`
+        );
+      }
 
       try {
-        await wapilotService.sendTextMessage(
+        console.log(`📱 Sending WhatsApp to guardian of ${student.personalInfo?.fullName}...`);
+        console.log(`   Guardian: ${student.guardianInfo?.name}`);
+        console.log(`   WhatsApp: ${guardianWhatsApp}`);
+        console.log(`   Status: ${studentStatus}`);
+        console.log(`   Message Preview: ${messageContent.substring(0, 100)}...`);
+        
+        const sendResult = await wapilotService.sendTextMessage(
           wapilotService.preparePhoneNumber(guardianWhatsApp),
-          absenceMessage
+          messageContent
         );
 
         successCount++;
+        notificationResults.push({
+          studentId,
+          studentName: student.personalInfo?.fullName,
+          guardianName: student.guardianInfo?.name,
+          guardianWhatsApp,
+          status: "sent",
+          customMessage: !!customMessages[studentId],
+          messagePreview: messageContent.substring(0, 50) + "...",
+          sentAt: new Date(),
+          wapilotResponse: sendResult
+        });
+
+        console.log(
+          `✅ Notification sent to guardian of ${student.personalInfo?.fullName}`
+        );
+        
       } catch (error) {
         failCount++;
+        notificationResults.push({
+          studentId,
+          studentName: student.personalInfo?.fullName,
+          guardianWhatsApp,
+          status: "failed",
+          reason: error.message,
+          error: error.toString()
+        });
         console.error(`❌ Failed to notify guardian:`, error);
+        console.error(`   Student: ${student.personalInfo?.fullName}`);
+        console.error(`   Guardian WhatsApp: ${guardianWhatsApp}`);
       }
     }
 
+    // ✅ تحديث السيشن
     await Session.findByIdAndUpdate(sessionId, {
       $set: {
         "automationEvents.absentNotificationsSent": true,
         "automationEvents.absentNotificationsSentAt": new Date(),
+        "automationEvents.customMessagesUsed":
+          Object.keys(customMessages).length > 0,
+        "automationEvents.notificationResults": notificationResults,
+        "automationEvents.lastNotificationAttempt": new Date(),
       },
     });
 
+    console.log(
+      `✅ Notifications complete: ${successCount} sent, ${failCount} failed`
+    );
+    console.log(`📊 Success rate: ${((successCount / students.length) * 100).toFixed(1)}%`);
+
     return {
       success: true,
-      absentCount: absentStudents.length,
+      totalStudents: students.length,
       successCount,
       failCount,
+      customMessagesUsed: Object.keys(customMessages).length,
+      notificationResults,
     };
   } catch (error) {
     console.error("❌ Error in onAttendanceSubmitted:", error);
@@ -676,11 +730,14 @@ export async function onAttendanceSubmitted(sessionId) {
 export async function onSessionStatusChanged(
   sessionId,
   newStatus,
-  reason = ""
+  customMessage = ""
 ) {
   try {
     console.log(
       `🎯 EVENT: Session Status Changed - ${sessionId} to ${newStatus}`
+    );
+    console.log(
+      `📝 Custom Message: ${customMessage ? "Yes" : "No (using default)"}`
     );
 
     if (newStatus !== "cancelled" && newStatus !== "postponed") {
@@ -701,6 +758,7 @@ export async function onSessionStatusChanged(
       !group.automation?.whatsappEnabled ||
       !group.automation?.notifyOnSessionUpdate
     ) {
+      console.log("⚠️ Notifications disabled for this group");
       return { success: false, reason: "Notifications disabled" };
     }
 
@@ -709,35 +767,50 @@ export async function onSessionStatusChanged(
       isDeleted: false,
     });
 
+    console.log(
+      `📤 Sending ${newStatus} notifications to ${students.length} students...`
+    );
+
     let successCount = 0;
     let failCount = 0;
+    const failedStudents = [];
 
     for (const student of students) {
       const whatsappNumber = student.personalInfo.whatsappNumber;
 
       if (!whatsappNumber) {
         failCount++;
+        failedStudents.push(student.personalInfo.fullName);
         continue;
       }
 
-      const updateMessage = prepareSessionUpdateMessage(
-        student.personalInfo.fullName,
-        session,
-        group,
-        newStatus,
-        reason,
-        student.communicationPreferences?.preferredLanguage || "ar"
-      );
+      const messageContent = customMessage
+        ? customMessage
+        : prepareSessionUpdateMessage(
+            student.personalInfo.fullName,
+            session,
+            group,
+            newStatus,
+            student.communicationPreferences?.preferredLanguage || "ar"
+          );
 
       try {
+        console.log(`📤 Sending to ${student.personalInfo.fullName}...`);
+
         await wapilotService.sendTextMessage(
           wapilotService.preparePhoneNumber(whatsappNumber),
-          updateMessage
+          messageContent
         );
 
         successCount++;
+        console.log(`✅ Message sent to ${student.personalInfo.fullName}`);
       } catch (error) {
         failCount++;
+        failedStudents.push(student.personalInfo.fullName);
+        console.error(
+          `❌ Failed to send message to ${student.personalInfo.fullName}:`,
+          error
+        );
       }
     }
 
@@ -749,14 +822,26 @@ export async function onSessionStatusChanged(
     await Session.findByIdAndUpdate(sessionId, {
       $set: {
         [`automationEvents.${updateField}`]: true,
+        [`automationEvents.${updateField}At`]: new Date(),
+        "metadata.updatedAt": new Date(),
       },
     });
 
+    const resultMessage = `${
+      newStatus === "cancelled" ? "Cancellation" : "Postponement"
+    } notifications sent`;
+
+    console.log(`✅ Complete: ${successCount} sent, ${failCount} failed`);
+
     return {
       success: true,
+      status: newStatus,
       totalStudents: students.length,
       successCount,
       failCount,
+      failedStudents: failedStudents.length > 0 ? failedStudents : null,
+      message: resultMessage,
+      customMessageUsed: !!customMessage,
     };
   } catch (error) {
     console.error("❌ Error in onSessionStatusChanged:", error);
@@ -802,15 +887,59 @@ ${session.meetingLink ? `🔗 رابط الاجتماع: ${session.meetingLink}`
   }
 }
 
+function processCustomMessage(message, student, session, group, status) {
+  const guardianName = student.guardianInfo?.name || "Guardian";
+  const studentName = student.personalInfo?.fullName || "Student";
+
+  const variables = {
+    guardianName,
+    studentName,
+    sessionName: session.title || "Session",
+    sessionNumber: `Session ${session.sessionNumber || "N/A"}`,
+    date: session.scheduledDate
+      ? new Date(session.scheduledDate).toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      : "N/A",
+    time: `${session.startTime} - ${session.endTime}` || "N/A",
+    status: status.charAt(0).toUpperCase() + status.slice(1),
+    groupCode: group.code || "N/A",
+    groupName: group.name || "N/A",
+  };
+
+  let processedMessage = message;
+
+  // ✅ استبدال جميع المتغيرات
+  Object.entries(variables).forEach(([key, value]) => {
+    const regex = new RegExp(`\\{${key}\\}`, "g");
+    processedMessage = processedMessage.replace(regex, value);
+  });
+
+  return processedMessage;
+}
+
+/**
+ * ✅ الرسالة الافتراضية - محدثة لدعم جميع الحالات
+ */
 function prepareAbsenceNotificationMessage(
   guardianName,
   studentName,
   session,
   group,
-  language
+  status = "absent",
+  language = "ar"
 ) {
+  const sessionDate = new Date(session.scheduledDate).toLocaleDateString(
+    language === "en" ? "en-US" : "ar-EG"
+  );
+
+  // ✅ رسائل مختلفة حسب الحالة
   if (language === "en") {
-    return `📢 Absence Notification
+    if (status === "absent") {
+      return `📢 Absence Notification
 
 Dear ${guardianName},
 
@@ -818,13 +947,45 @@ We noticed that ${studentName} was absent from today's session:
 
 📚 Session: ${session.title}
 👥 Group: ${group.code}
-📅 Date: ${new Date(session.scheduledDate).toLocaleDateString("en-US")}
+📅 Date: ${sessionDate}
+⏰ Time: ${session.startTime} - ${session.endTime}
 
 Please contact us if you have any questions.
 
 Code School Team 💻`;
+    } else if (status === "late") {
+      return `⏰ Late Arrival Notification
+
+Dear ${guardianName},
+
+${studentName} arrived late to today's session:
+
+📚 Session: ${session.title}
+👥 Group: ${group.code}
+📅 Date: ${sessionDate}
+⏰ Time: ${session.startTime} - ${session.endTime}
+
+Please ensure punctuality in future sessions.
+
+Code School Team 💻`;
+    } else if (status === "excused") {
+      return `ℹ️ Excused Absence Notification
+
+Dear ${guardianName},
+
+${studentName} was excused from today's session:
+
+📚 Session: ${session.title}
+👥 Group: ${group.code}
+📅 Date: ${sessionDate}
+⏰ Time: ${session.startTime} - ${session.endTime}
+
+Code School Team 💻`;
+    }
   } else {
-    return `📢 إشعار غياب
+    // Arabic messages
+    if (status === "absent") {
+      return `📢 إشعار غياب
 
 عزيزي/عزيزتي ${guardianName},
 
@@ -832,12 +993,44 @@ Code School Team 💻`;
 
 📚 المحاضرة: ${session.title}
 👥 المجموعة: ${group.code}
-📅 التاريخ: ${new Date(session.scheduledDate).toLocaleDateString("ar-EG")}
+📅 التاريخ: ${sessionDate}
+⏰ الوقت: ${session.startTime} - ${session.endTime}
 
 يرجى التواصل معنا في حال وجود أي استفسارات.
 
 فريق Code School 💻`;
+    } else if (status === "late") {
+      return `⏰ إشعار تأخير
+
+عزيزي/عزيزتي ${guardianName},
+
+${studentName} وصل/ت متأخر/ة إلى محاضرة اليوم:
+
+📚 المحاضرة: ${session.title}
+👥 المجموعة: ${group.code}
+📅 التاريخ: ${sessionDate}
+⏰ الوقت: ${session.startTime} - ${session.endTime}
+
+يرجى الحرص على المواعيد في المحاضرات القادمة.
+
+فريق Code School 💻`;
+    } else if (status === "excused") {
+      return `ℹ️ إشعار غياب بعذر
+
+عزيزي/عزيزتي ${guardianName},
+
+${studentName} كان/ت غائب/ة بعذر عن محاضرة اليوم:
+
+📚 المحاضرة: ${session.title}
+👥 المجموعة: ${group.code}
+📅 التاريخ: ${sessionDate}
+⏰ الوقت: ${session.startTime} - ${session.endTime}
+
+فريق Code School 💻`;
+    }
   }
+
+  return `Notification for ${studentName} - Status: ${status}`;
 }
 
 function prepareSessionUpdateMessage(
@@ -845,8 +1038,7 @@ function prepareSessionUpdateMessage(
   session,
   group,
   status,
-  reason,
-  language
+  language = "ar"
 ) {
   const statusText =
     language === "en"
@@ -867,8 +1059,7 @@ The following session has been ${status}:
 📚 Session: ${session.title}
 👥 Group: ${group.code}
 📅 Original Date: ${new Date(session.scheduledDate).toLocaleDateString("en-US")}
-
-${reason ? `Reason: ${reason}` : ""}
+⏰ Time: ${session.startTime} - ${session.endTime}
 
 We will notify you with updates.
 
@@ -885,8 +1076,7 @@ Code School Team 💻`;
 📅 التاريخ الأصلي: ${new Date(session.scheduledDate).toLocaleDateString(
       "ar-EG"
     )}
-
-${reason ? `السبب: ${reason}` : ""}
+⏰ الوقت: ${session.startTime} - ${session.endTime}
 
 سنوافيك بالتحديثات.
 

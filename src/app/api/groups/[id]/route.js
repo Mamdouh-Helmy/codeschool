@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../../models/Group';
 import Session from '../../../models/Session';
+import Student from '../../../models/Student';
 import { requireAdmin } from '@/utils/authMiddleware';
 import mongoose from 'mongoose';
 
@@ -28,8 +29,20 @@ export async function GET(req, { params }) {
     const group = await Group.findOne({ _id: id, isDeleted: false })
       .populate('courseId')
       .populate('instructors', 'name email phone')
-      .populate('students', 'personalInfo.fullName personalInfo.email enrollmentNumber')
       .populate('metadata.createdBy', 'name email');
+
+    // ✅ Fetch students from Student model manually (since Group model references User but we store Student IDs)
+    let students = [];
+    if (group && group.students && group.students.length > 0) {
+      students = await Student.find({
+        _id: { $in: group.students },
+        isDeleted: false
+      })
+        .select('personalInfo.fullName personalInfo.email enrollmentNumber _id')
+        .lean();
+      
+      console.log(`✅ Fetched ${students.length} students from Student model for group ${id}`);
+    }
 
     if (!group) {
       return NextResponse.json(
@@ -57,7 +70,7 @@ export async function GET(req, { params }) {
       course: group.courseId,
       courseSnapshot: group.courseSnapshot,
       instructors: group.instructors,
-      students: group.students,
+      students: students, // ✅ Use manually fetched students from Student model
       studentsCount: group.currentStudentsCount,
       maxStudents: group.maxStudents,
       availableSeats: group.maxStudents - group.currentStudentsCount,

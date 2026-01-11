@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../../../models/Group';
 import Session from '../../../../models/Session';
+import Course from '../../../../models/Course';
 import { requireAdmin } from '@/utils/authMiddleware';
 import mongoose from 'mongoose';
 
@@ -16,7 +17,7 @@ export async function GET(req, { params }) {
 
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params; // ✅ await params
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -62,8 +63,8 @@ export async function GET(req, { params }) {
       title: session.title,
       description: session.description,
       moduleIndex: session.moduleIndex,
-      lessonIndex: session.lessonIndex,
-      sessionIndex: session.sessionIndex,
+      sessionNumber: session.sessionNumber,
+      lessonIndexes: session.lessonIndexes,
       scheduledDate: session.scheduledDate,
       startTime: session.startTime,
       endTime: session.endTime,

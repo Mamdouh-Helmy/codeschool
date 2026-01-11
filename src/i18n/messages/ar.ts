@@ -2350,6 +2350,627 @@ const ar = {
   "courses.form.confirm.deleteLesson": "هل أنت متأكد من حذف هذا الدرس؟",
   "courses.form.confirm.unsavedChanges":
     "لديك تغييرات غير محفوظة. هل تريد المتابعة؟",
+
+  // Groups Management - Main
+  "groups.title": "إدارة المجموعات",
+  "groups.subtitle": "إدارة مجموعات الدورات، الجلسات، والطلاب",
+  "groups.createNew": "إنشاء مجموعة جديدة",
+  "groups.createFirst": "إنشاء أول مجموعة",
+  "groups.noGroupsFound": "لم يتم العثور على مجموعات",
+  "groups.noGroupsFoundDesc": "لا توجد مجموعات تطابق الفلاتر الخاصة بك",
+  "groups.getStarted": "ابدأ بإنشاء مجموعتك الأولى",
+
+  // Stats
+  "groups.stats.total": "الإجمالي",
+  "groups.stats.active": "نشطة",
+  "groups.stats.draft": "مسودة",
+  "groups.stats.completed": "مكتملة",
+  "groups.stats.cancelled": "ملغاة",
+
+  // Filters
+  "groups.filters.search": "البحث في المجموعات...",
+  "groups.filters.allStatuses": "جميع الحالات",
+  "groups.filters.refresh": "تحديث",
+  "groups.filters.status.draft": "مسودة",
+  "groups.filters.status.active": "نشطة",
+  "groups.filters.status.completed": "مكتملة",
+  "groups.filters.status.cancelled": "ملغاة",
+
+  // Table Headers
+  "groups.table.group": "المجموعة",
+  "groups.table.course": "الدورة",
+  "groups.table.status": "الحالة",
+  "groups.table.students": "الطلاب",
+  "groups.table.sessions": "الجلسات",
+  "groups.table.schedule": "الجدول",
+  "groups.table.actions": "الإجراءات",
+
+  // Group Details
+  "groups.code": "رمز المجموعة",
+  "groups.studentsCount": "{current}/{max}",
+  "groups.full": "ممتلئة",
+  "groups.sessionsGenerated": "{count} جلسة",
+  "groups.sessionsNotGenerated": "لم يتم إنشاء الجلسات",
+
+  // Actions
+  "groups.actions.activate": "تفعيل",
+  "groups.actions.addStudents": "إضافة طلاب",
+  "groups.actions.viewSessions": "عرض الجلسات",
+  "groups.actions.view": "عرض",
+  "groups.actions.edit": "تعديل",
+  "groups.actions.delete": "حذف",
+
+  // Modals
+  "groups.modal.edit": "تعديل المجموعة",
+  "groups.modal.create": "إنشاء مجموعة جديدة",
+  "groups.modal.addStudents": "إضافة طلاب للمجموعة",
+
+  // Delete Confirmation
+  "groups.delete.title": "حذف المجموعة",
+  "groups.delete.message":
+    "هل أنت متأكد من حذف <strong>{name}</strong>؟ سيتم إلغاء جميع الجلسات.",
+  "groups.delete.cancel": "إلغاء",
+  "groups.delete.confirm": "حذف",
+  "groups.delete.success": "تم حذف المجموعة بنجاح",
+  "groups.delete.failed": "فشل حذف المجموعة",
+
+  // Activate Confirmation
+  "groups.activate.title": "تفعيل المجموعة",
+  "groups.activate.message":
+    "تفعيل <strong>{name}</strong>؟ سيتم إنشاء جميع الجلسات تلقائياً.",
+  "groups.activate.cancel": "إلغاء",
+  "groups.activate.confirm": "تفعيل",
+  "groups.activate.loading": "جاري تفعيل المجموعة...",
+  "groups.activate.success": "تم تفعيل المجموعة! جاري إنشاء الجلسات...",
+  "groups.activate.failed": "فشل تفعيل المجموعة",
+
+  // Messages
+  "groups.saved.success": "تم حفظ المجموعة بنجاح!",
+  "groups.load.failed": "فشل تحميل المجموعات",
+  "groups.view.failed": "فشل تحميل المجموعة",
+
+  // Pagination
+  "groups.pagination.showing": "عرض {from} إلى {to} من {total} مجموعة",
+  "groups.pagination.page": "صفحة {current} من {total}",
+
+  // Group Form Translations
+  "groups.form.name": "اسم المجموعة",
+  "groups.form.nameRequired": "اسم المجموعة مطلوب",
+  "groups.form.namePlaceholder": "مثال: مجموعة Python - ربيع 2025",
+
+  "groups.form.code": "رمز المجموعة",
+  "groups.form.codeAuto": "يتم إنشاؤه تلقائياً",
+
+  "groups.form.course": "الدورة",
+  "groups.form.courseRequired": "اختيار الدورة مطلوب",
+  "groups.form.selectCourse": "اختر الدورة",
+
+  "groups.form.maxStudents": "الحد الأقصى للطلاب",
+  "groups.form.maxStudentsMin": "يجب أن يكون الحد الأقصى 1 أو أكثر",
+
+  "groups.form.startDate": "تاريخ البدء",
+  "groups.form.startDateRequired": "تاريخ البدء مطلوب",
+
+  "groups.form.daysOfWeek": "أيام الأسبوع (اختر 3)",
+  "groups.form.daysRequired": "يجب اختيار 3 أيام بالضبط",
+  "groups.form.days.sunday": "الأحد",
+  "groups.form.days.monday": "الاثنين",
+  "groups.form.days.tuesday": "الثلاثاء",
+  "groups.form.days.wednesday": "الأربعاء",
+  "groups.form.days.thursday": "الخميس",
+  "groups.form.days.friday": "الجمعة",
+  "groups.form.days.saturday": "السبت",
+
+  "groups.form.timeFrom": "من الساعة",
+  "groups.form.timeFromRequired": "وقت البدء مطلوب",
+
+  "groups.form.timeTo": "إلى الساعة",
+  "groups.form.timeToRequired": "وقت الانتهاء مطلوب",
+
+  "groups.form.price": "السعر",
+  "groups.form.priceMin": "يجب أن يكون السعر 0 أو أكثر",
+
+  "groups.form.paymentType": "نوع الدفع",
+  "groups.form.paymentType.full": "دفعة واحدة",
+  "groups.form.paymentType.installments": "أقساط",
+
+  "groups.form.installments": "عدد الأقساط",
+  "groups.form.installmentsMin": "يجب أن يكون عدد الأقساط 2 أو أكثر",
+
+  "groups.form.amountPerInstallment": "قيمة القسط",
+
+  "groups.form.automation": "إعدادات الأتمتة",
+  "groups.form.whatsappEnabled": "تفعيل إشعارات الواتساب",
+  "groups.form.welcomeMessage": "رسالة الترحيب",
+  "groups.form.reminderEnabled": "تذكير الجلسات",
+  "groups.form.reminderBefore": "التذكير قبل (ساعة)",
+  "groups.form.notifyGuardian": "إشعار ولي الأمر عند الغياب",
+  "groups.form.notifySessionUpdate": "إشعار تحديثات الجلسات",
+  "groups.form.completionMessage": "رسالة الإكمال",
+
+  "groups.form.submit": "حفظ المجموعة",
+  "groups.form.cancel": "إلغاء",
+  "groups.form.creating": "جاري الإنشاء...",
+  "groups.form.updating": "جاري التحديث...",
+
+  // Add Students Form
+  "groups.addStudents.title": "إضافة طلاب للمجموعة",
+  "groups.addStudents.search": "البحث عن طالب...",
+  "groups.addStudents.available": "الطلاب المتاحين",
+  "groups.addStudents.noStudents": "لا يوجد طلاب متاحين",
+  "groups.addStudents.select": "اختر",
+  "groups.addStudents.selected": "محدد",
+  "groups.addStudents.add": "إضافة للمجموعة",
+  "groups.addStudents.cancel": "إلغاء",
+  "groups.addStudents.success": "تم إضافة الطالب بنجاح",
+  "groups.addStudents.failed": "فشل إضافة الطالب",
+
+  "groups.form.automation.whatsappEnabled": "تفعيل إشعارات الواتساب",
+  "groups.form.automation.welcomeMessage": "إرسال رسالة ترحيب للطلاب الجدد",
+  "groups.form.automation.reminderEnabled": "إرسال تذكير قبل الجلسات",
+  "groups.form.automation.reminderBefore": "التذكير قبل (ساعة)",
+  "groups.form.automation.notifyGuardianOnAbsence":
+    "إشعار أولياء الأمور بالغياب",
+  "groups.form.automation.notifyOnSessionUpdate": "إشعار بتحديثات الجلسات",
+  "groups.form.automation.completionMessage": "إرسال رسالة إكمال",
+
+  "groups.form.update": "تحديث المجموعة",
+  "groups.form.create": "إنشاء المجموعة",
+
+  // Form Sections
+  "groups.form.sections.basicInfo": "المعلومات الأساسية",
+  "groups.form.sections.instructors": "المدرسون",
+  "groups.form.sections.schedule": "الجدول الزمني",
+  "groups.form.sections.pricing": "التسعير",
+  "groups.form.sections.automation": "الأتمتة",
+
+  // Loading Messages
+  "groups.form.loading.courses": "جاري تحميل الدورات...",
+  "groups.form.loading.instructors": "جاري تحميل المدرسين...",
+  "groups.form.noInstructors": "لا يوجد مدرسون متاحون",
+
+  // Help Messages
+  "groups.form.help.scheduleInfo": "جدول 3 أيام",
+  "groups.form.help.day1": "• اليوم 1: الدروس 1-2 (الجلسة الأولى)",
+  "groups.form.help.day2": "• اليوم 2: الدروس 3-4 (الجلسة الثانية)",
+  "groups.form.help.day3": "• اليوم 3: الدروس 5-6 (الجلسة الثالثة)",
+  "groups.form.help.selectedDays": "محدد: {count}/3 أيام ({day} مطلوب)",
+
+  // Success Messages
+  "groups.form.messages.firstDaySelected":
+    "اليوم الأول ({day}) تم تحديده تلقائياً. الرجاء اختيار يومين إضافيين.",
+  "groups.form.messages.firstDayWillBe": "اليوم الأول سيكون: {day}",
+  "groups.form.messages.creating": "جاري إنشاء المجموعة...",
+  "groups.form.messages.updating": "جاري تحديث المجموعة...",
+  "groups.form.messages.created": "تم إنشاء المجموعة بنجاح!",
+  "groups.form.messages.updated": "تم تحديث المجموعة بنجاح!",
+
+  // Error Messages
+  "groups.form.errors.loadCourses": "فشل تحميل الدورات",
+  "groups.form.errors.loadInstructors": "فشل تحميل المدرسين",
+  "groups.form.errors.requiredFields": "الرجاء ملء جميع الحقول المطلوبة",
+  "groups.form.errors.exactly3Days":
+    "الرجاء اختيار 3 أيام بالضبط (بما في ذلك يوم تاريخ البدء)",
+  "groups.form.errors.cannotRemoveFirstDay":
+    "لا يمكن إزالة {day} (اليوم الأول بناءً على تاريخ البدء)",
+  "groups.form.errors.maxDays": "الحد الأقصى هو 3 أيام",
+  "groups.form.errors.firstDayRequired":
+    "اليوم الأول يجب أن يكون {day} (بناءً على تاريخ البدء)",
+  "groups.form.errors.saveFailed": "فشل حفظ المجموعة",
+
+  // Add Students to Group Translations
+  "addStudents.title": "إضافة طلاب للمجموعة",
+  "addStudents.search.placeholder":
+    "ابحث عن الطلاب بالاسم، البريد الإلكتروني، أو رقم التسجيل...",
+  "addStudents.search.noResults": "لا توجد نتائج مطابقة للبحث",
+  "addStudents.search.noAvailable": "لا يوجد طلاب متاحين",
+
+  "addStudents.stats.current": "حالي",
+  "addStudents.stats.maximum": "الحد الأقصى",
+  "addStudents.stats.available": "متاح",
+
+  "addStudents.warnings.fullGroup": "المجموعة ممتلئة",
+  "addStudents.warnings.fullGroupDesc":
+    "وصلت هذه المجموعة إلى الحد الأقصى للطاقة الاستيعابية.",
+
+  "addStudents.labels.enrollment": "رقم التسجيل",
+
+  "addStudents.message.title": "قالب رسالة الواتساب",
+  "addStudents.message.variablesTitle":
+    "استخدم هذه المتغيرات (سيتم ملؤها تلقائياً):",
+  "addStudents.message.writeMessage": "اكتب رسالتك:",
+  "addStudents.message.copyTemplate": "نسخ القالب",
+  "addStudents.message.characters": "حرف",
+  "addStudents.message.previewTitle": "معاينة مباشرة:",
+
+  "addStudents.preview.defaults.studentName": "الطالب",
+  "addStudents.preview.defaults.courseName": "الكورس",
+  "addStudents.preview.defaults.startDate": "غير محدد",
+  "addStudents.preview.defaults.timeFrom": "00:00",
+  "addStudents.preview.defaults.timeTo": "00:00",
+
+  "addStudents.buttons.cancel": "إلغاء",
+  "addStudents.buttons.adding": "جاري الإضافة...",
+  "addStudents.buttons.addStudent": "إضافة طالب وإرسال الرسالة",
+
+  "addStudents.messages.adding": "جاري إضافة الطالب للمجموعة...",
+  "addStudents.messages.success": "تم إضافة الطالب وإرسال الرسالة بنجاح! 🎉",
+  "addStudents.messages.copied": "تم نسخ قالب الرسالة!",
+
+  "addStudents.errors.loadGroup": "فشل تحميل المجموعة",
+  "addStudents.errors.loadStudents": "فشل تحميل الطلاب",
+  "addStudents.errors.loadFailed": "فشل تحميل البيانات",
+  "addStudents.errors.groupNotFound": "لم يتم العثور على المجموعة",
+  "addStudents.errors.selectStudent": "الرجاء اختيار طالب",
+  "addStudents.errors.enterMessage": "الرجاء إدخال رسالة للطالب",
+  "addStudents.errors.invalidStudent": "طالب غير صالح",
+  "addStudents.errors.addFailed": "فشل إضافة الطالب",
+
+  // Sessions Management - Main
+  "sessions.title": "إدارة الجلسات",
+  "sessions.groupCode": "رمز المجموعة",
+
+  // Buttons
+  "sessions.buttons.viewStudents": "عرض الطلاب",
+  "sessions.buttons.backToGroups": "العودة للمجموعات",
+  "sessions.buttons.refresh": "تحديث",
+  "sessions.buttons.goToGroups": "الذهاب للمجموعات",
+  "sessions.buttons.viewDetails": "عرض التفاصيل",
+  "sessions.buttons.edit": "تعديل",
+  "sessions.buttons.manageAttendance": "إدارة الحضور",
+
+  // Table Headers
+  "sessions.table.session": "الجلسة",
+  "sessions.table.dateTime": "التاريخ والوقت",
+  "sessions.table.status": "الحالة",
+  "sessions.table.attendance": "الحضور",
+  "sessions.table.actions": "الإجراءات",
+  "sessions.table.module": "وحدة",
+  "sessions.table.lessons": "دروس",
+
+  // Filters
+  "sessions.filters.allStatuses": "جميع الحالات",
+  "sessions.filters.scheduled": "مجدولة",
+  "sessions.filters.completed": "مكتملة",
+  "sessions.filters.cancelled": "ملغاة",
+  "sessions.filters.postponed": "مؤجلة",
+  "sessions.filters.upcoming": "قادمة",
+  "sessions.filters.past": "ماضية",
+
+  // Status
+  "sessions.status.scheduled": "مجدولة",
+  "sessions.status.completed": "مكتملة",
+  "sessions.status.cancelled": "ملغاة",
+  "sessions.status.postponed": "مؤجلة",
+
+  // Attendance
+  "sessions.attendance.taken": "تم أخذها",
+  "sessions.attendance.notTaken": "لم تؤخذ",
+
+  // Errors
+  "sessions.errors.noGroupSelected": "لم يتم اختيار مجموعة",
+  "sessions.errors.selectGroupFirst": "الرجاء اختيار مجموعة أولاً",
+  "sessions.errors.loadFailed": "فشل تحميل الجلسات",
+  "sessions.errors.loadDetailsFailed": "فشل تحميل تفاصيل الجلسة",
+  "sessions.errors.updateFailed": "فشل تحديث الجلسة",
+  "sessions.errors.noSessionsFound": "لم يتم العثور على جلسات",
+  "sessions.errors.noMatchingFilters": "لا توجد جلسات تطابق الفلاتر",
+  "sessions.errors.activateGroup": "ستظهر الجلسات هنا بعد تفعيل المجموعة",
+
+  // Attendance Modal
+  "sessions.attendance.title": "الحضور والغياب",
+  "sessions.attendance.to": "إلى",
+  "sessions.attendance.id": "الرقم",
+
+  // Attendance Stats
+  "sessions.attendance.stats.total": "الإجمالي",
+  "sessions.attendance.stats.present": "حاضر",
+  "sessions.attendance.stats.absent": "غائب",
+  "sessions.attendance.stats.late": "متأخر",
+  "sessions.attendance.stats.excused": "معذور",
+
+  // Attendance Filters
+  "sessions.attendance.filters.allStudents": "جميع الطلاب",
+  "sessions.attendance.filters.present": "حاضرون",
+  "sessions.attendance.filters.absent": "غائبون",
+
+  // Attendance Status
+  "sessions.attendance.status.present": "حاضر",
+  "sessions.attendance.status.absent": "غائب",
+  "sessions.attendance.status.late": "متأخر",
+  "sessions.attendance.status.excused": "معذور",
+
+  // Attendance Messages
+  "sessions.attendance.messages.saved": "تم حفظ الحضور بنجاح",
+  "sessions.attendance.messages.templateCopied": "تم نسخ القالب إلى الحافظة",
+
+  // Attendance Errors
+  "sessions.attendance.errors.loadFailed": "فشل تحميل بيانات الحضور",
+  "sessions.attendance.errors.saveFailed": "فشل حفظ الحضور",
+
+  // Attendance Defaults
+  "sessions.attendance.defaults.studentName": "الطالب",
+  "sessions.attendance.defaults.guardianName": "ولي الأمر",
+  "sessions.attendance.defaults.sessionName": "الجلسة",
+  "sessions.attendance.defaults.session": "الجلسة",
+  "sessions.attendance.defaults.date": "غير محدد",
+  "sessions.attendance.defaults.time": "غير محدد",
+  "sessions.attendance.defaults.unknown": "غير معروف",
+
+  // Attendance Templates
+  "sessions.attendance.templates.absent": `📢 إشعار بالغياب
+
+عزيزي {guardianName},
+
+لاحظنا أن {studentName} كان غائباً عن جلسة اليوم:
+
+📚 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+السبب: [اكتب السبب هنا]
+
+الرجاء التواصل معنا إذا كان لديك أي استفسار.
+
+فريق المدرسة البرمجية 💻`,
+
+  "sessions.attendance.templates.late": `⏰ إشعار بالتأخير
+
+عزيزي {guardianName},
+
+{studentName} وصل متأخراً إلى جلسة اليوم:
+
+📚 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+الرجاء الحرص على الالتزام بالمواعيد في الجلسات القادمة.
+
+فريق المدرسة البرمجية 💻`,
+
+  "sessions.attendance.templates.excused": `ℹ️ إشعار بغياب معذور
+
+عزيزي {guardianName},
+
+{studentName} كان معذوراً عن جلسة اليوم:
+
+📚 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+السبب: [اكتب السبب هنا]
+
+فريق المدرسة البرمجية 💻`,
+
+  // Attendance Message Editor
+  "sessions.attendance.hideEditor": "إخفاء محرر الرسالة",
+  "sessions.attendance.showEditor": "كتابة رسالة لولي الأمر",
+  "sessions.attendance.message.toGuardian": "رسالة إلى ولي الأمر",
+  "sessions.attendance.message.optional": "اختياري",
+  "sessions.attendance.message.optionalDesc":
+    "إذا لم تكتب رسالة مخصصة، سيتم إرسال رسالة افتراضية تلقائياً بناءً على حالة الحضور ({status}).",
+  "sessions.attendance.message.availableVariables": "المتغيرات المتاحة",
+  "sessions.attendance.message.writeCustom": "اكتب رسالتك المخصصة (اختياري):",
+  "sessions.attendance.message.copyTemplate": "نسخ القالب",
+  "sessions.attendance.message.characters": "حرف",
+  "sessions.attendance.message.customReady": "الرسالة المخصصة جاهزة",
+  "sessions.attendance.message.defaultWillBeUsed":
+    "سيتم استخدام الرسالة الافتراضية",
+  "sessions.attendance.message.preview": "معاينة",
+  "sessions.attendance.message.whatGuardianWillReceive":
+    "ما سيستقبله ولي الأمر",
+
+  // Attendance Placeholders
+  "sessions.attendance.placeholders.absent": `اختياري: اكتب رسالة مخصصة أو اترك فارغاً لاستخدام الإشعار الافتراضي للغياب.
+
+قالب مثال:
+
+عزيزي {guardianName},
+
+لاحظنا أن {studentName} كان غائباً عن جلسة اليوم:
+
+📚 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+السبب: [اكتب سبب الغياب هنا]
+
+فريق المدرسة البرمجية 💻`,
+
+  "sessions.attendance.placeholders.late": `اختياري: اكتب رسالة مخصصة أو اترك فارغاً لاستخدام الإشعار الافتراضي للتأخير.
+
+قالب مثال:
+
+عزيزي {guardianName},
+
+{studentName} وصل متأخراً إلى جلسة اليوم:
+
+📚 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+الرجاء الحرص على الالتزام بالمواعيد.
+
+فريق المدرسة البرمجية 💻`,
+
+  "sessions.attendance.placeholders.excused": `اختياري: اكتب رسالة مخصصة أو اترك فارغاً لاستخدام الإشعار الافتراضي للغياب المعذور.
+
+قالب مثال:
+
+عزيزي {guardianName},
+
+{studentName} كان معذوراً عن جلسة اليوم:
+
+📚 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+السبب: [اكتب سبب الغياب المعذور هنا]
+
+فريق المدرسة البرمجية 💻`,
+
+  // Attendance Buttons
+  "sessions.attendance.buttons.cancel": "إلغاء",
+  "sessions.attendance.buttons.saving": "جاري الحفظ...",
+  "sessions.attendance.buttons.saveAttendance": "حفظ الحضور",
+
+  // No Students Found
+  "sessions.attendance.noStudentsFound": "لم يتم العثور على طلاب",
+  "sessions.attendance.addStudentsFirst": "الرجاء إضافة طلاب للمجموعة أولاً",
+  "sessions.attendance.noMatchingFilter": "لا يوجد طلاب يطابقون الفلتر المحدد",
+
+  // Edit Session Modal
+  "sessions.edit.title": "تعديل الجلسة",
+  "sessions.edit.to": "إلى",
+  "sessions.edit.labels.status": "الحالة",
+  "sessions.edit.labels.meetingLink": "رابط الاجتماع",
+  "sessions.edit.labels.recordingLink": "رابط التسجيل",
+  "sessions.edit.labels.instructorNotes": "ملاحظات المدرب",
+  "sessions.edit.placeholders.meetingLink": "https://zoom.us/j/...",
+  "sessions.edit.placeholders.recordingLink": "https://youtube.com/watch?v=...",
+  "sessions.edit.placeholders.instructorNotes":
+    "أضف أي ملاحظات حول هذه الجلسة (مرئية فقط للمدربين)...",
+
+  // Edit Session Status
+  "sessions.edit.status.scheduled": "مجدولة",
+  "sessions.edit.status.completed": "مكتملة",
+  "sessions.edit.status.cancelled": "ملغاة",
+  "sessions.edit.status.postponed": "مؤجلة",
+
+  // Edit Session Notify Students
+  "sessions.edit.notifyStudents.title": "إشعار الطلاب عبر الواتساب",
+  "sessions.edit.notifyStudents.availableVariables":
+    "المتغيرات المتاحة (سيتم ملؤها تلقائياً):",
+  "sessions.edit.notifyStudents.writeMessage": "اكتب رسالتك:",
+  "sessions.edit.notifyStudents.copyTemplate": "نسخ القالب",
+  "sessions.edit.notifyStudents.characters": "حرف",
+  "sessions.edit.notifyStudents.messageReady": "الرسالة جاهزة",
+  "sessions.edit.notifyStudents.livePreview": "معاينة مباشرة",
+  "sessions.edit.notifyStudents.whatStudentsWillSee": "ما سيراه الطلاب",
+
+  // Edit Session Defaults
+  "sessions.edit.defaults.sessionName": "الجلسة",
+  "sessions.edit.defaults.session": "الجلسة",
+  "sessions.edit.defaults.lesson": "درس",
+  "sessions.edit.defaults.date": "غير محدد",
+  "sessions.edit.defaults.time": "غير محدد",
+  "sessions.edit.defaults.module": "وحدة",
+  "sessions.edit.defaults.course": "الكورس",
+
+  // Edit Session Templates
+  "sessions.edit.templates.cancelled": `⚠️ إلغاء الجلسة
+
+عزيزي الطالب،
+
+الجلسة {sessionName} المقرر عقدها في {date} الساعة {time} تم إلغاؤها.
+
+الدروس المتأثرة: {lessonsCovered}
+
+السبب: [اكتب سبب الإلغاء هنا]
+
+سنخطرك بالتحديثات قريباً.
+
+فريق المدرسة البرمجية 💻`,
+
+  "sessions.edit.templates.postponed": `⚠️ تأجيل الجلسة
+
+عزيزي الطالب،
+
+الجلسة {sessionName} المقرر عقدها في {date} الساعة {time} تم تأجيلها.
+
+الدروس المتأثرة: {lessonsCovered}
+
+السبب: [اكتب سبب التأجيل هنا]
+
+سنخطرك بالتاريخ الجديد قريباً.
+
+فريق المدرسة البرمجية 💻`,
+
+  // Edit Session Placeholders
+  "sessions.edit.placeholders.cancelled": `مثال: ⚠️ إلغاء الجلسة
+
+عزيزي الطالب،
+
+الجلسة {sessionName} المقرر عقدها في {date} الساعة {time} تم إلغاؤها.
+
+الدروس المتأثرة: {lessonsCovered}
+
+السبب: [اشرح سبب إلغاء الجلسة]
+
+نعتذر عن أي إزعاج قد يسببه ذلك.`,
+
+  "sessions.edit.placeholders.postponed": `مثال: ⚠️ تأجيل الجلسة
+
+عزيزي الطالب،
+
+الجلسة {sessionName} المقرر عقدها في {date} الساعة {time} تم تأجيلها.
+
+الدروس المتأثرة: {lessonsCovered}
+
+السبب: [اشرح سبب تأجيل الجلسة]
+
+نعتذر عن أي إزعاج قد يسببه ذلك.`,
+
+  // Edit Session Messages
+  "sessions.edit.messages.templateCopied": "تم نسخ القالب إلى الحافظة!",
+
+  // Edit Session Errors
+  "sessions.edit.errors.writeMessage": "الرجاء كتابة رسالة للإشعار",
+
+  // Edit Session Buttons
+  "sessions.edit.buttons.cancel": "إلغاء",
+  "sessions.edit.buttons.saving": "جاري الحفظ...",
+  "sessions.edit.buttons.saveChanges": "حفظ التغييرات",
+
+  // Session Details Modal
+  "sessions.details.title": "تفاصيل الجلسة",
+  "sessions.details.module": "وحدة",
+  "sessions.details.session": "جلسة",
+  "sessions.details.basicInfo": "المعلومات الأساسية",
+  "sessions.details.date": "التاريخ",
+  "sessions.details.time": "الوقت",
+  "sessions.details.status": "الحالة",
+  "sessions.details.attendanceTaken": "تم أخذ الحضور",
+  "sessions.details.yes": "نعم",
+  "sessions.details.no": "لا",
+  "sessions.details.links": "الروابط",
+  "sessions.details.meetingLink": "رابط الاجتماع",
+  "sessions.details.recordingLink": "رابط التسجيل",
+  "sessions.details.instructorNotes": "ملاحظات المدرب",
+  "sessions.details.attendanceStats": "إحصائيات الحضور",
+
+  // Session Details Stats
+  "sessions.details.stats.total": "الإجمالي",
+  "sessions.details.stats.present": "حاضر",
+  "sessions.details.stats.absent": "غائب",
+  "sessions.details.stats.late": "متأخر",
+  "sessions.details.stats.excused": "معذور",
+
+  // Session Details Buttons
+  "sessions.details.buttons.close": "إغلاق",
+
+  // Students List Modal
+  "sessions.students.title": "طلاب المجموعة",
+  "sessions.students.total": "إجمالي الطلاب",
+  "sessions.students.defaults.unknown": "غير معروف",
+  "sessions.students.buttons.close": "إغلاق",
+  "dashboard.groups": "المجموعات",
+
+  // Students List Modal Translations
+  "sessions.students.selectSession": "اختر الجلسة (لعرض الحضور):",
+  "sessions.students.allSessions": "جميع الجلسات",
+  "sessions.students.filters.allStudents": "جميع الطلاب",
+  "sessions.students.filters.present": "حاضرون",
+  "sessions.students.filters.absent": "غائبون",
+  "sessions.students.loadingAttendance": "جاري تحميل بيانات الحضور...",
+  "sessions.students.noStudentsFound": "لم يتم العثور على طلاب",
+  "sessions.students.noStudentsInGroup": "لا يوجد طلاب في هذه المجموعة",
+  "sessions.students.noMatchingFilter": "لا يوجد طلاب يطابقون الفلتر المحدد",
+  "sessions.students.showing": "عرض",
+  "sessions.students.of": "من",
+  "sessions.students.students": "طالب",
+
+  
 };
 
 export default ar;

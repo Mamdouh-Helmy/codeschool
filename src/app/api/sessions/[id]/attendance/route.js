@@ -3,16 +3,18 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Session from '../../../../models/Session';
 import Student from '../../../../models/Student';
+import User from '../../../../models/User';
 import Group from '../../../../models/Group';
 import { requireAdmin } from '@/utils/authMiddleware';
 import { onAttendanceSubmitted } from '@/app/services/groupAutomation';
 import mongoose from 'mongoose';
 
-// POST: Submit attendance for a session
+// POST: Submit attendance for a session with custom messages
 export async function POST(req, { params }) {
   try {
-    const { id } = await params; // ✅ await params
-    console.log(`✅ Submitting attendance for session: ${id}`);
+    const { id } = await params;
+    console.log(`\n🎯 ========== ATTENDANCE SUBMISSION START ==========`);
+    console.log(`📋 Session ID: ${id}`);
 
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
@@ -20,10 +22,13 @@ export async function POST(req, { params }) {
     }
 
     const adminUser = authCheck.user;
+    console.log(`👤 Admin User: ${adminUser.email || adminUser.id}`);
 
     await connectDB();
 
-    const { attendance } = await req.json();
+    const { attendance, customMessages } = await req.json();
+    console.log(`📊 Attendance Records: ${attendance?.length || 0}`);
+    console.log(`💬 Custom Messages: ${customMessages ? Object.keys(customMessages).length : 0}`);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -50,13 +55,16 @@ export async function POST(req, { params }) {
       .populate('groupId');
 
     if (!session) {
+      console.log(`❌ Session not found: ${id}`);
       return NextResponse.json(
         { success: false, error: 'Session not found' },
         { status: 404 }
       );
     }
 
+    console.log(`✅ Session found: ${session.title}`);
     const group = session.groupId;
+    console.log(`👥 Group: ${group.name} (${group.code})`);
 
     // Validate all student IDs belong to the group
     const studentIds = attendance.map(a => a.studentId);
@@ -65,6 +73,8 @@ export async function POST(req, { params }) {
       'academicInfo.groupIds': group._id,
       isDeleted: false
     });
+
+    console.log(`🔍 Validating students: ${validStudents.length}/${studentIds.length}`);
 
     if (validStudents.length !== studentIds.length) {
       return NextResponse.json(
@@ -78,6 +88,43 @@ export async function POST(req, { params }) {
       );
     }
 
+    // ✅ التحقق من الطلاب الذين يحتاجون رسائل
+    const studentsNeedingMessages = attendance.filter(record => 
+      ['absent', 'late', 'excused'].includes(record.status)
+    );
+
+    console.log(`📱 Students needing guardian notification: ${studentsNeedingMessages.length}`);
+
+    // ✅ التحقق من أرقام أولياء الأمور
+    for (const record of studentsNeedingMessages) {
+      const student = validStudents.find(s => s._id.toString() === record.studentId.toString());
+      
+      if (!student) {
+        console.log(`⚠️ Student not found in valid students: ${record.studentId}`);
+        continue;
+      }
+
+      const guardianWhatsApp = student.guardianInfo?.whatsappNumber;
+      const studentName = student.personalInfo?.fullName || student.enrollmentNumber;
+
+      console.log(`   📞 ${studentName}: Guardian WhatsApp = ${guardianWhatsApp || 'NOT SET'}`);
+
+      if (!guardianWhatsApp) {
+        console.log(`❌ Missing guardian WhatsApp for: ${studentName}`);
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Cannot send notification: Student ${studentName} has no guardian WhatsApp number`,
+            studentId: student._id,
+            studentName: studentName
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    console.log(`✅ All guardians have WhatsApp numbers`);
+
     // Prepare attendance records
     const attendanceRecords = attendance.map(record => ({
       studentId: record.studentId,
@@ -86,6 +133,8 @@ export async function POST(req, { params }) {
       markedAt: new Date(),
       markedBy: adminUser.id
     }));
+
+    console.log(`💾 Saving attendance to database...`);
 
     // Update session with attendance
     const updatedSession = await Session.findByIdAndUpdate(
@@ -103,18 +152,40 @@ export async function POST(req, { params }) {
       .populate('attendance.studentId', 'personalInfo.fullName enrollmentNumber')
       .populate('attendance.markedBy', 'name email');
 
-    console.log(`✅ Attendance submitted for ${attendanceRecords.length} students`);
+    console.log(`✅ Attendance saved successfully for ${attendanceRecords.length} students`);
 
-    // Trigger automation (notify guardians of absent students)
-    setTimeout(async () => {
+    // ✅ إرسال الرسائل عبر الأوتوميشن
+    console.log(`\n📱 ========== WHATSAPP NOTIFICATIONS ==========`);
+    
+    let automationResult = {
+      successCount: 0,
+      failCount: 0,
+      notificationResults: []
+    };
+
+    if (studentsNeedingMessages.length > 0) {
+      console.log(`📤 Triggering automation for ${studentsNeedingMessages.length} notifications...`);
+      
       try {
-        console.log('🔄 Starting automation for attendance...');
-        const automationResult = await onAttendanceSubmitted(id);
-        console.log('✅ Automation completed:', automationResult);
+        automationResult = await onAttendanceSubmitted(id, customMessages || {});
+        console.log(`✅ Automation completed:`, {
+          success: automationResult.success,
+          sent: automationResult.successCount,
+          failed: automationResult.failCount
+        });
       } catch (automationError) {
-        console.error('❌ Automation failed:', automationError);
+        console.error(`❌ Automation error:`, automationError);
+        automationResult = {
+          success: false,
+          error: automationError.message,
+          successCount: 0,
+          failCount: studentsNeedingMessages.length,
+          notificationResults: []
+        };
       }
-    }, 1000);
+    } else {
+      console.log(`ℹ️ No students need guardian notifications (all present)`);
+    }
 
     const stats = {
       total: attendanceRecords.length,
@@ -124,9 +195,17 @@ export async function POST(req, { params }) {
       excused: attendanceRecords.filter(a => a.status === 'excused').length
     };
 
+    console.log(`📊 Attendance Stats:`, stats);
+
+    const customMessagesInfo = customMessages 
+      ? Object.keys(customMessages).length 
+      : 0;
+
+    console.log(`\n✅ ========== ATTENDANCE SUBMISSION COMPLETE ==========\n`);
+
     return NextResponse.json({
       success: true,
-      message: 'Attendance submitted successfully',
+      message: 'Attendance submitted successfully and notifications sent',
       data: {
         sessionId: updatedSession._id,
         sessionTitle: updatedSession.title,
@@ -134,14 +213,20 @@ export async function POST(req, { params }) {
         stats
       },
       automation: {
-        triggered: true,
-        action: 'Notifying guardians of absent students (if automation enabled)',
-        status: 'processing'
+        completed: automationResult.success !== false,
+        action: 'Guardians notified via WhatsApp',
+        customMessagesUsed: customMessagesInfo,
+        notificationsSent: automationResult.successCount || 0,
+        notificationsFailed: automationResult.failCount || 0,
+        details: automationResult.notificationResults || [],
+        error: automationResult.error || null
       }
     });
 
   } catch (error) {
-    console.error('❌ Error submitting attendance:', error);
+    console.error(`\n❌ ========== ATTENDANCE SUBMISSION ERROR ==========`);
+    console.error('Error:', error);
+    console.error('Stack:', error.stack);
 
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors || {})
@@ -178,7 +263,7 @@ export async function GET(req, { params }) {
 
     await connectDB();
 
-    const { id } = await params; // ✅ await params
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -188,7 +273,7 @@ export async function GET(req, { params }) {
     }
 
     const session = await Session.findOne({ _id: id, isDeleted: false })
-      .populate('attendance.studentId', 'personalInfo.fullName personalInfo.email enrollmentNumber')
+      .populate('attendance.studentId', 'personalInfo.fullName personalInfo.email enrollmentNumber guardianInfo.name guardianInfo.whatsappNumber')
       .populate('attendance.markedBy', 'name email')
       .populate('groupId', 'name code')
       .lean();
