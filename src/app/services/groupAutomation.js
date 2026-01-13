@@ -1,7 +1,7 @@
 // ============================================
 // services/groupAutomation.js - ENHANCED WITH GROUP COMPLETION
 // ============================================
-
+import mongoose from "mongoose";
 import Group from "../models/Group";
 import Student from "../models/Student";
 import Session from "../models/Session";
@@ -400,18 +400,18 @@ async function sendToStudentWithLogging({
   messageContent,
   messageType,
   language,
-  metadata
+  metadata,
 }) {
   try {
     const whatsappNumber = student.personalInfo?.whatsappNumber;
-    
+
     if (!whatsappNumber) {
       console.log(`⚠️ No WhatsApp for ${student.personalInfo?.fullName}`);
       return {
         success: false,
-        reason: 'No WhatsApp number',
+        reason: "No WhatsApp number",
         studentId,
-        studentName: student.personalInfo?.fullName
+        studentName: student.personalInfo?.fullName,
       };
     }
 
@@ -421,23 +421,25 @@ async function sendToStudentWithLogging({
       messageContent,
       messageType,
       language,
-      metadata
+      metadata,
     });
 
     return {
       success: true,
       studentId,
       studentName: student.personalInfo?.fullName,
-      whatsappNumber
+      whatsappNumber,
     };
-
   } catch (error) {
-    console.error(`❌ Failed to send to ${student.personalInfo?.fullName}:`, error);
+    console.error(
+      `❌ Failed to send to ${student.personalInfo?.fullName}:`,
+      error
+    );
     return {
       success: false,
       error: error.message,
       studentId,
-      studentName: student.personalInfo?.fullName
+      studentName: student.personalInfo?.fullName,
     };
   }
 }
@@ -480,7 +482,9 @@ export async function onStudentAddedToGroup(
       { new: true }
     );
 
-    console.log(`✅ Student ${student.personalInfo.fullName} added to group ${group.code}`);
+    console.log(
+      `✅ Student ${student.personalInfo.fullName} added to group ${group.code}`
+    );
 
     let welcomeMessageSent = false;
     let messageContent = "";
@@ -492,7 +496,8 @@ export async function onStudentAddedToGroup(
     ) {
       console.log("📱 Sending WhatsApp welcome message...");
 
-      const language = student.communicationPreferences?.preferredLanguage || "ar";
+      const language =
+        student.communicationPreferences?.preferredLanguage || "ar";
 
       let finalMessage;
       if (customMessage) {
@@ -513,15 +518,15 @@ export async function onStudentAddedToGroup(
         studentId,
         student,
         messageContent: finalMessage,
-        messageType: 'group_welcome',
+        messageType: "group_welcome",
         language,
         metadata: {
           groupId: group._id,
           groupName: group.name,
           groupCode: group.code,
           isCustomMessage: !!customMessage,
-          automationType: 'group_enrollment'
-        }
+          automationType: "group_enrollment",
+        },
       });
 
       if (result.success) {
@@ -546,7 +551,9 @@ export async function onStudentAddedToGroup(
       whatsappNumber: student.personalInfo?.whatsappNumber,
       welcomeMessageSent,
       customMessageUsed: !!customMessage,
-      messagePreview: messageContent ? messageContent.substring(0, 50) + "..." : null,
+      messagePreview: messageContent
+        ? messageContent.substring(0, 50) + "..."
+        : null,
       timestamp: new Date(),
     };
   } catch (error) {
@@ -561,182 +568,149 @@ export async function onStudentAddedToGroup(
  */
 export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
   try {
-    console.log(`🎯 EVENT: Attendance Submitted - ${sessionId}`);
-    console.log(`📝 Custom Messages Provided: ${Object.keys(customMessages).length}`);
+    console.log(`\n📋 ATTENDANCE SUBMITTED ==========`);
+    console.log(`📋 Session: ${sessionId}`);
+    console.log(`💬 Custom Messages: ${Object.keys(customMessages).length}`);
 
     const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .populate("courseId");
+      .populate({
+        path: "groupId",
+        select: "name code automation",
+      })
+      .lean();
 
-    if (!session) {
-      throw new Error("Session not found");
+    if (!session || !session.groupId) {
+      return { success: false, error: "Session or group not found" };
     }
 
     const group = session.groupId;
 
-    if (
-      !group.automation?.whatsappEnabled ||
-      !group.automation?.notifyGuardianOnAbsence
-    ) {
-      console.log("⚠️ Guardian notifications disabled");
-      return { success: false, reason: "Notifications disabled" };
+    if (!group.automation?.notifyGuardianOnAbsence) {
+      console.log(`ℹ️ Guardian notifications disabled for this group`);
+      return { success: true, message: "Notifications disabled" };
     }
 
-    // ✅ REMOVED: التحقق من إرسال سابق - السماح بإعادة الإرسال
-    console.log("📱 Guardian notifications enabled - proceeding...");
+    // Get students who need guardian notification
+    const studentsToNotify = session.attendance.filter((record) =>
+      ["absent", "late", "excused"].includes(record.status)
+    );
 
-    const studentsNeedingNotification = session.attendance
-      .filter((a) => ["absent", "late", "excused"].includes(a.status))
-      .map((a) => a.studentId);
+    console.log(`👨‍🎓 Students needing notification: ${studentsToNotify.length}`);
 
-    if (studentsNeedingNotification.length === 0) {
-      console.log("✅ No students needing guardian notification");
-
-      // ✅ Reset the flag if no notifications needed
-      await Session.findByIdAndUpdate(sessionId, {
-        $set: {
-          "automationEvents.absentNotificationsSent": false,
-          "automationEvents.absentNotificationsSentAt": null,
-        },
-      });
-
-      return { success: true, notificationCount: 0 };
+    if (studentsToNotify.length === 0) {
+      return { success: true, message: "No notifications needed" };
     }
-
-    console.log(`📤 Notifying guardians of ${studentsNeedingNotification.length} students...`);
-
-    const students = await Student.find({
-      _id: { $in: studentsNeedingNotification },
-      isDeleted: false,
-    });
 
     let successCount = 0;
     let failCount = 0;
     const notificationResults = [];
 
-    for (const student of students) {
-      const guardianWhatsApp = student.guardianInfo?.whatsappNumber;
-      const studentId = student._id.toString();
-
-      if (!guardianWhatsApp) {
-        failCount++;
-        notificationResults.push({
-          studentId,
-          studentName: student.personalInfo?.fullName,
-          status: "failed",
-          reason: "No guardian WhatsApp number",
-        });
-        console.log(
-          `⚠️ No guardian WhatsApp for ${student.personalInfo?.fullName}`
-        );
-        continue;
-      }
-
-      const attendanceRecord = session.attendance.find(
-        (a) => a.studentId.toString() === studentId
-      );
-      const studentStatus = attendanceRecord?.status || "absent";
-
-      let messageContent;
-      const language = student.communicationPreferences?.preferredLanguage || "ar";
-
-      if (customMessages && customMessages[studentId]) {
-        messageContent = processCustomMessage(
-          customMessages[studentId],
-          student,
-          session,
-          group,
-          studentStatus
-        );
-        console.log(
-          `📝 Using custom message for ${student.personalInfo?.fullName}`
-        );
-      } else {
-        messageContent = prepareAbsenceNotificationMessage(
-          student.guardianInfo?.name || "Guardian",
-          student.personalInfo?.fullName,
-          session,
-          group,
-          studentStatus,
-          language
-        );
-        console.log(
-          `📝 Using default message for ${student.personalInfo?.fullName}`
-        );
-      }
-
+    for (const record of studentsToNotify) {
       try {
-        // ✅ Send to guardian with logging (logged under student's record)
-        await wapilotService.sendAndLogMessage({
+        const student = await Student.findById(record.studentId)
+          .select("personalInfo.fullName guardianInfo communicationPreferences")
+          .lean();
+
+        if (!student) {
+          failCount++;
+          continue;
+        }
+
+        const guardianWhatsApp = student.guardianInfo?.whatsappNumber;
+
+        if (!guardianWhatsApp) {
+          failCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName: student.personalInfo?.fullName,
+            status: "failed",
+            reason: "No guardian WhatsApp number",
+          });
+          continue;
+        }
+
+        // Use custom message if provided, otherwise use default
+        let message = customMessages[student._id.toString()];
+
+        if (!message) {
+          const statusAr = {
+            absent: "غائب",
+            late: "متأخر",
+            excused: "معذور",
+          };
+
+          message = `عزيزي ولي الأمر ${student.guardianInfo?.name || ""},
+
+نود إعلامكم بأن الطالب ${student.personalInfo?.fullName} كان ${
+            statusAr[record.status]
+          } في حصة ${session.title}.
+
+📅 التاريخ: ${new Date(session.scheduledDate).toLocaleDateString("ar-EG")}
+⏰ الوقت: ${session.startTime}
+
+${record.notes ? `\n📝 ملاحظات: ${record.notes}` : ""}
+
+للاستفسار، يرجى التواصل معنا.
+
+مع التحية،
+فريق Code School`;
+        }
+
+        const result = await wapilotService.sendAndLogMessage({
           studentId: student._id,
           phoneNumber: guardianWhatsApp,
-          messageContent,
-          messageType: 'absence_notification',
-          language,
+          messageContent: message,
+          messageType: "absence_notification",
+          language: student.communicationPreferences?.preferredLanguage || "ar",
           metadata: {
             sessionId: session._id,
             sessionTitle: session.title,
-            groupId: group._id,
-            groupName: group.name,
-            attendanceStatus: studentStatus,
-            isCustomMessage: !!customMessages[studentId],
-            recipientType: 'guardian',
+            attendanceStatus: record.status,
+            recipientType: "guardian",
             guardianName: student.guardianInfo?.name,
-            automationType: 'attendance_notification'
-          }
+            isCustomMessage: !!customMessages[student._id.toString()],
+          },
         });
 
-        successCount++;
-        notificationResults.push({
-          studentId,
-          studentName: student.personalInfo?.fullName,
-          guardianName: student.guardianInfo?.name,
-          guardianWhatsApp,
-          status: "sent",
-          customMessage: !!customMessages[studentId],
-          messagePreview: messageContent.substring(0, 50) + "...",
-          sentAt: new Date(),
-        });
-
-        console.log(`✅ Notification sent to guardian of ${student.personalInfo?.fullName}`);
-
+        if (result.success) {
+          successCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName: student.personalInfo?.fullName,
+            status: "sent",
+          });
+        } else {
+          failCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName: student.personalInfo?.fullName,
+            status: "failed",
+            reason: result.error,
+          });
+        }
       } catch (error) {
+        console.error(`Error notifying guardian:`, error);
         failCount++;
-        notificationResults.push({
-          studentId,
-          studentName: student.personalInfo?.fullName,
-          guardianWhatsApp,
-          status: "failed",
-          reason: error.message,
-          error: error.toString(),
-        });
-        console.error(`❌ Failed to notify guardian:`, error);
       }
     }
 
-    await Session.findByIdAndUpdate(sessionId, {
-      $set: {
-        "automationEvents.absentNotificationsSent": true,
-        "automationEvents.absentNotificationsSentAt": new Date(),
-        "automationEvents.customMessagesUsed": Object.keys(customMessages).length > 0,
-        "automationEvents.notificationResults": notificationResults,
-        "automationEvents.lastNotificationAttempt": new Date(),
-      },
-    });
-
-    console.log(`✅ Notifications complete: ${successCount} sent, ${failCount} failed`);
+    console.log(
+      `✅ Guardian notifications: ${successCount}/${studentsToNotify.length}`
+    );
 
     return {
-      success: true,
-      totalStudents: students.length,
+      success: successCount > 0,
+      totalNotifications: studentsToNotify.length,
       successCount,
       failCount,
-      customMessagesUsed: Object.keys(customMessages).length,
       notificationResults,
     };
   } catch (error) {
-    console.error("❌ Error in onAttendanceSubmitted:", error);
-    throw error;
+    console.error(`❌ Error in onAttendanceSubmitted:`, error);
+    return {
+      success: false,
+      error: error.message,
+    };
   }
 }
 
@@ -747,114 +721,131 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
 export async function onSessionStatusChanged(
   sessionId,
   newStatus,
-  customMessage = ""
+  customMessage = null
 ) {
   try {
-    console.log(`🎯 EVENT: Session Status Changed - ${sessionId} to ${newStatus}`);
+    console.log(`\n🔄 SESSION STATUS CHANGE ==========`);
+    console.log(`📋 Session: ${sessionId}`);
+    console.log(`📊 New Status: ${newStatus}`);
+    console.log(`💬 Custom Message: ${customMessage ? "Yes" : "No"}`);
 
     if (newStatus !== "cancelled" && newStatus !== "postponed") {
-      return { success: true, notificationRequired: false };
+      console.log(`ℹ️ Status ${newStatus} does not trigger notifications`);
+      return { success: true, message: "No notifications needed" };
     }
 
+    // Fetch session with group details
     const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .populate("courseId");
+      .populate({
+        path: "groupId",
+        populate: {
+          path: "students",
+          select:
+            "personalInfo.fullName personalInfo.whatsappNumber communicationPreferences",
+          match: { isDeleted: false },
+        },
+      })
+      .lean();
 
     if (!session) {
-      throw new Error("Session not found");
+      console.log(`❌ Session not found`);
+      return { success: false, error: "Session not found" };
     }
 
     const group = session.groupId;
 
-    if (
-      !group.automation?.whatsappEnabled ||
-      !group.automation?.notifyOnSessionUpdate
-    ) {
-      console.log("⚠️ Notifications disabled for this group");
-      return { success: false, reason: "Notifications disabled" };
+    // ✅ Get students from both sources
+    let students = group?.students || [];
+
+    if (students.length === 0 && group?._id) {
+      students = await Student.find({
+        "academicInfo.groupIds": group._id,
+        isDeleted: false,
+      })
+        .select(
+          "personalInfo.fullName personalInfo.whatsappNumber communicationPreferences"
+        )
+        .lean();
     }
 
-    const students = await Student.find({
-      _id: { $in: group.students },
-      isDeleted: false,
-    });
+    console.log(`👨‍🎓 Total students: ${students.length}`);
 
-    console.log(`📤 Sending ${newStatus} notifications to ${students.length} students...`);
+    if (students.length === 0) {
+      console.log(`⚠️ No students to notify`);
+      return { success: false, error: "No students in group" };
+    }
 
+    // Send notifications to all students
     let successCount = 0;
     let failCount = 0;
-    const failedStudents = [];
 
     for (const student of students) {
-      const language = student.communicationPreferences?.preferredLanguage || "ar";
-
-      const messageContent = customMessage
-        ? customMessage
-        : prepareSessionUpdateMessage(
-            student.personalInfo.fullName,
-            session,
-            group,
-            newStatus,
-            language
-          );
-
       try {
-        // ✅ Send with auto-logging
-        await sendToStudentWithLogging({
+        const whatsappNumber = student.personalInfo?.whatsappNumber;
+
+        if (!whatsappNumber) {
+          failCount++;
+          continue;
+        }
+
+        let message = customMessage;
+
+        if (!message) {
+          const statusText =
+            newStatus === "cancelled" ? "تم إلغاء" : "تم تأجيل";
+          message = `عزيزي ${student.personalInfo?.fullName || "الطالب"},
+
+${statusText} حصة ${session.title}
+المقررة في: ${new Date(session.scheduledDate).toLocaleDateString("ar-EG")}
+
+للمزيد من المعلومات، يرجى التواصل معنا.
+
+مع التحية،
+فريق Code School`;
+        }
+
+        const result = await wapilotService.sendAndLogMessage({
           studentId: student._id,
-          student,
-          messageContent,
-          messageType: newStatus === 'cancelled' ? 'session_cancelled' : 'session_postponed',
-          language,
+          phoneNumber: whatsappNumber,
+          messageContent: message,
+          messageType: "session_" + newStatus,
+          language: student.communicationPreferences?.preferredLanguage || "ar",
           metadata: {
             sessionId: session._id,
             sessionTitle: session.title,
             groupId: group._id,
-            groupName: group.name,
             oldStatus: session.status,
             newStatus,
             isCustomMessage: !!customMessage,
-            automationType: 'session_status_change'
-          }
+            recipientType: "student",
+          },
         });
 
-        successCount++;
-        console.log(`✅ Message sent to ${student.personalInfo.fullName}`);
-
+        if (result.success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
       } catch (error) {
+        console.error(`Error notifying student:`, error);
         failCount++;
-        failedStudents.push(student.personalInfo.fullName);
-        console.error(`❌ Failed to send message to ${student.personalInfo.fullName}:`, error);
       }
     }
 
-    const updateField =
-      newStatus === "cancelled"
-        ? "cancelNotificationSent"
-        : "postponeNotificationSent";
-
-    await Session.findByIdAndUpdate(sessionId, {
-      $set: {
-        [`automationEvents.${updateField}`]: true,
-        [`automationEvents.${updateField}At`]: new Date(),
-        "metadata.updatedAt": new Date(),
-      },
-    });
-
-    console.log(`✅ Complete: ${successCount} sent, ${failCount} failed`);
+    console.log(`✅ Notifications sent: ${successCount}/${students.length}`);
 
     return {
-      success: true,
-      status: newStatus,
+      success: successCount > 0,
       totalStudents: students.length,
       successCount,
       failCount,
-      failedStudents: failedStudents.length > 0 ? failedStudents : null,
-      customMessageUsed: !!customMessage,
     };
   } catch (error) {
-    console.error("❌ Error in onSessionStatusChanged:", error);
-    throw error;
+    console.error(`❌ Error in onSessionStatusChanged:`, error);
+    return {
+      success: false,
+      error: error.message,
+    };
   }
 }
 
@@ -898,7 +889,9 @@ Your upcoming session is in ${timeWindow}:
 ⏰ Time: ${session.startTime} - ${session.endTime}
 
 ${session.meetingLink ? `🔗 Meeting Link: ${session.meetingLink}\n` : ""}
-${reminderType === "24hours" ? "Be ready for tomorrow!" : "Session starts soon!"}
+${
+  reminderType === "24hours" ? "Be ready for tomorrow!" : "Session starts soon!"
+}
 
 See you there! 🚀
 
@@ -977,7 +970,8 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
 
     for (const student of students) {
       try {
-        const language = student.communicationPreferences?.preferredLanguage || "ar";
+        const language =
+          student.communicationPreferences?.preferredLanguage || "ar";
 
         const message = prepareReminderMessage(
           student.personalInfo?.fullName,
@@ -992,7 +986,7 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
           studentId: student._id,
           phoneNumber: student.personalInfo?.whatsappNumber,
           messageContent: message,
-          messageType: 'session_reminder',
+          messageType: "session_reminder",
           language,
           metadata: {
             sessionId: session._id,
@@ -1000,8 +994,8 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
             groupId: group._id,
             groupName: group.name,
             reminderType,
-            automationType: 'session_reminder'
-          }
+            automationType: "session_reminder",
+          },
         });
 
         // ✅ Also add to sessionReminders array
@@ -1011,7 +1005,7 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
           reminderType,
           message,
           language,
-          status: 'sent',
+          status: "sent",
           sessionDetails: {
             title: session.title,
             scheduledDate: session.scheduledDate,
@@ -1031,7 +1025,6 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
           language,
           sentAt: new Date(),
         });
-
       } catch (studentError) {
         failCount++;
         notificationResults.push({
@@ -1043,7 +1036,9 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
       }
     }
 
-    console.log(`\n✅ Manual reminder complete: ${successCount} sent, ${failCount} failed`);
+    console.log(
+      `\n✅ Manual reminder complete: ${successCount} sent, ${failCount} failed`
+    );
 
     return {
       success: successCount > 0,
@@ -1065,174 +1060,244 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
  * ✅ NEW EVENT 6: Group Completed
  * Triggered when the last session is completed and group status changes to 'completed'
  */
-export async function onGroupCompleted(groupId, customMessage = null, feedbackLink = null) {
+/**
+ * ✅ FIXED: Group Completed Event with Correct WhatsApp Service
+ */
+export async function onGroupCompleted(
+  groupId,
+  customMessage = null,
+  feedbackLink = null
+) {
   try {
     console.log(`\n🎯 EVENT: Group Completed ==========`);
     console.log(`👥 Group: ${groupId}`);
     console.log(`📝 Custom Message: ${customMessage ? "Yes" : "No"}`);
     console.log(`📋 Feedback Link: ${feedbackLink || "Not provided"}`);
 
+    // ✅ Fetch group with proper populate
     const group = await Group.findById(groupId)
       .populate("courseId", "title level")
-      .populate("students");
+      .populate({
+        path: "students",
+        select:
+          "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo",
+        match: { isDeleted: false },
+      })
+      .lean();
 
     if (!group) {
-      throw new Error("Group not found");
+      console.log(`❌ Group not found: ${groupId}`);
+      return {
+        success: false,
+        error: "Group not found",
+        totalStudents: 0,
+        successCount: 0,
+        failCount: 0,
+        notificationResults: [],
+      };
     }
 
     console.log(`✅ Group found: ${group.name} (${group.code})`);
     console.log(`📚 Course: ${group.courseId?.title}`);
-    console.log(`👨‍🎓 Total students: ${group.students?.length || 0}`);
 
-    // ✅ Check if automation is enabled
-    if (!group.automation?.whatsappEnabled || !group.automation?.completionMessage) {
-      console.log("⚠️ Completion messages disabled for this group");
-      return {
-        success: false,
-        reason: "Completion messages disabled",
-        groupName: group.name,
-      };
+    // ✅ Get students from BOTH sources
+    let students = group.students || [];
+    console.log(`👥 Students from populate: ${students.length}`);
+
+    // ✅ Fallback: If no students from populate, fetch from Student collection
+    if (students.length === 0) {
+      console.log(
+        `⚠️ No students from populate, fetching from Student.academicInfo.groupIds...`
+      );
+
+      students = await Student.find({
+        "academicInfo.groupIds": new mongoose.Types.ObjectId(groupId),
+        isDeleted: false,
+      })
+        .select(
+          "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo"
+        )
+        .lean();
+
+      console.log(`👥 Students from academicInfo.groupIds: ${students.length}`);
     }
 
-    // ✅ Check if already sent
-    if (group.metadata?.completionMessagesSent) {
-      console.log("⚠️ Completion messages already sent");
-      return {
-        success: false,
-        reason: "Completion messages already sent",
-        groupName: group.name,
-        sentAt: group.metadata.completionMessagesSentAt,
-      };
-    }
+    console.log(`👨‍🎓 Total students: ${students.length}`);
 
-    const students = await Student.find({
-      _id: { $in: group.students },
-      isDeleted: false,
-    });
+    if (students.length === 0) {
+      console.log(`⚠️ No students in group - skipping notifications`);
 
-    console.log(`📤 Sending completion messages to ${students.length} students...`);
-
-    let successCount = 0;
-    let failCount = 0;
-    const notificationResults = [];
-
-    // ✅ Process each student
-    for (const student of students) {
-      const studentId = student._id.toString();
-      const whatsappNumber = student.personalInfo?.whatsappNumber;
-      const studentName = student.personalInfo?.fullName || student.enrollmentNumber;
-
-      console.log(`\n📱 Processing student: ${studentName}`);
-      console.log(`   WhatsApp: ${whatsappNumber || "Not found"}`);
-
-      if (!whatsappNumber) {
-        failCount++;
-        notificationResults.push({
-          studentId,
-          studentName,
-          status: "failed",
-          reason: "No WhatsApp number",
-        });
-        console.log(`⚠️ No WhatsApp for ${studentName}`);
-        continue;
-      }
-
-      const language = student.communicationPreferences?.preferredLanguage || "ar";
-
-      // ✅ Prepare message content
-      let messageContent;
-
-      if (customMessage) {
-        // Use custom message from admin with variable replacement
-        messageContent = processCompletionMessage(
-          customMessage,
-          student,
-          group,
-          feedbackLink
-        );
-        console.log(`📝 Using custom message from admin`);
-      } else {
-        // Use default completion message
-        messageContent = prepareCompletionMessage(
-          studentName,
-          group,
-          feedbackLink,
-          language
-        );
-        console.log(`📝 Using default completion message`);
-      }
-
-      console.log(`📤 Message preview: ${messageContent.substring(0, 50)}...`);
-
-      try {
-        // ✅ Send with auto-logging
-        await wapilotService.sendAndLogMessage({
-          studentId: student._id,
-          phoneNumber: whatsappNumber,
-          messageContent,
-          messageType: 'group_completion',
-          language,
-          metadata: {
-            groupId: group._id,
-            groupName: group.name,
-            groupCode: group.code,
-            courseTitle: group.courseId?.title,
-            isCustomMessage: !!customMessage,
-            hasFeedbackLink: !!feedbackLink,
-            feedbackLink: feedbackLink || null,
-            automationType: 'group_completion'
-          }
-        });
-
-        successCount++;
-        notificationResults.push({
-          studentId,
-          studentName,
-          whatsappNumber,
-          status: "sent",
-          customMessage: !!customMessage,
-          hasFeedbackLink: !!feedbackLink,
-          messagePreview: messageContent.substring(0, 50) + "...",
-          sentAt: new Date(),
-        });
-
-        console.log(`✅ Completion message sent to ${studentName}`);
-
-      } catch (error) {
-        failCount++;
-        notificationResults.push({
-          studentId,
-          studentName,
-          whatsappNumber,
-          status: "failed",
-          reason: error.message,
-          error: error.toString(),
-        });
-        console.error(`❌ Failed to send to ${studentName}:`, error);
-      }
-    }
-
-    // ✅ Update group metadata
-    try {
+      // Still update group metadata
       await Group.findByIdAndUpdate(groupId, {
         $set: {
           "metadata.completionMessagesSent": true,
           "metadata.completionMessagesSentAt": new Date(),
-          "metadata.completionMessagesResults": notificationResults,
           "metadata.completionMessagesSummary": {
-            total: students.length,
-            succeeded: successCount,
-            failed: failCount,
+            total: 0,
+            succeeded: 0,
+            failed: 0,
             customMessageUsed: !!customMessage,
             feedbackLinkProvided: !!feedbackLink,
             timestamp: new Date(),
           },
         },
       });
-      console.log(`📊 Updated group metadata`);
-    } catch (updateError) {
-      console.warn(`⚠️ Could not update group metadata:`, updateError.message);
+
+      return {
+        success: false,
+        error: "No students in group",
+        totalStudents: 0,
+        successCount: 0,
+        failCount: 0,
+        customMessageUsed: !!customMessage,
+        feedbackLinkProvided: !!feedbackLink,
+        successRate: "0%",
+        notificationResults: [],
+      };
     }
+
+    console.log(
+      `📤 Sending completion messages to ${students.length} students...`
+    );
+
+    // ✅ Send messages to all students
+    const notificationResults = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const student of students) {
+      try {
+        const studentName =
+          student.personalInfo?.fullName ||
+          student.enrollmentNumber ||
+          "Student";
+        const whatsappNumber = student.personalInfo?.whatsappNumber;
+
+        console.log(`\n📱 Processing: ${studentName}`);
+        console.log(`   WhatsApp: ${whatsappNumber || "NOT SET"}`);
+
+        if (!whatsappNumber) {
+          console.log(`   ⚠️ Skipping - no WhatsApp number`);
+          failCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName,
+            whatsappNumber: null,
+            status: "failed",
+            reason: "No WhatsApp number",
+            customMessage: !!customMessage,
+            hasFeedbackLink: !!feedbackLink,
+          });
+          continue;
+        }
+
+        // ✅ Prepare message with variable replacement
+        let finalMessage =
+          customMessage ||
+          getDefaultCompletionMessage(
+            student.communicationPreferences?.preferredLanguage || "ar"
+          );
+
+        // Replace variables
+        const variables = {
+          studentName,
+          courseName: group.courseId?.title || "the course",
+          groupCode: group.code,
+          groupName: group.name,
+        };
+
+        Object.entries(variables).forEach(([key, value]) => {
+          const regex = new RegExp(`\\{${key}\\}`, "g");
+          finalMessage = finalMessage.replace(regex, value);
+        });
+
+        // Add feedback link if provided
+        if (feedbackLink) {
+          finalMessage += `\n\n📋 نرجو منك تقييم الدورة:\n${feedbackLink}`;
+        }
+
+        console.log(`   📤 Sending message (${finalMessage.length} chars)`);
+
+        // ✅ FIXED: Use wapilotService instead of sendWhatsAppMessage
+        const result = await wapilotService.sendAndLogMessage({
+          studentId: student._id,
+          phoneNumber: whatsappNumber,
+          messageContent: finalMessage,
+          messageType: "custom",
+          language: student.communicationPreferences?.preferredLanguage || "ar",
+          metadata: {
+            groupId: group._id,
+            groupName: group.name,
+            groupCode: group.code,
+            isCustomMessage: !!customMessage,
+            hasFeedbackLink: !!feedbackLink,
+            automationType: "group_completion",
+            recipientType: "student",
+          },
+        });
+
+        if (result.success) {
+          console.log(`   ✅ Message sent successfully`);
+          successCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName,
+            whatsappNumber,
+            status: "sent",
+            customMessage: !!customMessage,
+            hasFeedbackLink: !!feedbackLink,
+            messagePreview: finalMessage.substring(0, 100) + "...",
+            sentAt: new Date(),
+          });
+        } else {
+          console.log(`   ❌ Failed: ${result.error}`);
+          failCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName,
+            whatsappNumber,
+            status: "failed",
+            reason: result.error,
+            error: result.error,
+            customMessage: !!customMessage,
+            hasFeedbackLink: !!feedbackLink,
+          });
+        }
+      } catch (error) {
+        console.error(`   ❌ Error processing student:`, error);
+        failCount++;
+        notificationResults.push({
+          studentId: student._id,
+          studentName: student.personalInfo?.fullName || "Unknown",
+          status: "failed",
+          error: error.message,
+        });
+      }
+    }
+
+    console.log(`\n📊 Updated group metadata`);
+
+    // ✅ Update group metadata with results
+    await Group.findByIdAndUpdate(groupId, {
+      $set: {
+        "metadata.completionMessagesSent": true,
+        "metadata.completionMessagesSentAt": new Date(),
+        "metadata.completionMessagesResults": notificationResults,
+        "metadata.completionMessagesSummary": {
+          total: students.length,
+          succeeded: successCount,
+          failed: failCount,
+          customMessageUsed: !!customMessage,
+          feedbackLinkProvided: !!feedbackLink,
+          timestamp: new Date(),
+        },
+      },
+    });
+
+    const successRate =
+      students.length > 0
+        ? `${Math.round((successCount / students.length) * 100)}%`
+        : "0%";
 
     console.log(`\n✅ Completion messages complete:`);
     console.log(`   Sent: ${successCount}/${students.length}`);
@@ -1240,22 +1305,24 @@ export async function onGroupCompleted(groupId, customMessage = null, feedbackLi
 
     return {
       success: successCount > 0,
-      message: `${successCount} completion messages sent, ${failCount} failed`,
-      groupName: group.name,
-      groupCode: group.code,
-      courseName: group.courseId?.title,
       totalStudents: students.length,
       successCount,
       failCount,
       customMessageUsed: !!customMessage,
       feedbackLinkProvided: !!feedbackLink,
-      successRate: ((successCount / students.length) * 100).toFixed(1),
+      successRate,
       notificationResults,
     };
-
   } catch (error) {
-    console.error("❌ Error in onGroupCompleted:", error);
-    throw error;
+    console.error(`\n❌ Error in onGroupCompleted:`, error);
+    return {
+      success: false,
+      error: error.message,
+      totalStudents: 0,
+      successCount: 0,
+      failCount: 0,
+      notificationResults: [],
+    };
   }
 }
 
@@ -1295,9 +1362,15 @@ Dear ${studentName},
 You have been enrolled in:
 📚 Course: ${group.courseSnapshot?.title || group.courseId?.title}
 👥 Group: ${group.code}
-📅 Start Date: ${new Date(group.schedule?.startDate).toLocaleDateString("en-US")}
+📅 Start Date: ${new Date(group.schedule?.startDate).toLocaleDateString(
+      "en-US"
+    )}
 ⏰ Time: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
-${group.instructors?.[0]?.name ? `👨‍🏫 Instructor: ${group.instructors[0].name}` : ""}
+${
+  group.instructors?.[0]?.name
+    ? `👨‍🏫 Instructor: ${group.instructors[0].name}`
+    : ""
+}
 
 Your learning journey starts soon! 🚀
 
@@ -1313,7 +1386,9 @@ Code School Team 💻`;
 تم تسجيلك في:
 📚 الكورس: ${group.courseSnapshot?.title || group.courseId?.title}
 👥 المجموعة: ${group.code}
-📅 تاريخ البدء: ${new Date(group.schedule?.startDate).toLocaleDateString("ar-EG")}
+📅 تاريخ البدء: ${new Date(group.schedule?.startDate).toLocaleDateString(
+      "ar-EG"
+    )}
 ⏰ الوقت: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
 ${group.instructors?.[0]?.name ? `👨‍🏫 المدرب: ${group.instructors[0].name}` : ""}
 
@@ -1434,14 +1509,15 @@ function processCustomMessage(message, student, session, group, status) {
  */
 function processCompletionMessage(message, student, group, feedbackLink) {
   const studentName = student.personalInfo?.fullName || "Student";
-  const courseName = group.courseId?.title || group.courseSnapshot?.title || "Course";
+  const courseName =
+    group.courseId?.title || group.courseSnapshot?.title || "Course";
 
   const variables = {
     studentName,
     groupName: group.name,
     groupCode: group.code,
     courseName,
-    feedbackLink: feedbackLink || "Contact admin for feedback form"
+    feedbackLink: feedbackLink || "Contact admin for feedback form",
   };
 
   let processedMessage = message;
@@ -1457,8 +1533,14 @@ function processCompletionMessage(message, student, group, feedbackLink) {
 /**
  * ✅ Prepare default completion message
  */
-function prepareCompletionMessage(studentName, group, feedbackLink, language = "ar") {
-  const courseName = group.courseId?.title || group.courseSnapshot?.title || "Course";
+function prepareCompletionMessage(
+  studentName,
+  group,
+  feedbackLink,
+  language = "ar"
+) {
+  const courseName =
+    group.courseId?.title || group.courseSnapshot?.title || "Course";
 
   if (language === "en") {
     return `🎓 Congratulations! You've Completed the Course!
@@ -1471,7 +1553,11 @@ Congratulations on successfully completing:
 
 We're proud of your achievement! 🎉
 
-${feedbackLink ? `📋 Please share your feedback:\n${feedbackLink}\n\nYour opinion helps us improve! 💡\n` : ""}
+${
+  feedbackLink
+    ? `📋 Please share your feedback:\n${feedbackLink}\n\nYour opinion helps us improve! 💡\n`
+    : ""
+}
 📞 Stay in touch for future courses and opportunities!
 
 Thank you for choosing Code School! 🚀
@@ -1489,7 +1575,11 @@ Code School Team 💻`;
 
 نحن فخورون بإنجازك! 🎉
 
-${feedbackLink ? `📋 نرجو منك تقييم تجربتك:\n${feedbackLink}\n\nرأيك يساعدنا على التحسين! 💡\n` : ""}
+${
+  feedbackLink
+    ? `📋 نرجو منك تقييم تجربتك:\n${feedbackLink}\n\nرأيك يساعدنا على التحسين! 💡\n`
+    : ""
+}
 📞 ابقَ على تواصل للحصول على فرص ودورات جديدة!
 
 شكراً لاختيارك Code School! 🚀
@@ -1652,11 +1742,43 @@ Code School Team 💻`;
 
 📚 المحاضرة: ${session.title}
 👥 المجموعة: ${group.code}
-📅 التاريخ الأصلي: ${new Date(session.scheduledDate).toLocaleDateString("ar-EG")}
+📅 التاريخ الأصلي: ${new Date(session.scheduledDate).toLocaleDateString(
+      "ar-EG"
+    )}
 ⏰ الوقت: ${session.startTime} - ${session.endTime}
 
 سنوافيك بالتحديثات.
 
 فريق Code School 💻`;
+  }
+}
+
+function getDefaultCompletionMessage(language = "ar") {
+  if (language === "ar") {
+    return `🎓 مبروك {studentName}!
+
+تهانينا على إتمام دورة {courseName} بنجاح! 🎉
+
+نحن فخورون بإنجازك وتفانيك طوال الرحلة التعليمية.
+
+📚 المجموعة: {groupName} ({groupCode})
+
+نتمنى لك التوفيق والنجاح في مسيرتك المهنية! 🚀
+
+مع أطيب التمنيات،
+فريق Code School`;
+  } else {
+    return `🎓 Congratulations {studentName}!
+
+Congratulations on successfully completing {courseName}! 🎉
+
+We are proud of your achievement and dedication throughout the learning journey.
+
+📚 Group: {groupName} ({groupCode})
+
+We wish you success in your professional career! 🚀
+
+Best regards,
+Code School Team`;
   }
 }

@@ -94,90 +94,275 @@ export default function SessionsAdmin() {
     }
   };
 
- const loadGroupStudents = async () => {
-  if (!groupId) return;
+  const loadGroupStudents = async () => {
+    if (!groupId) return;
 
-  try {
-    const res = await fetch(`/api/groups/${groupId}/students`, {
-      cache: "no-store"
-    });
-    const json = await res.json();
-
-    console.log("📊 Group API response:", json); // ✅ للتصحيح
-
-    if (json.success && json.data) {
-      // الطلاب قد يكونون في عدة أماكن
-      let students = [];
-      
-      // 1. حاول من students مباشرة
-      if (json.data.students && Array.isArray(json.data.students)) {
-        students = json.data.students;
-        console.log(`✅ Found ${students.length} students in students array`);
-      } 
-      // 2. أو من populatedStudents
-      else if (json.data.populatedStudents && Array.isArray(json.data.populatedStudents)) {
-        students = json.data.populatedStudents;
-        console.log(`✅ Found ${students.length} students in populatedStudents`);
-      }
-      // 3. أو من response.data مباشرة
-      else if (json.data && Array.isArray(json.data)) {
-        students = json.data;
-        console.log(`✅ Found ${students.length} students in data array`);
-      }
-      
-      // تصفية القيم الفارغة
-      students = students.filter(s => s !== null && s !== undefined);
-      
-      // تحقق من صحة هيكل الطالب
-      students = students.map(student => {
-        if (!student._id && student.id) {
-          student._id = student.id;
-        }
-        if (!student.personalInfo && student.fullName) {
-          student.personalInfo = {
-            fullName: student.fullName,
-            email: student.email,
-            phone: student.phone,
-            enrollmentNumber: student.enrollmentNumber
-          };
-        }
-        return student;
+    try {
+      const res = await fetch(`/api/groups/${groupId}/students`, {
+        cache: "no-store"
       });
+      const json = await res.json();
 
-      console.log(`📋 Final students:`, students.length);
-      students.forEach((s, i) => {
-        console.log(`   ${i + 1}. ${s.personalInfo?.fullName || s.enrollmentNumber} (${s._id})`);
-      });
-      
-      setGroupStudents(students);
-    } else {
-      console.log("❌ No students found in response");
+      if (json.success && json.data) {
+        let students = [];
+
+        if (json.data.students && Array.isArray(json.data.students)) {
+          students = json.data.students;
+        }
+        else if (json.data.populatedStudents && Array.isArray(json.data.populatedStudents)) {
+          students = json.data.populatedStudents;
+        }
+        else if (json.data && Array.isArray(json.data)) {
+          students = json.data;
+        }
+
+        students = students.filter(s => s !== null && s !== undefined);
+
+        students = students.map(student => {
+          if (!student._id && student.id) {
+            student._id = student.id;
+          }
+          if (!student.personalInfo && student.fullName) {
+            student.personalInfo = {
+              fullName: student.fullName,
+              email: student.email,
+              phone: student.phone,
+              enrollmentNumber: student.enrollmentNumber
+            };
+          }
+          return student;
+        });
+
+        setGroupStudents(students);
+      } else {
+        setGroupStudents([]);
+      }
+    } catch (err) {
+      console.error("❌ Error loading group students:", err);
       setGroupStudents([]);
     }
-  } catch (err) {
-    console.error("❌ Error loading group students:", err);
-    console.error("❌ Error details:", err.response?.data || err.message);
-    setGroupStudents([]);
-  }
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
+  };
 
   useEffect(() => {
     loadSessions();
     loadGroupStudents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId, filters.status, filters.upcoming, filters.past]);
+
+  // ================================================================
+  // ✅ NEW: Auto Group Completion Functions
+  // ================================================================
+
+  /**
+   * ✅ Check and auto-complete group when last session is completed
+   */
+  const checkAndCompleteGroup = async (sessionId, newStatus) => {
+    // Only proceed if session is being marked as 'completed'
+    if (newStatus !== 'completed') return;
+
+    try {
+      console.log(`🔍 Checking if this is the last session for group...`);
+
+      // 1. Get all sessions for this group
+      const allSessions = await fetch(`/api/groups/${groupId}/sessions`, {
+        cache: "no-store"
+      }).then(res => res.json());
+
+      if (!allSessions.success) return;
+
+      const allSessionsList = allSessions.data || [];
+
+      // 2. Count completed sessions (including the one we just updated)
+      const completedCount = allSessionsList.filter(s =>
+        s.id === sessionId ? true : s.status === 'completed'
+      ).length;
+
+      const totalSessions = allSessionsList.length;
+
+      console.log(`📊 Sessions: ${completedCount}/${totalSessions} completed`);
+
+      // 3. If all sessions are now completed, trigger group completion
+      if (completedCount === totalSessions && totalSessions > 0) {
+        console.log(`🎉 All sessions completed! Triggering group completion...`);
+
+        // Show confirmation toast
+        toast((toastInstance) => (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-500" />
+              <p className="font-semibold">🎓 جميع الحصص اكتملت!</p>
+            </div>
+            <p className="text-sm text-gray-600">
+              هل تريد إتمام المجموعة وإرسال رسائل التهنئة للطلاب؟
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => toast.dismiss(toastInstance.id)}
+                className="px-3 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300"
+              >
+                لاحقاً
+              </button>
+              <button
+                onClick={async () => {
+                  toast.dismiss(toastInstance.id);
+                  await handleGroupCompletion();
+                }}
+                className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+              >
+                إتمام الآن
+              </button>
+            </div>
+          </div>
+        ), { duration: Infinity });
+      }
+    } catch (error) {
+      console.error('Error checking group completion:', error);
+    }
+  };
+
+  /**
+   * ✅ Handle group completion with custom message modal
+   */
+  const handleGroupCompletion = async () => {
+    // Show custom message modal
+    toast((toastInstance) => (
+      <div className="flex flex-col gap-3 w-full max-w-md">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-lg">🎓 إتمام المجموعة</h3>
+          <button
+            onClick={() => toast.dismiss(toastInstance.id)}
+            className="p-1 hover:bg-gray-100 rounded"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">
+              رسالة مخصصة (اختياري)
+            </label>
+            <textarea
+              id="completion-message"
+              placeholder="اكتب رسالة تهنئة مخصصة أو اتركها فارغة لاستخدام الرسالة الافتراضية..."
+              className="w-full px-3 py-2 border rounded-lg text-sm h-24 resize-none"
+              dir="rtl"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              يمكنك استخدام: {'{studentName}'}, {'{courseName}'}, {'{groupCode}'}
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">
+              رابط التقييم (اختياري)
+            </label>
+            <input
+              id="feedback-link"
+              type="url"
+              placeholder="https://forms.google.com/..."
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => toast.dismiss(toastInstance.id)}
+              className="flex-1 px-3 py-2 bg-gray-200 rounded text-sm hover:bg-gray-300"
+            >
+              إلغاء
+            </button>
+            <button
+              onClick={async () => {
+                const message = document.getElementById('completion-message')?.value || '';
+                const feedbackLink = document.getElementById('feedback-link')?.value || '';
+
+                toast.dismiss(toastInstance.id);
+                await completeGroup(message, feedbackLink);
+              }}
+              className="flex-1 px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+            >
+              إرسال التهاني 🎉
+            </button>
+          </div>
+        </div>
+      </div>
+    ), {
+      duration: Infinity,
+      style: { maxWidth: '500px' }
+    });
+  };
+
+  /**
+   * ✅ Complete group and send congratulations
+   */
+  const completeGroup = async (customMessage = '', feedbackLink = '') => {
+    const loadingToast = toast.loading('جاري إتمام المجموعة وإرسال التهاني...');
+
+    try {
+      const res = await fetch(`/api/groups/${groupId}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          customMessage: customMessage.trim() || null,
+          feedbackLink: feedbackLink.trim() || null,
+          autoDetected: true
+        })
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        toast.success(
+          `🎓 تم إتمام المجموعة! تم إرسال ${json.automation.successCount} رسالة تهنئة`,
+          { id: loadingToast, duration: 5000 }
+        );
+
+        // Show detailed results
+        if (json.automation.details?.length > 0) {
+          const failed = json.automation.details.filter(d => d.status === 'failed');
+          if (failed.length > 0) {
+            toast((toastInstance) => (
+              <div className="text-sm">
+                <p className="font-semibold mb-2">⚠️ بعض الرسائل فشلت:</p>
+                <ul className="space-y-1 text-xs">
+                  {failed.slice(0, 5).map((f, i) => (
+                    <li key={i}>• {f.studentName}: {f.reason}</li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => toast.dismiss(toastInstance.id)}
+                  className="mt-2 text-xs text-blue-600 hover:underline"
+                >
+                  إغلاق
+                </button>
+              </div>
+            ), { duration: 8000 });
+          }
+        }
+
+        // Refresh sessions to show updated status
+        loadSessions();
+
+        // Navigate to groups page after 2 seconds
+        setTimeout(() => {
+          router.push('/admin/groups');
+        }, 2000);
+
+      } else {
+        toast.error(json.error || 'فشل إتمام المجموعة', { id: loadingToast });
+      }
+    } catch (error) {
+      console.error('Error completing group:', error);
+      toast.error('حدث خطأ أثناء إتمام المجموعة', { id: loadingToast });
+    }
+  };
+
+  // ================================================================
+  // END: Auto Group Completion Functions
+  // ================================================================
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -318,6 +503,9 @@ export default function SessionsAdmin() {
         toast.success(t("sessions.attendance.messages.saved"));
         setAttendanceModalOpen(false);
         loadSessions();
+
+        // ✅ Check if this triggers group completion
+        await checkAndCompleteGroup(selectedSession.id, 'completed');
       } else {
         toast.error(json.error || t("sessions.attendance.errors.saveFailed"));
       }
@@ -348,6 +536,9 @@ export default function SessionsAdmin() {
         toast.success(t("sessions.messages.updated"));
         setEditModalOpen(false);
         loadSessions();
+
+        // ✅ Check if this completion triggers group completion
+        await checkAndCompleteGroup(selectedSession.id, formData.status);
       } else {
         toast.error(json.error || t("sessions.errors.updateFailed"));
       }
@@ -396,12 +587,10 @@ export default function SessionsAdmin() {
     });
   };
 
-
-
   const handleSendReminder = async (session, reminderType) => {
     const reminderLabel = reminderType === '24hours' ? '24 ساعة' : 'ساعة';
 
-    toast((t) => (
+    toast((toastInstance) => (
       <div className="flex flex-col gap-3">
         <p className="font-semibold">إرسال تذكير {reminderLabel}؟</p>
         <p className="text-sm text-gray-600">
@@ -409,14 +598,14 @@ export default function SessionsAdmin() {
         </p>
         <div className="flex gap-2">
           <button
-            onClick={() => toast.dismiss(t.id)}
+            onClick={() => toast.dismiss(toastInstance.id)}
             className="px-3 py-1 bg-gray-200 rounded text-sm"
           >
             إلغاء
           </button>
           <button
             onClick={async () => {
-              toast.dismiss(t.id);
+              toast.dismiss(toastInstance.id);
               const loadingToast = toast.loading(`جاري إرسال تذكير ${reminderLabel}...`);
 
               try {
@@ -605,7 +794,6 @@ export default function SessionsAdmin() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-
                       {session.status === 'scheduled' && (
                         <button
                           onClick={() => handleSendReminder(session, '24hours')}
@@ -615,8 +803,6 @@ export default function SessionsAdmin() {
                           <Calendar className="w-4 h-4 text-blue-600" />
                         </button>
                       )}
-
-                      {/* ✅ زر تذكير ساعة */}
                       {session.status === 'scheduled' && (
                         <button
                           onClick={() => handleSendReminder(session, '1hour')}
@@ -626,8 +812,6 @@ export default function SessionsAdmin() {
                           <Clock className="w-4 h-4 text-orange-600" />
                         </button>
                       )}
-
-
                       <button
                         onClick={() => openDetailsModal(session)}
                         className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
@@ -670,7 +854,7 @@ export default function SessionsAdmin() {
         )}
       </div>
 
-      {/* Attendance Modal */}
+      {/* Modals */}
       {attendanceModalOpen && selectedSession && (
         <AttendanceModal
           session={selectedSession}
@@ -686,7 +870,6 @@ export default function SessionsAdmin() {
         />
       )}
 
-      {/* Edit Session Modal */}
       {editModalOpen && selectedSession && (
         <EditSessionModal
           session={selectedSession}
@@ -698,7 +881,6 @@ export default function SessionsAdmin() {
         />
       )}
 
-      {/* Session Details Modal */}
       {detailsModalOpen && selectedSession && (
         <SessionDetailsModal
           session={selectedSession}
@@ -710,7 +892,6 @@ export default function SessionsAdmin() {
         />
       )}
 
-      {/* Students List Modal */}
       {studentsModalOpen && (
         <StudentsListModal
           groupStudents={groupStudents}
@@ -1401,7 +1582,7 @@ const formatDateHelper = (dateString, isRTL = false) => {
   } catch {
     return 'N/A';
   }
-};
+}
 
 // Session Details Modal
 function SessionDetailsModal({ session, attendanceData, loading, onClose, isRTL, t }) {

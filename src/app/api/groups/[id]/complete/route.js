@@ -1,15 +1,15 @@
-// app/api/groups/[id]/complete/route.js
+// app/api/groups/[id]/complete/route.js - ✅ FIXED VERSION
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../../models/Group";
 import Session from "../../../../models/Session";
+import Student from "../../../../models/Student";
 import { requireAdmin } from "@/utils/authMiddleware";
 import { onGroupCompleted } from "@/app/services/groupAutomation";
 import mongoose from "mongoose";
 
 /**
  * POST: Complete a group and send completion messages
- * Triggered when admin marks group as completed OR when last session is completed
  */
 export async function POST(req, { params }) {
   try {
@@ -41,13 +41,15 @@ export async function POST(req, { params }) {
     console.log(`📋 Feedback Link: ${feedbackLink || "Not provided"}`);
     console.log(`🤖 Auto-detected: ${autoDetected ? "Yes" : "No"}`);
 
-    // ✅ Find and validate group
+    // ✅ FIX 1: Populate students AND get students from academicInfo.groupIds
     const group = await Group.findById(id)
       .populate("courseId", "title level")
-      .populate(
-        "students",
-        "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences"
-      );
+      .populate({
+        path: "students",
+        select: "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo.whatsappNumber guardianInfo.name",
+        match: { isDeleted: false }
+      })
+      .lean();
 
     if (!group) {
       console.log(`❌ Group not found: ${id}`);
@@ -59,6 +61,23 @@ export async function POST(req, { params }) {
 
     console.log(`✅ Group found: ${group.name} (${group.code})`);
     console.log(`📊 Current status: ${group.status}`);
+    console.log(`👥 Students from group.students: ${group.students?.length || 0}`);
+
+    // ✅ FIX 2: If no students from populate, fetch from Student collection
+    let students = group.students || [];
+    
+    if (students.length === 0) {
+      console.log(`⚠️ No students from populate, fetching from Student collection...`);
+      
+      students = await Student.find({
+        'academicInfo.groupIds': new mongoose.Types.ObjectId(id),
+        isDeleted: false
+      })
+      .select('personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo.whatsappNumber guardianInfo.name')
+      .lean();
+      
+      console.log(`📊 Students from academicInfo.groupIds: ${students.length}`);
+    }
 
     // ✅ Check if already completed
     if (
@@ -126,6 +145,7 @@ export async function POST(req, { params }) {
 
     // ✅ Trigger completion automation
     console.log(`\n📱 ========== TRIGGERING COMPLETION AUTOMATION ==========`);
+    console.log(`👥 Total students for automation: ${students.length}`);
 
     const automationResult = await onGroupCompleted(
       id,
@@ -154,6 +174,7 @@ export async function POST(req, { params }) {
         totalSessions: sessions.length,
         completedSessions: sessions.filter((s) => s.status === "completed")
           .length,
+        totalStudents: students.length,
       },
       automation: {
         completed: automationResult.success,
@@ -203,8 +224,14 @@ export async function GET(req, { params }) {
       );
     }
 
+    // ✅ Populate students to get count
     const group = await Group.findById(id)
       .populate("courseId", "title level")
+      .populate({
+        path: "students",
+        select: "personalInfo.fullName",
+        match: { isDeleted: false }
+      })
       .lean();
 
     if (!group) {
@@ -212,6 +239,18 @@ export async function GET(req, { params }) {
         { success: false, error: "Group not found" },
         { status: 404 }
       );
+    }
+
+    // ✅ Get students count from both sources
+    let studentsCount = group.students?.length || 0;
+    
+    if (studentsCount === 0) {
+      const students = await Student.find({
+        'academicInfo.groupIds': new mongoose.Types.ObjectId(id),
+        isDeleted: false
+      }).countDocuments();
+      
+      studentsCount = students;
     }
 
     // Check sessions status
@@ -244,6 +283,7 @@ export async function GET(req, { params }) {
         alreadyCompleted,
         messagesSent,
         sentAt: group.metadata?.completionMessagesSentAt || null,
+        totalStudents: studentsCount,
         sessions: {
           total: totalSessions,
           completed: completedSessions,
