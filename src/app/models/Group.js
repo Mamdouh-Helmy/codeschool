@@ -1,4 +1,4 @@
-// models/Group.js
+// models/Group.js - UPDATED with Completion Metadata
 import mongoose from 'mongoose';
 
 const groupSchema = new mongoose.Schema({
@@ -137,6 +137,7 @@ const groupSchema = new mongoose.Schema({
       type: Boolean,
       default: true
     },
+    // ✅ NEW: Completion message automation
     completionMessage: {
       type: Boolean,
       default: true
@@ -172,7 +173,62 @@ const groupSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     },
-    deletedAt: Date
+    deletedAt: Date,
+    
+    // ✅ NEW: Completion metadata
+    completedAt: Date,
+    completedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    
+    // ✅ NEW: Completion messages tracking
+    completionMessagesSent: {
+      type: Boolean,
+      default: false
+    },
+    completionMessagesSentAt: Date,
+    completionMessagesResults: [{
+      studentId: mongoose.Schema.Types.ObjectId,
+      studentName: String,
+      whatsappNumber: String,
+      status: {
+        type: String,
+        enum: ['sent', 'failed']
+      },
+      customMessage: Boolean,
+      hasFeedbackLink: Boolean,
+      messagePreview: String,
+      reason: String,
+      error: String,
+      sentAt: Date
+    }],
+    completionMessagesSummary: {
+      total: Number,
+      succeeded: Number,
+      failed: Number,
+      customMessageUsed: Boolean,
+      feedbackLinkProvided: Boolean,
+      timestamp: Date
+    },
+    
+    // Existing metadata fields
+    sessionsGeneratedAt: Date,
+    lastSessionGeneration: {
+      date: Date,
+      sessionsCount: Number,
+      userId: mongoose.Schema.Types.ObjectId
+    },
+    
+    instructorNotificationsSent: Boolean,
+    instructorNotificationsSentAt: Date,
+    instructorNotificationResults: Array,
+    instructorNotificationsSummary: {
+      total: Number,
+      succeeded: Number,
+      failed: Number,
+      timestamp: Date
+    }
   }
 }, {
   timestamps: true
@@ -203,11 +259,101 @@ groupSchema.pre('save', function(next) {
   next();
 });
 
+// ✅ NEW: Method to check if group can be completed
+groupSchema.methods.canBeCompleted = async function() {
+  try {
+    const Session = mongoose.model('Session');
+    
+    const sessions = await Session.find({
+      groupId: this._id,
+      isDeleted: false
+    }).lean();
+
+    if (sessions.length === 0) {
+      return {
+        can: false,
+        reason: 'No sessions found for this group'
+      };
+    }
+
+    const incompleteSessions = sessions.filter(s => s.status !== 'completed');
+
+    if (incompleteSessions.length > 0) {
+      return {
+        can: false,
+        reason: `${incompleteSessions.length} sessions not completed yet`,
+        incompleteSessions: incompleteSessions.map(s => ({
+          id: s._id,
+          title: s.title,
+          status: s.status,
+          scheduledDate: s.scheduledDate
+        }))
+      };
+    }
+
+    if (this.status === 'completed') {
+      return {
+        can: false,
+        reason: 'Group already marked as completed',
+        completedAt: this.metadata.completedAt
+      };
+    }
+
+    return {
+      can: true,
+      totalSessions: sessions.length,
+      completedSessions: sessions.length
+    };
+
+  } catch (error) {
+    return {
+      can: false,
+      reason: 'Error checking completion status',
+      error: error.message
+    };
+  }
+};
+
+// ✅ NEW: Method to get completion statistics
+groupSchema.methods.getCompletionStats = function() {
+  return {
+    isCompleted: this.status === 'completed',
+    completedAt: this.metadata.completedAt || null,
+    completedBy: this.metadata.completedBy || null,
+    messagesSent: this.metadata.completionMessagesSent || false,
+    messagesSentAt: this.metadata.completionMessagesSentAt || null,
+    summary: this.metadata.completionMessagesSummary || null,
+    results: this.metadata.completionMessagesResults || []
+  };
+};
+
+// ✅ NEW: Virtual for completion percentage
+groupSchema.virtual('completionPercentage').get(async function() {
+  try {
+    const Session = mongoose.model('Session');
+    
+    const sessions = await Session.find({
+      groupId: this._id,
+      isDeleted: false
+    }).lean();
+
+    if (sessions.length === 0) return 0;
+
+    const completedCount = sessions.filter(s => s.status === 'completed').length;
+    return Math.round((completedCount / sessions.length) * 100);
+
+  } catch (error) {
+    return 0;
+  }
+});
+
 // إنشاء index لتحسين الأداء
 groupSchema.index({ code: 1 }, { unique: true });
 groupSchema.index({ courseId: 1 });
 groupSchema.index({ status: 1 });
 groupSchema.index({ 'schedule.startDate': 1 });
+groupSchema.index({ 'metadata.completedAt': 1 });
+groupSchema.index({ 'metadata.completionMessagesSent': 1 });
 
 // Ensure the model exists
 const Group = mongoose.models.Group || mongoose.model('Group', groupSchema);

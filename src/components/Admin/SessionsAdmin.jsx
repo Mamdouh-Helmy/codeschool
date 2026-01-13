@@ -94,26 +94,85 @@ export default function SessionsAdmin() {
     }
   };
 
-  const loadGroupStudents = async () => {
-    if (!groupId) return;
+ const loadGroupStudents = async () => {
+  if (!groupId) return;
 
-    try {
-      const res = await fetch(`/api/groups/${groupId}`, {
-        cache: "no-store"
-      });
-      const json = await res.json();
+  try {
+    const res = await fetch(`/api/groups/${groupId}/students`, {
+      cache: "no-store"
+    });
+    const json = await res.json();
 
-      if (json.success && json.data.students && Array.isArray(json.data.students)) {
-        const students = json.data.students.filter(s => s !== null && s !== undefined);
-        setGroupStudents(students);
-      } else {
-        setGroupStudents([]);
+    console.log("📊 Group API response:", json); // ✅ للتصحيح
+
+    if (json.success && json.data) {
+      // الطلاب قد يكونون في عدة أماكن
+      let students = [];
+      
+      // 1. حاول من students مباشرة
+      if (json.data.students && Array.isArray(json.data.students)) {
+        students = json.data.students;
+        console.log(`✅ Found ${students.length} students in students array`);
+      } 
+      // 2. أو من populatedStudents
+      else if (json.data.populatedStudents && Array.isArray(json.data.populatedStudents)) {
+        students = json.data.populatedStudents;
+        console.log(`✅ Found ${students.length} students in populatedStudents`);
       }
-    } catch (err) {
-      console.error("❌ Error loading group students:", err);
+      // 3. أو من response.data مباشرة
+      else if (json.data && Array.isArray(json.data)) {
+        students = json.data;
+        console.log(`✅ Found ${students.length} students in data array`);
+      }
+      
+      // تصفية القيم الفارغة
+      students = students.filter(s => s !== null && s !== undefined);
+      
+      // تحقق من صحة هيكل الطالب
+      students = students.map(student => {
+        if (!student._id && student.id) {
+          student._id = student.id;
+        }
+        if (!student.personalInfo && student.fullName) {
+          student.personalInfo = {
+            fullName: student.fullName,
+            email: student.email,
+            phone: student.phone,
+            enrollmentNumber: student.enrollmentNumber
+          };
+        }
+        return student;
+      });
+
+      console.log(`📋 Final students:`, students.length);
+      students.forEach((s, i) => {
+        console.log(`   ${i + 1}. ${s.personalInfo?.fullName || s.enrollmentNumber} (${s._id})`);
+      });
+      
+      setGroupStudents(students);
+    } else {
+      console.log("❌ No students found in response");
       setGroupStudents([]);
     }
-  };
+  } catch (err) {
+    console.error("❌ Error loading group students:", err);
+    console.error("❌ Error details:", err.response?.data || err.message);
+    setGroupStudents([]);
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   useEffect(() => {
     loadSessions();
@@ -337,6 +396,60 @@ export default function SessionsAdmin() {
     });
   };
 
+
+
+  const handleSendReminder = async (session, reminderType) => {
+    const reminderLabel = reminderType === '24hours' ? '24 ساعة' : 'ساعة';
+
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="font-semibold">إرسال تذكير {reminderLabel}؟</p>
+        <p className="text-sm text-gray-600">
+          سيتم إرسال التذكير لجميع الطلاب الذين لم يستلموه بعد
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="px-3 py-1 bg-gray-200 rounded text-sm"
+          >
+            إلغاء
+          </button>
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              const loadingToast = toast.loading(`جاري إرسال تذكير ${reminderLabel}...`);
+
+              try {
+                const res = await fetch(`/api/sessions/${session.id}/send-reminder`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ reminderType })
+                });
+
+                const json = await res.json();
+
+                if (json.success) {
+                  toast.success(
+                    `تم إرسال ${json.data.successCount} تذكير من أصل ${json.data.totalStudents}`,
+                    { id: loadingToast }
+                  );
+                  loadSessions();
+                } else {
+                  toast.error(json.error || 'فشل الإرسال', { id: loadingToast });
+                }
+              } catch (error) {
+                toast.error('حدث خطأ', { id: loadingToast });
+              }
+            }}
+            className="px-3 py-1 bg-primary text-white rounded text-sm"
+          >
+            إرسال
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
+  };
+
   if (!groupId) {
     return (
       <div className="text-center py-12">
@@ -492,6 +605,29 @@ export default function SessionsAdmin() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
+
+                      {session.status === 'scheduled' && (
+                        <button
+                          onClick={() => handleSendReminder(session, '24hours')}
+                          className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                          title="إرسال تذكير 24 ساعة"
+                        >
+                          <Calendar className="w-4 h-4 text-blue-600" />
+                        </button>
+                      )}
+
+                      {/* ✅ زر تذكير ساعة */}
+                      {session.status === 'scheduled' && (
+                        <button
+                          onClick={() => handleSendReminder(session, '1hour')}
+                          className="p-1.5 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded transition-colors"
+                          title="إرسال تذكير ساعة"
+                        >
+                          <Clock className="w-4 h-4 text-orange-600" />
+                        </button>
+                      )}
+
+
                       <button
                         onClick={() => openDetailsModal(session)}
                         className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
@@ -646,7 +782,7 @@ function AttendanceModal({ session, attendanceData, groupStudents, loading, savi
   const getAvailableVariables = (student) => {
     const studentName = student.personalInfo?.fullName || t("sessions.attendance.defaults.studentName");
     const guardianName = student.guardianInfo?.name || t("sessions.attendance.defaults.guardianName");
-    
+
     return {
       studentName,
       guardianName,
@@ -668,8 +804,8 @@ function AttendanceModal({ session, attendanceData, groupStudents, loading, savi
     const template = status === 'absent'
       ? t("sessions.attendance.templates.absent")
       : status === 'late'
-      ? t("sessions.attendance.templates.late")
-      : t("sessions.attendance.templates.excused");
+        ? t("sessions.attendance.templates.late")
+        : t("sessions.attendance.templates.excused");
 
     navigator.clipboard.writeText(template);
     toast.success(t("sessions.attendance.messages.templateCopied"));
@@ -837,11 +973,10 @@ function AttendanceModal({ session, attendanceData, groupStudents, loading, savi
                       {showEditor && (
                         <button
                           onClick={() => toggleMessageEditor(studentId)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            isEditorOpen
-                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600'
-                          }`}
+                          className={`p-2 rounded-lg transition-colors ${isEditorOpen
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600'
+                            }`}
                           title={isEditorOpen ? t("sessions.attendance.hideEditor") : t("sessions.attendance.showEditor")}
                         >
                           <MessageCircle className="w-4 h-4" />
@@ -1044,7 +1179,7 @@ function EditSessionModal({ session, saving, onClose, onSave, isRTL, t }) {
   }, [formData.customMessage, formData.status, session]);
 
   const copyToClipboard = () => {
-    const template = formData.status === 'cancelled' 
+    const template = formData.status === 'cancelled'
       ? t("sessions.edit.templates.cancelled")
       : t("sessions.edit.templates.postponed");
 

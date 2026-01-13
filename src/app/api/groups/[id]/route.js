@@ -1,15 +1,22 @@
-// app/api/groups/[id]/route.js
-import { NextResponse } from 'next/server';
-import { connectDB } from '@/lib/mongodb';
-import Group from '../../../models/Group';
-import Session from '../../../models/Session';
-import Student from '../../../models/Student';
-import { requireAdmin } from '@/utils/authMiddleware';
-import mongoose from 'mongoose';
+// app/api/groups/[id]/route.js - الإصدار المصحح
+
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongodb";
+import Group from "../../../models/Group";
+import Course from "../../../models/Course";  
+import User from "../../../models/User";      
+import Student from "../../../models/Student"; 
+import Session from "../../../models/Session"; 
+import { requireAdmin } from "@/utils/authMiddleware";
+import mongoose from "mongoose";
 
 // GET: Fetch single group by ID
 export async function GET(req, { params }) {
   try {
+    const { id } = await params;
+
+    console.log(`🔍 GET Group Request: ${id}`);
+
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
       return authCheck.response;
@@ -17,60 +24,66 @@ export async function GET(req, { params }) {
 
     await connectDB();
 
-    const { id } = await params; // ✅ await params
-
     if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.error(`❌ Invalid group ID format: ${id}`);
       return NextResponse.json(
-        { success: false, error: 'Invalid group ID format' },
+        {
+          success: false,
+          error: "Invalid group ID format",
+          received: id,
+          type: typeof id,
+        },
         { status: 400 }
       );
     }
 
     const group = await Group.findOne({ _id: id, isDeleted: false })
-      .populate('courseId')
-      .populate('instructors', 'name email phone')
-      .populate('metadata.createdBy', 'name email');
-
-    // ✅ Fetch students from Student model manually (since Group model references User but we store Student IDs)
-    let students = [];
-    if (group && group.students && group.students.length > 0) {
-      students = await Student.find({
-        _id: { $in: group.students },
-        isDeleted: false
-      })
-        .select('personalInfo.fullName personalInfo.email enrollmentNumber _id')
-        .lean();
-      
-      console.log(`✅ Fetched ${students.length} students from Student model for group ${id}`);
-    }
+      .populate("courseId", "title level")
+      .populate("instructors", "name email profile")
+      .populate("students", "personalInfo.fullName enrollmentNumber")
+      .lean();
 
     if (!group) {
+      console.error(`❌ Group not found: ${id}`);
       return NextResponse.json(
-        { success: false, error: 'Group not found' },
+        {
+          success: false,
+          error: "Group not found",
+        },
         { status: 404 }
       );
     }
 
-    // Get sessions count by status
-    const sessionsStats = await Session.aggregate([
-      { $match: { groupId: group._id, isDeleted: false } },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
+    console.log(`✅ Group found: ${group.name}`);
+    console.log(`   ID: ${group._id}`);
+    console.log(`   Instructors: ${group.instructors?.length || 0}`);
 
-    const statsMap = {};
-    sessionsStats.forEach(s => {
-      statsMap[s._id] = s.count;
-    });
-
+    // Format response
     const formattedGroup = {
       id: group._id,
+      _id: group._id,
       name: group.name,
       code: group.code,
       status: group.status,
-      course: group.courseId,
+      course: {
+        id: group.courseId?._id,
+        title: group.courseId?.title,
+        level: group.courseId?.level,
+      },
       courseSnapshot: group.courseSnapshot,
-      instructors: group.instructors,
-      students: students, // ✅ Use manually fetched students from Student model
+      instructors: (group.instructors || []).map((inst) => ({
+        id: inst._id,
+        _id: inst._id,
+        name: inst.name,
+        email: inst.email,
+        profile: inst.profile,
+      })),
+      students: (group.students || []).map((std) => ({
+        id: std._id,
+        _id: std._id,
+        name: std.personalInfo?.fullName,
+        enrollmentNumber: std.enrollmentNumber,
+      })),
       studentsCount: group.currentStudentsCount,
       maxStudents: group.maxStudents,
       availableSeats: group.maxStudents - group.currentStudentsCount,
@@ -80,26 +93,27 @@ export async function GET(req, { params }) {
       automation: group.automation,
       sessionsGenerated: group.sessionsGenerated,
       totalSessions: group.totalSessionsCount,
-      sessionsStats: {
-        scheduled: statsMap.scheduled || 0,
-        completed: statsMap.completed || 0,
-        cancelled: statsMap.cancelled || 0,
-        postponed: statsMap.postponed || 0
-      },
-      metadata: group.metadata
+      currentStudentsCount: group.currentStudentsCount,
+      metadata: group.metadata,
     };
 
     return NextResponse.json({
       success: true,
-      data: formattedGroup
+      data: formattedGroup,
     });
-
   } catch (error) {
-    console.error('❌ Error fetching group:', error);
+    console.error("❌ Error fetching group:", error);
+    console.error("❌ Error details:", {
+      name: error.name,
+      message: error.message,
+      ...(process.env.NODE_ENV === "development" && { stack: error.stack })
+    });
+    
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Failed to fetch group'
+        error: error.message || "Failed to fetch group",
+        ...(process.env.NODE_ENV === "development" && { stack: error.stack })
       },
       { status: 500 }
     );
@@ -109,7 +123,7 @@ export async function GET(req, { params }) {
 // PUT: Update group
 export async function PUT(req, { params }) {
   try {
-    const { id } = await params; // ✅ await params
+    const { id } = await params;
     console.log(`✏️ Updating group: ${id}`);
 
     const authCheck = await requireAdmin(req);
@@ -123,50 +137,51 @@ export async function PUT(req, { params }) {
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid group ID format' },
+        { success: false, error: "Invalid group ID format" },
         { status: 400 }
       );
     }
 
     const updateData = await req.json();
-    console.log('📥 Update data:', JSON.stringify(updateData, null, 2));
+    console.log("📥 Update data:", JSON.stringify(updateData, null, 2));
 
     const existingGroup = await Group.findOne({ _id: id, isDeleted: false });
 
     if (!existingGroup) {
       return NextResponse.json(
-        { success: false, error: 'Group not found' },
+        { success: false, error: "Group not found" },
         { status: 404 }
       );
     }
 
     // Prevent updating if sessions are generated and group is active
-    if (existingGroup.sessionsGenerated && existingGroup.status === 'active') {
-      const restrictedFields = ['schedule', 'courseId'];
-      const hasRestrictedChanges = restrictedFields.some(field => 
-        updateData[field] !== undefined
+    if (existingGroup.sessionsGenerated && existingGroup.status === "active") {
+      const restrictedFields = ["schedule", "courseId"];
+      const hasRestrictedChanges = restrictedFields.some(
+        (field) => updateData[field] !== undefined
       );
 
       if (hasRestrictedChanges) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Cannot modify schedule or course for active groups with generated sessions',
-            suggestion: 'Cancel and recreate the group, or regenerate sessions'
+            error:
+              "Cannot modify schedule or course for active groups with generated sessions",
+            suggestion: "Cancel and recreate the group, or regenerate sessions",
           },
           { status: 400 }
         );
       }
     }
 
-    // ✅ Build update payload correctly (without nested metadata fields)
+    // Build update payload correctly
     const updatePayload = {
       ...updateData,
       metadata: {
         ...existingGroup.metadata.toObject(),
         updatedBy: adminUser.id,
-        updatedAt: new Date()
-      }
+        updatedAt: new Date(),
+      },
     };
 
     const updatedGroup = await Group.findOneAndUpdate(
@@ -174,16 +189,16 @@ export async function PUT(req, { params }) {
       { $set: updatePayload },
       {
         new: true,
-        runValidators: true
+        runValidators: true,
       }
     )
-      .populate('courseId', 'title level')
-      .populate('instructors', 'name email')
-      .populate('students', 'personalInfo.fullName enrollmentNumber');
+      .populate("courseId", "title level")
+      .populate("instructors", "name email")
+      .populate("students", "personalInfo.fullName enrollmentNumber");
 
     if (!updatedGroup) {
       return NextResponse.json(
-        { success: false, error: 'Failed to update group' },
+        { success: false, error: "Failed to update group" },
         { status: 500 }
       );
     }
@@ -192,23 +207,22 @@ export async function PUT(req, { params }) {
 
     return NextResponse.json({
       success: true,
-      message: 'Group updated successfully',
-      data: updatedGroup
+      message: "Group updated successfully",
+      data: updatedGroup,
     });
-
   } catch (error) {
-    console.error('❌ Error updating group:', error);
+    console.error("❌ Error updating group:", error);
 
-    if (error.name === 'ValidationError') {
+    if (error.name === "ValidationError") {
       const messages = Object.values(error.errors || {})
-        .map(err => err.message)
-        .join('; ');
-      
+        .map((err) => err.message)
+        .join("; ");
+
       return NextResponse.json(
         {
           success: false,
-          error: 'Validation failed',
-          details: messages
+          error: "Validation failed",
+          details: messages,
         },
         { status: 400 }
       );
@@ -217,7 +231,7 @@ export async function PUT(req, { params }) {
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Failed to update group'
+        error: error.message || "Failed to update group",
       },
       { status: 500 }
     );
@@ -227,7 +241,7 @@ export async function PUT(req, { params }) {
 // DELETE: Soft delete group
 export async function DELETE(req, { params }) {
   try {
-    const { id } = await params; // ✅ await params
+    const { id } = await params;
     console.log(`🗑️ Soft deleting group: ${id}`);
 
     const authCheck = await requireAdmin(req);
@@ -241,7 +255,7 @@ export async function DELETE(req, { params }) {
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid group ID format' },
+        { success: false, error: "Invalid group ID format" },
         { status: 400 }
       );
     }
@@ -250,7 +264,7 @@ export async function DELETE(req, { params }) {
 
     if (!existingGroup) {
       return NextResponse.json(
-        { success: false, error: 'Group not found' },
+        { success: false, error: "Group not found" },
         { status: 404 }
       );
     }
@@ -262,10 +276,10 @@ export async function DELETE(req, { params }) {
         $set: {
           isDeleted: true,
           deletedAt: new Date(),
-          status: 'cancelled',
-          'metadata.updatedBy': adminUser.id,
-          'metadata.updatedAt': new Date()
-        }
+          status: "cancelled",
+          "metadata.updatedBy": adminUser.id,
+          "metadata.updatedAt": new Date(),
+        },
       },
       { new: true }
     );
@@ -277,8 +291,8 @@ export async function DELETE(req, { params }) {
         $set: {
           isDeleted: true,
           deletedAt: new Date(),
-          status: 'cancelled'
-        }
+          status: "cancelled",
+        },
       }
     );
 
@@ -286,21 +300,20 @@ export async function DELETE(req, { params }) {
 
     return NextResponse.json({
       success: true,
-      message: 'Group deleted successfully (soft delete)',
+      message: "Group deleted successfully (soft delete)",
       data: {
         id: deletedGroup._id,
         code: deletedGroup.code,
         name: deletedGroup.name,
-        deletedAt: deletedGroup.deletedAt
-      }
+        deletedAt: deletedGroup.deletedAt,
+      },
     });
-
   } catch (error) {
-    console.error('❌ Error deleting group:', error);
+    console.error("❌ Error deleting group:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Failed to delete group'
+        error: error.message || "Failed to delete group",
       },
       { status: 500 }
     );

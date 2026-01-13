@@ -106,6 +106,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       badge: createBadge(t('common.new') || "New"),
     },
     {
+      label: t('dashboard.instructors') || "Instructors Management",
+      href: "/admin/InstructorsPage",
+      icon: "ion:people-outline",
+      badge: createBadge(t('common.new') || "New"),
+    },
+    {
       label: t('dashboard.courses') || "Courses",
       href: "/admin/courses",
       icon: "ion:book-outline",

@@ -1,3 +1,4 @@
+// models/Student.js
 import mongoose from 'mongoose';
 
 const addressSchema = new mongoose.Schema({
@@ -20,278 +21,276 @@ const notificationChannelsSchema = new mongoose.Schema({
   sms: { type: Boolean, default: false }
 });
 
-const StudentSchema = new mongoose.Schema({
-  // Reference to User model
-  authUserId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    unique: true,
-    sparse: true
+const sessionReminderSchema = new mongoose.Schema({
+  sessionId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Session', 
+    required: true 
   },
+  groupId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Group', 
+    required: true 
+  },
+  reminderType: { 
+    type: String, 
+    enum: ['24hours', '1hour'], 
+    required: true 
+  },
+  message: { 
+    type: String, 
+    required: true 
+  },
+  language: { 
+    type: String, 
+    enum: ['ar', 'en'], 
+    default: 'ar' 
+  },
+  sentAt: { 
+    type: Date, 
+    default: Date.now 
+  },
+  status: { 
+    type: String, 
+    enum: ['sent', 'failed', 'pending'], 
+    default: 'sent' 
+  },
+  error: { type: String },
+  sessionDetails: {
+    title: String,
+    scheduledDate: Date,
+    startTime: String,
+    endTime: String,
+    moduleIndex: Number,
+    sessionNumber: Number
+  }
+}, { _id: true, timestamps: true });
 
-  // Auto-generated enrollment number
-  enrollmentNumber: {
+// ✅ NEW: WhatsApp Messages Log Schema
+const whatsappMessageSchema = new mongoose.Schema({
+  messageType: {
     type: String,
-    unique: true,
-    sparse: true
+    enum: [
+      'welcome',
+      'language_selection',
+      'language_confirmation',
+      'group_welcome',
+      'session_reminder',
+      'absence_notification',
+      'session_cancelled',
+      'session_postponed',
+      'custom',
+      'other'
+    ],
+    required: true
+  },
+  messageContent: {
+    type: String,
+    required: true
+  },
+  language: {
+    type: String,
+    enum: ['ar', 'en'],
+    default: 'ar'
+  },
+  status: {
+    type: String,
+    enum: ['sent', 'failed', 'pending'],
+    default: 'sent',
+    required: true
+  },
+  recipientNumber: {
+    type: String,
+    required: true
+  },
+  wapilotMessageId: {
+    type: String
+  },
+  sentAt: {
+    type: Date,
+    default: Date.now,
+    required: true
+  },
+  metadata: {
+    groupId: { type: mongoose.Schema.Types.ObjectId, ref: 'Group' },
+    groupName: String,
+    groupCode: String,
+    sessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Session' },
+    sessionTitle: String,
+    attendanceStatus: String,
+    isCustomMessage: { type: Boolean, default: false },
+    recipientType: { type: String, enum: ['student', 'guardian'], default: 'student' },
+    guardianName: String,
+    automationType: String,
+    interactive: { type: Boolean, default: false },
+    selectedLanguage: String,
+    reminderType: String,
+    oldStatus: String,
+    newStatus: String
+  },
+  error: {
+    type: String
+  },
+  errorDetails: {
+    stack: String,
+    code: String,
+    message: String
+  }
+}, { _id: true, timestamps: true });
+
+const StudentSchema = new mongoose.Schema({
+  authUserId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    unique: true, 
+    sparse: true 
   },
 
-  // Personal Information
+  enrollmentNumber: { 
+    type: String, 
+    unique: true, 
+    sparse: true 
+  },
+
   personalInfo: {
-    fullName: {
-      type: String,
-      trim: true
-    },
-    email: {
-      type: String,
-      lowercase: true
-    },
-    phone: {
-      type: String
-    },
-    whatsappNumber: {
-      type: String
-    },
-    dateOfBirth: {
-      type: Date
-    },
-    gender: {
-      type: String
-    },
-    nationalId: {
-      type: String,
-      unique: true,
-      sparse: true
-    },
+    fullName: { type: String, trim: true },
+    email: { type: String, lowercase: true },
+    phone: { type: String },
+    whatsappNumber: { type: String },
+    dateOfBirth: { type: Date },
+    gender: { type: String },
+    nationalId: { type: String, unique: true, sparse: true },
     address: addressSchema
   },
 
-  // Guardian Information
   guardianInfo: {
-    name: {
-      type: String
-    },
-    relationship: {
-      type: String
-    },
-    phone: {
-      type: String
-    },
-    whatsappNumber: {
-      type: String
-    },
-    email: {
-      type: String,
-      lowercase: true
-    }
+    name: { type: String },
+    relationship: { type: String },
+    phone: { type: String },
+    whatsappNumber: { type: String },
+    email: { type: String, lowercase: true }
   },
 
-  // Enrollment Information
   enrollmentInfo: {
-    enrollmentDate: {
-      type: Date,
-      default: Date.now
+    enrollmentDate: { type: Date, default: Date.now },
+    status: { 
+      type: String, 
+      enum: ['Active', 'Suspended', 'Graduated', 'Dropped'], 
+      default: 'Active' 
     },
-    status: {
-      type: String,
-      enum: ['Active', 'Suspended', 'Graduated', 'Dropped'],
-      default: 'Active'
+    source: { 
+      type: String, 
+      enum: ['Website', 'Referral', 'Marketing', 'Walk-in'] 
     },
-    source: {
-      type: String,
-      enum: ['Website', 'Referral', 'Marketing', 'Walk-in']
-    },
-    referredBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Student'
-    }
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' }
   },
 
-  // Academic Information
   academicInfo: {
-    level: {
-      type: String,
-      enum: ['Beginner', 'Intermediate', 'Advanced'],
-      default: 'Beginner'
+    level: { 
+      type: String, 
+      enum: ['Beginner', 'Intermediate', 'Advanced'], 
+      default: 'Beginner' 
     },
-    groupIds: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Group'
-    }],
+    groupIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Group' }],
     currentCourses: [currentCourseSchema]
   },
 
-  // Communication Preferences
   communicationPreferences: {
-    preferredLanguage: {
-      type: String,
-      enum: ['ar', 'en'],
-      default: 'ar'
+    preferredLanguage: { 
+      type: String, 
+      enum: ['ar', 'en'], 
+      default: 'ar' 
     },
     notificationChannels: notificationChannelsSchema,
-    marketingOptIn: {
-      type: Boolean,
-      default: true
-    }
+    marketingOptIn: { type: Boolean, default: true }
   },
 
-  // Metadata
+  sessionReminders: [sessionReminderSchema],
+
+  // ✅ NEW: WhatsApp Messages Log Array
+  whatsappMessages: [whatsappMessageSchema],
+
   metadata: {
-    createdAt: {
-      type: Date,
-      default: Date.now
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    whatsappWelcomeSent: { type: Boolean, default: false },
+    whatsappInteractiveSent: { type: Boolean, default: false },
+    whatsappButtons: [{ id: String, title: String }],
+    whatsappSentAt: { type: Date },
+    whatsappMessageId: { type: String },
+    whatsappStatus: { 
+      type: String, 
+      enum: ['pending', 'sent', 'failed', 'skipped', 'error', 'resent'], 
+      default: 'pending' 
     },
-    updatedAt: {
-      type: Date,
-      default: Date.now
+    whatsappSkipReason: { type: String },
+    whatsappError: { type: String },
+    whatsappErrorAt: { type: Date },
+    whatsappMode: { 
+      type: String, 
+      enum: ['production', 'simulation'], 
+      default: 'simulation' 
     },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+    whatsappMessagesCount: { type: Number, default: 0 },
+
+    whatsappLanguageSelected: { type: Boolean, default: false },
+    whatsappLanguageSelection: { 
+      type: String, 
+      enum: ['1', '2', 'arabic_btn', 'english_btn', null], 
+      default: null 
     },
-    lastModifiedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    
-    // WhatsApp Fields
-    whatsappWelcomeSent: {
-      type: Boolean,
-      default: false
-    },
-    whatsappInteractiveSent: {
-      type: Boolean,
-      default: false
-    },
-    whatsappButtons: [{
-      id: String,
-      title: String
-    }],
-    whatsappSentAt: {
-      type: Date
-    },
-    whatsappMessageId: {
-      type: String
-    },
-    whatsappStatus: {
-      type: String,
-      enum: ['pending', 'sent', 'failed', 'skipped', 'error', 'resent'],
-      default: 'pending'
-    },
-    whatsappSkipReason: {
-      type: String
-    },
-    whatsappError: {
-      type: String
-    },
-    whatsappErrorAt: {
-      type: Date
-    },
-    whatsappMode: {
-      type: String,
-      enum: ['production', 'simulation'],
-      default: 'simulation'
-    },
-    whatsappMessagesCount: {
-      type: Number,
-      default: 0
-    },
-    
-    // Language Selection Fields
-    whatsappLanguageSelected: {
-      type: Boolean,
-      default: false
-    },
-    whatsappLanguageSelection: {
-      type: String,
-      enum: ['1', '2', 'arabic_btn', 'english_btn', null],
-      default: null
-    },
-    whatsappLanguageSelectedAt: {
-      type: Date
-    },
-    whatsappButtonSelected: {
-      type: String
-    },
-    whatsappButtonSelectedAt: {
-      type: Date
-    },
-    whatsappResponseReceived: {
-      type: Boolean,
-      default: false
-    },
-    whatsappResponse: {
-      type: String
-    },
-    whatsappResponseAt: {
-      type: Date
-    },
-    
-    // Language Confirmation Fields
-    whatsappLanguageConfirmed: {
-      type: Boolean,
-      default: false
-    },
-    whatsappLanguageConfirmationAt: {
-      type: Date
-    },
-    whatsappConfirmationSent: {
-      type: Boolean,
-      default: false
-    },
-    whatsappConfirmationSentAt: {
-      type: Date
-    },
-    whatsappConfirmationError: {
-      type: String
-    },
-    whatsappConfirmationErrorAt: {
-      type: Date
-    },
-    
-    // Additional Statistics
-    whatsappTotalMessages: {
-      type: Number,
-      default: 0
-    },
-    whatsappLastInteraction: {
-      type: Date
-    },
-    whatsappConversationId: {
-      type: String
-    }
+    whatsappLanguageSelectedAt: { type: Date },
+    whatsappButtonSelected: { type: String },
+    whatsappButtonSelectedAt: { type: Date },
+    whatsappResponseReceived: { type: Boolean, default: false },
+    whatsappResponse: { type: String },
+    whatsappResponseAt: { type: Date },
+
+    whatsappLanguageConfirmed: { type: Boolean, default: false },
+    whatsappLanguageConfirmationAt: { type: Date },
+    whatsappConfirmationSent: { type: Boolean, default: false },
+    whatsappConfirmationSentAt: { type: Date },
+    whatsappConfirmationError: { type: String },
+    whatsappConfirmationErrorAt: { type: Date },
+
+    whatsappTotalMessages: { type: Number, default: 0 },
+    whatsappLastInteraction: { type: Date },
+    whatsappConversationId: { type: String },
+
+    lastSessionReminder24h: { type: Date },
+    lastSessionReminder1h: { type: Date },
+    totalSessionReminders: { type: Number, default: 0 }
   },
 
-  // Soft delete flag
-  isDeleted: {
-    type: Boolean,
-    default: false
-  },
-  deletedAt: {
-    type: Date
-  }
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date }
 }, {
   timestamps: true,
   strict: true
 });
 
-// Indexes for better performance
+// Indexes
 StudentSchema.index({ enrollmentNumber: 1 }, { unique: true, sparse: true });
 StudentSchema.index({ 'personalInfo.whatsappNumber': 1 });
 StudentSchema.index({ 'personalInfo.nationalId': 1 }, { unique: true, sparse: true });
 StudentSchema.index({ 'enrollmentInfo.status': 1 });
 StudentSchema.index({ 'personalInfo.email': 1 });
 StudentSchema.index({ authUserId: 1 }, { unique: true, sparse: true });
-StudentSchema.index({ 'metadata.whatsappStatus': 1 });
-StudentSchema.index({ 'metadata.whatsappWelcomeSent': 1 });
-StudentSchema.index({ 'metadata.whatsappInteractiveSent': 1 });
-StudentSchema.index({ 'metadata.whatsappLanguageSelected': 1 });
-StudentSchema.index({ 'metadata.whatsappConfirmationSent': 1 });
+StudentSchema.index({ 'academicInfo.groupIds': 1 });
 StudentSchema.index({ 'communicationPreferences.preferredLanguage': 1 });
-StudentSchema.index({ 'metadata.whatsappResponseReceived': 1 });
-StudentSchema.index({ 'metadata.whatsappButtonSelected': 1 });
+StudentSchema.index({ 'sessionReminders.sessionId': 1 });
+StudentSchema.index({ 'sessionReminders.reminderType': 1 });
+StudentSchema.index({ 'sessionReminders.sentAt': -1 });
 
-// Prevent returning deleted students by default
+// ✅ NEW: WhatsApp Messages Indexes
+StudentSchema.index({ 'whatsappMessages.sentAt': -1 });
+StudentSchema.index({ 'whatsappMessages.messageType': 1 });
+StudentSchema.index({ 'whatsappMessages.status': 1 });
+
+// Pre-find middleware
 StudentSchema.pre('find', function() {
   this.where({ isDeleted: false });
 });
@@ -300,7 +299,7 @@ StudentSchema.pre('findOne', function() {
   this.where({ isDeleted: false });
 });
 
-// Update timestamp before save
+// Pre-save middleware
 StudentSchema.pre('save', function(next) {
   try {
     if (!this.metadata) {
@@ -309,36 +308,221 @@ StudentSchema.pre('save', function(next) {
     this.metadata.updatedAt = new Date();
     next();
   } catch (error) {
-    console.error("Error in pre-save middleware (timestamp):", error);
+    console.error("Error in pre-save middleware:", error);
     next(error);
   }
 });
 
-// Middleware لتحديث الحقول المترابطة
-StudentSchema.pre('save', function(next) {
+// ✅ NEW: Method to log WhatsApp message
+// ✅ FIXED: Method to log WhatsApp message - NO VALIDATION ERRORS
+StudentSchema.methods.logWhatsAppMessage = function(messageData) {
   try {
+    console.log(`\n📝 [LOG_METHOD] Logging WhatsApp message`);
+    console.log(`   Type: ${messageData.messageType}`);
+    console.log(`   Status: ${messageData.status}`);
+
+    // Initialize array if needed
+    if (!this.whatsappMessages) {
+      this.whatsappMessages = [];
+    }
+    
+    // ✅ CRITICAL: Only map to whatsappMessageSchema fields
+    // Do NOT add any extra fields like whatsappMode, whatsappStatus, etc.
+    const messageToLog = {
+      messageType: messageData.messageType,
+      messageContent: messageData.messageContent,
+      language: messageData.language || 'ar',
+      status: messageData.status || 'sent',
+      recipientNumber: messageData.recipientNumber,
+      wapilotMessageId: messageData.wapilotMessageId || null,
+      sentAt: messageData.sentAt || new Date(),
+      // ✅ metadata is a simple object - NOT the Student metadata!
+      metadata: {
+        groupId: messageData.metadata?.groupId || null,
+        groupName: messageData.metadata?.groupName || null,
+        groupCode: messageData.metadata?.groupCode || null,
+        sessionId: messageData.metadata?.sessionId || null,
+        sessionTitle: messageData.metadata?.sessionTitle || null,
+        attendanceStatus: messageData.metadata?.attendanceStatus || null,
+        isCustomMessage: messageData.metadata?.isCustomMessage || false,
+        recipientType: messageData.metadata?.recipientType || 'student',
+        guardianName: messageData.metadata?.guardianName || null,
+        automationType: messageData.metadata?.automationType || null,
+        interactive: messageData.metadata?.interactive || false,
+        selectedLanguage: messageData.metadata?.selectedLanguage || null,
+        reminderType: messageData.metadata?.reminderType || null,
+        oldStatus: messageData.metadata?.oldStatus || null,
+        newStatus: messageData.metadata?.newStatus || null
+      },
+      error: messageData.error || null,
+      errorDetails: messageData.errorDetails || null
+    };
+
+    console.log(`✅ Message object created:`, {
+      type: messageToLog.messageType,
+      status: messageToLog.status,
+      to: messageToLog.recipientNumber,
+      language: messageToLog.language
+    });
+
+    // Add to array
+    this.whatsappMessages.push(messageToLog);
+    console.log(`✅ Added to whatsappMessages array`);
+    
+    // ✅ Update ONLY safe metadata counters
     if (!this.metadata) {
-      return next();
+      this.metadata = {};
     }
     
-    // إذا تم اختيار اللغة، تحديث الحقول المترابطة
-    if (this.metadata.whatsappLanguageSelected && !this.metadata.whatsappLanguageSelectedAt) {
-      this.metadata.whatsappLanguageSelectedAt = new Date();
-      this.metadata.whatsappResponseReceived = true;
-      this.metadata.whatsappResponse = this.metadata.whatsappLanguageSelection;
-      this.metadata.whatsappResponseAt = new Date();
-    }
+    this.metadata.whatsappTotalMessages = (this.metadata.whatsappTotalMessages || 0) + 1;
+    this.metadata.whatsappLastInteraction = new Date();
     
-    // إذا تم الضغط على زر، تحديث الحقول المترابطة
-    if (this.metadata.whatsappButtonSelected && !this.metadata.whatsappButtonSelectedAt) {
-      this.metadata.whatsappButtonSelectedAt = new Date();
-    }
+    console.log(`📊 Updated metadata counters:`);
+    console.log(`   Total messages: ${this.metadata.whatsappTotalMessages}`);
+    console.log(`   Last interaction: ${this.metadata.whatsappLastInteraction.toISOString()}`);
+
+    console.log(`💾 Saving student document...`);
+    return this.save();
     
-    next();
   } catch (error) {
-    console.error("Error in pre-save middleware (whatsapp):", error);
-    next(error);
+    console.error(`\n❌ [LOG_METHOD] Error in logWhatsAppMessage:`, error.message);
+    if (error.name === 'ValidationError') {
+      console.error(`   Validation Errors:`);
+      Object.entries(error.errors).forEach(([field, err]) => {
+        console.error(`   - ${field}: ${err.message}`);
+      });
+    }
+    throw error;
   }
-});
+};
+
+// ✅ Method to get all WhatsApp messages
+StudentSchema.methods.getWhatsAppMessages = function(filters = {}) {
+  if (!this.whatsappMessages || this.whatsappMessages.length === 0) {
+    return [];
+  }
+  
+  let messages = [...this.whatsappMessages];
+  
+  if (filters.messageType) {
+    messages = messages.filter(msg => msg.messageType === filters.messageType);
+  }
+  
+  if (filters.status) {
+    messages = messages.filter(msg => msg.status === filters.status);
+  }
+  
+  if (filters.language) {
+    messages = messages.filter(msg => msg.language === filters.language);
+  }
+  
+  if (filters.startDate) {
+    messages = messages.filter(msg => msg.sentAt >= new Date(filters.startDate));
+  }
+  
+  if (filters.endDate) {
+    messages = messages.filter(msg => msg.sentAt <= new Date(filters.endDate));
+  }
+  
+  return messages.sort((a, b) => b.sentAt - a.sentAt);
+};
+
+// ✅ Method to get message statistics
+StudentSchema.methods.getWhatsAppStats = function() {
+  if (!this.whatsappMessages || this.whatsappMessages.length === 0) {
+    return {
+      total: 0,
+      sent: 0,
+      failed: 0,
+      pending: 0,
+      byType: {},
+      byLanguage: {}
+    };
+  }
+  
+  const stats = {
+    total: this.whatsappMessages.length,
+    sent: 0,
+    failed: 0,
+    pending: 0,
+    byType: {},
+    byLanguage: {}
+  };
+  
+  this.whatsappMessages.forEach(msg => {
+    // Count by status
+    if (msg.status === 'sent') stats.sent++;
+    if (msg.status === 'failed') stats.failed++;
+    if (msg.status === 'pending') stats.pending++;
+    
+    // Count by type
+    stats.byType[msg.messageType] = (stats.byType[msg.messageType] || 0) + 1;
+    
+    // Count by language
+    stats.byLanguage[msg.language] = (stats.byLanguage[msg.language] || 0) + 1;
+  });
+  
+  return stats;
+};
+
+// Session Reminder Methods
+StudentSchema.methods.addSessionReminder = function(reminderData) {
+  if (!this.sessionReminders) {
+    this.sessionReminders = [];
+  }
+  
+  this.sessionReminders.push(reminderData);
+  
+  if (!this.metadata) {
+    this.metadata = {};
+  }
+  
+  if (reminderData.reminderType === '24hours') {
+    this.metadata.lastSessionReminder24h = new Date();
+  } else if (reminderData.reminderType === '1hour') {
+    this.metadata.lastSessionReminder1h = new Date();
+  }
+  
+  this.metadata.totalSessionReminders = (this.metadata.totalSessionReminders || 0) + 1;
+  this.metadata.whatsappTotalMessages = (this.metadata.whatsappTotalMessages || 0) + 1;
+  this.metadata.whatsappLastInteraction = new Date();
+  
+  return this.save();
+};
+
+StudentSchema.methods.hasReceivedReminder = function(sessionId, reminderType) {
+  if (!this.sessionReminders || this.sessionReminders.length === 0) {
+    return false;
+  }
+  
+  return this.sessionReminders.some(reminder => 
+    reminder.sessionId.toString() === sessionId.toString() &&
+    reminder.reminderType === reminderType &&
+    reminder.status === 'sent'
+  );
+};
+
+StudentSchema.methods.getSessionReminders = function(sessionId) {
+  if (!this.sessionReminders) {
+    return [];
+  }
+  
+  return this.sessionReminders.filter(reminder => 
+    reminder.sessionId.toString() === sessionId.toString()
+  );
+};
+
+StudentSchema.statics.getStudentsForReminder = async function(groupId, sessionId, reminderType) {
+  const students = await this.find({
+    'academicInfo.groupIds': groupId,
+    'enrollmentInfo.status': 'Active',
+    'personalInfo.whatsappNumber': { $exists: true, $ne: null, $ne: '' },
+    isDeleted: false
+  });
+
+  return students.filter(student => 
+    !student.hasReceivedReminder(sessionId, reminderType)
+  );
+};
 
 export default mongoose.models.Student || mongoose.model('Student', StudentSchema);

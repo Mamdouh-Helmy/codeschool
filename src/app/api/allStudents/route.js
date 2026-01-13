@@ -9,13 +9,6 @@ import mongoose from "mongoose";
 export async function POST(req) {
   try {
     console.log("🚀 Starting student creation process...");
-    console.log("🔍 Environment check:", {
-      WHATSAPP_API_TOKEN: process.env.WHATSAPP_API_TOKEN
-        ? "Configured"
-        : "Not configured",
-      WHATSAPP_INSTANCE_ID: process.env.WHATSAPP_INSTANCE_ID || "Not set",
-      NODE_ENV: process.env.NODE_ENV || "development",
-    });
 
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
@@ -30,12 +23,9 @@ export async function POST(req) {
     console.log("✅ Database connected");
 
     const studentData = await req.json();
-    console.log(
-      "📥 Received student data:",
-      JSON.stringify(studentData, null, 2)
-    );
+    console.log("📥 Received student data");
 
-    // ✅ احفظ الرسائل المخصصة قبل المعالجة
+    // ✅ احفظ الرسائل المخصصة
     const customMessages = {
       firstMessage: studentData.whatsappCustomMessages?.firstMessage || "",
       secondMessage: studentData.whatsappCustomMessages?.secondMessage || "",
@@ -95,9 +85,6 @@ export async function POST(req) {
           { status: 409 }
         );
       }
-      console.log("✅ No existing student found for this user");
-    } else {
-      console.log("📝 Creating student without user account link");
     }
 
     console.log("🔢 Generating enrollment number...");
@@ -107,13 +94,6 @@ export async function POST(req) {
     const whatsappMode = process.env.WHATSAPP_API_TOKEN
       ? "production"
       : "simulation";
-    console.log("📱 WhatsApp Mode determined:", {
-      mode: whatsappMode,
-      hasToken: !!process.env.WHATSAPP_API_TOKEN,
-      hasInstanceId: !!process.env.WHATSAPP_INSTANCE_ID,
-    });
-
-    console.log("📝 Creating student record...");
 
     const whatsappButtons = [
       { id: "arabic_btn", title: "العربية 🇸🇦" },
@@ -128,7 +108,6 @@ export async function POST(req) {
         lastModifiedBy: adminUser.id,
         createdAt: new Date(),
         updatedAt: new Date(),
-
         whatsappWelcomeSent: false,
         whatsappInteractiveSent: false,
         whatsappButtons: whatsappButtons,
@@ -136,27 +115,17 @@ export async function POST(req) {
         whatsappMode: whatsappMode,
         whatsappMessagesCount: 0,
         whatsappTotalMessages: 0,
-
         whatsappLanguageSelected: false,
         whatsappLanguageSelection: null,
         whatsappButtonSelected: null,
         whatsappResponseReceived: false,
-
         whatsappLanguageConfirmed: false,
         whatsappConfirmationSent: false,
-
         whatsappConversationId: `conv_${Date.now()}_${Math.random()
           .toString(36)
           .substr(2, 9)}`,
       },
     };
-
-    console.log("📋 Student data to save:", {
-      name: studentDataToSave.personalInfo.fullName,
-      whatsappNumber: studentDataToSave.personalInfo.whatsappNumber,
-      buttons: whatsappButtons.length,
-      mode: whatsappMode,
-    });
 
     let savedStudent;
     try {
@@ -167,19 +136,12 @@ export async function POST(req) {
         id: savedStudent._id,
         enrollmentNumber: savedStudent.enrollmentNumber,
         name: savedStudent.personalInfo.fullName,
-        whatsappNumber: savedStudent.personalInfo.whatsappNumber,
       });
     } catch (saveError) {
-      console.error("❌ Error saving student to database:", {
-        message: saveError.message,
-        name: saveError.name,
-        code: saveError.code,
-        errors: saveError.errors,
-      });
+      console.error("❌ Error saving student to database:", saveError);
 
       if (saveError.code === 11000) {
         const field = Object.keys(saveError.keyPattern)[0];
-        console.error("❌ Duplicate field error:", field);
         return NextResponse.json(
           {
             success: false,
@@ -197,8 +159,6 @@ export async function POST(req) {
           message: err.message,
         }));
 
-        console.error("❌ Validation errors:", errors);
-
         return NextResponse.json(
           {
             success: false,
@@ -210,56 +170,12 @@ export async function POST(req) {
         );
       }
 
-      if (
-        saveError.name === "TypeError" &&
-        saveError.message &&
-        saveError.message.includes("is not a function")
-      ) {
-        console.error(
-          "❌ TypeError - function call error:",
-          saveError.message,
-          saveError.stack
-        );
-        return NextResponse.json(
-          {
-            success: false,
-            message: "خطأ في معالجة البيانات. يرجى المحاولة مرة أخرى.",
-            error: "Internal processing error",
-            details:
-              process.env.NODE_ENV === "development"
-                ? saveError.message
-                : undefined,
-          },
-          { status: 500 }
-        );
-      }
-
       throw saveError;
     }
 
     console.log("📱 Triggering WhatsApp automation...");
-    console.log("📊 Automation details:", {
-      studentId: savedStudent._id,
-      studentName: savedStudent.personalInfo.fullName,
-      whatsappNumber: savedStudent.personalInfo.whatsappNumber,
-      mode: whatsappMode,
-      willSend: whatsappMode === "production",
-      messages: "Welcome + Interactive language selection with buttons",
-      totalMessages: 2,
-      buttons: whatsappButtons,
-      customMessagesIncluded: !!(
-        customMessages.firstMessage || customMessages.secondMessage
-      ),
-      flow: [
-        "Step 1: Send welcome message (custom or default)",
-        "Step 2: Send interactive message with 2 BUTTONS",
-        "Step 3: Student clicks button (arabic_btn or english_btn)",
-        "Step 4: Webhook receives response and updates database",
-        "Step 5: Send confirmation message in selected language",
-      ],
-    });
 
-    // ✅ استخدام customMessages في setTimeout
+    // ✅ استخدام customMessages
     setTimeout(async () => {
       try {
         console.log("🔄 Starting WhatsApp automation in background...");
@@ -268,28 +184,19 @@ export async function POST(req) {
           "@/app/services/wapilot-service"
         );
 
-        console.log("🔧 Wapilot service loaded, mode:", wapilotService.mode);
-
-        // ✅ تمرير الرسائل المخصصة
+        // ✅ تمرير الرسائل المخصصة مع studentId
         const whatsappResult = await wapilotService.sendWelcomeMessages(
+          savedStudent._id, // ✅ إضافة studentId
           savedStudent.personalInfo.fullName,
           savedStudent.personalInfo.whatsappNumber,
-          customMessages.firstMessage, // الرسالة الأولى المخصصة
-          customMessages.secondMessage // الرسالة الثانية المخصصة
+          customMessages.firstMessage,
+          customMessages.secondMessage
         );
 
         console.log("📦 WhatsApp automation result:", whatsappResult);
 
         if (whatsappResult.success) {
-          console.log("✅ WhatsApp automation completed successfully:", {
-            studentName: savedStudent.personalInfo.fullName,
-            whatsappNumber: whatsappResult.whatsappNumber,
-            mode: whatsappResult.mode,
-            messagesSent: whatsappResult.totalMessages || 2,
-            interactive: true,
-            buttons: whatsappResult.buttons,
-            nextStep: "Waiting for student button click",
-          });
+          console.log("✅ WhatsApp automation completed successfully");
 
           try {
             const updateData = {
@@ -435,41 +342,17 @@ export async function POST(req) {
               status: "active",
               method: "POST",
               supported_responses: ["arabic_btn", "english_btn", "1", "2"],
-              description:
-                "Receives button clicks and updates language preference",
             },
-            expectedResponse: {
-              arabic_btn: "Arabic (العربية)",
-              english_btn: "English (الإنجليزية)",
-              1: "Arabic (fallback)",
-              2: "English (fallback)",
-            },
-            notes: [
-              "Student will receive two messages immediately",
-              "Second message has 2 INTERACTIVE BUTTONS",
-              "Student clicks button to choose language",
-              "System automatically updates database",
-              "Confirmation message sent in chosen language",
-            ],
           },
         },
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error("❌ Error creating student:", {
-      message: error.message,
-      name: error.name,
-      code: error.code,
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      errors: error.errors,
-      keyPattern: error.keyPattern,
-      keyValue: error.keyValue,
-    });
+    console.error("❌ Error creating student:", error);
 
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0] || "unknown";
-      console.error("❌ Duplicate field error:", field);
       return NextResponse.json(
         {
           success: false,
@@ -482,61 +365,6 @@ export async function POST(req) {
       );
     }
 
-    if (error.name === "ValidationError") {
-      const errors = Object.values(error.errors || {}).map((err) => ({
-        field: err.path,
-        message: err.message,
-      }));
-
-      console.error("❌ Validation errors:", errors);
-
-      return NextResponse.json(
-        {
-          success: false,
-          message: "فشل التحقق من البيانات",
-          error: "Validation failed",
-          errors: errors,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (error.name === "CastError") {
-      console.error("❌ Cast error:", error.path, error.value);
-      return NextResponse.json(
-        {
-          success: false,
-          message: `قيمة غير صحيحة للحقل: ${error.path}`,
-          error: `Invalid value for field: ${error.path}`,
-          field: error.path,
-          value: error.value,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (
-      error.name === "TypeError" &&
-      error.message &&
-      error.message.includes("is not a function")
-    ) {
-      console.error("❌ TypeError - function call error:", {
-        message: error.message,
-        stack: error.stack,
-        cause: error.cause,
-      });
-      return NextResponse.json(
-        {
-          success: false,
-          message: "خطأ في معالجة البيانات. يرجى المحاولة مرة أخرى.",
-          error: "Internal processing error",
-          details:
-            process.env.NODE_ENV === "development" ? error.message : undefined,
-        },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json(
       {
         success: false,
@@ -544,16 +372,13 @@ export async function POST(req) {
         error: error.message || "Failed to create student",
         ...(process.env.NODE_ENV === "development" && {
           stack: error.stack,
-          details: {
-            name: error.name,
-            code: error.code,
-          },
         }),
       },
       { status: 500 }
     );
   }
 }
+
 
 // GET: الحصول على جميع الطلاب
 export async function GET(req) {

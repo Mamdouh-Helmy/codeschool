@@ -31,11 +31,17 @@ import {
 import Modal from "./Modal";
 import GroupForm from "./GroupForm";
 import AddStudentsToGroup from "./AddStudentsToGroup";
+import InstructorNotificationModal from "./InstructorNotificationModal";
 import { useI18n } from "@/i18n/I18nProvider";
 
 export default function GroupsAdmin() {
     const { t, language } = useI18n();
     const [groups, setGroups] = useState([]);
+    const [instructorNotificationModal, setInstructorNotificationModal] = useState({
+        open: false,
+        groupData: null,
+        instructors: []
+    });
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState(null);
@@ -149,7 +155,7 @@ export default function GroupsAdmin() {
                         </div>
                         <div className="flex-1">
                             <p className="text-16 font-semibold">{t("groups.delete.title")}</p>
-                            <p 
+                            <p
                                 className="text-14 mt-1 text-slate-500 dark:text-darktext"
                                 dangerouslySetInnerHTML={{
                                     __html: t("groups.delete.message", { name })
@@ -195,66 +201,101 @@ export default function GroupsAdmin() {
         );
     };
 
+
+
+    // Replace the old onActivate method with this simplified version
+
     const onActivate = async (id, name) => {
-        toast(
-            (toastInstance) => (
-                <div className="w-404 max-w-full bg-white dark:bg-darkmode rounded-14 shadow-round-box p-4">
-                    <div className="flex items-start gap-3">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-600 font-bold">
-                            <PlayCircle className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-16 font-semibold">{t("groups.activate.title")}</p>
-                            <p 
-                                className="text-14 mt-1 text-slate-500 dark:text-darktext"
-                                dangerouslySetInnerHTML={{
-                                    __html: t("groups.activate.message", { name })
-                                }}
-                            />
-                        </div>
-                    </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                        <button
-                            className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-                            onClick={() => toast.dismiss(toastInstance.id)}
-                        >
-                            {t("groups.activate.cancel")}
-                        </button>
-                        <button
-                            className="px-3 py-1 bg-green-600 text-white rounded-14 text-15 hover:bg-green-700 shadow-sm"
-                            onClick={async () => {
-                                toast.dismiss(toastInstance.id);
-                                const loadingToast = toast.loading(t("groups.activate.loading"));
-                                try {
-                                    const res = await fetch(`/api/groups/${id}/activate`, {
-                                        method: "POST",
-                                    });
+        // ✅ Simply open the notification modal
+        onActivateWithNotification(id);
+    };
 
-                                    const result = await res.json();
+    const onActivateWithNotification = async (groupId) => {
+        console.log(`📂 Loading group data for: ${groupId}`);
 
-                                    if (res.ok) {
-                                        await loadGroups();
-                                        toast.success(t("groups.activate.success"), {
-                                            id: loadingToast
-                                        });
-                                    } else {
-                                        toast.error(result.error || t("groups.activate.failed"), {
-                                            id: loadingToast
-                                        });
-                                    }
-                                } catch (err) {
-                                    console.error("Error activating group:", err);
-                                    toast.error(t("groups.activate.failed"), { id: loadingToast });
-                                }
-                            }}
-                        >
-                            {t("groups.activate.confirm")}
-                        </button>
-                    </div>
-                </div>
-            ),
-            { duration: Infinity, position: "top-center" }
-        );
+        if (!groupId) {
+            console.error("❌ No group ID provided");
+            toast.error("Invalid group ID");
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/groups/${groupId}`, {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
+
+            console.log(`📊 Fetch Status: ${res.status}`);
+
+            if (!res.ok) {
+                throw new Error(`Failed to fetch group: ${res.status}`);
+            }
+
+            const json = await res.json();
+            console.log(`📋 Group Data Loaded:`, json);
+
+            if (json.success && json.data) {
+                console.log(`✅ Group loaded successfully`);
+                console.log(`   ID: ${json.data.id || json.data._id}`);
+                console.log(`   Name: ${json.data.name}`);
+                console.log(`   Instructors: ${json.data.instructors?.length || 0}`);
+
+                setInstructorNotificationModal({
+                    open: true,
+                    groupData: json.data,
+                    instructors: json.data.instructors || []
+                });
+            } else {
+                throw new Error(json.error || "Failed to load group data");
+            }
+        } catch (err) {
+            console.error("❌ Error loading group:", err);
+            toast.error(err.message || t("groups.errors.loadGroup"));
+        }
+    };
+
+
+    const handleActivateAndNotify = async (instructorMessages) => {
+        // ✅ FIX: استخدم group id من state بشكل آمن
+        const groupId = instructorNotificationModal?.groupData?._id || instructorNotificationModal?.groupData?.id;
+
+        console.log(`🔄 Activating group with ID: ${groupId}`);
+        console.log(`📦 Group Data:`, instructorNotificationModal.groupData);
+
+        if (!groupId) {
+            toast.error("Group ID not found. Please try again.");
+            return;
+        }
+
+        const loadingToast = toast.loading(t("groups.activate.loading"));
+
+        try {
+            // ✅ تأكد من تمرير الـ ID بشكل صحيح
+            const res = await fetch(`/api/groups/${groupId}/activate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ instructorMessages })
+            });
+
+            console.log(`📊 API Response Status: ${res.status}`);
+
+            const result = await res.json();
+
+            console.log(`📋 API Response:`, result);
+
+            if (res.ok && result.success) {
+                await loadGroups();
+                toast.success(t("groups.activate.success"), { id: loadingToast });
+                setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
+            } else {
+                const errorMsg = result.error || result.message || t("groups.activate.failed");
+                console.error(`❌ API Error:`, errorMsg);
+                toast.error(errorMsg, { id: loadingToast });
+            }
+        } catch (err) {
+            console.error("❌ Network Error:", err);
+            toast.error(t("groups.activate.failed"), { id: loadingToast });
+        }
     };
 
     const onAddStudents = (groupId) => {
@@ -520,9 +561,9 @@ export default function GroupsAdmin() {
                                         <div className="flex items-center gap-2">
                                             <Users className="w-4 h-4 text-gray-400" />
                                             <span className="text-sm">
-                                                {t("groups.studentsCount", { 
-                                                    current: group.studentsCount, 
-                                                    max: group.maxStudents 
+                                                {t("groups.studentsCount", {
+                                                    current: group.studentsCount,
+                                                    max: group.maxStudents
                                                 })}
                                             </span>
                                             {group.isFull && (
@@ -731,6 +772,17 @@ export default function GroupsAdmin() {
                     }}
                 />
             </Modal>
+
+            <InstructorNotificationModal
+                isOpen={instructorNotificationModal.open}
+                onClose={() =>
+                    setInstructorNotificationModal({ open: false, groupData: null, instructors: [] })
+                }
+                instructors={instructorNotificationModal.instructors}
+                groupData={instructorNotificationModal.groupData}
+                onSendNotifications={handleActivateAndNotify}
+
+            />
         </div>
     );
 }
