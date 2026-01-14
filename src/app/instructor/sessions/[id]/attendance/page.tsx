@@ -136,7 +136,7 @@ export default function SessionAttendancePage() {
 
       console.log("🔄 [Session Attendance] Fetching attendance data...");
 
-      const attendanceRes = await fetch(`/api/instructor/sessions/${sessionId}/attendance`, {
+      const attendanceRes = await fetch(`/api/instructor-dashboard/sessions/${sessionId}/attendance`, {
         headers: {
           "Content-Type": "application/json",
         },

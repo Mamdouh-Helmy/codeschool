@@ -1,4 +1,3 @@
-// app/instructor/sessions/[id]/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -15,7 +14,6 @@ import {
   ChevronRight,
   Eye,
   Video,
-  Download,
   BarChart3,
   BookOpen,
   GraduationCap,
@@ -28,7 +26,10 @@ import {
   ExternalLink,
   FileText,
   UserCheck,
-  CalendarDays,
+  X,
+  Save,
+  Globe,
+  Send,
 } from "lucide-react";
 
 interface Session {
@@ -160,6 +161,7 @@ interface SessionResponse {
       canPostpone: boolean;
     };
   };
+  error?: string;
 }
 
 export default function SessionDetailsPage() {
@@ -168,15 +170,27 @@ export default function SessionDetailsPage() {
   const sessionId = params.id as string;
 
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [studentAttendance, setStudentAttendance] = useState<any[]>([]);
   const [attendanceStats, setAttendanceStats] = useState<any>(null);
   const [navigation, setNavigation] = useState<any>(null);
   const [permissions, setPermissions] = useState<any>(null);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  
   const [showEditModal, setShowEditModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  
+  const [editForm, setEditForm] = useState({
+    meetingLink: '',
+    recordingLink: '',
+    instructorNotes: '',
+    customMessage: '',
+    processedMessage: '',
+  });
+  
+  const [selectedAction, setSelectedAction] = useState<'cancel' | 'postpone' | 'complete' | 'scheduled' | ''>('');
 
   useEffect(() => {
     if (sessionId) {
@@ -188,6 +202,7 @@ export default function SessionDetailsPage() {
     try {
       setLoading(true);
       setError("");
+      setSuccessMessage("");
 
       console.log("🔄 [Session Details] Fetching session details...");
 
@@ -206,14 +221,43 @@ export default function SessionDetailsPage() {
       });
 
       if (!sessionRes.ok || !response.success) {
-        throw new Error(response.data?.session?.error || "فشل في تحميل تفاصيل الجلسة");
+        throw new Error(response.error || response.data?.session?.error || "فشل في تحميل تفاصيل الجلسة");
+      }
+
+      if (!response.data) {
+        throw new Error("لا توجد بيانات في الاستجابة");
       }
 
       setSession(response.data.session);
       setStudentAttendance(response.data.studentAttendance || []);
-      setAttendanceStats(response.data.attendanceStats);
-      setNavigation(response.data.navigation);
-      setPermissions(response.data.permissions);
+      setAttendanceStats(response.data.attendanceStats || {
+        total: 0,
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        pending: 0
+      });
+      setNavigation(response.data.navigation || {
+        previousSessions: [],
+        nextSessions: []
+      });
+      setPermissions(response.data.permissions || {
+        canTakeAttendance: false,
+        canEdit: false,
+        canCancel: false,
+        canPostpone: false
+      });
+
+      if (response.data.session) {
+        setEditForm({
+          meetingLink: response.data.session.meetingLink || '',
+          recordingLink: response.data.session.recordingLink || '',
+          instructorNotes: response.data.session.instructorNotes || '',
+          customMessage: '',
+          processedMessage: '',
+        });
+      }
 
     } catch (error: any) {
       console.error("❌ [Session Details] Error fetching session:", error);
@@ -343,6 +387,153 @@ export default function SessionDetailsPage() {
     return Math.round((attendanceStats.present / attendanceStats.total) * 100);
   };
 
+  const processMessageVariables = (message: string) => {
+    if (!session) return message;
+    
+    const sessionDate = new Date(session.scheduledDate);
+    const formattedDate = sessionDate.toLocaleDateString('ar-EG', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    return message
+      .replace(/\{studentName\}/g, 'الطالب')
+      .replace(/\{sessionTitle\}/g, session.title)
+      .replace(/\{sessionDate\}/g, formattedDate)
+      .replace(/\{startTime\}/g, session.startTime)
+      .replace(/\{endTime\}/g, session.endTime)
+      .replace(/\{groupName\}/g, session.groupId.name)
+      .replace(/\{groupCode\}/g, session.groupId.code)
+      .replace(/\{courseName\}/g, session.courseId?.title || '');
+  };
+
+  const handleUpdateSession = async () => {
+    try {
+      setUpdating(true);
+      setError("");
+      setSuccessMessage("");
+
+      let processedMessage = '';
+      if ((selectedAction === 'cancel' || selectedAction === 'postpone' || selectedAction === 'scheduled') && editForm.customMessage) {
+        processedMessage = processMessageVariables(editForm.customMessage);
+      }
+
+      let newStatus = session?.status;
+      if (selectedAction === 'cancel') newStatus = 'cancelled';
+      if (selectedAction === 'postpone') newStatus = 'postponed';
+      if (selectedAction === 'complete') newStatus = 'completed';
+      if (selectedAction === 'scheduled') newStatus = 'scheduled';
+
+      const response = await fetch(`/api/instructor-dashboard/sessions/${sessionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          meetingLink: editForm.meetingLink,
+          recordingLink: editForm.recordingLink,
+          instructorNotes: editForm.instructorNotes,
+          status: newStatus,
+          customMessage: editForm.customMessage || undefined,
+          processedMessage: processedMessage || undefined
+        })
+      });
+
+      const result = await response.json();
+
+      console.log("📥 [Update Session] Response:", {
+        success: result.success,
+        status: response.status,
+        automation: result.automation
+      });
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'فشل في تحديث الجلسة');
+      }
+
+      setSuccessMessage(result.message || 'تم تحديث الجلسة بنجاح');
+      
+      fetchSessionDetails();
+      
+      setShowEditModal(false);
+      setShowStatusModal(false);
+      setSelectedAction('');
+      
+    } catch (error: any) {
+      console.error("❌ [Update Session] Error:", error);
+      setError(error.message || 'حدث خطأ أثناء تحديث الجلسة');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const openEditModal = () => {
+    if (!session) return;
+    
+    setEditForm({
+      meetingLink: session.meetingLink || '',
+      recordingLink: session.recordingLink || '',
+      instructorNotes: session.instructorNotes || '',
+      customMessage: '',
+      processedMessage: '',
+    });
+    
+    setSelectedAction('');
+    setShowEditModal(true);
+  };
+
+  const getStatusChangeButtons = () => {
+    if (!session) return [];
+    
+    const buttons = [
+      {
+        id: 'scheduled',
+        label: 'جدولة',
+        icon: Calendar,
+        bgColor: 'bg-blue-600',
+        textColor: 'text-blue-700',
+        borderColor: 'border-blue-200 dark:border-blue-800',
+        hoverColor: 'hover:bg-blue-50 dark:hover:bg-blue-900/20',
+        disabled: session.status === 'scheduled' || session.status === 'completed'
+      },
+      {
+        id: 'complete',
+        label: 'إكمال',
+        icon: CheckCircle,
+        bgColor: 'bg-green-600',
+        textColor: 'text-green-700',
+        borderColor: 'border-green-200 dark:border-green-800',
+        hoverColor: 'hover:bg-green-50 dark:hover:bg-green-900/20',
+        disabled: session.status === 'completed'
+      },
+      {
+        id: 'cancel',
+        label: 'إلغاء',
+        icon: XCircle,
+        bgColor: 'bg-red-600',
+        textColor: 'text-red-700',
+        borderColor: 'border-red-200 dark:border-red-800',
+        hoverColor: 'hover:bg-red-50 dark:hover:bg-red-900/20',
+        disabled: session.status === 'cancelled' || session.status === 'completed'
+      },
+      {
+        id: 'postpone',
+        label: 'تأجيل',
+        icon: AlertCircle,
+        bgColor: 'bg-yellow-600',
+        textColor: 'text-yellow-700',
+        borderColor: 'border-yellow-200 dark:border-yellow-800',
+        hoverColor: 'hover:bg-yellow-50 dark:hover:bg-yellow-900/20',
+        disabled: session.status === 'postponed' || session.status === 'completed'
+      }
+    ];
+    
+    return buttons;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-darkmode">
@@ -388,6 +579,7 @@ export default function SessionDetailsPage() {
 
   const statusConfig = getStatusConfig(session.status);
   const StatusIcon = statusConfig.icon;
+  const statusButtons = getStatusChangeButtons();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-darkmode">
@@ -429,6 +621,18 @@ export default function SessionDetailsPage() {
           </div>
         </div>
       </div>
+
+      {/* رسائل النجاح */}
+      {successMessage && (
+        <div className="container mx-auto px-4 py-4">
+          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <span className="text-green-800 dark:text-green-300">{successMessage}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="container mx-auto px-4 py-8">
@@ -515,7 +719,7 @@ export default function SessionDetailsPage() {
                 </div>
 
                 <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <CalendarDays className="w-6 h-6 text-yellow-600 dark:text-yellow-400 mx-auto mb-2" />
+                  <CheckCircle className="w-6 h-6 text-yellow-600 dark:text-yellow-400 mx-auto mb-2" />
                   <p className="text-sm text-gray-500 dark:text-gray-400">الحالة</p>
                   <p className="font-bold text-gray-900 dark:text-white">
                     {statusConfig.text}
@@ -944,7 +1148,7 @@ export default function SessionDetailsPage() {
               <div className="space-y-2">
                 {permissions?.canEdit && (
                   <button
-                    onClick={() => setShowEditModal(true)}
+                    onClick={openEditModal}
                     className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
                   >
                     <Edit className="w-4 h-4" />
@@ -952,7 +1156,7 @@ export default function SessionDetailsPage() {
                   </button>
                 )}
                 
-                {permissions?.canTakeAttendance && !session.attendanceTaken && (
+                
                   <Link
                     href={`/instructor/sessions/${session._id}/attendance`}
                     className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
@@ -960,7 +1164,7 @@ export default function SessionDetailsPage() {
                     <UserCheck className="w-4 h-4" />
                     <span>تسجيل الحضور</span>
                   </Link>
-                )}
+                
                 
                 {session.attendanceTaken && (
                   <Link
@@ -991,69 +1195,317 @@ export default function SessionDetailsPage() {
                     <span>شاهد التسجيل</span>
                   </button>
                 )}
-                
-                <button
-                  onClick={() => {
-                    // Export attendance data
-                    const csvContent = [
-                      ["اسم الطالب", "رقم القيد", "حالة الحضور", "ملاحظات"],
-                      ...studentAttendance.map(student => [
-                        student.fullName,
-                        student.enrollmentNumber,
-                        getAttendanceStatusConfig(student.attendance.status).text,
-                        student.attendance.notes || ""
-                      ])
-                    ].map(row => row.join(",")).join("\n");
-                    
-                    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-                    const link = document.createElement("a");
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `حضور_${session.title}_${new Date().toISOString().split('T')[0]}.csv`;
-                    link.click();
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>تصدير الحضور</span>
-                </button>
-              </div>
-            </div>
-
-            {/* معلومات الملف */}
-            <div className="bg-gradient-to-r from-primary/10 to-primary/5 dark:from-primary/20 dark:to-primary/10 rounded-xl shadow-lg p-6 border border-primary/20">
-              <div className="flex items-center gap-2 mb-4">
-                <CalendarDays className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  معلومات الملف
-                </h3>
-              </div>
-              
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">تاريخ الإنشاء</p>
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    {formatDate(session.createdAt)}
-                  </p>
-                </div>
-                
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">آخر تحديث</p>
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    {formatDate(session.updatedAt)}
-                  </p>
-                </div>
-                
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">معرف الجلسة</p>
-                  <p className="font-medium text-gray-900 dark:text-white text-sm truncate">
-                    {session._id}
-                  </p>
-                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* مودال تعديل الجلسة */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-secondary rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-white dark:bg-secondary border-b border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Edit className="w-6 h-6 text-primary" />
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    تعديل الجلسة
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">
+                {session.title}
+              </p>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* معلومات الأساسية */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    رابط الاجتماع
+                  </label>
+                  <input
+                    type="url"
+                    value={editForm.meetingLink}
+                    onChange={(e) => setEditForm({...editForm, meetingLink: e.target.value})}
+                    placeholder="https://meet.google.com/..."
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    ستتم مشاركته مع الطلاب عبر الواتساب
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    رابط التسجيل
+                  </label>
+                  <input
+                    type="url"
+                    value={editForm.recordingLink}
+                    onChange={(e) => setEditForm({...editForm, recordingLink: e.target.value})}
+                    placeholder="https://youtube.com/..."
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    يتم إضافته بعد انتهاء الجلسة
+                  </p>
+                </div>
+              </div>
+
+              {/* ملاحظات المدرس */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  ملاحظات المدرس
+                </label>
+                <textarea
+                  value={editForm.instructorNotes}
+                  onChange={(e) => setEditForm({...editForm, instructorNotes: e.target.value})}
+                  placeholder="اكتب ملاحظاتك حول الجلسة..."
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+
+              {/* تغيير حالة الجلسة */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  تغيير حالة الجلسة
+                </h4>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {statusButtons.map((button) => {
+                    const ButtonIcon = button.icon;
+                    return (
+                      <button
+                        key={button.id}
+                        onClick={() => {
+                          if (['cancel', 'postpone', 'scheduled'].includes(button.id)) {
+                            setSelectedAction(button.id as any);
+                            setShowStatusModal(true);
+                          } else if (button.id === 'complete') {
+                            setSelectedAction('complete');
+                            handleUpdateSession();
+                          }
+                        }}
+                        disabled={button.disabled}
+                        className={`p-4 rounded-lg border flex flex-col items-center justify-center gap-2 transition-all ${button.disabled 
+                          ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600' 
+                          : `${button.hoverColor} ${button.borderColor}`}`}
+                      >
+                        <ButtonIcon className={`w-6 h-6 ${button.disabled ? 'text-gray-400' : button.textColor}`} />
+                        <span className={`font-medium ${button.disabled ? 'text-gray-500' : button.textColor}`}>
+                          {button.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <div className="mt-6">
+                  <button
+                    onClick={() => {
+                      setSelectedAction('');
+                      handleUpdateSession();
+                    }}
+                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-5 h-5" />
+                    <span>حفظ التعديلات دون تغيير الحالة</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* معلومات الأوتوميشن */}
+              {session.groupId.automation?.whatsappEnabled && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <h5 className="font-medium text-blue-800 dark:text-blue-300">
+                      إعدادات الأوتوميشن
+                    </h5>
+                  </div>
+                  <div className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
+                    <p>✓ إشعارات الواتساب مفعلة</p>
+                    <p>✓ سيتم إرسال إشعارات تلقائية للطلاب</p>
+                    {selectedAction === 'cancel' || selectedAction === 'postpone' || selectedAction === 'scheduled' ? (
+                      <p className="font-medium mt-2">
+                        📝 يمكنك إضافة رسالة مخصصة في النافذة التالية
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-white dark:bg-secondary border-t border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={handleUpdateSession}
+                  disabled={updating}
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {updating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>حفظ التغييرات</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* مودال تغيير حالة الجلسة مع رسالة مخصصة */}
+      {showStatusModal && selectedAction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-secondary rounded-xl shadow-xl max-w-lg w-full">
+            {/* Header */}
+            <div className="sticky top-0 bg-white dark:bg-secondary border-b border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {selectedAction === 'cancel' ? (
+                    <XCircle className="w-6 h-6 text-red-600" />
+                  ) : selectedAction === 'postpone' ? (
+                    <AlertCircle className="w-6 h-6 text-yellow-600" />
+                  ) : (
+                    <Calendar className="w-6 h-6 text-blue-600" />
+                  )}
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {selectedAction === 'cancel' ? 'إلغاء الجلسة' : 
+                     selectedAction === 'postpone' ? 'تأجيل الجلسة' : 
+                     'جدولة الجلسة'}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowStatusModal(false);
+                    setSelectedAction('');
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">
+                {selectedAction === 'cancel' 
+                  ? 'ستتم إزالة الجلسة من الجدول وإعلام الطلاب'
+                  : selectedAction === 'postpone'
+                  ? 'سيتم تأجيل الجلسة إلى وقت آخر وإعلام الطلاب'
+                  : 'ستتم إعادة جدولة الجلسة وإعلام الطلاب'}
+              </p>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* الرسالة المخصصة */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  رسالة مخصصة للطلاب
+                </label>
+                <textarea
+                  value={editForm.customMessage}
+                  onChange={(e) => setEditForm({...editForm, customMessage: e.target.value})}
+                  placeholder={selectedAction === 'cancel' 
+                    ? `عزيزي الطالب، نود إعلامك بأن حصة ${session.title} قد تم إلغاؤها. سيتم إعلامكم بالجلسة البديلة قريباً.` 
+                    : selectedAction === 'postpone'
+                    ? `عزيزي الطالب، نود إعلامك بأن حصة ${session.title} قد تم تأجيلها. سيتم إعلامكم بالموعد الجديد قريباً.`
+                    : `عزيزي الطالب، نود إعلامك بأن حصة ${session.title} قد تم جدولتها. نرجو الحضور في الموعد المحدد.`}
+                  rows={6}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  يمكنك استخدام المتغيرات: {`{studentName}, {sessionTitle}, {sessionDate}, {startTime}, {endTime}, {groupName}, {groupCode}, {courseName}`}
+                </p>
+              </div>
+
+              {/* معاينة الرسالة */}
+              {editForm.customMessage && (
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Eye className="w-5 h-5 text-gray-400" />
+                    <h5 className="font-medium text-gray-700 dark:text-gray-300">
+                      معاينة الرسالة
+                    </h5>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line">
+                    {processMessageVariables(editForm.customMessage)}
+                  </p>
+                </div>
+              )}
+
+              {/* معلومات الأوتوميشن */}
+              {session.groupId.automation?.whatsappEnabled && (
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Send className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <h5 className="font-medium text-green-800 dark:text-green-300">
+                      إشعارات الواتساب
+                    </h5>
+                  </div>
+                  <p className="text-sm text-green-700 dark:text-green-400">
+                    سيتم إرسال هذه الرسالة تلقائياً إلى جميع الطلاب عبر الواتساب
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-white dark:bg-secondary border-t border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowStatusModal(false);
+                    setSelectedAction('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={handleUpdateSession}
+                  disabled={updating}
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {updating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : selectedAction === 'cancel' ? (
+                    <XCircle className="w-4 h-4" />
+                  ) : selectedAction === 'postpone' ? (
+                    <AlertCircle className="w-4 h-4" />
+                  ) : (
+                    <Calendar className="w-4 h-4" />
+                  )}
+                  <span>
+                    {selectedAction === 'cancel' ? 'تأكيد الإلغاء' : 
+                     selectedAction === 'postpone' ? 'تأكيد التأجيل' : 
+                     'تأكيد الجدولة'}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

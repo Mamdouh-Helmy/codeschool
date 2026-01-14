@@ -319,6 +319,7 @@ export async function POST(req, { params }) {
 }
 
 // GET: Get attendance for a session
+// GET: Get attendance for a session
 export async function GET(req, { params }) {
   try {
     console.log(`\n📋 ========== GET ATTENDANCE FOR SESSION ==========`);
@@ -360,6 +361,10 @@ export async function GET(req, { params }) {
     }
 
     console.log(`✅ Session found: ${session.title}`);
+    console.log(`📅 Session Date: ${session.scheduledDate}`);
+    console.log(`⏰ Session Time: ${session.startTime} - ${session.endTime}`);
+    console.log(`📊 Session Status: ${session.status}`);
+    console.log(`🎯 Attendance Taken: ${session.attendanceTaken}`);
 
     // التحقق إذا كان المدرس يدرس هذه المجموعة
     const isInstructorOfGroup = session.groupId.instructors.some(
@@ -430,12 +435,42 @@ export async function GET(req, { params }) {
 
     // التحقق إذا كان يمكن أخذ الحضور
     const now = new Date();
+    
+    // ✅ إصلاح: تحويل session.scheduledDate إلى Date object
     const sessionDate = new Date(session.scheduledDate);
+    console.log(`📅 Parsed Session Date: ${sessionDate}`);
+    console.log(`📅 Is Valid Date: ${!isNaN(sessionDate.getTime())}`);
+    
+    if (isNaN(sessionDate.getTime())) {
+      console.log(`❌ Invalid session date format: ${session.scheduledDate}`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'تاريخ الجلسة غير صالح',
+          scheduledDate: session.scheduledDate
+        },
+        { status: 400 }
+      );
+    }
+    
     const [hours, minutes] = session.startTime.split(':').map(Number);
+    console.log(`⏰ Parsed Time: ${hours}:${minutes}`);
+    
     sessionDate.setHours(hours, minutes, 0, 0);
+    console.log(`🕒 Full Session DateTime: ${sessionDate}`);
     
     const thirtyMinutesBefore = new Date(sessionDate.getTime() - 30 * 60000);
     const twoHoursAfter = new Date(sessionDate.getTime() + 2 * 60 * 60000);
+    
+    console.log(`🕒 Time Windows:`);
+    console.log(`   Session: ${sessionDate}`);
+    console.log(`   Now: ${now}`);
+    console.log(`   30 Min Before: ${thirtyMinutesBefore}`);
+    console.log(`   2 Hours After: ${twoHoursAfter}`);
+    console.log(`   Is Now >= 30 Min Before: ${now >= thirtyMinutesBefore}`);
+    console.log(`   Is Now <= 2 Hours After: ${now <= twoHoursAfter}`);
+    console.log(`   Valid Status: ${session.status === 'scheduled' || session.status === 'completed'}`);
+    console.log(`   Not Taken: ${!session.attendanceTaken}`);
     
     const canTakeAttendance = 
       (session.status === 'scheduled' || session.status === 'completed') &&
