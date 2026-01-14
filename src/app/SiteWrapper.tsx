@@ -1,3 +1,4 @@
+// app/SiteWrapper.tsx - تحديث
 "use client";
 
 import { ReactNode, useMemo } from "react";
@@ -6,7 +7,7 @@ import Header from "@/components/Layout/Header";
 import Footer from "@/components/Layout/Footer";
 
 // تحديد الـ Routes اللي هتتعامل كـ Dashboard
-const DASHBOARD_PREFIXES: string[] = ["/admin"];
+const DASHBOARD_PREFIXES: string[] = ["/admin", "/dashboard", "/marketing", "/instructor"];
 
 interface SiteWrapperProps {
   children: ReactNode;

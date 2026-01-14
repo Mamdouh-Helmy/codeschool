@@ -3073,6 +3073,8 @@ const ar = {
   "common.copy": "نسخ",
   "common.showPreview": "عرض المعاينة",
   "common.hidePreview": "إخفاء المعاينة",
+
+  "nav.instructorDashboard": "لوحة تحكم المدرّس",
 };
 
 export default ar;

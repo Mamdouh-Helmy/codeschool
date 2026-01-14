@@ -1,4 +1,3 @@
-// components/Header/Header.tsx
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -152,15 +151,15 @@ const Header: React.FC = () => {
 
   // 🔥 دالة للتحقق مما إذا كان المستخدم يمكنه الوصول للبورتفليو
   const canAccessPortfolio = localUser &&
-    (localUser.role === "student" || localUser.role === "admin" || localUser.role === "marketing");
+    (localUser.role === "student" || localUser.role === "admin" || localUser.role === "marketing" || localUser.role === "user");
 
   return (
     <>
       <div className="relative"></div>
       <header
         className={`fixed h-24 top-0 py-1 z-50 w-full bg-transparent transition-all ${sticky
-            ? "shadow-lg dark:shadow-darkmd bg-white dark:bg-secondary"
-            : "shadow-none"
+          ? "shadow-lg dark:shadow-darkmd bg-white dark:bg-secondary"
+          : "shadow-none"
           }`}
       >
         <div className="container">
@@ -178,8 +177,8 @@ const Header: React.FC = () => {
                     <Link
                       href="/portfolio/builder"
                       className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/portfolio/builder"
-                          ? "text-primary"
-                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        ? "text-primary"
+                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
                         }`}
                     >
                       {t("nav.createPortfolio") || "إنشاء بورتفليو"}
@@ -193,11 +192,40 @@ const Header: React.FC = () => {
                     <Link
                       href={`/portfolio/${localUser.username}`}
                       className={`text-base font-medium transition-colors duration-200 ${pathUrl === `/portfolio/${localUser.username}`
-                          ? "text-primary"
-                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        ? "text-primary"
+                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
                         }`}
                     >
                       {t("nav.myPortfolio") || "بورتفليو"}
+                    </Link>
+                  </li>
+                )}
+
+                {/* 🔥 رابط الداشبورد - يظهر للمستخدمين العاديين والطلاب */}
+                {localUser && (localUser.role === "student" || localUser.role === "user") && (
+                  <li>
+                    <Link
+                      href="/dashboard"
+                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/dashboard"
+                        ? "text-primary"
+                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        }`}
+                    >
+                      {t("nav.dashboard") || "لوحة التحكم"}
+                    </Link>
+                  </li>
+                )}
+
+                {localUser?.role === "instructor" && (
+                  <li>
+                    <Link
+                      href="/instructor"
+                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/instructor"
+                        ? "text-primary"
+                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        }`}
+                    >
+                      {t("nav.instructorDashboard") || "لوحة المدرب"}
                     </Link>
                   </li>
                 )}
@@ -208,8 +236,8 @@ const Header: React.FC = () => {
                     <Link
                       href="/admin"
                       className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/admin"
-                          ? "text-primary"
-                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        ? "text-primary"
+                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
                         }`}
                     >
                       {t("nav.dashboard")}
@@ -223,8 +251,8 @@ const Header: React.FC = () => {
                     <Link
                       href="/marketing/blogs"
                       className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/marketing/blogs"
-                          ? "text-primary"
-                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        ? "text-primary"
+                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
                         }`}
                     >
                       {t("nav.addBlog") || "إضافة مدونة"}
@@ -418,6 +446,28 @@ const Header: React.FC = () => {
               </Link>
             )}
 
+            {/* 🔥 رابط الداشبورد في الموبايل - للمستخدمين العاديين والطلاب */}
+            {localUser && (localUser.role === "student" || localUser.role === "user") && (
+              <Link
+                href="/dashboard"
+                onClick={() => setNavbarOpen(false)}
+                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+              >
+                {t("nav.dashboard") || "لوحة التحكم"}
+              </Link>
+            )}
+
+            // وفي قسم الموبايل:
+{localUser?.role === "instructor" && (
+  <Link
+    href="/instructor"
+    onClick={() => setNavbarOpen(false)}
+    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+  >
+    {t("nav.instructorDashboard") || "لوحة المدرب"}
+  </Link>
+)}
+
             {/* Dashboard للأدمن فقط */}
             {localUser?.role === "admin" && (
               <Link
@@ -518,24 +568,24 @@ const Header: React.FC = () => {
         {/* Dialogs */}
         <div
           className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isSuccessDialogOpen
-              ? "opacity-100 transform translate-y-0"
-              : "opacity-0 transform -translate-y-4 pointer-events-none"
+            ? "opacity-100 transform translate-y-0"
+            : "opacity-0 transform -translate-y-4 pointer-events-none"
             }`}
         >
           <SuccessfullLogin />
         </div>
         <div
           className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isFailedDialogOpen
-              ? "opacity-100 transform translate-y-0"
-              : "opacity-0 transform -translate-y-4 pointer-events-none"
+            ? "opacity-100 transform translate-y-0"
+            : "opacity-0 transform -translate-y-4 pointer-events-none"
             }`}
         >
           <FailedLogin />
         </div>
         <div
           className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isUserRegistered
-              ? "opacity-100 transform translate-y-0"
-              : "opacity-0 transform -translate-y-4 pointer-events-none"
+            ? "opacity-100 transform translate-y-0"
+            : "opacity-0 transform -translate-y-4 pointer-events-none"
             }`}
         >
           <UserRegistered />

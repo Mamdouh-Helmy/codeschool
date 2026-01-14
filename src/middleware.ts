@@ -1,4 +1,4 @@
-// middleware.ts
+// middleware.ts - تحديث
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
@@ -14,9 +14,10 @@ export async function middleware(req: NextRequest) {
   const protectedRoutes = [
     "/admin",
     "/dashboard",
+    "/instructor",
     "/profile",
     "/marketing",
-    "/portfolio/builder" // 🔥 أضفنا هذا
+    "/portfolio/builder"
   ];
 
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -43,8 +44,15 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(new URL("/", req.url));
       }
       
-      // 🔥 صفحة إنشاء البورتفليو متاحة لجميع المستخدمين المسجلين (user, admin, marketing)
-      // لا حاجة لتحقق إضافي هنا
+      // تحقق من الصلاحيات للاستاذ
+      if (pathname.startsWith("/instructor") && payload.role !== "instructor") {
+        return NextResponse.redirect(new URL("/", req.url));
+      }
+      
+      // تحقق من الصلاحيات للداشبورد - يجب أن يكون المستخدم طالباً أو مستخدم عادي
+      if (pathname.startsWith("/dashboard") && payload.role !== "student" && payload.role !== "user") {
+        return NextResponse.redirect(new URL("/", req.url));
+      }
       
       // إضافة بيانات المستخدم للهيدر
       const requestHeaders = new Headers(req.headers);
@@ -81,9 +89,12 @@ export const config = {
   matcher: [
     "/admin/:path*",
     "/dashboard/:path*",
+    "/dashboard", 
+    "/instructor/:path*",
+    "/instructor",
     "/profile/:path*",
     "/marketing/:path*",
-    "/portfolio/builder", // 🔥 أضفنا هذا
+    "/portfolio/builder",
     "/signin",
     "/signup"
   ],

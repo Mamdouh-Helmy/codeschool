@@ -3001,6 +3001,8 @@ const en = {
   "common.copy": "Copy",
   "common.showPreview": "Show Preview",
   "common.hidePreview": "Hide Preview",
+
+  "nav.instructorDashboard": "Instructor Dashboard",
 };
 
 export default en;
