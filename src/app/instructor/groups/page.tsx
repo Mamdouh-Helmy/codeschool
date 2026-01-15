@@ -265,6 +265,7 @@ export default function InstructorGroupsPage() {
   };
 
   const getEvaluationStatusBadge = (group: Group) => {
+    // ⚠️ تحديث: فقط المجموعات المكتملة يمكن تقييمها
     if (group.status !== "completed") return null;
     
     if (group.metadata?.evaluationsCompleted) {
@@ -295,6 +296,11 @@ export default function InstructorGroupsPage() {
       icon: GraduationCap,
       progress: 0,
     };
+  };
+
+  const canShowEvaluationButton = (group: Group) => {
+    // ⚠️ تحديث: فقط المجموعات المكتملة يمكن تقييمها
+    return group.status === "completed";
   };
 
   if (loading && groups.length === 0) {
@@ -500,6 +506,7 @@ export default function InstructorGroupsPage() {
             const StatusIcon = statusConfig.icon;
             const evaluationStatus = getEvaluationStatusBadge(group);
             const EvaluationIcon = evaluationStatus?.icon || Star;
+            const canEvaluate = canShowEvaluationButton(group);
 
             return (
               <div
@@ -701,7 +708,8 @@ export default function InstructorGroupsPage() {
                         <span>عرض التفاصيل</span>
                       </Link>
                       
-                      
+                      {/* ⚠️ تحديث: زر التقييم يظهر فقط للمجموعات المكتملة */}
+                      {canEvaluate && (
                         <Link
                           href={`/instructor/groups/${group.id}/evaluations`}
                           className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
@@ -709,7 +717,7 @@ export default function InstructorGroupsPage() {
                           <Star className="w-4 h-4" />
                           <span>تقييم الطلاب</span>
                         </Link>
-                      
+                      )}
                     </div>
                   </div>
                 </div>
