@@ -32,9 +32,11 @@ import {
   Search,
   ChevronLeft,
   ChevronRight as ChevronRightIcon,
-  Printer,
   Mail,
   Phone,
+  Info,
+  Copy,
+  MessageCircle,
 } from "lucide-react";
 
 interface Session {
@@ -115,13 +117,16 @@ export default function SessionAttendancePage() {
   const [automation, setAutomation] = useState<any>(null);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  
+
   const [selectedStatus, setSelectedStatus] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // ✅ إضافة حالة للرسائل المخصصة
   const [showCustomMessages, setShowCustomMessages] = useState(false);
   const [customMessages, setCustomMessages] = useState<Record<string, string>>({});
+  const [showMessageEditor, setShowMessageEditor] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (sessionId) {
@@ -164,12 +169,12 @@ export default function SessionAttendancePage() {
       // تهيئة الحالة المحددة والملاحظات
       const initialStatus: Record<string, string> = {};
       const initialNotes: Record<string, string> = {};
-      
+
       response.data.attendance.forEach((item: StudentAttendance) => {
         initialStatus[item.studentId] = item.attendance.status;
         initialNotes[item.studentId] = item.attendance.notes || "";
       });
-      
+
       setSelectedStatus(initialStatus);
       setNotes(initialNotes);
 
@@ -191,9 +196,23 @@ export default function SessionAttendancePage() {
       [studentId]: status
     }));
 
-    // إذا تم اختيار حالة تحتاج لإشعار ولي الأمر، نعرض حقل الرسالة المخصصة
+    // إذا تم اختيار حالة تحتاج لإشعار ولي الأمر، نعرض زر الرسالة المخصصة
     if (['absent', 'late', 'excused'].includes(status)) {
-      setShowCustomMessages(true);
+      setShowMessageEditor(prev => ({
+        ...prev,
+        [studentId]: false
+      }));
+    } else {
+      // إذا تم تغيير الحالة إلى حاضر، نزيل الرسالة المخصصة
+      setCustomMessages(prev => {
+        const newMessages = { ...prev };
+        delete newMessages[studentId];
+        return newMessages;
+      });
+      setShowMessageEditor(prev => ({
+        ...prev,
+        [studentId]: false
+      }));
     }
   };
 
@@ -208,6 +227,13 @@ export default function SessionAttendancePage() {
     setCustomMessages(prev => ({
       ...prev,
       [studentId]: message
+    }));
+  };
+
+  const toggleMessageEditor = (studentId: string) => {
+    setShowMessageEditor(prev => ({
+      ...prev,
+      [studentId]: !prev[studentId]
     }));
   };
 
@@ -254,8 +280,8 @@ export default function SessionAttendancePage() {
         throw new Error(response.error || "فشل في تسجيل الحضور");
       }
 
-      setSuccessMessage(response.message || "تم تسجيل الحضور بنجاح");
-      
+      setSuccessMessage(response.message || "تم تسجيل/تحديث الحضور بنجاح");
+
       // تحديث البيانات بعد التسجيل الناجح
       setTimeout(() => {
         fetchAttendanceData();
@@ -275,24 +301,10 @@ export default function SessionAttendancePage() {
       newStatus[student.studentId] = status;
     });
     setSelectedStatus(newStatus);
-    
+
     if (['absent', 'late', 'excused'].includes(status)) {
       setShowCustomMessages(true);
     }
-  };
-
-  const handleSendTestNotification = (studentId: string) => {
-    const student = attendance.find(s => s.studentId === studentId);
-    if (!student) return;
-
-    const whatsappNumber = student.guardianInfo?.whatsappNumber;
-    if (!whatsappNumber) {
-      alert("لا يوجد رقم واتساب لولي أمر هذا الطالب");
-      return;
-    }
-
-    // هنا يمكنك إضافة منطق إرسال رسالة تجريبية
-    alert(`سيتم إرسال إشعار تجريبي إلى ولي أمر ${student.fullName}`);
   };
 
   const formatDate = (dateString: string) => {
@@ -345,6 +357,89 @@ export default function SessionAttendancePage() {
     };
 
     return config[status as keyof typeof config] || config.pending;
+  };
+
+  const getAvailableVariables = (student: StudentAttendance) => {
+    const studentName = student.fullName || "الطالب";
+    const guardianName = student.guardianInfo?.name || "ولي الأمر";
+
+    return {
+      studentName,
+      guardianName,
+      sessionName: session?.title || "الجلسة",
+      sessionNumber: "الجلسة الحالية",
+      date: formatDate(session?.scheduledDate || ""),
+      time: `${session?.startTime} - ${session?.endTime}`,
+      status: getStatusConfig(selectedStatus[student.studentId] || student.attendance.status).text,
+      groupCode: session?.groupId?.code || "",
+      groupName: session?.groupId?.name || "",
+      notes: notes[student.studentId] || "",
+    };
+  };
+
+  const copyTemplate = (status: string) => {
+    let template = "";
+
+    if (status === 'absent') {
+      template = `عزيزي {guardianName}،
+
+نود إعلامكم بأن الطالب {studentName} كان غائباً في حصة {sessionName}.
+
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+👥 المجموعة: {groupName}
+
+{notes ? '📝 ملاحظات: {notes}' : ''}
+
+مع أطيب التحيات،
+فريق Code School`;
+    } else if (status === 'late') {
+      template = `عزيزي {guardianName}،
+
+نود إعلامكم بأن الطالب {studentName} كان متأخراً في حصة {sessionName}.
+
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+👥 المجموعة: {groupName}
+
+{notes ? '📝 ملاحظات: {notes}' : ''}
+
+نرجو الحرص على المواعيد في المستقبل.
+
+مع أطيب التحيات،
+فريق Code School`;
+    } else if (status === 'excused') {
+      template = `عزيزي {guardianName}،
+
+نود إعلامكم بأن الطالب {studentName} كان معذوراً في حصة {sessionName}.
+
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+👥 المجموعة: {groupName}
+
+{notes ? '📝 ملاحظات: {notes}' : ''}
+
+مع أطيب التحيات،
+فريق Code School`;
+    }
+
+    navigator.clipboard.writeText(template).then(() => {
+      alert("تم نسخ القالب إلى الحافظة");
+    });
+  };
+
+  const getMessagePreview = (student: StudentAttendance, message: string) => {
+    if (!message) return "";
+
+    const variables = getAvailableVariables(student);
+    let preview = message;
+
+    Object.entries(variables).forEach(([key, value]) => {
+      const regex = new RegExp(`\\{${key}\\}`, 'g');
+      preview = preview.replace(regex, value);
+    });
+
+    return preview;
   };
 
   const filteredAttendance = attendance.filter(student => {
@@ -412,7 +507,7 @@ export default function SessionAttendancePage() {
       </div>
     );
   }
-
+ console.log(session)
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-darkmode">
       {/* Header */}
@@ -476,7 +571,7 @@ export default function SessionAttendancePage() {
                 <span>•</span>
                 <span className="flex items-center gap-1">
                   <Users className="w-4 h-4" />
-                  {session?.groupId?.name}
+                  {attendance.length} طالب
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1">
@@ -485,16 +580,11 @@ export default function SessionAttendancePage() {
                 </span>
               </div>
             </div>
-            
-            {session?.attendanceTaken ? (
-              <div className="px-4 py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 rounded-full text-sm">
-                تم تسجيل الحضور
-              </div>
-            ) : (
-              <div className="px-4 py-2 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-full text-sm">
-                {canTakeAttendance ? "جاهز للتسجيل" : "غير جاهز للتسجيل"}
-              </div>
-            )}
+
+            {/* ✅ تعديل: عرض حالة الحضور فقط */}
+            <div className="px-4 py-2 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 rounded-full text-sm">
+              {session?.attendanceTaken ? "تم تسجيل الحضور (قابل للتعديل)" : "جاهز لتسجيل الحضور"}
+            </div>
           </div>
 
           {/* إحصائيات الحضور */}
@@ -646,21 +736,20 @@ export default function SessionAttendancePage() {
               </div>
             </div>
 
-            {/* إجراءات */}
-            <div className="flex items-end">
+            {/* ✅ زر عرض/إخفاء الرسائل المخصصة */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                الرسائل المخصصة
+              </label>
               <button
-                onClick={handleSubmitAttendance}
-                disabled={submitting || !canTakeAttendance || session?.attendanceTaken}
-                className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                onClick={() => setShowCustomMessages(!showCustomMessages)}
+                className={`w-full px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 ${showCustomMessages
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                  }`}
               >
-                {submitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                <span>
-                  {submitting ? "جاري الحفظ..." : session?.attendanceTaken ? "تم التسجيل" : "حفظ الحضور"}
-                </span>
+                <MessageCircle className="w-4 h-4" />
+                {showCustomMessages ? "إخفاء الرسائل" : "عرض الرسائل"}
               </button>
             </div>
           </div>
@@ -692,17 +781,25 @@ export default function SessionAttendancePage() {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 قائمة الطلاب ({filteredAttendance.length})
               </h3>
-              <div className="flex items-center gap-2">
+
+              {/* ✅ زر حفظ الحضور */}
+              <div className="flex items-center gap-4">
                 <button
-                  onClick={() => setShowCustomMessages(!showCustomMessages)}
-                  className="px-3 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-sm flex items-center gap-2"
+                  onClick={handleSubmitAttendance}
+                  disabled={submitting}
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>رسائل مخصصة</span>
-                </button>
-                <button className="px-3 py-2 border border-gray-300 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm flex items-center gap-2">
-                  <Printer className="w-4 h-4" />
-                  <span>طباعة</span>
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري الحفظ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>حفظ/تحديث الحضور</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -728,7 +825,7 @@ export default function SessionAttendancePage() {
                     </th>
                     {showCustomMessages && (
                       <th className="px-4 py-3 text-right text-sm font-medium text-gray-700 dark:text-gray-300">
-                        رسالة مخصصة
+                        رسالة ولي الأمر
                       </th>
                     )}
                     <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -742,16 +839,17 @@ export default function SessionAttendancePage() {
                       const currentStatus = selectedStatus[student.studentId] || student.attendance.status;
                       const statusConfig = getStatusConfig(currentStatus);
                       const StatusIcon = statusConfig.icon;
-                      
+
                       const needsNotification = ['absent', 'late', 'excused'].includes(currentStatus);
                       const hasGuardianWhatsApp = student.guardianInfo?.whatsappNumber;
+                      const isMessageEditorOpen = showMessageEditor[student.studentId];
 
                       return (
                         <tr key={student.studentId} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                           <td className="px-4 py-3 text-center text-sm text-gray-500 dark:text-gray-400">
                             {index + 1}
                           </td>
-                          
+
                           <td className="px-4 py-3">
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">
@@ -762,7 +860,7 @@ export default function SessionAttendancePage() {
                               </p>
                             </div>
                           </td>
-                          
+
                           <td className="px-4 py-3">
                             <div className="space-y-1">
                               <div className="flex items-center gap-1">
@@ -781,14 +879,14 @@ export default function SessionAttendancePage() {
                               )}
                             </div>
                           </td>
-                          
+
                           <td className="px-4 py-3">
                             <div className="flex justify-center">
                               <select
                                 value={currentStatus}
                                 onChange={(e) => handleStatusChange(student.studentId, e.target.value)}
-                                disabled={session?.attendanceTaken}
-                                className={`px-3 py-1 rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent text-sm ${statusConfig.bg} ${session?.attendanceTaken ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                                disabled={submitting}
+                                className={`px-3 py-1 rounded-lg border focus:ring-2 focus:ring-primary focus:border-transparent text-sm ${statusConfig.bg} ${submitting ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
                               >
                                 <option value="present" className="bg-white dark:bg-gray-800">حاضر</option>
                                 <option value="absent" className="bg-white dark:bg-gray-800">غائب</option>
@@ -798,54 +896,108 @@ export default function SessionAttendancePage() {
                               </select>
                             </div>
                           </td>
-                          
+
                           <td className="px-4 py-3">
                             <input
                               type="text"
                               value={notes[student.studentId] || ""}
                               onChange={(e) => handleNotesChange(student.studentId, e.target.value)}
-                              disabled={session?.attendanceTaken}
+                              disabled={submitting}
                               placeholder="أضف ملاحظة..."
                               className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                           </td>
-                          
+
                           {showCustomMessages && (
                             <td className="px-4 py-3">
-                              {needsNotification ? (
-                                <div className="space-y-2">
-                                  <textarea
-                                    value={customMessages[student.studentId] || ""}
-                                    onChange={(e) => handleCustomMessageChange(student.studentId, e.target.value)}
-                                    disabled={session?.attendanceTaken}
-                                    placeholder={`رسالة مخصصة لولي أمر ${student.fullName}`}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed resize-none"
-                                    rows={2}
-                                  />
-                                  {automation?.whatsappEnabled && automation?.notifyGuardianOnAbsence && (
-                                    <div className="flex items-center gap-2">
-                                      <span className={`text-xs ${hasGuardianWhatsApp ? 'text-green-600' : 'text-red-600'}`}>
-                                        {hasGuardianWhatsApp ? '✓ رقم واتساب متوفر' : '⚠️ لا يوجد رقم واتساب'}
-                                      </span>
-                                      {hasGuardianWhatsApp && (
+                              <div className="space-y-2">
+                                {needsNotification ? (
+                                  <>
+                                    {!isMessageEditorOpen ? (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs text-gray-500">
+                                          {customMessages[student.studentId]
+                                            ? "✓ رسالة مخصصة مضافة"
+                                            : "📝 إضافة رسالة"
+                                          }
+                                        </span>
                                         <button
-                                          onClick={() => handleSendTestNotification(student.studentId)}
-                                          className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                          onClick={() => toggleMessageEditor(student.studentId)}
+                                          className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
                                         >
-                                          إرسال تجريبي
+                                          <MessageCircle className="w-3 h-3" />
+                                          {customMessages[student.studentId] ? "تعديل" : "إضافة"}
                                         </button>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="text-center text-sm text-gray-500 dark:text-gray-400">
-                                  غير مطلوب
-                                </div>
-                              )}
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-3">
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                                            رسالة مخصصة لولي الأمر
+                                          </span>
+                                          <button
+                                            onClick={() => copyTemplate(currentStatus)}
+                                            className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
+                                          >
+                                            <Copy className="w-3 h-3" />
+                                            نسخ قالب
+                                          </button>
+                                        </div>
+
+                                        <textarea
+                                          value={customMessages[student.studentId] || ""}
+                                          onChange={(e) => handleCustomMessageChange(student.studentId, e.target.value)}
+                                          placeholder={`اكتب رسالة مخصصة لولي أمر ${student.fullName}`}
+                                          className="w-full px-3 py-2 border border-blue-300 dark:border-blue-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed resize-none h-32"
+                                          rows={3}
+                                          dir="rtl"
+                                        />
+
+                                        <div className="flex justify-between items-center">
+                                          <button
+                                            onClick={() => toggleMessageEditor(student.studentId)}
+                                            className="text-xs text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+                                          >
+                                            إغلاق
+                                          </button>
+                                          <span className="text-xs text-gray-500">
+                                            {customMessages[student.studentId]?.length || 0} حرف
+                                          </span>
+                                        </div>
+
+                                        {customMessages[student.studentId] && (
+                                          <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                              معاينة الرسالة:
+                                            </p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                                              {getMessagePreview(student, customMessages[student.studentId]).substring(0, 100)}...
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {automation?.whatsappEnabled && automation?.notifyGuardianOnAbsence && (
+                                      <div className="text-xs">
+                                        <span className={`${hasGuardianWhatsApp ? 'text-green-600' : 'text-red-600'}`}>
+                                          {hasGuardianWhatsApp
+                                            ? `✓ سيتم الإرسال إلى: ${student.guardianInfo?.whatsappNumber}`
+                                            : "⚠️ لا يوجد رقم واتساب لولي الأمر"
+                                          }
+                                        </span>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+                                    غير مطلوب
+                                  </div>
+                                )}
+                              </div>
                             </td>
                           )}
-                          
+
                           <td className="px-4 py-3">
                             <div className="flex justify-center gap-2">
                               {student.attendance.markedAt && (
@@ -884,22 +1036,23 @@ export default function SessionAttendancePage() {
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 عرض {filteredAttendance.length} من {attendance.length} طالب
               </div>
-              
+
               <div className="flex gap-2">
                 <button
                   onClick={() => {
                     setSelectedStatus({});
                     setNotes({});
                     setCustomMessages({});
+                    setShowMessageEditor({});
                   }}
                   className="px-4 py-2 border border-gray-300 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
-                  إعادة تعيين
+                  إعادة تعيين الكل
                 </button>
-                
+
                 <button
                   onClick={handleSubmitAttendance}
-                  disabled={submitting || !canTakeAttendance || session?.attendanceTaken}
+                  disabled={submitting}
                   className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {submitting ? (
@@ -910,7 +1063,7 @@ export default function SessionAttendancePage() {
                   ) : (
                     <>
                       <Save className="w-4 h-4" />
-                      <span>{session?.attendanceTaken ? "تم التسجيل" : "حفظ الحضور"}</span>
+                      <span>حفظ/تحديث الحضور</span>
                     </>
                   )}
                 </button>
@@ -920,25 +1073,24 @@ export default function SessionAttendancePage() {
         </div>
 
         {/* ملاحظات هامة */}
-        {canTakeAttendance && !session?.attendanceTaken && (
-          <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-medium text-yellow-800 dark:text-yellow-300 mb-1">
-                  ملاحظات هامة
-                </h4>
-                <ul className="text-sm text-yellow-700 dark:text-yellow-400 space-y-1">
-                  <li>• يمكنك تغيير حالة الحضور لأي طالب من القائمة المنسدلة</li>
-                  <li>• إضافة ملاحظات اختيارية لتوضيح سبب الغياب أو التأخير</li>
-                  <li>• سيتم إرسال إشعارات تلقائية لأولياء أمور الطلاب الغائبين والمتأخرين والمعذورين إذا كان الأوتوميشن مفعل</li>
-                  <li>• يمكنك إرسال رسائل مخصصة لكل ولي أمر عن طريق تفعيل خيار "رسائل مخصصة"</li>
-                  <li>• بعد الحفظ، لا يمكن تعديل الحضور إلا من قبل الإدارة</li>
-                </ul>
-              </div>
+        <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="flex items-start gap-2">
+            <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-1">
+                ملاحظات هامة
+              </h4>
+              <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
+                <li>• يمكنك تغيير حالة الحضور لأي طالب في أي وقت</li>
+                <li>• إضافة ملاحظات اختيارية لتوضيح سبب الغياب أو التأخير</li>
+                <li>• سيتم إرسال إشعارات تلقائية لأولياء أمور الطلاب الغائبين والمتأخرين والمعذورين إذا كان الأوتوميشن مفعل</li>
+                <li>• يمكنك إضافة رسائل مخصصة لكل ولي أمر عند اختيار حالة "غائب" أو "متأخر" أو "معذور"</li>
+                <li>• يمكنك تعديل الحضور حتى بعد حفظه</li>
+                <li>• الحفظ سيحدث البيانات مباشرة في قاعدة البيانات ويرسل الإشعارات إذا كانت مفعلة</li>
+              </ul>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

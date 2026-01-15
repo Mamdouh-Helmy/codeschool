@@ -12,24 +12,16 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
-  Search,
   Filter,
   ChevronRight,
   Eye,
-  Download,
   BarChart3,
   BookOpen,
   GraduationCap,
   TrendingUp,
   RefreshCw,
-  MoreVertical,
-  FileText,
-  Mail,
-  Phone,
   ChevronLeft,
   ChevronRight as ChevronRightIcon,
-  Printer,
-  ExternalLink,
 } from "lucide-react";
 
 interface AttendanceRecord {
@@ -68,15 +60,6 @@ interface StudentAttendanceSummary {
 interface GroupsResponse {
   success: boolean;
   data: {
-    type: string;
-    sessions: Array<{
-      _id: string;
-      title: string;
-      date: string;
-      time: string;
-      group: string;
-      attendanceCount: number;
-    }>;
     attendanceRecords: AttendanceRecord[];
     studentAttendanceSummary: StudentAttendanceSummary[];
     statistics: {
@@ -103,12 +86,7 @@ interface GroupsResponse {
     hasPrev: boolean;
   };
   filters: {
-    fromDate?: string;
-    toDate?: string;
-    groupId?: string;
-    status?: string;
     applied: {
-      dateRange: string;
       group: string;
       statusFilter: string;
     };
@@ -122,14 +100,11 @@ export default function InstructorAttendancePage() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [studentSummary, setStudentSummary] = useState<StudentAttendanceSummary[]>([]);
   const [stats, setStats] = useState<any>(null);
-  const [groups, setGroups] = useState<any[]>([]);
+  const [groups, setGroups] = useState<Array<{id: string; name: string; code: string}>>([]);
   const [error, setError] = useState("");
   
-  const [filterFromDate, setFilterFromDate] = useState("");
-  const [filterToDate, setFilterToDate] = useState("");
   const [filterGroup, setFilterGroup] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [filterStudent, setFilterStudent] = useState("");
   const [viewType, setViewType] = useState<"detailed" | "summary">("detailed");
   
   const [pagination, setPagination] = useState({
@@ -143,7 +118,8 @@ export default function InstructorAttendancePage() {
 
   useEffect(() => {
     fetchAttendanceData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterGroup, filterStatus]);
 
   const fetchAttendanceData = async (page = 1) => {
     try {
@@ -154,14 +130,6 @@ export default function InstructorAttendancePage() {
 
       let url = `/api/instructor-dashboard/attendance?page=${page}&limit=${pagination.limit}`;
       
-      if (filterFromDate) {
-        url += `&fromDate=${filterFromDate}`;
-      }
-      
-      if (filterToDate) {
-        url += `&toDate=${filterToDate}`;
-      }
-      
       if (filterGroup !== "all") {
         url += `&groupId=${filterGroup}`;
       }
@@ -169,10 +137,8 @@ export default function InstructorAttendancePage() {
       if (filterStatus !== "all") {
         url += `&status=${filterStatus}`;
       }
-      
-      if (filterStudent) {
-        url += `&studentId=${filterStudent}`;
-      }
+
+      console.log("🌐 Fetching from URL:", url);
 
       const attendanceRes = await fetch(url, {
         headers: {
@@ -191,7 +157,7 @@ export default function InstructorAttendancePage() {
       });
 
       if (!attendanceRes.ok || !response.success) {
-        throw new Error(response.data?.error || "فشل في تحميل سجل الحضور");
+        throw new Error(response.error || "فشل في تحميل سجل الحضور");
       }
 
       setAttendanceRecords(response.data.attendanceRecords || []);
@@ -210,10 +176,6 @@ export default function InstructorAttendancePage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFilterChange = () => {
-    fetchAttendanceData(1);
   };
 
   const handlePageChange = (page: number) => {
@@ -278,291 +240,10 @@ export default function InstructorAttendancePage() {
     return "bg-red-100 dark:bg-red-900/30";
   };
 
-  const exportToCSV = () => {
-    let csvContent = "";
-    
-    if (viewType === "detailed") {
-      const headers = [
-        "تاريخ الجلسة",
-        "وقت الجلسة",
-        "عنوان الجلسة",
-        "المجموعة",
-        "اسم الطالب",
-        "رقم القيد",
-        "حالة الحضور",
-        "ملاحظات",
-        "تاريخ التسجيل",
-        "مسجل بواسطة"
-      ];
-
-      const data = attendanceRecords.map(record => [
-        formatDate(record.sessionDate),
-        record.sessionTime,
-        record.sessionTitle,
-        record.groupName,
-        record.studentName,
-        record.enrollmentNumber,
-        getStatusConfig(record.status).text,
-        record.notes || "لا توجد",
-        formatDate(record.markedAt),
-        record.markedBy?.name || "غير معروف"
-      ]);
-
-      csvContent = [
-        headers.join(","),
-        ...data.map(row => row.map(cell => `"${cell}"`).join(","))
-      ].join("\n");
-    } else {
-      const headers = [
-        "اسم الطالب",
-        "رقم القيد",
-        "إجمالي الجلسات",
-        "عدد الحضور",
-        "عدد الغياب",
-        "عدد التأخير",
-        "عدد المعذورين",
-        "نسبة الحضور %"
-      ];
-
-      const data = studentSummary.map(student => [
-        student.studentName,
-        student.enrollmentNumber,
-        student.totalSessions,
-        student.present,
-        student.absent,
-        student.late,
-        student.excused,
-        student.attendanceRate
-      ]);
-
-      csvContent = [
-        headers.join(","),
-        ...data.map(row => row.map(cell => `"${cell}"`).join(","))
-      ].join("\n");
-    }
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `سجل_الحضور_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-  };
-
-  const exportStudentReport = async (studentId: string) => {
-    try {
-      setLoading(true);
-      
-      const response = await fetch(`/api/instructor/attendance?studentId=${studentId}&export=true`, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      });
-      
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `تقرير_الحضور_${studentId}_${new Date().toISOString().split('T')[0]}.pdf`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-      } else {
-        throw new Error('فشل في تصدير تقرير الطالب');
-      }
-    } catch (error: any) {
-      console.error('❌ Error exporting student report:', error);
-      setError(error.message || 'حدث خطأ أثناء تصدير التقرير');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const notifyPoorAttendance = async (studentId: string) => {
-    if (!confirm('هل تريد إرسال تنبيه بضعف الحضور لهذا الطالب؟')) return;
-    
-    try {
-      setLoading(true);
-      
-      const response = await fetch(`/api/instructor/students/${studentId}/notify-poor-attendance`, {
-        method: 'POST',
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        alert('✅ تم إرسال التنبيه بنجاح');
-      } else {
-        throw new Error(data.error || 'فشل في إرسال التنبيه');
-      }
-    } catch (error: any) {
-      console.error('❌ Error notifying poor attendance:', error);
-      alert(`❌ ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const printAttendanceReport = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('الرجاء السماح بالنوافذ المنبثقة لطباعة التقرير');
-      return;
-    }
-    
-    const reportContent = `
-      <html>
-        <head>
-          <title>تقرير الحضور - ${new Date().toLocaleDateString('ar-EG')}</title>
-          <style>
-            body { 
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-              direction: rtl;
-              padding: 20px;
-              line-height: 1.6;
-            }
-            .header {
-              text-align: center;
-              margin-bottom: 30px;
-              border-bottom: 2px solid #333;
-              padding-bottom: 20px;
-            }
-            .header h1 {
-              color: #2c3e50;
-              margin-bottom: 5px;
-            }
-            .header .date {
-              color: #7f8c8d;
-              font-size: 14px;
-            }
-            .stats {
-              display: grid;
-              grid-template-columns: repeat(5, 1fr);
-              gap: 15px;
-              margin-bottom: 30px;
-            }
-            .stat-box {
-              text-align: center;
-              padding: 15px;
-              border-radius: 8px;
-              color: white;
-              font-weight: bold;
-            }
-            .stat-box.total { background: #3498db; }
-            .stat-box.present { background: #27ae60; }
-            .stat-box.absent { background: #e74c3c; }
-            .stat-box.late { background: #f39c12; }
-            .stat-box.excused { background: #9b59b6; }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 20px;
-            }
-            th {
-              background: #2c3e50;
-              color: white;
-              padding: 12px;
-              text-align: right;
-            }
-            td {
-              padding: 10px 12px;
-              border-bottom: 1px solid #ddd;
-            }
-            tr:nth-child(even) {
-              background: #f8f9fa;
-            }
-            .present-status { color: #27ae60; font-weight: bold; }
-            .absent-status { color: #e74c3c; font-weight: bold; }
-            .late-status { color: #f39c12; font-weight: bold; }
-            .excused-status { color: #9b59b6; font-weight: bold; }
-            .footer {
-              margin-top: 40px;
-              text-align: center;
-              color: #7f8c8d;
-              font-size: 12px;
-              border-top: 1px solid #ddd;
-              padding-top: 20px;
-            }
-            @media print {
-              body { padding: 0; }
-              .no-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>تقرير الحضور الشامل</h1>
-            <div class="date">تاريخ التقرير: ${new Date().toLocaleDateString('ar-EG')}</div>
-            <div class="date">المدرس: نظام إدارة التعلم</div>
-          </div>
-          
-          <div class="stats">
-            <div class="stat-box total">
-              <div style="font-size: 24px">${stats?.totalSessions || 0}</div>
-              <div>إجمالي الجلسات</div>
-            </div>
-            <div class="stat-box present">
-              <div style="font-size: 24px">${stats?.totalPresent || 0}</div>
-              <div>حضور</div>
-            </div>
-            <div class="stat-box absent">
-              <div style="font-size: 24px">${stats?.totalAbsent || 0}</div>
-              <div>غياب</div>
-            </div>
-            <div class="stat-box late">
-              <div style="font-size: 24px">${stats?.totalLate || 0}</div>
-              <div>تأخير</div>
-            </div>
-            <div class="stat-box excused">
-              <div style="font-size: 24px">${stats?.totalExcused || 0}</div>
-              <div>معذور</div>
-            </div>
-          </div>
-          
-          <table>
-            <thead>
-              <tr>
-                <th>الطالب</th>
-                <th>المجموعة</th>
-                <th>الجلسة</th>
-                <th>التاريخ</th>
-                <th>حالة الحضور</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${attendanceRecords.map(record => `
-                <tr>
-                  <td>${record.studentName}<br><small>${record.enrollmentNumber}</small></td>
-                  <td>${record.groupName}<br><small>${record.groupCode}</small></td>
-                  <td>${record.sessionTitle}</td>
-                  <td>${formatDate(record.sessionDate)}<br><small>${record.sessionTime}</small></td>
-                  <td class="${record.status}-status">${getStatusConfig(record.status).text}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          
-          <div class="footer">
-            <p>تم إنشاء التقرير تلقائياً من نظام إدارة التعلم</p>
-            <p>© ${new Date().getFullYear()} جميع الحقوق محفوظة</p>
-          </div>
-          
-          <div class="no-print" style="margin-top: 20px; text-align: center;">
-            <button onclick="window.print()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
-              طباعة التقرير
-            </button>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    printWindow.document.write(reportContent);
-    printWindow.document.close();
-    printWindow.focus();
+  const resetFilters = () => {
+    setFilterGroup("all");
+    setFilterStatus("all");
+    // الـ useEffect سيتحقق من التغييرات تلقائياً
   };
 
   if (loading && attendanceRecords.length === 0) {
@@ -635,13 +316,6 @@ export default function InstructorAttendancePage() {
                 title="تحديث"
               >
                 <RefreshCw className="w-5 h-5" />
-              </button>
-              <button
-                onClick={exportToCSV}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>تصدير CSV</span>
               </button>
               <Link
                 href="/instructor"
@@ -717,32 +391,7 @@ export default function InstructorAttendancePage() {
 
         {/* فلتر وبحث */}
         <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            {/* نطاق التواريخ */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                من تاريخ
-              </label>
-              <input
-                type="date"
-                value={filterFromDate}
-                onChange={(e) => setFilterFromDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                إلى تاريخ
-              </label>
-              <input
-                type="date"
-                value={filterToDate}
-                onChange={(e) => setFilterToDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
-              />
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             {/* تصفية حسب المجموعة */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -754,7 +403,7 @@ export default function InstructorAttendancePage() {
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
               >
                 <option value="all">جميع المجموعات</option>
-                {groups.map(group => (
+                {groups.map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name} ({group.code})
                   </option>
@@ -777,10 +426,8 @@ export default function InstructorAttendancePage() {
                 <option value="poor">حضور ضعيف (&lt;70%)</option>
               </select>
             </div>
-          </div>
 
-          {/* نوع العرض */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* نوع العرض */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 نوع العرض
@@ -808,31 +455,32 @@ export default function InstructorAttendancePage() {
                 </button>
               </div>
             </div>
+          </div>
 
-            <div className="flex items-end gap-2">
-              <button
-                onClick={() => handleFilterChange()}
-                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-              >
-                <Filter className="w-4 h-4" />
-                <span>تطبيق الفلاتر</span>
-              </button>
-              <button
-                onClick={() => {
-                  setFilterFromDate("");
-                  setFilterToDate("");
-                  setFilterGroup("all");
-                  setFilterStatus("all");
-                  setFilterStudent("");
-                  fetchAttendanceData(1);
-                }}
-                className="px-4 py-2 border border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-              >
-                إعادة تعيين
-              </button>
-            </div>
+          {/* أزرار التطبيق */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={resetFilters}
+              className="px-4 py-2 border border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              إعادة تعيين الفلاتر
+            </button>
           </div>
         </div>
+
+        {/* معلومات النتائج */}
+        {(filterGroup !== "all" || filterStatus !== "all") && (
+          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                {filterGroup !== "all" && `مجموعة: ${groups.find(g => g.id === filterGroup)?.name || filterGroup}`}
+                {filterGroup !== "all" && filterStatus !== "all" && " | "}
+                {filterStatus !== "all" && `حالة: ${filterStatus === 'good' ? 'حضور جيد (≥70%)' : 'حضور ضعيف (<70%)'}`}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* معلومات النتائج */}
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -841,14 +489,16 @@ export default function InstructorAttendancePage() {
               <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
                 {viewType === "detailed" 
-                  ? `عرض ${attendanceRecords.length} سجل حضور من ${pagination.total}`
-                  : `عرض ${studentSummary.length} طالب من ${pagination.total}`
+                  ? `عرض ${attendanceRecords.length} سجل حضور`
+                  : `عرض ${studentSummary.length} طالب`
                 }
               </span>
             </div>
-            <div className="text-sm text-blue-600 dark:text-blue-400">
-              الصفحة {pagination.page} من {pagination.pages}
-            </div>
+            {pagination.pages > 1 && (
+              <div className="text-sm text-blue-600 dark:text-blue-400">
+                الصفحة {pagination.page} من {pagination.pages}
+              </div>
+            )}
           </div>
         </div>
 
@@ -881,9 +531,6 @@ export default function InstructorAttendancePage() {
                       </th>
                       <th className="px-4 py-3 text-right text-sm font-medium text-gray-700 dark:text-gray-300">
                         مسجل بواسطة
-                      </th>
-                      <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">
-                        إجراءات
                       </th>
                     </tr>
                   </thead>
@@ -966,39 +613,13 @@ export default function InstructorAttendancePage() {
                                 </p>
                               </div>
                             </td>
-                            
-                            <td className="px-4 py-3">
-                              <div className="flex justify-center gap-2">
-                                <Link
-                                  href={`/instructor/sessions/${record.sessionId}`}
-                                  className="p-1 text-gray-400 hover:text-primary transition-colors"
-                                  title="عرض الجلسة"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </Link>
-                                <Link
-                                  href={`/instructor/students/${record.studentId}`}
-                                  className="p-1 text-gray-400 hover:text-primary transition-colors"
-                                  title="عرض الطالب"
-                                >
-                                  <Users className="w-4 h-4" />
-                                </Link>
-                                <button
-                                  onClick={() => exportStudentReport(record.studentId)}
-                                  className="p-1 text-gray-400 hover:text-green-600 transition-colors"
-                                  title="تصدير تقرير الطالب"
-                                >
-                                  <FileText className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
                           </tr>
                         );
                       })
                     ) : (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={7}
                           className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                         >
                           <div className="flex flex-col items-center gap-3">
@@ -1008,14 +629,7 @@ export default function InstructorAttendancePage() {
                               لم يتم العثور على سجلات حضور تطابق معايير البحث
                             </p>
                             <button
-                              onClick={() => {
-                                setFilterFromDate("");
-                                setFilterToDate("");
-                                setFilterGroup("all");
-                                setFilterStatus("all");
-                                setFilterStudent("");
-                                fetchAttendanceData(1);
-                              }}
+                              onClick={resetFilters}
                               className="mt-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
                             >
                               إعادة تعيين الفلاتر
@@ -1030,11 +644,11 @@ export default function InstructorAttendancePage() {
             </div>
 
             {/* Pagination */}
-            {attendanceRecords.length > 0 && (
+            {pagination.pages > 1 && (
               <div className="mt-6 p-6 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-sm text-gray-600 dark:text-gray-400">
-                    عرض {attendanceRecords.length} من {pagination.total} سجل
+                    الصفحة {pagination.page} من {pagination.pages}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -1126,9 +740,6 @@ export default function InstructorAttendancePage() {
                       <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">
                         نسبة الحضور
                       </th>
-                      <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">
-                        إجراءات
-                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1211,48 +822,13 @@ export default function InstructorAttendancePage() {
                                 </div>
                               </div>
                             </td>
-                            
-                            <td className="px-4 py-3">
-                              <div className="flex justify-center gap-2">
-                                <Link
-                                  href={`/instructor/students/${student.studentId}`}
-                                  className="p-1 text-gray-400 hover:text-primary transition-colors"
-                                  title="عرض الطالب"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </Link>
-                                <Link
-                                  href={`/instructor/students/${student.studentId}/attendance`}
-                                  className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                                  title="سجل الحضور التفصيلي"
-                                >
-                                  <BarChart3 className="w-4 h-4" />
-                                </Link>
-                                <button
-                                  onClick={() => exportStudentReport(student.studentId)}
-                                  className="p-1 text-gray-400 hover:text-green-600 transition-colors"
-                                  title="تصدير تقرير"
-                                >
-                                  <FileText className="w-4 h-4" />
-                                </button>
-                                {student.attendanceRate < 70 && (
-                                  <button
-                                    onClick={() => notifyPoorAttendance(student.studentId)}
-                                    className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                                    title="تنبيه بضعف الحضور"
-                                  >
-                                    <AlertCircle className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
                           </tr>
                         );
                       })
                     ) : (
                       <tr>
                         <td
-                          colSpan={9}
+                          colSpan={8}
                           className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                         >
                           <div className="flex flex-col items-center gap-3">
@@ -1271,11 +847,11 @@ export default function InstructorAttendancePage() {
             </div>
 
             {/* Pagination */}
-            {studentSummary.length > 0 && (
+            {pagination.pages > 1 && (
               <div className="mt-6 p-6 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-sm text-gray-600 dark:text-gray-400">
-                    عرض {studentSummary.length} من {pagination.total} طالب
+                    الصفحة {pagination.page} من {pagination.pages}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -1336,54 +912,6 @@ export default function InstructorAttendancePage() {
             )}
           </div>
         )}
-
-        {/* Quick Actions */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
-            onClick={exportToCSV}
-            className="p-4 bg-white dark:bg-secondary rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex flex-col items-center gap-3"
-          >
-            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-              <Download className="w-6 h-6 text-green-600 dark:text-green-400" />
-            </div>
-            <div className="text-center">
-              <p className="font-medium text-gray-900 dark:text-white">تصدير إلى CSV</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                تصدير جميع سجلات الحضور
-              </p>
-            </div>
-          </button>
-          
-          <Link
-            href="/instructor/attendance/report"
-            className="p-4 bg-white dark:bg-secondary rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex flex-col items-center gap-3"
-          >
-            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-              <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div className="text-center">
-              <p className="font-medium text-gray-900 dark:text-white">التقارير المتقدمة</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                تحليلات وتقارير مفصلة
-              </p>
-            </div>
-          </Link>
-          
-          <button
-            onClick={printAttendanceReport}
-            className="p-4 bg-white dark:bg-secondary rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex flex-col items-center gap-3"
-          >
-            <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-              <Printer className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div className="text-center">
-              <p className="font-medium text-gray-900 dark:text-white">طباعة التقرير</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                طباعة سجل الحضور بتنسيق PDF
-              </p>
-            </div>
-          </button>
-        </div>
 
         {/* ملاحظات وإحصائات إضافية */}
         <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">

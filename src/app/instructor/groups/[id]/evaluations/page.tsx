@@ -73,8 +73,6 @@ interface GroupInfo {
     name: string;
     code: string;
     status: string;
-    sessionsCompleted: number;
-    totalSessions: number;
     evaluationStatus: {
         enabled: boolean;
         enabledAt?: string;
@@ -109,17 +107,6 @@ interface EvaluationResponse {
             hasPrev: boolean;
         };
     };
-    details?: string;
-    groupStatus?: string;
-    sessionsInfo?: {
-        total: number;
-        completed: number;
-        incomplete?: Array<{
-            title: string;
-            status: string;
-            date: string;
-        }>;
-    };
 }
 
 export default function GroupEvaluationsPage() {
@@ -132,7 +119,6 @@ export default function GroupEvaluationsPage() {
     const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
     const [stats, setStats] = useState<EvaluationStats | null>(null);
     const [error, setError] = useState("");
-    const [errorDetails, setErrorDetails] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
     const [filterDecision, setFilterDecision] = useState("all");
     const [currentPage, setCurrentPage] = useState(1);
@@ -147,15 +133,6 @@ export default function GroupEvaluationsPage() {
         notes: "",
     });
     const [saving, setSaving] = useState(false);
-    const [sessionsInfo, setSessionsInfo] = useState<{
-        total: number;
-        completed: number;
-        incomplete?: Array<{
-            title: string;
-            status: string;
-            date: string;
-        }>;
-    } | null>(null);
 
     useEffect(() => {
         fetchEvaluations();
@@ -165,7 +142,6 @@ export default function GroupEvaluationsPage() {
         try {
             setLoading(true);
             setError("");
-            setErrorDetails("");
 
             console.log(`📊 [Group Evaluations] Fetching evaluations for group: ${groupId}`);
 
@@ -190,49 +166,19 @@ export default function GroupEvaluationsPage() {
 
             console.log("📥 [Group Evaluations] API Response:", {
                 success: result.success,
-                status: response.status,
                 count: result.data?.students?.length,
-                groupStatus: result.groupStatus,
-                sessionsInfo: result.sessionsInfo,
             });
 
             if (!response.ok || !result.success) {
-                // إذا كانت المشكلة هي أن المجموعة لم تكتمل بعد
-                if (result.details?.includes("لا يمكن تقييم الطلاب إلا بعد اكتمال المجموعة")) {
-                    setError(result.message || "لا يمكن تقييم الطلاب إلا بعد اكتمال المجموعة");
-                    setErrorDetails(result.details || `حالة المجموعة: ${result.groupStatus || "غير معروف"}`);
-                    setSessionsInfo(result.sessionsInfo || null);
-                    
-                    // إذا كان هناك معلومات عن الجلسات، عرضها في الكنسول
-                    if (result.sessionsInfo) {
-                        console.log("📅 [Sessions Info]:", result.sessionsInfo);
-                        if (result.sessionsInfo.incomplete && result.sessionsInfo.incomplete.length > 0) {
-                            console.log("❌ Incomplete sessions:");
-                            result.sessionsInfo.incomplete.forEach(session => {
-                                console.log(`  - ${session.title}: ${session.status}`);
-                            });
-                        }
-                    }
-                } else {
-                    throw new Error(result.message || "فشل في تحميل بيانات التقييم");
-                }
-                
-                setStudents([]);
-                setGroupInfo(null);
-                setStats(null);
-                return;
+                throw new Error(result.message || "فشل في تحميل بيانات التقييم");
             }
 
             setStudents(result.data.students || []);
             setGroupInfo(result.data.group);
             setStats(result.data.stats);
-            setSessionsInfo(result.data.group ? {
-                total: result.data.group.totalSessions,
-                completed: result.data.group.sessionsCompleted,
-            } : null);
 
             // تحديث حالة المجموعة إذا لزم الأمر
-            if (result.data.group && !result.data.group.evaluationStatus.enabled) {
+            if (!result.data.group.evaluationStatus.enabled) {
                 await enableEvaluations();
             }
 
@@ -335,10 +281,6 @@ export default function GroupEvaluationsPage() {
             const result = await response.json();
 
             if (!response.ok || !result.success) {
-                if (result.details?.includes("لا يمكن تقييم الطلاب إلا بعد اكتمال المجموعة")) {
-                    alert(`❌ ${result.message}\n\n${result.details}\n\nعدد الجلسات المكتملة: ${result.sessionsInfo?.completed}/${result.sessionsInfo?.total}`);
-                    return;
-                }
                 throw new Error(result.message || "فشل في حفظ التقييم");
             }
 
@@ -422,41 +364,6 @@ export default function GroupEvaluationsPage() {
         }
     };
 
-    const handleMarkGroupCompleted = async () => {
-        if (!sessionsInfo || sessionsInfo.completed !== sessionsInfo.total) {
-            const incompleteCount = sessionsInfo ? sessionsInfo.total - sessionsInfo.completed : "غير معروف";
-            alert(`لا يمكن إكمال المجموعة. لا تزال هناك ${incompleteCount} جلسة لم تكتمل.\n\nيجب إكمال جميع الجلسات أولاً من صفحة الجلسات.`);
-            return;
-        }
-
-        if (!confirm("هل أنت متأكد من إكمال المجموعة؟ بعد إكمال المجموعة يمكنك البدء في تقييم الطلاب.")) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/instructor-dashboard/groups/${groupId}/complete`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                credentials: "include",
-            });
-
-            const result = await response.json();
-
-            if (!response.ok || !result.success) {
-                throw new Error(result.message || "فشل في إكمال المجموعة");
-            }
-
-            alert("تم إكمال المجموعة بنجاح. يمكنك الآن البدء في تقييم الطلاب.");
-            fetchEvaluations();
-
-        } catch (error: any) {
-            console.error("❌ [Mark Group Completed] Error:", error);
-            alert(error.message || "حدث خطأ أثناء إكمال المجموعة");
-        }
-    };
-
     const getDecisionColor = (decision: string) => {
         const colors = {
             pass: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
@@ -496,21 +403,6 @@ export default function GroupEvaluationsPage() {
         ));
     };
 
-    const formatDate = (dateString: string) => {
-        try {
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return "تاريخ غير صالح";
-            
-            return date.toLocaleDateString("ar-EG", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-            });
-        } catch {
-            return dateString;
-        }
-    };
-
     if (loading && students.length === 0) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-darkmode">
@@ -526,167 +418,26 @@ export default function GroupEvaluationsPage() {
 
     if (error && students.length === 0) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-darkmode">
-                {/* Header */}
-                <div className="bg-white dark:bg-secondary shadow">
-                    <div className="container mx-auto px-4 py-6">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                            <div className="flex items-center gap-4">
-                                <Link
-                                    href={`/instructor/groups/${groupId}`}
-                                    className="p-2 text-gray-600 dark:text-gray-300 hover:text-primary transition-colors"
-                                >
-                                    <ArrowLeft className="w-5 h-5" />
-                                </Link>
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <AlertCircle className="w-6 h-6 text-red-500" />
-                                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                            المجموعة غير مكتملة
-                                        </h1>
-                                        <span className="px-3 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 rounded-full text-sm">
-                                            غير جاهزة للتقييم
-                                        </span>
-                                    </div>
-                                    <p className="text-gray-600 dark:text-gray-300">
-                                        يجب إكمال جميع جلسات المجموعة أولاً
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <Link
-                                    href={`/instructor/groups/${groupId}`}
-                                    className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 transition-colors"
-                                >
-                                    العودة للمجموعة
-                                </Link>
-                                <Link
-                                    href={`/instructor/groups/${groupId}/sessions`}
-                                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-                                >
-                                    الذهاب للجلسات
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Content */}
-                <div className="container mx-auto px-4 py-8">
-                    <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 mb-6">
-                        <div className="flex items-start gap-4">
-                            <div className="p-3 bg-red-100 dark:bg-red-900/20 rounded-lg">
-                                <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
-                            </div>
-                            <div className="flex-1">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                                    {error}
-                                </h3>
-                                <p className="text-gray-600 dark:text-gray-300 mb-4">
-                                    {errorDetails}
-                                </p>
-                                
-                                {sessionsInfo && (
-                                    <div className="mt-6">
-                                        <h4 className="font-medium text-gray-900 dark:text-white mb-3">
-                                            حالة الجلسات:
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                                <div className="text-2xl font-bold text-blue-700 dark:text-blue-400 mb-1">
-                                                    {sessionsInfo.total}
-                                                </div>
-                                                <div className="text-sm text-blue-600 dark:text-blue-300">
-                                                    إجمالي الجلسات
-                                                </div>
-                                            </div>
-
-                                            <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                                <div className="text-2xl font-bold text-green-700 dark:text-green-400 mb-1">
-                                                    {sessionsInfo.completed}
-                                                </div>
-                                                <div className="text-sm text-green-600 dark:text-green-300">
-                                                    جلسات مكتملة
-                                                </div>
-                                                <div className="text-xs text-green-500 dark:text-green-400 mt-1">
-                                                    {Math.round((sessionsInfo.completed / sessionsInfo.total) * 100)}%
-                                                </div>
-                                            </div>
-
-                                            <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                                                <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-400 mb-1">
-                                                    {sessionsInfo.total - sessionsInfo.completed}
-                                                </div>
-                                                <div className="text-sm text-yellow-600 dark:text-yellow-300">
-                                                    جلسات لم تكتمل
-                                                </div>
-                                                <div className="text-xs text-yellow-500 dark:text-yellow-400 mt-1">
-                                                    يتطلب الإكمال
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* شريط التقدم */}
-                                        <div className="mt-6">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                    تقدم الجلسات
-                                                </span>
-                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                    {sessionsInfo.completed}/{sessionsInfo.total} ({Math.round((sessionsInfo.completed / sessionsInfo.total) * 100)}%)
-                                                </span>
-                                            </div>
-                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                                                <div
-                                                    className="h-3 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600"
-                                                    style={{ width: `${(sessionsInfo.completed / sessionsInfo.total) * 100}%` }}
-                                                ></div>
-                                            </div>
-                                        </div>
-
-                                        {/* التعليمات */}
-                                        <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                            <h5 className="font-medium text-blue-800 dark:text-blue-300 mb-2">
-                                                📝 التعليمات:
-                                            </h5>
-                                            <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700 dark:text-blue-400">
-                                                <li>اذهب إلى صفحة <Link href={`/instructor/groups/${groupId}/sessions`} className="underline font-medium">الجلسات</Link></li>
-                                                <li>قم بإكمال جميع الجلسات المتبقية</li>
-                                                <li>عد إلى هذه الصفحة للتقييم</li>
-                                                <li>يمكنك البدء في تقييم الطلاب بعد إكمال جميع الجلسات</li>
-                                            </ol>
-                                        </div>
-
-                                        {/* الإجراءات */}
-                                        <div className="mt-6 flex flex-col sm:flex-row gap-3">
-                                            <Link
-                                                href={`/instructor/groups/${groupId}/sessions`}
-                                                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                <Calendar className="w-5 h-5" />
-                                                <span>الذهاب إلى الجلسات</span>
-                                            </Link>
-                                            <button
-                                                onClick={fetchEvaluations}
-                                                className="px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                <RefreshCw className="w-5 h-5" />
-                                                <span>تحديث الحالة</span>
-                                            </button>
-                                            {sessionsInfo.completed === sessionsInfo.total && (
-                                                <button
-                                                    onClick={handleMarkGroupCompleted}
-                                                    className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-                                                >
-                                                    <CheckCircle className="w-5 h-5" />
-                                                    <span>إكمال المجموعة</span>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-darkmode">
+                <div className="text-center max-w-md mx-auto p-6">
+                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                        حدث خطأ
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-300 mb-4">{error}</p>
+                    <div className="flex gap-3 justify-center">
+                        <button
+                            onClick={fetchEvaluations}
+                            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                        >
+                            حاول مرة أخرى
+                        </button>
+                        <Link
+                            href={`/instructor/groups/${groupId}`}
+                            className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 transition-colors"
+                        >
+                            العودة للمجموعة
+                        </Link>
                     </div>
                 </div>
             </div>
@@ -717,14 +468,9 @@ export default function GroupEvaluationsPage() {
                                         تقييم طلاب المجموعة
                                     </h1>
                                     {groupInfo && (
-                                        <>
-                                            <span className="px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 rounded-full text-sm">
-                                                {groupInfo.name} ({groupInfo.code})
-                                            </span>
-                                            <span className="px-3 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 rounded-full text-sm">
-                                                جلسات: {groupInfo.sessionsCompleted}/{groupInfo.totalSessions}
-                                            </span>
-                                        </>
+                                        <span className="px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 rounded-full text-sm">
+                                            {groupInfo.name} ({groupInfo.code})
+                                        </span>
                                     )}
                                 </div>
                                 <p className="text-gray-600 dark:text-gray-300">
@@ -763,32 +509,6 @@ export default function GroupEvaluationsPage() {
 
             {/* Content */}
             <div className="container mx-auto px-4 py-6">
-                {/* حالة الجلسات */}
-                {groupInfo && groupInfo.sessionsCompleted < groupInfo.totalSessions && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl shadow-lg p-6 mb-6 border border-yellow-200 dark:border-yellow-800">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <AlertCircle className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
-                                <div>
-                                    <h3 className="font-semibold text-yellow-800 dark:text-yellow-300">
-                                        تذكير: جلسات غير مكتملة
-                                    </h3>
-                                    <p className="text-yellow-700 dark:text-yellow-400 text-sm">
-                                        لديك {groupInfo.totalSessions - groupInfo.sessionsCompleted} جلسة لم تكتمل
-                                    </p>
-                                </div>
-                            </div>
-                            <Link
-                                href={`/instructor/groups/${groupId}/sessions`}
-                                className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors flex items-center gap-2"
-                            >
-                                <Calendar className="w-4 h-4" />
-                                <span>الذهاب للجلسات</span>
-                            </Link>
-                        </div>
-                    </div>
-                )}
-
                 {/* إحصائيات */}
                 {stats && (
                     <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 mb-6">
@@ -924,15 +644,9 @@ export default function GroupEvaluationsPage() {
                             </span>
                         </div>
                         <div className="flex items-center gap-4">
-                            {groupInfo?.status === "completed" && (
-                                <span className="px-3 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 rounded-full text-sm flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4" />
-                                    المجموعة مكتملة
-                                </span>
-                            )}
                             {groupInfo?.evaluationStatus.completed && (
                                 <span className="px-3 py-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 rounded-full text-sm flex items-center gap-2">
-                                    <Award className="w-4 h-4" />
+                                    <CheckCircle className="w-4 h-4" />
                                     تم إتمام التقييم
                                 </span>
                             )}
@@ -1016,7 +730,7 @@ export default function GroupEvaluationsPage() {
                                                             </span>
                                                         </div>
                                                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                            تم التقييم في: {student.evaluation.evaluatedAt ? formatDate(student.evaluation.evaluatedAt) : "غير معروف"}
+                                                            تم التقييم في: {new Date(student.evaluation.evaluatedAt || "").toLocaleDateString("ar-EG")}
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -1083,7 +797,6 @@ export default function GroupEvaluationsPage() {
                                                             setSearchTerm("");
                                                             setFilterDecision("all");
                                                             setCurrentPage(1);
-                                                            fetchEvaluations();
                                                         }}
                                                         className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
                                                     >

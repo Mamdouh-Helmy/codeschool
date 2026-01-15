@@ -1,22 +1,31 @@
-// app/api/instructor/attendance/route.js
-import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import Session from "../../../models/Session";
-import Group from "../../../models/Group";
-import Student from "../../../models/Student";
-import { getUserFromRequest } from "@/lib/auth";
-import mongoose from "mongoose";
+// app/api/instructor-dashboard/attendance/route.js
+import { NextResponse } from 'next/server';
+import { connectDB } from '@/lib/mongodb';
+import Session from '../../../models/Session';
+import Group from '../../../models/Group';
+import Student from '../../../models/Student';
+import { getUserFromRequest } from '@/lib/auth';
+import mongoose from 'mongoose';
 
-// GET: Get comprehensive attendance report for instructor
 export async function GET(req) {
   try {
-    console.log(`\n📋 ========== INSTRUCTOR ATTENDANCE REPORT ==========`);
+    console.log(`\n📋 ========== INSTRUCTOR ATTENDANCE REQUEST ==========`);
 
+    // تحقق من المصادقة
     const user = await getUserFromRequest(req);
-
-    if (!user || user.role !== "instructor") {
+    
+    if (!user) {
+      console.log(`❌ Unauthorized: No user found`);
       return NextResponse.json(
-        { success: false, error: "غير مصرح لك بالوصول. يجب أن تكون مدرساً" },
+        { success: false, error: 'غير مصرح لك بالوصول' },
+        { status: 401 }
+      );
+    }
+
+    if (user.role !== 'instructor') {
+      console.log(`❌ Forbidden: User role is ${user.role}, expected instructor`);
+      return NextResponse.json(
+        { success: false, error: 'غير مصرح لك بالوصول. يجب أن تكون مدرساً' },
         { status: 403 }
       );
     }
@@ -29,343 +38,223 @@ export async function GET(req) {
     const groups = await Group.find({
       instructors: user.id,
       isDeleted: false,
-      status: { $in: ["active", "completed"] },
-    }).select("_id name code");
+      status: { $in: ['active', 'completed'] }
+    }).select('_id name code').lean();
 
     console.log(`👥 Found ${groups.length} groups for instructor`);
 
     if (!groups || groups.length === 0) {
       return NextResponse.json({
         success: true,
-        data: [],
-        message: "لا توجد مجموعات نشطة للمدرس",
+        data: {
+          attendanceRecords: [],
+          studentAttendanceSummary: [],
+          statistics: {
+            totalSessions: 0,
+            totalAttendanceRecords: 0,
+            totalPresent: 0,
+            totalAbsent: 0,
+            totalLate: 0,
+            totalExcused: 0,
+            attendanceRate: 0
+          },
+          groups: []
+        },
+        pagination: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          pages: 0,
+          hasNext: false,
+          hasPrev: false
+        },
+        filters: {
+          groups: [],
+          applied: {}
+        },
+        message: 'لا توجد مجموعات نشطة للمدرس',
       });
     }
 
-    const groupIds = groups.map((group) => group._id);
+    const groupIds = groups.map(group => group._id);
 
-    // الحصول على query parameters للتصفية
+    // الحصول على query parameters
     const { searchParams } = new URL(req.url);
-    const fromDate = searchParams.get("fromDate");
-    const toDate = searchParams.get("toDate");
-    const groupId = searchParams.get("groupId");
-    const studentId = searchParams.get("studentId");
-    const status = searchParams.get("status");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const groupId = searchParams.get('groupId');
+    const statusFilter = searchParams.get('status');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '50');
     const skip = (page - 1) * limit;
+
+    console.log('📊 Query Parameters:', {
+      groupId,
+      statusFilter,
+      page,
+      limit,
+      skip
+    });
 
     // بناء query للجلسات
     let sessionQuery = {
       groupId: { $in: groupIds },
       isDeleted: false,
-      attendanceTaken: true,
+      attendanceTaken: true
     };
 
-    // تطبيق الفلاتر
-    if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
-      const groupExists = groups.some((g) => g._id.toString() === groupId);
+    if (groupId && groupId !== 'all' && mongoose.Types.ObjectId.isValid(groupId)) {
+      const groupExists = groups.some(g => g._id.toString() === groupId);
       if (groupExists) {
         sessionQuery.groupId = new mongoose.Types.ObjectId(groupId);
         console.log(`🔍 Filter: groupId = ${groupId}`);
       }
     }
 
-    if (fromDate) {
-      const from = new Date(fromDate);
-      if (!isNaN(from.getTime())) {
-        sessionQuery.scheduledDate = {
-          ...sessionQuery.scheduledDate,
-          $gte: from,
-        };
-        console.log(`🔍 Filter: fromDate = ${fromDate}`);
-      }
-    }
-
-    if (toDate) {
-      const to = new Date(toDate);
-      if (!isNaN(to.getTime())) {
-        sessionQuery.scheduledDate = {
-          ...sessionQuery.scheduledDate,
-          $lte: to,
-        };
-        console.log(`🔍 Filter: toDate = ${toDate}`);
-      }
-    }
-
-    console.log(`📊 Session query:`, JSON.stringify(sessionQuery, null, 2));
-
     // جلب الجلسات مع الحضور
     const sessions = await Session.find(sessionQuery)
-      .populate("groupId", "name code")
-      .populate("courseId", "title")
-      .populate(
-        "attendance.studentId",
-        "personalInfo.fullName enrollmentNumber"
-      )
-      .sort({ scheduledDate: -1 })
+      .populate('groupId', 'name code')
+      .populate('courseId', 'title')
+      .populate({
+        path: 'attendance.studentId',
+        select: 'personalInfo.fullName enrollmentNumber',
+      })
+      .sort({ scheduledDate: -1, startTime: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
-    console.log(`✅ Found ${sessions.length} sessions with attendance`);
+    console.log(`📅 Found ${sessions.length} sessions with attendance`);
 
-    // إعداد سجل الحضور الشامل
-    const attendanceRecords = [];
-    const studentAttendanceMap = {};
-    const sessionStats = {
-      totalSessions: sessions.length,
-      totalAttendanceRecords: 0,
-      totalPresent: 0,
-      totalAbsent: 0,
-      totalLate: 0,
-      totalExcused: 0,
-      attendanceRate: 0,
-    };
+    // جمع سجلات الحضور
+    let allAttendanceRecords = [];
+    let studentStats = new Map();
 
-    // معالجة كل جلسة
-    sessions.forEach((session) => {
+    sessions.forEach(session => {
       if (session.attendance && session.attendance.length > 0) {
-        session.attendance.forEach((record) => {
-          if (record.studentId) {
-            const studentKey = record.studentId._id.toString();
+        session.attendance.forEach(att => {
+          if (att.studentId) {
+            const studentId = att.studentId._id.toString();
+            const studentName = att.studentId.personalInfo?.fullName || 'غير معروف';
+            const enrollmentNumber = att.studentId.enrollmentNumber || 'غير معروف';
 
-            // تسجيل الحضور في السجل الشامل
-            attendanceRecords.push({
-              sessionId: session._id,
+            // تسجيل الحضور
+            allAttendanceRecords.push({
+              sessionId: session._id.toString(),
               sessionTitle: session.title,
               sessionDate: session.scheduledDate,
               sessionTime: `${session.startTime} - ${session.endTime}`,
-              groupId: session.groupId._id,
+              groupId: session.groupId._id.toString(),
               groupName: session.groupId.name,
               groupCode: session.groupId.code,
-              courseTitle: session.courseId?.title,
-              studentId: record.studentId._id,
-              studentName: record.studentId.personalInfo?.fullName,
-              enrollmentNumber: record.studentId.enrollmentNumber,
-              status: record.status,
-              notes: record.notes,
-              markedAt: record.markedAt,
-              markedBy: record.markedBy,
+              courseTitle: session.courseId?.title || 'غير معروف',
+              studentId: studentId,
+              studentName: studentName,
+              enrollmentNumber: enrollmentNumber,
+              status: att.status,
+              notes: att.notes || '',
+              markedAt: att.markedAt,
+              markedBy: att.markedBy || { name: 'نظام', email: '' }
             });
 
             // تحديث إحصائيات الطالب
-            if (!studentAttendanceMap[studentKey]) {
-              studentAttendanceMap[studentKey] = {
-                studentId: record.studentId._id,
-                studentName: record.studentId.personalInfo?.fullName,
-                enrollmentNumber: record.studentId.enrollmentNumber,
+            if (!studentStats.has(studentId)) {
+              studentStats.set(studentId, {
+                studentId: studentId,
+                studentName: studentName,
+                enrollmentNumber: enrollmentNumber,
                 totalSessions: 0,
                 present: 0,
                 absent: 0,
                 late: 0,
                 excused: 0,
-                attendanceRate: 0,
-              };
+                attendanceRate: 0
+              });
             }
 
-            studentAttendanceMap[studentKey].totalSessions++;
-
-            switch (record.status) {
-              case "present":
-                studentAttendanceMap[studentKey].present++;
-                sessionStats.totalPresent++;
-                break;
-              case "absent":
-                studentAttendanceMap[studentKey].absent++;
-                sessionStats.totalAbsent++;
-                break;
-              case "late":
-                studentAttendanceMap[studentKey].late++;
-                sessionStats.totalLate++;
-                break;
-              case "excused":
-                studentAttendanceMap[studentKey].excused++;
-                sessionStats.totalExcused++;
-                break;
-            }
-
-            // حساب نسبة الحضور للطالب
-            const studentStats = studentAttendanceMap[studentKey];
-            studentStats.attendanceRate =
-              studentStats.totalSessions > 0
-                ? Math.round(
-                    (studentStats.present / studentStats.totalSessions) * 100
-                  )
-                : 0;
-
-            sessionStats.totalAttendanceRecords++;
+            const studentStat = studentStats.get(studentId);
+            studentStat.totalSessions++;
+            
+            if (att.status === 'present') studentStat.present++;
+            else if (att.status === 'absent') studentStat.absent++;
+            else if (att.status === 'late') studentStat.late++;
+            else if (att.status === 'excused') studentStat.excused++;
           }
         });
       }
     });
 
-    // حساب إجمالي نسبة الحضور
-    if (sessionStats.totalAttendanceRecords > 0) {
-      sessionStats.attendanceRate = Math.round(
-        (sessionStats.totalPresent / sessionStats.totalAttendanceRecords) * 100
-      );
+    // حساب نسبة الحضور لكل طالب
+    studentStats.forEach(student => {
+      if (student.totalSessions > 0) {
+        student.attendanceRate = Math.round((student.present / student.totalSessions) * 100);
+      }
+    });
+
+    // تطبيق فلتر الحالة على الطلاب
+    let studentAttendanceSummary = Array.from(studentStats.values());
+    
+    if (statusFilter && statusFilter !== 'all') {
+      if (statusFilter === 'good') {
+        studentAttendanceSummary = studentAttendanceSummary.filter(student => student.attendanceRate >= 70);
+      } else if (statusFilter === 'poor') {
+        studentAttendanceSummary = studentAttendanceSummary.filter(student => student.attendanceRate < 70);
+      }
     }
 
-    // تحويل map الطلاب إلى مصفوفة
-    const studentAttendanceSummary = Object.values(studentAttendanceMap);
+    // حساب الإحصائيات الإجمالية
+    let totalSessions = sessions.length;
+    let totalAttendanceRecords = allAttendanceRecords.length;
+    let totalPresent = allAttendanceRecords.filter(a => a.status === 'present').length;
+    let totalAbsent = allAttendanceRecords.filter(a => a.status === 'absent').length;
+    let totalLate = allAttendanceRecords.filter(a => a.status === 'late').length;
+    let totalExcused = allAttendanceRecords.filter(a => a.status === 'excused').length;
+    let attendanceRate = totalAttendanceRecords > 0 ? 
+      Math.round((totalPresent / totalAttendanceRecords) * 100) : 0;
 
-    // تطبيق فلتر حالة الطالب إذا طلب
-    let filteredStudentAttendance = studentAttendanceSummary;
-    if (status === "poor") {
-      filteredStudentAttendance = studentAttendanceSummary.filter(
-        (student) => student.attendanceRate < 70
-      );
-    } else if (status === "good") {
-      filteredStudentAttendance = studentAttendanceSummary.filter(
-        (student) => student.attendanceRate >= 70
-      );
-    }
-
-    // تطبيق فلتر الطالب المحدد
-    if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
-      const studentRecords = attendanceRecords.filter(
-        (record) => record.studentId.toString() === studentId
-      );
-
-      const studentSessions = sessions.filter((session) =>
-        session.attendance?.some(
-          (record) =>
-            record.studentId && record.studentId._id.toString() === studentId
-        )
-      );
-
-      const studentSummary = studentAttendanceSummary.find(
-        (s) => s.studentId.toString() === studentId
-      );
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          type: "student_report",
-          student: studentSummary,
-          attendanceRecords: studentRecords,
-          sessions: studentSessions.map((s) => ({
-            _id: s._id,
-            title: s.title,
-            date: s.scheduledDate,
-            time: `${s.startTime} - ${s.endTime}`,
-            group: s.groupId.name,
-            attendance: s.attendance.find(
-              (a) => a.studentId && a.studentId._id.toString() === studentId
-            ),
-          })),
-        },
-        filters: {
-          studentId,
-          fromDate,
-          toDate,
-          groupId,
-        },
-      });
-    }
-
-    // إجمالي عدد السجلات للترقيم
-    const totalRecords = await Session.countDocuments(sessionQuery);
+    // الحصول على العدد الإجمالي للجلسات مع الحضور
+    const totalSessionsCount = await Session.countDocuments(sessionQuery);
 
     return NextResponse.json({
       success: true,
       data: {
-        type: "comprehensive_report",
-        sessions: sessions.map((s) => ({
-          _id: s._id,
-          title: s.title,
-          date: s.scheduledDate,
-          time: `${s.startTime} - ${s.endTime}`,
-          group: s.groupId.name,
-          attendanceCount: s.attendance?.length || 0,
-        })),
-        attendanceRecords,
-        studentAttendanceSummary: filteredStudentAttendance,
-        statistics: sessionStats,
-        groups,
+        attendanceRecords: allAttendanceRecords,
+        studentAttendanceSummary: studentAttendanceSummary,
+        statistics: {
+          totalSessions: totalSessions,
+          totalAttendanceRecords: totalAttendanceRecords,
+          totalPresent: totalPresent,
+          totalAbsent: totalAbsent,
+          totalLate: totalLate,
+          totalExcused: totalExcused,
+          attendanceRate: attendanceRate
+        },
+        groups: groups.map(g => ({ 
+          id: g._id.toString(), 
+          name: g.name, 
+          code: g.code 
+        }))
       },
       pagination: {
         page,
         limit,
-        total: totalRecords,
-        pages: Math.ceil(totalRecords / limit),
+        total: totalSessionsCount,
+        pages: Math.ceil(totalSessionsCount / limit),
+        hasNext: page < Math.ceil(totalSessionsCount / limit),
+        hasPrev: page > 1,
       },
       filters: {
-        fromDate,
-        toDate,
-        groupId,
-        status,
         applied: {
-          dateRange:
-            fromDate || toDate
-              ? `${fromDate || "بداية"} - ${toDate || "نهاية"}`
-              : "جميع التواريخ",
-          group: groupId
-            ? groups.find((g) => g._id.toString() === groupId)?.name
-            : "جميع المجموعات",
-          statusFilter:
-            status === "poor"
-              ? "ضعيف الحضور (<70%)"
-              : status === "good"
-              ? "جيد الحضور (≥70%)"
-              : "جميع الطلاب",
-        },
-      },
+          group: groupId || 'all',
+          statusFilter: statusFilter || 'all'
+        }
+      }
     });
+
   } catch (error) {
-    console.error("❌ Error fetching attendance report:", error);
+    console.error('❌ Error fetching instructor attendance:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "فشل في جلب سجل الحضور",
-      },
-      { status: 500 }
-    );
-  }
-}
-
-// POST: Export attendance report (PDF/Excel)
-export async function POST(req) {
-  try {
-    const user = await getUserFromRequest(req);
-
-    if (!user || user.role !== "instructor") {
-      return NextResponse.json(
-        { success: false, error: "غير مصرح لك بالتصدير. يجب أن تكون مدرساً" },
-        { status: 403 }
-      );
-    }
-
-    const { exportType, filters } = await req.json();
-
-    if (!exportType || !["pdf", "excel"].includes(exportType)) {
-      return NextResponse.json(
-        { success: false, error: "نوع التصدير غير صالح" },
-        { status: 400 }
-      );
-    }
-
-    // هنا يمكنك إضافة منطق التصدير إلى PDF أو Excel
-    // استخدم libraries مثل pdf-lib أو exceljs
-
-    return NextResponse.json({
-      success: true,
-      message: `تم إنشاء ملف ${exportType.toUpperCase()} بنجاح`,
-      downloadUrl: `/api/exports/attendance-${Date.now()}.${exportType}`,
-      exportDetails: {
-        type: exportType,
-        filters,
-        exportedAt: new Date(),
-        exportedBy: user.name || user.email,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Error exporting attendance:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "فشل في تصدير سجل الحضور",
+        error: error.message || 'فشل في جلب سجل الحضور',
       },
       { status: 500 }
     );

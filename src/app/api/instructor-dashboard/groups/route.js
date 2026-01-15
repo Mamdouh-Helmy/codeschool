@@ -4,6 +4,7 @@ import { getUserFromRequest } from "@/lib/auth";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
 import Student from "../../../models/Student";
+import Course from "../../../models/Course"; // ✅ إضافة استيراد Course
 import mongoose from "mongoose";
 
 export async function GET(req) {
@@ -82,11 +83,18 @@ export async function GET(req) {
     const total = await Group.countDocuments(query);
     console.log(`📊 [Instructor Groups] Total groups found: ${total}`);
 
-    // جلب المجموعات مع البوبيوليت
+    // ✅ التحقق من أن الـ Course model مسجل في mongoose
+    // إذا لم يكن مسجلاً، نقوم بتسجيله
+    if (!mongoose.models.Course) {
+      console.log("⚠️ [Instructor Groups] Course model not registered, importing...");
+      await import("../../../models/Course");
+    }
+
+    // ✅ إذا كان Course model موجود في ملف Group (كمرجع)، يجب استخدامه مباشرة
+    // بدلاً من استخدام .populate، سنجلب بيانات الكورس من courseSnapshot إذا كان موجوداً
     const groups = await Group.find(query)
-      .populate("courseId", "title level")
-      .populate("instructors", "name email profile")
-      .select("name code status currentStudentsCount maxStudents schedule pricing totalSessionsCount automation metadata")
+      // ✅ استخدام courseSnapshot بدلاً من populate
+      .select("name code status currentStudentsCount maxStudents schedule pricing totalSessionsCount automation metadata courseSnapshot")
       .sort({ "schedule.startDate": -1, "metadata.createdAt": -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -174,16 +182,37 @@ export async function GET(req) {
           })
           .length;
 
+        // ✅ استخدام courseSnapshot بدلاً من populate
+        const courseInfo = group.courseSnapshot || {};
+        
+        // ✅ محاولة جلب بيانات المدرسين
+        let instructors = [];
+        if (group.instructors && group.instructors.length > 0) {
+          try {
+            const User = mongoose.models.User;
+            if (User) {
+              instructors = await User.find({
+                _id: { $in: group.instructors },
+                isDeleted: false
+              })
+              .select("name email profile")
+              .lean();
+            }
+          } catch (error) {
+            console.log("⚠️ Error fetching instructors:", error.message);
+          }
+        }
+
         return {
           id: group._id,
           name: group.name,
           code: group.code,
           status: group.status,
           course: {
-            title: group.courseId?.title || "غير محدد",
-            level: group.courseId?.level || "غير محدد"
+            title: courseInfo.title || "غير محدد",
+            level: courseInfo.level || "غير محدد"
           },
-          instructors: group.instructors || [],
+          instructors: instructors || [],
           schedule: {
             startDate: group.schedule?.startDate,
             daysOfWeek: group.schedule?.daysOfWeek || [],

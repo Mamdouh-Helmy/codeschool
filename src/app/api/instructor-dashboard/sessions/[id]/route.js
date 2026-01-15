@@ -8,56 +8,27 @@ import { getUserFromRequest } from "@/lib/auth";
 import { onSessionStatusChanged } from "@/app/services/groupAutomation";
 import mongoose from "mongoose";
 
-// Helper functions for session permissions
+// ✅ تم إزالة جميع القيود - المدرس يمكنه التعديل في أي وقت وأي حالة
 function canEditSession(session, user) {
-  if (session.status === "completed" || session.status === "cancelled") {
-    return false;
-  }
-
-  const now = new Date();
-  const sessionDate = new Date(session.scheduledDate);
-  const [hours, minutes] = session.startTime.split(":").map(Number);
-  sessionDate.setHours(hours, minutes, 0, 0);
-
-  const hoursBefore = (sessionDate - now) / (1000 * 60 * 60);
-  return hoursBefore > 24;
+  return true; // ✅ يمكن التعديل دائمًا
 }
 
 function canCancelSession(session, user) {
-  // لا يمكن إلغاء الجلسات المكتملة أو الملغاة مسبقاً
-  if (session.status === "completed" || session.status === "cancelled") {
-    return false;
-  }
-
-  const now = new Date();
-  const sessionDate = new Date(session.scheduledDate);
-  const [hours, minutes] = session.startTime.split(":").map(Number);
-  sessionDate.setHours(hours, minutes, 0, 0);
-
-  const hoursBefore = (sessionDate - now) / (1000 * 60 * 60);
-
-  // يمكن الإلغاء قبل 24 ساعة على الأقل
-  return hoursBefore > 24;
+  return true; // ✅ يمكن الإلغاء دائمًا
 }
 
 function canPostponeSession(session, user) {
-  // لا يمكن تأجيل الجلسات المكتملة أو الملغاة
-  if (session.status === "completed" || session.status === "cancelled") {
-    return false;
-  }
-
-  const now = new Date();
-  const sessionDate = new Date(session.scheduledDate);
-  const [hours, minutes] = session.startTime.split(":").map(Number);
-  sessionDate.setHours(hours, minutes, 0, 0);
-
-  const hoursBefore = (sessionDate - now) / (1000 * 60 * 60);
-
-  // يمكن التأجيل قبل 24 ساعة على الأقل
-  return hoursBefore > 24;
+  return true; // ✅ يمكن التأجيل دائمًا
 }
 
-// دالة مساعدة لجلب الجلسات السابقة والتالية
+function canCompleteSession(session, user) {
+  return true; // ✅ يمكن الإكمال دائمًا
+}
+
+function canRescheduleSession(session, user) {
+  return true; // ✅ يمكن إعادة الجدولة دائمًا
+}
+
 async function getSessionNavigation(currentSession) {
   try {
     // الجلسات السابقة (بنفس المجموعة)
@@ -233,14 +204,8 @@ export async function GET(req, { params }) {
     const isPast = sessionDate < now;
     const isUpcoming = hoursBefore > 0 && hoursBefore <= 48;
 
-    // التحقق إذا كان يمكن أخذ الحضور
-    const thirtyMinutesBefore = new Date(sessionDate.getTime() - 30 * 60000);
-    const twoHoursAfter = new Date(sessionDate.getTime() + 2 * 60 * 60000);
-    const canTakeAttendance =
-      (session.status === "scheduled" || session.status === "completed") &&
-      now >= thirtyMinutesBefore &&
-      now <= twoHoursAfter &&
-      !session.attendanceTaken;
+    // ✅ السماح بأخذ الحضور في أي حالة (حتى لو كانت مكتملة)
+    const canTakeAttendance = !session.attendanceTaken;
 
     // جلب تفاصيل الحضور
     const studentAttendance = await getStudentAttendance(session);
@@ -266,12 +231,15 @@ export async function GET(req, { params }) {
     // جلب الجلسات السابقة والتالية
     const navigation = await getSessionNavigation(session);
 
-    // الصلاحيات
+    // ✅ الصلاحيات المطلقة للمدرس
     const permissions = {
       canTakeAttendance,
-      canEdit: canEditSession(session, user),
-      canCancel: canCancelSession(session, user),
-      canPostpone: canPostponeSession(session, user),
+      canEdit: true, // ✅ يمكن التعديل دائمًا
+      canCancel: true, // ✅ يمكن الإلغاء دائمًا
+      canPostpone: true, // ✅ يمكن التأجيل دائمًا
+      canComplete: true, // ✅ يمكن الإكمال دائمًا
+      canReschedule: true, // ✅ يمكن إعادة الجدولة دائمًا
+      canDelete: false, // ✅ لا يمكن الحذف (فقط الإلغاء)
     };
 
     // تحضير كائن الجلسة النهائي
@@ -308,13 +276,7 @@ export async function GET(req, { params }) {
       attendance: session.attendance || [],
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
-      permissions: {
-        canEdit: canEditSession(session, user),
-        canCancel: canCancelSession(session, user),
-        canPostpone: canPostponeSession(session, user),
-        canTakeAttendance,
-        canDelete: false,
-      },
+      permissions: permissions,
       metadata: {
         isPast,
         isUpcoming,
@@ -410,6 +372,8 @@ export async function PUT(req, { params }) {
     }
 
     console.log(`✅ Session found: ${existingSession.title}`);
+    console.log(`📊 Current status: ${existingSession.status}`);
+    console.log(`📊 Attendance taken: ${existingSession.attendanceTaken}`);
 
     // التحقق إذا كان المدرس يدرس هذه المجموعة
     const isInstructorOfGroup = existingSession.groupId.instructors.some(
@@ -427,43 +391,9 @@ export async function PUT(req, { params }) {
     const oldStatus = existingSession.status;
     const newStatus = updateData.status;
 
-    // التحقق من الصلاحيات بناءً على حالة الجلسة
-    if (
-      existingSession.status === "completed" ||
-      existingSession.status === "cancelled"
-    ) {
-      console.log(`❌ Cannot edit completed or cancelled session`);
-      return NextResponse.json(
-        { success: false, error: "لا يمكن تعديل جلسة مكتملة أو ملغاة" },
-        { status: 400 }
-      );
-    }
+    console.log(`🔄 Status change: ${oldStatus} → ${newStatus}`);
 
-    // التحقق من إمكانية التعديل بناءً على الوقت
-    const now = new Date();
-    const sessionDate = new Date(existingSession.scheduledDate);
-    const [hours, minutes] = existingSession.startTime.split(":").map(Number);
-    sessionDate.setHours(hours, minutes, 0, 0);
-
-    const hoursBefore = (sessionDate - now) / (1000 * 60 * 60);
-
-    if (
-      hoursBefore <= 24 &&
-      (newStatus === "cancelled" || newStatus === "postponed")
-    ) {
-      console.log(
-        `❌ Cannot cancel/postpone within 24 hours (${hoursBefore.toFixed(
-          1
-        )} hours remaining)`
-      );
-      return NextResponse.json(
-        {
-          success: false,
-          error: "لا يمكن إلغاء أو تأجيل الجلسة قبل أقل من 24 ساعة",
-        },
-        { status: 400 }
-      );
-    }
+    // ✅ إزالة جميع القيود - يمكن التعديل في أي وقت وأي حالة
 
     // ✅ إنشاء payload للتحديث
     const updatePayload = {
@@ -482,11 +412,32 @@ export async function PUT(req, { params }) {
       ["scheduled", "completed", "cancelled", "postponed"].includes(newStatus)
     ) {
       updatePayload.status = newStatus;
+
+      // ✅ إذا كانت الحالة تتغير من "completed" إلى حالة أخرى، نزيل الحضور المسجل
+      if (
+        oldStatus === "completed" &&
+        newStatus !== "completed" &&
+        existingSession.attendanceTaken
+      ) {
+        console.log(
+          `🔄 Removing attendance for status change from completed to ${newStatus}`
+        );
+        updatePayload.attendanceTaken = false;
+        updatePayload.attendance = [];
+      }
+
+      // ✅ إذا كانت الحالة تتغير إلى "completed" ولدينا حضور مسجل، نحتفظ به
+      if (newStatus === "completed" && existingSession.attendanceTaken) {
+        console.log(`✅ Keeping attendance for completed session`);
+        updatePayload.attendanceTaken = true;
+      }
     }
 
     // ✅ حفظ الرسالة المخصصة في السيشن (اختياري)
     if (
-      (newStatus === "cancelled" || newStatus === "postponed") &&
+      (newStatus === "cancelled" ||
+        newStatus === "postponed" ||
+        newStatus === "scheduled") &&
       updateData.customMessage
     ) {
       updatePayload.customStatusMessage = updateData.customMessage;
@@ -502,12 +453,16 @@ export async function PUT(req, { params }) {
       .populate("courseId", "title");
 
     console.log(`✅ Session updated: ${updatedSession.title}`);
+    console.log(`📊 New status: ${updatedSession.status}`);
+    console.log(`📊 Attendance taken: ${updatedSession.attendanceTaken}`);
 
-    // ✅ Trigger automation if status changed to cancelled or postponed
+    // ✅ Trigger automation if status changed
     if (
       newStatus &&
       oldStatus !== newStatus &&
-      (newStatus === "cancelled" || newStatus === "postponed") &&
+      (newStatus === "cancelled" ||
+        newStatus === "postponed" ||
+        newStatus === "scheduled") &&
       updatedSession.groupId.automation?.whatsappEnabled &&
       updatedSession.groupId.automation?.notifyOnSessionUpdate
     ) {
@@ -551,7 +506,11 @@ export async function PUT(req, { params }) {
           automation: {
             triggered: true,
             action: `إرسال إشعار ${
-              newStatus === "cancelled" ? "إلغاء" : "تأجيل"
+              newStatus === "cancelled"
+                ? "إلغاء"
+                : newStatus === "postponed"
+                ? "تأجيل"
+                : "جدولة"
             } للطلاب عبر الواتساب`,
             status: "processing",
             customMessageUsed: !!updateData.customMessage,
@@ -561,7 +520,6 @@ export async function PUT(req, { params }) {
       });
     }
 
-    // لو ما في automation (مثلاً updated إلى completed أو scheduled)
     return NextResponse.json({
       success: true,
       message: "تم تحديث الجلسة بنجاح",

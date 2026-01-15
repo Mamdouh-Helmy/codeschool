@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -593,9 +593,9 @@ export default function GroupStudentsPage() {
                     const AttentionIcon = attentionConfig.icon;
                     
                     return (
-                      <>
+                      <Fragment key={student.id}>
+                        {/* الصف الرئيسي للطالب */}
                         <tr 
-                          key={student.id} 
                           className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
                           <td className="py-4 px-6">
@@ -735,6 +735,7 @@ export default function GroupStudentsPage() {
                                       <a 
                                         href={`https://wa.me/${student.whatsapp}`}
                                         target="_blank"
+                                        rel="noopener noreferrer"
                                         className="text-green-600 dark:text-green-400 hover:underline"
                                       >
                                         {student.whatsapp}
@@ -809,7 +810,10 @@ export default function GroupStudentsPage() {
                                   <div className="space-y-2">
                                     {student.attendance.records.length > 0 ? (
                                       student.attendance.records.map((record, index) => (
-                                        <div key={index} className="flex items-center justify-between text-sm">
+                                        <div 
+                                          key={`${student.id}-record-${index}`}
+                                          className="flex items-center justify-between text-sm"
+                                        >
                                           <div className="flex items-center gap-2">
                                             <span className={`w-2 h-2 rounded-full ${
                                               record.status === 'present' ? 'bg-green-500' :
@@ -838,11 +842,11 @@ export default function GroupStudentsPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })
                 ) : (
-                  <tr>
+                  <tr key="no-students">
                     <td colSpan={6} className="py-12 text-center">
                       <Users className="w-16 h-16 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
@@ -907,7 +911,7 @@ export default function GroupStudentsPage() {
 
                 return (
                   <button
-                    key={pageNum}
+                    key={`page-${pageNum}`}
                     onClick={() => handlePageChange(pageNum)}
                     className={`px-3 py-2 rounded-lg ${
                       pagination.page === pageNum

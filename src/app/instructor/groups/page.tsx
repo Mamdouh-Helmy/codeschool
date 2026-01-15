@@ -1,3 +1,4 @@
+// app/instructor/groups/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -22,6 +23,10 @@ import {
   Plus,
   Download,
   RefreshCw,
+  Award,
+  Star,
+  ClipboardCheck,
+  GraduationCap,
 } from "lucide-react";
 
 // أنواع البيانات
@@ -64,6 +69,15 @@ interface Group {
   progress: number;
   createdAt: string;
   updatedAt: string;
+  metadata?: {
+    evaluationsEnabled?: boolean;
+    evaluationsCompleted?: boolean;
+    evaluationSummary?: {
+      totalStudents?: number;
+      evaluatedStudents?: number;
+      pendingStudents?: number;
+    };
+  };
 }
 
 interface GroupsResponse {
@@ -248,6 +262,39 @@ export default function InstructorGroupsPage() {
     if (rate >= 80) return "text-green-600";
     if (rate >= 60) return "text-yellow-600";
     return "text-red-600";
+  };
+
+  const getEvaluationStatusBadge = (group: Group) => {
+    if (group.status !== "completed") return null;
+    
+    if (group.metadata?.evaluationsCompleted) {
+      return {
+        bg: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+        text: "تم التقييم",
+        icon: Award,
+        progress: 100,
+      };
+    }
+    
+    if (group.metadata?.evaluationsEnabled) {
+      const evaluated = group.metadata?.evaluationSummary?.evaluatedStudents || 0;
+      const total = group.metadata?.evaluationSummary?.totalStudents || group.studentCount || 1;
+      const progress = Math.round((evaluated / total) * 100);
+      
+      return {
+        bg: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+        text: `جاري التقييم (${evaluated}/${total})`,
+        icon: ClipboardCheck,
+        progress,
+      };
+    }
+    
+    return {
+      bg: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+      text: "يتطلب التقييم",
+      icon: GraduationCap,
+      progress: 0,
+    };
   };
 
   if (loading && groups.length === 0) {
@@ -451,6 +498,8 @@ export default function InstructorGroupsPage() {
           {groups.map((group) => {
             const statusConfig = getStatusBadge(group.status);
             const StatusIcon = statusConfig.icon;
+            const evaluationStatus = getEvaluationStatusBadge(group);
+            const EvaluationIcon = evaluationStatus?.icon || Star;
 
             return (
               <div
@@ -468,16 +517,22 @@ export default function InstructorGroupsPage() {
                         {group.code} • {group.course.title}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-end gap-2">
                       <span
                         className={`px-3 py-1 rounded-full text-sm ${statusConfig.bg}`}
                       >
                         <StatusIcon className="inline w-4 h-4 mr-1 rtl:ml-1" />
                         {statusConfig.text}
                       </span>
-                      <button className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                        <MoreVertical className="w-5 h-5" />
-                      </button>
+                      
+                      {evaluationStatus && (
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs ${evaluationStatus.bg}`}
+                        >
+                          <EvaluationIcon className="inline w-3 h-3 mr-1 rtl:ml-1" />
+                          {evaluationStatus.text}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -585,6 +640,26 @@ export default function InstructorGroupsPage() {
                       </div>
                     </div>
 
+                    {/* حالة التقييم */}
+                    {evaluationStatus && evaluationStatus.progress > 0 && (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            تقدم التقييمات
+                          </span>
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                            {evaluationStatus.progress}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full bg-gradient-to-r from-amber-500 to-amber-600"
+                            style={{ width: `${evaluationStatus.progress}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* الجلسة التالية */}
                     {group.nextSession && (
                       <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
@@ -625,6 +700,16 @@ export default function InstructorGroupsPage() {
                         <Eye className="w-4 h-4" />
                         <span>عرض التفاصيل</span>
                       </Link>
+                      
+                      
+                        <Link
+                          href={`/instructor/groups/${group.id}/evaluations`}
+                          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                        >
+                          <Star className="w-4 h-4" />
+                          <span>تقييم الطلاب</span>
+                        </Link>
+                      
                     </div>
                   </div>
                 </div>
