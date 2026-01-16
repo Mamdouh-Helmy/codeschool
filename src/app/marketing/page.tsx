@@ -1,38 +1,36 @@
-// app/marketing/dashboard/page.tsx - صفحة رئيسية مختصرة
-"use client";
+'use client';
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
-  BarChart3,
-  Users,
   TrendingUp,
-  MessageSquare,
+  Users,
+  Target,
   DollarSign,
-  Calendar,
+  MessageSquare,
   Filter,
-  Download,
   RefreshCw,
+  Calendar,
+  BarChart3,
+  PieChart,
+  Activity,
+  Sparkles,
+  Zap,
+  Rocket,
+  Star,
   AlertCircle,
   CheckCircle,
-  XCircle,
-  Star,
-  Target,
-  Zap,
-  PieChart,
-  LineChart
+  Clock,
+  ChevronRight
 } from "lucide-react";
 
 interface MarketingStats {
-  timeframe: string;
   total: {
     actions: number;
     completed: number;
     students: number;
     successRate: number;
   };
-  byActionType: Record<string, any>;
   campaigns: {
     active: number;
     totalTargets: number;
@@ -45,46 +43,81 @@ interface MarketingStats {
   };
 }
 
-export default function MarketingDashboard() {
+interface Campaign {
+  _id: string;
+  name: string;
+  campaignType: string;
+  status: string;
+  stats: {
+    totalTargets: number;
+    messagesSent: number;
+    conversions: number;
+    conversionRate: number;
+  };
+}
+
+interface Lead {
+  _id: string;
+  fullName: string;
+  status: string;
+  leadScore: {
+    score: number;
+  };
+}
+
+export default function MarketingDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<MarketingStats | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [timeframe, setTimeframe] = useState("month");
 
   useEffect(() => {
-    fetchMarketingData();
+    fetchDashboardData();
   }, [timeframe]);
 
-  const fetchMarketingData = async () => {
+  const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/marketing-dashboard?timeframe=${timeframe}`, {
+      
+      // Fetch marketing stats
+      const statsResponse = await fetch(`/api/marketing-dashboard?timeframe=${timeframe}`, {
         credentials: "include"
       });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setStats(result.data.stats);
-      } else {
-        throw new Error(result.message);
+      const statsResult = await statsResponse.json();
+      
+      if (statsResult.success) {
+        setStats(statsResult.data.stats);
+        setCampaigns(statsResult.data.activeCampaigns || []);
       }
+
+      // Fetch recent leads
+      const leadsResponse = await fetch(`/api/marketing/leads?timeframe=${timeframe}&limit=5`, {
+        credentials: "include"
+      });
+      const leadsResult = await leadsResponse.json();
+      
+      if (leadsResult.success) {
+        setLeads(leadsResult.data.leads.slice(0, 5) || []);
+      }
+
     } catch (error) {
-      console.error("Error fetching marketing data:", error);
+      console.error("Error fetching dashboard data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const getActionTypeColor = (type: string) => {
-    const colors = {
-      upsell: "bg-green-100 text-green-800",
-      support: "bg-yellow-100 text-yellow-800",
-      re_enroll: "bg-blue-100 text-blue-800",
-      referral: "bg-purple-100 text-purple-800",
-      feedback: "bg-indigo-100 text-indigo-800"
+  const getCampaignTypeName = (type: string) => {
+    const names = {
+      evaluation_followup: "متابعة تقييمات",
+      retention: "احتفاظ",
+      upsell: "ترقية",
+      re_enrollment: "إعادة تسجيل",
+      referral: "إحالات"
     };
-    return colors[type as keyof typeof colors] || "bg-gray-100 text-gray-800";
+    return names[type as keyof typeof names] || type;
   };
 
   if (loading) {
@@ -93,7 +126,7 @@ export default function MarketingDashboard() {
         <div className="text-center">
           <RefreshCw className="h-12 w-12 animate-spin text-primary mx-auto" />
           <p className="mt-4 text-gray-600 dark:text-gray-300">
-            جاري تحميل بيانات الماركتنج...
+            جاري تحميل لوحة الماركتنج...
           </p>
         </div>
       </div>
@@ -108,10 +141,10 @@ export default function MarketingDashboard() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                لوحة تحكم الماركتنج
+                لوحة الماركتنج
               </h1>
               <p className="text-gray-600 dark:text-gray-300">
-                تحليل ومتابعة الحملات التسويقية
+                نظرة شاملة على أداء التسويق والأتمتة
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -124,10 +157,9 @@ export default function MarketingDashboard() {
                 <option value="week">الأسبوع</option>
                 <option value="month">الشهر</option>
                 <option value="quarter">الربع</option>
-                <option value="year">السنة</option>
               </select>
               <button
-                onClick={fetchMarketingData}
+                onClick={fetchDashboardData}
                 className="p-2 text-gray-600 dark:text-gray-300 hover:text-primary transition-colors"
               >
                 <RefreshCw className="w-5 h-5" />
@@ -137,184 +169,290 @@ export default function MarketingDashboard() {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="container mx-auto px-4 py-8">
-        {/* Stats Overview */}
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-6">
+        {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Total Actions */}
-          <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6">
+          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">إجمالي الإجراءات</p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                <p className="text-blue-100 text-sm">إجمالي الإجراءات</p>
+                <h3 className="text-2xl font-bold mt-2">
                   {stats?.total.actions || 0}
                 </h3>
               </div>
-              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <Zap className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                <Activity className="w-6 h-6" />
               </div>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {stats?.total.completed || 0} مكتملة
-            </p>
-          </div>
-
-          {/* Success Rate */}
-          <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">معدل النجاح</p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                  {stats?.total.successRate || 0}%
-                </h3>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
+            <div className="text-blue-100 text-sm">
+              {stats?.total.completed || 0} مكتمل ({stats?.total.successRate || 0}%)
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {stats?.total.students || 0} طالب
-            </p>
           </div>
 
           {/* Active Campaigns */}
-          <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6">
+          <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg p-6 text-white">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">الحملات النشطة</p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
+                <p className="text-green-100 text-sm">حملات نشطة</p>
+                <h3 className="text-2xl font-bold mt-2">
                   {stats?.campaigns.active || 0}
                 </h3>
               </div>
-              <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                <Target className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                <Rocket className="w-6 h-6" />
               </div>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {stats?.campaigns.totalTargets || 0} هدف
-            </p>
+            <div className="text-green-100 text-sm">
+              {stats?.campaigns.messagesSent || 0} رسالة مرسلة
+            </div>
           </div>
 
-          {/* Messages Sent */}
-          <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6">
+          {/* Leads */}
+          <div className="bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl shadow-lg p-6 text-white">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">الرسائل المرسلة</p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                  {stats?.campaigns.messagesSent || 0}
+                <p className="text-purple-100 text-sm">Leads جديدة</p>
+                <h3 className="text-2xl font-bold mt-2">
+                  {leads.length}
                 </h3>
               </div>
-              <div className="w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                <MessageSquare className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                <Users className="w-6 h-6" />
               </div>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              عبر WhatsApp
-            </p>
+            <div className="text-purple-100 text-sm">
+              {leads.filter(l => l.status === "new").length} جديد
+            </div>
           </div>
-        </div>
 
-        {/* Action Types Breakdown */}
-        <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            توزيع الإجراءات حسب النوع
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {stats?.byActionType && Object.entries(stats.byActionType).map(([type, data]: [string, any]) => (
-              <div key={type} className="text-center p-4 rounded-lg border">
-                <div className={`inline-block px-3 py-1 rounded-full text-sm mb-2 ${getActionTypeColor(type)}`}>
-                  {type === "upsell" && "ترقية"}
-                  {type === "support" && "دعم"}
-                  {type === "re_enroll" && "إعادة تسجيل"}
-                  {type === "referral" && "إحالات"}
-                  {type === "feedback" && "تقييمات"}
-                </div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {data.total}
-                </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  {data.successRate}% نجاح
-                </div>
+          {/* Evaluation Results */}
+          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-amber-100 text-sm">تقييمات حديثة</p>
+                <h3 className="text-2xl font-bold mt-2">
+                  {stats?.evaluations ? Object.values(stats.evaluations).reduce((a, b) => a + b, 0) : 0}
+                </h3>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Evaluation Decisions */}
-        <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            قرارات التقييم
-          </h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-green-700 dark:text-green-400">
-                {stats?.evaluations.pass || 0}
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                <Target className="w-6 h-6" />
               </div>
-              <div className="text-sm text-green-600 dark:text-green-300">ناجح</div>
             </div>
-
-            <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-              <AlertCircle className="w-8 h-8 text-yellow-600 dark:text-yellow-400 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">
-                {stats?.evaluations.review || 0}
-              </div>
-              <div className="text-sm text-yellow-600 dark:text-yellow-300">مراجعة</div>
-            </div>
-
-            <div className="text-center p-4 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 rounded-lg border border-red-200 dark:border-red-800">
-              <XCircle className="w-8 h-8 text-red-600 dark:text-red-400 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-red-700 dark:text-red-400">
-                {stats?.evaluations.repeat || 0}
-              </div>
-              <div className="text-sm text-red-600 dark:text-red-300">إعادة</div>
+            <div className="text-amber-100 text-sm">
+              {stats?.evaluations?.pass || 0} ناجح
             </div>
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Link
-            href="/marketing/campaigns"
-            className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 hover:shadow-xl transition-all hover:border-primary/50 border"
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <Target className="w-6 h-6 text-primary" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">إدارة الحملات</h3>
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Campaigns Overview */}
+          <div className="lg:col-span-2 bg-white dark:bg-secondary rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                الحملات النشطة
+              </h3>
+              <button
+                onClick={() => router.push("/marketing/campaigns")}
+                className="text-primary hover:underline text-sm"
+              >
+                عرض الكل
+              </button>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              إنشاء وتعديل ومتابعة الحملات التسويقية
-            </p>
-            <div className="text-primary text-sm">عرض الحملات →</div>
-          </Link>
+            <div className="space-y-4">
+              {campaigns.map((campaign) => (
+                <div key={campaign._id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <Rocket className="w-4 h-4 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900 dark:text-white">
+                          {campaign.name}
+                        </h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {getCampaignTypeName(campaign.campaignType)}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-1 rounded-full text-xs ${
+                      campaign.status === "active" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" :
+                      campaign.status === "paused" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300" :
+                      "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                    }`}>
+                      {campaign.status === "active" ? "نشطة" : "متوقفة"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 mt-4">
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {campaign.stats.totalTargets}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">أهداف</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {campaign.stats.conversions}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">تحويلات</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {campaign.stats.conversionRate}%
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">معدل</div>
+                    </div>
+                  </div>
+                  <div className="mt-4 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="h-2 rounded-full bg-primary"
+                      style={{ width: `${Math.min(campaign.stats.conversionRate * 2, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+              {campaigns.length === 0 && (
+                <div className="text-center py-8">
+                  <Rocket className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">
+                    لا توجد حملات نشطة حالياً
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
 
-          <Link
-            href="/marketing/students"
-            className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 hover:shadow-xl transition-all hover:border-primary/50 border"
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <Users className="w-6 h-6 text-primary" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">تصنيف الطلاب</h3>
+          {/* Recent Leads */}
+          <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                آخر الـ Leads
+              </h3>
+              <button
+                onClick={() => router.push("/marketing/leads")}
+                className="text-primary hover:underline text-sm"
+              >
+                عرض الكل
+              </button>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              عرض وتصنيف الطلاب بناءً على التقييمات
-            </p>
-            <div className="text-primary text-sm">استعراض الطلاب →</div>
-          </Link>
+            <div className="space-y-4">
+              {leads.map((lead) => (
+                <div key={lead._id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white">
+                      {lead.fullName.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {lead.fullName}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {lead.status === "new" && "جديد"}
+                        {lead.status === "contacted" && "تم التواصل"}
+                        {lead.status === "converted" && "محول"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`font-semibold ${
+                      lead.leadScore.score >= 75 ? "text-green-600 dark:text-green-400" :
+                      lead.leadScore.score >= 50 ? "text-yellow-600 dark:text-yellow-400" :
+                      "text-red-600 dark:text-red-400"
+                    }`}>
+                      {lead.leadScore.score}
+                    </div>
+                    <div className="text-xs text-gray-500">نقاط</div>
+                  </div>
+                </div>
+              ))}
+              {leads.length === 0 && (
+                <div className="text-center py-8">
+                  <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">
+                    لا توجد Leads حديثة
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
-          <Link
-            href="/marketing/analytics"
-            className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 hover:shadow-xl transition-all hover:border-primary/50 border"
+        {/* Quick Actions Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Create Campaign */}
+          <button
+            onClick={() => router.push("/marketing/campaigns/new")}
+            className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <BarChart3 className="w-6 h-6 text-primary" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">تقارير متقدمة</h3>
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center mb-4">
+                <Sparkles className="w-6 h-6 text-white" />
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                حملة جديدة
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                إنشاء حملة تسويقية جديدة
+              </p>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              تحليلات تفصيلية وأداء الحملات
-            </p>
-            <div className="text-primary text-sm">التقارير →</div>
-          </Link>
+          </button>
+
+          {/* Manage Leads */}
+          <button
+            onClick={() => router.push("/marketing/leads")}
+            className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center mb-4">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                إدارة الـ Leads
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                متابعة العملاء المحتملين
+              </p>
+            </div>
+          </button>
+
+          {/* Student Retention */}
+          <button
+            onClick={() => router.push("/marketing/retention")}
+            className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg flex items-center justify-center mb-4">
+                <AlertCircle className="w-6 h-6 text-white" />
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                الاحتفاظ بالطلاب
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                متابعة الطلاب المعرضين للخطر
+              </p>
+            </div>
+          </button>
+
+          {/* Upsell Offers */}
+          <button
+            onClick={() => router.push("/marketing/upsell")}
+            className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow"
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex items-center justify-center mb-4">
+                <TrendingUp className="w-6 h-6 text-white" />
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                عروض الترقية
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                ترقية الطلاب الناجحين
+              </p>
+            </div>
+          </button>
         </div>
       </div>
     </div>
