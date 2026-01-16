@@ -1,4 +1,3 @@
-// app/instructor/groups/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,25 +10,21 @@ import {
   BookOpen,
   TrendingUp,
   Search,
-  Filter,
-  ChevronRight,
-  AlertCircle,
   CheckCircle,
   XCircle,
   Loader2,
   BarChart3,
   Eye,
-  MoreVertical,
-  Plus,
-  Download,
   RefreshCw,
   Award,
   Star,
   ClipboardCheck,
   GraduationCap,
+  AlertCircle,
+  ChevronRight,
 } from "lucide-react";
 
-// أنواع البيانات
+// أنواع البيانات - محدثة
 interface Group {
   id: string;
   name: string;
@@ -60,6 +55,12 @@ interface Group {
     attendanceRate: number;
     studentsAtRisk: number;
     studentCapacity: string;
+  };
+  sessionsInfo?: { // ✅ جديد: معلومات الجلسات
+    totalSessions: number;
+    completedSessionsCount: number;
+    allSessionsCompleted: boolean;
+    completionPercentage: number;
   };
   nextSession?: {
     title: string;
@@ -264,9 +265,17 @@ export default function InstructorGroupsPage() {
     return "text-red-600";
   };
 
+  const getSessionsCompletionColor = (percentage: number) => {
+    if (percentage >= 90) return "text-green-600";
+    if (percentage >= 60) return "text-yellow-600";
+    return "text-red-600";
+  };
+
   const getEvaluationStatusBadge = (group: Group) => {
-    // ⚠️ تحديث: فقط المجموعات المكتملة يمكن تقييمها
-    if (group.status !== "completed") return null;
+    // ⚠️ تحديث: يعتمد فقط على اكتمال جميع الجلسات
+    const allSessionsCompleted = group.sessionsInfo?.allSessionsCompleted === true;
+    
+    if (!allSessionsCompleted) return null;
     
     if (group.metadata?.evaluationsCompleted) {
       return {
@@ -299,8 +308,22 @@ export default function InstructorGroupsPage() {
   };
 
   const canShowEvaluationButton = (group: Group) => {
-    // ⚠️ تحديث: فقط المجموعات المكتملة يمكن تقييمها
-    return group.status === "completed";
+    // ⚠️ تحديث: يعتمد فقط على اكتمال جميع جلسات المجموعة، بغض النظر عن حالة المجموعة
+    return group.sessionsInfo?.allSessionsCompleted === true;
+  };
+
+  const getSessionsCompletionMessage = (group: Group) => {
+    if (!group.sessionsInfo) return null;
+    
+    const { totalSessions, completedSessionsCount, allSessionsCompleted } = group.sessionsInfo;
+    
+    if (allSessionsCompleted) {
+      return "✅ جميع الجلسات مكتملة";
+    } else if (completedSessionsCount > 0) {
+      return `📊 ${completedSessionsCount}/${totalSessions} جلسة مكتملة`;
+    } else {
+      return "⏳ لم تبدأ الجلسات بعد";
+    }
   };
 
   if (loading && groups.length === 0) {
@@ -507,6 +530,7 @@ export default function InstructorGroupsPage() {
             const evaluationStatus = getEvaluationStatusBadge(group);
             const EvaluationIcon = evaluationStatus?.icon || Star;
             const canEvaluate = canShowEvaluationButton(group);
+            const sessionsCompletionMessage = getSessionsCompletionMessage(group);
 
             return (
               <div
@@ -599,6 +623,32 @@ export default function InstructorGroupsPage() {
                       </div>
                     </div>
 
+                    {/* حالة اكتمال الجلسات */}
+                    {group.sessionsInfo && (
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              حالة الجلسات
+                            </span>
+                          </div>
+                          <span className={`text-xs font-medium ${getSessionsCompletionColor(group.sessionsInfo.completionPercentage)}`}>
+                            {group.sessionsInfo.completionPercentage}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+                          <div
+                            className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600"
+                            style={{ width: `${group.sessionsInfo.completionPercentage}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          {sessionsCompletionMessage}
+                        </p>
+                      </div>
+                    )}
+
                     {/* الإحصائيات */}
                     <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                       <div className="text-center">
@@ -668,7 +718,7 @@ export default function InstructorGroupsPage() {
                     )}
 
                     {/* الجلسة التالية */}
-                    {group.nextSession && (
+                    {group.nextSession && group.status === "active" && (
                       <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -708,7 +758,7 @@ export default function InstructorGroupsPage() {
                         <span>عرض التفاصيل</span>
                       </Link>
                       
-                      {/* ⚠️ تحديث: زر التقييم يظهر فقط للمجموعات المكتملة */}
+                      {/* ⚠️ تحديث: زر التقييم يظهر فقط عندما تكتمل جميع جلسات المجموعة */}
                       {canEvaluate && (
                         <Link
                           href={`/instructor/groups/${group.id}/evaluations`}
@@ -720,6 +770,15 @@ export default function InstructorGroupsPage() {
                       )}
                     </div>
                   </div>
+                  
+                  {/* رسالة إذا كانت هناك جلسات غير مكتملة */}
+                  {group.sessionsInfo && !group.sessionsInfo.allSessionsCompleted && (
+                    <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded border border-amber-200 dark:border-amber-800">
+                      ⚠️ {group.sessionsInfo.totalSessions === 0 
+                        ? "لا توجد جلسات للمجموعة" 
+                        : `${group.sessionsInfo.totalSessions - group.sessionsInfo.completedSessionsCount} جلسة غير مكتملة`}
+                    </div>
+                  )}
                 </div>
               </div>
             );

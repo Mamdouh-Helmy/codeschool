@@ -10,8 +10,10 @@ import mongoose from "mongoose";
 // دالة مساعدة لتحديث حالة المجموعة بناءً على الجلسات
 async function updateGroupCompletionStatus(groupId) {
   try {
-    console.log(`🔄 [updateGroupCompletionStatus] Checking group ${groupId}...`);
-    
+    console.log(
+      `🔄 [updateGroupCompletionStatus] Checking group ${groupId}...`
+    );
+
     const sessions = await Session.find({
       groupId: groupId,
       isDeleted: false,
@@ -19,46 +21,61 @@ async function updateGroupCompletionStatus(groupId) {
 
     // إذا لم يكن هناك جلسات، لا تفعل شيء
     if (sessions.length === 0) {
-      console.log(`⚠️ [updateGroupCompletionStatus] No sessions found for group ${groupId}`);
+      console.log(
+        `⚠️ [updateGroupCompletionStatus] No sessions found for group ${groupId}`
+      );
       return "active";
     }
 
-    const completedSessions = sessions.filter(s => s.status === "completed");
+    const completedSessions = sessions.filter((s) => s.status === "completed");
     const allSessionsCompleted = sessions.length === completedSessions.length;
 
-    console.log(`📊 [updateGroupCompletionStatus] Sessions: ${completedSessions.length}/${sessions.length} completed`);
+    console.log(
+      `📊 [updateGroupCompletionStatus] Sessions: ${completedSessions.length}/${sessions.length} completed`
+    );
 
     const group = await Group.findById(groupId);
-    
+
     if (!group) {
-      console.error(`❌ [updateGroupCompletionStatus] Group ${groupId} not found`);
+      console.error(
+        `❌ [updateGroupCompletionStatus] Group ${groupId} not found`
+      );
       return "error";
     }
-    
+
     if (allSessionsCompleted && group.status !== "completed") {
-      console.log(`✅ [updateGroupCompletionStatus] All ${sessions.length} sessions completed for group ${groupId}. Updating status to 'completed'`);
-      
+      console.log(
+        `✅ [updateGroupCompletionStatus] All ${sessions.length} sessions completed for group ${groupId}. Updating status to 'completed'`
+      );
+
       group.status = "completed";
       group.metadata.completedAt = new Date();
-      group.metadata.completedBy = group.metadata.createdBy || group.instructors[0];
-      
+      group.metadata.completedBy =
+        group.metadata.createdBy || group.instructors[0];
+
       await group.save();
-      
-      console.log(`✅ [updateGroupCompletionStatus] Group ${groupId} status updated to 'completed'`);
+
+      console.log(
+        `✅ [updateGroupCompletionStatus] Group ${groupId} status updated to 'completed'`
+      );
       return "completed";
     } else if (!allSessionsCompleted && group.status === "completed") {
       // إذا كانت المجموعة مكتملة ولكن ليس كل الجلسات مكتملة
-      console.log(`⚠️ [updateGroupCompletionStatus] Group ${groupId} is marked as 'completed' but not all sessions are completed. Reverting to 'active'`);
-      
+      console.log(
+        `⚠️ [updateGroupCompletionStatus] Group ${groupId} is marked as 'completed' but not all sessions are completed. Reverting to 'active'`
+      );
+
       group.status = "active";
       group.metadata.completedAt = null;
       group.metadata.completedBy = null;
-      
+
       await group.save();
       return "active";
     }
-    
-    console.log(`📊 [updateGroupCompletionStatus] Group status remains: ${group.status}`);
+
+    console.log(
+      `📊 [updateGroupCompletionStatus] Group status remains: ${group.status}`
+    );
     return group.status;
   } catch (error) {
     console.error("❌ [updateGroupCompletionStatus] Error:", error);
@@ -75,7 +92,9 @@ export async function GET(req, { params }) {
     // التحقق من المستخدم
     const user = await getUserFromRequest(req);
     if (!user || (user.role !== "instructor" && user.role !== "admin")) {
-      console.log(`❌ [Group Evaluations GET] Unauthorized access attempt by user: ${user?.id}`);
+      console.log(
+        `❌ [Group Evaluations GET] Unauthorized access attempt by user: ${user?.id}`
+      );
       return NextResponse.json(
         { success: false, message: "غير مصرح" },
         { status: 401 }
@@ -92,24 +111,35 @@ export async function GET(req, { params }) {
     });
 
     if (!group) {
-      console.log(`❌ [Group Evaluations GET] Group ${id} not found or user not instructor`);
+      console.log(
+        `❌ [Group Evaluations GET] Group ${id} not found or user not instructor`
+      );
       return NextResponse.json(
-        { success: false, message: "المجموعة غير موجودة أو لا تملك صلاحية الوصول" },
+        {
+          success: false,
+          message: "المجموعة غير موجودة أو لا تملك صلاحية الوصول",
+        },
         { status: 404 }
       );
     }
 
-    console.log(`📊 [Group Evaluations GET] Current group status: ${group.status}`);
+    console.log(
+      `📊 [Group Evaluations GET] Current group status: ${group.status}`
+    );
 
     // ⚠️ تحديث حالة المجموعة بناءً على الجلسات
     const updatedStatus = await updateGroupCompletionStatus(id);
-    console.log(`🔄 [Group Evaluations GET] Group status after update: ${updatedStatus}`);
+    console.log(
+      `🔄 [Group Evaluations GET] Group status after update: ${updatedStatus}`
+    );
 
     // إعادة تحميل المجموعة بعد التحديث
     const updatedGroup = await Group.findById(id);
-    
+
     if (!updatedGroup) {
-      console.log(`❌ [Group Evaluations GET] Failed to reload group after update`);
+      console.log(
+        `❌ [Group Evaluations GET] Failed to reload group after update`
+      );
       return NextResponse.json(
         { success: false, message: "خطأ في تحميل بيانات المجموعة" },
         { status: 500 }
@@ -118,14 +148,16 @@ export async function GET(req, { params }) {
 
     // ⚠️ التحقق من أن المجموعة مكتملة (بعد التحديث)
     if (updatedGroup.status !== "completed") {
-      console.log(`❌ [Group Evaluations GET] Group not completed: ${updatedGroup.status}`);
+      console.log(
+        `❌ [Group Evaluations GET] Group not completed: ${updatedGroup.status}`
+      );
       return NextResponse.json(
         {
           success: false,
           message: "لا يمكن تقييم الطلاب إلا بعد اكتمال المجموعة",
           details: `حالة المجموعة: ${updatedGroup.status}. يرجى إكمال جميع الجلسات أولاً.`,
           groupStatus: updatedGroup.status,
-          sessionsInfo: await getSessionsInfo(id)
+          sessionsInfo: await getSessionsInfo(id),
         },
         { status: 400 }
       );
@@ -137,7 +169,9 @@ export async function GET(req, { params }) {
     const search = searchParams.get("search");
     const decision = searchParams.get("decision");
 
-    console.log(`🔍 [Group Evaluations GET] Filters - page: ${page}, limit: ${limit}, search: ${search}, decision: ${decision}`);
+    console.log(
+      `🔍 [Group Evaluations GET] Filters - page: ${page}, limit: ${limit}, search: ${search}, decision: ${decision}`
+    );
 
     let studentsQuery = {
       "academicInfo.groupIds": new mongoose.Types.ObjectId(id),
@@ -148,7 +182,7 @@ export async function GET(req, { params }) {
       studentsQuery.$or = [
         { "personalInfo.fullName": { $regex: search, $options: "i" } },
         { enrollmentNumber: { $regex: search, $options: "i" } },
-        { "personalInfo.email": { $regex: search, $options: "i" } }
+        { "personalInfo.email": { $regex: search, $options: "i" } },
       ];
     }
 
@@ -163,7 +197,9 @@ export async function GET(req, { params }) {
 
     const totalStudents = await Student.countDocuments(studentsQuery);
 
-    console.log(`👥 [Group Evaluations GET] Found ${students.length} students (total: ${totalStudents})`);
+    console.log(
+      `👥 [Group Evaluations GET] Found ${students.length} students (total: ${totalStudents})`
+    );
 
     // جلب تقييمات الطلاب الموجودة
     const existingEvaluations = await StudentEvaluation.find({
@@ -172,7 +208,9 @@ export async function GET(req, { params }) {
       isDeleted: false,
     }).lean();
 
-    console.log(`📝 [Group Evaluations GET] Found ${existingEvaluations.length} existing evaluations`);
+    console.log(
+      `📝 [Group Evaluations GET] Found ${existingEvaluations.length} existing evaluations`
+    );
 
     const evaluationsMap = {};
     existingEvaluations.forEach((evaluation) => {
@@ -187,14 +225,18 @@ export async function GET(req, { params }) {
       .select("attendance scheduledDate status")
       .lean();
 
-    console.log(`📅 [Group Evaluations GET] Found ${sessions.length} sessions for attendance`);
+    console.log(
+      `📅 [Group Evaluations GET] Found ${sessions.length} sessions for attendance`
+    );
 
     // إعداد بيانات الطلاب مع التقييمات
     const studentsWithEvaluation = await Promise.all(
       students.map(async (student) => {
         // حساب إحصائيات الحضور
         let attended = 0;
-        const completedSessions = sessions.filter(s => s.status === "completed");
+        const completedSessions = sessions.filter(
+          (s) => s.status === "completed"
+        );
         let totalSessions = completedSessions.length;
 
         completedSessions.forEach((session) => {
@@ -222,7 +264,11 @@ export async function GET(req, { params }) {
           if (decision === "not_evaluated" && existingEvaluation) {
             return null;
           }
-          if (decision !== "not_evaluated" && (!existingEvaluation || existingEvaluation.finalDecision !== decision)) {
+          if (
+            decision !== "not_evaluated" &&
+            (!existingEvaluation ||
+              existingEvaluation.finalDecision !== decision)
+          ) {
             return null;
           }
         }
@@ -253,7 +299,7 @@ export async function GET(req, { params }) {
     );
 
     // تصفية القيم null الناتجة عن التصفية
-    const filteredStudents = studentsWithEvaluation.filter(s => s !== null);
+    const filteredStudents = studentsWithEvaluation.filter((s) => s !== null);
 
     // إحصائيات التقييمات
     const evaluationStats = {
@@ -270,7 +316,9 @@ export async function GET(req, { params }) {
       },
     };
 
-    console.log(`📊 [Group Evaluations GET] Stats - total: ${evaluationStats.totalStudents}, evaluated: ${evaluationStats.evaluated}, pending: ${evaluationStats.pending}`);
+    console.log(
+      `📊 [Group Evaluations GET] Stats - total: ${evaluationStats.totalStudents}, evaluated: ${evaluationStats.evaluated}, pending: ${evaluationStats.pending}`
+    );
 
     // التحقق من إعداد التقييمات في المجموعة
     const groupEvaluationStatus = {
@@ -289,7 +337,8 @@ export async function GET(req, { params }) {
           code: updatedGroup.code,
           status: updatedGroup.status,
           evaluationStatus: groupEvaluationStatus,
-          sessionsCompleted: sessions.filter(s => s.status === "completed").length,
+          sessionsCompleted: sessions.filter((s) => s.status === "completed")
+            .length,
           totalSessions: sessions.length,
         },
         students: filteredStudents,
@@ -305,7 +354,9 @@ export async function GET(req, { params }) {
       },
     };
 
-    console.log(`✅ [Group Evaluations GET] Successfully returned data for ${filteredStudents.length} students`);
+    console.log(
+      `✅ [Group Evaluations GET] Successfully returned data for ${filteredStudents.length} students`
+    );
     return NextResponse.json(response);
   } catch (error) {
     console.error("❌ [Group Evaluations API] Error:", error);
@@ -330,7 +381,9 @@ export async function POST(req, { params }) {
     // التحقق من المستخدم
     const user = await getUserFromRequest(req);
     if (!user || (user.role !== "instructor" && user.role !== "admin")) {
-      console.log(`❌ [Group Evaluations POST] Unauthorized access attempt by user: ${user?.id}`);
+      console.log(
+        `❌ [Group Evaluations POST] Unauthorized access attempt by user: ${user?.id}`
+      );
       return NextResponse.json(
         { success: false, message: "غير مصرح" },
         { status: 401 }
@@ -347,22 +400,31 @@ export async function POST(req, { params }) {
     });
 
     if (!group) {
-      console.log(`❌ [Group Evaluations POST] Group ${id} not found or user not instructor`);
+      console.log(
+        `❌ [Group Evaluations POST] Group ${id} not found or user not instructor`
+      );
       return NextResponse.json(
-        { success: false, message: "المجموعة غير موجودة أو لا تملك صلاحية الوصول" },
+        {
+          success: false,
+          message: "المجموعة غير موجودة أو لا تملك صلاحية الوصول",
+        },
         { status: 404 }
       );
     }
 
     // ⚠️ تحديث حالة المجموعة بناءً على الجلسات
-    console.log(`🔄 [Group Evaluations POST] Checking group completion status...`);
+    console.log(
+      `🔄 [Group Evaluations POST] Checking group completion status...`
+    );
     await updateGroupCompletionStatus(id);
-    
+
     // إعادة تحميل المجموعة بعد التحديث
     const updatedGroup = await Group.findById(id);
 
     if (!updatedGroup) {
-      console.log(`❌ [Group Evaluations POST] Failed to reload group after update`);
+      console.log(
+        `❌ [Group Evaluations POST] Failed to reload group after update`
+      );
       return NextResponse.json(
         { success: false, message: "خطأ في تحميل بيانات المجموعة" },
         { status: 500 }
@@ -371,16 +433,20 @@ export async function POST(req, { params }) {
 
     // التحقق من أن المجموعة مكتملة
     if (updatedGroup.status !== "completed") {
-      console.log(`❌ [Group Evaluations POST] Group not completed: ${updatedGroup.status}`);
-      
+      console.log(
+        `❌ [Group Evaluations POST] Group not completed: ${updatedGroup.status}`
+      );
+
       // جلب معلومات الجلسات لعرضها للمستخدم
       const sessions = await Session.find({
         groupId: id,
         isDeleted: false,
       });
-      
-      const incompleteSessions = sessions.filter(s => s.status !== "completed");
-      
+
+      const incompleteSessions = sessions.filter(
+        (s) => s.status !== "completed"
+      );
+
       return NextResponse.json(
         {
           success: false,
@@ -388,14 +454,14 @@ export async function POST(req, { params }) {
           details: `حالة المجموعة: ${updatedGroup.status}`,
           sessionsInfo: {
             total: sessions.length,
-            completed: sessions.filter(s => s.status === "completed").length,
+            completed: sessions.filter((s) => s.status === "completed").length,
             incomplete: incompleteSessions.length,
-            incompleteSessions: incompleteSessions.map(s => ({
+            incompleteSessions: incompleteSessions.map((s) => ({
               title: s.title,
               status: s.status,
               date: s.scheduledDate,
-            }))
-          }
+            })),
+          },
         },
         { status: 400 }
       );
@@ -404,7 +470,9 @@ export async function POST(req, { params }) {
     const body = await req.json();
     const { studentId, criteria, finalDecision, notes } = body;
 
-    console.log(`📝 [Group Evaluations POST] Creating evaluation for student: ${studentId}`);
+    console.log(
+      `📝 [Group Evaluations POST] Creating evaluation for student: ${studentId}`
+    );
 
     // التحقق من الطالب
     const student = await Student.findOne({
@@ -414,7 +482,9 @@ export async function POST(req, { params }) {
     });
 
     if (!student) {
-      console.log(`❌ [Group Evaluations POST] Student ${studentId} not found in group ${id}`);
+      console.log(
+        `❌ [Group Evaluations POST] Student ${studentId} not found in group ${id}`
+      );
       return NextResponse.json(
         { success: false, message: "الطالب غير موجود في المجموعة" },
         { status: 404 }
@@ -439,7 +509,9 @@ export async function POST(req, { params }) {
     ];
     for (const score of validScores) {
       if (!criteria[score] || criteria[score] < 1 || criteria[score] > 5) {
-        console.log(`❌ [Group Evaluations POST] Invalid ${score} score: ${criteria[score]}`);
+        console.log(
+          `❌ [Group Evaluations POST] Invalid ${score} score: ${criteria[score]}`
+        );
         return NextResponse.json(
           { success: false, message: `تقييم ${score} غير صالح` },
           { status: 400 }
@@ -449,7 +521,9 @@ export async function POST(req, { params }) {
 
     // التحقق من القرار النهائي
     if (!["pass", "review", "repeat"].includes(finalDecision)) {
-      console.log(`❌ [Group Evaluations POST] Invalid final decision: ${finalDecision}`);
+      console.log(
+        `❌ [Group Evaluations POST] Invalid final decision: ${finalDecision}`
+      );
       return NextResponse.json(
         { success: false, message: "القرار النهائي غير صالح" },
         { status: 400 }
@@ -457,7 +531,12 @@ export async function POST(req, { params }) {
     }
 
     // حساب المعدل العام
-    const overallScore = (criteria.understanding + criteria.commitment + criteria.attendance + criteria.participation) / 4;
+    const overallScore =
+      (criteria.understanding +
+        criteria.commitment +
+        criteria.attendance +
+        criteria.participation) /
+      4;
 
     // التحقق مما إذا كان هناك تقييم سابق
     const existingEvaluation = await StudentEvaluation.findOne({
@@ -470,7 +549,9 @@ export async function POST(req, { params }) {
 
     if (existingEvaluation) {
       // تحديث التقييم الحالي
-      console.log(`🔄 [Group Evaluations POST] Updating existing evaluation: ${existingEvaluation._id}`);
+      console.log(
+        `🔄 [Group Evaluations POST] Updating existing evaluation: ${existingEvaluation._id}`
+      );
       existingEvaluation.criteria = criteria;
       existingEvaluation.finalDecision = finalDecision;
       existingEvaluation.notes = notes;
@@ -478,14 +559,67 @@ export async function POST(req, { params }) {
         overallScore: parseFloat(overallScore.toFixed(2)),
         lastUpdated: new Date(),
       };
+
+      // ✅ تحديث الحضور
+      const sessions = await Session.find({
+        groupId: id,
+        isDeleted: false,
+        status: "completed",
+      }).lean();
+
+      const completedSessions = sessions.length;
+      const attendanceRecords = sessions.filter((session) => {
+        if (session.attendance) {
+          return session.attendance.some(
+            (record) =>
+              record.studentId.toString() === studentId.toString() &&
+              (record.status === "present" || record.status === "late")
+          );
+        }
+        return false;
+      }).length;
+
+      existingEvaluation.calculatedStats.attendancePercentage =
+        completedSessions > 0
+          ? Math.round((attendanceRecords / completedSessions) * 100)
+          : 0;
+      existingEvaluation.calculatedStats.completedSessions = completedSessions;
+      existingEvaluation.calculatedStats.totalSessions =
+        await Session.countDocuments({
+          groupId: id,
+          isDeleted: false,
+        });
+
       existingEvaluation.metadata.lastModifiedAt = new Date();
       existingEvaluation.metadata.lastModifiedBy = user.id;
 
       evaluation = await existingEvaluation.save();
-      console.log(`✅ [Group Evaluations POST] Evaluation updated: ${evaluation._id}`);
+      console.log(
+        `✅ [Group Evaluations POST] Evaluation updated: ${evaluation._id}`
+      );
     } else {
       // إنشاء تقييم جديد
       console.log(`🔄 [Group Evaluations POST] Creating new evaluation`);
+
+      // ✅ جلب بيانات الحضور
+      const sessions = await Session.find({
+        groupId: id,
+        isDeleted: false,
+        status: "completed",
+      }).lean();
+
+      const completedSessions = sessions.length;
+      const attendanceRecords = sessions.filter((session) => {
+        if (session.attendance) {
+          return session.attendance.some(
+            (record) =>
+              record.studentId.toString() === studentId.toString() &&
+              (record.status === "present" || record.status === "late")
+          );
+        }
+        return false;
+      }).length;
+
       evaluation = await StudentEvaluation.create({
         groupId: id,
         studentId,
@@ -495,6 +629,15 @@ export async function POST(req, { params }) {
         notes,
         calculatedStats: {
           overallScore: parseFloat(overallScore.toFixed(2)),
+          attendancePercentage:
+            completedSessions > 0
+              ? Math.round((attendanceRecords / completedSessions) * 100)
+              : 0,
+          completedSessions,
+          totalSessions: await Session.countDocuments({
+            groupId: id,
+            isDeleted: false,
+          }),
           createdAt: new Date(),
         },
         metadata: {
@@ -505,7 +648,9 @@ export async function POST(req, { params }) {
         },
       });
 
-      console.log(`✅ [Group Evaluations POST] New evaluation created: ${evaluation._id}`);
+      console.log(
+        `✅ [Group Evaluations POST] New evaluation created: ${evaluation._id}`
+      );
 
       // تحديث المجموعة لتسجيل أن التقييمات قد بدأت
       if (!updatedGroup.metadata.evaluationsEnabled) {
@@ -529,6 +674,27 @@ export async function POST(req, { params }) {
     });
   } catch (error) {
     console.error("❌ [Create Evaluation API] Error:", error);
+
+    // ✅ معالجة أخطاء التحقق من صحة البيانات بشكل أفضل
+    if (error.name === "ValidationError") {
+      const validationErrors = Object.keys(error.errors).map((key) => ({
+        field: key,
+        message: error.errors[key].message,
+      }));
+
+      console.error("📋 Validation errors:", validationErrors);
+
+      return NextResponse.json(
+        {
+          success: false,
+          message: "أخطاء في بيانات التقييم",
+          errors: validationErrors,
+          error: error.message,
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -543,8 +709,10 @@ export async function POST(req, { params }) {
 
 async function updateGroupEvaluationStats(groupId) {
   try {
-    console.log(`🔄 [updateGroupEvaluationStats] Updating stats for group: ${groupId}`);
-    
+    console.log(
+      `🔄 [updateGroupEvaluationStats] Updating stats for group: ${groupId}`
+    );
+
     const evaluations = await StudentEvaluation.find({
       groupId,
       isDeleted: false,
@@ -592,10 +760,16 @@ async function updateGroupEvaluationStats(groupId) {
       { new: true }
     );
 
-    console.log(`✅ [updateGroupEvaluationStats] Stats updated for group ${groupId}:`);
-    console.log(`   Evaluated: ${stats.evaluatedStudents}/${stats.totalStudents}`);
-    console.log(`   Pass: ${stats.passCount}, Review: ${stats.reviewCount}, Repeat: ${stats.repeatCount}`);
-    
+    console.log(
+      `✅ [updateGroupEvaluationStats] Stats updated for group ${groupId}:`
+    );
+    console.log(
+      `   Evaluated: ${stats.evaluatedStudents}/${stats.totalStudents}`
+    );
+    console.log(
+      `   Pass: ${stats.passCount}, Review: ${stats.reviewCount}, Repeat: ${stats.repeatCount}`
+    );
+
     return stats;
   } catch (error) {
     console.error("❌ [updateGroupEvaluationStats] Error:", error);
@@ -613,21 +787,23 @@ async function getSessionsInfo(groupId) {
 
     return {
       total: sessions.length,
-      completed: sessions.filter(s => s.status === "completed").length,
-      incomplete: sessions.filter(s => s.status !== "completed").map(s => ({
+      completed: sessions.filter((s) => s.status === "completed").length,
+      incomplete: sessions
+        .filter((s) => s.status !== "completed")
+        .map((s) => ({
+          id: s._id,
+          title: s.title,
+          sessionNumber: s.sessionNumber,
+          status: s.status,
+          scheduledDate: s.scheduledDate,
+        })),
+      allSessions: sessions.map((s) => ({
         id: s._id,
         title: s.title,
         sessionNumber: s.sessionNumber,
         status: s.status,
         scheduledDate: s.scheduledDate,
       })),
-      allSessions: sessions.map(s => ({
-        id: s._id,
-        title: s.title,
-        sessionNumber: s.sessionNumber,
-        status: s.status,
-        scheduledDate: s.scheduledDate,
-      }))
     };
   } catch (error) {
     console.error("❌ [getSessionsInfo] Error:", error);

@@ -4,7 +4,7 @@ import { getUserFromRequest } from "@/lib/auth";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
 import Student from "../../../models/Student";
-import Course from "../../../models/Course"; // ✅ إضافة استيراد Course
+import Course from "../../../models/Course";
 import mongoose from "mongoose";
 
 export async function GET(req) {
@@ -84,16 +84,13 @@ export async function GET(req) {
     console.log(`📊 [Instructor Groups] Total groups found: ${total}`);
 
     // ✅ التحقق من أن الـ Course model مسجل في mongoose
-    // إذا لم يكن مسجلاً، نقوم بتسجيله
     if (!mongoose.models.Course) {
       console.log("⚠️ [Instructor Groups] Course model not registered, importing...");
       await import("../../../models/Course");
     }
 
-    // ✅ إذا كان Course model موجود في ملف Group (كمرجع)، يجب استخدامه مباشرة
-    // بدلاً من استخدام .populate، سنجلب بيانات الكورس من courseSnapshot إذا كان موجوداً
+    // جلب المجموعات
     const groups = await Group.find(query)
-      // ✅ استخدام courseSnapshot بدلاً من populate
       .select("name code status currentStudentsCount maxStudents schedule pricing totalSessionsCount automation metadata courseSnapshot")
       .sort({ "schedule.startDate": -1, "metadata.createdAt": -1 })
       .skip((page - 1) * limit)
@@ -105,7 +102,21 @@ export async function GET(req) {
     // جلب إحصائيات إضافية لكل مجموعة
     const groupsWithStats = await Promise.all(
       groups.map(async (group) => {
-        // جلب عدد الجلسات المكتملة
+        // جلب جميع الجلسات للمجموعة - مهم: جلب الحالة فقط
+        const allSessions = await Session.find({
+          groupId: group._id,
+          isDeleted: false
+        })
+          .select("status")
+          .lean();
+
+        const totalSessions = allSessions.length;
+        const completedSessionsCount = allSessions.filter(s => s.status === "completed").length;
+        const allSessionsCompleted = totalSessions > 0 && totalSessions === completedSessionsCount;
+
+        console.log(`📊 [Group ${group._id}] Sessions: ${totalSessions} total, ${completedSessionsCount} completed, allCompleted: ${allSessionsCompleted}`);
+
+        // جلب عدد الجلسات المكتملة للاستخدامات الأخرى
         const completedSessions = await Session.countDocuments({
           groupId: group._id,
           isDeleted: false,
@@ -147,7 +158,7 @@ export async function GET(req) {
           : 0;
 
         // جلب الطلاب المحتاجين متابعة (غياب متكرر)
-        const allSessions = await Session.find({
+        const allSessionsForAttendance = await Session.find({
           groupId: group._id,
           isDeleted: false,
           attendanceTaken: true
@@ -156,7 +167,7 @@ export async function GET(req) {
           .lean();
 
         const studentsAttendance = {};
-        allSessions.forEach(session => {
+        allSessionsForAttendance.forEach(session => {
           if (session.attendance) {
             session.attendance.forEach(record => {
               const studentId = record.studentId.toString();
@@ -233,6 +244,14 @@ export async function GET(req) {
             studentCapacity: group.currentStudentsCount && group.maxStudents 
               ? `${group.currentStudentsCount}/${group.maxStudents}`
               : "0/0"
+          },
+          // ✅ جديد: معلومات اكتمال الجلسات
+          sessionsInfo: {
+            totalSessions,
+            completedSessionsCount,
+            allSessionsCompleted,
+            completionPercentage: totalSessions > 0 ? 
+              Math.round((completedSessionsCount / totalSessions) * 100) : 0
           },
           nextSession: nextSession ? {
             title: nextSession.title,

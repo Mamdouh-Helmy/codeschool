@@ -245,6 +245,20 @@ const Header: React.FC = () => {
                   </li>
                 )}
 
+                {localUser?.role === "marketing" && (
+                  <li>
+                    <Link
+                      href="/marketing"
+                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/marketing"
+                        ? "text-primary"
+                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        }`}
+                    >
+                      {t("nav.dashboard")}
+                    </Link>
+                  </li>
+                )}
+
                 {/* يظهر فقط لو المستخدم marketing */}
                 {localUser?.role === "marketing" && (
                   <li>
@@ -457,16 +471,16 @@ const Header: React.FC = () => {
               </Link>
             )}
 
-            // وفي قسم الموبايل:
-{localUser?.role === "instructor" && (
-  <Link
-    href="/instructor"
-    onClick={() => setNavbarOpen(false)}
-    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-  >
-    {t("nav.instructorDashboard") || "لوحة المدرب"}
-  </Link>
-)}
+           
+            {localUser?.role === "instructor" && (
+              <Link
+                href="/instructor"
+                onClick={() => setNavbarOpen(false)}
+                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+              >
+                {t("nav.instructorDashboard") || "لوحة المدرب"}
+              </Link>
+            )}
 
             {/* Dashboard للأدمن فقط */}
             {localUser?.role === "admin" && (
@@ -479,7 +493,17 @@ const Header: React.FC = () => {
               </Link>
             )}
 
-            {/* إضافة مدونة لـ marketing فقط */}
+            {localUser?.role === "marketing" && (
+              <Link
+                href="/marketing"
+                onClick={() => setNavbarOpen(false)}
+                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+              >
+                {t("nav.dashboard")}
+              </Link>
+            )}
+
+            
             {localUser?.role === "marketing" && (
               <Link
                 href="/marketing/blogs"
@@ -644,7 +668,7 @@ const Header: React.FC = () => {
               }
               onSuccess={(userData) => {
                 setLocalUser(userData);
-                // لا حاجة لتخزين user في localStorage لأننا نخزن token فقط
+             
               }}
             />
           </div>
