@@ -11,7 +11,7 @@ import mongoose from "mongoose";
 
 export async function GET(req) {
   try {
-    console.log("🎯 [Marketing Campaigns API] Request received");
+    console.log("🎯 [Marketing Campaigns API] GET request received");
 
     // التحقق من المستخدم
     const user = await getUserFromRequest(req);
@@ -81,6 +81,7 @@ export async function GET(req) {
     const totalCampaigns = await MarketingCampaign.countDocuments(query);
     const campaigns = await MarketingCampaign.find(query)
       .populate("metadata.createdBy", "name email")
+      .populate("team.owner", "name email")
       .sort(sort)
       .skip((page - 1) * limit)
       .limit(limit)
@@ -116,7 +117,7 @@ export async function GET(req) {
             costPerAction: campaign.stats?.totalTargets > 0 ? 
               parseFloat((campaignRevenue / campaign.stats.totalTargets).toFixed(2)) : 0,
             roi: campaignRevenue > 0 ? 
-              parseFloat(((campaignRevenue / (campaignRevenue * 0.1)) * 100).toFixed(2)) : 0 // افتراضي 10% تكلفة
+              parseFloat(((campaignRevenue / (campaignRevenue * 0.1)) * 100).toFixed(2)) : 0
           },
           performanceScore: calculateCampaignPerformanceScore(campaign, campaignActions, campaignConversions, campaignRevenue),
           daysSinceStart: campaign.stats?.startDate ? 
@@ -193,7 +194,7 @@ export async function GET(req) {
     return NextResponse.json(response);
 
   } catch (error) {
-    console.error("❌ [Marketing Campaigns API] Error:", error);
+    console.error("❌ [Marketing Campaigns API] GET Error:", error);
     return NextResponse.json(
       {
         success: false,
@@ -242,9 +243,13 @@ export async function POST(req) {
     // حساب الأهداف
     const targetCount = await calculateTargetCount(body);
     
-    // إنشاء الحملة
+    // ✅ **FIX: إضافة team.owner بشكل إجباري**
     const campaignData = {
       ...body,
+      team: {
+        owner: user.id, // ✅ مستخدم مسجل الدخول هو المالك
+        collaborators: body.team?.collaborators || []
+      },
       stats: {
         totalTargets: targetCount,
         messagesSent: 0,
@@ -263,6 +268,13 @@ export async function POST(req) {
         version: 1
       }
     };
+
+    console.log("📦 Campaign data prepared:", {
+      name: campaignData.name,
+      type: campaignData.campaignType,
+      owner: campaignData.team.owner,
+      createdBy: campaignData.metadata.createdBy
+    });
 
     const newCampaign = await MarketingCampaign.create(campaignData);
 
@@ -284,12 +296,26 @@ export async function POST(req) {
     });
 
   } catch (error) {
-    console.error("❌ [Marketing Campaigns API] Error creating campaign:", error);
+    console.error("❌ [Marketing Campaigns API] POST Error creating campaign:", error);
+    
+    // ✅ **FIX: عرض تفاصيل الخطأ بالكامل**
+    if (error.name === 'ValidationError') {
+      console.error("Validation Errors:", Object.keys(error.errors).map(key => ({
+        field: key,
+        message: error.errors[key].message,
+        value: error.errors[key].value
+      })));
+    }
+    
     return NextResponse.json(
       {
         success: false,
         message: "فشل في إنشاء الحملة",
         error: error.message,
+        details: error.errors ? Object.keys(error.errors).map(key => ({
+          field: key,
+          message: error.errors[key].message
+        })) : null,
         code: "CAMPAIGN_CREATION_ERROR"
       },
       { status: 500 }
@@ -402,7 +428,7 @@ export async function PUT(req) {
     });
 
   } catch (error) {
-    console.error("❌ [Marketing Campaigns API] Error updating campaign:", error);
+    console.error("❌ [Marketing Campaigns API] PUT Error updating campaign:", error);
     return NextResponse.json(
       {
         success: false,
@@ -493,7 +519,7 @@ export async function DELETE(req) {
     }
 
   } catch (error) {
-    console.error("❌ [Marketing Campaigns API] Error deleting campaign:", error);
+    console.error("❌ [Marketing Campaigns API] DELETE Error deleting campaign:", error);
     return NextResponse.json(
       {
         success: false,
@@ -506,7 +532,7 @@ export async function DELETE(req) {
   }
 }
 
-// Helper Functions
+// ==================== Helper Functions ====================
 
 // حساب عدد الأهداف
 async function calculateTargetCount(campaignData) {
@@ -1091,16 +1117,24 @@ function generateReferralCampaignMessage(student, referralCode, campaign) {
 مع تحيات فريق Code School 💻✨`;
 }
 
-// إحصائيات الحملات
+// ✅ **FIX: إحصائيات الحملات - المصححة**
 async function getCampaignStats(timeframe) {
-  const dateFilter = timeframe !== "all" ? getDateFilter(timeframe) : {};
+  let matchCondition = {
+    isDeleted: false
+  };
+  
+  // إضافة فلترة الوقت إذا لم يكن "all"
+  if (timeframe !== "all") {
+    const dateFilter = getDateFilter(timeframe);
+    matchCondition = {
+      ...matchCondition,
+      "metadata.createdAt": dateFilter
+    };
+  }
   
   const stats = await MarketingCampaign.aggregate([
     {
-      $match: {
-        ...dateFilter,
-        isDeleted: false
-      }
+      $match: matchCondition
     },
     {
       $facet: {
@@ -1190,7 +1224,7 @@ async function getCampaignStats(timeframe) {
     parseFloat((totalRevenue / totalMessages).toFixed(2)) : 0;
   
   const avgROI = totalRevenue > 0 ? 
-    parseFloat(((totalRevenue / (totalRevenue * 0.1)) * 100).toFixed(2)) : 0; // افتراضي 10% تكلفة
+    parseFloat(((totalRevenue / (totalRevenue * 0.1)) * 100).toFixed(2)) : 0;
   
   return {
     totalCampaigns,
@@ -1210,15 +1244,23 @@ async function getCampaignStats(timeframe) {
 
 // تحليل الحملات حسب النوع
 async function analyzeCampaignsByType(timeframe) {
-  const dateFilter = timeframe !== "all" ? getDateFilter(timeframe) : {};
+  let matchCondition = {
+    isDeleted: false,
+    status: { $in: ["active", "completed"] }
+  };
+  
+  // إضافة فلترة الوقت إذا لم يكن "all"
+  if (timeframe !== "all") {
+    const dateFilter = getDateFilter(timeframe);
+    matchCondition = {
+      ...matchCondition,
+      "metadata.createdAt": dateFilter
+    };
+  }
   
   const analysis = await MarketingCampaign.aggregate([
     {
-      $match: {
-        ...dateFilter,
-        isDeleted: false,
-        status: { $in: ["active", "completed"] }
-      }
+      $match: matchCondition
     },
     {
       $group: {
@@ -1230,7 +1272,7 @@ async function analyzeCampaignsByType(timeframe) {
               { $and: ["$stats.startDate", "$stats.endDate"] },
               { $divide: [
                 { $subtract: ["$stats.endDate", "$stats.startDate"] },
-                1000 * 60 * 60 * 24 // تحويل إلى أيام
+                1000 * 60 * 60 * 24
               ]},
               null
             ]
@@ -1348,7 +1390,7 @@ function calculateCampaignPerformanceScore(campaign, totalActions, conversions, 
   score += Math.min(conversionRate * 0.4, 40);
   
   // عامل: الإيرادات (30 نقطة كحد أقصى)
-  const revenueScore = revenue > 0 ? Math.min(revenue / 1000, 30) : 0; // كل 1000 جنيه = 1 نقطة
+  const revenueScore = revenue > 0 ? Math.min(revenue / 1000, 30) : 0;
   score += revenueScore;
   
   // عامل: عدد الأهداف (10 نقاط كحد أقصى)
@@ -1361,7 +1403,7 @@ function calculateCampaignPerformanceScore(campaign, totalActions, conversions, 
     const durationScore = duration <= 30 ? 10 : duration <= 60 ? 7 : duration <= 90 ? 5 : 3;
     score += durationScore;
   } else {
-    score += 5; // متوسط إذا لم تكن المدة محددة
+    score += 5;
   }
   
   // عامل: الحالة (10 نقاط)
@@ -1397,29 +1439,29 @@ function getDefaultDiscount(decision) {
   return discounts[decision] || 20;
 }
 
-// فلترة التاريخ
+// ✅ **FIX: فلترة التاريخ - المصححة**
 function getDateFilter(timeframe) {
   const now = new Date();
-  let startDate;
+  let startDate = new Date();
   
   switch (timeframe) {
     case 'day':
-      startDate = new Date(now.setDate(now.getDate() - 1));
+      startDate.setDate(now.getDate() - 1);
       break;
     case 'week':
-      startDate = new Date(now.setDate(now.getDate() - 7));
+      startDate.setDate(now.getDate() - 7);
       break;
     case 'month':
-      startDate = new Date(now.setMonth(now.getMonth() - 1));
+      startDate.setMonth(now.getMonth() - 1);
       break;
     case 'quarter':
-      startDate = new Date(now.setMonth(now.getMonth() - 3));
+      startDate.setMonth(now.getMonth() - 3);
       break;
     case 'year':
-      startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+      startDate.setFullYear(now.getFullYear() - 1);
       break;
     default:
-      startDate = new Date(now.setMonth(now.getMonth() - 1));
+      startDate.setMonth(now.getMonth() - 1);
   }
   
   return { $gte: startDate };

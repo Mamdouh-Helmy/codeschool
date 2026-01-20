@@ -7,24 +7,20 @@ import {
   Users,
   Filter,
   Search,
-  Download,
   Target,
-  BarChart3,
   DollarSign,
   Clock,
   CheckCircle,
   AlertCircle,
   MessageSquare,
-  Mail,
-  Phone,
   ChevronRight,
-  Eye,
-  MoreVertical,
   RefreshCw,
   Sparkles,
   Zap,
   Rocket,
-  Star
+  Send,
+  X,
+  Edit
 } from "lucide-react";
 
 interface EligibleStudent {
@@ -70,7 +66,9 @@ export default function MarketingUpsellPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [readinessFilter, setReadinessFilter] = useState<string>("all");
   const [levelFilter, setLevelFilter] = useState<string>("all");
-  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<EligibleStudent | null>(null);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [customMessage, setCustomMessage] = useState("");
   const [timeframe, setTimeframe] = useState("month");
 
   useEffect(() => {
@@ -139,35 +137,48 @@ export default function MarketingUpsellPage() {
     return "text-red-600 dark:text-red-400";
   };
 
-  const handleSelectStudent = (studentId: string) => {
-    setSelectedStudents(prev =>
-      prev.includes(studentId)
-        ? prev.filter(id => id !== studentId)
-        : [...prev, studentId]
-    );
+  const handleCreateUpsellOffer = (student: EligibleStudent) => {
+    setSelectedStudent(student);
+
+    // إنشاء رسالة افتراضية
+    const defaultMessage = `🎉 مبروك ${student.studentName}!
+
+بناءً على أدائك المتميز في ${student.currentCourseName}، نقدم لك عرضاً خاصاً للتسجيل في:
+**${student.suggestedOffer?.targetCourseName || "الكورس المتقدم"}**
+
+🏆 **عرض التميز:**
+• الخصم: ${student.suggestedOffer?.discountPercentage || 15}% للطلاب المتفوقين
+• السعر الأصلي: ${student.suggestedOffer ? Math.round(student.suggestedOffer.discountedPrice / (1 - student.suggestedOffer.discountPercentage / 100)) : 0} ج.م
+• السعر بعد الخصم: ${student.suggestedOffer?.discountedPrice || 0} ج.م فقط!
+• العرض ساري لمدة أسبوع
+
+🚀 **لماذا هذا الكورس؟**
+• مستوى متقدم يناسب مهاراتك
+• مشاريع واقعية واحترافية
+• شهادة معتمدة معترف بها
+
+📞 للاستفادة من العرض، رد بكلمة "نعم" أو اتصل بنا مباشرة.
+
+مع تحيات فريق Code School 💻✨`;
+
+    setCustomMessage(defaultMessage);
+    setShowOfferModal(true);
   };
 
-  const handleSelectAll = () => {
-    if (selectedStudents.length === filteredStudents.length) {
-      setSelectedStudents([]);
-    } else {
-      setSelectedStudents(filteredStudents.map(student => student.studentId));
-    }
-  };
-
-  const handleCreateUpsellOffer = async (student: EligibleStudent) => {
-    if (!student.suggestedOffer) return;
+  const sendOffer = async () => {
+    if (!selectedStudent || !selectedStudent.suggestedOffer) return;
 
     try {
+      // أولاً: إنشاء إجراء تسويقي في قاعدة البيانات
       const response = await fetch("/api/marketing/upsell", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          studentId: student.studentId,
-          targetCourseId: student.availableCourses[0]?._id,
+          studentId: selectedStudent.studentId,
+          targetCourseId: selectedStudent.availableCourses[0]?._id,
           offerDetails: {
-            discountPercentage: student.suggestedOffer.discountPercentage,
+            discountPercentage: selectedStudent.suggestedOffer.discountPercentage,
             deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
           }
         })
@@ -175,40 +186,33 @@ export default function MarketingUpsellPage() {
 
       const result = await response.json();
       if (result.success) {
-        alert("تم إنشاء عرض الترقية بنجاح!");
-        fetchUpsellData();
+        // ثانياً: إرسال الرسالة عبر WhatsApp
+        const whatsappResponse = await fetch("/api/marketing-automation/whatsapp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            studentId: selectedStudent.studentId,
+            whatsappNumber: selectedStudent.whatsappNumber,
+            message: customMessage,
+            actionId: result.action?._id
+          })
+        });
+
+        const whatsappResult = await whatsappResponse.json();
+
+        if (whatsappResult.success) {
+          alert("✅ تم إنشاء وعرض الترقية بنجاح وتم إرسال الرسالة!");
+          setShowOfferModal(false);
+          setSelectedStudent(null);
+          fetchUpsellData();
+        } else {
+          alert("⚠️ تم إنشاء العرض ولكن حدث خطأ في إرسال الرسالة");
+        }
       }
     } catch (error) {
-      console.error("Error creating upsell offer:", error);
-    }
-  };
-
-  const handleBulkCreateOffers = async () => {
-    const readyStudents = filteredStudents.filter(s => s.isReadyForUpsell);
-    
-    try {
-      const response = await fetch("/api/marketing-automation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          eventType: "bulk_upsell_campaign",
-          data: {
-            groupIds: [],
-            courseId: readyStudents[0]?.availableCourses[0]?._id,
-            discountPercentage: 15,
-            deadlineDays: 7
-          }
-        })
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        alert(`تم إنشاء ${result.actionsCreated} عرض ترقية`);
-        fetchUpsellData();
-      }
-    } catch (error) {
-      console.error("Error creating bulk offers:", error);
+      console.error("Error creating/sending offer:", error);
+      alert("❌ حدث خطأ أثناء إنشاء/إرسال العرض");
     }
   };
 
@@ -336,62 +340,43 @@ export default function MarketingUpsellPage() {
           </div>
         </div>
 
-        {/* Filters and Actions */}
+        {/* Filters */}
         <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6 mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-            <div className="flex flex-wrap items-center gap-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="بحث عن طلاب..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white w-64"
-                />
-              </div>
-
-              {/* Readiness Filter */}
-              <select
-                value={readinessFilter}
-                onChange={(e) => setReadinessFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
-              >
-                <option value="all">كل الطلاب</option>
-                <option value="ready">جاهز للترقية</option>
-                <option value="not-ready">غير جاهز</option>
-              </select>
-
-              {/* Level Filter */}
-              <select
-                value={levelFilter}
-                onChange={(e) => setLevelFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
-              >
-                <option value="all">كل المستويات</option>
-                <option value="beginner">مبتدئ</option>
-                <option value="intermediate">متوسط</option>
-                <option value="advanced">متقدم</option>
-              </select>
+          <div className="flex flex-wrap items-center gap-4 mb-6">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="بحث عن طلاب..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white w-64"
+              />
             </div>
 
-            {/* Bulk Actions */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSelectAll}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-              >
-                {selectedStudents.length === filteredStudents.length ? "إلغاء الكل" : "تحديد الكل"}
-              </button>
-              <button
-                onClick={handleBulkCreateOffers}
-                disabled={selectedStudents.length === 0}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                إنشاء عروض جماعية
-              </button>
-            </div>
+            {/* Readiness Filter */}
+            <select
+              value={readinessFilter}
+              onChange={(e) => setReadinessFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
+            >
+              <option value="all">كل الطلاب</option>
+              <option value="ready">جاهز للترقية</option>
+              <option value="not-ready">غير جاهز</option>
+            </select>
+
+            {/* Level Filter */}
+            <select
+              value={levelFilter}
+              onChange={(e) => setLevelFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white"
+            >
+              <option value="all">كل المستويات</option>
+              <option value="beginner">مبتدئ</option>
+              <option value="intermediate">متوسط</option>
+              <option value="advanced">متقدم</option>
+            </select>
           </div>
 
           {/* Students Grid */}
@@ -402,11 +387,10 @@ export default function MarketingUpsellPage() {
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                        student.readinessScore >= 80 ? "bg-gradient-to-br from-green-400 to-emerald-600" :
-                        student.readinessScore >= 60 ? "bg-gradient-to-br from-yellow-400 to-orange-500" :
-                        "bg-gradient-to-br from-gray-400 to-gray-600"
-                      }`}>
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${student.readinessScore >= 80 ? "bg-gradient-to-br from-green-400 to-emerald-600" :
+                          student.readinessScore >= 60 ? "bg-gradient-to-br from-yellow-400 to-orange-500" :
+                            "bg-gradient-to-br from-gray-400 to-gray-600"
+                        }`}>
                         {student.readinessScore >= 80 ? (
                           <Rocket className="w-6 h-6 text-white" />
                         ) : student.readinessScore >= 60 ? (
@@ -429,14 +413,8 @@ export default function MarketingUpsellPage() {
                         </div>
                       </div>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={selectedStudents.includes(student.studentId)}
-                      onChange={() => handleSelectStudent(student.studentId)}
-                      className="rounded border-gray-300 text-primary focus:ring-primary"
-                    />
                   </div>
-                  
+
                   <p className="text-gray-600 dark:text-gray-400 text-sm">
                     {student.currentCourseName}
                   </p>
@@ -486,7 +464,7 @@ export default function MarketingUpsellPage() {
                         className="w-full mt-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all flex items-center justify-center gap-2"
                       >
                         <TrendingUp className="w-4 h-4" />
-                        إنشاء عرض
+                        إنشاء عرض للطالب
                       </button>
                     </div>
                   ) : (
@@ -517,18 +495,14 @@ export default function MarketingUpsellPage() {
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => window.open(`https://wa.me/${student.whatsappNumber}`, '_blank')}
-                      className="flex-1 px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-800 transition-colors flex items-center justify-center gap-2 text-sm"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      WhatsApp
-                    </button>
-                    <button className="p-2 text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
+                  {/* WhatsApp Number */}
+                  <div className="mb-4">
+                    <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      رقم الواتساب:
+                    </h5>
+                    <p className="text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 p-2 rounded-lg">
+                      {student.whatsappNumber}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -546,7 +520,7 @@ export default function MarketingUpsellPage() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Readiness Distribution */}
           <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -558,13 +532,13 @@ export default function MarketingUpsellPage() {
                 { label: "جيد", min: 60, color: "bg-yellow-500" },
                 { label: "بحاجة تحسين", min: 0, color: "bg-red-500" }
               ].map((category) => {
-                const count = students.filter(s => 
+                const count = students.filter(s =>
                   category.min === 0 ? s.readinessScore < 60 :
-                  category.min === 60 ? s.readinessScore >= 60 && s.readinessScore < 80 :
-                  s.readinessScore >= 80
+                    category.min === 60 ? s.readinessScore >= 60 && s.readinessScore < 80 :
+                      s.readinessScore >= 80
                 ).length;
                 const percentage = students.length > 0 ? (count / students.length) * 100 : 0;
-                
+
                 return (
                   <div key={category.label} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -623,39 +597,160 @@ export default function MarketingUpsellPage() {
                 ))}
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white dark:bg-secondary rounded-xl shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              إجراءات سريعة
-            </h3>
-            <div className="space-y-3">
+      {/* Offer Modal */}
+      {showOfferModal && selectedStudent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-secondary rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  إنشاء عرض ترقية
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300">
+                  للطالب: {selectedStudent.studentName}
+                </p>
+              </div>
               <button
-                onClick={() => handleBulkCreateOffers()}
-                className="w-full px-4 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-lg hover:from-primary/90 hover:to-blue-700 transition-all flex items-center justify-between"
+                onClick={() => setShowOfferModal(false)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               >
-                <span>إنشاء عروض جماعية</span>
-                <Sparkles className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
-              
-              <button className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all flex items-center justify-between">
-                <span>إعداد قوالب الرسائل</span>
-                <MessageSquare className="w-4 h-4" />
-              </button>
-              
-              <button className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-violet-600 text-white rounded-lg hover:from-purple-600 hover:to-violet-700 transition-all flex items-center justify-between">
-                <span>تحليل الإيرادات المتوقعة</span>
-                <BarChart3 className="w-4 h-4" />
-              </button>
-              
-              <button className="w-full px-4 py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2">
-                <TrendingUp className="w-4 h-4" />
-                عرض تقارير الترقية
-              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {/* Student Info */}
+              <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">الكورس الحالي</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {selectedStudent.currentCourseName}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">مستوى الجاهزية</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {selectedStudent.readinessScore}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">رقم الواتساب</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {selectedStudent.whatsappNumber}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray500 dark:text-gray-400">الكورس المقترح</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {selectedStudent.suggestedOffer?.targetCourseName}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom Message Editor */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    تعديل الرسالة قبل الإرسال:
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">
+                      {customMessage.length} حرف
+                    </span>
+                    <button
+                      onClick={() => {
+                        const defaultMsg = `🎉 مبروك ${selectedStudent.studentName}!
+
+بناءً على أدائك المتميز في ${selectedStudent.currentCourseName}، نقدم لك عرضاً خاصاً للتسجيل في:
+**${selectedStudent.suggestedOffer?.targetCourseName || "الكورس المتقدم"}**
+
+🏆 **عرض التميز:**
+• الخصم: ${selectedStudent.suggestedOffer?.discountPercentage || 15}% للطلاب المتفوقين
+• السعر الأصلي: ${selectedStudent.suggestedOffer ? Math.round(selectedStudent.suggestedOffer.discountedPrice / (1 - selectedStudent.suggestedOffer.discountPercentage / 100)) : 0} ج.م
+• السعر بعد الخصم: ${selectedStudent.suggestedOffer?.discountedPrice || 0} ج.م فقط!
+• العرض ساري لمدة أسبوع
+
+🚀 **لماذا هذا الكورس؟**
+• مستوى متقدم يناسب مهاراتك
+• مشاريع واقعية واحترافية
+• شهادة معتمدة معترف بها
+
+📞 للاستفادة من العرض، رد بكلمة "نعم" أو اتصل بنا مباشرة.
+
+مع تحيات فريق Code School 💻✨`;
+                        setCustomMessage(defaultMsg);
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
+                    >
+                      <Edit className="w-4 h-4" />
+                      إعادة تعيين
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  className="w-full h-64 p-4 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white resize-none"
+                  placeholder="قم بتعديل الرسالة هنا..."
+                />
+                <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  💡 يمكنك تعديل الرسالة لجعلها أكثر تخصيصاً للطالب
+                </div>
+              </div>
+
+              {/* Offer Summary */}
+              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                  ملخص العرض:
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">الخصم</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">
+                      {selectedStudent.suggestedOffer?.discountPercentage || 15}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">السعر بعد الخصم</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">
+                      {selectedStudent.suggestedOffer?.discountedPrice.toLocaleString() || 0} ج.م
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                سيتم إرسال الرسالة إلى: {selectedStudent.whatsappNumber}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowOfferModal(false)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={sendOffer}
+                  className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  إرسال العرض
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

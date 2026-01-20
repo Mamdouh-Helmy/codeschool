@@ -4,8 +4,75 @@ import { useState, useEffect } from "react";
 import { UserPlus, Search, X, CheckCircle, AlertCircle, Users, Loader2, MessageCircle, Info, Copy } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
+import { useLocale } from "@/app/context/LocaleContext";
+
+// Helper function to generate default welcome message template
+const getDefaultWelcomeMessage = (language, group, studentName = "{studentName}") => {
+  const template = language === "ar" 
+    ? `🎉 مرحباً بك في {groupName}!
+
+عزيزي/عزيزتي {studentName},
+
+تم تسجيلك في:
+📚 الكورس: {courseName}
+👥 المجموعة: {groupCode}
+📅 تاريخ البدء: {startDate}
+⏰ الوقت: {timeFrom} - {timeTo}
+{instructor}
+
+رحلتك التعليمية ستبدأ قريباً! 🚀
+
+مع أطيب التحيات،
+فريق Code School 💻`
+    : `🎉 Welcome to {groupName}!
+
+Dear {studentName},
+
+You have been enrolled in:
+📚 Course: {courseName}
+👥 Group: {groupCode}
+📅 Start Date: {startDate}
+⏰ Time: {timeFrom} - {timeTo}
+{instructor}
+
+Your learning journey starts soon! 🚀
+
+Best regards,
+Code School Team 💻`;
+
+  if (!group) return template;
+
+  // استبدال المتغيرات
+  return template
+    .replace(/\{groupName\}/g, group.name || "{groupName}")
+    .replace(/\{courseName\}/g, group.courseSnapshot?.title || group.course?.title || "{courseName}")
+    .replace(/\{groupCode\}/g, group.code || "{groupCode}")
+    .replace(
+      /\{startDate\}/g,
+      group.schedule?.startDate
+        ? new Date(group.schedule.startDate).toLocaleDateString(language === "ar" ? "ar-EG" : "en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })
+        : "{startDate}"
+    )
+    .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "{timeFrom}")
+    .replace(/\{timeTo\}/g, group.schedule?.timeTo || "{timeTo}")
+    .replace(
+      /\{instructor\}/g,
+      group.instructors?.[0]?.name
+        ? language === "ar"
+          ? `👨‍🏫 المدرب: ${group.instructors[0].name}`
+          : `👨‍🏫 Instructor: ${group.instructors[0].name}`
+        : ""
+    )
+    .replace(/\{studentName\}/g, studentName);
+};
 
 export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded }) {
+  const { locale } = useLocale();
   const { t, language } = useI18n();
   const [students, setStudents] = useState([]);
   const [group, setGroup] = useState(null);
@@ -17,16 +84,19 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const [customMessage, setCustomMessage] = useState("");
   const [previewMessage, setPreviewMessage] = useState("");
 
-  const isRTL = language === "ar";
+  const isRTL = locale === "ar";
 
-  // Default messages based on language
+  // Default welcome message based on group and language
   useEffect(() => {
-    const defaultMessage = isRTL 
-      ? "🎓 مرحباً {studentName}\nتم إضافتك بنجاح إلى {groupName}\nالكورس: {courseName}\nالبدء: {startDate}\nالوقت: {timeFrom} - {timeTo}"
-      : "🎓 Hello {studentName}\nYou have been successfully added to {groupName}\nCourse: {courseName}\nStart: {startDate}\nTime: {timeFrom} - {timeTo}";
-    
-    setCustomMessage(defaultMessage);
-  }, [isRTL]);
+    if (group) {
+      const defaultMessage = getDefaultWelcomeMessage(
+        isRTL ? "ar" : "en",
+        group,
+        "{studentName}"
+      );
+      setCustomMessage(defaultMessage);
+    }
+  }, [group, isRTL]);
 
   useEffect(() => {
     if (groupId) {
@@ -107,6 +177,12 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     
     const timeFrom = group.schedule?.timeFrom || t("addStudents.preview.defaults.timeFrom");
     const timeTo = group.schedule?.timeTo || t("addStudents.preview.defaults.timeTo");
+    
+    // إضافة المدرس
+    const instructor = group.instructors?.[0]?.name;
+    const instructorText = instructor
+      ? (isRTL ? `👨‍🏫 المدرب: ${instructor}` : `👨‍🏫 Instructor: ${instructor}`)
+      : "";
 
     let preview = message
       .replace(/\{studentName\}/g, studentName)
@@ -114,7 +190,8 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       .replace(/\{courseName\}/g, courseName)
       .replace(/\{startDate\}/g, startDate)
       .replace(/\{timeFrom\}/g, timeFrom)
-      .replace(/\{timeTo\}/g, timeTo);
+      .replace(/\{timeTo\}/g, timeTo)
+      .replace(/\{instructor\}/g, instructorText);
 
     return preview;
   };
@@ -132,11 +209,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       return;
     }
 
-    if (!customMessage.trim()) {
-      toast.error(t("addStudents.errors.enterMessage"));
-      return;
-    }
-
     const studentId = selectedStudent._id || selectedStudent.id;
     
     if (!studentId) {
@@ -148,11 +220,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     const loadingToast = toast.loading(t("addStudents.messages.adding"));
 
     try {
-      const finalMessage = generatePreview(customMessage);
-
+      // ✅ إرسال الرسالة كما هي (سيعالجها الـ automation service)
       const payload = {
         studentId: studentId.toString(),
-        customMessage: finalMessage,
+        customMessage: customMessage, // ✅ الرسالة كما هي مع المتغيرات
         sendWhatsApp: true
       };
 
@@ -176,7 +247,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         }));
         
         setSelectedStudent(null);
-        setCustomMessage("");
+        setCustomMessage(getDefaultWelcomeMessage(isRTL ? "ar" : "en", group, "{studentName}"));
         setPreviewMessage("");
 
         if (onStudentAdded) {
@@ -388,7 +459,12 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                   </div>
                   <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
                     {`{startDate}`} → {group.schedule?.startDate 
-                      ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? 'ar-EG' : 'en-US')
+                      ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? 'ar-EG' : 'en-US', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
                       : t("addStudents.preview.defaults.startDate")
                     }
                   </div>
@@ -397,6 +473,9 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                   </div>
                   <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
                     {`{timeTo}`} → {group.schedule?.timeTo || t("addStudents.preview.defaults.timeTo")}
+                  </div>
+                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                    {`{instructor}`} → {group.instructors?.[0]?.name || "No instructor"}
                   </div>
                 </div>
               </div>
@@ -419,10 +498,11 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 <textarea
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
-                  placeholder={isRTL 
-                    ? "🎓 مرحباً {studentName}\nتم إضافتك بنجاح إلى {groupName}\nالكورس: {courseName}\nالبدء: {startDate}\nالوقت: {timeFrom} - {timeTo}"
-                    : "🎓 Hello {studentName}\nYou have been added to {groupName}\nCourse: {courseName}\nStart: {startDate}\nTime: {timeFrom} - {timeTo}"
-                  }
+                  placeholder={getDefaultWelcomeMessage(
+                    isRTL ? "ar" : "en",
+                    group,
+                    "{studentName}"
+                  )}
                   className="w-full px-3 py-2.5 border border-blue-300 dark:border-blue-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white resize-none h-32 font-mono text-sm"
                   dir={isRTL ? 'rtl' : 'ltr'}
                 />

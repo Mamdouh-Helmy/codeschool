@@ -29,7 +29,7 @@ export async function onGroupActivated(groupId, userId) {
     console.log(`📊 Group status: ${group.status}`);
     console.log(`📚 Course: ${group.courseId?.title}`);
     console.log(
-      `📖 Curriculum modules: ${group.courseId?.curriculum?.length || 0}`
+      `📖 Curriculum modules: ${group.courseId?.curriculum?.length || 0}`,
     );
 
     // ✅ التحقق من إعدادات الجدول
@@ -37,11 +37,11 @@ export async function onGroupActivated(groupId, userId) {
     console.log(
       `   Start Date: ${
         new Date(group.schedule.startDate).toISOString().split("T")[0]
-      }`
+      }`,
     );
     console.log(`   Days of Week: ${group.schedule.daysOfWeek}`);
     console.log(
-      `   Time: ${group.schedule.timeFrom} - ${group.schedule.timeTo}`
+      `   Time: ${group.schedule.timeFrom} - ${group.schedule.timeTo}`,
     );
 
     // ✅ التحقق من أن هناك 3 أيام مختارة
@@ -59,14 +59,13 @@ export async function onGroupActivated(groupId, userId) {
     // ✅ Generate Sessions using the updated generateSessionsForGroup
     console.log("📅 Generating new sessions...");
 
-    const { generateSessionsForGroup } = await import(
-      "@/utils/sessionGenerator"
-    );
+    const { generateSessionsForGroup } =
+      await import("@/utils/sessionGenerator");
 
     const sessionsResult = await generateSessionsForGroup(
       groupId,
       group,
-      userId
+      userId,
     );
 
     if (!sessionsResult.success) {
@@ -81,7 +80,7 @@ export async function onGroupActivated(groupId, userId) {
     // ✅ Save sessions to database
     if (sessionsResult.sessions && sessionsResult.sessions.length > 0) {
       console.log(
-        `💾 Saving ${sessionsResult.sessions.length} sessions to database...`
+        `💾 Saving ${sessionsResult.sessions.length} sessions to database...`,
       );
 
       try {
@@ -106,7 +105,7 @@ export async function onGroupActivated(groupId, userId) {
         });
 
         console.log(
-          `✅ Generated and saved ${sessionsResult.totalGenerated} sessions`
+          `✅ Generated and saved ${sessionsResult.totalGenerated} sessions`,
         );
         console.log(`   First session: ${sessionsResult.startDate}`);
         console.log(`   Last session: ${sessionsResult.endDate}`);
@@ -115,7 +114,7 @@ export async function onGroupActivated(groupId, userId) {
 
         if (insertError.code === 11000) {
           console.log(
-            "🔄 Trying to insert sessions individually with conflict resolution..."
+            "🔄 Trying to insert sessions individually with conflict resolution...",
           );
 
           let successCount = 0;
@@ -135,7 +134,7 @@ export async function onGroupActivated(groupId, userId) {
                   upsert: true,
                   new: true,
                   setDefaultsOnInsert: true,
-                }
+                },
               );
 
               successCount++;
@@ -155,11 +154,11 @@ export async function onGroupActivated(groupId, userId) {
             });
 
             console.log(
-              `✅ Saved ${successCount} sessions (${errorCount} failed)`
+              `✅ Saved ${successCount} sessions (${errorCount} failed)`,
             );
           } else {
             throw new Error(
-              `Failed to save any sessions. All ${errorCount} attempts failed.`
+              `Failed to save any sessions. All ${errorCount} attempts failed.`,
             );
           }
         } else {
@@ -174,7 +173,7 @@ export async function onGroupActivated(groupId, userId) {
 
       for (const instructor of group.instructors) {
         console.log(
-          `📤 Notify instructor: ${instructor.name} (${instructor.email})`
+          `📤 Notify instructor: ${instructor.name} (${instructor.email})`,
         );
       }
     }
@@ -210,13 +209,13 @@ export async function onGroupActivated(groupId, userId) {
  */
 export async function sendInstructorWelcomeMessages(
   groupId,
-  instructorMessages = {}
+  instructorMessages = {},
 ) {
   try {
     console.log(`\n🎯 EVENT: Send Instructor Welcome Messages ==========`);
     console.log(`👥 Group: ${groupId}`);
     console.log(
-      `📝 Custom Messages Provided: ${Object.keys(instructorMessages).length}`
+      `📝 Custom Messages Provided: ${Object.keys(instructorMessages).length}`,
     );
 
     const group = await Group.findById(groupId)
@@ -290,7 +289,7 @@ export async function sendInstructorWelcomeMessages(
         messageContent = prepareInstructorWelcomeMessage(
           instructor.name,
           group,
-          "ar" // يمكن تحديد اللغة من instructor metadata لو موجودة
+          "ar", // يمكن تحديد اللغة من instructor metadata لو موجودة
         );
         console.log(`📝 Using default message`);
       }
@@ -303,7 +302,7 @@ export async function sendInstructorWelcomeMessages(
 
         const sendResult = await wapilotService.sendTextMessage(
           wapilotService.preparePhoneNumber(instructorPhone),
-          messageContent
+          messageContent,
         );
 
         successCount++;
@@ -333,7 +332,7 @@ export async function sendInstructorWelcomeMessages(
         } catch (updateError) {
           console.warn(
             `⚠️ Could not update instructor metadata:`,
-            updateError.message
+            updateError.message,
           );
         }
       } catch (error) {
@@ -433,7 +432,7 @@ async function sendToStudentWithLogging({
   } catch (error) {
     console.error(
       `❌ Failed to send to ${student.personalInfo?.fullName}:`,
-      error
+      error,
     );
     return {
       success: false,
@@ -448,11 +447,15 @@ async function sendToStudentWithLogging({
  * EVENT 2: Student Added to Group
  * EXISTING - NO CHANGES
  */
+/**
+ * EVENT 2: Student Added to Group
+ * MODIFIED: Always use prepareGroupWelcomeMessage for default messages
+ */
 export async function onStudentAddedToGroup(
   studentId,
   groupId,
   customMessage = null,
-  sendWhatsApp = true
+  sendWhatsApp = true,
 ) {
   try {
     console.log(`\n🎯 EVENT: Student Added to Group ==========`);
@@ -479,11 +482,11 @@ export async function onStudentAddedToGroup(
           "metadata.lastGroupAdded": new Date(),
         },
       },
-      { new: true }
+      { new: true },
     );
 
     console.log(
-      `✅ Student ${student.personalInfo.fullName} added to group ${group.code}`
+      `✅ Student ${student.personalInfo.fullName} added to group ${group.code}`,
     );
 
     let welcomeMessageSent = false;
@@ -504,12 +507,13 @@ export async function onStudentAddedToGroup(
         finalMessage = customMessage;
         console.log("📝 Using custom message from admin");
       } else {
+        // ✅ MODIFIED: Always use prepareGroupWelcomeMessage for default messages
         finalMessage = prepareGroupWelcomeMessage(
           student.personalInfo.fullName,
           group,
-          language
+          language,
         );
-        console.log("📝 Using default welcome message");
+        console.log("📝 Using default group welcome message");
       }
 
       messageContent = finalMessage;
@@ -592,7 +596,7 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
 
     // Get students who need guardian notification
     const studentsToNotify = session.attendance.filter((record) =>
-      ["absent", "late", "excused"].includes(record.status)
+      ["absent", "late", "excused"].includes(record.status),
     );
 
     console.log(`👨‍🎓 Students needing notification: ${studentsToNotify.length}`);
@@ -695,7 +699,7 @@ ${record.notes ? `\n📝 ملاحظات: ${record.notes}` : ""}
     }
 
     console.log(
-      `✅ Guardian notifications: ${successCount}/${studentsToNotify.length}`
+      `✅ Guardian notifications: ${successCount}/${studentsToNotify.length}`,
     );
 
     return {
@@ -721,7 +725,7 @@ ${record.notes ? `\n📝 ملاحظات: ${record.notes}` : ""}
 export async function onSessionStatusChanged(
   sessionId,
   newStatus,
-  customMessage = null
+  customMessage = null,
 ) {
   try {
     console.log(`\n🔄 SESSION STATUS CHANGE ==========`);
@@ -763,7 +767,7 @@ export async function onSessionStatusChanged(
         isDeleted: false,
       })
         .select(
-          "personalInfo.fullName personalInfo.whatsappNumber communicationPreferences"
+          "personalInfo.fullName personalInfo.whatsappNumber communicationPreferences",
         )
         .lean();
     }
@@ -858,12 +862,12 @@ export function prepareReminderMessage(
   session,
   group,
   reminderType,
-  language
+  language,
 ) {
   const sessionDate = new Date(session.scheduledDate);
   const formattedDate = sessionDate.toLocaleDateString(
     language === "en" ? "en-US" : "ar-EG",
-    { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+    { weekday: "long", year: "numeric", month: "long", day: "numeric" },
   );
 
   const timeWindow =
@@ -872,8 +876,8 @@ export function prepareReminderMessage(
         ? "24 hours"
         : "24 ساعة"
       : language === "en"
-      ? "1 hour"
-      : "ساعة واحدة";
+        ? "1 hour"
+        : "ساعة واحدة";
 
   if (language === "en") {
     return `⏰ Session Reminder (${timeWindow})
@@ -950,7 +954,7 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
     const students = await Student.getStudentsForReminder(
       group._id,
       session._id,
-      reminderType
+      reminderType,
     );
 
     console.log(`👥 Found ${students.length} students to notify`);
@@ -978,7 +982,7 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
           session,
           group,
           reminderType,
-          language
+          language,
         );
 
         // ✅ Send with auto-logging
@@ -1037,7 +1041,7 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
     }
 
     console.log(
-      `\n✅ Manual reminder complete: ${successCount} sent, ${failCount} failed`
+      `\n✅ Manual reminder complete: ${successCount} sent, ${failCount} failed`,
     );
 
     return {
@@ -1066,7 +1070,7 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
 export async function onGroupCompleted(
   groupId,
   customMessage = null,
-  feedbackLink = null
+  feedbackLink = null,
 ) {
   try {
     console.log(`\n🎯 EVENT: Group Completed ==========`);
@@ -1107,7 +1111,7 @@ export async function onGroupCompleted(
     // ✅ Fallback: If no students from populate, fetch from Student collection
     if (students.length === 0) {
       console.log(
-        `⚠️ No students from populate, fetching from Student.academicInfo.groupIds...`
+        `⚠️ No students from populate, fetching from Student.academicInfo.groupIds...`,
       );
 
       students = await Student.find({
@@ -1115,7 +1119,7 @@ export async function onGroupCompleted(
         isDeleted: false,
       })
         .select(
-          "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo"
+          "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo",
         )
         .lean();
 
@@ -1157,7 +1161,7 @@ export async function onGroupCompleted(
     }
 
     console.log(
-      `📤 Sending completion messages to ${students.length} students...`
+      `📤 Sending completion messages to ${students.length} students...`,
     );
 
     // ✅ Send messages to all students
@@ -1195,7 +1199,7 @@ export async function onGroupCompleted(
         let finalMessage =
           customMessage ||
           getDefaultCompletionMessage(
-            student.communicationPreferences?.preferredLanguage || "ar"
+            student.communicationPreferences?.preferredLanguage || "ar",
           );
 
         // Replace variables
@@ -1341,13 +1345,13 @@ function prepareGroupWelcomeMessage(studentName, group, language) {
       .replace(/\{groupCode\}/g, group.code)
       .replace(
         /\{courseName\}/g,
-        group.courseSnapshot?.title || group.courseId?.title || ""
+        group.courseSnapshot?.title || group.courseId?.title || "",
       )
       .replace(
         /\{startDate\}/g,
         new Date(group.schedule?.startDate).toLocaleDateString(
-          language === "en" ? "en-US" : "ar-EG"
-        )
+          language === "en" ? "en-US" : "ar-EG",
+        ),
       )
       .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "")
       .replace(/\{timeTo\}/g, group.schedule?.timeTo || "")
@@ -1363,7 +1367,7 @@ You have been enrolled in:
 📚 Course: ${group.courseSnapshot?.title || group.courseId?.title}
 👥 Group: ${group.code}
 📅 Start Date: ${new Date(group.schedule?.startDate).toLocaleDateString(
-      "en-US"
+      "en-US",
     )}
 ⏰ Time: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
 ${
@@ -1387,7 +1391,7 @@ Code School Team 💻`;
 📚 الكورس: ${group.courseSnapshot?.title || group.courseId?.title}
 👥 المجموعة: ${group.code}
 📅 تاريخ البدء: ${new Date(group.schedule?.startDate).toLocaleDateString(
-      "ar-EG"
+      "ar-EG",
     )}
 ⏰ الوقت: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
 ${group.instructors?.[0]?.name ? `👨‍🏫 المدرب: ${group.instructors[0].name}` : ""}
@@ -1407,7 +1411,7 @@ ${group.instructors?.[0]?.name ? `👨‍🏫 المدرب: ${group.instructors[
 function prepareInstructorWelcomeMessage(
   instructorName,
   group,
-  language = "ar"
+  language = "ar",
 ) {
   const startDate = new Date(group.schedule?.startDate).toLocaleDateString(
     language === "en" ? "en-US" : "ar-EG",
@@ -1416,7 +1420,7 @@ function prepareInstructorWelcomeMessage(
       year: "numeric",
       month: "long",
       day: "numeric",
-    }
+    },
   );
 
   const studentCount = group.currentStudentsCount || 0;
@@ -1537,7 +1541,7 @@ function prepareCompletionMessage(
   studentName,
   group,
   feedbackLink,
-  language = "ar"
+  language = "ar",
 ) {
   const courseName =
     group.courseId?.title || group.courseSnapshot?.title || "Course";
@@ -1598,10 +1602,10 @@ function prepareAbsenceNotificationMessage(
   session,
   group,
   status = "absent",
-  language = "ar"
+  language = "ar",
 ) {
   const sessionDate = new Date(session.scheduledDate).toLocaleDateString(
-    language === "en" ? "en-US" : "ar-EG"
+    language === "en" ? "en-US" : "ar-EG",
   );
 
   if (language === "en") {
@@ -1707,7 +1711,7 @@ function prepareSessionUpdateMessage(
   session,
   group,
   status,
-  language = "ar"
+  language = "ar",
 ) {
   const statusText =
     language === "en"
@@ -1715,8 +1719,8 @@ function prepareSessionUpdateMessage(
         ? "CANCELLED"
         : "POSTPONED"
       : status === "cancelled"
-      ? "ملغاة"
-      : "مؤجلة";
+        ? "ملغاة"
+        : "مؤجلة";
 
   if (language === "en") {
     return `⚠️ Session ${statusText}
@@ -1743,7 +1747,7 @@ Code School Team 💻`;
 📚 المحاضرة: ${session.title}
 👥 المجموعة: ${group.code}
 📅 التاريخ الأصلي: ${new Date(session.scheduledDate).toLocaleDateString(
-      "ar-EG"
+      "ar-EG",
     )}
 ⏰ الوقت: ${session.startTime} - ${session.endTime}
 

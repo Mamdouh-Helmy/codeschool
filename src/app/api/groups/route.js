@@ -2,6 +2,8 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../models/Group';
+import Student from '../../models/Student';
+import Session from '../../models/Session';
 import Course from '../../models/Course';
 import { requireAdmin } from '@/utils/authMiddleware';
 import { calculateTotalSessions, getSessionDistributionSummary } from '@/utils/sessionGenerator';

@@ -499,7 +499,7 @@ groupSchema.pre("save", async function (next) {
 
         // Import and trigger marketing automation
         const { triggerGroupCompletionMarketing } = await import(
-          "@/services/marketingAutomation"
+          "../services/marketingAutomation"
         );
         await triggerGroupCompletionMarketing(
           this._id,

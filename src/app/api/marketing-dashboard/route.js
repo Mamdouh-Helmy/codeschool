@@ -2,9 +2,11 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getUserFromRequest } from "@/lib/auth";
-import { getMarketingStats } from "../../services/marketingAutomation";
-import { MarketingCampaign, StudentEvaluation, MarketingAction } from "@/lib/models";
-import mongoose from "mongoose";
+import MarketingCampaign from "../../models/MarketingCampaign";
+import StudentEvaluation from "../../models/StudentEvaluation";
+import MarketingAction from "../../models/MarketingAction";
+import Student from "../../models/Student";
+import Lead from "../../models/MarketingLead";
 
 export async function GET(req) {
   try {
@@ -14,55 +16,215 @@ export async function GET(req) {
     const user = await getUserFromRequest(req);
     
     if (!user || (user.role !== "marketing" && user.role !== "admin")) {
-      console.log("❌ [Marketing Dashboard] Unauthorized - User role:", user?.role);
       return NextResponse.json(
         { 
           success: false, 
-          message: "غير مصرح بالوصول - دور الماركتنج مطلوب",
+          message: "غير مصرح بالوصول",
           code: "UNAUTHORIZED"
         },
         { status: 401 }
       );
     }
 
-    console.log("✅ [Marketing Dashboard] User authorized:", {
-      id: user.id,
-      name: user.name,
-      role: user.role
-    });
-
     await connectDB();
 
     const { searchParams } = new URL(req.url);
     const timeframe = searchParams.get("timeframe") || "month";
 
-    // جلب الإحصائيات العامة
-    const stats = await getMarketingStats(timeframe);
+    // 1. إحصائيات الإجراءات التسويقية
+    const dateFilter = getDateFilter(timeframe);
+    
+    const actionStats = await MarketingAction.aggregate([
+      {
+        $match: {
+          createdAt: dateFilter,
+          isDeleted: false
+        }
+      },
+      {
+        $facet: {
+          // إحصائيات عامة
+          overview: [
+            {
+              $group: {
+                _id: null,
+                totalActions: { $sum: 1 },
+                completed: { 
+                  $sum: { 
+                    $cond: [{ $eq: ["$status", "completed"] }, 1, 0] 
+                  } 
+                },
+                pending: { 
+                  $sum: { 
+                    $cond: [{ $eq: ["$status", "pending"] }, 1, 0] 
+                  } 
+                },
+                failed: { 
+                  $sum: { 
+                    $cond: [{ $eq: ["$status", "failed"] }, 1, 0] 
+                  } 
+                }
+              }
+            }
+          ],
+          
+          // حسب النوع
+          byType: [
+            {
+              $group: {
+                _id: "$actionType",
+                count: { $sum: 1 },
+                completed: { 
+                  $sum: { 
+                    $cond: [{ $eq: ["$status", "completed"] }, 1, 0] 
+                  } 
+                },
+                revenue: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$status", "completed"] },
+                      { $ifNull: ["$actionData.discountedPrice", 0] },
+                      0
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          
+          // حسب الشهر
+          monthlyTrend: [
+            {
+              $group: {
+                _id: {
+                  month: { $month: "$createdAt" },
+                  year: { $year: "$createdAt" }
+                },
+                count: { $sum: 1 },
+                revenue: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$status", "completed"] },
+                      { $ifNull: ["$actionData.discountedPrice", 0] },
+                      0
+                    ]
+                  }
+                }
+              }
+            },
+            { $sort: { "_id.year": 1, "_id.month": 1 } },
+            { $limit: 6 }
+          ]
+        }
+      }
+    ]);
 
-    // جلب الحملات النشطة
+    const overview = actionStats[0]?.overview[0] || {
+      totalActions: 0,
+      completed: 0,
+      pending: 0,
+      failed: 0
+    };
+
+    // 2. إحصائيات الحملات
+    const campaignStats = await MarketingCampaign.aggregate([
+      {
+        $match: {
+          status: "active",
+          isDeleted: false
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          activeCampaigns: { $sum: 1 },
+          totalTargets: { $sum: "$stats.totalTargets" },
+          messagesSent: { $sum: "$stats.messagesSent" },
+          conversions: { $sum: "$stats.conversions" },
+          conversionRate: { $avg: "$stats.conversionRate" }
+        }
+      }
+    ]);
+
+    const campaigns = campaignStats[0] || {
+      activeCampaigns: 0,
+      totalTargets: 0,
+      messagesSent: 0,
+      conversions: 0,
+      conversionRate: 0
+    };
+
+    // 3. إحصائيات التقييمات
+    const evaluationStats = await StudentEvaluation.aggregate([
+      {
+        $match: {
+          "metadata.evaluatedAt": dateFilter,
+          isDeleted: false
+        }
+      },
+      {
+        $group: {
+          _id: "$finalDecision",
+          count: { $sum: 1 },
+          avgScore: { $avg: "$calculatedStats.overallScore" }
+        }
+      }
+    ]);
+
+    const evaluations = {
+      pass: evaluationStats.find(e => e._id === "pass")?.count || 0,
+      review: evaluationStats.find(e => e._id === "review")?.count || 0,
+      repeat: evaluationStats.find(e => e._id === "repeat")?.count || 0,
+      total: evaluationStats.reduce((sum, e) => sum + e.count, 0)
+    };
+
+    // 4. إحصائيات Leads
+    const leadStats = await Lead.aggregate([
+      {
+        $match: {
+          createdAt: dateFilter,
+          isDeleted: false
+        }
+      },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+          avgScore: { $avg: "$leadScore.score" }
+        }
+      }
+    ]);
+
+    const leads = {
+      new: leadStats.find(l => l._id === "new")?.count || 0,
+      contacted: leadStats.find(l => l._id === "contacted")?.count || 0,
+      qualified: leadStats.find(l => l._id === "qualified")?.count || 0,
+      converted: leadStats.find(l => l._id === "converted")?.count || 0,
+      total: leadStats.reduce((sum, l) => sum + l.count, 0)
+    };
+
+    // 5. الحملات النشطة
     const activeCampaigns = await MarketingCampaign.find({
-      status: "active"
+      status: "active",
+      isDeleted: false
     })
-      .select("name description campaignType stats targetCriteria automationRules")
-      .sort({ "stats.totalTargets": -1 })
+      .select("name description campaignType status stats")
+      .sort({ createdAt: -1 })
       .limit(5)
       .lean();
 
-    // جلب التقييمات الأخيرة مع المتابعة التسويقية
-    const recentEvaluations = await StudentEvaluation.find({
-      isDeleted: false,
-      "metadata.evaluatedAt": { 
-        $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      }
+    // 6. أحدث الإجراءات
+    const recentActions = await MarketingAction.find({
+      isDeleted: false
     })
-      .populate("studentId", "personalInfo.fullName personalInfo.whatsappNumber")
-      .populate("groupId", "name code")
-      .select("finalDecision calculatedStats marketing metadata")
-      .sort({ "metadata.evaluatedAt": -1 })
+      .populate("targetStudent", "personalInfo.fullName")
+      .populate("targetGroup", "name")
+      .select("actionType status createdAt results")
+      .sort({ createdAt: -1 })
       .limit(10)
       .lean();
 
-    // جلب الطلاب المصنفين بناءً على التقييمات
+    // 7. التصنيفات التسويقية للطلاب
     const studentCategories = await StudentEvaluation.aggregate([
       {
         $match: {
@@ -74,20 +236,64 @@ export async function GET(req) {
         $group: {
           _id: "$marketing.studentCategory",
           count: { $sum: 1 },
-          averageScore: { $avg: "$calculatedStats.overallScore" }
-        }
-      },
-      {
-        $project: {
-          category: "$_id",
-          count: 1,
-          averageScore: { $round: ["$averageScore", 2] }
+          avgScore: { $avg: "$calculatedStats.overallScore" }
         }
       }
     ]);
 
-    // جلب إحصائيات التحويل
-    const conversionStats = await getConversionStats(timeframe);
+    // تجميع البيانات النهائية
+    const stats = {
+      total: {
+        actions: overview.totalActions,
+        completed: overview.completed,
+        students: await Student.countDocuments({ isDeleted: false }),
+        successRate: overview.totalActions > 0 
+          ? Math.round((overview.completed / overview.totalActions) * 100) 
+          : 0
+      },
+      campaigns: {
+        active: campaigns.activeCampaigns,
+        totalTargets: campaigns.totalTargets,
+        messagesSent: campaigns.messagesSent,
+        conversions: campaigns.conversions,
+        conversionRate: campaigns.conversionRate ? parseFloat(campaigns.conversionRate.toFixed(2)) : 0
+      },
+      evaluations: {
+        pass: evaluations.pass,
+        review: evaluations.review,
+        repeat: evaluations.repeat,
+        total: evaluations.total
+      },
+      leads: {
+        new: leads.new,
+        contacted: leads.contacted,
+        qualified: leads.qualified,
+        converted: leads.converted,
+        total: leads.total
+      },
+      byActionType: actionStats[0]?.byType?.reduce((acc, item) => {
+        if (item._id) {
+          acc[item._id] = {
+            count: item.count,
+            completed: item.completed,
+            revenue: item.revenue,
+            successRate: item.count > 0 ? Math.round((item.completed / item.count) * 100) : 0
+          };
+        }
+        return acc;
+      }, {}) || {},
+      monthlyTrend: actionStats[0]?.monthlyTrend?.map(item => ({
+        month: item._id.month,
+        year: item._id.year,
+        count: item.count,
+        revenue: item.revenue
+      })) || [],
+      studentCategories: studentCategories.map(cat => ({
+        category: cat._id,
+        count: cat.count,
+        avgScore: cat.avgScore ? parseFloat(cat.avgScore.toFixed(2)) : 0
+      }))
+    };
 
     const response = {
       success: true,
@@ -100,20 +306,21 @@ export async function GET(req) {
         timeframe,
         stats,
         activeCampaigns,
-        recentEvaluations,
-        studentCategories,
-        conversionStats,
+        recentActions,
         summary: {
-          totalTargets: stats?.total?.students || 0,
-          conversionRate: stats?.total?.successRate || 0,
-          activeCampaigns: activeCampaigns.length || 0,
-          pendingFollowups: await getPendingFollowupsCount(),
-          highPriorityStudents: await getHighPriorityStudentsCount()
+          totalRevenue: stats.byActionType.upsell?.revenue || 0,
+          conversionRate: stats.total.successRate,
+          studentRetentionRate: evaluations.total > 0 
+            ? Math.round(((evaluations.pass + evaluations.review) / evaluations.total) * 100)
+            : 0,
+          leadConversionRate: leads.total > 0
+            ? Math.round((leads.converted / leads.total) * 100)
+            : 0
         }
       }
     };
 
-    console.log("✅ [Marketing Dashboard] Response ready");
+    console.log("✅ [Marketing Dashboard] Data loaded successfully");
     return NextResponse.json(response);
 
   } catch (error) {
@@ -130,121 +337,7 @@ export async function GET(req) {
   }
 }
 
-/**
- * ✅ الحصول على إحصائيات التحويل
- */
-async function getConversionStats(timeframe) {
-  try {
-    console.log("📊 [Conversion Stats] Getting conversion stats for timeframe:", timeframe);
-    
-    const dateFilter = getDateFilter(timeframe);
-    
-    // استخدم MarketingAction من lib/models
-    const conversionData = await MarketingAction.aggregate([
-      {
-        $match: {
-          createdAt: dateFilter,
-          status: "completed"
-        }
-      },
-      {
-        $group: {
-          _id: "$actionType",
-          count: { $sum: 1 },
-          revenue: { 
-            $sum: { 
-              $switch: {
-                branches: [
-                  { case: { $eq: ["$_id", "upsell"] }, then: 500 },
-                  { case: { $eq: ["$_id", "re_enroll"] }, then: 1000 },
-                  { case: { $eq: ["$_id", "support"] }, then: 300 },
-                  { case: { $eq: ["$_id", "referral"] }, then: 200 },
-                  { case: { $eq: ["$_id", "feedback"] }, then: 100 }
-                ],
-                default: 0
-              }
-            }
-          }
-        }
-      }
-    ]);
-
-    console.log("📊 [Conversion Stats] Aggregation result:", conversionData);
-
-    const stats = {};
-    conversionData.forEach(item => {
-      if (item._id) {
-        stats[item._id] = {
-          count: item.count || 0,
-          totalRevenue: item.revenue || 0,
-          averageRevenue: item.count > 0 ? Math.round(item.revenue / item.count) : 0
-        };
-      }
-    });
-
-    // إضافة البيانات الوهمية إذا كانت النتائج فارغة (للاختبار)
-    if (Object.keys(stats).length === 0) {
-      console.log("📊 [Conversion Stats] No data found, adding mock data for testing");
-      stats.upsell = { count: 15, totalRevenue: 7500, averageRevenue: 500 };
-      stats.support = { count: 8, totalRevenue: 2400, averageRevenue: 300 };
-      stats.re_enroll = { count: 5, totalRevenue: 5000, averageRevenue: 1000 };
-      stats.referral = { count: 3, totalRevenue: 600, averageRevenue: 200 };
-      stats.feedback = { count: 12, totalRevenue: 1200, averageRevenue: 100 };
-    }
-
-    console.log("📊 [Conversion Stats] Final stats:", stats);
-    return stats;
-  } catch (error) {
-    console.error("❌ [Conversion Stats] Error getting conversion stats:", error);
-    
-    // بيانات وهمية للاختبار
-    return {
-      upsell: { count: 15, totalRevenue: 7500, averageRevenue: 500 },
-      support: { count: 8, totalRevenue: 2400, averageRevenue: 300 },
-      re_enroll: { count: 5, totalRevenue: 5000, averageRevenue: 1000 },
-      referral: { count: 3, totalRevenue: 600, averageRevenue: 200 },
-      feedback: { count: 12, totalRevenue: 1200, averageRevenue: 100 }
-    };
-  }
-}
-
-/**
- * ✅ الحصول على عدد المتابعات المعلقة
- */
-async function getPendingFollowupsCount() {
-  try {
-    const count = await StudentEvaluation.countDocuments({
-      isDeleted: false,
-      "marketing.followupStatus": { $in: ["pending", "in_progress"] }
-    });
-    console.log("📊 [Pending Followups] Count:", count);
-    return count;
-  } catch (error) {
-    console.error("❌ [Pending Followups] Error getting pending followups:", error);
-    return 0;
-  }
-}
-
-/**
- * ✅ الحصول على عدد الطلاب ذات الأولوية العالية
- */
-async function getHighPriorityStudentsCount() {
-  try {
-    const count = await StudentEvaluation.countDocuments({
-      isDeleted: false,
-      "marketing.studentCategory": { $in: ["at_risk", "needs_repeat"] }
-    });
-    console.log("📊 [High Priority Students] Count:", count);
-    return count;
-  } catch (error) {
-    console.error("❌ [High Priority Students] Error getting high priority students:", error);
-    return 0;
-  }
-}
-
-/**
- * ✅ فلترة التاريخ
- */
+// Helper function for date filtering
 function getDateFilter(timeframe) {
   const now = new Date();
   let startDate;
@@ -269,6 +362,5 @@ function getDateFilter(timeframe) {
       startDate = new Date(now.setMonth(now.getMonth() - 1));
   }
 
-  console.log("📅 [Date Filter] Timeframe:", timeframe, "Start date:", startDate);
   return { $gte: startDate };
 }
