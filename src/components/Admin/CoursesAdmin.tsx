@@ -16,7 +16,6 @@ import {
     Edit3,
     Package,
     Zap,
-    TrendingUp,
     BarChart,
 } from "lucide-react";
 import Modal from "./Modal";
@@ -27,7 +26,7 @@ interface Lesson {
     title: string;
     description?: string;
     order: number;
-    sessionsCount: number;
+    sessionNumber: number;
 }
 
 interface Module {
@@ -36,6 +35,7 @@ interface Module {
     order: number;
     lessons: Lesson[];
     projects: string[];
+    totalSessions: number;
 }
 
 interface Course {
