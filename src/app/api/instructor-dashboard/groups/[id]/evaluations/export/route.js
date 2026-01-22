@@ -56,29 +56,29 @@ export async function GET(req, { params }) {
         status: group.status,
       },
       exportDate: new Date().toISOString(),
-      evaluations: evaluations.map((eval) => ({
+      evaluations: evaluations.map((evalat) => ({
         student: {
-          name: eval.studentId?.personalInfo?.fullName || "غير معروف",
-          enrollmentNumber: eval.studentId?.enrollmentNumber,
-          email: eval.studentId?.personalInfo?.email,
+          name: evalat.studentId?.personalInfo?.fullName || "غير معروف",
+          enrollmentNumber: evalat.studentId?.enrollmentNumber,
+          email: evalat.studentId?.personalInfo?.email,
         },
         evaluation: {
           criteria: {
-            understanding: eval.criteria.understanding,
-            commitment: eval.criteria.commitment,
-            attendance: eval.criteria.attendance,
-            participation: eval.criteria.participation,
+            understanding: evalat.criteria.understanding,
+            commitment: evalat.criteria.commitment,
+            attendance: evalat.criteria.attendance,
+            participation: evalat.criteria.participation,
           },
-          finalDecision: getDecisionArabic(eval.finalDecision),
-          finalDecisionCode: eval.finalDecision,
-          overallScore: eval.calculatedStats?.overallScore || 0,
-          notes: eval.notes || "",
+          finalDecision: getDecisionArabic(evalat.finalDecision),
+          finalDecisionCode: evalat.finalDecision,
+          overallScore: evalat.calculatedStats?.overallScore || 0,
+          notes: evalat.notes || "",
         },
         evaluator: {
-          name: eval.instructorId?.name || "غير معروف",
-          email: eval.instructorId?.email,
+          name: evalat.instructorId?.name || "غير معروف",
+          email: evalat.instructorId?.email,
         },
-        evaluatedAt: eval.metadata.evaluatedAt,
+        evaluatedAt: evalat.metadata.evaluatedAt,
       })),
       summary: {
         totalEvaluations: evaluations.length,
@@ -170,20 +170,20 @@ function generateCSV(data) {
   let csv =
     "الطالب,رقم القيد,البريد الإلكتروني,مستوى الفهم,الالتزام,الحضور,المشاركة,المعدل العام,القرار النهائي,ملاحظات,تم التقييم في,المقيِّم\n";
 
-  data.evaluations.forEach((eval) => {
+  data.evaluations.forEach((evalat) => {
     const row = [
-      `"${eval.student.name}"`,
-      eval.student.enrollmentNumber || "",
-      eval.student.email || "",
-      eval.evaluation.criteria.understanding,
-      eval.evaluation.criteria.commitment,
-      eval.evaluation.criteria.attendance,
-      eval.evaluation.criteria.participation,
-      eval.evaluation.overallScore,
-      eval.evaluation.finalDecision,
-      `"${eval.evaluation.notes.replace(/"/g, '""')}"`,
-      new Date(eval.evaluatedAt).toLocaleString("ar-EG"),
-      `"${eval.evaluator.name}"`,
+      `"${evalat.student.name}"`,
+      evalat.student.enrollmentNumber || "",
+      evalat.student.email || "",
+      evalat.evaluation.criteria.understanding,
+      evalat.evaluation.criteria.commitment,
+      evalat.evaluation.criteria.attendance,
+      evalat.evaluation.criteria.participation,
+      evalat.evaluation.overallScore,
+      evalat.evaluation.finalDecision,
+      `"${evalat.evaluation.notes.replace(/"/g, '""')}"`,
+      new Date(evalat.evaluatedAt).toLocaleString("ar-EG"),
+      `"${evalat.evaluator.name}"`,
     ];
 
     csv += row.join(",") + "\n";
