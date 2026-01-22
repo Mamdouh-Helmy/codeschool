@@ -3081,6 +3081,21 @@ const ar = {
 
   "nav.skills": "المهارات",
   "nav.projects": "المشاريع",
+
+  "dashboard.quickStats": "إحصائيات سريعة",
+  "dashboard.totalUsers": "إجمالي المستخدمين",
+  "dashboard.activeCourses": "الكورسات النشطة",
+  "dashboard.system": "النظام",
+  "dashboard.recentlyAccessed": "تم الوصول إليها مؤخرًا",
+  "dashboard.items": "العناصر",
+  "dashboard.communication": "التواصل",
+  "dashboard.subscriptions": "الاشتراكات",
+  "dashboard.users": "المستخدمين",
+  "dashboard.learning": "التعلم",
+  "dashboard.content": "المحتوى",
+  "dashboard.categories": "التصنيفات",
+
+  "common.backToCategories": "العودة إلى التصنيفات",
 };
 
 export default ar;

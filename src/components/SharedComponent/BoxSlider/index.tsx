@@ -7,7 +7,7 @@ import Slider from "react-slick";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
 
-type Webinar = {
+type Event = {
   _id?: string;
   title: string;
   date: string;
@@ -16,7 +16,7 @@ type Webinar = {
 };
 
 const BoxSlider = () => {
-  const [webinars, setWebinars] = useState<Webinar[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const sliderRef = useRef<any>(null);
@@ -25,24 +25,24 @@ const BoxSlider = () => {
   const { locale } = useLocale();
   const isArabic = String(locale || "").startsWith("ar");
 
-  // جلب البيانات
+  // جلب البيانات من API الـ events بدلاً من webinars
   useEffect(() => {
-    const fetchWebinars = async () => {
+    const fetchEvents = async () => {
       try {
-        const res = await fetch("/api/webinars", { cache: "no-store" });
+        const res = await fetch("/api/events", { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to fetch");
 
         const result = await res.json();
-        setWebinars(result.data || []);
+        setEvents(result.data || []);
       } catch (err) {
-        console.error("Error fetching webinars:", err);
+        console.error("Error fetching events:", err);
         setError(t("common.error"));
       } finally {
         setLoading(false);
       }
     };
 
-    fetchWebinars();
+    fetchEvents();
   }, [t]);
 
   // تجهيز أيام الشهر
@@ -57,8 +57,8 @@ const BoxSlider = () => {
     const days: {
       date: string;
       day: number;
-      hasWebinar: boolean;
-      webinar?: Webinar;
+      hasEvent: boolean;
+      event?: Event;
     }[] = [];
 
     for (let d = 1; d <= daysInMonth; d++) {
@@ -66,13 +66,13 @@ const BoxSlider = () => {
         d
       ).padStart(2, "0")}`;
 
-      const webinar = webinars.find((wb) => wb.date === dateStr);
+      const event = events.find((ev) => ev.date === dateStr);
 
       days.push({
         date: dateStr,
         day: d,
-        hasWebinar: !!webinar,
-        webinar,
+        hasEvent: !!event,
+        event,
       });
     }
 
@@ -81,24 +81,24 @@ const BoxSlider = () => {
 
   const monthDays = getCurrentMonthDays();
 
-  // تحديد targetIndex (اليوم الحالي أو أقرب webinar مستقبلي)
+  // تحديد targetIndex (اليوم الحالي أو أقرب event مستقبلي)
   const findTargetIndex = (days: any[]) => {
     const todayStr = new Date().toISOString().split("T")[0];
 
     const todayIndex = days.findIndex((d) => d.date === todayStr);
     if (todayIndex !== -1) return todayIndex;
 
-    const futureWebinarIndex = days.findIndex((d) => {
-      const webinarDate = new Date(d.date);
+    const futureEventIndex = days.findIndex((d) => {
+      const eventDate = new Date(d.date);
       const today = new Date();
 
-      webinarDate.setHours(0, 0, 0, 0);
+      eventDate.setHours(0, 0, 0, 0);
       today.setHours(0, 0, 0, 0);
 
-      return d.hasWebinar && webinarDate >= today;
+      return d.hasEvent && eventDate >= today;
     });
 
-    return futureWebinarIndex !== -1 ? futureWebinarIndex : 0;
+    return futureEventIndex !== -1 ? futureEventIndex : 0;
   };
 
   const targetIndex = findTargetIndex(monthDays);
@@ -109,8 +109,8 @@ const BoxSlider = () => {
       typeof w === "number"
         ? w
         : typeof window !== "undefined"
-        ? window.innerWidth
-        : 1200;
+          ? window.innerWidth
+          : 1200;
 
     if (width <= 480) return 2;
     if (width <= 768) return 3;
@@ -150,27 +150,27 @@ const BoxSlider = () => {
     return { day, month, year };
   };
 
-  const getWebinarStatus = (dateStr: string, hasWebinar: boolean) => {
-    const webinarDate = new Date(dateStr);
+  const getEventStatus = (dateStr: string, hasEvent: boolean) => {
+    const eventDate = new Date(dateStr);
     const today = new Date();
 
-    webinarDate.setHours(0, 0, 0, 0);
+    eventDate.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
 
     // إذا كان اليوم هو اليوم الحالي
-    if (+webinarDate === +today) {
-      // إذا كان اليوم الحالي وليس فيه webinar
-      if (!hasWebinar) {
-        return "today-no-webinar";
+    if (+eventDate === +today) {
+      // إذا كان اليوم الحالي وليس فيه event
+      if (!hasEvent) {
+        return "today-no-event";
       }
       return "today";
     }
-    
-    if (webinarDate < today) return "past";
+
+    if (eventDate < today) return "past";
     return "soon";
   };
 
-  // 🔥 وظائف التنقل للسلايدر
+  // وظائف التنقل للسلايدر
   const goToNext = () => {
     if (sliderRef.current) {
       sliderRef.current.slickNext();
@@ -201,21 +201,20 @@ const BoxSlider = () => {
     ],
   };
 
-  // 🔥 نختار العرض بناءً على slidesToShow
   const renderContent = () => {
     return (
       <div className="relative">
-        {/* 🔥 أزرار التنقل */}
+        {/* أزرار التنقل */}
         <button
           onClick={goToPrev}
           className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 md:-translate-x-4 z-10 bg-white dark:bg-gray-800 shadow-lg rounded-full w-8 h-8 md:w-10 md:h-10 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label={isArabic ? "السابق" : "Previous"}
           disabled={targetIndex === 0}
         >
-          <svg 
+          <svg
             className={`w-5 h-5 md:w-6 md:h-6 ${isArabic ? "rotate-180" : ""}`}
-            fill="none" 
-            stroke="currentColor" 
+            fill="none"
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -228,10 +227,10 @@ const BoxSlider = () => {
           aria-label={isArabic ? "التالي" : "Next"}
           disabled={targetIndex + slidesToShow >= monthDays.length}
         >
-          <svg 
+          <svg
             className={`w-5 h-5 md:w-6 md:h-6 ${isArabic ? "rotate-180" : ""}`}
-            fill="none" 
-            stroke="currentColor" 
+            fill="none"
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -241,19 +240,19 @@ const BoxSlider = () => {
         <Slider ref={sliderRef} {...settings}>
           {monthDays.map((dayData, index) => {
             const { day, month, year } = formatDate(dayData.date);
-            const status = getWebinarStatus(dayData.date, dayData.hasWebinar);
-            
-            // 🔥 تحديد الكلاسات بناءً على الحالة
+            const status = getEventStatus(dayData.date, dayData.hasEvent);
+
+            // تحديد الكلاسات بناءً على الحالة
             let boxClasses = "";
             let dayClasses = "";
             let dateClasses = "";
-            
+
             if (status === "past") {
               boxClasses = "bg-gray-300 dark:bg-gray-700 opacity-90 cursor-default";
               dayClasses = "text-gray-500";
               dateClasses = "text-gray-500";
-            } else if (status === "today-no-webinar") {
-              // 🔥 إذا كان اليوم الحالي وليس فيه webinar
+            } else if (status === "today-no-event") {
+              // إذا كان اليوم الحالي وليس فيه event
               boxClasses = "bg-gray-300 dark:bg-gray-700 opacity-90 cursor-default";
               dayClasses = "text-gray-500";
               dateClasses = "text-gray-500";
@@ -261,48 +260,47 @@ const BoxSlider = () => {
               boxClasses = "bg-IcyBreeze dark:bg-darklight border-2 border-primary shadow-lg";
               dayClasses = "text-primary";
               dateClasses = "text-primary";
-            } else if (status === "soon" && !dayData.hasWebinar) {
-              // 🔥 إذا كان يوم مستقبلي وليس فيه webinar
+            } else if (status === "soon" && !dayData.hasEvent) {
+              // إذا كان يوم مستقبلي وليس فيه event
               boxClasses = "bg-gray-300 dark:bg-gray-700 opacity-90 cursor-default";
               dayClasses = "text-gray-500";
               dateClasses = "text-gray-500";
             } else {
-              // 🔥 إذا كان يوم مستقبلي وفيه webinar
+              // إذا كان يوم مستقبلي وفيه event
               boxClasses = "bg-IcyBreeze dark:bg-darklight hover:bg-primary transition-all duration-300";
               dayClasses = "text-gray-400 group-hover:text-white";
               dateClasses = "text-gray-400 group-hover:text-white";
             }
-            
-            // 🔥 تحديد النص المعروض لليوم
-            const labelForDay = status === "today" || status === "today-no-webinar"
+
+            // تحديد النص المعروض لليوم
+            const labelForDay = status === "today" || status === "today-no-event"
               ? t("upcoming.today") || (isArabic ? "اليوم" : "Today")
               : day;
-            
-            // 🔥 تحديد البادج
-            const smallBadge = status === "soon" && dayData.hasWebinar
+
+            // تحديد البادج
+            const smallBadge = status === "soon" && dayData.hasEvent
               ? t("upcoming.comingSoon") || (isArabic ? "قريباً" : "Soon")
               : null;
-            
+
             // تحقق إذا كان هذا اليوم هو اليوم الحالي
             const isTargetDay = index === targetIndex;
-            
+
             return (
               <div key={`${dayData.date}-${index}`} className="px-2">
                 <div
-                  className={`pt-5 pb-7 rounded-lg text-center group relative ${boxClasses} ${
-                    isTargetDay && status !== "today-no-webinar" ? "ring-2 ring-primary ring-opacity-50" : ""
-                  }`}
+                  className={`pt-5 pb-7 rounded-lg text-center group relative ${boxClasses} ${isTargetDay && status !== "today-no-event" ? "ring-2 ring-primary ring-opacity-50" : ""
+                    }`}
                 >
                   {smallBadge && (
                     <div className="absolute -top-0 -right-2 bg-primary text-white text-xs px-2 py-1 rounded-full font-semibold">
                       {smallBadge}
                     </div>
                   )}
-                  
+
                   <h5 className={`text-[34px] leading-[2.76rem] font-normal ${dayClasses}`}>
                     {labelForDay}
                   </h5>
-                  
+
                   <p className={`text-xs font-medium ${dateClasses}`}>
                     {month} {year}
                   </p>

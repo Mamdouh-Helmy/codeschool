@@ -219,7 +219,6 @@ body {
   bottom: -0.25em;
 }
 
-
 /* في ملف globals.css */
 .portfolio-header {
   background: linear-gradient(to right, var(--gradient-from), var(--gradient-to)) !important;
@@ -246,7 +245,6 @@ body {
   --gradient-to: #4b5563;
 }
 
-
 /* styles/portfolio.css */
 @layer components {
   /* Print Styles */
@@ -254,13 +252,13 @@ body {
     .no-print {
       display: none !important;
     }
-    
+
     .portfolio-print {
       margin: 0 !important;
       padding: 20px !important;
       box-shadow: none !important;
     }
-    
+
     .portfolio-section {
       break-inside: avoid;
     }
@@ -268,7 +266,10 @@ body {
 
   /* Theme Transitions */
   .theme-transition {
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease,
+      border-color 0.3s ease;
   }
 
   /* Skill Bar Animation */
@@ -287,7 +288,9 @@ body {
 
   /* Card Hover Effects */
   .portfolio-card {
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition:
+      transform 0.3s ease,
+      box-shadow 0.3s ease;
   }
 
   .portfolio-card:hover {
@@ -314,4 +317,36 @@ body {
   .portfolio-header-professional {
     background: linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%);
   }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Dual Sidebar Responsive Styles */
+@media (max-width: 1023px) {
+  .lg\:fixed {
+    position: fixed;
+  }
+}
+
+@media (min-width: 1024px) {
+  .lg\:ml-\[17rem\] {
+    margin-left: 17rem;
+  }
+}
+
+/* Smooth transitions for sidebars */
+.sidebar-transition {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Overlay z-index adjustments */
+.sidebar-overlay {
+  z-index: 40;
 }

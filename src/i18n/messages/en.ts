@@ -3009,6 +3009,21 @@ const en = {
 
   "nav.skills": "Skills",
   "nav.projects": "Projects",
+
+  "dashboard.quickStats": "Quick Stats",
+  "dashboard.totalUsers": "Total Users",
+  "dashboard.activeCourses": "Active Courses",
+  "dashboard.system": "System",
+  "dashboard.recentlyAccessed": "Recently Accessed",
+  "dashboard.items": "Items",
+  "dashboard.communication": "Communication",
+  "dashboard.subscriptions": "Subscriptions",
+  "dashboard.users": "Users",
+  "dashboard.learning": "Learning",
+  "dashboard.content": "Content",
+  "dashboard.categories": "Categories",
+
+  "common.backToCategories": "Back to Categories",
 };
 
 export default en;

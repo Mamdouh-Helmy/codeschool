@@ -12,7 +12,7 @@ type Speaker = {
   image?: string;
 };
 
-type WebinarItem = {
+type EventItem = {
   _id?: string;
   title: string;
   date: string;
@@ -72,52 +72,58 @@ const getImageInfo = (img?: string | null) => {
 const DEFAULT_AVATAR = "/default-avatar.png";
 
 const Upcoming = () => {
-  const [upcomingWebinars, setUpcomingWebinars] = useState<WebinarItem[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { t } = useI18n();
 
-  // 🔥 دالة للتحقق إذا كان الويبنار لم ينته بعد
-  const isWebinarUpcoming = (webinar: WebinarItem) => {
+  // دالة للتحقق إذا كان الحدث لم ينته بعد
+  const isEventUpcoming = (event: EventItem) => {
     const now = new Date();
-    
+
     try {
-      const webinarDateTime = new Date(`${webinar.date}T${webinar.time || '23:59:59'}`);
-      return webinarDateTime > now;
+      const eventDateTime = new Date(`${event.date}T${event.time || '23:59:59'}`);
+      return eventDateTime > now;
     } catch (error) {
-      console.error('Error parsing date:', webinar.date, webinar.time);
+      console.error('Error parsing date:', event.date, event.time);
       return false;
     }
   };
 
   useEffect(() => {
-    const fetchUpcomingWebinars = async () => {
+    const fetchUpcomingEvents = async () => {
       try {
-        const response = await fetch("/api/webinars");
+        const response = await fetch("/api/events");
         const result = await response.json();
 
         if (result.success) {
-          const webinars = result.data || [];
-          
-          const upcoming = webinars
-            .filter((webinar: WebinarItem) => {
-              if (!webinar.date || !webinar.time) return false;
-              return isWebinarUpcoming(webinar);
-            })
-            .slice(0, 8);
+          const events = result.data || [];
 
-          setUpcomingWebinars(upcoming);
+          // تصفية الأحداث القادمة فقط وترتيبها حسب التاريخ
+          const upcoming = events
+            .filter((event: EventItem) => {
+              if (!event.date || !event.time) return false;
+              return isEventUpcoming(event);
+            })
+            .sort((a: EventItem, b: EventItem) => {
+              const dateA = new Date(`${a.date}T${a.time || '00:00:00'}`);
+              const dateB = new Date(`${b.date}T${b.time || '00:00:00'}`);
+              return dateA.getTime() - dateB.getTime();
+            });
+
+          // عرض أول 3 أحداث فقط مع السماح بالتمرير العمودي للباقي
+          setUpcomingEvents(upcoming);
         } else {
-          setUpcomingWebinars([]);
+          setUpcomingEvents([]);
         }
       } catch (error) {
-        console.error("Error fetching webinars:", error);
-        setUpcomingWebinars([]);
+        console.error("Error fetching events:", error);
+        setUpcomingEvents([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUpcomingWebinars();
+    fetchUpcomingEvents();
   }, []);
 
   if (loading) {
@@ -151,10 +157,13 @@ const Upcoming = () => {
                 <BoxSlider />
               </div>
               <div>
-                <div className="flex items-center flex-wrap w-full border border-solid dark:border-dark_border md:px-14 px-6 md:mt-14 mt-6 rounded-22">
-                  {upcomingWebinars.map((webinar, index) => (
+                {/* 🔥 حاوية الأحداث بنفس التصميم مع التمرير العمودي */}
+                <div
+                  className="flex items-center flex-wrap w-full border border-solid dark:border-dark_border md:px-14 px-6 md:mt-14 mt-6 rounded-22 max-h-[400px] overflow-y-auto no-scrollbar"
+                >
+                  {upcomingEvents.map((event, index) => (
                     <div
-                      key={webinar._id || index}
+                      key={event._id || index}
                       data-aos="fade-up"
                       data-aos-delay={`${index * 300}`}
                       data-aos-duration="1000"
@@ -162,21 +171,20 @@ const Upcoming = () => {
                     >
                       <div>
                         <h6 className="text-[26px] leading-[2.1rem] font-bold text-secondary dark:text-white max-w-286">
-                          {webinar.title}
+                          {event.title}
                         </h6>
-                        
                       </div>
                       <div className="flex items-center flex-wrap gap-30">
                         <div className="flex items-center">
-                          {webinar.speakers && webinar.speakers.slice(0, 3).length > 0 ? (
-                            webinar.speakers.slice(0, 3).map((speaker, profileIndex) => {
+                          {event.speakers && event.speakers.slice(0, 3).length > 0 ? (
+                            event.speakers.slice(0, 3).map((speaker, profileIndex) => {
                               const { src, useImgTag } = getImageInfo(speaker.image || DEFAULT_AVATAR);
-                              const key = `${webinar._id || index}-sp-${profileIndex}`;
+                              const key = `${event._id || index}-sp-${profileIndex}`;
                               if (!src) {
                                 return (
                                   <div
                                     key={key}
-                                    className={`!w-16 !h-16 rounded-full bg-gray-200 ${profileIndex !== webinar.speakers!.slice(0, 3).length - 1 ? "-mr-3" : ""
+                                    className={`!w-16 !h-16 rounded-full bg-gray-200 ${profileIndex !== event.speakers!.slice(0, 3).length - 1 ? "-mr-3" : ""
                                       }`}
                                   />
                                 );
@@ -190,7 +198,7 @@ const Upcoming = () => {
                                     width={64}
                                     height={64}
                                     loading="lazy"
-                                    className={`!w-16 !h-16 rounded-full object-cover ${profileIndex !== webinar.speakers!.slice(0, 3).length - 1 ? "-mr-3" : ""
+                                    className={`!w-16 !h-16 rounded-full object-cover ${profileIndex !== event.speakers!.slice(0, 3).length - 1 ? "-mr-3" : ""
                                       }`}
                                     onError={(e) => {
                                       (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR;
@@ -206,21 +214,21 @@ const Upcoming = () => {
                                   width={64}
                                   height={64}
                                   quality={100}
-                                  className={`!w-16 !h-16 rounded-full object-cover ${profileIndex !== webinar.speakers!.slice(0, 3).length - 1 ? "-mr-3" : ""
+                                  className={`!w-16 !h-16 rounded-full object-cover ${profileIndex !== event.speakers!.slice(0, 3).length - 1 ? "-mr-3" : ""
                                     }`}
                                 />
                               );
                             })
-                          ) : webinar.instructorImage ? (
+                          ) : event.instructorImage ? (
                             (() => {
-                              const { src, useImgTag } = getImageInfo(webinar.instructorImage || DEFAULT_AVATAR);
+                              const { src, useImgTag } = getImageInfo(event.instructorImage || DEFAULT_AVATAR);
                               if (!src) {
                                 return <div className="!w-16 !h-16 rounded-full bg-gray-200" />;
                               }
                               return useImgTag ? (
                                 <img
                                   src={src}
-                                  alt={webinar.instructor || "instructor"}
+                                  alt={event.instructor || "instructor"}
                                   width={64}
                                   height={64}
                                   loading="lazy"
@@ -232,7 +240,7 @@ const Upcoming = () => {
                               ) : (
                                 <Image
                                   src={src}
-                                  alt={webinar.instructor || "instructor"}
+                                  alt={event.instructor || "instructor"}
                                   width={64}
                                   height={64}
                                   quality={100}
@@ -256,15 +264,15 @@ const Upcoming = () => {
                             {t("upcoming.speechBy")}
                           </p>
                           <p className="text-lg font-medium text-secondary dark:text-white">
-                            {webinar.speakers && webinar.speakers.length > 0
-                              ? webinar.speakers.map((s) => s.name).join(", ")
-                              : webinar.instructor || t("upcoming.tba")}
+                            {event.speakers && event.speakers.length > 0
+                              ? event.speakers.map((s) => s.name).join(", ")
+                              : event.instructor || t("upcoming.tba")}
                           </p>
                         </div>
                       </div>
                       <div>
                         <Link
-                          href={webinar.crmRegistrationUrl || "#"}
+                          href={event.crmRegistrationUrl || "#"}
                           className="btn_outline btn-2 btn_outline hover-outline-slide-down"
                         >
                           <span>{t("upcoming.registerNow")}</span>
@@ -273,7 +281,7 @@ const Upcoming = () => {
                     </div>
                   ))}
 
-                  {upcomingWebinars.length === 0 && (
+                  {upcomingEvents.length === 0 && (
                     <div className="w-full py-12 text-center">
                       <p className="text-lg text-gray-500 dark:text-gray-400">{t("upcoming.noEvents")}</p>
                     </div>
