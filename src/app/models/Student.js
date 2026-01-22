@@ -1,4 +1,3 @@
-// models/Student.js
 import mongoose from 'mongoose';
 
 const addressSchema = new mongoose.Schema({
@@ -299,21 +298,56 @@ StudentSchema.pre('findOne', function() {
   this.where({ isDeleted: false });
 });
 
-// Pre-save middleware
+// ✅ FIXED: Pre-save middleware (تم إصلاح المشكلة)
 StudentSchema.pre('save', function(next) {
+  console.log("🔧 [PRE-SAVE] Executing pre-save middleware...");
+  
   try {
     if (!this.metadata) {
-      this.metadata = {};
+      console.log("📝 Initializing metadata object");
+      this.metadata = {
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        whatsappTotalMessages: 0,
+        whatsappMessagesCount: 0,
+        totalSessionReminders: 0
+      };
+    } else {
+      console.log("📝 Updating metadata.updatedAt");
+      this.metadata.updatedAt = new Date();
     }
-    this.metadata.updatedAt = new Date();
-    next();
+    
+    // تأكد من تحديث timestamps إذا كان موجوداً
+    if (this.isNew) {
+      console.log("📝 This is a new document");
+      if (!this.metadata.createdAt) {
+        this.metadata.createdAt = new Date();
+      }
+    }
+    
+    console.log("✅ [PRE-SAVE] Middleware completed successfully");
+    
+    // التحقق من أن next هي دالة قبل استدعائها
+    if (typeof next === 'function') {
+      console.log("➡️ Calling next() function");
+      next();
+    } else {
+      console.warn("⚠️ Warning: next is not a function, type is:", typeof next);
+      // استمر بدون استدعاء next
+    }
   } catch (error) {
-    console.error("Error in pre-save middleware:", error);
-    next(error);
+    console.error("❌ Error in pre-save middleware:", error);
+    
+    // تمرير الخطأ إذا كان next دالة
+    if (typeof next === 'function') {
+      next(error);
+    } else {
+      console.error("❌ Cannot call next(), throwing error");
+      throw error;
+    }
   }
 });
 
-// ✅ NEW: Method to log WhatsApp message
 // ✅ FIXED: Method to log WhatsApp message - NO VALIDATION ERRORS
 StudentSchema.methods.logWhatsAppMessage = function(messageData) {
   try {
@@ -327,7 +361,6 @@ StudentSchema.methods.logWhatsAppMessage = function(messageData) {
     }
     
     // ✅ CRITICAL: Only map to whatsappMessageSchema fields
-    // Do NOT add any extra fields like whatsappMode, whatsappStatus, etc.
     const messageToLog = {
       messageType: messageData.messageType,
       messageContent: messageData.messageContent,
@@ -336,7 +369,6 @@ StudentSchema.methods.logWhatsAppMessage = function(messageData) {
       recipientNumber: messageData.recipientNumber,
       wapilotMessageId: messageData.wapilotMessageId || null,
       sentAt: messageData.sentAt || new Date(),
-      // ✅ metadata is a simple object - NOT the Student metadata!
       metadata: {
         groupId: messageData.metadata?.groupId || null,
         groupName: messageData.metadata?.groupName || null,
