@@ -169,10 +169,6 @@ export default function GroupEvaluationsPage() {
                 count: result.data?.students?.length,
             });
 
-            if (!response.ok || !result.success) {
-                throw new Error(result.message || "فشل في تحميل بيانات التقييم");
-            }
-
             setStudents(result.data.students || []);
             setGroupInfo(result.data.group);
             setStats(result.data.stats);

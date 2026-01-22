@@ -60,7 +60,7 @@ import {
     Search,
     Plus,
     Minus,
-    Copy,
+    
 } from "lucide-react";
 
 // أنواع البيانات

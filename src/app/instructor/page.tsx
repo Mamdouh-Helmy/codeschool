@@ -9,15 +9,8 @@ import {
   Clock,
   Award,
   AlertCircle,
-  TrendingUp,
-  MessageSquare,
-  Bell,
   CheckCircle,
-  XCircle,
-  Loader2,
-  ChevronRight,
   Video,
-  Download,
   BookOpen,
   BarChart3,
   Eye,
@@ -25,6 +18,8 @@ import {
   FileText,
   GraduationCap,
   Zap,
+  ChevronRight,
+  Loader2,
 } from "lucide-react";
 
 // أنواع البيانات
@@ -57,10 +52,13 @@ interface Session {
     id: string;
     name: string;
     code: string;
+    students?: number;
   };
   course: {
     title: string;
   };
+  studentsMarked?: number;
+  totalStudents?: number;
 }
 
 interface Group {
@@ -137,16 +135,16 @@ export default function InstructorDashboard() {
       setError("");
 
       console.log("🔄 [Instructor Dashboard] Fetching data...");
-      
+
       const dashboardRes = await fetch(`/api/instructor-dashboard/dashboard`, {
-        headers: { 
+        headers: {
           "Content-Type": "application/json"
         },
         credentials: 'include'
       });
 
       const response = await dashboardRes.json();
-      
+
       console.log("📥 [Instructor Dashboard] API Response:", {
         success: response.success,
         status: dashboardRes.status,
@@ -162,7 +160,7 @@ export default function InstructorDashboard() {
     } catch (error: any) {
       console.error("❌ [Instructor Dashboard] Error fetching data:", error);
       setError(error.message || "حدث خطأ أثناء تحميل البيانات");
-      
+
       if (error.message.includes("غير مصرح") || error.message.includes("UNAUTHORIZED")) {
         router.push("/signin");
       }
@@ -175,7 +173,7 @@ export default function InstructorDashboard() {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return "تاريخ غير صالح";
-      
+
       return date.toLocaleDateString("ar-EG", {
         weekday: "long",
         year: "numeric",
@@ -185,10 +183,6 @@ export default function InstructorDashboard() {
     } catch {
       return dateString;
     }
-  };
-
-  const formatTime = (timeString: string) => {
-    return timeString || "غير محدد";
   };
 
   const getStatusColor = (status: string) => {
@@ -222,20 +216,6 @@ export default function InstructorDashboard() {
     } else {
       alert("لا يوجد رابط للاجتماع متاح حالياً أو أن الجلسة لم تعد مجدولة");
     }
-  };
-
-  const getDaysInArabic = (days: string[]) => {
-    const daysMap: Record<string, string> = {
-      "Sunday": "الأحد",
-      "Monday": "الاثنين",
-      "Tuesday": "الثلاثاء",
-      "Wednesday": "الأربعاء",
-      "Thursday": "الخميس",
-      "Friday": "الجمعة",
-      "Saturday": "السبت",
-    };
-    
-    return days.map(day => daysMap[day] || day).join("، ");
   };
 
   const getProgressColor = (progress: number) => {
@@ -355,8 +335,8 @@ export default function InstructorDashboard() {
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                 <div
                   className="bg-blue-600 h-2 rounded-full"
-                  style={{ 
-                    width: `${stats.totalGroups > 0 ? (stats.activeGroups / stats.totalGroups) * 100 : 0}%` 
+                  style={{
+                    width: `${stats.totalGroups > 0 ? (stats.activeGroups / stats.totalGroups) * 100 : 0}%`
                   }}
                 ></div>
               </div>
@@ -484,11 +464,11 @@ export default function InstructorDashboard() {
                               {session.group.name} ({session.group.code})
                             </span>
                           </div>
-                          
+
                           <h4 className="font-medium text-gray-900 dark:text-white mb-2">
                             {session.title}
                           </h4>
-                          
+
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
                             <div className="flex items-center gap-1">
                               <Clock className="w-4 h-4" />
@@ -504,7 +484,7 @@ export default function InstructorDashboard() {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="flex gap-2">
                           {session.status === "scheduled" && session.meetingLink && (
                             <button
@@ -515,7 +495,7 @@ export default function InstructorDashboard() {
                               <span>انضم</span>
                             </button>
                           )}
-                          
+
                           {session.canTakeAttendance && !session.attendanceTaken && (
                             <Link
                               href={`/instructor/sessions/${session.id}/attendance`}
@@ -525,7 +505,7 @@ export default function InstructorDashboard() {
                               <span>تسجيل حضور</span>
                             </Link>
                           )}
-                          
+
                           {session.attendanceTaken && (
                             <Link
                               href={`/instructor/sessions/${session.id}/attendance`}
@@ -640,18 +620,18 @@ export default function InstructorDashboard() {
                           </p>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500 dark:text-gray-400">الطلاب</span>
                           <span className="font-medium">{group.studentCount}/{group.maxStudents}</span>
                         </div>
-                        
+
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500 dark:text-gray-400">الحصص</span>
                           <span className="font-medium">{group.totalSessions}</span>
                         </div>
-                        
+
                         <div>
                           <div className="flex justify-between text-sm mb-1">
                             <span className="text-gray-500 dark:text-gray-400">التقدم</span>
@@ -689,7 +669,7 @@ export default function InstructorDashboard() {
                   الجلسات القادمة
                 </h3>
               </div>
-              
+
               <div className="space-y-3">
                 {upcomingSessions.length > 0 ? (
                   upcomingSessions.slice(0, 5).map((session) => (
@@ -728,7 +708,7 @@ export default function InstructorDashboard() {
                     </p>
                   </div>
                 )}
-                
+
                 {upcomingSessions.length > 5 && (
                   <Link
                     href="/instructor/sessions?filter=upcoming"
@@ -748,7 +728,7 @@ export default function InstructorDashboard() {
                   جلسات مكتملة
                 </h3>
               </div>
-              
+
               <div className="space-y-3">
                 {recentCompletedSessions.length > 0 ? (
                   recentCompletedSessions.map((session) => (
@@ -805,7 +785,7 @@ export default function InstructorDashboard() {
                   إجراءات سريعة
                 </h3>
               </div>
-              
+
               <div className="space-y-2">
                 <Link
                   href="/instructor/sessions"
@@ -819,7 +799,7 @@ export default function InstructorDashboard() {
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />
                 </Link>
-                
+
                 <Link
                   href="/instructor/groups"
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group"
@@ -832,7 +812,7 @@ export default function InstructorDashboard() {
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />
                 </Link>
-                
+
                 <Link
                   href="/instructor/attendance"
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group"
@@ -845,7 +825,7 @@ export default function InstructorDashboard() {
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />
                 </Link>
-                
+
                 <Link
                   href="/instructor/analytics"
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group"
@@ -869,27 +849,27 @@ export default function InstructorDashboard() {
                   معلومات سريعة
                 </h3>
               </div>
-              
+
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-300">الجلسات المكتملة</span>
                   <span className="font-medium">{stats.completedSessions}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-300">جلسات بانتظار</span>
                   <span className="font-medium">{stats.pendingSessions}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-300">نسبة الحضور</span>
                   <span className="font-medium">
-                    {stats.attendanceStats.totalSessionsWithAttendance > 0 
+                    {stats.attendanceStats.totalSessionsWithAttendance > 0
                       ? `${Math.round((stats.attendanceStats.totalStudentsMarked / (stats.attendanceStats.totalSessionsWithAttendance * 25)) * 100)}%`
                       : "0%"}
                   </span>
                 </div>
-                
+
                 <div className="pt-3 border-t border-primary/20">
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     آخر تحديث: {new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}

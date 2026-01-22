@@ -199,7 +199,6 @@ export default function GroupEvaluationsPage() {
             if (!response.ok || !result.success) {
                 // إذا كانت المشكلة هي أن المجموعة لم تكتمل بعد
                 if (result.details?.includes("لا يمكن تقييم الطلاب إلا بعد اكتمال المجموعة")) {
-                    setError(result.message || "لا يمكن تقييم الطلاب إلا بعد اكتمال المجموعة");
                     setErrorDetails(result.details || `حالة المجموعة: ${result.groupStatus || "غير معروف"}`);
                     setSessionsInfo(result.sessionsInfo || null);
                     
@@ -213,8 +212,6 @@ export default function GroupEvaluationsPage() {
                             });
                         }
                     }
-                } else {
-                    throw new Error(result.message || "فشل في تحميل بيانات التقييم");
                 }
                 
                 setStudents([]);

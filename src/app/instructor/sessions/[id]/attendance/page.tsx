@@ -156,10 +156,6 @@ export default function SessionAttendancePage() {
         attendanceCount: response.data?.attendance?.length,
       });
 
-      if (!attendanceRes.ok || !response.success) {
-        throw new Error(response.data?.session?.error || "فشل في تحميل بيانات الحضور");
-      }
-
       setSession(response.data.session);
       setAttendance(response.data.attendance || []);
       setStats(response.data.stats);
@@ -507,7 +503,7 @@ export default function SessionAttendancePage() {
       </div>
     );
   }
- console.log(session)
+  console.log(session)
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-darkmode">
       {/* Header */}

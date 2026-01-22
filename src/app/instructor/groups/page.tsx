@@ -163,10 +163,6 @@ export default function InstructorGroupsPage() {
         count: response.data?.length,
       });
 
-      if (!groupsRes.ok || !response.success) {
-        throw new Error(response.message || "فشل في تحميل المجموعات");
-      }
-
       setGroups(response.data || []);
       setStats(response.stats || {});
       setPagination(response.pagination || pagination);

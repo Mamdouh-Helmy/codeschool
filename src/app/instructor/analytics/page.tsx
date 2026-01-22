@@ -474,11 +474,10 @@ export default function InstructorAnalyticsPage() {
                 <button
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
-                  className={`flex items-center gap-2 px-6 py-4 border-b-2 transition-all whitespace-nowrap ${
-                    isActive
+                  className={`flex items-center gap-2 px-6 py-4 border-b-2 transition-all whitespace-nowrap ${isActive
                       ? "border-primary text-primary font-semibold"
                       : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300"
-                  }`}
+                    }`}
                 >
                   <Icon className="w-4 h-4" />
                   <span>{section.name}</span>
@@ -525,13 +524,12 @@ export default function InstructorAnalyticsPage() {
                   <div className="text-right">
                     <div className="flex items-center gap-1">
                       {getTrendIcon(data.attendance.trends.trend)}
-                      <span className={`text-xs ${
-                        data.attendance.trends.trend === "improving" 
-                          ? "text-green-600 dark:text-green-400" 
+                      <span className={`text-xs ${data.attendance.trends.trend === "improving"
+                          ? "text-green-600 dark:text-green-400"
                           : data.attendance.trends.trend === "declining"
-                          ? "text-red-600 dark:text-red-400"
-                          : "text-gray-600 dark:text-gray-400"
-                      }`}>
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-gray-600 dark:text-gray-400"
+                        }`}>
                         {data.attendance.trends.trend === "improving" ? "+" : ""}{data.attendance.trends.percentage.toFixed(1)}%
                       </span>
                     </div>
@@ -830,11 +828,10 @@ export default function InstructorAnalyticsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {Object.entries(data.groups.distribution).map(([level, count]) => (
                   <div key={level} className="text-center p-6 border border-gray-200 dark:border-gray-700 rounded-xl">
-                    <div className={`text-4xl font-bold mb-3 ${
-                      level === "beginner" ? "text-blue-600 dark:text-blue-400" :
-                      level === "intermediate" ? "text-green-600 dark:text-green-400" :
-                      "text-purple-600 dark:text-purple-400"
-                    }`}>
+                    <div className={`text-4xl font-bold mb-3 ${level === "beginner" ? "text-blue-600 dark:text-blue-400" :
+                        level === "intermediate" ? "text-green-600 dark:text-green-400" :
+                          "text-purple-600 dark:text-purple-400"
+                      }`}>
                       {count}
                     </div>
                     <p className="text-lg font-medium text-gray-900 dark:text-white capitalize">
@@ -843,11 +840,10 @@ export default function InstructorAnalyticsPage() {
                     <div className="mt-4">
                       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                         <div
-                          className={`h-3 rounded-full ${
-                            level === "beginner" ? "bg-blue-500" :
-                            level === "intermediate" ? "bg-green-500" :
-                            "bg-purple-500"
-                          }`}
+                          className={`h-3 rounded-full ${level === "beginner" ? "bg-blue-500" :
+                              level === "intermediate" ? "bg-green-500" :
+                                "bg-purple-500"
+                            }`}
                           style={{ width: `${(count / data.overview.totalGroups) * 100}%` }}
                         ></div>
                       </div>
@@ -885,11 +881,10 @@ export default function InstructorAnalyticsPage() {
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-                          <Crown className={`w-5 h-5 ${
-                            index === 0 ? "text-yellow-500" :
-                            index === 1 ? "text-gray-400" :
-                            index === 2 ? "text-amber-600" : "text-gray-300"
-                          }`} />
+                          <Crown className={`w-5 h-5 ${index === 0 ? "text-yellow-500" :
+                              index === 1 ? "text-gray-400" :
+                                index === 2 ? "text-amber-600" : "text-gray-300"
+                            }`} />
                         </div>
                         <div>
                           <h4 className="font-medium text-gray-900 dark:text-white">
@@ -1058,11 +1053,10 @@ export default function InstructorAnalyticsPage() {
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-green-100 to-green-50 dark:from-green-900/20 dark:to-green-800/10">
-                          <div className={`font-bold ${
-                            index === 0 ? "text-yellow-500" :
-                            index === 1 ? "text-gray-400" :
-                            index === 2 ? "text-amber-600" : "text-gray-600 dark:text-gray-400"
-                          }`}>
+                          <div className={`font-bold ${index === 0 ? "text-yellow-500" :
+                              index === 1 ? "text-gray-400" :
+                                index === 2 ? "text-amber-600" : "text-gray-600 dark:text-gray-400"
+                            }`}>
                             #{index + 1}
                           </div>
                         </div>
@@ -1197,13 +1191,13 @@ export default function InstructorAnalyticsPage() {
                 {Object.entries(data.students.attendanceDistribution).map(([level, count]) => {
                   const percentage = (count / data.students.total) * 100;
                   const color = level === "excellent" ? "bg-green-500" :
-                               level === "good" ? "bg-green-400" :
-                               level === "average" ? "bg-yellow-500" :
-                               level === "poor" ? "bg-red-500" : "bg-gray-400";
+                    level === "good" ? "bg-green-400" :
+                      level === "average" ? "bg-yellow-500" :
+                        level === "poor" ? "bg-red-500" : "bg-gray-400";
                   const text = level === "excellent" ? "ممتاز (90%+)" :
-                              level === "good" ? "جيد (70-89%)" :
-                              level === "average" ? "متوسط (60-69%)" :
-                              level === "poor" ? "ضعيف (أقل من 60%)" : "لا توجد بيانات";
+                    level === "good" ? "جيد (70-89%)" :
+                      level === "average" ? "متوسط (60-69%)" :
+                        level === "poor" ? "ضعيف (أقل من 60%)" : "لا توجد بيانات";
 
                   return (
                     <div key={level} className="space-y-2">
@@ -1245,13 +1239,12 @@ export default function InstructorAnalyticsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {getTrendIcon(data.attendance.trends.trend)}
-                  <span className={`text-sm ${
-                    data.attendance.trends.trend === "improving" 
-                      ? "text-green-600 dark:text-green-400" 
+                  <span className={`text-sm ${data.attendance.trends.trend === "improving"
+                      ? "text-green-600 dark:text-green-400"
                       : data.attendance.trends.trend === "declining"
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-gray-600 dark:text-gray-400"
-                  }`}>
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-gray-600 dark:text-gray-400"
+                    }`}>
                     {data.attendance.trends.trend === "improving" ? "+" : ""}{data.attendance.trends.percentage.toFixed(1)}%
                   </span>
                 </div>
@@ -1298,7 +1291,7 @@ export default function InstructorAnalyticsPage() {
                 ].map((day) => {
                   const dayData = data.attendance.daily.find(d => d.day.includes(day.en));
                   const attendanceRate = dayData?.attendanceRate || 0;
-                  
+
                   return (
                     <div key={day.ar} className="text-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
                       <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1329,11 +1322,11 @@ export default function InstructorAnalyticsPage() {
                     const total = Object.values(data.attendance.reasons).reduce((a, b) => a + b, 0);
                     const percentage = total > 0 ? (count / total) * 100 : 0;
                     const color = reason === "present" ? "bg-green-500" :
-                                 reason === "late" ? "bg-yellow-500" :
-                                 reason === "excused" ? "bg-blue-500" : "bg-red-500";
+                      reason === "late" ? "bg-yellow-500" :
+                        reason === "excused" ? "bg-blue-500" : "bg-red-500";
                     const text = reason === "present" ? "حاضر" :
-                                 reason === "late" ? "متأخر" :
-                                 reason === "excused" ? "معذور" : "غائب";
+                      reason === "late" ? "متأخر" :
+                        reason === "excused" ? "معذور" : "غائب";
 
                     return (
                       <div key={reason} className="space-y-2">
@@ -1364,8 +1357,8 @@ export default function InstructorAnalyticsPage() {
                 <div className="space-y-4">
                   {data.attendance.timeSlots.map((slot) => {
                     const slotText = slot.slot === "morning" ? "الصباح" :
-                                    slot.slot === "afternoon" ? "الظهر" : "المساء";
-                    
+                      slot.slot === "afternoon" ? "الظهر" : "المساء";
+
                     return (
                       <div key={slot.slot} className="space-y-2">
                         <div className="flex justify-between">
@@ -1417,9 +1410,9 @@ export default function InstructorAnalyticsPage() {
                 {Object.entries(data.evaluations.criteriaAverages).map(([criterion, score]) => {
                   const percentage = (score / 5) * 100;
                   const criterionText = criterion === "understanding" ? "مستوى الفهم" :
-                                      criterion === "commitment" ? "الالتزام" :
-                                      criterion === "attendance" ? "الحضور" :
-                                      criterion === "participation" ? "المشاركة" : "المعدل العام";
+                    criterion === "commitment" ? "الالتزام" :
+                      criterion === "attendance" ? "الحضور" :
+                        criterion === "participation" ? "المشاركة" : "المعدل العام";
 
                   return (
                     <div key={criterion} className="space-y-2">
@@ -1454,12 +1447,12 @@ export default function InstructorAnalyticsPage() {
                   const total = data.evaluations.totalEvaluations;
                   const percentage = total > 0 ? (count / total) * 100 : 0;
                   const color = decision === "pass" ? "bg-gradient-to-br from-green-500 to-emerald-600" :
-                               decision === "review" ? "bg-gradient-to-br from-yellow-500 to-amber-600" :
-                               "bg-gradient-to-br from-red-500 to-rose-600";
+                    decision === "review" ? "bg-gradient-to-br from-yellow-500 to-amber-600" :
+                      "bg-gradient-to-br from-red-500 to-rose-600";
                   const text = decision === "pass" ? "ناجح" :
-                              decision === "review" ? "قيد المراجعة" : "يعيد";
+                    decision === "review" ? "قيد المراجعة" : "يعيد";
                   const icon = decision === "pass" ? CheckCircle :
-                              decision === "review" ? AlertCircle : AlertCircle;
+                    decision === "review" ? AlertCircle : AlertCircle;
 
                   const Icon = icon;
 
@@ -1519,13 +1512,12 @@ export default function InstructorAnalyticsPage() {
                           </p>
                         </div>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        evaluation.decision === "pass" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" :
-                        evaluation.decision === "review" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300" :
-                        "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                      }`}>
-                        {evaluation.decision === "pass" ? "ناجح" : 
-                         evaluation.decision === "review" ? "مراجعة" : "يعيد"}
+                      <span className={`px-2 py-1 rounded-full text-xs ${evaluation.decision === "pass" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" :
+                          evaluation.decision === "review" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300" :
+                            "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                        }`}>
+                        {evaluation.decision === "pass" ? "ناجح" :
+                          evaluation.decision === "review" ? "مراجعة" : "يعيد"}
                       </span>
                     </div>
                   ))}
@@ -1614,7 +1606,7 @@ export default function InstructorAnalyticsPage() {
                   </h3>
                 </div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">
-                    آخر 12 شهر
+                  آخر 12 شهر
                 </div>
               </div>
 
@@ -1633,11 +1625,11 @@ export default function InstructorAnalyticsPage() {
                     {data.timeSeries.sessions.slice(-6).map((month) => (
                       <div key={month.month} className="flex-1 flex flex-col items-center">
                         <div className="w-full flex items-end gap-1">
-                          <div 
+                          <div
                             className="w-1/2 bg-blue-500 rounded-t"
                             style={{ height: `${(month.sessions / Math.max(...data.timeSeries.sessions.map(s => s.sessions))) * 80}%` }}
                           ></div>
-                          <div 
+                          <div
                             className="w-1/2 bg-green-500 rounded-t"
                             style={{ height: `${(month.completed / Math.max(...data.timeSeries.sessions.map(s => s.completed))) * 80}%` }}
                           ></div>
@@ -1673,7 +1665,7 @@ export default function InstructorAnalyticsPage() {
                   <div className="flex items-end gap-2 h-32">
                     {data.timeSeries.attendance.slice(-6).map((month) => (
                       <div key={month.month} className="flex-1 flex flex-col items-center">
-                        <div 
+                        <div
                           className={`w-3/4 ${getProgressColor(month.attendanceRate)} rounded-t`}
                           style={{ height: `${month.attendanceRate}%` }}
                         ></div>
@@ -1699,11 +1691,11 @@ export default function InstructorAnalyticsPage() {
                     {data.timeSeries.evaluations.slice(-6).map((month) => (
                       <div key={month.month} className="flex-1 flex flex-col items-center">
                         <div className="w-full flex items-end gap-1">
-                          <div 
+                          <div
                             className="w-1/2 bg-purple-500 rounded-t"
                             style={{ height: `${(month.evaluations / Math.max(...data.timeSeries.evaluations.map(e => e.evaluations))) * 80}%` }}
                           ></div>
-                          <div 
+                          <div
                             className="w-1/2 bg-pink-500 rounded-t"
                             style={{ height: `${(month.averageScore / 5) * 80}%` }}
                           ></div>

@@ -183,9 +183,6 @@ export default function InstructorSessionsPage() {
         count: response.data?.length,
       });
 
-      if (!sessionsRes.ok || !response.success) {
-        throw new Error(response.error || "فشل في تحميل الجلسات");
-      }
 
       setSessions(response.data || []);
       setGroups(response.filters?.groups || []);

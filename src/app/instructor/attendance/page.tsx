@@ -95,18 +95,18 @@ interface GroupsResponse {
 
 export default function InstructorAttendancePage() {
   const router = useRouter();
-  
+
   const [loading, setLoading] = useState(true);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [studentSummary, setStudentSummary] = useState<StudentAttendanceSummary[]>([]);
   const [stats, setStats] = useState<any>(null);
-  const [groups, setGroups] = useState<Array<{id: string; name: string; code: string}>>([]);
+  const [groups, setGroups] = useState<Array<{ id: string; name: string; code: string }>>([]);
   const [error, setError] = useState("");
-  
+
   const [filterGroup, setFilterGroup] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [viewType, setViewType] = useState<"detailed" | "summary">("detailed");
-  
+
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 50,
@@ -129,11 +129,11 @@ export default function InstructorAttendancePage() {
       console.log("🔄 [Instructor Attendance] Fetching attendance data...");
 
       let url = `/api/instructor-dashboard/attendance?page=${page}&limit=${pagination.limit}`;
-      
+
       if (filterGroup !== "all") {
         url += `&groupId=${filterGroup}`;
       }
-      
+
       if (filterStatus !== "all") {
         url += `&status=${filterStatus}`;
       }
@@ -155,10 +155,6 @@ export default function InstructorAttendancePage() {
         records: response.data?.attendanceRecords?.length,
         students: response.data?.studentAttendanceSummary?.length,
       });
-
-      if (!attendanceRes.ok || !response.success) {
-        throw new Error(response.error || "فشل في تحميل سجل الحضور");
-      }
 
       setAttendanceRecords(response.data.attendanceRecords || []);
       setStudentSummary(response.data.studentAttendanceSummary || []);
@@ -435,21 +431,19 @@ export default function InstructorAttendancePage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setViewType("detailed")}
-                  className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
-                    viewType === "detailed"
+                  className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${viewType === "detailed"
                       ? "bg-primary text-white border-primary"
                       : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  }`}
+                    }`}
                 >
                   تفاصيل الحضور
                 </button>
                 <button
                   onClick={() => setViewType("summary")}
-                  className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
-                    viewType === "summary"
+                  className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${viewType === "summary"
                       ? "bg-primary text-white border-primary"
                       : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  }`}
+                    }`}
                 >
                   ملخص الطلاب
                 </button>
@@ -488,7 +482,7 @@ export default function InstructorAttendancePage() {
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                {viewType === "detailed" 
+                {viewType === "detailed"
                   ? `عرض ${attendanceRecords.length} سجل حضور`
                   : `عرض ${studentSummary.length} طالب`
                 }
@@ -552,7 +546,7 @@ export default function InstructorAttendancePage() {
                                 </p>
                               </div>
                             </td>
-                            
+
                             <td className="px-4 py-3">
                               <div>
                                 <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -563,7 +557,7 @@ export default function InstructorAttendancePage() {
                                 </p>
                               </div>
                             </td>
-                            
+
                             <td className="px-4 py-3">
                               <div>
                                 <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -574,7 +568,7 @@ export default function InstructorAttendancePage() {
                                 </p>
                               </div>
                             </td>
-                            
+
                             <td className="px-4 py-3">
                               <div>
                                 <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -585,7 +579,7 @@ export default function InstructorAttendancePage() {
                                 </p>
                               </div>
                             </td>
-                            
+
                             <td className="px-4 py-3">
                               <div className="flex justify-center">
                                 <span
@@ -596,13 +590,13 @@ export default function InstructorAttendancePage() {
                                 </span>
                               </div>
                             </td>
-                            
+
                             <td className="px-4 py-3">
                               <p className="text-sm text-gray-600 dark:text-gray-400">
                                 {record.notes || "لا توجد ملاحظات"}
                               </p>
                             </td>
-                            
+
                             <td className="px-4 py-3">
                               <div>
                                 <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -654,15 +648,14 @@ export default function InstructorAttendancePage() {
                     <button
                       onClick={() => handlePageChange(pagination.page - 1)}
                       disabled={!pagination.hasPrev}
-                      className={`px-3 py-1.5 rounded-lg border ${
-                        pagination.hasPrev
+                      className={`px-3 py-1.5 rounded-lg border ${pagination.hasPrev
                           ? "border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                           : "border-gray-200 text-gray-400 cursor-not-allowed dark:border-gray-700 dark:text-gray-500"
-                      }`}
+                        }`}
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    
+
                     <div className="flex items-center gap-1">
                       {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
                         let pageNum;
@@ -675,31 +668,29 @@ export default function InstructorAttendancePage() {
                         } else {
                           pageNum = pagination.page - 2 + i;
                         }
-                        
+
                         return (
                           <button
                             key={pageNum}
                             onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-1.5 rounded-lg border text-sm ${
-                              pagination.page === pageNum
+                            className={`px-3 py-1.5 rounded-lg border text-sm ${pagination.page === pageNum
                                 ? "bg-primary border-primary text-white"
                                 : "border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-                            }`}
+                              }`}
                           >
                             {pageNum}
                           </button>
                         );
                       })}
                     </div>
-                    
+
                     <button
                       onClick={() => handlePageChange(pagination.page + 1)}
                       disabled={!pagination.hasNext}
-                      className={`px-3 py-1.5 rounded-lg border ${
-                        pagination.hasNext
+                      className={`px-3 py-1.5 rounded-lg border ${pagination.hasNext
                           ? "border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                           : "border-gray-200 text-gray-400 cursor-not-allowed dark:border-gray-700 dark:text-gray-500"
-                      }`}
+                        }`}
                     >
                       <ChevronRightIcon className="w-4 h-4" />
                     </button>
@@ -747,7 +738,7 @@ export default function InstructorAttendancePage() {
                       studentSummary.map((student) => {
                         const attendanceColor = getAttendanceColor(student.attendanceRate);
                         const attendanceBg = getAttendanceBg(student.attendanceRate);
-                        
+
                         return (
                           <tr key={student.studentId} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                             <td className="px-4 py-3">
@@ -760,12 +751,12 @@ export default function InstructorAttendancePage() {
                                 </p>
                               </div>
                             </td>
-                            
+
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap gap-1">
-                                {groups.filter(g => 
-                                  attendanceRecords.some(record => 
-                                    record.studentId === student.studentId && 
+                                {groups.filter(g =>
+                                  attendanceRecords.some(record =>
+                                    record.studentId === student.studentId &&
                                     record.groupId === g.id
                                   )
                                 ).map(group => (
@@ -778,37 +769,37 @@ export default function InstructorAttendancePage() {
                                 ))}
                               </div>
                             </td>
-                            
+
                             <td className="px-4 py-3 text-center">
                               <span className="text-sm font-medium text-gray-900 dark:text-white">
                                 {student.totalSessions}
                               </span>
                             </td>
-                            
+
                             <td className="px-4 py-3 text-center">
                               <span className="text-sm font-medium text-green-600 dark:text-green-400">
                                 {student.present}
                               </span>
                             </td>
-                            
+
                             <td className="px-4 py-3 text-center">
                               <span className="text-sm font-medium text-red-600 dark:text-red-400">
                                 {student.absent}
                               </span>
                             </td>
-                            
+
                             <td className="px-4 py-3 text-center">
                               <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">
                                 {student.late}
                               </span>
                             </td>
-                            
+
                             <td className="px-4 py-3 text-center">
                               <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
                                 {student.excused}
                               </span>
                             </td>
-                            
+
                             <td className="px-4 py-3 text-center">
                               <div className="flex flex-col items-center">
                                 <span className={`text-sm font-bold ${attendanceColor}`}>
@@ -857,15 +848,14 @@ export default function InstructorAttendancePage() {
                     <button
                       onClick={() => handlePageChange(pagination.page - 1)}
                       disabled={!pagination.hasPrev}
-                      className={`px-3 py-1.5 rounded-lg border ${
-                        pagination.hasPrev
+                      className={`px-3 py-1.5 rounded-lg border ${pagination.hasPrev
                           ? "border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                           : "border-gray-200 text-gray-400 cursor-not-allowed dark:border-gray-700 dark:text-gray-500"
-                      }`}
+                        }`}
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    
+
                     <div className="flex items-center gap-1">
                       {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
                         let pageNum;
@@ -878,31 +868,29 @@ export default function InstructorAttendancePage() {
                         } else {
                           pageNum = pagination.page - 2 + i;
                         }
-                        
+
                         return (
                           <button
                             key={pageNum}
                             onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-1.5 rounded-lg border text-sm ${
-                              pagination.page === pageNum
+                            className={`px-3 py-1.5 rounded-lg border text-sm ${pagination.page === pageNum
                                 ? "bg-primary border-primary text-white"
                                 : "border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-                            }`}
+                              }`}
                           >
                             {pageNum}
                           </button>
                         );
                       })}
                     </div>
-                    
+
                     <button
                       onClick={() => handlePageChange(pagination.page + 1)}
                       disabled={!pagination.hasNext}
-                      className={`px-3 py-1.5 rounded-lg border ${
-                        pagination.hasNext
+                      className={`px-3 py-1.5 rounded-lg border ${pagination.hasNext
                           ? "border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                           : "border-gray-200 text-gray-400 cursor-not-allowed dark:border-gray-700 dark:text-gray-500"
-                      }`}
+                        }`}
                     >
                       <ChevronRightIcon className="w-4 h-4" />
                     </button>
@@ -938,7 +926,7 @@ export default function InstructorAttendancePage() {
           </ul>
         </div>
       </div>
-      
+
       {/* Loading overlay */}
       {loading && attendanceRecords.length > 0 && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center">

@@ -35,10 +35,29 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
+interface GroupAutomation {
+  whatsappEnabled: boolean;
+  notifyGuardianOnAbsence: boolean;
+  notifyOnSessionUpdate: boolean;
+}
+
+interface SessionGroup {
+  _id: string;
+  name: string;
+  code: string;
+  automation?: GroupAutomation;
+}
+
+interface SessionCourse {
+  _id: string;
+  title: string;
+  level: string;
+}
+
 interface Session {
   _id: string;
   title: string;
-  description: string;
+  description?: string;
   scheduledDate: string;
   startTime: string;
   endTime: string;
@@ -47,24 +66,11 @@ interface Session {
   sessionNumber: number;
   lessonIndexes: number[];
   attendanceTaken: boolean;
-  meetingLink: string;
-  recordingLink: string;
-  instructorNotes: string;
-  groupId: {
-    _id: string;
-    name: string;
-    code: string;
-    automation?: {
-      whatsappEnabled: boolean;
-      notifyGuardianOnAbsence: boolean;
-      notifyOnSessionUpdate: boolean;
-    };
-  };
-  courseId: {
-    _id: string;
-    title: string;
-    level: string;
-  };
+  meetingLink?: string;
+  recordingLink?: string;
+  instructorNotes?: string;
+  groupId: SessionGroup;
+  courseId: SessionCourse;
   attendance?: Array<{
     _id: string;
     studentId: {
@@ -104,39 +110,44 @@ interface Session {
     canReschedule: boolean;
     canDelete: boolean;
   };
-  automation?: {
-    whatsappEnabled: boolean;
-    notifyGuardianOnAbsence: boolean;
-    notifyOnSessionUpdate: boolean;
-  };
+  automation?: GroupAutomation;
   createdAt: string;
   updatedAt: string;
+}
+
+interface StudentAttendance {
+  studentId: string;
+  fullName: string;
+  email: string;
+  enrollmentNumber: string;
+  whatsappNumber?: string;
+  guardianInfo?: {
+    name?: string;
+    whatsappNumber?: string;
+  };
+  attendance: {
+    status: "present" | "absent" | "late" | "excused" | "pending";
+    notes: string;
+    markedAt: string | null;
+    markedBy: {
+      name: string;
+      email: string;
+    } | null;
+  };
+}
+
+interface NavigationSession {
+  _id: string;
+  title: string;
+  scheduledDate: string;
+  status: string;
 }
 
 interface SessionResponse {
   success: boolean;
   data: {
     session: Session;
-    studentAttendance: Array<{
-      studentId: string;
-      fullName: string;
-      email: string;
-      enrollmentNumber: string;
-      whatsappNumber?: string;
-      guardianInfo?: {
-        name?: string;
-        whatsappNumber?: string;
-      };
-      attendance: {
-        status: "present" | "absent" | "late" | "excused" | "pending";
-        notes: string;
-        markedAt: string | null;
-        markedBy: {
-          name: string;
-          email: string;
-        } | null;
-      };
-    }>;
+    studentAttendance: StudentAttendance[];
     attendanceStats: {
       total: number;
       present: number;
@@ -146,18 +157,8 @@ interface SessionResponse {
       pending: number;
     };
     navigation: {
-      previousSessions: Array<{
-        _id: string;
-        title: string;
-        scheduledDate: string;
-        status: string;
-      }>;
-      nextSessions: Array<{
-        _id: string;
-        title: string;
-        scheduledDate: string;
-        status: string;
-      }>;
+      previousSessions: NavigationSession[];
+      nextSessions: NavigationSession[];
     };
     permissions: {
       canTakeAttendance: boolean;
@@ -179,7 +180,7 @@ export default function SessionDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
-  const [studentAttendance, setStudentAttendance] = useState<any[]>([]);
+  const [studentAttendance, setStudentAttendance] = useState<StudentAttendance[]>([]);
   const [attendanceStats, setAttendanceStats] = useState<any>(null);
   const [navigation, setNavigation] = useState<any>(null);
   const [permissions, setPermissions] = useState<any>(null);
@@ -223,10 +224,6 @@ export default function SessionDetailsPage() {
         success: response.success,
         status: sessionRes.status,
       });
-
-      if (!sessionRes.ok || !response.success) {
-        throw new Error(response.error || response.data?.session?.error || "فشل في تحميل تفاصيل الجلسة");
-      }
 
       if (!response.data) {
         throw new Error("لا توجد بيانات في الاستجابة");
@@ -292,7 +289,11 @@ export default function SessionDetailsPage() {
     }
   };
 
-  const handleCopyLink = (link: string) => {
+  const handleCopyLink = (link: string | undefined) => {
+    if (!link) {
+      toast.error("لا يوجد رابط للنسخ");
+      return;
+    }
     navigator.clipboard.writeText(link);
     toast.success("تم نسخ الرابط إلى الحافظة");
   };
@@ -376,9 +377,8 @@ export default function SessionDetailsPage() {
     return config[status as keyof typeof config] || config.pending;
   };
 
-  const getLessonsText = (lessonIndexes: number[]) => {
+  const getLessonsText = (lessonIndexes: number[] | undefined) => {
     if (!lessonIndexes || lessonIndexes.length === 0) return "لا توجد دروس";
-
     const lessons = lessonIndexes.map(index => `الدرس ${index + 1}`);
     return lessons.join("، ");
   };
@@ -386,6 +386,56 @@ export default function SessionDetailsPage() {
   const calculateAttendancePercentage = () => {
     if (!attendanceStats || attendanceStats.total === 0) return 0;
     return Math.round((attendanceStats.present / attendanceStats.total) * 100);
+  };
+
+  const copyTemplateToClipboard = (templateType: 'cancelled' | 'postponed' | 'scheduled') => {
+    const templates = {
+      cancelled: `عزيزي الطالب،
+
+نود إعلامك بأن حصة {sessionTitle} المقررة في {date} على الساعة {startTime} قد تم إلغاؤها.
+
+سيتم إعلامك بالجلسة البديلة قريباً.
+
+مع التحية،
+فريق Code School`,
+
+      postponed: `عزيزي الطالب،
+
+نود إعلامك بأن حصة {sessionTitle} المقررة في {date} على الساعة {startTime} قد تم تأجيلها.
+
+سيتم إعلامك بالموعد الجديد في أقرب وقت.
+
+مع التحية،
+فريق Code School`,
+
+      scheduled: `عزيزي الطالب،
+
+نود إعلامك بأن حصة {sessionTitle} قد تم جدولتها.
+
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+نرجو الحضور في الموعد المحدد.
+
+مع التحية،
+فريق Code School`
+    };
+
+    navigator.clipboard.writeText(templates[templateType]);
+    toast.success(`تم نسخ قالب رسالة ${templateType === 'cancelled' ? 'الإلغاء' : templateType === 'postponed' ? 'التأجيل' : 'الجدولة'}`);
+  };
+
+  // دالة مساعدة لنسخ القالب بناءً على selectedAction
+  const copyTemplateForAction = () => {
+    if (!selectedAction || selectedAction === 'complete') return;
+
+    if (selectedAction === 'cancel') {
+      copyTemplateToClipboard('cancelled');
+    } else if (selectedAction === 'postpone') {
+      copyTemplateToClipboard('postponed');
+    } else if (selectedAction === 'scheduled') {
+      copyTemplateToClipboard('scheduled');
+    }
   };
 
   const processMessageVariables = (message: string) => {
@@ -400,7 +450,7 @@ export default function SessionDetailsPage() {
     });
 
     const moduleNumber = (session.moduleIndex || 0) + 1;
-    const lessonsText = getLessonsText(session.lessonIndexes || []);
+    const lessonsText = getLessonsText(session.lessonIndexes);
 
     return message
       .replace(/\{studentName\}/g, 'الطالب')
@@ -433,7 +483,7 @@ export default function SessionDetailsPage() {
     });
 
     const moduleNumber = (session.moduleIndex || 0) + 1;
-    const lessonsText = getLessonsText(session.lessonIndexes || []);
+    const lessonsText = getLessonsText(session.lessonIndexes);
 
     return {
       sessionName: session.title,
@@ -527,43 +577,6 @@ export default function SessionDetailsPage() {
     setShowEditModal(true);
   };
 
-  const copyTemplateToClipboard = (templateType: 'cancelled' | 'postponed' | 'scheduled') => {
-    const templates = {
-      cancelled: `عزيزي الطالب،
-
-نود إعلامك بأن حصة {sessionTitle} المقررة في {date} على الساعة {startTime} قد تم إلغاؤها.
-
-سيتم إعلامك بالجلسة البديلة قريباً.
-
-مع التحية،
-فريق Code School`,
-
-      postponed: `عزيزي الطالب،
-
-نود إعلامك بأن حصة {sessionTitle} المقررة في {date} على الساعة {startTime} قد تم تأجيلها.
-
-سيتم إعلامك بالموعد الجديد في أقرب وقت.
-
-مع التحية،
-فريق Code School`,
-
-      scheduled: `عزيزي الطالب،
-
-نود إعلامك بأن حصة {sessionTitle} قد تم جدولتها.
-
-📅 التاريخ: {date}
-⏰ الوقت: {time}
-
-نرجو الحضور في الموعد المحدد.
-
-مع التحية،
-فريق Code School`
-    };
-
-    navigator.clipboard.writeText(templates[templateType]);
-    toast.success(`تم نسخ قالب رسالة ${templateType === 'cancelled' ? 'الإلغاء' : templateType === 'postponed' ? 'التأجيل' : 'الجدولة'}`);
-  };
-
   const getStatusChangeButtons = () => {
     if (!session) return [];
 
@@ -576,7 +589,6 @@ export default function SessionDetailsPage() {
         textColor: 'text-blue-700',
         borderColor: 'border-blue-200 dark:border-blue-800',
         hoverColor: 'hover:bg-blue-50 dark:hover:bg-blue-900/20',
-        // ✅ يمكن جدولة أي جلسة (حتى لو كانت مجدولة بالفعل)
         disabled: false
       },
       {
@@ -587,7 +599,6 @@ export default function SessionDetailsPage() {
         textColor: 'text-green-700',
         borderColor: 'border-green-200 dark:border-green-800',
         hoverColor: 'hover:bg-green-50 dark:hover:bg-green-900/20',
-        // ✅ يمكن إكمال أي جلسة (حتى لو كانت مكتملة بالفعل)
         disabled: false
       },
       {
@@ -598,7 +609,6 @@ export default function SessionDetailsPage() {
         textColor: 'text-red-700',
         borderColor: 'border-red-200 dark:border-red-800',
         hoverColor: 'hover:bg-red-50 dark:hover:bg-red-900/20',
-        // ✅ يمكن إلغاء أي جلسة (حتى لو كانت ملغاة بالفعل)
         disabled: false
       },
       {
@@ -609,7 +619,6 @@ export default function SessionDetailsPage() {
         textColor: 'text-yellow-700',
         borderColor: 'border-yellow-200 dark:border-yellow-800',
         hoverColor: 'hover:bg-yellow-50 dark:hover:bg-yellow-900/20',
-        // ✅ يمكن تأجيل أي جلسة (حتى لو كانت مؤجلة بالفعل)
         disabled: false
       }
     ];
@@ -770,7 +779,7 @@ export default function SessionDetailsPage() {
                   <BookOpen className="w-6 h-6 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
                   <p className="text-sm text-gray-500 dark:text-gray-400">الوحدة</p>
                   <p className="font-bold text-gray-900 dark:text-white">
-                    {session.moduleIndex + 1}
+                    {(session.moduleIndex || 0) + 1}
                   </p>
                 </div>
 
@@ -786,7 +795,7 @@ export default function SessionDetailsPage() {
                   <FileText className="w-6 h-6 text-purple-600 dark:text-purple-400 mx-auto mb-2" />
                   <p className="text-sm text-gray-500 dark:text-gray-400">الدروس</p>
                   <p className="font-bold text-gray-900 dark:text-white">
-                    {session.lessonIndexes.length}
+                    {session.lessonIndexes?.length || 0}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {getLessonsText(session.lessonIndexes)}
@@ -1157,7 +1166,7 @@ export default function SessionDetailsPage() {
                         الجلسات السابقة
                       </h4>
                       <div className="space-y-2">
-                        {navigation.previousSessions.map((prevSession: any) => (
+                        {navigation.previousSessions.map((prevSession: NavigationSession) => (
                           <Link
                             key={prevSession._id}
                             href={`/instructor/sessions/${prevSession._id}`}
@@ -1184,7 +1193,7 @@ export default function SessionDetailsPage() {
                         الجلسات القادمة
                       </h4>
                       <div className="space-y-2">
-                        {navigation.nextSessions.map((nextSession: any) => (
+                        {navigation.nextSessions.map((nextSession: NavigationSession) => (
                           <Link
                             key={nextSession._id}
                             href={`/instructor/sessions/${nextSession._id}`}
@@ -1405,12 +1414,15 @@ export default function SessionDetailsPage() {
                         <div className="space-y-2">
                           <div className="flex justify-between items-center">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                              رسالة مخصصة {selectedAction !== 'complete' && <span className="text-red-500">*</span>}
+                              رسالة مخصصة
+                              {/* التصحيح: نعرف أن selectedAction هنا ليس 'complete' */}
+                              <span className="text-red-500">*</span>
                             </label>
                             <button
                               type="button"
-                              onClick={() => copyTemplateToClipboard(selectedAction)}
-                              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1"
+                              onClick={copyTemplateForAction}
+                              disabled={!selectedAction}
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <Copy className="w-3 h-3" />
                               نسخ قالب
@@ -1420,14 +1432,17 @@ export default function SessionDetailsPage() {
                           <textarea
                             value={editForm.customMessage}
                             onChange={(e) => setEditForm({ ...editForm, customMessage: e.target.value })}
-                            placeholder={selectedAction === 'cancel'
-                              ? `عزيزي الطالب، نود إعلامك بأن حصة {sessionTitle} قد تم إلغاؤها. سيتم إعلامكم بالجلسة البديلة قريباً.`
-                              : selectedAction === 'postpone'
-                                ? `عزيزي الطالب، نود إعلامك بأن حصة {sessionTitle} قد تم تأجيلها. سيتم إعلامكم بالموعد الجديد قريباً.`
-                                : `عزيزي الطالب، نود إعلامك بأن حصة {sessionTitle} قد تم جدولتها. نرجو الحضور في الموعد المحدد.`}
+                            placeholder={
+                              selectedAction === 'cancel'
+                                ? `عزيزي الطالب، نود إعلامك بأن حصة {sessionTitle} قد تم إلغاؤها. سيتم إعلامكم بالجلسة البديلة قريباً.`
+                                : selectedAction === 'postpone'
+                                  ? `عزيزي الطالب، نود إعلامك بأن حصة {sessionTitle} قد تم تأجيلها. سيتم إعلامكم بالموعد الجديد قريباً.`
+                                  : `عزيزي الطالب، نود إعلامك بأن حصة {sessionTitle} قد تم جدولتها. نرجو الحضور في الموعد المحدد.`
+                            }
                             rows={6}
                             className="w-full px-3 py-2.5 border border-blue-300 dark:border-blue-700 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none"
-                            required={selectedAction !== 'complete'}
+                            // التصحيح: نستخدم true مباشرة لأننا نعلم أن selectedAction ليس 'complete' هنا
+                            required={true}
                           />
 
                           <div className="flex justify-between items-center text-xs">
@@ -1435,10 +1450,6 @@ export default function SessionDetailsPage() {
                             {editForm.customMessage.trim() ? (
                               <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
                                 ✓ الرسالة جاهزة
-                              </span>
-                            ) : selectedAction === 'complete' ? (
-                              <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                                ℹ️ لا تحتاج رسالة للإكمال
                               </span>
                             ) : (
                               <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1">

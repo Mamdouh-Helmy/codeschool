@@ -196,10 +196,6 @@ export default function GroupStudentsPage() {
         count: data.data?.length,
       });
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "فشل في تحميل الطلاب");
-      }
-
       setStudents(data.data || []);
       setGroupInfo(data.groupInfo || null);
       setStats(data.stats || {});
