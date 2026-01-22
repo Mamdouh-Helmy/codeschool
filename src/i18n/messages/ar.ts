@@ -3075,6 +3075,12 @@ const ar = {
   "common.hidePreview": "إخفاء المعاينة",
 
   "nav.instructorDashboard": "لوحة تحكم المدرّس",
+
+  "nav.studentDashboard": "لَوْحَةُ تَحَكُّمِ الطَّالِبِ",
+  "nav.adminDashboard": "لَوْحَةُ تَحَكُّمِ المُشْرِفِ",
+
+  "nav.skills": "المهارات",
+  "nav.projects": "المشاريع",
 };
 
 export default ar;

@@ -3003,6 +3003,12 @@ const en = {
   "common.hidePreview": "Hide Preview",
 
   "nav.instructorDashboard": "Instructor Dashboard",
+
+  "nav.studentDashboard": "Student Dashboard",
+  "nav.adminDashboard": "Admin Dashboard",
+
+  "nav.skills": "Skills",
+  "nav.projects": "Projects",
 };
 
 export default en;

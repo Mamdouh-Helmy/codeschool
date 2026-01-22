@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -61,9 +61,11 @@ const Testimonials = () => {
   const { t } = useI18n();
   const { locale } = useLocale();
   const isArabic = String(locale || "").startsWith("ar");
+  const sliderRef = useRef<Slider>(null);
 
   const [testimonials, setTestimonials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
     const fetchTestimonials = async () => {
@@ -80,22 +82,42 @@ const Testimonials = () => {
     fetchTestimonials();
   }, []);
 
-  // إعدادات السلايدر الأساسية
+  // إعدادات السلايدر الأساسية مع التمرير التلقائي
   const settings = {
     dots: false,
-    infinite: testimonials.length > 1, // infinite فقط لو فيه أكثر من slide
-    speed: 500,
+    infinite: testimonials.length > 1,
+    speed: 1000, // زيادة السرعة للحصول على تحول أكثر سلاسة
     slidesToShow: 1,
     slidesToScroll: 1,
-    autoplay: false, // إيقاف التشغيل التلقائي
+    autoplay: true, // ✅ تمكين التشغيل التلقائي
+    autoplaySpeed: 3000, // ✅ التمرير كل 3 ثوانٍ
+    pauseOnHover: true, // إيقاف التمرير عند التحويم
     rtl: isArabic,
     arrows: false,
     swipe: true,
     draggable: true,
     touchMove: true,
     adaptiveHeight: false,
-    className: "testimonials-slider", // إضافة كلاس للتحديد
+    className: "testimonials-slider",
+    beforeChange: (oldIndex: number, newIndex: number) => {
+      setCurrentSlide(newIndex);
+    },
+    afterChange: (current: number) => {
+      setCurrentSlide(current);
+    },
   };
+
+  // بدء التمرير التلقائي عند تحميل المكون
+  useEffect(() => {
+    if (sliderRef.current && testimonials.length > 1) {
+      // إعادة تشغيل السلايدر للتأكد من أن التمرير التلقائي يعمل
+      setTimeout(() => {
+        if (sliderRef.current) {
+          sliderRef.current.slickPlay();
+        }
+      }, 100);
+    }
+  }, [testimonials]);
 
   if (loading) {
     return (
@@ -111,7 +133,6 @@ const Testimonials = () => {
     return null;
   }
 
-
   return (
     <section className="bg-IcyBreeze dark:bg-darklight testimonial">
       <div className="container space-y-8">
@@ -122,16 +143,31 @@ const Testimonials = () => {
           }
           .testimonials-slider .slick-slide {
             padding: 0 10px;
+            opacity: 0.8;
+            transition: opacity 0.5s ease;
+          }
+          .testimonials-slider .slick-active {
+            opacity: 1;
           }
           .testimonials-slider .slick-track {
             display: flex;
             align-items: center;
           }
+          .slide-item {
+            outline: none !important;
+          }
+          
+          /* تحسينات للحركة السلسة */
+          .slick-slide {
+            transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+          }
         `}</style>
 
-        <Slider {...settings}>
+
+
+        <Slider ref={sliderRef} {...settings}>
           {testimonials.map((testimonial, index) => {
-            console.log(`Rendering testimonial ${index}:`, testimonial); // Debug log
+            console.log(`Rendering testimonial ${index}:`, testimonial);
 
             const imgRaw = testimonial.studentImage;
             let studentImageFallback = "/images/hero/john.png";
@@ -269,6 +305,27 @@ const Testimonials = () => {
           })}
         </Slider>
       </div>
+
+      {/* نقاط التنقل (اختياري) */}
+      {testimonials.length > 1 && (
+        <div className="flex justify-center gap-2 mb-6">
+          {testimonials.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                if (sliderRef.current) {
+                  sliderRef.current.slickGoTo(index);
+                }
+              }}
+              className={`w-2 h-2 rounded-full transition-all duration-300 ${currentSlide === index
+                  ? 'bg-[#8c52ff] w-6'
+                  : 'bg-gray-300 hover:bg-gray-400'
+                }`}
+              aria-label={`Go to slide ${index + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 };

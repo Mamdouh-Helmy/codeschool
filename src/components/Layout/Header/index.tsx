@@ -41,11 +41,21 @@ const Header: React.FC = () => {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  // Dropdown states
+  const [marketingDropdownOpen, setMarketingDropdownOpen] = useState(false);
+  const [instructorDropdownOpen, setInstructorDropdownOpen] = useState(false);
+  const [studentDropdownOpen, setStudentDropdownOpen] = useState(false);
+  const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
+
   const navbarRef = useRef<HTMLDivElement>(null);
   const signInRef = useRef<HTMLDivElement>(null);
   const signUpRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const marketingDropdownRef = useRef<HTMLDivElement>(null);
+  const instructorDropdownRef = useRef<HTMLDivElement>(null);
+  const studentDropdownRef = useRef<HTMLDivElement>(null);
+  const adminDropdownRef = useRef<HTMLDivElement>(null);
 
   const { headerData, loading } = useHeaderData();
 
@@ -67,6 +77,28 @@ const Header: React.FC = () => {
       navbarOpen
     )
       setNavbarOpen(false);
+
+    // Close dropdowns when clicking outside
+    if (
+      marketingDropdownRef.current &&
+      !marketingDropdownRef.current.contains(event.target as Node)
+    )
+      setMarketingDropdownOpen(false);
+    if (
+      instructorDropdownRef.current &&
+      !instructorDropdownRef.current.contains(event.target as Node)
+    )
+      setInstructorDropdownOpen(false);
+    if (
+      studentDropdownRef.current &&
+      !studentDropdownRef.current.contains(event.target as Node)
+    )
+      setStudentDropdownOpen(false);
+    if (
+      adminDropdownRef.current &&
+      !adminDropdownRef.current.contains(event.target as Node)
+    )
+      setAdminDropdownOpen(false);
   };
 
   useEffect(() => {
@@ -151,7 +183,15 @@ const Header: React.FC = () => {
 
   // 🔥 دالة للتحقق مما إذا كان المستخدم يمكنه الوصول للبورتفليو
   const canAccessPortfolio = localUser &&
-    (localUser.role === "student" || localUser.role === "admin" || localUser.role === "marketing" || localUser.role === "user");
+    (localUser.role === "student" || localUser.role === "admin" || localUser.role === "marketing" || localUser.role === "user" || localUser.role === "instructor");
+
+  // Function to close all dropdowns
+  const closeAllDropdowns = () => {
+    setMarketingDropdownOpen(false);
+    setInstructorDropdownOpen(false);
+    setStudentDropdownOpen(false);
+    setAdminDropdownOpen(false);
+  };
 
   return (
     <>
@@ -171,107 +211,256 @@ const Header: React.FC = () => {
                   <HeaderLink key={index} item={item} />
                 ))}
 
-                {/* 🔥 رابط إنشاء البورتفليو - يظهر لأي مستخدم مسجل (user, admin, marketing) */}
-                {canAccessPortfolio && (
-                  <li>
-                    <Link
-                      href="/portfolio/builder"
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/portfolio/builder"
-                        ? "text-primary"
-                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
+                {/* Dropdown for Marketing role */}
+                {localUser?.role === "marketing" && (
+                  <li className="relative" ref={marketingDropdownRef}>
+                    <button
+                      onClick={() => {
+                        closeAllDropdowns();
+                        setMarketingDropdownOpen(!marketingDropdownOpen);
+                      }}
+                      className="flex items-center text-base font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors duration-200"
                     >
-                      {t("nav.createPortfolio") || "إنشاء بورتفليو"}
-                    </Link>
+                      {t("nav.dashboard") || "لوحة التسويق"}
+                      <svg
+                        className={`ml-1 w-4 h-4 transition-transform ${marketingDropdownOpen ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {marketingDropdownOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#011120] rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border-none dark:border-gray-700">
+                        <Link
+                          href="/portfolio/builder"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                        </Link>
+                        {localUser?.username && (
+                          <Link
+                            href={`/portfolio/${localUser.username}`}
+                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                            onClick={closeAllDropdowns}
+                          >
+                            {t("nav.myPortfolio") || "بورتفليو"}
+                          </Link>
+                        )}
+                        <Link
+                          href="/marketing"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.dashboard") || "لوحة التحكم"}
+                        </Link>
+                        <Link
+                          href="/marketing/blogs"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.addBlog") || "إضافة مدونة"}
+                        </Link>
+                      </div>
+                    )}
                   </li>
                 )}
 
-                {/* 🔥 رابط عرض البورتفليو - يظهر لأي مستخدم مسجل */}
-                {canAccessPortfolio && localUser?.username && (
-                  <li>
-                    <Link
-                      href={`/portfolio/${localUser.username}`}
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === `/portfolio/${localUser.username}`
-                        ? "text-primary"
-                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
-                    >
-                      {t("nav.myPortfolio") || "بورتفليو"}
-                    </Link>
-                  </li>
-                )}
-
-                {/* 🔥 رابط الداشبورد - يظهر للمستخدمين العاديين والطلاب */}
-                {localUser && (localUser.role === "student" || localUser.role === "user") && (
-                  <li>
-                    <Link
-                      href="/dashboard"
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/dashboard"
-                        ? "text-primary"
-                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
-                    >
-                      {t("nav.dashboard") || "لوحة التحكم"}
-                    </Link>
-                  </li>
-                )}
-
+                {/* Dropdown for Instructor role */}
                 {localUser?.role === "instructor" && (
-                  <li>
-                    <Link
-                      href="/instructor"
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/instructor"
-                        ? "text-primary"
-                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
+                  <li className="relative" ref={instructorDropdownRef}>
+                    <button
+                      onClick={() => {
+                        closeAllDropdowns();
+                        setInstructorDropdownOpen(!instructorDropdownOpen);
+                      }}
+                      className="flex items-center text-base font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors duration-200"
                     >
                       {t("nav.instructorDashboard") || "لوحة المدرب"}
-                    </Link>
+                      <svg
+                        className={`ml-1 w-4 h-4 transition-transform ${instructorDropdownOpen ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {instructorDropdownOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#011120] rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border-none dark:border-gray-700">
+                        <Link
+                          href="/portfolio/builder"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                        </Link>
+                        {localUser?.username && (
+                          <Link
+                            href={`/portfolio/${localUser.username}`}
+                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                            onClick={closeAllDropdowns}
+                          >
+                            {t("nav.myPortfolio") || "بورتفليو"}
+                          </Link>
+                        )}
+                        <Link
+                          href="/instructor"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.instructorDashboard") || "لوحة تحكم المدرّس"}
+                        </Link>
+                      </div>
+                    )}
                   </li>
                 )}
 
-                {/* يظهر فقط لو المستخدم أدمن */}
+                {/* Dropdown for Student role */}
+                {localUser?.role === "student" && (
+                  <li className="relative" ref={studentDropdownRef}>
+                    <button
+                      onClick={() => {
+                        closeAllDropdowns();
+                        setStudentDropdownOpen(!studentDropdownOpen);
+                      }}
+                      className="flex items-center text-base font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors duration-200"
+                    >
+                      {t("nav.studentDashboard") || "لوحة الطالب"}
+                      <svg
+                        className={`ml-1 w-4 h-4 transition-transform ${studentDropdownOpen ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {studentDropdownOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#011120] rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border-none dark:border-gray-700">
+                        <Link
+                          href="/portfolio/builder"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                        </Link>
+                        {localUser?.username && (
+                          <Link
+                            href={`/portfolio/${localUser.username}`}
+                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                            onClick={closeAllDropdowns}
+                          >
+                            {t("nav.myPortfolio") || "بورتفليو"}
+                          </Link>
+                        )}
+                        <Link
+                          href="/dashboard"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.dashboard") || "لوحة التحكم"}
+                        </Link>
+                      </div>
+                    )}
+                  </li>
+                )}
+
+                {/* Dropdown for Admin role */}
                 {localUser?.role === "admin" && (
-                  <li>
-                    <Link
-                      href="/admin"
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/admin"
-                        ? "text-primary"
-                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
+                  <li className="relative" ref={adminDropdownRef}>
+                    <button
+                      onClick={() => {
+                        closeAllDropdowns();
+                        setAdminDropdownOpen(!adminDropdownOpen);
+                      }}
+                      className="flex items-center text-base font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors duration-200"
                     >
-                      {t("nav.dashboard")}
-                    </Link>
+                      {t("nav.adminDashboard") || "لوحة الأدمن"}
+                      <svg
+                        className={`ml-1 w-4 h-4 transition-transform ${adminDropdownOpen ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {adminDropdownOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#011120] rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border-none dark:border-gray-700">
+                        <Link
+                          href="/portfolio/builder"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                        </Link>
+                        {localUser?.username && (
+                          <Link
+                            href={`/portfolio/${localUser.username}`}
+                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                            onClick={closeAllDropdowns}
+                          >
+                            {t("nav.myPortfolio") || "بورتفليو"}
+                          </Link>
+                        )}
+                        <Link
+                          href="/admin"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.dashboard") || "لوحة التحكم"}
+                        </Link>
+                      </div>
+                    )}
                   </li>
                 )}
 
-                {localUser?.role === "marketing" && (
-                  <li>
-                    <Link
-                      href="/marketing"
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/marketing"
-                        ? "text-primary"
-                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
-                    >
-                      {t("nav.dashboard")}
-                    </Link>
-                  </li>
-                )}
-
-                {/* يظهر فقط لو المستخدم marketing */}
-                {localUser?.role === "marketing" && (
-                  <li>
-                    <Link
-                      href="/marketing/blogs"
-                      className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/marketing/blogs"
-                        ? "text-primary"
-                        : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
-                    >
-                      {t("nav.addBlog") || "إضافة مدونة"}
-                    </Link>
-                  </li>
+                {/* Regular user (without dropdown) */}
+                {localUser && localUser.role === "user" && canAccessPortfolio && (
+                  <>
+                    <li>
+                      <Link
+                        href="/portfolio/builder"
+                        className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/portfolio/builder"
+                          ? "text-primary"
+                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                          }`}
+                      >
+                        {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                      </Link>
+                    </li>
+                    {localUser?.username && (
+                      <li>
+                        <Link
+                          href={`/portfolio/${localUser.username}`}
+                          className={`text-base font-medium transition-colors duration-200 ${pathUrl === `/portfolio/${localUser.username}`
+                            ? "text-primary"
+                            : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                            }`}
+                        >
+                          {t("nav.myPortfolio") || "بورتفليو"}
+                        </Link>
+                      </li>
+                    )}
+                    <li>
+                      <Link
+                        href="/dashboard"
+                        className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/dashboard"
+                          ? "text-primary"
+                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                          }`}
+                      >
+                        {t("nav.dashboard") || "لوحة التحكم"}
+                      </Link>
+                    </li>
+                  </>
                 )}
               </ul>
             )}
@@ -438,80 +627,181 @@ const Header: React.FC = () => {
                 <MobileHeaderLink key={index} item={item} />
               ))}
 
-            {/* 🔥 رابط إنشاء البورتفليو في الموبايل - لأي مستخدم مسجل */}
-            {canAccessPortfolio && (
-              <Link
-                href="/portfolio/builder"
-                onClick={() => setNavbarOpen(false)}
-                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-              >
-                {t("nav.createPortfolio") || "إنشاء بورتفليو"}
-              </Link>
+            {/* Mobile menu sections based on user role */}
+            {localUser?.role === "marketing" && (
+              <div className="w-full mb-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
+                  {t("nav.dashboard") || "لوحة التسويق"}
+                </h3>
+                <div className="space-y-1">
+                  {canAccessPortfolio && (
+                    <Link
+                      href="/portfolio/builder"
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                    </Link>
+                  )}
+                  {canAccessPortfolio && localUser?.username && (
+                    <Link
+                      href={`/portfolio/${localUser.username}`}
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      {t("nav.myPortfolio") || "بورتفليو"}
+                    </Link>
+                  )}
+                  <Link
+                    href="/marketing"
+                    onClick={() => setNavbarOpen(false)}
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                  >
+                    {t("nav.dashboard") || "لوحة التحكم"}
+                  </Link>
+                  <Link
+                    href="/marketing/blogs"
+                    onClick={() => setNavbarOpen(false)}
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                  >
+                    {t("nav.addBlog") || "إضافة مدونة"}
+                  </Link>
+                </div>
+              </div>
             )}
 
-            {/* 🔥 رابط عرض البورتفليو في الموبايل - لأي مستخدم مسجل */}
-            {canAccessPortfolio && localUser?.username && (
-              <Link
-                href={`/portfolio/${localUser.username}`}
-                onClick={() => setNavbarOpen(false)}
-                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-              >
-                {t("nav.myPortfolio") || "بورتفليو"}
-              </Link>
-            )}
-
-            {/* 🔥 رابط الداشبورد في الموبايل - للمستخدمين العاديين والطلاب */}
-            {localUser && (localUser.role === "student" || localUser.role === "user") && (
-              <Link
-                href="/dashboard"
-                onClick={() => setNavbarOpen(false)}
-                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-              >
-                {t("nav.dashboard") || "لوحة التحكم"}
-              </Link>
-            )}
-
-           
             {localUser?.role === "instructor" && (
-              <Link
-                href="/instructor"
-                onClick={() => setNavbarOpen(false)}
-                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-              >
-                {t("nav.instructorDashboard") || "لوحة المدرب"}
-              </Link>
+              <div className="w-full mb-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
+                  {t("nav.instructorDashboard") || "لوحة المدرب"}
+                </h3>
+                <div className="space-y-1">
+                  {canAccessPortfolio && (
+                    <Link
+                      href="/portfolio/builder"
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                    </Link>
+                  )}
+                  {canAccessPortfolio && localUser?.username && (
+                    <Link
+                      href={`/portfolio/${localUser.username}`}
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      {t("nav.myPortfolio") || "بورتفليو"}
+                    </Link>
+                  )}
+                  <Link
+                    href="/instructor"
+                    onClick={() => setNavbarOpen(false)}
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                  >
+                    {t("nav.instructorDashboard") || "لوحة تحكم المدرّس"}
+                  </Link>
+                </div>
+              </div>
             )}
 
-            {/* Dashboard للأدمن فقط */}
+            {localUser?.role === "student" && (
+              <div className="w-full mb-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
+                  {t("nav.studentDashboard") || "لوحة الطالب"}
+                </h3>
+                <div className="space-y-1">
+                  {canAccessPortfolio && (
+                    <Link
+                      href="/portfolio/builder"
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                    </Link>
+                  )}
+                  {canAccessPortfolio && localUser?.username && (
+                    <Link
+                      href={`/portfolio/${localUser.username}`}
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      {t("nav.myPortfolio") || "بورتفليو"}
+                    </Link>
+                  )}
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setNavbarOpen(false)}
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                  >
+                    {t("nav.dashboard") || "لوحة التحكم"}
+                  </Link>
+                </div>
+              </div>
+            )}
+
             {localUser?.role === "admin" && (
-              <Link
-                href="/admin"
-                onClick={() => setNavbarOpen(false)}
-                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-              >
-                {t("nav.dashboard")}
-              </Link>
+              <div className="w-full mb-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
+                  {t("nav.adminDashboard") || "لوحة الأدمن"}
+                </h3>
+                <div className="space-y-1">
+                  {canAccessPortfolio && (
+                    <Link
+                      href="/portfolio/builder"
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                    </Link>
+                  )}
+                  {canAccessPortfolio && localUser?.username && (
+                    <Link
+                      href={`/portfolio/${localUser.username}`}
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      {t("nav.myPortfolio") || "بورتفليو"}
+                    </Link>
+                  )}
+                  <Link
+                    href="/admin"
+                    onClick={() => setNavbarOpen(false)}
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                  >
+                    {t("nav.dashboard") || "لوحة التحكم"}
+                  </Link>
+                </div>
+              </div>
             )}
 
-            {localUser?.role === "marketing" && (
-              <Link
-                href="/marketing"
-                onClick={() => setNavbarOpen(false)}
-                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-              >
-                {t("nav.dashboard")}
-              </Link>
-            )}
-
-            
-            {localUser?.role === "marketing" && (
-              <Link
-                href="/marketing/blogs"
-                onClick={() => setNavbarOpen(false)}
-                className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-              >
-                {t("nav.addBlog") || "إضافة مدونة"}
-              </Link>
+            {/* Regular user (no role-based grouping) */}
+            {localUser && localUser.role === "user" && canAccessPortfolio && (
+              <>
+                <Link
+                  href="/portfolio/builder"
+                  onClick={() => setNavbarOpen(false)}
+                  className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                >
+                  {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                </Link>
+                {localUser?.username && (
+                  <Link
+                    href={`/portfolio/${localUser.username}`}
+                    onClick={() => setNavbarOpen(false)}
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                  >
+                    {t("nav.myPortfolio") || "بورتفليو"}
+                  </Link>
+                )}
+                <Link
+                  href="/dashboard"
+                  onClick={() => setNavbarOpen(false)}
+                  className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                >
+                  {t("nav.dashboard") || "لوحة التحكم"}
+                </Link>
+              </>
             )}
 
             <div className="mt-4 flex flex-col space-y-4 w-full">
@@ -668,7 +958,6 @@ const Header: React.FC = () => {
               }
               onSuccess={(userData) => {
                 setLocalUser(userData);
-             
               }}
             />
           </div>

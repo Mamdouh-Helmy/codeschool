@@ -162,11 +162,11 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
     }
 
     return (
-        <div className="container mx-auto mt-32 mb-10 rounded-md">
+        <div className="rounded-md">
             <div className={`min-h-screen ${themeStyles.container}  rounded-lg`}>
 
                 {/* Action Bar */}
-                <div className={`border-b ${themeStyles.border} ${themeStyles.background.primary}`}>
+                {/* <div className={`border-b ${themeStyles.border} ${themeStyles.background.primary}`}>
                     <div className="container mx-auto px-4 py-3">
                         <div className="flex justify-between items-center">
                             <div className={`text-sm ${getTextColor('muted')}`}>
@@ -195,7 +195,7 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div> */}
 
                 {/* Header Section */}
                 <PortfolioHeader portfolio={portfolio} />

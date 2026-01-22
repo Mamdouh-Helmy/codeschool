@@ -47,7 +47,7 @@ const ContactInfo = () => {
                 </div>
               </div>
             </div>
-            <div className="flex sm:flex-row flex-col items-start sm:gap-8 gap-4">
+            <div className="flex sm:flex-row flex-col items-start sm:gap-8 gap-4 pb-20">
               <div className="bg-primary/20 w-14 h-14 flex items-center justify-center rounded-full">
                 <i className="bg-[url('/images/contact-page/Career.svg')] bg-no-repeat bg-contain w-9 h-9 inline-block"></i>
               </div>
@@ -85,16 +85,9 @@ const ContactInfo = () => {
               </div>
             </div>
           </div>
-          <div className="md:pt-28 pt-11 md:pb-28 pb-16">
-            <iframe
-              src="https://www.google.com/maps?q=30.067028,31.333083&z=15&output=embed"
-              width="1114"
-              height="477"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              className="rounded-lg w-full"
-            ></iframe>
-          </div>
+          
+          {/* تم إزالة قسم الخريطة بالكامل هنا */}
+          
         </div>
         <div className="border-b border-solid  dark:border-dark_border"></div>
       </section>
