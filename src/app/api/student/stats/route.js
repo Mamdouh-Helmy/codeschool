@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getUserFromRequest } from "@/lib/auth";
-import Student from "../../../../models/Student";
-import Session from "../../../../models/Session";
-import Group from "../../../../models/Group";
+import Student from "../../../models/Student";
+import Session from "../../../models/Session";
+import Group from "../../../models/Group";
 
 export async function GET(req) {
   try {
