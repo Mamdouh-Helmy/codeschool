@@ -179,6 +179,9 @@ const Hero = () => {
   const instructor2Name = heroImages?.instructor2 || t("hero.instructor2");
   const instructor2Role = heroImages?.instructor2Role || t("hero.instructor2Role");
 
+
+  console.log("Hero Images:", heroImages);
+
   // نص الويبنار الديناميكي
   const webinarText = nextWebinar 
     && t("hero.webinar", { date: nextWebinar.formattedDate });

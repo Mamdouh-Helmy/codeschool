@@ -69,16 +69,16 @@ export default function StudentNotificationsPage() {
       setError("");
 
       console.log("🔄 [Notifications] Fetching notifications...");
-      
+
       const notificationsRes = await fetch(`/api/student/notifications`, {
-        headers: { 
+        headers: {
           "Content-Type": "application/json"
         },
         credentials: 'include'
       });
 
       const response = await notificationsRes.json();
-      
+
       console.log("📥 [Notifications] API Response:", {
         success: response.success,
         status: notificationsRes.status,
@@ -94,7 +94,7 @@ export default function StudentNotificationsPage() {
     } catch (error: any) {
       console.error("❌ [Notifications] Error fetching notifications:", error);
       setError(error.message || "حدث خطأ أثناء تحميل الإشعارات");
-      
+
       if (error.message.includes("غير مصرح") || error.message.includes("UNAUTHORIZED")) {
         router.push("/signin");
       }
@@ -107,17 +107,17 @@ export default function StudentNotificationsPage() {
     try {
       // تحديث حالة القراءة محلياً أولاً
       setReadIds(prev => [...prev, notificationId]);
-      
+
       const markRes = await fetch(`/api/student/notifications/${notificationId}/read`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           "Content-Type": "application/json"
         },
         credentials: 'include'
       });
 
       const response = await markRes.json();
-      
+
       if (!response.success) {
         // إذا فشلت العملية، نرجع الحالة المحلية
         setReadIds(prev => prev.filter(id => id !== notificationId));
@@ -133,14 +133,14 @@ export default function StudentNotificationsPage() {
     try {
       const markRes = await fetch(`/api/student/notifications`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           "Content-Type": "application/json"
         },
         credentials: 'include'
       });
 
       const response = await markRes.json();
-      
+
       if (response.success) {
         // تحديث جميع الإشعارات كمقروءة محلياً
         setReadIds(notifications.map(n => n.id));
@@ -158,17 +158,17 @@ export default function StudentNotificationsPage() {
 
     try {
       setDeletingId(notificationId);
-      
+
       const deleteRes = await fetch(`/api/student/notifications/${notificationId}`, {
         method: 'DELETE',
-        headers: { 
+        headers: {
           "Content-Type": "application/json"
         },
         credentials: 'include'
       });
 
       const response = await deleteRes.json();
-      
+
       if (response.success) {
         // حذف الإشعار من القائمة المحلية
         setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
@@ -188,13 +188,13 @@ export default function StudentNotificationsPage() {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return "تاريخ غير صالح";
-      
+
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
       const diffMins = Math.floor(diffMs / (1000 * 60));
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      
+
       if (diffMins < 60) {
         return `قبل ${diffMins} دقيقة`;
       } else if (diffHours < 24) {
@@ -266,14 +266,14 @@ export default function StudentNotificationsPage() {
 
   const filteredNotifications = notifications.filter(notification => {
     const notificationType = getTypeFromMetadata(notification.metadata);
-    
+
     if (filterType !== "all" && notificationType !== filterType) return false;
     if (filterRead === "read" && !notification.read && !readIds.includes(notification.id)) return false;
     if (filterRead === "unread" && (notification.read || readIds.includes(notification.id))) return false;
     return true;
   });
 
-  const unreadCount = notifications.filter(n => 
+  const unreadCount = notifications.filter(n =>
     !n.read && !readIds.includes(n.id)
   ).length;
 
@@ -371,21 +371,21 @@ export default function StudentNotificationsPage() {
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">إجمالي الإشعارات</div>
               </div>
-              
+
               <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <div className="text-2xl font-bold text-blue-700 dark:text-blue-400 mb-1">
                   {unreadCount}
                 </div>
                 <div className="text-sm text-blue-600 dark:text-blue-300">غير مقروء</div>
               </div>
-              
+
               <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                 <div className="text-2xl font-bold text-green-700 dark:text-green-400 mb-1">
                   {notifications.filter(n => getTypeFromMetadata(n.metadata) === 'whatsapp').length}
                 </div>
                 <div className="text-sm text-green-600 dark:text-green-300">رسائل واتساب</div>
               </div>
-              
+
               <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
                 <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-400 mb-1">
                   {notifications.filter(n => getTypeFromMetadata(n.metadata) === 'reminder').length}
@@ -448,22 +448,20 @@ export default function StudentNotificationsPage() {
                 const notificationType = getTypeFromMetadata(notification.metadata);
                 const isRead = notification.read || readIds.includes(notification.id);
                 const isDeleting = deletingId === notification.id;
-                
+
                 return (
                   <div
                     key={notification.id}
-                    className={`p-6 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                      !isRead ? 'bg-blue-50 dark:bg-blue-900/10' : ''
-                    } ${isDeleting ? 'opacity-50' : ''}`}
+                    className={`p-6 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${!isRead ? 'bg-blue-50 dark:bg-blue-900/10' : ''
+                      } ${isDeleting ? 'opacity-50' : ''}`}
                   >
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-3">
-                          <div className={`p-2 rounded-lg ${
-                            !isRead 
-                              ? 'bg-primary text-white' 
+                          <div className={`p-2 rounded-lg ${!isRead
+                              ? 'bg-primary text-white'
                               : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                          }`}>
+                            }`}>
                             <Icon className="w-4 h-4" />
                           </div>
                           <div>
@@ -490,11 +488,11 @@ export default function StudentNotificationsPage() {
                             </p>
                           </div>
                         </div>
-                        
+
                         <p className="text-gray-700 dark:text-gray-300 mb-4">
                           {notification.message}
                         </p>
-                        
+
                         {notification.metadata && (
                           <div className="flex flex-wrap gap-2">
                             {notification.metadata.groupName && (
@@ -515,7 +513,7 @@ export default function StudentNotificationsPage() {
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="flex gap-2">
                         {!isRead && (
                           <button
@@ -576,16 +574,16 @@ export default function StudentNotificationsPage() {
 
 // أيقونة تحديث إضافية
 const RefreshCw = ({ className }: { className?: string }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width="16" 
-    height="16" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
     className={className}
   >
     <path d="M21 2v6h-6"></path>
