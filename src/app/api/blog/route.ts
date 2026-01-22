@@ -85,17 +85,17 @@ function validateBlogData(data: any): { isValid: boolean; errors: string[] } {
   };
 }
 
-// دالة لرفع الصور إلى السيرفر
+// ✅ دالة محسنة لرفع الصور إلى السيرفر
 async function uploadImageToServer(file: File): Promise<string> {
   try {
     console.log("🔼 Uploading image to server...");
 
     // إنشاء مجلد uploads إذا لم يكن موجوداً
-    const uploadDir = process.env.UPLOAD_DIR || "/var/www/uploads";
+    const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "public/uploads");
 
     if (!existsSync(uploadDir)) {
       await mkdir(uploadDir, { recursive: true });
-      console.log("📁 Created uploads directory");
+      console.log("📁 Created uploads directory:", uploadDir);
     }
 
     // التحقق من نوع الملف
@@ -124,13 +124,15 @@ async function uploadImageToServer(file: File): Promise<string> {
     const filePath = path.join(uploadDir, fileName);
 
     console.log(`🔄 Saving file as: ${fileName}`);
+    console.log(`📁 Full path: ${filePath}`);
 
     // تحويل الملف إلى buffer وحفظه
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     await writeFile(filePath, buffer);
 
-    // إرجاع رابط الملف
+    // ✅ إرجاع رابط الملف بدون المسار الكامل
+    // استخدم فقط اسم الملف إذا كان المجلد داخل public
     const fileUrl = `/uploads/${fileName}`;
 
     console.log(`✅ File uploaded successfully: ${fileUrl}`);
@@ -180,6 +182,16 @@ export async function POST(req: Request) {
         const formData = await req.formData();
         requestData = Object.fromEntries(formData.entries());
 
+        // ✅ DEBUG: عرض جميع الحقول المستلمة
+        console.log("📋 FormData fields received:");
+        for (let [key, value] of formData.entries()) {
+          if (value instanceof File) {
+            console.log(`  ${key}: File - ${value.name} (${value.size} bytes)`);
+          } else {
+            console.log(`  ${key}: ${value}`);
+          }
+        }
+
         // معالجة ملفات الصور إذا وجدت
         const imageFile = formData.get("image") as File;
         if (imageFile && imageFile.size > 0) {
@@ -187,6 +199,7 @@ export async function POST(req: Request) {
           try {
             const imageUrl = await uploadImageToServer(imageFile);
             requestData.image = imageUrl;
+            console.log(`✅ Image URL set to: ${requestData.image}`);
           } catch (uploadError: any) {
             return NextResponse.json(
               {
@@ -206,6 +219,7 @@ export async function POST(req: Request) {
             const avatarUrl = await uploadImageToServer(avatarFile);
             requestData.author = requestData.author || {};
             requestData.author.avatar = avatarUrl;
+            console.log(`✅ Avatar URL set to: ${requestData.author.avatar}`);
           } catch (uploadError: any) {
             return NextResponse.json(
               {
@@ -220,15 +234,21 @@ export async function POST(req: Request) {
 
         // تحويل البيانات النصية من JSON strings إذا كانت
         if (typeof requestData.data === "string") {
-          const parsedData = JSON.parse(requestData.data);
-          requestData = { ...requestData, ...parsedData };
+          try {
+            const parsedData = JSON.parse(requestData.data);
+            requestData = { ...requestData, ...parsedData };
+            console.log("📝 Parsed JSON data from form field");
+          } catch (parseError) {
+            console.log("ℹ️ Could not parse 'data' field as JSON");
+          }
         }
       } else {
         // استقبال JSON مباشرة
         requestData = await req.json();
+        console.log("📥 Received JSON data directly");
       }
 
-      console.log("📥 Received blog data");
+      console.log("📥 Final requestData:", JSON.stringify(requestData, null, 2));
     } catch (parseError: any) {
       console.error("❌ Failed to parse request:", parseError.message);
       return NextResponse.json(
@@ -287,7 +307,21 @@ export async function POST(req: Request) {
           .filter(Boolean)
       : [];
 
-    // 4. إعداد البيانات النهائية
+    // ✅ إصلاح: تنظيف رابط الصورة - إزالة أي مسارات زائدة
+    let imageUrl = (requestData.image || "").toString().trim();
+    
+    // إزالة أي / زائدة في النهاية
+    if (imageUrl.endsWith('/')) {
+      imageUrl = imageUrl.slice(0, -1);
+    }
+    
+    // إذا كان الرابط يحتوي فقط على /uploads/ بدون اسم ملف
+    if (imageUrl === '/uploads/') {
+      imageUrl = '';
+      console.log("⚠️ Fixed empty image URL");
+    }
+
+    // 4. إعداد البيانات النهائية مع رابط الصورة المصحح
     const blogData = {
       title_ar: (requestData.title_ar || "").toString().trim(),
       title_en: (requestData.title_en || "").toString().trim(),
@@ -309,7 +343,7 @@ export async function POST(req: Request) {
       imageAlt_en: (requestData.imageAlt_en || "").toString().trim(),
       category_ar: (requestData.category_ar || "").toString().trim(),
       category_en: (requestData.category_en || "").toString().trim(),
-      image: (requestData.image || "").toString().trim(),
+      image: imageUrl, // ✅ استخدام الرابط المصحح
       publishDate: requestData.publishDate
         ? new Date(requestData.publishDate)
         : new Date(),
@@ -324,6 +358,15 @@ export async function POST(req: Request) {
       ),
       viewCount: 0,
     };
+
+    console.log("📝 Final blog data to save:");
+    console.log(JSON.stringify({
+      title_ar: blogData.title_ar,
+      title_en: blogData.title_en,
+      image: blogData.image, // ✅ هذا هو الرابط المصحح
+      author: blogData.author,
+      slug: blogData.slug
+    }, null, 2));
 
     console.log("📝 Creating blog post...");
 
@@ -341,6 +384,12 @@ export async function POST(req: Request) {
         const savedPost = new BlogPost(blogData);
         newPost = await savedPost.save();
         console.log("✅ Blog post created successfully!");
+        console.log("📊 Post details:", {
+          id: newPost._id,
+          slug: newPost.slug,
+          image: newPost.image,
+          authorAvatar: newPost.author?.avatar
+        });
         break;
       } catch (createError: any) {
         console.log(`⚠️ Attempt ${attempts} failed:`, createError.message);
@@ -504,9 +553,23 @@ export async function GET(req: Request) {
 
     console.log(`✅ Found ${posts.length} blog posts`);
 
+    // ✅ إصلاح: تنظيف روابط الصور في البيانات المرجعة
+    const cleanedPosts = posts.map(post => ({
+      ...post.toObject(),
+      // تنظيف رابط الصورة الرئيسية
+      image: post.image?.endsWith('/') ? post.image.slice(0, -1) : post.image,
+      // تنظيف رابط صورة المؤلف إذا كان موجوداً
+      author: post.author ? {
+        ...post.author,
+        avatar: post.author.avatar?.endsWith('/') 
+          ? post.author.avatar.slice(0, -1) 
+          : post.author.avatar
+      } : post.author
+    }));
+
     return NextResponse.json({
       success: true,
-      data: posts,
+      data: cleanedPosts,
       pagination: {
         total,
         page,
