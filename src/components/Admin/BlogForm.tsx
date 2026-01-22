@@ -63,7 +63,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
       name_ar: initial?.author?.name_ar || "",
       name_en: initial?.author?.name_en || "",
       email: initial?.author?.email || "",
-      avatar: initial?.author?.avatar || "",
+      avatar: initial?.author?.avatar || "/images/default-avatar.jpg",
       role: initial?.author?.role || "Author",
     },
     tags_ar: initial?.tags_ar || [],
@@ -81,33 +81,39 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   const [authorAvatarPreview, setAuthorAvatarPreview] = useState("");
   const [activeLanguage, setActiveLanguage] = useState<"ar" | "en">("ar");
 
-  // دالة لرفع الصور إلى السيرفر
-  const uploadImageToServer = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    console.log("🔼 Uploading image to server...");
-
-    const response = await fetch("/api/upload", {
-      method: "POST",
-      body: formData,
+  // ✅ دالة محسنة لتحويل الملف إلى Base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        if (reader.result) {
+          resolve(reader.result as string);
+        } else {
+          reject(new Error("Failed to read file"));
+        }
+      };
+      reader.onerror = error => reject(error);
     });
+  };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Upload failed:", errorText);
-      throw new Error("فشل في اتصال السيرفر");
-    }
-
-    const data = await response.json();
+  // ✅ دالة محسنة لتنظيف رابط الصورة
+  const cleanImageUrl = (url: string): string => {
+    if (!url || typeof url !== 'string') return '';
     
-    if (!data.success) {
-      console.error("❌ Upload failed:", data.message);
-      throw new Error(data.message || "فشل رفع الصورة");
+    let cleaned = url.trim();
+    
+    // إزالة أي / زائدة في النهاية
+    if (cleaned.endsWith('/')) {
+      cleaned = cleaned.slice(0, -1);
     }
-
-    console.log("✅ Image uploaded successfully:", data.url);
-    return data.url;
+    
+    // إذا كان الرابط يحتوي فقط على /uploads/ بدون اسم ملف
+    if (cleaned === '/uploads/' || cleaned === '/uploads') {
+      return '';
+    }
+    
+    return cleaned;
   };
 
   // معاينة الصور
@@ -179,7 +185,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // معالجة رفع صورة المقال
+  // ✅ معالجة رفع صورة المقال - تستخدم Base64 مباشرة
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -201,31 +207,36 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     setLoading(true);
     
     try {
+      // ✅ تحويل الملف إلى Base64 مباشرة
+      const base64Image = await fileToBase64(file);
+      
+      // ✅ تنظيف الصورة إذا كانت URL
+      const cleanedImage = cleanImageUrl(base64Image);
+      
+      // ✅ حفظ Base64 في الحالة
+      onChange("image", cleanedImage);
+      
       // عرض معاينة محلية
       const localPreview = URL.createObjectURL(file);
       setImagePreview(localPreview);
-
-      // رفع الملف إلى السيرفر
-      const imageUrl = await uploadImageToServer(file);
-      
-      // حفظ الرابط في الحالة
-      onChange("image", imageUrl);
 
       // تنظيف المعاينة المحلية بعد ثانية
       setTimeout(() => {
         URL.revokeObjectURL(localPreview);
       }, 1000);
 
+      console.log("✅ Image converted to Base64 successfully");
+
     } catch (error: any) {
       console.error("Upload error:", error);
-      alert(`خطأ في رفع الصورة: ${error.message}`);
+      alert(`خطأ في تحويل الصورة: ${error.message}`);
       setImagePreview("");
     } finally {
       setLoading(previousLoading);
     }
   };
 
-  // معالجة رفع صورة المؤلف
+  // ✅ معالجة رفع صورة المؤلف - تستخدم Base64 مباشرة
   const handleAuthorAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -245,19 +256,28 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     setLoading(true);
     
     try {
+      // ✅ تحويل الملف إلى Base64 مباشرة
+      const base64Image = await fileToBase64(file);
+      
+      // ✅ تنظيف الصورة
+      const cleanedAvatar = cleanImageUrl(base64Image);
+      
+      // ✅ حفظ Base64 في الحالة
+      onChangeAuthor("avatar", cleanedAvatar || "/images/default-avatar.jpg");
+      
+      // عرض معاينة محلية
       const localPreview = URL.createObjectURL(file);
       setAuthorAvatarPreview(localPreview);
-
-      const imageUrl = await uploadImageToServer(file);
-      onChangeAuthor("avatar", imageUrl);
 
       setTimeout(() => {
         URL.revokeObjectURL(localPreview);
       }, 1000);
 
+      console.log("✅ Author avatar converted to Base64 successfully");
+
     } catch (error: any) {
       console.error("Upload error:", error);
-      alert(`خطأ في رفع الصورة: ${error.message}`);
+      alert(`خطأ في تحويل الصورة: ${error.message}`);
       setAuthorAvatarPreview("");
     } finally {
       setLoading(previousLoading);
@@ -289,9 +309,14 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     setLoading(true);
 
     try {
-      // التأكد من أن tags_ar و tags_en موجودين في form
-      const payload = {
+      // ✅ تنظيف روابط الصور قبل الإرسال
+      const cleanedForm = {
         ...form,
+        image: cleanImageUrl(form.image),
+        author: {
+          ...form.author,
+          avatar: cleanImageUrl(form.author.avatar) || "/images/default-avatar.jpg"
+        },
         tags_ar: tagsAr,
         tags_en: tagsEn,
         publishDate: form.publishDate
@@ -299,41 +324,40 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           : new Date().toISOString(),
       };
 
-      console.log("Submitting payload (without base64):", payload);
+      console.log("📤 Submitting blog data:", {
+        title_ar: cleanedForm.title_ar,
+        title_en: cleanedForm.title_en,
+        image: cleanedForm.image ? "Base64 image (truncated)" : "No image",
+        authorAvatar: cleanedForm.author.avatar ? "Base64 avatar (truncated)" : "Default avatar",
+        tags_ar: cleanedForm.tags_ar.length,
+        tags_en: cleanedForm.tags_en.length
+      });
 
       // إضافة تحقق من البيانات المطلوبة
-      if (!form.title_ar && !form.title_en) {
+      if (!cleanedForm.title_ar && !cleanedForm.title_en) {
         alert("الرجاء إدخال عنوان المقال بالعربية أو الإنجليزية");
         setLoading(false);
         return;
       }
 
-      if (!form.body_ar && !form.body_en) {
+      if (!cleanedForm.body_ar && !cleanedForm.body_en) {
         alert("الرجاء إدخال محتوى المقال بالعربية أو الإنجليزية");
         setLoading(false);
         return;
       }
 
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("Authentication required. Please log in.");
-        setLoading(false);
-        return;
-      }
-
+      // ✅ إرسال البيانات مباشرة
       const method = initial?._id ? "PUT" : "POST";
       const url = initial?._id
         ? `/api/blog/${encodeURIComponent(initial._id)}`
         : "/api/blog";
 
-      // إرسال البيانات
       const res = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(cleanedForm),
       });
 
       if (!res.ok) {
@@ -361,7 +385,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         throw new Error(result.message || "Operation failed");
       }
     } catch (err: any) {
-      console.error("Error:", err);
+      console.error("Error submitting blog:", err);
       alert(`خطأ: ${err.message || "حدث خطأ غير معروف"}`);
     } finally {
       setLoading(false);
@@ -584,7 +608,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                   <button
                     type="button"
                     onClick={() => {
-                      onChangeAuthor("avatar", "");
+                      onChangeAuthor("avatar", "/images/default-avatar.jpg");
                       setAuthorAvatarPreview("");
                     }}
                     className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
@@ -664,21 +688,18 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
 
           <div className="flex gap-4 items-start">
             <div className="flex-1 space-y-3">
-              {/* رابط الصورة بعد الرفع */}
-              {form.image && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                  <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+              {/* ✅ رسالة توضيحية للصورة */}
+              {form.image && form.image.includes('base64') && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-sm">تم رفع الصورة بنجاح</span>
+                    <span className="text-sm">✅ الصورة جاهزة للإرسال (Base64)</span>
                   </div>
-                  <input
-                    type="text"
-                    value={form.image}
-                    readOnly
-                    className="w-full mt-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-sm text-gray-500 dark:text-gray-400"
-                  />
+                  <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                    سيتم حفظ الصورة كبيانات مباشرة في قاعدة البيانات
+                  </div>
                 </div>
               )}
 
@@ -704,7 +725,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
               {loading && (
                 <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
                   <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  {t('blogForm.uploading') || "جاري رفع الصورة..."}
+                  {t('blogForm.uploading') || "جاري تحويل الصورة..."}
                 </div>
               )}
 
@@ -730,12 +751,6 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                   src={imagePreview}
                   alt="Preview"
                   className="w-full h-full object-cover"
-                  onLoad={() => {
-                    // عندما يتم تحميل الصورة، نعيد تحديث المعاينة إذا كان الرابط مختلفاً
-                    if (imagePreview.startsWith('blob:') && form.image && form.image !== imagePreview) {
-                      setImagePreview(form.image);
-                    }
-                  }}
                 />
               </div>
             )}

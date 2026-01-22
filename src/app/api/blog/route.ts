@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import BlogPost from "../../models/BlogPost";
-import { writeFile, mkdir } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
-import { v4 as uuidv4 } from "uuid";
 
 // ==================== دوال المساعدة ====================
 
-// دالة آمنة تماماً لتوليد slug
+// توليد slug
 function generateSlug(title: string): string {
   if (!title || typeof title !== "string") {
     return `post-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -30,7 +26,7 @@ function generateSlug(title: string): string {
   return slug;
 }
 
-// دالة آمنة لتوليد excerpt
+// توليد excerpt
 function generateExcerpt(content: string, maxLength: number = 150): string {
   if (!content || typeof content !== "string") {
     return "";
@@ -46,7 +42,7 @@ function generateExcerpt(content: string, maxLength: number = 150): string {
   }
 }
 
-// دالة آمنة لحساب وقت القراءة
+// حساب وقت القراءة
 function calculateReadTime(content: string): number {
   if (!content || typeof content !== "string") {
     return 5;
@@ -61,120 +57,19 @@ function calculateReadTime(content: string): number {
   }
 }
 
-// دالة للتحقق من صحة البيانات
-function validateBlogData(data: any): { isValid: boolean; errors: string[] } {
-  const errors: string[] = [];
-
-  if (
-    (!data.title_ar || data.title_ar.trim() === "") &&
-    (!data.title_en || data.title_en.trim() === "")
-  ) {
-    errors.push("Blog title is required in at least one language");
-  }
-
-  if (
-    (!data.body_ar || data.body_ar.trim() === "") &&
-    (!data.body_en || data.body_en.trim() === "")
-  ) {
-    errors.push("Blog content is required in at least one language");
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
-}
-
-// ✅ دالة محسنة لرفع الصور إلى السيرفر
-async function uploadImageToServer(file: File): Promise<string> {
-  try {
-    console.log("🔼 Uploading image to server...");
-
-    // إنشاء مجلد uploads إذا لم يكن موجوداً
-    const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "public/uploads");
-
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-      console.log("📁 Created uploads directory:", uploadDir);
-    }
-
-    // التحقق من نوع الملف
-    const allowedTypes = [
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-      "image/webp",
-      "image/gif",
-    ];
-    if (!allowedTypes.includes(file.type)) {
-      throw new Error(
-        "نوع الملف غير مدعوم. يرجى استخدام صورة (JPEG, PNG, WebP, GIF)",
-      );
-    }
-
-    // التحقق من حجم الملف (5MB كحد أقصى)
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      throw new Error("حجم الملف كبير جداً. الحد الأقصى 5MB");
-    }
-
-    // توليد اسم فريد للملف
-    const fileExt = path.extname(file.name);
-    const fileName = `${uuidv4()}${fileExt}`;
-    const filePath = path.join(uploadDir, fileName);
-
-    console.log(`🔄 Saving file as: ${fileName}`);
-    console.log(`📁 Full path: ${filePath}`);
-
-    // تحويل الملف إلى buffer وحفظه
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
-
-    // ✅ إرجاع رابط الملف بدون المسار الكامل
-    // استخدم فقط اسم الملف إذا كان المجلد داخل public
-    const fileUrl = `/uploads/${fileName}`;
-
-    console.log(`✅ File uploaded successfully: ${fileUrl}`);
-    return fileUrl;
-  } catch (error: any) {
-    console.error("💥 Upload error:", error);
-    throw new Error(error.message || "حدث خطأ أثناء رفع الملف");
-  }
-}
-
 // ==================== POST - إنشاء مقال جديد ====================
 
 export async function POST(req: Request) {
   console.log("🚀 POST /api/blog - Starting...");
 
-  let requestData: any = null;
-  let isConnected = false;
-
   try {
-    // محاولة الاتصال بقاعدة البيانات
-    try {
-      await connectDB();
-      isConnected = true;
-      console.log("✅ Database connected successfully");
-    } catch (dbError: any) {
-      console.error("❌ Database connection failed:", dbError.message);
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Database connection failed",
-          error:
-            process.env.NODE_ENV === "development"
-              ? dbError.message
-              : undefined,
-        },
-        { status: 500 },
-      );
-    }
+    // الاتصال بقاعدة البيانات
+    await connectDB();
+    console.log("✅ Database connected successfully");
 
     // قراءة البيانات
+    let requestData: any;
     try {
-      // التحقق مما إذا كانت البيانات FormData أو JSON
       const contentType = req.headers.get("content-type") || "";
 
       if (contentType.includes("multipart/form-data")) {
@@ -182,73 +77,21 @@ export async function POST(req: Request) {
         const formData = await req.formData();
         requestData = Object.fromEntries(formData.entries());
 
-        // ✅ DEBUG: عرض جميع الحقول المستلمة
-        console.log("📋 FormData fields received:");
-        for (let [key, value] of formData.entries()) {
-          if (value instanceof File) {
-            console.log(`  ${key}: File - ${value.name} (${value.size} bytes)`);
-          } else {
-            console.log(`  ${key}: ${value}`);
-          }
-        }
-
-        // معالجة ملفات الصور إذا وجدت
-        const imageFile = formData.get("image") as File;
-        if (imageFile && imageFile.size > 0) {
-          console.log(`📸 Processing image file: ${imageFile.name}`);
-          try {
-            const imageUrl = await uploadImageToServer(imageFile);
-            requestData.image = imageUrl;
-            console.log(`✅ Image URL set to: ${requestData.image}`);
-          } catch (uploadError: any) {
-            return NextResponse.json(
-              {
-                success: false,
-                message: uploadError.message,
-                error: "Image upload failed",
-              },
-              { status: 400 },
-            );
-          }
-        }
-
-        const avatarFile = formData.get("author.avatar") as File;
-        if (avatarFile && avatarFile.size > 0) {
-          console.log(`👤 Processing avatar file: ${avatarFile.name}`);
-          try {
-            const avatarUrl = await uploadImageToServer(avatarFile);
-            requestData.author = requestData.author || {};
-            requestData.author.avatar = avatarUrl;
-            console.log(`✅ Avatar URL set to: ${requestData.author.avatar}`);
-          } catch (uploadError: any) {
-            return NextResponse.json(
-              {
-                success: false,
-                message: uploadError.message,
-                error: "Avatar upload failed",
-              },
-              { status: 400 },
-            );
-          }
-        }
-
-        // تحويل البيانات النصية من JSON strings إذا كانت
+        // تحويل البيانات النصية من JSON إذا كانت
         if (typeof requestData.data === "string") {
           try {
             const parsedData = JSON.parse(requestData.data);
             requestData = { ...requestData, ...parsedData };
-            console.log("📝 Parsed JSON data from form field");
-          } catch (parseError) {
-            console.log("ℹ️ Could not parse 'data' field as JSON");
+          } catch {
+            console.log("⚠️ Could not parse 'data' field as JSON");
           }
         }
       } else {
         // استقبال JSON مباشرة
         requestData = await req.json();
-        console.log("📥 Received JSON data directly");
       }
 
-      console.log("📥 Final requestData:", JSON.stringify(requestData, null, 2));
+      console.log("📥 Received blog data");
     } catch (parseError: any) {
       console.error("❌ Failed to parse request:", parseError.message);
       return NextResponse.json(
@@ -261,67 +104,59 @@ export async function POST(req: Request) {
       );
     }
 
-    // التحقق من صحة البيانات
-    const validation = validateBlogData(requestData);
-    if (!validation.isValid) {
-      console.log("❌ Validation failed:", validation.errors);
+    // التحقق من البيانات المطلوبة
+    if (
+      (!requestData.title_ar || requestData.title_ar.trim() === "") &&
+      (!requestData.title_en || requestData.title_en.trim() === "")
+    ) {
       return NextResponse.json(
         {
           success: false,
-          message: "Validation failed",
-          errors: validation.errors,
+          message: "Blog title is required in at least one language",
         },
         { status: 400 },
       );
     }
 
-    // ========== إعداد البيانات النهائية ==========
+    if (
+      (!requestData.body_ar || requestData.body_ar.trim() === "") &&
+      (!requestData.body_en || requestData.body_en.trim() === "")
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Blog content is required in at least one language",
+        },
+        { status: 400 },
+      );
+    }
 
-    // 1. توليد slug آمن
-    const titleToUse =
-      requestData.title_en || requestData.title_ar || "Untitled Post";
+    // إعداد البيانات النهائية
+    const titleToUse = requestData.title_en || requestData.title_ar || "Untitled Post";
     const slug = generateSlug(titleToUse);
     console.log("🔗 Generated slug:", slug);
 
-    // 2. إعداد بيانات المؤلف
-    const author = {
-      name_ar: (requestData.author?.name_ar || "Admin").toString().trim(),
-      name_en: (requestData.author?.name_en || "Admin").toString().trim(),
-      email: (requestData.author?.email || "").toString().trim(),
-      avatar: (requestData.author?.avatar || "/images/default-avatar.jpg")
-        .toString()
-        .trim(),
-      role: (requestData.author?.role || "Author").toString().trim(),
-    };
-
-    // 3. إعداد tags
-    const tags_ar = Array.isArray(requestData.tags_ar)
-      ? requestData.tags_ar
-          .map((tag: any) => tag?.toString().trim())
-          .filter(Boolean)
-      : [];
-
-    const tags_en = Array.isArray(requestData.tags_en)
-      ? requestData.tags_en
-          .map((tag: any) => tag?.toString().trim())
-          .filter(Boolean)
-      : [];
-
-    // ✅ إصلاح: تنظيف رابط الصورة - إزالة أي مسارات زائدة
+    // تنظيف رابط الصورة
     let imageUrl = (requestData.image || "").toString().trim();
-    
-    // إزالة أي / زائدة في النهاية
     if (imageUrl.endsWith('/')) {
       imageUrl = imageUrl.slice(0, -1);
     }
     
-    // إذا كان الرابط يحتوي فقط على /uploads/ بدون اسم ملف
     if (imageUrl === '/uploads/') {
       imageUrl = '';
       console.log("⚠️ Fixed empty image URL");
     }
 
-    // 4. إعداد البيانات النهائية مع رابط الصورة المصحح
+    // تنظيف رابط صورة المؤلف
+    let authorAvatar = (requestData.author?.avatar || "").toString().trim();
+    if (authorAvatar.endsWith('/')) {
+      authorAvatar = authorAvatar.slice(0, -1);
+    }
+    
+    if (authorAvatar === '/uploads/') {
+      authorAvatar = '/images/default-avatar.jpg';
+    }
+
     const blogData = {
       title_ar: (requestData.title_ar || "").toString().trim(),
       title_en: (requestData.title_en || "").toString().trim(),
@@ -330,26 +165,36 @@ export async function POST(req: Request) {
       excerpt_ar: (
         requestData.excerpt_ar ||
         generateExcerpt(requestData.body_ar || "", 150)
-      )
-        .toString()
-        .trim(),
+      ).toString().trim(),
       excerpt_en: (
         requestData.excerpt_en ||
         generateExcerpt(requestData.body_en || "", 150)
-      )
-        .toString()
-        .trim(),
+      ).toString().trim(),
       imageAlt_ar: (requestData.imageAlt_ar || "").toString().trim(),
       imageAlt_en: (requestData.imageAlt_en || "").toString().trim(),
       category_ar: (requestData.category_ar || "").toString().trim(),
       category_en: (requestData.category_en || "").toString().trim(),
-      image: imageUrl, // ✅ استخدام الرابط المصحح
+      image: imageUrl,
       publishDate: requestData.publishDate
         ? new Date(requestData.publishDate)
         : new Date(),
-      author: author,
-      tags_ar: tags_ar,
-      tags_en: tags_en,
+      author: {
+        name_ar: (requestData.author?.name_ar || "Admin").toString().trim(),
+        name_en: (requestData.author?.name_en || "Admin").toString().trim(),
+        email: (requestData.author?.email || "").toString().trim(),
+        avatar: authorAvatar,
+        role: (requestData.author?.role || "Author").toString().trim(),
+      },
+      tags_ar: Array.isArray(requestData.tags_ar)
+        ? requestData.tags_ar
+            .map((tag: any) => tag?.toString().trim())
+            .filter(Boolean)
+        : [],
+      tags_en: Array.isArray(requestData.tags_en)
+        ? requestData.tags_en
+            .map((tag: any) => tag?.toString().trim())
+            .filter(Boolean)
+        : [],
       featured: Boolean(requestData.featured),
       status: requestData.status === "published" ? "published" : "draft",
       slug: slug,
@@ -359,75 +204,13 @@ export async function POST(req: Request) {
       viewCount: 0,
     };
 
-    console.log("📝 Final blog data to save:");
-    console.log(JSON.stringify({
-      title_ar: blogData.title_ar,
-      title_en: blogData.title_en,
-      image: blogData.image, // ✅ هذا هو الرابط المصحح
-      author: blogData.author,
-      slug: blogData.slug
-    }, null, 2));
-
     console.log("📝 Creating blog post...");
 
-    // ========== محاولة حفظ المقال ==========
-    let newPost;
-    let attempts = 0;
-    const maxAttempts = 3;
+    // حفظ المقال في قاعدة البيانات
+    const newPost = await BlogPost.create(blogData);
 
-    while (attempts < maxAttempts) {
-      attempts++;
-      console.log(`🔄 Attempt ${attempts}/${maxAttempts}`);
+    console.log("✅ Blog post created successfully!");
 
-      try {
-        // محاولة مباشرة لإنشاء المقال
-        const savedPost = new BlogPost(blogData);
-        newPost = await savedPost.save();
-        console.log("✅ Blog post created successfully!");
-        console.log("📊 Post details:", {
-          id: newPost._id,
-          slug: newPost.slug,
-          image: newPost.image,
-          authorAvatar: newPost.author?.avatar
-        });
-        break;
-      } catch (createError: any) {
-        console.log(`⚠️ Attempt ${attempts} failed:`, createError.message);
-
-        // إذا كان الخطأ بسبب slug مكرر
-        if (createError.code === 11000 && createError.keyPattern?.slug) {
-          console.log("🔄 Duplicate slug, generating new one...");
-          blogData.slug = `${slug}-${Date.now()}-${attempts}`;
-          continue;
-        }
-
-        // إذا كان خطأ تحقق (validation)
-        if (createError.name === "ValidationError") {
-          const errors = Object.values(createError.errors).map(
-            (err: any) => err.message,
-          );
-          return NextResponse.json(
-            {
-              success: false,
-              message: "Validation error",
-              errors,
-            },
-            { status: 400 },
-          );
-        }
-
-        // لأي خطأ آخر، أعد المحاولة
-        if (attempts === maxAttempts) {
-          throw createError;
-        }
-      }
-    }
-
-    if (!newPost) {
-      throw new Error("Failed to create blog post after multiple attempts");
-    }
-
-    // ========== الرد الناجح ==========
     return NextResponse.json(
       {
         success: true,
@@ -448,27 +231,7 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (err: any) {
-    console.error("💥 POST /api/blog - Critical error:", {
-      name: err.name,
-      message: err.message,
-      code: err.code,
-      stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
-    });
-
-    // الرد حسب نوع الخطأ
-    if (err.name === "ValidationError") {
-      const errors = Object.values(err.errors || {}).map(
-        (error: any) => error.message,
-      );
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Validation error",
-          errors,
-        },
-        { status: 400 },
-      );
-    }
+    console.error("💥 POST /api/blog - Error:", err.message);
 
     if (err.code === 11000) {
       return NextResponse.json(
@@ -480,15 +243,11 @@ export async function POST(req: Request) {
       );
     }
 
-    // رد عام للخطأ
     return NextResponse.json(
       {
         success: false,
         message: "Failed to create blog post",
-        error:
-          process.env.NODE_ENV === "development"
-            ? err.message
-            : "Internal server error",
+        error: err.message || "Internal server error",
       },
       { status: 500 },
     );
@@ -501,20 +260,7 @@ export async function GET(req: Request) {
   try {
     console.log("📚 GET /api/blog - Fetching posts");
 
-    // محاولة الاتصال بقاعدة البيانات
-    try {
-      await connectDB();
-    } catch (dbError: any) {
-      console.error("❌ Database connection failed:", dbError.message);
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Database connection failed",
-          data: [],
-        },
-        { status: 200 }, // نرجع 200 مع بيانات فارغة بدلاً من 500
-      );
-    }
+    await connectDB();
 
     const url = new URL(req.url);
     const search = url.searchParams.get("search") || "";
@@ -527,7 +273,7 @@ export async function GET(req: Request) {
       1000,
     );
 
-    // بناء query آمن
+    // بناء query
     const query: any = { status: status };
 
     if (search) {
@@ -553,23 +299,9 @@ export async function GET(req: Request) {
 
     console.log(`✅ Found ${posts.length} blog posts`);
 
-    // ✅ إصلاح: تنظيف روابط الصور في البيانات المرجعة
-    const cleanedPosts = posts.map(post => ({
-      ...post.toObject(),
-      // تنظيف رابط الصورة الرئيسية
-      image: post.image?.endsWith('/') ? post.image.slice(0, -1) : post.image,
-      // تنظيف رابط صورة المؤلف إذا كان موجوداً
-      author: post.author ? {
-        ...post.author,
-        avatar: post.author.avatar?.endsWith('/') 
-          ? post.author.avatar.slice(0, -1) 
-          : post.author.avatar
-      } : post.author
-    }));
-
     return NextResponse.json({
       success: true,
-      data: cleanedPosts,
+      data: posts,
       pagination: {
         total,
         page,
@@ -586,9 +318,9 @@ export async function GET(req: Request) {
         success: false,
         message: "Failed to load blog posts",
         data: [],
-        error: process.env.NODE_ENV === "development" ? err.message : undefined,
+        error: err.message || "Unknown error",
       },
-      { status: 200 }, // نرجع 200 مع بيانات فارغة
+      { status: 500 },
     );
   }
 }
