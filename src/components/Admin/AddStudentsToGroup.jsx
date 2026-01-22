@@ -8,7 +8,7 @@ import { useLocale } from "@/app/context/LocaleContext";
 
 // Helper function to generate default welcome message template
 const getDefaultWelcomeMessage = (language, group, studentName = "{studentName}") => {
-  const template = language === "ar" 
+  const template = language === "ar"
     ? `🎉 مرحباً بك في {groupName}!
 
 عزيزي/عزيزتي {studentName},
@@ -51,11 +51,11 @@ Code School Team 💻`;
       /\{startDate\}/g,
       group.schedule?.startDate
         ? new Date(group.schedule.startDate).toLocaleDateString(language === "ar" ? "ar-EG" : "en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
         : "{startDate}"
     )
     .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "{timeFrom}")
@@ -80,7 +80,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
-  
+
   const [customMessage, setCustomMessage] = useState("");
   const [previewMessage, setPreviewMessage] = useState("");
 
@@ -112,17 +112,17 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       const groupRes = await fetch(`/api/groups/${groupId}`, {
         cache: 'no-store'
       });
-      
+
       if (!groupRes.ok) {
         throw new Error(t("addStudents.errors.loadGroup"));
       }
 
       const groupData = await groupRes.json();
-      
+
       if (!groupData.success) {
         throw new Error(groupData.error || t("addStudents.errors.loadGroup"));
       }
-      
+
       setGroup(groupData.data);
 
       const studentsRes = await fetch('/api/allStudents?status=Active', {
@@ -165,19 +165,19 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     const studentName = selectedStudent.personalInfo?.fullName || t("addStudents.preview.defaults.studentName");
     const groupName = group.name;
     const courseName = group.courseSnapshot?.title || group.course?.title || t("addStudents.preview.defaults.courseName");
-    
-    const startDate = group.schedule?.startDate 
+
+    const startDate = group.schedule?.startDate
       ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? 'ar-EG' : 'en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        })
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
       : t("addStudents.preview.defaults.startDate");
-    
+
     const timeFrom = group.schedule?.timeFrom || t("addStudents.preview.defaults.timeFrom");
     const timeTo = group.schedule?.timeTo || t("addStudents.preview.defaults.timeTo");
-    
+
     // إضافة المدرس
     const instructor = group.instructors?.[0]?.name;
     const instructorText = instructor
@@ -210,7 +210,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     }
 
     const studentId = selectedStudent._id || selectedStudent.id;
-    
+
     if (!studentId) {
       toast.error(t("addStudents.errors.invalidStudent"));
       return;
@@ -240,12 +240,12 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
       if (res.ok && result.success) {
         toast.success(t("addStudents.messages.success"), { id: loadingToast });
-        
+
         setStudents(prev => prev.filter(s => {
           const sid = s._id || s.id;
           return sid.toString() !== studentId.toString();
         }));
-        
+
         setSelectedStudent(null);
         setCustomMessage(getDefaultWelcomeMessage(isRTL ? "ar" : "en", group, "{studentName}"));
         setPreviewMessage("");
@@ -386,11 +386,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
               <div
                 key={studentId}
                 onClick={() => !isFull && setSelectedStudent(student)}
-                className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                  isSelected
+                className={`p-4 border rounded-lg cursor-pointer transition-all ${isSelected
                     ? "border-primary bg-primary/5"
                     : "border-PowderBlueBorder dark:border-dark_border hover:border-primary/50"
-                } ${isFull ? "opacity-50 cursor-not-allowed" : ""}`}
+                  } ${isFull ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -416,11 +415,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                           📱 {student.personalInfo.whatsappNumber}
                         </span>
                       )}
-                      <span className={`px-2 py-1 rounded ${
-                        student.communicationPreferences?.preferredLanguage === 'ar'
+                      <span className={`px-2 py-1 rounded ${student.communicationPreferences?.preferredLanguage === 'ar'
                           ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                           : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-                      }`}>
+                        }`}>
                         🌐 {student.communicationPreferences?.preferredLanguage === 'ar' ? 'العربية' : 'English'}
                       </span>
                     </div>
@@ -458,13 +456,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                     {`{courseName}`} → {group.courseSnapshot?.title || group.course?.title}
                   </div>
                   <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{startDate}`} → {group.schedule?.startDate 
+                    {`{startDate}`} → {group.schedule?.startDate
                       ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? 'ar-EG' : 'en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })
                       : t("addStudents.preview.defaults.startDate")
                     }
                   </div>
@@ -518,7 +516,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                   <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                     📋 {t("addStudents.message.previewTitle")}
                   </p>
-                  <div 
+                  <div
                     className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 max-h-40 overflow-y-auto"
                     dir={isRTL ? 'rtl' : 'ltr'}
                   >
@@ -540,7 +538,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         >
           {t("addStudents.buttons.cancel")}
         </button>
-        
+
         <button
           onClick={handleAddStudent}
           disabled={!selectedStudent || !customMessage.trim() || isFull || adding}

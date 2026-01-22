@@ -1247,7 +1247,7 @@ const ar = {
   "welcome.whatsappButton": "راسلنا على واتساب",
   "welcome.callButton": "اتصل بنا",
   "welcome.emailButton": "راسلنا",
-  "welcome.happyParents": "250 ألف+ ولي أمر راضٍ",
+  "welcome.happyParents": "250 ولي أمر راضٍ",
 
   // Blog Subscription
   "blog.subscribe": "اشترك في النشرة البريدية",

@@ -34,10 +34,10 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
 
     // Check on mount
     checkMobile();
-    
+
     // Add event listener for resize
     window.addEventListener('resize', checkMobile);
-    
+
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -235,13 +235,13 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
   // Find active category based on active path
   const currentCategory = useMemo(() => {
     if (!activePath) return null;
-    
+
     for (const category of NAVIGATION_CATEGORIES) {
       if (category.items.some((item: DashboardNavItem) => item.href === activePath)) {
         return category.id;
       }
     }
-    
+
     return null;
   }, [activePath, NAVIGATION_CATEGORIES]);
 
@@ -310,13 +310,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
         )}
 
         {/* Main Content Area */}
-        <div className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${
-          !isMobile && isSecondarySidebarOpen && activeCategory 
-            ? isRTL ? 'lg:mr-[17rem]' : 'lg:ml-[17rem]' 
+        <div className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${!isMobile && isSecondarySidebarOpen && activeCategory
+            ? isRTL ? 'lg:mr-[17rem]' : 'lg:ml-[17rem]'
             : ''
-        }`}>
-          <TopBar 
-            onMenuClick={() => setPrimarySidebarOpen(true)} 
+          }`}>
+          <TopBar
+            onMenuClick={() => setPrimarySidebarOpen(true)}
             user={user}
             showSecondaryToggle={activeCategory !== null && !isMobile}
             onSecondaryToggle={() => setSecondarySidebarOpen(!isSecondarySidebarOpen)}

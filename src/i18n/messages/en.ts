@@ -1293,7 +1293,7 @@ const en = {
   "welcome.whatsappButton": "Message Us on WhatsApp",
   "welcome.callButton": "Call Us",
   "welcome.emailButton": "Email Us",
-  "welcome.happyParents": "250K+ Happy Parents",
+  "welcome.happyParents": "250 Happy Parents",
 
   // Blog Subscription
   "blog.subscribe": "Subscribe to Newsletter",

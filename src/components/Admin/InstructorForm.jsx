@@ -52,7 +52,7 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
     }
 
     const data = await response.json();
-    
+
     if (!data.success) {
       console.error("❌ Upload failed:", data.message);
       throw new Error(data.message || "فشل رفع الصورة");
@@ -81,7 +81,7 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
     }
 
     setUploadingImage(true);
-    
+
     try {
       // عرض معاينة محلية
       const localPreview = URL.createObjectURL(file);
@@ -89,7 +89,7 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
 
       // رفع الملف إلى السيرفر
       const imageUrl = await uploadImageToServer(file);
-      
+
       // حفظ الرابط في الحالة
       onChange("image", imageUrl);
       setImagePreview(imageUrl);
