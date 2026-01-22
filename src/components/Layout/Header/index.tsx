@@ -52,10 +52,12 @@ const Header: React.FC = () => {
   const signUpRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
-  const marketingDropdownRef = useRef<HTMLDivElement>(null);
-  const instructorDropdownRef = useRef<HTMLDivElement>(null);
-  const studentDropdownRef = useRef<HTMLDivElement>(null);
-  const adminDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // تغيير نوع الـ refs إلى HTMLLIElement
+  const marketingDropdownRef = useRef<HTMLLIElement>(null);
+  const instructorDropdownRef = useRef<HTMLLIElement>(null);
+  const studentDropdownRef = useRef<HTMLLIElement>(null);
+  const adminDropdownRef = useRef<HTMLLIElement>(null);
 
   const { headerData, loading } = useHeaderData();
 
