@@ -20,6 +20,7 @@ interface UserDoc {
   email?: string;
   role?: string;
   image?: string | null;
+  isActive?: boolean; // ADDED THIS LINE
 }
 
 /**
