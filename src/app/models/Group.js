@@ -1,4 +1,4 @@
-// models/Group.js - ENHANCED with Marketing Automation
+// models/Group.js - FIXED VERSION
 import mongoose from "mongoose";
 
 const groupSchema = new mongoose.Schema(
@@ -444,79 +444,83 @@ const groupSchema = new mongoose.Schema(
   }
 );
 
-// ==================== MIDDLEWARE ====================
+// ==================== FIXED MIDDLEWARE ====================
 
-// Update updatedAt on save
+// Update updatedAt on save - SIMPLIFIED
 groupSchema.pre("save", function (next) {
-  this.metadata.updatedAt = new Date();
-  next();
-});
-
-// Validate schedule before saving
-groupSchema.pre("save", function (next) {
-  if (this.schedule && this.schedule.startDate && this.schedule.daysOfWeek) {
-    const startDayIndex = new Date(this.schedule.startDate).getDay();
-    const dayNames = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-    ];
-    const expectedFirstDay = dayNames[startDayIndex];
-
-    if (!this.schedule.daysOfWeek.includes(expectedFirstDay)) {
-      return next(
-        new Error(
-          `First selected day must be ${expectedFirstDay} (based on start date)`
-        )
-      );
+  try {
+    if (!this.metadata) {
+      this.metadata = {};
     }
-
-    if (this.schedule.daysOfWeek.length !== 3) {
-      return next(new Error("Must select exactly 3 days for the schedule"));
-    }
+    this.metadata.updatedAt = new Date();
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 });
 
-// Trigger marketing followup when group is marked as completed
-groupSchema.pre("save", async function (next) {
-  if (this.isModified("status") && this.status === "completed") {
-    try {
-      // Set completion metadata
-      this.metadata.completedAt = new Date();
-      this.metadata.completedBy =
-        this.metadata.createdBy || this.instructors[0];
-
-      // Trigger marketing followup if enabled
-      if (this.marketing.enabled && this.marketing.completionFollowup) {
-        console.log(
-          `🚀 [Group] Triggering marketing followup for completed group: ${this._id}`
-        );
-
-        // Import and trigger marketing automation
-        const { triggerGroupCompletionMarketing } = await import(
-          "../services/marketingAutomation"
-        );
-        await triggerGroupCompletionMarketing(
-          this._id,
-          this.metadata.createdBy
-        );
-
-        this.metadata.marketingFollowupTriggered = true;
-        this.metadata.marketingFollowupTriggeredAt = new Date();
-        this.metadata.marketingFollowupTriggeredBy = this.metadata.createdBy;
+// Validate schedule before saving - SIMPLIFIED
+groupSchema.pre("save", function (next) {
+  try {
+    // Only validate if schedule exists
+    if (this.schedule && this.schedule.startDate && this.schedule.daysOfWeek) {
+      const startDate = new Date(this.schedule.startDate);
+      
+      // Basic validation
+      if (isNaN(startDate.getTime())) {
+        return next(new Error("Invalid start date"));
       }
-    } catch (error) {
-      console.error("❌ [Group] Error triggering marketing followup:", error);
-      // Don't stop save process if marketing fails
+
+      // Ensure daysOfWeek is an array
+      if (!Array.isArray(this.schedule.daysOfWeek)) {
+        return next(new Error("daysOfWeek must be an array"));
+      }
+
+      // Check if we have exactly 3 days
+      if (this.schedule.daysOfWeek.length !== 3) {
+        return next(new Error("Must select exactly 3 days for the schedule"));
+      }
+
+      // Check if first day matches startDate
+      const startDayIndex = startDate.getDay();
+      const dayNames = [
+        "Sunday", "Monday", "Tuesday", "Wednesday", 
+        "Thursday", "Friday", "Saturday"
+      ];
+      const expectedFirstDay = dayNames[startDayIndex];
+
+      if (!this.schedule.daysOfWeek.includes(expectedFirstDay)) {
+        return next(
+          new Error(
+            `First selected day must be ${expectedFirstDay} (based on start date)`
+          )
+        );
+      }
     }
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 });
+
+// REMOVE the problematic marketing followup pre-save hook temporarily
+// We'll add it back once the basic save works
+// groupSchema.pre("save", async function (next) {
+//   if (this.isModified("status") && this.status === "completed") {
+//     try {
+//       // Set completion metadata
+//       this.metadata.completedAt = new Date();
+//       this.metadata.completedBy = this.metadata.createdBy || this.instructors[0];
+
+//       // Don't trigger marketing followup during basic save
+//       // This can be handled separately
+//     } catch (error) {
+//       console.error("❌ [Group] Error in completion handler:", error);
+//       // Continue with save even if marketing fails
+//     }
+//   }
+//   next();
+// });
 
 // ==================== VIRTUAL PROPERTIES ====================
 
@@ -631,197 +635,6 @@ groupSchema.methods.getCompletionStats = function () {
   };
 };
 
-// Get marketing statistics
-groupSchema.methods.getMarketingStats = function () {
-  return {
-    enabled: this.marketing.enabled,
-    campaigns: this.marketing.campaigns || [],
-    settings: this.marketing.settings || {},
-    stats: this.marketing.stats || {},
-    followup: {
-      triggered: this.metadata.marketingFollowupTriggered || false,
-      triggeredAt: this.metadata.marketingFollowupTriggeredAt || null,
-      completed: this.metadata.marketingFollowupCompleted || false,
-      completedAt: this.metadata.marketingFollowupCompletedAt || null,
-      results: this.metadata.marketingFollowupResults || {},
-    },
-  };
-};
-
-// Trigger marketing followup manually
-groupSchema.methods.triggerMarketingFollowup = async function (userId) {
-  try {
-    console.log(
-      `🎯 [Group] Manual marketing followup triggered for group: ${this._id}`
-    );
-
-    if (!this.marketing.enabled) {
-      return {
-        success: false,
-        message: "Marketing automation is disabled for this group",
-      };
-    }
-
-    if (this.status !== "completed") {
-      return {
-        success: false,
-        message: "Group must be completed before triggering marketing followup",
-      };
-    }
-
-    // Import marketing automation service
-    const { triggerGroupCompletionMarketing } = await import(
-      "../services/marketingAutomation"
-    );
-
-    const result = await triggerGroupCompletionMarketing(this._id, userId);
-
-    // Update group metadata
-    this.metadata.marketingFollowupTriggered = true;
-    this.metadata.marketingFollowupTriggeredAt = new Date();
-    this.metadata.marketingFollowupTriggeredBy = userId;
-
-    await this.save();
-
-    return {
-      success: true,
-      message: "Marketing followup triggered successfully",
-      ...result,
-    };
-  } catch (error) {
-    console.error("❌ [Group] Error triggering marketing followup:", error);
-    return {
-      success: false,
-      message: "Failed to trigger marketing followup",
-      error: error.message,
-    };
-  }
-};
-
-// Update marketing statistics
-groupSchema.methods.updateMarketingStats = async function (data) {
-  try {
-    if (!this.marketing.stats) {
-      this.marketing.stats = {
-        totalMarketingActions: 0,
-        successfulActions: 0,
-        conversionRate: 0,
-        totalRevenue: 0,
-        lastCampaignRun: null,
-      };
-    }
-
-    // Update stats
-    if (data.totalMarketingActions !== undefined) {
-      this.marketing.stats.totalMarketingActions = data.totalMarketingActions;
-    }
-    if (data.successfulActions !== undefined) {
-      this.marketing.stats.successfulActions = data.successfulActions;
-    }
-    if (data.conversionRate !== undefined) {
-      this.marketing.stats.conversionRate = data.conversionRate;
-    }
-    if (data.totalRevenue !== undefined) {
-      this.marketing.stats.totalRevenue = data.totalRevenue;
-    }
-    if (data.lastCampaignRun !== undefined) {
-      this.marketing.stats.lastCampaignRun = data.lastCampaignRun;
-    }
-
-    // Calculate conversion rate if not provided
-    if (this.marketing.stats.totalMarketingActions > 0) {
-      this.marketing.stats.conversionRate = parseFloat(
-        (
-          (this.marketing.stats.successfulActions /
-            this.marketing.stats.totalMarketingActions) *
-          100
-        ).toFixed(2)
-      );
-    }
-
-    await this.save();
-
-    return {
-      success: true,
-      stats: this.marketing.stats,
-    };
-  } catch (error) {
-    console.error("❌ [Group] Error updating marketing stats:", error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-};
-
-// Get student segmentation
-groupSchema.methods.getStudentSegmentation = async function () {
-  try {
-    const StudentEvaluation = mongoose.model("StudentEvaluation");
-
-    const evaluations = await StudentEvaluation.find({
-      groupId: this._id,
-      isDeleted: false,
-    })
-      .populate(
-        "studentId",
-        "personalInfo.fullName personalInfo.email enrollmentNumber"
-      )
-      .lean();
-
-    const segmentation = {
-      star_students: [],
-      ready_for_next_level: [],
-      needs_support: [],
-      needs_repeat: [],
-      at_risk: [],
-      not_evaluated: [],
-    };
-
-    evaluations.forEach((evaluation) => {
-      const category = evaluation.marketing?.studentCategory || "not_evaluated";
-      const studentData = {
-        studentId: evaluation.studentId._id,
-        studentName: evaluation.studentId.personalInfo?.fullName,
-        enrollmentNumber: evaluation.studentId.enrollmentNumber,
-        email: evaluation.studentId.personalInfo?.email,
-        evaluationId: evaluation._id,
-        overallScore: evaluation.calculatedStats?.overallScore,
-        finalDecision: evaluation.finalDecision,
-        weakPoints: evaluation.weakPoints || [],
-        strengths: evaluation.strengths || [],
-        aiAnalysis: evaluation.marketing?.aiAnalysis,
-      };
-
-      if (segmentation[category]) {
-        segmentation[category].push(studentData);
-      } else {
-        segmentation.not_evaluated.push(studentData);
-      }
-    });
-
-    return {
-      success: true,
-      totalStudents: evaluations.length,
-      segmentation,
-      summary: {
-        star_students: segmentation.star_students.length,
-        ready_for_next_level: segmentation.ready_for_next_level.length,
-        needs_support: segmentation.needs_support.length,
-        needs_repeat: segmentation.needs_repeat.length,
-        at_risk: segmentation.at_risk.length,
-        not_evaluated: segmentation.not_evaluated.length,
-      },
-    };
-  } catch (error) {
-    console.error("❌ [Group] Error getting student segmentation:", error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-};
-
 // ==================== STATIC METHODS ====================
 
 // Find groups needing marketing followup
@@ -853,23 +666,6 @@ groupSchema.statics.findGroupsNeedingMarketingFollowup = async function (
   }
 };
 
-// Get groups by marketing campaign
-groupSchema.statics.getGroupsByCampaign = async function (campaignId) {
-  try {
-    const groups = await this.find({
-      "marketing.campaigns.campaignId": campaignId,
-      isDeleted: false,
-    })
-      .select("name code status marketing metadata")
-      .lean();
-
-    return groups;
-  } catch (error) {
-    console.error("❌ [Group] Error getting groups by campaign:", error);
-    return [];
-  }
-};
-
 // ==================== INDEXES ====================
 
 groupSchema.index({ code: 1 }, { unique: true });
@@ -877,13 +673,13 @@ groupSchema.index({ courseId: 1 });
 groupSchema.index({ status: 1 });
 groupSchema.index({ "schedule.startDate": 1 });
 groupSchema.index({ "metadata.completedAt": 1 });
-groupSchema.index({ "metadata.completionMessagesSent": 1 });
-groupSchema.index({ "marketing.enabled": 1 });
-groupSchema.index({ "metadata.marketingFollowupTriggered": 1 });
-groupSchema.index({ "metadata.marketingFollowupCompleted": 1 });
-groupSchema.index({ "marketing.campaigns.campaignId": 1 });
 
-// Ensure the model exists
-const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
+// Ensure the model exists - FIXED
+let Group;
+try {
+  Group = mongoose.model("Group");
+} catch {
+  Group = mongoose.model("Group", groupSchema);
+}
 
 export default Group;
