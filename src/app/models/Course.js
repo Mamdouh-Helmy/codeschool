@@ -1,4 +1,4 @@
-// models/Course.js - COMPLETE FIXED VERSION
+// models/Course.js - FIXED VERSION
 import mongoose from "mongoose";
 
 // ==================== LESSON SCHEMA ====================
@@ -285,9 +285,10 @@ CourseSchema.pre("save", function (next) {
 
     console.log("✅ Pre-save hook completed successfully");
     next();
-  } catch (err) {
-    console.error("❌ Error in pre-save hook:", err.message);
-    next(err);
+  } catch (error) {
+    console.error("❌ Error in pre-save hook:", error.message);
+    // ✅ FIX: Pass the error properly to next
+    next(error);
   }
 });
 
