@@ -110,13 +110,13 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
         },
         {
           label: t('nav.meetingLink') || "Meeting Link",
-          href: "/admin/meetingLink-admin",
+          href: "/admin/meetingLinkAdmin",
           icon: "ion:school-outline",
           badge: createBadge(t('common.new') || "New"),
         },
         {
           label: t('nav.curriculumCourse') || "Curriculum Course",
-          href: "/admin/curriculum-course",
+          href: "/admin/curriculumCourse",
           icon: "ion:bookmarks-outline",
           badge: createBadge(t('common.new') || "New"),
         },
