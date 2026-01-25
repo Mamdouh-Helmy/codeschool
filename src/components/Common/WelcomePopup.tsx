@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useI18n } from "@/i18n/I18nProvider";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -33,42 +32,37 @@ interface SiteContent {
   secondImageAlt: string;
   
   // بيانات الـ Welcome Popup - عربي
-  welcomeTitleAr?: string;
-  welcomeSubtitle1Ar?: string;
-  welcomeSubtitle2Ar?: string;
-  welcomeFeature1Ar?: string;
-  welcomeFeature2Ar?: string;
-  welcomeFeature3Ar?: string;
-  welcomeFeature4Ar?: string;
-  welcomeFeature5Ar?: string;
-  welcomeFeature6Ar?: string;
+  welcomeTitleAr: string;
+  welcomeSubtitle1Ar: string;
+  welcomeSubtitle2Ar: string;
+  welcomeFeature1Ar: string;
+  welcomeFeature2Ar: string;
+  welcomeFeature3Ar: string;
+  welcomeFeature4Ar: string;
+  welcomeFeature5Ar: string;
+  welcomeFeature6Ar: string;
   
   // بيانات الـ Welcome Popup - انجليزي
-  welcomeTitleEn?: string;
-  welcomeSubtitle1En?: string;
-  welcomeSubtitle2En?: string;
-  welcomeFeature1En?: string;
-  welcomeFeature2En?: string;
-  welcomeFeature3En?: string;
-  welcomeFeature4En?: string;
-  welcomeFeature5En?: string;
-  welcomeFeature6En?: string;
+  welcomeTitleEn: string;
+  welcomeSubtitle1En: string;
+  welcomeSubtitle2En: string;
+  welcomeFeature1En: string;
+  welcomeFeature2En: string;
+  welcomeFeature3En: string;
+  welcomeFeature4En: string;
+  welcomeFeature5En: string;
+  welcomeFeature6En: string;
   
-  // بيانات الـ Hero (للاستخدام إذا لم توجد بيانات Welcome)
-  heroTitleAr?: string;
-  heroDescriptionAr?: string;
-  heroTitleEn?: string;
-  heroDescriptionEn?: string;
+  // بيانات الـ Hero
+  heroTitleAr: string;
+  heroTitleEn: string;
   
   // الأرقام
-  discount?: number;
-  happyParents?: string;
-  graduates?: string;
+  discount: number;
+  happyParents: string;
+  graduates: string;
   
   isActive: boolean;
-  displayOrder: number;
-  createdAt: string;
-  updatedAt: string;
 }
 
 // ✅ Cache خارج المكون
@@ -80,21 +74,20 @@ const WELCOME_CACHE_DURATION = 10 * 60 * 1000; // 10 دقائق
 
 const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
   const { locale } = useLocale();
-  const { t } = useI18n();
   const router = useRouter();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [siteContent, setSiteContent] = useState<SiteContent | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isRTL = locale === "ar";
   const direction = isRTL ? "rtl" : "ltr";
 
   // ✅ Refs لمنع memory leaks
   const isMounted = useRef(true);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const animationRef = useRef<number | null>(null);
 
-  // ✅ تحسين fetchWelcomeData
+  // ✅ جلب البيانات من الـ API
   useEffect(() => {
     if (!isOpen) return;
 
@@ -110,33 +103,60 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
         ) {
           if (isSubscribed) {
             setSiteContent(welcomeDataCache.data);
+            setError(null);
           }
           return;
         }
 
         setLoading(true);
+        setError(null);
+        
         const res = await fetch(`/api/section-images-hero?activeOnly=true`, {
           signal: controller.signal,
           cache: 'force-cache',
           headers: {
-            'Cache-Control': 'max-age=600' // 10 دقائق
+            'Cache-Control': 'max-age=600'
           }
         });
 
         if (controller.signal.aborted) return;
 
         const result = await res.json();
-        if (isSubscribed && result.success && result.data.length > 0) {
+        
+        if (!isSubscribed) return;
+
+        if (result.success && result.data.length > 0) {
+          const data = result.data[0];
+          
+          // ✅ التحقق من وجود البيانات المطلوبة
+          const requiredFields = [
+            'welcomeTitleAr', 'welcomeTitleEn',
+            'welcomeFeature1Ar', 'welcomeFeature1En'
+          ];
+          
+          const hasRequiredData = requiredFields.every(field => 
+            data[field] && data[field].trim() !== ''
+          );
+          
+          if (!hasRequiredData) {
+            setError("بيانات الـ Welcome Popup غير مكتملة في قاعدة البيانات");
+            return;
+          }
+          
           // ✅ حفظ في الـ cache
           welcomeDataCache = {
-            data: result.data[0],
+            data: data,
             timestamp: Date.now(),
           };
-          setSiteContent(result.data[0]);
+          
+          setSiteContent(data);
+        } else {
+          setError("لم يتم العثور على بيانات للـ Welcome Popup");
         }
       } catch (error: any) {
         if (error.name !== 'AbortError' && isSubscribed) {
           console.error('Error fetching welcome popup data:', error);
+          setError("حدث خطأ في جلب البيانات");
         }
       } finally {
         if (isSubscribed) {
@@ -160,22 +180,24 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     if (locale === "ar") {
       return {
         // بيانات Welcome بالعربي
-        welcomeTitle: siteContent.welcomeTitleAr || siteContent.heroTitleAr || t("hero.title"),
-        welcomeSubtitle1: siteContent.welcomeSubtitle1Ar || t("welcome.subtitle1"),
-        welcomeSubtitle2: siteContent.welcomeSubtitle2Ar || t("welcome.subtitle2"),
+        welcomeTitle: siteContent.welcomeTitleAr || "مرحباً بك!",
+        welcomeSubtitle1: siteContent.welcomeSubtitle1Ar || "",
+        welcomeSubtitle2: siteContent.welcomeSubtitle2Ar || "",
         welcomeFeatures: [
-          siteContent.welcomeFeature1Ar || t("welcome.feature1"),
-          siteContent.welcomeFeature2Ar || t("welcome.feature2"),
-          siteContent.welcomeFeature3Ar || t("welcome.feature3"),
-          siteContent.welcomeFeature4Ar || t("welcome.feature4"),
-          siteContent.welcomeFeature5Ar || t("welcome.feature5"),
-          siteContent.welcomeFeature6Ar || t("welcome.feature6"),
-        ],
+          siteContent.welcomeFeature1Ar,
+          siteContent.welcomeFeature2Ar,
+          siteContent.welcomeFeature3Ar,
+          siteContent.welcomeFeature4Ar,
+          siteContent.welcomeFeature5Ar,
+          siteContent.welcomeFeature6Ar,
+        ].filter(feature => feature && feature.trim() !== ""), // إزالة الحقول الفارغة
+        
         // الصور
         imageUrl: siteContent.imageUrl,
         secondImageUrl: siteContent.secondImageUrl,
         imageAlt: siteContent.imageAlt || "صورة الترحيب",
         secondImageAlt: siteContent.secondImageAlt || "الصورة الثانية",
+        
         // الأرقام
         discount: siteContent.discount || 30,
         happyParents: siteContent.happyParents || "250",
@@ -184,37 +206,38 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     } else {
       return {
         // بيانات Welcome بالإنجليزية
-        welcomeTitle: siteContent.welcomeTitleEn || siteContent.heroTitleEn || t("hero.title"),
-        welcomeSubtitle1: siteContent.welcomeSubtitle1En || t("welcome.subtitle1"),
-        welcomeSubtitle2: siteContent.welcomeSubtitle2En || t("welcome.subtitle2"),
+        welcomeTitle: siteContent.welcomeTitleEn || "Welcome!",
+        welcomeSubtitle1: siteContent.welcomeSubtitle1En || "",
+        welcomeSubtitle2: siteContent.welcomeSubtitle2En || "",
         welcomeFeatures: [
-          siteContent.welcomeFeature1En || t("welcome.feature1"),
-          siteContent.welcomeFeature2En || t("welcome.feature2"),
-          siteContent.welcomeFeature3En || t("welcome.feature3"),
-          siteContent.welcomeFeature4En || t("welcome.feature4"),
-          siteContent.welcomeFeature5En || t("welcome.feature5"),
-          siteContent.welcomeFeature6En || t("welcome.feature6"),
-        ],
+          siteContent.welcomeFeature1En,
+          siteContent.welcomeFeature2En,
+          siteContent.welcomeFeature3En,
+          siteContent.welcomeFeature4En,
+          siteContent.welcomeFeature5En,
+          siteContent.welcomeFeature6En,
+        ].filter(feature => feature && feature.trim() !== ""), // إزالة الحقول الفارغة
+        
         // الصور
         imageUrl: siteContent.imageUrl,
         secondImageUrl: siteContent.secondImageUrl,
         imageAlt: siteContent.imageAlt || "Welcome image",
         secondImageAlt: siteContent.secondImageAlt || "Second image",
+        
         // الأرقام
         discount: siteContent.discount || 30,
         happyParents: siteContent.happyParents || "250",
         graduates: siteContent.graduates || "130",
       };
     }
-  }, [siteContent, locale, t]);
+  }, [siteContent, locale]);
 
   // ✅ تحسين الـ interval مع cleanup
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !getContentByLanguage) return;
 
-    // ✅ استخدام requestAnimationFrame بدل setInterval لتحسين الأداء
     let lastTime = 0;
-    const slideDuration = 5000; // 5 ثواني
+    const slideDuration = 5000;
 
     const animate = (time: number) => {
       if (!lastTime) lastTime = time;
@@ -234,11 +257,47 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
     };
-  }, [isOpen]);
+  }, [isOpen, getContentByLanguage]);
+
+  // ✅ استخدام useMemo للـ slides
+  const slides = useMemo(() => {
+    if (!getContentByLanguage) return [];
+    
+    const features = getContentByLanguage.welcomeFeatures;
+    const hasEnoughFeatures = features.length >= 6;
+    
+    // إذا كانت هناك 6 ميزات أو أكثر، نقسمهم إلى شريحتين
+    if (hasEnoughFeatures) {
+      return [
+        {
+          title: getContentByLanguage.welcomeTitle,
+          subtitle: getContentByLanguage.welcomeSubtitle1 || "ابدأ رحلة طفلك مع البرمجة",
+          imageUrl: getContentByLanguage.imageUrl,
+          features: features.slice(0, 3),
+          icon: GraduationCap,
+        },
+        {
+          title: "عرض خاص!",
+          subtitle: getContentByLanguage.welcomeSubtitle2 || `احصل على خصم ${getContentByLanguage.discount}%`,
+          imageUrl: getContentByLanguage.secondImageUrl || getContentByLanguage.imageUrl,
+          features: features.slice(3, 6),
+          icon: Heart,
+        },
+      ];
+    }
+    
+    // إذا لم يكن هناك ميزات كافية، نستخدم شريحة واحدة فقط
+    return [
+      {
+        title: getContentByLanguage.welcomeTitle,
+        subtitle: getContentByLanguage.welcomeSubtitle1 || "ابدأ رحلة طفلك مع البرمجة",
+        imageUrl: getContentByLanguage.imageUrl,
+        features: features,
+        icon: GraduationCap,
+      },
+    ];
+  }, [getContentByLanguage]);
 
   // ✅ تنظيف عند unmount
   useEffect(() => {
@@ -246,9 +305,6 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
       isMounted.current = false;
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
-      }
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
       }
     };
   }, []);
@@ -259,50 +315,15 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     return imageUrl;
   };
 
-  // ✅ استخدام useMemo للـ slides لمنع إعادة الإنشاء
-  const slides = useMemo(() => {
-    if (!getContentByLanguage) return [];
-    
-    return [
-      {
-        title: getContentByLanguage.welcomeTitle,
-        subtitle: getContentByLanguage.welcomeSubtitle1 || t("welcome.subtitle1"),
-        imageUrl: getImageSrc(getContentByLanguage.imageUrl, "/images/hero/john.png"),
-        features: [
-          getContentByLanguage.welcomeFeatures[0],
-          getContentByLanguage.welcomeFeatures[1],
-          getContentByLanguage.welcomeFeatures[2],
-        ],
-        icon: GraduationCap,
-      },
-      {
-        title: t("welcome.specialOffer") || "Special Launch Offer!",
-        subtitle: getContentByLanguage.welcomeSubtitle2 || t("welcome.subtitle2"),
-        imageUrl: getImageSrc(getContentByLanguage.secondImageUrl, "/images/hero/maria.png"),
-        features: [
-          getContentByLanguage.welcomeFeatures[3],
-          getContentByLanguage.welcomeFeatures[4],
-          getContentByLanguage.welcomeFeatures[5],
-        ],
-        icon: Heart,
-      },
-    ];
-  }, [getContentByLanguage, t]);
-
   const currentSlideData = slides[currentSlide] || {};
   const CurrentIcon = currentSlideData.icon || GraduationCap;
   const discount = getContentByLanguage?.discount || 30;
 
   const handleWhatsAppContact = () => {
     const number = "201140474129";
-    const message =
-      locale === "ar"
-        ? encodeURIComponent(
-            t("welcome.whatsappMessage") || "مرحبًا! أهتم بدورات البرمجة للأطفال. هل يمكنكم مساعدتي؟",
-          )
-        : encodeURIComponent(
-            t("welcome.whatsappMessage") || "Hello! I'm interested in coding courses for children. Can you help me?",
-          );
+    const message = locale === "ar"
+      ? encodeURIComponent("مرحبًا! أهتم بدورات البرمجة للأطفال. هل يمكنكم مساعدتي؟")
+      : encodeURIComponent("Hello! I'm interested in coding courses for children. Can you help me?");
     window.open(`https://wa.me/${number}?text=${message}`, "_blank");
     onClose();
   };
@@ -313,24 +334,40 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
   };
 
   const handleEmailContact = () => {
-    const subject =
-      locale === "ar"
-        ? encodeURIComponent(t("welcome.emailSubject") || "استفسار عن دورات البرمجة")
-        : encodeURIComponent(t("welcome.emailSubject") || "Inquiry about Coding Courses");
-    const body =
-      locale === "ar"
-        ? encodeURIComponent(
-            t("welcome.emailBody") || "مرحبًا، أريد معرفة المزيد عن دورات البرمجة للأطفال.",
-          )
-        : encodeURIComponent(
-            t("welcome.emailBody") || "Hello, I would like to know more about coding courses for children.",
-          );
-    window.open(
-      `mailto:Engabdallah.naser@gmail.com?subject=${subject}&body=${body}`,
-      "_self",
-    );
+    const subject = locale === "ar"
+      ? encodeURIComponent("استفسار عن دورات البرمجة")
+      : encodeURIComponent("Inquiry about Coding Courses");
+    const body = locale === "ar"
+      ? encodeURIComponent("مرحبًا، أريد معرفة المزيد عن دورات البرمجة للأطفال.")
+      : encodeURIComponent("Hello, I would like to know more about coding courses for children.");
+    window.open(`mailto:Engabdallah.naser@gmail.com?subject=${subject}&body=${body}`, "_self");
     onClose();
   };
+
+  // ✅ إضافة error state
+  if (error && isOpen) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white dark:bg-darkmode rounded-xl p-8 max-w-md mx-4">
+          <div className="text-center">
+            <div className="text-red-500 text-xl mb-4">⚠️</div>
+            <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-2">
+              {error}
+            </h3>
+            <p className="text-sm text-SlateBlueText dark:text-darktext mb-6">
+              يرجى التحقق من إعدادات الـ Welcome Popup في لوحة التحكم
+            </p>
+            <button
+              onClick={onClose}
+              className="bg-primary text-white px-6 py-2 rounded-lg font-semibold"
+            >
+              إغلاق
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ✅ إضافة loading state
   if (loading && isOpen) {
@@ -343,9 +380,12 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     );
   }
 
+  // ✅ لا نعرض البوب أب إذا لم توجد بيانات
+  if (!getContentByLanguage || !isOpen) return null;
+
   return (
     <AnimatePresence>
-      {isOpen && getContentByLanguage && (
+      {isOpen && (
         <>
           <motion.div
             initial={{ opacity: 0 }}
@@ -371,9 +411,8 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                 <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-darktext" />
               </button>
 
-              <div
-                className={`flex flex-col lg:flex-row ${isRTL ? "lg:flex-row-reverse" : ""} h-full`}
-              >
+              <div className={`flex flex-col lg:flex-row ${isRTL ? "lg:flex-row-reverse" : ""} h-full`}>
+                {/* الجانب الأيسر: الصور والميزات */}
                 <div className="lg:w-1/2 xl:w-2/5 relative overflow-hidden bg-gradient-to-br from-primary via-[#7a45e6] to-[#6a3ac9] p-4 sm:p-6 md:p-8 flex items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
                   <div className="absolute inset-0 overflow-hidden">
                     {[...Array(6)].map((_, i) => (
@@ -415,7 +454,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
 
                     <div className="bg-white/10 backdrop-blur-sm rounded-14 sm:rounded-22 p-3 sm:p-4 mb-4 sm:mb-6 mx-auto max-w-[280px]">
                       <Image
-                        src={currentSlideData.imageUrl || "/images/hero/john.png"}
+                        src={getImageSrc(currentSlideData.imageUrl, "/images/hero/john.png")}
                         alt={getContentByLanguage.imageAlt}
                         width={200}
                         height={200}
@@ -460,6 +499,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
 
+                {/* الجانب الأيمن: النصوص والأزرار */}
                 <div className="lg:w-1/2 xl:w-3/5 p-4 sm:p-6 md:p-8 flex flex-col justify-center bg-IcyBreeze dark:bg-darklight overflow-y-auto">
                   <motion.div
                     key={currentSlide}
@@ -478,14 +518,16 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                         {currentSlideData.title}
                       </motion.h2>
 
-                      <motion.p
-                        className="text-base sm:text-lg text-SlateBlueText dark:text-darktext mb-4 sm:mb-6 leading-relaxed"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.3 }}
-                      >
-                        {currentSlideData.subtitle}
-                      </motion.p>
+                      {currentSlideData.subtitle && (
+                        <motion.p
+                          className="text-base sm:text-lg text-SlateBlueText dark:text-darktext mb-4 sm:mb-6 leading-relaxed"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.3 }}
+                        >
+                          {currentSlideData.subtitle}
+                        </motion.p>
+                      )}
 
                       {currentSlide === 1 && (
                         <motion.div
@@ -500,7 +542,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                           <div>
                             <div className="font-bold text-xl sm:text-24">{discount}% OFF</div>
                             <div className="text-xs sm:text-sm opacity-90 font-medium">
-                              {t("welcome.limitedTime") || "Limited Time Offer"}
+                              {locale === "ar" ? "عرض لفترة محدودة" : "Limited Time Offer"}
                             </div>
                           </div>
                         </motion.div>
@@ -514,7 +556,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                       className="space-y-3 sm:space-y-4"
                     >
                       <h3 className="text-lg sm:text-20 font-semibold text-MidnightNavyText dark:text-white mb-3 sm:mb-4">
-                        {t("welcome.contactUs") || "Start Your Child's Journey Today!"}
+                        {locale === "ar" ? "ابدأ رحلة طفلك اليوم!" : "Start Your Child's Journey Today!"}
                       </h3>
 
                       <motion.button
@@ -525,7 +567,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                       >
                         <FaWhatsapp className="text-xl sm:text-24" />
                         <span>
-                          {t("welcome.whatsappButton") || "Free Consultation on WhatsApp"}
+                          {locale === "ar" ? "استشارة مجانية على واتساب" : "Free Consultation on WhatsApp"}
                         </span>
                         {isRTL ? (
                           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -543,7 +585,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                         >
                           <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
                           <span>
-                            {t("welcome.callButton") || "Call Now"}
+                            {locale === "ar" ? "اتصل الآن" : "Call Now"}
                           </span>
                         </motion.button>
 
@@ -555,7 +597,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                         >
                           <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
                           <span>
-                            {t("welcome.emailButton") || "Email Us"}
+                            {locale === "ar" ? "راسلنا عبر الإيميل" : "Email Us"}
                           </span>
                         </motion.button>
                       </div>
@@ -582,7 +624,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                         <div className="flex items-center gap-1">
                           <Users className="w-4 h-4 text-primary" />
                           <span className="font-medium">
-                            {getContentByLanguage.happyParents}
+                            {getContentByLanguage.happyParents} {locale === "ar" ? "أولياء أمور راضون" : "Happy Parents"}
                           </span>
                         </div>
                       </div>
