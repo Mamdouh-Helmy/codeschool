@@ -186,8 +186,8 @@ export default function MeetingLinksAdmin() {
 
             {/* Stats Overview */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {Object.entries(stats).map(([key, value]) => (
-                    <div key={key} className="bg-white dark:bg-darkmode rounded-xl p-4 border border-gray-200 dark:border-dark_border shadow-sm">
+                {Object.entries(stats).map(([key, value], index) => (
+                    <div key={`stat-${key}-${index}`} className="bg-white dark:bg-darkmode rounded-xl p-4 border border-gray-200 dark:border-dark_border shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-xs text-gray-500 dark:text-darktext uppercase tracking-wide">
@@ -223,6 +223,7 @@ export default function MeetingLinksAdmin() {
 
                     <div className="flex flex-wrap gap-2">
                         <select
+                            key="status-select"
                             value={filters.status}
                             onChange={(e) => handleFilterChange('status', e.target.value)}
                             className="px-3 py-2 text-sm border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
@@ -235,6 +236,7 @@ export default function MeetingLinksAdmin() {
                         </select>
 
                         <select
+                            key="platform-select"
                             value={filters.platform}
                             onChange={(e) => handleFilterChange('platform', e.target.value)}
                             className="px-3 py-2 text-sm border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
@@ -247,6 +249,7 @@ export default function MeetingLinksAdmin() {
                         </select>
 
                         <button
+                            key="refresh-btn"
                             onClick={() => loadLinks()}
                             className="px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg flex items-center gap-2 text-sm"
                         >
@@ -285,7 +288,7 @@ export default function MeetingLinksAdmin() {
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-dark_border">
                             {links.map((link) => (
-                                <tr key={link.id} className="hover:bg-gray-50 dark:hover:bg-dark_input transition-colors">
+                                <tr key={link.id || link._id || `link-${Date.now()}-${Math.random()}`} className="hover:bg-gray-50 dark:hover:bg-dark_input transition-colors">
                                     <td className="py-4 px-4">
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
@@ -299,6 +302,7 @@ export default function MeetingLinksAdmin() {
                                                     {link.link}
                                                 </p>
                                                 <button
+                                                    key={`copy-link-${link.id}`}
                                                     onClick={() => copyToClipboard(link.link, "Link")}
                                                     className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
                                                     title="Copy link"
@@ -314,13 +318,13 @@ export default function MeetingLinksAdmin() {
                                                 {link.status.replace('_', ' ')}
                                             </span>
                                             {link.isInUse && (
-                                                <div className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
+                                                <div key={`inuse-${link.id}`} className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
                                                     <Clock className="w-3 h-3" />
                                                     Currently in use
                                                 </div>
                                             )}
                                             {link.nextReservation && !link.isInUse && (
-                                                <div className="text-xs text-blue-600 dark:text-blue-400">
+                                                <div key={`reserved-${link.id}`} className="text-xs text-blue-600 dark:text-blue-400">
                                                     Reserved for later
                                                 </div>
                                             )}
@@ -330,10 +334,11 @@ export default function MeetingLinksAdmin() {
                                         <div className="space-y-1">
                                             <div className="flex items-center gap-2">
                                                 <Lock className="w-3 h-3 text-gray-400" />
-                                                <span className="text-sm">{link.credentials.username}</span>
+                                                <span className="text-sm">{link.credentials?.username}</span>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <button
+                                                    key={`toggle-pass-${link.id}`}
                                                     onClick={() => togglePassword(link.id)}
                                                     className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
                                                     title={showPassword[link.id] ? "Hide password" : "Show password"}
@@ -345,10 +350,11 @@ export default function MeetingLinksAdmin() {
                                                     )}
                                                 </button>
                                                 <span className="text-sm font-mono">
-                                                    {showPassword[link.id] ? link.credentials.password : "••••••••"}
+                                                    {showPassword[link.id] ? (link.credentials?.password || "") : "••••••••"}
                                                 </span>
                                                 <button
-                                                    onClick={() => copyToClipboard(link.credentials.password, "Password")}
+                                                    key={`copy-pass-${link.id}`}
+                                                    onClick={() => copyToClipboard(link.credentials?.password || "", "Password")}
                                                     className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
                                                     title="Copy password"
                                                 >
@@ -370,7 +376,7 @@ export default function MeetingLinksAdmin() {
                                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
                                                 <div
                                                     className="bg-primary h-1.5 rounded-full"
-                                                    style={{ width: `${Math.min(link.usagePercentage, 100)}%` }}
+                                                    style={{ width: `${Math.min(link.usagePercentage || 0, 100)}%` }}
                                                 ></div>
                                             </div>
                                         </div>
@@ -379,20 +385,21 @@ export default function MeetingLinksAdmin() {
                                         <div className="space-y-1 text-xs">
                                             <div className="flex items-center gap-1">
                                                 <Users className="w-3 h-3" />
-                                                <span>Capacity: {link.capacity}</span>
+                                                <span>Capacity: {link.capacity || 0}</span>
                                             </div>
                                             <div className="flex items-center gap-1">
                                                 <Clock className="w-3 h-3" />
-                                                <span>Max: {link.durationLimit}m</span>
+                                                <span>Max: {link.durationLimit || 0}m</span>
                                             </div>
                                             <div className="text-gray-500">
-                                                {link.allowedDays?.length} days allowed
+                                                {link.allowedDays?.length || 0} days allowed
                                             </div>
                                         </div>
                                     </td>
                                     <td className="py-4 px-4">
                                         <div className="flex items-center gap-1">
                                             <button
+                                                key={`edit-${link.id}`}
                                                 onClick={() => onEdit(link)}
                                                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                                                 title="Edit"
@@ -400,7 +407,8 @@ export default function MeetingLinksAdmin() {
                                                 <Edit className="w-4 h-4 text-primary" />
                                             </button>
                                             <button
-                                                onClick={() => onDelete(link.id, link.name)}
+                                                key={`delete-${link.id}`}
+                                                onClick={() => onDelete(link.id || link._id, link.name)}
                                                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                                                 title="Delete"
                                             >
@@ -442,24 +450,28 @@ export default function MeetingLinksAdmin() {
             </div>
 
             {/* Meeting Link Form Modal */}
-            <Modal
-                open={modalOpen}
-                title={editingLink ? "Edit Meeting Link" : "Add New Meeting Link"}
-                onClose={() => {
-                    setModalOpen(false);
-                    setEditingLink(null);
-                }}
-                size="lg"
-            >
-                <MeetingLinkForm
-                    initial={editingLink}
+            {modalOpen && (
+                <Modal
+                    key={`modal-${editingLink?.id || 'new'}`}
+                    open={modalOpen}
+                    title={editingLink ? "Edit Meeting Link" : "Add New Meeting Link"}
                     onClose={() => {
                         setModalOpen(false);
                         setEditingLink(null);
                     }}
-                    onSaved={onSaved}
-                />
-            </Modal>
+                    size="lg"
+                >
+                    <MeetingLinkForm
+                        key={`form-${editingLink?.id || 'new'}`}
+                        initial={editingLink}
+                        onClose={() => {
+                            setModalOpen(false);
+                            setEditingLink(null);
+                        }}
+                        onSaved={onSaved}
+                    />
+                </Modal>
+            )}
         </div>
     );
 }
