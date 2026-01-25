@@ -1,4 +1,4 @@
-// app/api/groups/route.js
+// app/api/groups/route.js - FIXED VERSION
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../models/Group';
@@ -59,8 +59,8 @@ export async function GET(req) {
       .populate('courseId', 'title level')
       .populate('instructors', 'name email')
       .populate('students', 'personalInfo.fullName enrollmentNumber')
-      .populate('metadata.createdBy', 'name email')
-      .sort({ 'metadata.createdAt': -1 })
+      .populate('createdBy', 'name email') // ✅ تم التصحيح هنا
+      .sort({ createdAt: -1 }) // ✅ تم التصحيح هنا
       .skip(skip)
       .limit(limit)
       .lean();
@@ -87,7 +87,9 @@ export async function GET(req) {
       automation: group.automation,
       sessionsGenerated: group.sessionsGenerated,
       totalSessions: group.totalSessionsCount,
-      metadata: group.metadata
+      createdBy: group.createdBy, // ✅ تم التصحيح هنا
+      createdAt: group.createdAt, // ✅ تم التصحيح هنا
+      updatedAt: group.updatedAt // ✅ تم التصحيح هنا
     }));
 
     const stats = {
@@ -127,7 +129,7 @@ export async function GET(req) {
   }
 }
 
-// POST: Create new group
+// POST: Create new group - FIXED VERSION
 export async function POST(req) {
   try {
     console.log('🚀 Creating new group...');
@@ -160,6 +162,29 @@ export async function POST(req) {
         {
           success: false,
           error: 'Missing required fields: name, courseId, maxStudents, schedule, pricing'
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate schedule has exactly 3 days
+    if (!schedule.daysOfWeek || schedule.daysOfWeek.length !== 3) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Schedule must have exactly 3 days'
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate unique days
+    const uniqueDays = [...new Set(schedule.daysOfWeek)];
+    if (uniqueDays.length !== 3) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Schedule days must be unique'
         },
         { status: 400 }
       );
@@ -201,34 +226,62 @@ export async function POST(req) {
       }))
     };
 
-    // Create group
+    // Generate group code
+    const groupCode = `GRP-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 4)
+      .toUpperCase()}`;
+
+    // Create group - FIXED: استخدام createdBy مباشرة وليس داخل metadata
     const groupData = {
       name,
+      code: groupCode,
       courseId,
       courseSnapshot,
       instructors: instructors || [],
       students: [],
-      maxStudents,
+      maxStudents: parseInt(maxStudents),
       currentStudentsCount: 0,
-      schedule,
-      pricing,
-      automation: automation || {},
+      schedule: {
+        startDate: new Date(schedule.startDate),
+        daysOfWeek: schedule.daysOfWeek,
+        timeFrom: schedule.timeFrom,
+        timeTo: schedule.timeTo,
+        timezone: schedule.timezone || 'Africa/Cairo'
+      },
+      pricing: {
+        price: parseFloat(pricing.price),
+        paymentType: pricing.paymentType || 'full',
+        installmentPlan: pricing.installmentPlan || {
+          numberOfInstallments: 0,
+          amountPerInstallment: 0
+        }
+      },
+      automation: automation || {
+        whatsappEnabled: true,
+        welcomeMessage: true,
+        reminderEnabled: true,
+        reminderBeforeHours: 24,
+        notifyGuardianOnAbsence: true,
+        notifyOnSessionUpdate: true,
+        completionMessage: true
+      },
       status: 'draft',
       sessionsGenerated: false,
-      totalSessionsCount: 0,
-      metadata: {
-        createdBy: adminUser.id,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
+      totalSessionsCount: totalSessions,
+      createdBy: adminUser.id, // ✅ تصحيح هنا: حقل مباشر
+      updatedAt: new Date()
     };
+
+    console.log('📦 Group data to create:', JSON.stringify(groupData, null, 2));
 
     const group = await Group.create(groupData);
 
     const populatedGroup = await Group.findById(group._id)
       .populate('courseId', 'title level')
       .populate('instructors', 'name email')
-      .populate('metadata.createdBy', 'name email');
+      .populate('createdBy', 'name email') // ✅ تصحيح هنا
+      .lean();
 
     console.log('✅ Group created:', group.code);
 
@@ -264,10 +317,23 @@ export async function POST(req) {
       );
     }
 
+    // Handle duplicate key error for group code
+    if (error.code === 11000) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Group code already exists. Please try again.',
+          details: 'Duplicate group code'
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Failed to create group'
+        error: error.message || 'Failed to create group',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       },
       { status: 500 }
     );
