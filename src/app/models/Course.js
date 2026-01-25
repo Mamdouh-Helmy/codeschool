@@ -9,7 +9,6 @@ const validateLessonsCount = function (lessons) {
 
 const validateSessionNumber = function (lesson) {
   if (!lesson || typeof lesson !== "object") return false;
-  // يجب أن يكون رقم السيشن بين 1 و 3
   return lesson.sessionNumber >= 1 && lesson.sessionNumber <= 3;
 };
 
@@ -30,17 +29,14 @@ const validateCurriculum = function (curriculum) {
         return false;
       }
 
-      // Validate lessons exist
       if (!Array.isArray(module.lessons)) {
         return false;
       }
 
-      // Validate module has exactly 6 lessons
       if (!validateLessonsCount(module.lessons)) {
         return false;
       }
 
-      // Validate each lesson has valid sessionNumber (1, 2, or 3)
       for (let j = 0; j < module.lessons.length; j++) {
         const lesson = module.lessons[j];
         if (!validateSessionNumber(lesson)) {
@@ -80,7 +76,7 @@ const LessonSchema = new mongoose.Schema(
       max: 3,
     },
   },
-  { _id: true, _id: false } // Disable _id for lessons if they're always nested
+  { _id: false } // تصحيح: يجب أن يكون _id: false فقط
 );
 
 const ModuleSchema = new mongoose.Schema(
@@ -187,9 +183,9 @@ const CourseSchema = new mongoose.Schema(
       type: new mongoose.Schema(
         {
           id: {
-            type: String,
+            type: mongoose.Schema.Types.ObjectId, // تصحيح: يجب أن يكون ObjectId
+            ref: "User",
             required: [true, "Creator ID is required"],
-            trim: true,
           },
           name: {
             type: String,
@@ -227,7 +223,6 @@ CourseSchema.pre("save", function (next) {
       .replace(/-+/g, "-")
       .trim();
     
-    // Ensure slug is not empty
     this.slug = slug || `course-${Date.now()}`;
   }
   
@@ -236,21 +231,24 @@ CourseSchema.pre("save", function (next) {
     this.curriculum.forEach((module) => {
       if (module.lessons && module.lessons.length > 0) {
         module.lessons.forEach((lesson) => {
-          // Only set sessionNumber if not already set
           if (!lesson.sessionNumber || lesson.sessionNumber < 1 || lesson.sessionNumber > 3) {
-            // Calculate session number from order: 
-            // Lessons 1-2 → Session 1, Lessons 3-4 → Session 2, Lessons 5-6 → Session 3
             lesson.sessionNumber = Math.ceil(lesson.order / 2);
           }
         });
       }
-      // Ensure totalSessions is 3
       module.totalSessions = 3;
     });
   }
   
   next();
 });
+
+// إضافة indexes مرة واحدة فقط - هذا هو المكان الوحيد
+CourseSchema.index({ slug: 1 }, { unique: true, sparse: true });
+CourseSchema.index({ title: "text", description: "text" });
+CourseSchema.index({ isActive: 1, featured: 1 });
+CourseSchema.index({ level: 1 });
+CourseSchema.index({ "createdBy.id": 1 });
 
 // Fix for hot reloading in development
 if (mongoose.models.Course) {

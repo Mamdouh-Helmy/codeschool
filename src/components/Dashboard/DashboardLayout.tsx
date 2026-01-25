@@ -362,8 +362,8 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
 
           {/* Scrollable Main Content */}
           <div className={`flex-1 overflow-auto transition-all duration-300 ${!isMobile && isSecondarySidebarOpen && activeCategory
-              ? isRTL ? 'mr-[17rem]' : 'ml-[17rem]'
-              : !isMobile ? (isRTL ? 'mr-20' : 'ml-20') : ''
+            ? isRTL ? 'mr-[17rem]' : 'ml-[17rem]'
+            : !isMobile ? (isRTL ? 'mr-20' : 'ml-20') : ''
             }`}>
             <main className="px-4 py-6 sm:px-6 lg:px-8">
               {children}
