@@ -1,11 +1,9 @@
-// app/api/meeting-links/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
-import MeetingLink from "../../models/MeetingLink";
-import Session from "../../models/Session";
+import MeetingLink from "../../models/MeetingLink"; // Updated import path
 import { requireAdmin } from "@/utils/authMiddleware";
 
-// Days of week for reference - MOVED TO TOP
+// Days of week for reference
 const daysOfWeek = [
   "Sunday",
   "Monday",
@@ -49,10 +47,8 @@ export async function GET(req) {
       ];
     }
 
-    // Filter by availability
     if (availableOnly) {
       query.status = "available";
-      query.$or = query.$or || [];
     }
 
     const total = await MeetingLink.countDocuments(query);
@@ -67,7 +63,6 @@ export async function GET(req) {
 
     // Format response
     const formattedLinks = links.map((link) => {
-      // Calculate if link is currently in use
       const now = new Date();
       let isInUse = false;
 
@@ -84,13 +79,13 @@ export async function GET(req) {
         platform: link.platform,
         status: link.status,
         credentials: {
-          username: link.credentials.username,
-          hasPassword: !!link.credentials.password,
+          username: link.credentials?.username || "",
+          hasPassword: !!(link.credentials?.password),
         },
         capacity: link.capacity,
         durationLimit: link.durationLimit,
         allowedDays: link.allowedDays,
-        allowedTimeSlots: link.allowedTimeSlots,
+        allowedTimeSlots: link.allowedTimeSlots || [],
         stats: link.stats || {
           totalUses: 0,
           totalHours: 0,
@@ -188,12 +183,11 @@ export async function POST(req) {
     } = body;
 
     // Validation
-    if (!name || !link || !credentials?.username || !credentials?.password) {
+    if (!name || !link) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Missing required fields: name, link, credentials.username, credentials.password",
+          error: "Missing required fields: name and link",
         },
         { status: 400 },
       );
@@ -228,14 +222,17 @@ export async function POST(req) {
     }
 
     // Validate allowedDays
-    if (!allowedDays || allowedDays.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "At least one day must be selected",
-        },
-        { status: 400 },
-      );
+    if (allowedDays && allowedDays.length > 0) {
+      const validDays = allowedDays.every(day => daysOfWeek.includes(day));
+      if (!validDays) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid day provided in allowedDays",
+          },
+          { status: 400 },
+        );
+      }
     }
 
     // Validate allowedTimeSlots if provided
@@ -263,19 +260,19 @@ export async function POST(req) {
       }
     }
 
-    // Create meeting link
+    // Create meeting link data
     const meetingLinkData = {
       name: name.trim(),
       link: link.trim(),
       platform: platform || "zoom",
       credentials: {
-        username: credentials.username.trim(),
-        password: credentials.password,
+        username: credentials?.username?.trim() || "",
+        password: credentials?.password || "",
       },
       capacity: capacity || 100,
       durationLimit: durationLimit || 120,
       status: status || "available",
-      allowedDays: allowedDays || daysOfWeek, // Now correctly referenced
+      allowedDays: allowedDays?.length > 0 ? allowedDays : daysOfWeek,
       allowedTimeSlots: allowedTimeSlots || [],
       metadata: {
         createdBy: adminUser.id,
@@ -289,9 +286,12 @@ export async function POST(req) {
         averageUsageDuration: 0,
         lastUsed: null,
       },
+      isDeleted: false,
     };
 
-    const meetingLink = await MeetingLink.create(meetingLinkData);
+    // Create the meeting link
+    const meetingLink = new MeetingLink(meetingLinkData);
+    await meetingLink.save();
 
     console.log("✅ Meeting link created:", meetingLink.name);
 
@@ -306,7 +306,7 @@ export async function POST(req) {
           status: meetingLink.status,
           credentials: {
             username: meetingLink.credentials.username,
-            hasPassword: true,
+            hasPassword: !!meetingLink.credentials.password,
           },
           capacity: meetingLink.capacity,
           durationLimit: meetingLink.durationLimit,
@@ -320,6 +320,13 @@ export async function POST(req) {
     );
   } catch (error) {
     console.error("❌ Error creating meeting link:", error);
+    
+    // Log the full error for debugging
+    console.error("Full error details:", {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    });
 
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors || {})

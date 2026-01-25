@@ -1,3 +1,4 @@
+// models/MeetingLink.js
 import mongoose from "mongoose";
 
 const meetingLinkSchema = new mongoose.Schema(
@@ -79,8 +80,8 @@ const meetingLinkSchema = new mongoose.Schema(
     
     allowedTimeSlots: [
       {
-        startTime: String, // "08:00"
-        endTime: String,   // "22:00"
+        startTime: String, // Format: "08:00"
+        endTime: String,   // Format: "22:00"
       },
     ],
     
@@ -174,17 +175,18 @@ const meetingLinkSchema = new mongoose.Schema(
 
 // ==================== MIDDLEWARE ====================
 
+// Update updatedAt timestamp before saving
 meetingLinkSchema.pre("save", function (next) {
-  this.metadata.updatedAt = new Date();
+  if (this.metadata) {
+    this.metadata.updatedAt = new Date();
+  } else {
+    this.metadata = { updatedAt: new Date() };
+  }
   next();
 });
 
 // Prevent deletion queries from returning deleted links
-meetingLinkSchema.pre("find", function () {
-  this.where({ isDeleted: false });
-});
-
-meetingLinkSchema.pre("findOne", function () {
+meetingLinkSchema.pre(/^find/, function () {
   this.where({ isDeleted: false });
 });
 
@@ -219,16 +221,25 @@ meetingLinkSchema.virtual("isInUse").get(function () {
 
 // Get usage percentage
 meetingLinkSchema.virtual("usagePercentage").get(function () {
-  if (this.stats.totalUses === 0) return 0;
+  if (!this.stats?.totalUses || this.stats.totalUses === 0) return 0;
   
   // Assuming 30 days per month, 8 hours per day maximum
   const maxPossibleHours = 30 * 8;
-  return Math.min(100, (this.stats.totalHours / maxPossibleHours) * 100);
+  const totalHours = this.stats.totalHours || 0;
+  return Math.min(100, (totalHours / maxPossibleHours) * 100);
 });
 
 // ==================== METHODS ====================
 
-// Reserve link for a session
+/**
+ * Reserve link for a session
+ * @param {ObjectId} sessionId - The session ID
+ * @param {ObjectId} groupId - The group ID
+ * @param {Date} startTime - Session start time
+ * @param {Date} endTime - Session end time
+ * @param {ObjectId} userId - User ID who is reserving
+ * @returns {Object} Reservation result
+ */
 meetingLinkSchema.methods.reserveForSession = async function (
   sessionId,
   groupId,
@@ -258,7 +269,7 @@ meetingLinkSchema.methods.reserveForSession = async function (
   }
 
   // Check time slot restriction
-  if (this.allowedTimeSlots.length > 0) {
+  if (this.allowedTimeSlots && this.allowedTimeSlots.length > 0) {
     const sessionStartTime = start.toTimeString().slice(0, 5);
     const sessionEndTime = end.toTimeString().slice(0, 5);
     
@@ -293,27 +304,49 @@ meetingLinkSchema.methods.reserveForSession = async function (
   };
 };
 
-// Release link after session
+/**
+ * Release link after session
+ * @param {number} actualDuration - Actual duration in minutes
+ * @returns {Object} Release result
+ */
 meetingLinkSchema.methods.releaseLink = async function (actualDuration) {
   if (!this.currentReservation) {
     throw new Error("No active reservation to release");
   }
 
   // Record usage
-  this.usageHistory.push({
+  const usageRecord = {
     sessionId: this.currentReservation.sessionId,
     groupId: this.currentReservation.groupId,
     startTime: this.currentReservation.startTime,
     endTime: this.currentReservation.endTime,
     duration: actualDuration || 120, // default 2 hours
     usedAt: new Date(),
-  });
+  };
+
+  // Add to usage history
+  if (!this.usageHistory) {
+    this.usageHistory = [];
+  }
+  this.usageHistory.push(usageRecord);
 
   // Update stats
+  if (!this.stats) {
+    this.stats = {
+      totalUses: 0,
+      totalHours: 0,
+      averageUsageDuration: 0,
+    };
+  }
+
   this.stats.totalUses += 1;
-  this.stats.totalHours += (actualDuration || 120) / 60;
+  const hoursToAdd = (actualDuration || 120) / 60;
+  this.stats.totalHours += hoursToAdd;
   this.stats.lastUsed = new Date();
-  this.stats.averageUsageDuration = this.stats.totalHours * 60 / this.stats.totalUses;
+  
+  // Calculate new average
+  this.stats.averageUsageDuration = 
+    this.stats.totalHours * 60 / this.stats.totalUses;
 
   // Clear reservation
   this.status = "available";
@@ -324,11 +357,16 @@ meetingLinkSchema.methods.releaseLink = async function (actualDuration) {
   return {
     success: true,
     message: "Link released successfully",
-    usageRecord: this.usageHistory[this.usageHistory.length - 1],
+    usageRecord,
   };
 };
 
-// Check availability for a time slot
+/**
+ * Check availability for a time slot
+ * @param {Date} startTime - Start time
+ * @param {Date} endTime - End time
+ * @returns {Object} Availability check result
+ */
 meetingLinkSchema.methods.checkAvailability = function (startTime, endTime) {
   if (this.status !== "available") {
     return {
@@ -359,7 +397,7 @@ meetingLinkSchema.methods.checkAvailability = function (startTime, endTime) {
   }
 
   // Check time slot restriction
-  if (this.allowedTimeSlots.length > 0) {
+  if (this.allowedTimeSlots && this.allowedTimeSlots.length > 0) {
     const sessionStartTime = start.toTimeString().slice(0, 5);
     const sessionEndTime = end.toTimeString().slice(0, 5);
     
@@ -385,12 +423,15 @@ meetingLinkSchema.methods.checkAvailability = function (startTime, endTime) {
   };
 };
 
-// Get usage statistics
+/**
+ * Get usage statistics
+ * @returns {Object} Usage statistics
+ */
 meetingLinkSchema.methods.getUsageStats = function () {
   const today = new Date();
   const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const recentUses = this.usageHistory.filter(
+  const recentUses = (this.usageHistory || []).filter(
     (use) => new Date(use.usedAt) >= thirtyDaysAgo
   );
 
@@ -401,13 +442,13 @@ meetingLinkSchema.methods.getUsageStats = function () {
   });
 
   return {
-    totalUses: this.stats.totalUses,
-    totalHours: this.stats.totalHours.toFixed(2),
-    averageDuration: this.stats.averageUsageDuration.toFixed(2),
+    totalUses: this.stats?.totalUses || 0,
+    totalHours: (this.stats?.totalHours || 0).toFixed(2),
+    averageDuration: (this.stats?.averageUsageDuration || 0).toFixed(2),
     usagePercentage: this.usagePercentage.toFixed(2),
     recentUses: recentUses.length,
     usageByDay,
-    lastUsed: this.stats.lastUsed,
+    lastUsed: this.stats?.lastUsed,
     currentStatus: this.status,
     nextReservation: this.nextReservation,
     isInUse: this.isInUse,
@@ -416,7 +457,13 @@ meetingLinkSchema.methods.getUsageStats = function () {
 
 // ==================== STATIC METHODS ====================
 
-// Find available meeting links for a time slot
+/**
+ * Find available meeting links for a time slot
+ * @param {Date} startTime - Session start time
+ * @param {Date} endTime - Session end time
+ * @param {number} limit - Maximum number of links to return
+ * @returns {Array} Available meeting links
+ */
 meetingLinkSchema.statics.findAvailableLinks = async function (
   startTime,
   endTime,
@@ -437,7 +484,7 @@ meetingLinkSchema.statics.findAvailableLinks = async function (
 
   // Filter by time slots if specified
   const filteredLinks = availableLinks.filter((link) => {
-    if (link.allowedTimeSlots.length === 0) return true;
+    if (!link.allowedTimeSlots || link.allowedTimeSlots.length === 0) return true;
 
     const sessionStartTime = start.toTimeString().slice(0, 5);
     const sessionEndTime = end.toTimeString().slice(0, 5);
@@ -451,11 +498,16 @@ meetingLinkSchema.statics.findAvailableLinks = async function (
 
   // Sort by usage (prefer less used links)
   return filteredLinks
-    .sort((a, b) => a.stats.totalUses - b.stats.totalUses)
+    .sort((a, b) => (a.stats?.totalUses || 0) - (b.stats?.totalUses || 0))
     .slice(0, limit);
 };
 
-// Get link usage report
+/**
+ * Get link usage report
+ * @param {Date} startDate - Report start date
+ * @param {Date} endDate - Report end date
+ * @returns {Object} Usage report
+ */
 meetingLinkSchema.statics.getUsageReport = async function (startDate, endDate) {
   const links = await this.find({ isDeleted: false }).lean();
 
@@ -481,8 +533,9 @@ meetingLinkSchema.statics.getUsageReport = async function (startDate, endDate) {
 
   links.forEach((link) => {
     // Platform distribution
-    report.platformDistribution[link.platform] =
-      (report.platformDistribution[link.platform] || 0) + 1;
+    const platform = link.platform || "other";
+    report.platformDistribution[platform] =
+      (report.platformDistribution[platform] || 0) + 1;
 
     // Total usage
     report.totalUsage.sessions += link.stats?.totalUses || 0;
@@ -490,7 +543,7 @@ meetingLinkSchema.statics.getUsageReport = async function (startDate, endDate) {
 
     // Filter usage by date range if provided
     if (startDate && endDate) {
-      const filteredHistory = link.usageHistory.filter((use) => {
+      const filteredHistory = (link.usageHistory || []).filter((use) => {
         const useDate = new Date(use.usedAt);
         return useDate >= new Date(startDate) && useDate <= new Date(endDate);
       });
@@ -500,7 +553,7 @@ meetingLinkSchema.statics.getUsageReport = async function (startDate, endDate) {
         report.dailyUsage[day] = (report.dailyUsage[day] || 0) + 1;
       });
     } else {
-      link.usageHistory.forEach((use) => {
+      (link.usageHistory || []).forEach((use) => {
         const day = new Date(use.usedAt).toLocaleDateString();
         report.dailyUsage[day] = (report.dailyUsage[day] || 0) + 1;
       });
@@ -509,14 +562,23 @@ meetingLinkSchema.statics.getUsageReport = async function (startDate, endDate) {
 
   // Calculate averages
   report.averageUsagePerLink = {
-    sessions: (report.totalUsage.sessions / links.length).toFixed(2),
-    hours: (report.totalUsage.hours / links.length).toFixed(2),
+    sessions: links.length > 0 ? (report.totalUsage.sessions / links.length).toFixed(2) : "0.00",
+    hours: links.length > 0 ? (report.totalUsage.hours / links.length).toFixed(2) : "0.00",
   };
 
   return report;
 };
 
-// Reserve a link for a session (auto-select)
+/**
+ * Reserve a link for a session (auto-select)
+ * @param {ObjectId} sessionId - Session ID
+ * @param {ObjectId} groupId - Group ID
+ * @param {Date} startTime - Start time
+ * @param {Date} endTime - End time
+ * @param {ObjectId} userId - User ID
+ * @param {string} platform - Preferred platform
+ * @returns {Object} Reservation result
+ */
 meetingLinkSchema.statics.reserveLinkForSession = async function (
   sessionId,
   groupId,
@@ -542,7 +604,7 @@ meetingLinkSchema.statics.reserveLinkForSession = async function (
 
   // Find the best link (least used)
   const bestLink = availableLinks.sort(
-    (a, b) => a.stats.totalUses - b.stats.totalUses
+    (a, b) => (a.stats?.totalUses || 0) - (b.stats?.totalUses || 0)
   )[0];
 
   try {
@@ -564,7 +626,10 @@ meetingLinkSchema.statics.reserveLinkForSession = async function (
   }
 };
 
-// Release all expired reservations
+/**
+ * Release all expired reservations
+ * @returns {Object} Release results
+ */
 meetingLinkSchema.statics.releaseExpiredReservations = async function () {
   const now = new Date();
   
@@ -609,10 +674,21 @@ meetingLinkSchema.index({ "currentReservation.sessionId": 1 });
 meetingLinkSchema.index({ "currentReservation.groupId": 1 });
 meetingLinkSchema.index({ "metadata.createdAt": -1 });
 meetingLinkSchema.index({ "stats.lastUsed": -1 });
+meetingLinkSchema.index({ link: 1 }, { unique: true });
+meetingLinkSchema.index({ name: 1 });
+meetingLinkSchema.index({ isDeleted: 1 });
 
-// Ensure the model exists
-const MeetingLink =
-  mongoose.models.MeetingLink ||
-  mongoose.model("MeetingLink", meetingLinkSchema);
+// ==================== MODEL CREATION ====================
+
+// Check if model already exists to prevent OverwriteModelError
+let MeetingLink;
+
+try {
+  // Try to get existing model
+  MeetingLink = mongoose.model("MeetingLink");
+} catch {
+  // Create new model if it doesn't exist
+  MeetingLink = mongoose.model("MeetingLink", meetingLinkSchema);
+}
 
 export default MeetingLink;
