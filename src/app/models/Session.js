@@ -1,4 +1,4 @@
-// models/Session.js
+// models/Session.js - ENHANCED WITH MEETING LINK SUPPORT
 import mongoose from "mongoose";
 
 const attendanceRecordSchema = new mongoose.Schema(
@@ -82,6 +82,30 @@ const SessionSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // ✅ Meeting Link Information
+    meetingLink: {
+      type: String,
+      trim: true,
+    },
+    meetingCredentials: {
+      username: {
+        type: String,
+        trim: true,
+      },
+      password: {
+        type: String,
+      },
+    },
+    meetingLinkId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MeetingLink",
+    },
+    meetingPlatform: {
+      type: String,
+      enum: ["zoom", "google_meet", "microsoft_teams", "other", null],
+      default: null,
+    },
+
     // Schedule
     scheduledDate: {
       type: Date,
@@ -103,11 +127,7 @@ const SessionSchema = new mongoose.Schema(
       default: "scheduled",
     },
 
-    // Meeting Details
-    meetingLink: {
-      type: String,
-      trim: true,
-    },
+    // Recording
     recordingLink: {
       type: String,
       trim: true,
@@ -122,16 +142,21 @@ const SessionSchema = new mongoose.Schema(
 
     // Automation Tracking
     automationEvents: {
+      // Reminders
       reminderSent: {
         type: Boolean,
         default: false,
       },
       reminderSentAt: Date,
+      
+      // Absence notifications
       absentNotificationsSent: {
         type: Boolean,
         default: false,
       },
       absentNotificationsSentAt: Date,
+      
+      // Session updates
       postponeNotificationSent: {
         type: Boolean,
         default: false,
@@ -141,6 +166,14 @@ const SessionSchema = new mongoose.Schema(
         default: false,
       },
 
+      // Meeting link assignment
+      meetingLinkAssigned: {
+        type: Boolean,
+        default: false,
+      },
+      meetingLinkAssignedAt: Date,
+
+      // Reminder details
       reminder24hSent: { type: Boolean, default: false },
       reminder24hSentAt: Date,
       reminder24hStudentsNotified: { type: Number, default: 0 },
@@ -162,6 +195,26 @@ const SessionSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+
+    // Materials
+    materials: [
+      {
+        name: String,
+        url: String,
+        type: {
+          type: String,
+          enum: ["pdf", "video", "link", "document", "presentation", "other"],
+        },
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        uploadedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+      },
+    ],
 
     // Metadata
     metadata: {
@@ -196,23 +249,32 @@ const SessionSchema = new mongoose.Schema(
   }
 );
 
-// Compound Indexes
+// ==================== INDEXES ====================
+
+// Basic indexes
 SessionSchema.index({ groupId: 1, scheduledDate: 1 });
 SessionSchema.index({ groupId: 1, status: 1 });
 SessionSchema.index({ courseId: 1 });
 SessionSchema.index({ scheduledDate: 1, status: 1 });
 SessionSchema.index({ moduleIndex: 1, sessionNumber: 1 });
 
+// ✅ Meeting link indexes
+SessionSchema.index({ meetingLinkId: 1 });
+SessionSchema.index({ meetingPlatform: 1 });
+SessionSchema.index({ "automationEvents.meetingLinkAssigned": 1 });
+
 // ✅ Unique constraint: one session per group/module/sessionNumber
-// ⚠️ REMOVED: lessonIndex from unique index to prevent duplicate key errors
 SessionSchema.index(
   { groupId: 1, moduleIndex: 1, sessionNumber: 1 },
   {
     unique: true,
     name: "unique_session_per_group_module",
     background: true,
+    partialFilterExpression: { isDeleted: false }
   }
 );
+
+// ==================== MIDDLEWARE ====================
 
 // Update timestamp
 SessionSchema.pre("save", function (next) {
@@ -227,6 +289,32 @@ SessionSchema.pre("find", function () {
 
 SessionSchema.pre("findOne", function () {
   this.where({ isDeleted: false });
+});
+
+// ✅ Automatically release meeting link when session is deleted
+SessionSchema.pre("save", async function (next) {
+  if (this.isModified("isDeleted") && this.isDeleted && this.meetingLinkId) {
+    try {
+      // Import the releaseMeetingLink function
+      const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
+      await releaseMeetingLink(this._id);
+    } catch (error) {
+      console.error("❌ Error releasing meeting link on delete:", error);
+      // Don't stop the save operation
+    }
+  }
+  
+  // ✅ Automatically release meeting link when session is cancelled
+  if (this.isModified("status") && this.status === "cancelled" && this.meetingLinkId) {
+    try {
+      const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
+      await releaseMeetingLink(this._id);
+    } catch (error) {
+      console.error("❌ Error releasing meeting link on cancellation:", error);
+    }
+  }
+  
+  next();
 });
 
 // ✅ Prevent duplicate sessions on save
@@ -254,26 +342,42 @@ SessionSchema.pre("save", async function (next) {
   }
 });
 
-// Virtual: Total students marked
+// ==================== VIRTUAL PROPERTIES ====================
+
+// Total students marked
 SessionSchema.virtual("totalMarked").get(function () {
   return this.attendance ? this.attendance.length : 0;
 });
 
-// Virtual: Present count
+// Present count
 SessionSchema.virtual("presentCount").get(function () {
   return this.attendance
     ? this.attendance.filter((a) => a.status === "present").length
     : 0;
 });
 
-// Virtual: Absent count
+// Absent count
 SessionSchema.virtual("absentCount").get(function () {
   return this.attendance
     ? this.attendance.filter((a) => a.status === "absent").length
     : 0;
 });
 
-// Virtual: Day of week name
+// Late count
+SessionSchema.virtual("lateCount").get(function () {
+  return this.attendance
+    ? this.attendance.filter((a) => a.status === "late").length
+    : 0;
+});
+
+// Excused count
+SessionSchema.virtual("excusedCount").get(function () {
+  return this.attendance
+    ? this.attendance.filter((a) => a.status === "excused").length
+    : 0;
+});
+
+// Day of week name
 SessionSchema.virtual("dayName").get(function () {
   const dayMap = {
     0: "Sunday",
@@ -287,24 +391,24 @@ SessionSchema.virtual("dayName").get(function () {
   return dayMap[new Date(this.scheduledDate).getDay()] || "Unknown";
 });
 
-// Virtual: Formatted date (YYYY-MM-DD)
+// Formatted date (YYYY-MM-DD)
 SessionSchema.virtual("formattedDate").get(function () {
   return this.scheduledDate
     ? this.scheduledDate.toISOString().split("T")[0]
     : "";
 });
 
-// Virtual: Lessons covered text
+// Lessons covered text
 SessionSchema.virtual("lessonsText").get(function () {
   return this.lessonIndexes.map((idx) => `Lesson ${idx + 1}`).join(" & ");
 });
 
-// Virtual: Module position (for display)
+// Module position (for display)
 SessionSchema.virtual("modulePosition").get(function () {
   return this.moduleIndex + 1;
 });
 
-// Virtual: Full date time for sorting
+// Full date time for sorting
 SessionSchema.virtual("fullDateTime").get(function () {
   if (!this.scheduledDate || !this.startTime) return null;
 
@@ -314,14 +418,43 @@ SessionSchema.virtual("fullDateTime").get(function () {
   return date;
 });
 
-// Method: Check if session is in the past
+// ✅ Check if session has meeting link
+SessionSchema.virtual("hasMeetingLink").get(function () {
+  return !!this.meetingLink;
+});
+
+// ✅ Get meeting platform icon
+SessionSchema.virtual("meetingPlatformIcon").get(function () {
+  const icons = {
+    zoom: "🔷",
+    google_meet: "🔴",
+    microsoft_teams: "🔵",
+    other: "🔗",
+  };
+  return icons[this.meetingPlatform] || "📅";
+});
+
+// ✅ Get meeting credentials display (masked password)
+SessionSchema.virtual("credentialsDisplay").get(function () {
+  if (!this.meetingCredentials) return null;
+  
+  return {
+    username: this.meetingCredentials.username,
+    password: this.meetingCredentials.password ? "••••••••" : null,
+    hasPassword: !!this.meetingCredentials.password,
+  };
+});
+
+// ==================== METHODS ====================
+
+// Check if session is in the past
 SessionSchema.methods.isPast = function () {
   const now = new Date();
   const sessionDateTime = this.fullDateTime;
   return sessionDateTime ? sessionDateTime < now : false;
 };
 
-// Method: Check if session is upcoming (within next 48 hours)
+// Check if session is upcoming (within next 48 hours)
 SessionSchema.methods.isUpcoming = function () {
   const now = new Date();
   const sessionDateTime = this.fullDateTime;
@@ -332,7 +465,7 @@ SessionSchema.methods.isUpcoming = function () {
   return diffHours > 0 && diffHours <= 48;
 };
 
-// Method: Check if session is today
+// Check if session is today
 SessionSchema.methods.isToday = function () {
   const today = new Date();
   const sessionDate = new Date(this.scheduledDate);
@@ -340,7 +473,7 @@ SessionSchema.methods.isToday = function () {
   return today.toDateString() === sessionDate.toDateString();
 };
 
-// Method: Get session summary
+// Get session summary
 SessionSchema.methods.getSummary = function () {
   return {
     id: this._id,
@@ -358,17 +491,22 @@ SessionSchema.methods.getSummary = function () {
     totalMarked: this.totalMarked,
     presentCount: this.presentCount,
     absentCount: this.absentCount,
+    lateCount: this.lateCount,
+    excusedCount: this.excusedCount,
     isPast: this.isPast(),
     isUpcoming: this.isUpcoming(),
     isToday: this.isToday(),
     moduleIndex: this.moduleIndex,
     modulePosition: this.modulePosition,
     meetingLink: this.meetingLink,
+    meetingPlatform: this.meetingPlatform,
+    meetingPlatformIcon: this.meetingPlatformIcon,
+    hasMeetingLink: this.hasMeetingLink,
     recordingLink: this.recordingLink,
   };
 };
 
-// Method: Get session display details (for UI)
+// Get session display details (for UI)
 SessionSchema.methods.getDisplayDetails = function () {
   const dayName = this.dayName;
   const lessonsText = this.lessonIndexes
@@ -394,12 +532,17 @@ SessionSchema.methods.getDisplayDetails = function () {
     isToday: this.isToday(),
     attendanceTaken: this.attendanceTaken,
     meetingLink: this.meetingLink,
+    meetingPlatform: this.meetingPlatform,
+    meetingPlatformIcon: this.meetingPlatformIcon,
+    hasMeetingLink: this.hasMeetingLink,
+    credentialsDisplay: this.credentialsDisplay,
     recordingLink: this.recordingLink,
     instructorNotes: this.instructorNotes,
+    materials: this.materials || [],
   };
 };
 
-// Method: Get status color for UI
+// Get status color for UI
 SessionSchema.methods.getStatusColor = function () {
   const colors = {
     scheduled:
@@ -416,7 +559,7 @@ SessionSchema.methods.getStatusColor = function () {
   );
 };
 
-// Method: Check if attendance can be taken
+// Check if attendance can be taken
 SessionSchema.methods.canTakeAttendance = function () {
   if (this.status !== "scheduled" && this.status !== "completed") {
     return false;
@@ -427,21 +570,21 @@ SessionSchema.methods.canTakeAttendance = function () {
 
   if (!sessionDateTime) return false;
 
-  // يمكن أخذ الحضور قبل الجلسة بـ 30 دقيقة وبعد انتهائها بـ 2 ساعة
+  // Can take attendance 30 minutes before and up to 2 hours after session
   const thirtyMinutesBefore = new Date(sessionDateTime.getTime() - 30 * 60000);
   const twoHoursAfter = new Date(sessionDateTime.getTime() + 2 * 60 * 60000);
 
   return now >= thirtyMinutesBefore && now <= twoHoursAfter;
 };
 
-// Method: Check if session can be edited
+// Check if session can be edited
 SessionSchema.methods.canBeEdited = function () {
-  // لا يمكن تعديل السيشنات المكتملة أو الملغاة
+  // Cannot edit completed or cancelled sessions
   if (this.status === "completed" || this.status === "cancelled") {
     return false;
   }
 
-  // يمكن تعديل السيشنات المؤجلة أو المجدولة قبل موعدها بـ 24 ساعة
+  // Can edit scheduled or postponed sessions 24 hours before
   if (this.status === "scheduled" || this.status === "postponed") {
     const now = new Date();
     const sessionDateTime = this.fullDateTime;
@@ -455,7 +598,45 @@ SessionSchema.methods.canBeEdited = function () {
   return true;
 };
 
-// Method: Get next session in sequence (if exists)
+// ✅ Check if meeting link can be changed
+SessionSchema.methods.canChangeMeetingLink = function () {
+  if (this.status === "completed" || this.status === "cancelled") {
+    return false;
+  }
+
+  const now = new Date();
+  const sessionDateTime = this.fullDateTime;
+
+  if (!sessionDateTime) return true;
+
+  // Can change meeting link up to 1 hour before session
+  const oneHourBefore = new Date(sessionDateTime.getTime() - 60 * 60000);
+  return now < oneHourBefore;
+};
+
+// ✅ Release meeting link (wrapper method)
+SessionSchema.methods.releaseMeetingLink = async function () {
+  try {
+    const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
+    return await releaseMeetingLink(this._id);
+  } catch (error) {
+    console.error("❌ Error releasing meeting link:", error);
+    throw error;
+  }
+};
+
+// ✅ Assign new meeting link
+SessionSchema.methods.assignMeetingLink = async function (meetingLinkId, userId) {
+  try {
+    const { manuallyAssignMeetingLink } = await import("../../utils/sessionGenerator");
+    return await manuallyAssignMeetingLink(this._id, meetingLinkId, userId);
+  } catch (error) {
+    console.error("❌ Error assigning meeting link:", error);
+    throw error;
+  }
+};
+
+// Get next session in sequence (if exists)
 SessionSchema.methods.getNextSession = async function () {
   const nextSession = await mongoose
     .model("Session")
@@ -469,7 +650,7 @@ SessionSchema.methods.getNextSession = async function () {
   return nextSession;
 };
 
-// Method: Get previous session in sequence (if exists)
+// Get previous session in sequence (if exists)
 SessionSchema.methods.getPreviousSession = async function () {
   const prevSession = await mongoose
     .model("Session")
@@ -483,7 +664,7 @@ SessionSchema.methods.getPreviousSession = async function () {
   return prevSession;
 };
 
-// Method: Get session sequence in module
+// Get session sequence in module
 SessionSchema.methods.getModuleSessions = async function () {
   const moduleSessions = await mongoose
     .model("Session")
@@ -497,7 +678,9 @@ SessionSchema.methods.getModuleSessions = async function () {
   return moduleSessions;
 };
 
-// Static: Get all sessions for a group grouped by day
+// ==================== STATIC METHODS ====================
+
+// Get all sessions for a group grouped by day
 SessionSchema.statics.getSessionsByDay = async function (groupId) {
   const sessions = await this.find({
     groupId,
@@ -533,6 +716,8 @@ SessionSchema.statics.getSessionsByDay = async function (groupId) {
       status: session.status,
       attendanceTaken: session.attendanceTaken,
       meetingLink: session.meetingLink,
+      meetingPlatform: session.meetingPlatform,
+      hasMeetingLink: !!session.meetingLink,
       lessonIndexes: session.lessonIndexes,
       lessonsText: session.lessonIndexes
         .map((idx) => `Lesson ${idx + 1}`)
@@ -546,7 +731,7 @@ SessionSchema.statics.getSessionsByDay = async function (groupId) {
   );
 };
 
-// Static: Get sessions for a specific day of week
+// Get sessions for a specific day of week
 SessionSchema.statics.getSessionsByDayOfWeek = async function (
   groupId,
   dayOfWeek
@@ -571,7 +756,7 @@ SessionSchema.statics.getSessionsByDayOfWeek = async function (
   });
 };
 
-// Static: Get session distribution statistics
+// Get session distribution statistics
 SessionSchema.statics.getSessionStats = async function (groupId) {
   const stats = await this.aggregate([
     {
@@ -594,17 +779,27 @@ SessionSchema.statics.getSessionStats = async function (groupId) {
     cancelled: 0,
     postponed: 0,
     total: 0,
+    withMeetingLinks: 0,
   };
+
+  // Get count of sessions with meeting links
+  const sessionsWithLinks = await this.countDocuments({
+    groupId: new mongoose.Types.ObjectId(groupId),
+    isDeleted: false,
+    meetingLink: { $ne: null },
+  });
 
   stats.forEach((stat) => {
     statsMap[stat._id] = stat.count;
     statsMap.total += stat.count;
   });
 
+  statsMap.withMeetingLinks = sessionsWithLinks;
+
   return statsMap;
 };
 
-// Static: Get next upcoming session for a group
+// Get next upcoming session for a group
 SessionSchema.statics.getNextUpcomingSession = async function (groupId) {
   const now = new Date();
 
@@ -616,7 +811,7 @@ SessionSchema.statics.getNextUpcomingSession = async function (groupId) {
   }).sort({ scheduledDate: 1, startTime: 1 });
 };
 
-// Static: Get sessions by module
+// Get sessions by module
 SessionSchema.statics.getSessionsByModule = async function (groupId) {
   const sessions = await this.find({
     groupId,
@@ -653,6 +848,9 @@ SessionSchema.statics.getSessionsByModule = async function (groupId) {
       endTime: session.endTime,
       status: session.status,
       attendanceTaken: session.attendanceTaken,
+      meetingLink: session.meetingLink,
+      meetingPlatform: session.meetingPlatform,
+      hasMeetingLink: !!session.meetingLink,
       lessonIndexes: session.lessonIndexes,
       lessonsText: session.lessonIndexes
         .map((idx) => `Lesson ${idx + 1}`)
@@ -666,7 +864,7 @@ SessionSchema.statics.getSessionsByModule = async function (groupId) {
   );
 };
 
-// Static: Get today's sessions for a group
+// Get today's sessions for a group
 SessionSchema.statics.getTodaySessions = async function (groupId) {
   const today = new Date();
   const todayStart = new Date(
@@ -687,7 +885,7 @@ SessionSchema.statics.getTodaySessions = async function (groupId) {
   }).sort({ startTime: 1 });
 };
 
-// Static: Get sessions within date range
+// Get sessions within date range
 SessionSchema.statics.getSessionsByDateRange = async function (
   groupId,
   startDate,
@@ -700,8 +898,70 @@ SessionSchema.statics.getSessionsByDateRange = async function (
   }).sort({ scheduledDate: 1, startTime: 1 });
 };
 
-// Static: Delete all sessions for a group (soft delete)
+// ✅ Get sessions needing meeting links
+SessionSchema.statics.getSessionsNeedingMeetingLinks = async function (
+  groupId = null,
+  limit = 50
+) {
+  const query = {
+    status: "scheduled",
+    meetingLink: { $in: [null, ""] },
+    scheduledDate: { $gte: new Date() },
+    isDeleted: false,
+  };
+
+  if (groupId) {
+    query.groupId = new mongoose.Types.ObjectId(groupId);
+  }
+
+  return await this.find(query)
+    .sort({ scheduledDate: 1 })
+    .limit(limit)
+    .lean();
+};
+
+// ✅ Get available meeting links for a session
+SessionSchema.statics.getAvailableMeetingLinksForSession = async function (
+  sessionId
+) {
+  const session = await this.findById(sessionId);
+  
+  if (!session) {
+    throw new Error("Session not found");
+  }
+
+  const { getAvailableMeetingLinks } = await import("../../utils/sessionGenerator");
+  
+  // Create date objects for the session time
+  const startTime = new Date(session.scheduledDate);
+  const [hours, minutes] = session.startTime.split(":").map(Number);
+  startTime.setHours(hours, minutes, 0, 0);
+  
+  const endTime = new Date(startTime);
+  const [endHours, endMinutes] = session.endTime.split(":").map(Number);
+  endTime.setHours(endHours, endMinutes, 0, 0);
+
+  return await getAvailableMeetingLinks(startTime, endTime);
+};
+
+// Delete all sessions for a group (soft delete)
 SessionSchema.statics.deleteGroupSessions = async function (groupId, userId) {
+  // First release all meeting links
+  const sessions = await this.find({
+    groupId: groupId,
+    isDeleted: false,
+    meetingLinkId: { $ne: null },
+  });
+
+  for (const session of sessions) {
+    try {
+      await session.releaseMeetingLink();
+    } catch (error) {
+      console.error(`⚠️ Failed to release meeting link for session ${session._id}:`, error.message);
+    }
+  }
+
+  // Then mark as deleted
   const result = await this.updateMany(
     {
       groupId: groupId,
@@ -721,7 +981,7 @@ SessionSchema.statics.deleteGroupSessions = async function (groupId, userId) {
   return result;
 };
 
-// Static: Find duplicate sessions
+// Find duplicate sessions
 SessionSchema.statics.findDuplicates = async function (groupId) {
   const duplicates = await this.aggregate([
     {
@@ -751,6 +1011,8 @@ SessionSchema.statics.findDuplicates = async function (groupId) {
   return duplicates;
 };
 
+// ==================== JSON TRANSFORM ====================
+
 // Ensure virtuals are included in JSON
 SessionSchema.set("toJSON", {
   virtuals: true,
@@ -759,6 +1021,12 @@ SessionSchema.set("toJSON", {
     delete ret.__v;
     delete ret.isDeleted;
     delete ret.deletedAt;
+    
+    // Remove password from meeting credentials
+    if (ret.meetingCredentials && ret.meetingCredentials.password) {
+      ret.meetingCredentials.password = "••••••••";
+    }
+    
     return ret;
   },
 });
@@ -769,6 +1037,11 @@ SessionSchema.set("toObject", {
     delete ret.__v;
     delete ret.isDeleted;
     delete ret.deletedAt;
+    
+    if (ret.meetingCredentials && ret.meetingCredentials.password) {
+      ret.meetingCredentials.password = "••••••••";
+    }
+    
     return ret;
   },
 });

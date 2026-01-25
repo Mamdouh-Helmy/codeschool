@@ -4,21 +4,16 @@ import SectionImageHero from "../../models/SectionImageHero";
 
 export const revalidate = 60;
 
-// GET - جلب جميع صور الأقسام
+// GET - جلب جميع الصور
 export async function GET(request) {
   try {
     await connectDB();
 
     const { searchParams } = new URL(request.url);
-    const sectionName = searchParams.get("sectionName");
     const activeOnly = searchParams.get("activeOnly") === "true";
     const language = searchParams.get("language");
 
     let filter = {};
-
-    if (sectionName) {
-      filter.sectionName = sectionName;
-    }
 
     if (activeOnly) {
       filter.isActive = true;
@@ -40,11 +35,11 @@ export async function GET(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("❌ Error fetching section images:", error);
+    console.error("❌ Error fetching images:", error);
     return NextResponse.json(
       {
         success: false,
-        message: "فشل في جلب صور الأقسام",
+        message: "فشل في جلب الصور",
         error: error.message,
       },
       { status: 500 }
@@ -52,50 +47,79 @@ export async function GET(request) {
   }
 }
 
-// POST - إنشاء صورة قسم جديدة
-// POST - إنشاء صورة قسم جديدة
+// POST - إنشاء صورة جديدة
 export async function POST(request) {
   try {
     await connectDB();
     const body = await request.json();
 
     // التحقق من الحقول المطلوبة
-    if (!body.sectionName || !body.imageUrl) {
+    if (!body.language || !body.imageUrl) {
       return NextResponse.json(
         {
           success: false,
-          message: "اسم القسم ورابط الصورة مطلوبان",
+          message: "اللغة ورابط الصورة مطلوبان",
+        },
+        { status: 400 }
+      );
+    }
+
+    // التحقق من عدم وجود سجل بنفس اللغة مسبقاً
+    const existingRecord = await SectionImageHero.findOne({ language: body.language });
+    if (existingRecord) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `يوجد بالفعل سجل للغة ${body.language}. يمكنك تعديله بدلاً من إنشاء جديد.`,
         },
         { status: 400 }
       );
     }
 
     const newImage = await SectionImageHero.create({
-      sectionName: body.sectionName,
-      language: body.language || "ar",
+      language: body.language,
       imageUrl: body.imageUrl,
       secondImageUrl: body.secondImageUrl || "",
       imageAlt: body.imageAlt || "",
       secondImageAlt: body.secondImageAlt || "",
 
-      // بيانات الـ Hero
-      heroTitle: body.heroTitle || "",
-      heroDescription: body.heroDescription || "", // ← الحقل الجديد
-      instructor1: body.instructor1 || "",
-      instructor1Role: body.instructor1Role || "",
-      instructor2: body.instructor2 || "",
-      instructor2Role: body.instructor2Role || "",
+      // بيانات الهيرو عربي
+      heroTitleAr: body.heroTitleAr || "",
+      heroDescriptionAr: body.heroDescriptionAr || "",
+      instructor1Ar: body.instructor1Ar || "",
+      instructor1RoleAr: body.instructor1RoleAr || "",
+      instructor2Ar: body.instructor2Ar || "",
+      instructor2RoleAr: body.instructor2RoleAr || "",
 
-      // بيانات الـ Welcome Popup
-      welcomeTitle: body.welcomeTitle || "",
-      welcomeSubtitle1: body.welcomeSubtitle1 || "",
-      welcomeSubtitle2: body.welcomeSubtitle2 || "",
-      welcomeFeature1: body.welcomeFeature1 || "",
-      welcomeFeature2: body.welcomeFeature2 || "",
-      welcomeFeature3: body.welcomeFeature3 || "",
-      welcomeFeature4: body.welcomeFeature4 || "",
-      welcomeFeature5: body.welcomeFeature5 || "",
-      welcomeFeature6: body.welcomeFeature6 || "",
+      // بيانات الهيرو انجليزي
+      heroTitleEn: body.heroTitleEn || "",
+      heroDescriptionEn: body.heroDescriptionEn || "",
+      instructor1En: body.instructor1En || "",
+      instructor1RoleEn: body.instructor1RoleEn || "",
+      instructor2En: body.instructor2En || "",
+      instructor2RoleEn: body.instructor2RoleEn || "",
+
+      // بيانات Welcome Popup عربي
+      welcomeTitleAr: body.welcomeTitleAr || "",
+      welcomeSubtitle1Ar: body.welcomeSubtitle1Ar || "",
+      welcomeSubtitle2Ar: body.welcomeSubtitle2Ar || "",
+      welcomeFeature1Ar: body.welcomeFeature1Ar || "",
+      welcomeFeature2Ar: body.welcomeFeature2Ar || "",
+      welcomeFeature3Ar: body.welcomeFeature3Ar || "",
+      welcomeFeature4Ar: body.welcomeFeature4Ar || "",
+      welcomeFeature5Ar: body.welcomeFeature5Ar || "",
+      welcomeFeature6Ar: body.welcomeFeature6Ar || "",
+
+      // بيانات Welcome Popup انجليزي
+      welcomeTitleEn: body.welcomeTitleEn || "",
+      welcomeSubtitle1En: body.welcomeSubtitle1En || "",
+      welcomeSubtitle2En: body.welcomeSubtitle2En || "",
+      welcomeFeature1En: body.welcomeFeature1En || "",
+      welcomeFeature2En: body.welcomeFeature2En || "",
+      welcomeFeature3En: body.welcomeFeature3En || "",
+      welcomeFeature4En: body.welcomeFeature4En || "",
+      welcomeFeature5En: body.welcomeFeature5En || "",
+      welcomeFeature6En: body.welcomeFeature6En || "",
 
       // الأرقام
       discount: body.discount || 30,
@@ -109,15 +133,15 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       data: newImage,
-      message: "تم إنشاء صورة القسم بنجاح",
+      message: "تم إنشاء الصورة بنجاح",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("❌ Error creating section image:", error);
+    console.error("❌ Error creating image:", error);
     return NextResponse.json(
       {
         success: false,
-        message: "فشل في إنشاء صورة القسم",
+        message: "فشل في إنشاء الصورة",
         error: error.message,
       },
       { status: 500 }

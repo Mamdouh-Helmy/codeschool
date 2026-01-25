@@ -23,6 +23,7 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
   const [isSecondarySidebarOpen, setSecondarySidebarOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [showSecondaryOnDesktop, setShowSecondaryOnDesktop] = useState(false);
 
   const isRTL = locale === "ar";
 
@@ -105,6 +106,18 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           label: t('nav.curriculum') || "Curriculum",
           href: "/admin/curriculum",
           icon: "ion:school-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
+        {
+          label: t('nav.meetingLink') || "Meeting Link",
+          href: "/admin/meetingLink-admin",
+          icon: "ion:school-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
+        {
+          label: t('nav.curriculumCourse') || "Curriculum Course",
+          href: "/admin/curriculum-course",
+          icon: "ion:bookmarks-outline",
           badge: createBadge(t('common.new') || "New"),
         },
         {
@@ -245,11 +258,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
     return null;
   }, [activePath, NAVIGATION_CATEGORIES]);
 
-  // Set initial active category based on current path
+  // Set initial active category based on current path - ولكن لا نفتح SecondarySidebar تلقائياً
   useEffect(() => {
     if (currentCategory && !isMobile) {
       setActiveCategory(currentCategory);
-      setSecondarySidebarOpen(true);
+      // لا نفتح SecondarySidebar تلقائياً
+      // setSecondarySidebarOpen(true);
     }
   }, [currentCategory, isMobile]);
 
@@ -260,12 +274,21 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       setPrimarySidebarOpen(false);
     } else {
       if (activeCategory === categoryId) {
+        // Toggle if same category clicked
         setSecondarySidebarOpen(!isSecondarySidebarOpen);
+        setShowSecondaryOnDesktop(!isSecondarySidebarOpen);
       } else {
         setActiveCategory(categoryId);
         setSecondarySidebarOpen(true);
+        setShowSecondaryOnDesktop(true);
       }
     }
+  };
+
+  const handleBackToCategories = () => {
+    setSecondarySidebarOpen(false);
+    setShowSecondaryOnDesktop(false);
+    setActiveCategory(null);
   };
 
   const selectedCategory = useMemo(() => {
@@ -282,7 +305,7 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
   return (
     <div className={`min-h-screen bg-slate-100 text-slate-900 dark:bg-darkmode dark:text-white ${isRTL ? 'rtl' : 'ltr'}`}>
       <div className="flex min-h-screen w-full">
-        {/* Primary Sidebar - Shows Categories */}
+        {/* Primary Sidebar - Always visible on desktop */}
         <PrimarySidebar
           categories={NAVIGATION_CATEGORIES}
           activeCategory={activeCategory}
@@ -293,35 +316,59 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           isRTL={isRTL}
         />
 
-        {/* Secondary Sidebar - Shows Items of Selected Category */}
-        {selectedCategory && (
+        {/* Secondary Sidebar - Shows Items of Selected Category (only on desktop when user clicks) */}
+        {selectedCategory && !isMobile && showSecondaryOnDesktop && (
           <SecondarySidebar
             category={selectedCategory}
             activePath={activePath}
             isOpen={isSecondarySidebarOpen}
-            onClose={() => {
-              setSecondarySidebarOpen(false);
-              if (isMobile) setActiveCategory(null);
-            }}
+            onClose={handleBackToCategories}
             currentCategory={currentCategory}
             isMobile={isMobile}
             isRTL={isRTL}
+            onBackToCategories={handleBackToCategories}
           />
         )}
 
-        {/* Main Content Area */}
-        <div className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${!isMobile && isSecondarySidebarOpen && activeCategory
-            ? isRTL ? 'lg:mr-[17rem]' : 'lg:ml-[17rem]'
-            : ''
-          }`}>
+        {/* For mobile, show secondary sidebar as overlay */}
+        {selectedCategory && isMobile && (
+          <SecondarySidebar
+            category={selectedCategory}
+            activePath={activePath}
+            isOpen={isSecondarySidebarOpen}
+            onClose={handleBackToCategories}
+            currentCategory={currentCategory}
+            isMobile={isMobile}
+            isRTL={isRTL}
+            onBackToCategories={handleBackToCategories}
+          />
+        )}
+
+        {/* Main Content Area - Fixed TopBar with scrollable content */}
+        <div className="flex min-h-screen flex-1 flex-col overflow-hidden">
+          {/* TopBar - Always fixed at top */}
           <TopBar
             onMenuClick={() => setPrimarySidebarOpen(true)}
             user={user}
             showSecondaryToggle={activeCategory !== null && !isMobile}
-            onSecondaryToggle={() => setSecondarySidebarOpen(!isSecondarySidebarOpen)}
+            onSecondaryToggle={() => {
+              setSecondarySidebarOpen(!isSecondarySidebarOpen);
+              setShowSecondaryOnDesktop(!isSecondarySidebarOpen);
+            }}
             isRTL={isRTL}
+            onBackToCategories={handleBackToCategories}
+            showBackButton={isSecondarySidebarOpen && !isMobile}
           />
-          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+
+          {/* Scrollable Main Content */}
+          <div className={`flex-1 overflow-auto transition-all duration-300 ${!isMobile && isSecondarySidebarOpen && activeCategory
+              ? isRTL ? 'mr-[17rem]' : 'ml-[17rem]'
+              : !isMobile ? (isRTL ? 'mr-20' : 'ml-20') : ''
+            }`}>
+            <main className="px-4 py-6 sm:px-6 lg:px-8">
+              {children}
+            </main>
+          </div>
         </div>
       </div>
     </div>

@@ -6,17 +6,29 @@ import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
 import WebinarRegistrationForm from "./WebinarRegistrationForm";
 
-interface HeroImages {
-  imageUrl?: string;
-  secondImageUrl?: string;
-  imageAlt?: string;
-  secondImageAlt?: string;
-  heroTitle?: string;
-  heroDescription?: string;
-  instructor1?: string;
-  instructor1Role?: string;
-  instructor2?: string;
-  instructor2Role?: string;
+interface SiteContent {
+  _id: string;
+  imageUrl: string;
+  secondImageUrl: string;
+  imageAlt: string;
+  secondImageAlt: string;
+  heroTitleAr: string;
+  heroDescriptionAr: string;
+  instructor1Ar: string;
+  instructor1RoleAr: string;
+  instructor2Ar: string;
+  instructor2RoleAr: string;
+  heroTitleEn: string;
+  heroDescriptionEn: string;
+  instructor1En: string;
+  instructor1RoleEn: string;
+  instructor2En: string;
+  instructor2RoleEn: string;
+  // باقي الحقول...
+  isActive: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Webinar {
@@ -33,10 +45,9 @@ interface Webinar {
 
 // ✅ Cache خارج المكون لمنع إعادة جلب البيانات
 let heroDataCache: {
-  heroImages: HeroImages | null;
+  siteContent: SiteContent | null;
   nextWebinar: Webinar | null;
   timestamp: number;
-  locale: string;
 } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 دقائق
 
@@ -47,7 +58,7 @@ const Hero = () => {
   const [showFullText, setShowFullText] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
-  const [heroImages, setHeroImages] = useState<HeroImages | null>(null);
+  const [siteContent, setSiteContent] = useState<SiteContent | null>(null);
   const [nextWebinar, setNextWebinar] = useState<Webinar | null>(null);
   const [loading, setLoading] = useState(true);
   
@@ -71,11 +82,10 @@ const Hero = () => {
       // ✅ التحقق من الـ cache أولاً
       if (
         heroDataCache &&
-        Date.now() - heroDataCache.timestamp < CACHE_DURATION &&
-        heroDataCache.locale === locale
+        Date.now() - heroDataCache.timestamp < CACHE_DURATION
       ) {
         if (isMounted.current) {
-          setHeroImages(heroDataCache.heroImages);
+          setSiteContent(heroDataCache.siteContent);
           setNextWebinar(heroDataCache.nextWebinar);
           setLoading(false);
         }
@@ -86,8 +96,8 @@ const Hero = () => {
         setLoading(true);
         
         // ✅ جلب البيانات بالتوازي مع Promise.all
-        const [heroRes, webinarRes] = await Promise.all([
-          fetch(`/api/section-images-hero?sectionName=hero-section&activeOnly=true&language=${locale}`, {
+        const [contentRes, webinarRes] = await Promise.all([
+          fetch(`/api/section-images-hero?activeOnly=true`, {
             signal,
             cache: 'force-cache', // استخدام cache المتصفح
             headers: {
@@ -106,16 +116,16 @@ const Hero = () => {
         // ✅ التحقق من الـ abort
         if (signal.aborted) return;
 
-        const [heroResult, webinarResult] = await Promise.all([
-          heroRes.json(),
+        const [contentResult, webinarResult] = await Promise.all([
+          contentRes.json(),
           webinarRes.json()
         ]);
 
         if (!isMounted.current) return;
 
-        let heroData: HeroImages | null = null;
-        if (heroResult.success && heroResult.data.length > 0) {
-          heroData = heroResult.data[0];
+        let contentData: SiteContent | null = null;
+        if (contentResult.success && contentResult.data.length > 0) {
+          contentData = contentResult.data[0];
         }
 
         let webinarData: Webinar | null = null;
@@ -125,13 +135,12 @@ const Hero = () => {
 
         // ✅ حفظ في الـ cache
         heroDataCache = {
-          heroImages: heroData,
+          siteContent: contentData,
           nextWebinar: webinarData,
           timestamp: Date.now(),
-          locale
         };
 
-        setHeroImages(heroData);
+        setSiteContent(contentData);
         setNextWebinar(webinarData);
       } catch (error: any) {
         if (error.name === 'AbortError') {
@@ -154,10 +163,45 @@ const Hero = () => {
         fetchController.current.abort();
       }
     };
-  }, [locale]); // ✅ الاعتماد فقط على locale
+  }, []); // ✅ إزالة locale من dependency لأننا نحصل على جميع اللغات مرة واحدة
+
+  // ✅ الحصول على البيانات بناءً على اللغة الحالية
+  const getContentByLanguage = () => {
+    if (!siteContent) return null;
+    
+    if (locale === "ar") {
+      return {
+        imageUrl: siteContent.imageUrl,
+        secondImageUrl: siteContent.secondImageUrl,
+        imageAlt: siteContent.imageAlt || "صورة الهيرو",
+        secondImageAlt: siteContent.secondImageAlt || "الصورة الثانية",
+        heroTitle: siteContent.heroTitleAr ,
+        heroDescription: siteContent.heroDescriptionAr ,
+        instructor1: siteContent.instructor1Ar ,
+        instructor1Role: siteContent.instructor1RoleAr ,
+        instructor2: siteContent.instructor2Ar ,
+        instructor2Role: siteContent.instructor2RoleAr ,
+      };
+    } else {
+      return {
+        imageUrl: siteContent.imageUrl,
+        secondImageUrl: siteContent.secondImageUrl,
+        imageAlt: siteContent.imageAlt || "Hero image",
+        secondImageAlt: siteContent.secondImageAlt || "Second image",
+        heroTitle: siteContent.heroTitleEn ,
+        heroDescription: siteContent.heroDescriptionEn,
+        instructor1: siteContent.instructor1En ,
+        instructor1Role: siteContent.instructor1RoleEn ,
+        instructor2: siteContent.instructor2En,
+        instructor2Role: siteContent.instructor2RoleEn ,
+      };
+    }
+  };
+
+  const content = getContentByLanguage();
 
   // استخدام الوصف من API أو الترجمات الافتراضية
-  const fullText = heroImages?.heroDescription || t("hero.description");
+  const fullText = content?.heroDescription || t("hero.description");
   const preview = fullText.split(" ").slice(0, 36).join(" ") + "...";
 
   const closeModal = () => {
@@ -173,14 +217,13 @@ const Hero = () => {
   };
 
   // استخدام البيانات من API أو الترجمات الافتراضية
-  const displayTitle = heroImages?.heroTitle || t("hero.title");
-  const instructor1Name = heroImages?.instructor1 || t("hero.instructor1");
-  const instructor1Role = heroImages?.instructor1Role || t("hero.instructor1Role");
-  const instructor2Name = heroImages?.instructor2 || t("hero.instructor2");
-  const instructor2Role = heroImages?.instructor2Role || t("hero.instructor2Role");
+  const displayTitle = content?.heroTitle ;
+  const instructor1Name = content?.instructor1 ;
+  const instructor1Role = content?.instructor1Role ;
+  const instructor2Name = content?.instructor2 ;
+  const instructor2Role = content?.instructor2Role ;
 
-
-  console.log("Hero Images:", heroImages);
+  console.log( "fxxcxxcc" , siteContent)
 
   // نص الويبنار الديناميكي
   const webinarText = nextWebinar 
@@ -276,7 +319,7 @@ const Hero = () => {
           </div>
 
           {/* الصور - فقط إذا لم يكن loading */}
-          {!loading && (
+          {!loading && content && (
             <div
               data-aos="fade-left"
               data-aos-delay="200"
@@ -289,8 +332,8 @@ const Hero = () => {
                 {/* الصورة الأولى مع overflow فقط للصورة */}
                 <div className={`relative w-full h-[450px] ${firstImageStyle} bg-[#ffbd59] overflow-hidden`}>
                   <img
-                    src={getImageSrc(heroImages?.imageUrl, "/images/hero/john.png")}
-                    alt={heroImages?.imageAlt || "hero"}
+                    src={getImageSrc(content.imageUrl, "/images/hero/john.png")}
+                    alt={content.imageAlt}
                     width={400}
                     height={500}
                     className="w-full h-full object-cover"
@@ -302,7 +345,7 @@ const Hero = () => {
                 {/* البادج خارج الـ overflow */}
                 <div 
                   className={`bg-[#8c52ff] rounded-22 shadow-hero-box py-4 px-5 absolute top-3 z-50 ${
-                    isRTL ? "-right-16" : "-left-20"
+                    isRTL ? "-right-10" : "-left-20"
                   }`}
                 >
                   <p className="text-lg font-bold text-white">{instructor1Name}</p>
@@ -315,8 +358,8 @@ const Hero = () => {
                 {/* الصورة الثانية مع overflow فقط للصورة */}
                 <div className={`relative w-full h-[450px] ${secondImageStyle} bg-primary overflow-hidden`}>
                   <img
-                    src={getImageSrc(heroImages?.secondImageUrl, "/images/hero/maria.png")}
-                    alt={heroImages?.secondImageAlt || "hero"}
+                    src={getImageSrc(content.secondImageUrl, "/images/hero/maria.png")}
+                    alt={content.secondImageAlt}
                     width={400}
                     height={500}
                     className="w-full h-full object-cover"
@@ -337,11 +380,23 @@ const Hero = () => {
               </div>
             </div>
           )}
+
+          {/* Loading State */}
+          {loading && (
+            <div className="col-span-6 lg:flex hidden items-center gap-3 animate-pulse">
+              <div className="relative w-full">
+                <div className={`relative w-full h-[450px] bg-gray-200 dark:bg-gray-700 ${firstImageStyle}`}></div>
+              </div>
+              <div className="relative w-full">
+                <div className={`relative w-full h-[450px] bg-gray-300 dark:bg-gray-600 ${secondImageStyle}`}></div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Modal للوصف الكامل */}
-      {showFullText && (
+      {showFullText && content && (
         <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div
             onClick={(e) => e.stopPropagation()}
@@ -372,7 +427,7 @@ const Hero = () => {
           onSuccess={() => {
             closeModal();
             // تحديث الـ cache بعد التسجيل
-            if (heroDataCache) {
+            if (heroDataCache && heroDataCache.nextWebinar) {
               heroDataCache.nextWebinar = {
                 ...nextWebinar,
                 currentAttendees: nextWebinar.currentAttendees + 1

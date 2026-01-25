@@ -19,6 +19,8 @@ type TopBarProps = {
   showSecondaryToggle?: boolean;
   onSecondaryToggle?: () => void;
   isRTL?: boolean;
+  onBackToCategories?: () => void;
+  showBackButton?: boolean;
 };
 
 const TopBar = ({
@@ -26,7 +28,9 @@ const TopBar = ({
   user: serverUser,
   showSecondaryToggle = false,
   onSecondaryToggle,
-  isRTL = false
+  isRTL = false,
+  onBackToCategories,
+  showBackButton = false
 }: TopBarProps) => {
   const { data: session } = useSession();
   const { t } = useI18n();
@@ -94,7 +98,7 @@ const TopBar = ({
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur-md dark:border-dark_border dark:bg-darklight/80">
       <div className={`flex items-center justify-between gap-2 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3 lg:px-6 lg:py-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
         <div className={`flex flex-1 items-center gap-2 sm:gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-          {/* Primary Menu Button - Adjust for mobile */}
+          {/* Primary Menu Button - Mobile only */}
           <button
             type="button"
             onClick={onMenuClick}
@@ -104,8 +108,20 @@ const TopBar = ({
             <Icon icon="ion:menu" className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
 
+          {/* Back to categories button - Desktop only when secondary sidebar is open */}
+          {showBackButton && onBackToCategories && (
+            <button
+              type="button"
+              onClick={onBackToCategories}
+              className="hidden h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary lg:inline-flex dark:border-dark_border dark:text-darktext dark:hover:bg-darkmode"
+              aria-label={t("common.backToCategories") || "Back to Categories"}
+            >
+              <Icon icon={isRTL ? "ion:arrow-forward" : "ion:arrow-back"} className="h-5 w-5" />
+            </button>
+          )}
+
           {/* Secondary sidebar toggle button - Desktop only */}
-          {showSecondaryToggle && (
+          {showSecondaryToggle && onSecondaryToggle && (
             <button
               type="button"
               onClick={onSecondaryToggle}

@@ -1,5 +1,37 @@
-// utils/sessionGenerator.js
-// ✅ إزالة import mongoose من هنا لأننا نستورده مرة واحدة فقط
+// utils/sessionGenerator.js - ENHANCED WITH MEETING LINK SUPPORT
+import mongoose from "mongoose";
+
+// ✅ Import MeetingLink model dynamically
+let MeetingLink;
+try {
+  MeetingLink = (await import("../app/models/MeetingLink")).default;
+} catch (error) {
+  console.warn(
+    "⚠️ MeetingLink model not found, meeting link assignment will be disabled",
+  );
+  MeetingLink = null;
+}
+
+// Day mapping
+const dayMap = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
+
+const dayMapReverse = {
+  0: "Sunday",
+  1: "Monday",
+  2: "Tuesday",
+  3: "Wednesday",
+  4: "Thursday",
+  5: "Friday",
+  6: "Saturday",
+};
 
 /**
  * ✅ Calculate total sessions from course curriculum
@@ -7,13 +39,17 @@
  */
 export function calculateTotalSessions(curriculum) {
   if (!curriculum || !Array.isArray(curriculum) || curriculum.length === 0) {
-    console.log('⚠️ No curriculum provided or empty array');
+    console.log("⚠️ No curriculum provided or empty array");
     return 0;
   }
 
   let total = 0;
   curriculum.forEach((module) => {
-    if (module.lessons && Array.isArray(module.lessons) && module.lessons.length > 0) {
+    if (
+      module.lessons &&
+      Array.isArray(module.lessons) &&
+      module.lessons.length > 0
+    ) {
       // ✅ Each module has 6 lessons = 3 sessions
       total += module.totalSessions || 3;
     }
@@ -32,7 +68,7 @@ export function getSessionDistributionSummary(curriculum) {
       totalModules: 0,
       totalLessons: 0,
       totalSessions: 0,
-      modules: []
+      modules: [],
     };
   }
 
@@ -40,7 +76,7 @@ export function getSessionDistributionSummary(curriculum) {
     totalModules: curriculum.length,
     totalLessons: 0,
     totalSessions: 0,
-    modules: []
+    modules: [],
   };
 
   curriculum.forEach((module, idx) => {
@@ -55,7 +91,7 @@ export function getSessionDistributionSummary(curriculum) {
       title: module.title,
       lessonsCount,
       sessionsCount,
-      distribution: 'Lessons 1-2→S1, 3-4→S2, 5-6→S3'
+      distribution: "Lessons 1-2→S1, 3-4→S2, 5-6→S3",
     });
   });
 
@@ -63,48 +99,25 @@ export function getSessionDistributionSummary(curriculum) {
 }
 
 /**
- * ✅ تحويل أسماء الأيام إلى أرقام
- */
-const dayMap = {
-  'Sunday': 0,
-  'Monday': 1,
-  'Tuesday': 2,
-  'Wednesday': 3,
-  'Thursday': 4,
-  'Friday': 5,
-  'Saturday': 6
-};
-
-const dayMapReverse = {
-  0: 'Sunday',
-  1: 'Monday', 
-  2: 'Tuesday',
-  3: 'Wednesday',
-  4: 'Thursday',
-  5: 'Friday',
-  6: 'Saturday'
-};
-
-/**
- * ✅ الحصول على اسم اليوم من رقمه
+ * ✅ Get day name from day number
  */
 function getDayName(dayNumber) {
-  return dayMapReverse[dayNumber] || 'Unknown';
+  return dayMapReverse[dayNumber] || "Unknown";
 }
 
 /**
- * ✅ حساب الفرق بين يومين في نفس الأسبوع
+ * ✅ Calculate day difference between two days in the same week
  */
 function calculateDayDifference(startDay, targetDay) {
   if (targetDay >= startDay) {
     return targetDay - startDay;
   } else {
-    return (targetDay + 7) - startDay;
+    return targetDay + 7 - startDay;
   }
 }
 
 /**
- * ✅ ضبط التاريخ ليصبح في اليوم المطلوب
+ * ✅ Adjust date to target day of week
  */
 function adjustDateToTargetDay(date, targetDay) {
   const currentDay = date.getDay();
@@ -115,68 +128,77 @@ function adjustDateToTargetDay(date, targetDay) {
 }
 
 /**
- * ✅ إنشاء جدول أسبوعي لـ 3 أيام بشكل صحيح
+ * ✅ Create weekly schedule for 3 days correctly
  */
 function createWeeklySchedule(baseDate, scheduleDays, totalWeeks) {
   const weeklySchedule = [];
-  
-  // تحويل أسماء الأيام إلى أرقام
-  const dayNumbers = scheduleDays.map(day => dayMap[day]);
-  
-  console.log(`📅 إنشاء جدول لـ ${totalWeeks} أسابيع`);
-  console.log(`   أيام الجدول: ${scheduleDays} → ${dayNumbers}`);
-  
-  // تاريخ البداية
+
+  // Convert day names to numbers
+  const dayNumbers = scheduleDays.map((day) => dayMap[day]);
+
+  console.log(`📅 Creating schedule for ${totalWeeks} weeks`);
+  console.log(`   Schedule days: ${scheduleDays} → ${dayNumbers}`);
+
+  // Start date
   const startDate = new Date(baseDate);
-  
-  // ✅ ضبط تاريخ البداية ليكون في اليوم الأول من الجدول
+
+  // ✅ Adjust start date to be the first day of the schedule
   let adjustedStartDate = new Date(startDate);
-  
-  // احسب الإزاحة للوصول إلى اليوم الأول من الجدول
+
+  // Calculate offset to reach the first schedule day
   const currentDay = startDate.getDay();
   const targetDay = dayNumbers[0];
-  
+
   let daysToAdd = targetDay - currentDay;
   if (daysToAdd < 0) {
     daysToAdd += 7;
   }
-  
+
   adjustedStartDate.setDate(startDate.getDate() + daysToAdd);
-  
-  console.log(`   تاريخ البداية: ${startDate.toISOString().split('T')[0]} (${getDayName(startDate.getDay())})`);
-  console.log(`   تاريخ البداية المعدل: ${adjustedStartDate.toISOString().split('T')[0]} (${getDayName(adjustedStartDate.getDay())})`);
-  
-  // لكل أسبوع
+
+  console.log(
+    `   Original start date: ${startDate.toISOString().split("T")[0]} (${getDayName(startDate.getDay())})`,
+  );
+  console.log(
+    `   Adjusted start date: ${adjustedStartDate.toISOString().split("T")[0]} (${getDayName(adjustedStartDate.getDay())})`,
+  );
+
+  // For each week
   for (let week = 0; week < totalWeeks; week++) {
     const weekDays = [];
-    
-    // لكل يوم من الأيام الثلاثة
+
+    // For each of the three days
     for (let i = 0; i < 3; i++) {
       const date = new Date(adjustedStartDate);
-      
-      // حساب الإزاحة: (أسبوع × 7 أيام) + الفرق بين الأيام
+
+      // Calculate offset: (week × 7 days) + day difference
       const weekOffset = week * 7;
-      
+
       if (i === 0) {
-        // اليوم الأول: تاريخ البداية المعدل + إزاحة الأسبوع
+        // First day: adjusted start date + week offset
         date.setDate(adjustedStartDate.getDate() + weekOffset);
       } else {
-        // للأيام الأخرى: احسب الفرق بين اليوم الأول واليوم الحالي
-        const dayDifference = calculateDayDifference(dayNumbers[0], dayNumbers[i]);
+        // For other days: calculate difference between first day and current day
+        const dayDifference = calculateDayDifference(
+          dayNumbers[0],
+          dayNumbers[i],
+        );
         date.setDate(adjustedStartDate.getDate() + weekOffset + dayDifference);
       }
-      
+
       weekDays.push(new Date(date));
     }
-    
+
     weeklySchedule.push(weekDays);
-    
-    console.log(`   🗓️  الأسبوع ${week + 1}:`);
+
+    console.log(`   🗓️  Week ${week + 1}:`);
     weekDays.forEach((date, idx) => {
-      console.log(`      اليوم ${idx + 1}: ${date.toISOString().split('T')[0]} (${getDayName(date.getDay())})`);
+      console.log(
+        `      Day ${idx + 1}: ${date.toISOString().split("T")[0]} (${getDayName(date.getDay())})`,
+      );
     });
   }
-  
+
   return weeklySchedule;
 }
 
@@ -187,16 +209,18 @@ function validateScheduleDays(startDate, daysOfWeek) {
   if (!startDate || !daysOfWeek || daysOfWeek.length !== 3) {
     return {
       valid: false,
-      error: 'Must select exactly 3 days for schedule'
+      error: "Must select exactly 3 days for schedule",
     };
   }
 
-  const startDayName = new Date(startDate).toLocaleDateString('en-US', { weekday: 'long' });
-  
+  const startDayName = new Date(startDate).toLocaleDateString("en-US", {
+    weekday: "long",
+  });
+
   if (!daysOfWeek.includes(startDayName)) {
     return {
       valid: false,
-      error: `First selected day must be ${startDayName} (based on start date)`
+      error: `First selected day must be ${startDayName} (based on start date)`,
     };
   }
 
@@ -205,70 +229,161 @@ function validateScheduleDays(startDate, daysOfWeek) {
   if (uniqueDays.length !== 3) {
     return {
       valid: false,
-      error: 'Duplicate days are not allowed'
+      error: "Duplicate days are not allowed",
     };
   }
 
   return {
     valid: true,
-    startDayName
+    startDayName,
   };
 }
 
 /**
+ * ✅ Assign meeting link to a session
+ */
+async function assignMeetingLinkToSession(sessionData, userId) {
+  try {
+    if (!MeetingLink) {
+      console.log(
+        "⚠️ Meeting link assignment disabled - MeetingLink model not available",
+      );
+      return sessionData;
+    }
+
+    console.log(
+      `🔗 Looking for meeting link for session: ${sessionData.title}`,
+    );
+
+    // Create date objects for the session time
+    const startTime = new Date(sessionData.scheduledDate);
+    const [hours, minutes] = sessionData.startTime.split(":").map(Number);
+    startTime.setHours(hours, minutes, 0, 0);
+
+    const endTime = new Date(startTime);
+    const [endHours, endMinutes] = sessionData.endTime.split(":").map(Number);
+    endTime.setHours(endHours, endMinutes, 0, 0);
+
+    console.log(
+      `   Session time: ${startTime.toISOString()} to ${endTime.toISOString()}`,
+    );
+
+    // Try to find available links
+    const availableLinks = await MeetingLink.findAvailableLinks(
+      startTime,
+      endTime,
+      3,
+    );
+
+    if (availableLinks.length === 0) {
+      console.log("⚠️ No meeting links available for this time slot");
+      return sessionData;
+    }
+
+    // Choose the least used link
+    const bestLink = availableLinks[0];
+
+    // Reserve the link
+    try {
+      const reservationResult = await bestLink.reserveForSession(
+        sessionData._id || new mongoose.Types.ObjectId(), // temp ID for reservation
+        sessionData.groupId,
+        startTime,
+        endTime,
+        userId,
+      );
+
+      console.log(
+        `✅ Assigned meeting link: ${reservationResult.link.substring(0, 50)}...`,
+      );
+
+      // Return updated session data with meeting link
+      return {
+        ...sessionData,
+        meetingLink: reservationResult.link,
+        meetingCredentials: {
+          username: bestLink.credentials.username,
+          password: bestLink.credentials.password,
+        },
+        meetingLinkId: bestLink._id,
+        meetingPlatform: bestLink.platform,
+        automationEvents: {
+          ...(sessionData.automationEvents || {}),
+          meetingLinkAssigned: true,
+          meetingLinkAssignedAt: new Date(),
+        },
+      };
+    } catch (reservationError) {
+      console.error(
+        `   ❌ Failed to reserve link: ${reservationError.message}`,
+      );
+      return sessionData;
+    }
+  } catch (error) {
+    console.error("❌ Error assigning meeting link:", error.message);
+    // Don't fail session creation if link assignment fails
+    return sessionData;
+  }
+}
+
+/**
  * ✅ Generate all sessions for a group based on course curriculum
- * النظام الجديد: 3 سيشنات لكل وحدة (2 حصة لكل سيشن)
- * التوزيع: السيشنات الثلاثة تتوزع على الأيام الثلاثة المختارة
+ * NEW SYSTEM: 3 sessions per module (2 lessons per session)
+ * Distribution: The three sessions are distributed over the three selected days
  */
 export async function generateSessionsForGroup(groupId, group, userId) {
   try {
-    console.log(`\n🔄 ========== GENERATING SESSIONS (3 SESSIONS SYSTEM) ==========`);
+    console.log(
+      `\n🔄 ========== GENERATING SESSIONS (3 SESSIONS SYSTEM) ==========`,
+    );
     console.log(`Group ID: ${groupId}`);
     console.log(`Group Name: ${group.name}`);
     console.log(`Group Status: ${group.status}`);
 
     if (!group) {
-      throw new Error('Group not found');
+      throw new Error("Group not found");
     }
 
     // ✅ Check status
-    if (group.status !== 'active') {
+    if (group.status !== "active") {
       throw new Error(`Group must be active. Current status: ${group.status}`);
     }
 
     if (group.sessionsGenerated) {
-      console.log('⚠️ Sessions already generated for this group');
+      console.log("⚠️ Sessions already generated for this group");
       return {
         success: false,
-        message: 'Sessions already generated',
-        totalGenerated: 0
+        message: "Sessions already generated",
+        totalGenerated: 0,
       };
     }
 
     const course = group.courseId;
     if (!course || !course.curriculum || course.curriculum.length === 0) {
-      throw new Error('Course curriculum not found');
+      throw new Error("Course curriculum not found");
     }
 
-    console.log('📚 Course curriculum loaded:', {
+    console.log("📚 Course curriculum loaded:", {
       courseId: course._id,
       courseName: course.title,
       modulesCount: course.curriculum.length,
-      totalSessions: course.curriculum.length * 3
+      totalSessions: course.curriculum.length * 3,
     });
 
     // Parse schedule
     const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
 
     if (!startDate || !daysOfWeek || daysOfWeek.length !== 3) {
-      throw new Error('Invalid schedule: Must have start date and exactly 3 days selected');
+      throw new Error(
+        "Invalid schedule: Must have start date and exactly 3 days selected",
+      );
     }
 
-    console.log('📅 Schedule configuration:', {
-      startDate: new Date(startDate).toISOString().split('T')[0],
+    console.log("📅 Schedule configuration:", {
+      startDate: new Date(startDate).toISOString().split("T")[0],
       daysOfWeek: daysOfWeek,
       timeFrom: timeFrom,
-      timeTo: timeTo
+      timeTo: timeTo,
     });
 
     // ✅ Validate schedule days
@@ -277,98 +392,117 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       throw new Error(scheduleValidation.error);
     }
 
-    console.log(`✅ Schedule validated. Start day: ${scheduleValidation.startDayName}`);
+    console.log(
+      `✅ Schedule validated. Start day: ${scheduleValidation.startDayName}`,
+    );
 
-    // تحويل أسماء الأيام إلى أرقام
-    const scheduleDayNumbers = daysOfWeek.map(day => dayMap[day]);
-    console.log('📅 Days as numbers:', scheduleDayNumbers);
+    // Convert day names to numbers
+    const scheduleDayNumbers = daysOfWeek.map((day) => dayMap[day]);
+    console.log("📅 Days as numbers:", scheduleDayNumbers);
 
-    // حساب عدد الأسابيع المطلوبة (كل وحدة تحتاج أسبوعاً كاملاً)
-    const totalWeeks = Math.ceil(course.curriculum.length / 1); // وحدة واحدة في الأسبوع
-    console.log(`📅 إجمالي الأسابيع المطلوبة: ${totalWeeks}`);
+    // Calculate required weeks (each module needs one full week)
+    const totalWeeks = Math.ceil(course.curriculum.length / 1); // one module per week
+    console.log(`📅 Total weeks required: ${totalWeeks}`);
 
-    // إنشاء الجدول الأسبوعي
-    const weeklySchedule = createWeeklySchedule(startDate, daysOfWeek, totalWeeks);
-    
+    // Create weekly schedule
+    const weeklySchedule = createWeeklySchedule(
+      startDate,
+      daysOfWeek,
+      totalWeeks,
+    );
+
     if (weeklySchedule.length === 0) {
-      throw new Error('Failed to create weekly schedule');
+      throw new Error("Failed to create weekly schedule");
     }
 
     // ✅ Generate sessions
     const sessions = [];
 
-    // لكل وحدة دراسية
+    // For each module
     for (let moduleIdx = 0; moduleIdx < course.curriculum.length; moduleIdx++) {
       const module = course.curriculum[moduleIdx];
-      
+
       console.log(`\n📖 Processing Module ${moduleIdx + 1}: ${module.title}`);
 
       if (!module.lessons || module.lessons.length !== 6) {
-        console.warn(`⚠️ Module ${moduleIdx + 1} must have exactly 6 lessons (has ${module.lessons?.length || 0})`);
+        console.warn(
+          `⚠️ Module ${moduleIdx + 1} must have exactly 6 lessons (has ${module.lessons?.length || 0})`,
+        );
         continue;
       }
 
-      // تحديد الأسبوع لهذه الوحدة
-      const weekIndex = moduleIdx; // كل وحدة في أسبوع مختلف
+      // Determine the week for this module
+      const weekIndex = moduleIdx; // each module in a different week
       const weekDays = weeklySchedule[weekIndex];
-      
+
       if (!weekDays || weekDays.length !== 3) {
-        console.error(`❌ Error: No valid week days for module ${moduleIdx + 1}`);
+        console.error(
+          `❌ Error: No valid week days for module ${moduleIdx + 1}`,
+        );
         continue;
       }
 
-      // ✅ ترتيب التواريخ زمنياً (من الأقدم للأحدث) قبل ربط الجلسات
+      // ✅ Sort dates chronologically (oldest to newest) before linking sessions
       const sortedWeekDays = [...weekDays].sort((a, b) => {
         return new Date(a) - new Date(b);
       });
 
       console.log(`   🗓️  Week ${weekIndex + 1} dates (before sorting):`);
       weekDays.forEach((date, idx) => {
-        console.log(`      Day ${idx + 1}: ${date.toISOString().split('T')[0]} (${getDayName(date.getDay())})`);
+        console.log(
+          `      Day ${idx + 1}: ${date.toISOString().split("T")[0]} (${getDayName(date.getDay())})`,
+        );
       });
 
-      console.log(`   🗓️  Week ${weekIndex + 1} dates (after sorting by date):`);
+      console.log(
+        `   🗓️  Week ${weekIndex + 1} dates (after sorting by date):`,
+      );
       sortedWeekDays.forEach((date, idx) => {
-        console.log(`      Day ${idx + 1}: ${date.toISOString().split('T')[0]} (${getDayName(date.getDay())}) - Session ${idx + 1}`);
+        console.log(
+          `      Day ${idx + 1}: ${date.toISOString().split("T")[0]} (${getDayName(date.getDay())}) - Session ${idx + 1}`,
+        );
       });
 
-      // ✅ إنشاء 3 سيشنات لهذه الوحدة
+      // ✅ Create 3 sessions for this module
       const sessionGroups = [
         {
           sessionNumber: 1,
           lessonIndexes: [0, 1],
           lessonNumbers: "1-2",
-          lessons: [module.lessons[0], module.lessons[1]]
+          lessons: [module.lessons[0], module.lessons[1]],
         },
         {
           sessionNumber: 2,
           lessonIndexes: [2, 3],
           lessonNumbers: "3-4",
-          lessons: [module.lessons[2], module.lessons[3]]
+          lessons: [module.lessons[2], module.lessons[3]],
         },
         {
           sessionNumber: 3,
           lessonIndexes: [4, 5],
           lessonNumbers: "5-6",
-          lessons: [module.lessons[4], module.lessons[5]]
-        }
+          lessons: [module.lessons[4], module.lessons[5]],
+        },
       ];
 
-      // لكل سيشن من الـ 3 سيشنات
+      // For each of the 3 sessions
       for (const sessionGroup of sessionGroups) {
-        // ✅ التاريخ المناسب لهذا السيشن (مرتب حسب التاريخ - الأقدم أولاً)
-        // Session 1 → أول تاريخ (الأقدم)
-        // Session 2 → ثاني تاريخ
-        // Session 3 → ثالث تاريخ (الأحدث)
+        // ✅ Appropriate date for this session (sorted by date - oldest first)
+        // Session 1 → first date (oldest)
+        // Session 2 → second date
+        // Session 3 → third date (newest)
         const dayIndex = sessionGroup.sessionNumber - 1; // 0, 1, 2
         const scheduledDate = new Date(sortedWeekDays[dayIndex]);
-        
-        // تحضير عنوان السيشن
-        const lessonTitles = sessionGroup.lessons.map(l => l.title).join(' & ');
+
+        // Prepare session title
+        const lessonTitles = sessionGroup.lessons
+          .map((l) => l.title)
+          .join(" & ");
         const sessionTitle = `${module.title} - Session ${sessionGroup.sessionNumber}: ${lessonTitles}`;
 
-        // إنشاء كائن السيشن
+        // Create session object
         const session = {
+          _id: new mongoose.Types.ObjectId(), // Generate ID for meeting link reservation
           groupId: group._id,
           courseId: course._id,
           moduleIndex: moduleIdx,
@@ -379,31 +513,36 @@ export async function generateSessionsForGroup(groupId, group, userId) {
           scheduledDate: scheduledDate,
           startTime: timeFrom,
           endTime: timeTo,
-          status: 'scheduled',
+          status: "scheduled",
           attendanceTaken: false,
           attendance: [],
           automationEvents: {
             reminderSent: false,
             absentNotificationsSent: false,
             postponeNotificationSent: false,
-            cancelNotificationSent: false
+            cancelNotificationSent: false,
+            meetingLinkAssigned: false,
           },
           metadata: {
             createdBy: userId,
             createdAt: new Date(),
-            updatedAt: new Date()
+            updatedAt: new Date(),
           },
-          isDeleted: false
+          isDeleted: false,
         };
 
         sessions.push(session);
 
-        console.log(`   ✅ Session ${sessionGroup.sessionNumber} (Lessons ${sessionGroup.lessonNumbers})`);
-        console.log(`      📅 ${scheduledDate.toISOString().split('T')[0]} (${getDayName(scheduledDate.getDay())})`);
+        console.log(
+          `   ✅ Session ${sessionGroup.sessionNumber} (Lessons ${sessionGroup.lessonNumbers})`,
+        );
+        console.log(
+          `      📅 ${scheduledDate.toISOString().split("T")[0]} (${getDayName(scheduledDate.getDay())})`,
+        );
         console.log(`      🕐 ${timeFrom} - ${timeTo}`);
         console.log(`      📚 ${lessonTitles}`);
       }
-      
+
       console.log(`   📊 Created 3 sessions for module ${moduleIdx + 1}`);
     }
 
@@ -413,14 +552,51 @@ export async function generateSessionsForGroup(groupId, group, userId) {
     console.log(`   Expected Sessions: ${course.curriculum.length * 3}`);
     console.log(`   Sessions per Module: 3`);
 
-    // تحليل توزيع الأيام
+    // Assign meeting links to sessions
+    console.log(`\n🔗 Assigning meeting links to sessions...`);
+    const sessionsWithLinks = [];
+    let linksAssigned = 0;
+    let linksFailed = 0;
+
+    for (const session of sessions) {
+      try {
+        const sessionWithLink = await assignMeetingLinkToSession(
+          session,
+          userId,
+        );
+        sessionsWithLinks.push(sessionWithLink);
+
+        if (sessionWithLink.meetingLink) {
+          linksAssigned++;
+          console.log(
+            `   ✅ Link assigned to Session ${session.sessionNumber}`,
+          );
+        } else {
+          linksFailed++;
+          console.log(
+            `   ⚠️ No link assigned to Session ${session.sessionNumber}`,
+          );
+        }
+      } catch (linkError) {
+        console.error(`   ❌ Failed to assign link: ${linkError.message}`);
+        sessionsWithLinks.push(session);
+        linksFailed++;
+      }
+    }
+
+    console.log(`\n🔗 Meeting Link Assignment Summary:`);
+    console.log(`   Total Sessions: ${sessions.length}`);
+    console.log(`   Links Assigned: ${linksAssigned}`);
+    console.log(`   Links Failed: ${linksFailed}`);
+
+    // Analyze day distribution
     const dayDistribution = {};
     const dateSet = new Set();
-    
-    sessions.forEach(session => {
+
+    sessionsWithLinks.forEach((session) => {
       const dayName = getDayName(new Date(session.scheduledDate).getDay());
-      const dateStr = session.scheduledDate.toISOString().split('T')[0];
-      
+      const dateStr = session.scheduledDate.toISOString().split("T")[0];
+
       dayDistribution[dayName] = (dayDistribution[dayName] || 0) + 1;
       dateSet.add(dateStr);
     });
@@ -431,32 +607,42 @@ export async function generateSessionsForGroup(groupId, group, userId) {
     });
 
     console.log(`\n📅 Unique Dates Used: ${dateSet.size}`);
-    Array.from(dateSet).sort().forEach(date => {
-      console.log(`   ${date}`);
-    });
+    Array.from(dateSet)
+      .sort()
+      .forEach((date) => {
+        console.log(`   ${date}`);
+      });
 
-    if (sessions.length > 0) {
-      console.log(`   Start Date: ${sessions[0].scheduledDate.toISOString().split('T')[0]}`);
-      console.log(`   End Date: ${sessions[sessions.length - 1].scheduledDate.toISOString().split('T')[0]}`);
+    if (sessionsWithLinks.length > 0) {
+      console.log(
+        `   Start Date: ${sessionsWithLinks[0].scheduledDate.toISOString().split("T")[0]}`,
+      );
+      console.log(
+        `   End Date: ${sessionsWithLinks[sessionsWithLinks.length - 1].scheduledDate.toISOString().split("T")[0]}`,
+      );
     }
 
-    // ✅ التحقق من التوزيع الصحيح
-    const expectedDayCount = Math.ceil(sessions.length / 3); // كل يوم يجب أن يكون له نفس العدد تقريباً
+    // ✅ Validate correct distribution
+    const expectedDayCount = Math.ceil(sessionsWithLinks.length / 3); // each day should have roughly the same count
     const dayCounts = Object.values(dayDistribution);
-    const isBalanced = dayCounts.every(count => 
-      count >= expectedDayCount - 1 && count <= expectedDayCount + 1
+    const isBalanced = dayCounts.every(
+      (count) => count >= expectedDayCount - 1 && count <= expectedDayCount + 1,
     );
 
     if (!isBalanced) {
-      console.warn(`⚠️  WARNING: Session distribution may not be balanced properly`);
+      console.warn(
+        `⚠️  WARNING: Session distribution may not be balanced properly`,
+      );
       console.warn(`   Expected ~${expectedDayCount} sessions per day`);
       console.warn(`   Actual distribution:`, dayDistribution);
     }
 
     // ✅ Validation check
     const expectedTotal = course.curriculum.length * 3;
-    if (sessions.length !== expectedTotal) {
-      console.warn(`⚠️ WARNING: Expected ${expectedTotal} sessions but generated ${sessions.length}`);
+    if (sessionsWithLinks.length !== expectedTotal) {
+      console.warn(
+        `⚠️ WARNING: Expected ${expectedTotal} sessions but generated ${sessionsWithLinks.length}`,
+      );
     }
 
     console.log(`\n✅ Session Generation Completed Successfully!`);
@@ -464,27 +650,96 @@ export async function generateSessionsForGroup(groupId, group, userId) {
 
     return {
       success: true,
-      sessions: sessions,
-      totalGenerated: sessions.length,
-      startDate: sessions[0]?.scheduledDate,
-      endDate: sessions[sessions.length - 1]?.scheduledDate,
+      sessions: sessionsWithLinks,
+      totalGenerated: sessionsWithLinks.length,
+      startDate: sessionsWithLinks[0]?.scheduledDate,
+      endDate: sessionsWithLinks[sessionsWithLinks.length - 1]?.scheduledDate,
       distribution: dayDistribution,
       uniqueDates: Array.from(dateSet).sort(),
       schedule: {
         daysOfWeek: daysOfWeek,
         startDate: new Date(startDate),
         timeFrom: timeFrom,
-        timeTo: timeTo
-      }
+        timeTo: timeTo,
+      },
+      meetingLinks: {
+        assigned: linksAssigned,
+        failed: linksFailed,
+        total: sessionsWithLinks.length,
+      },
     };
-
   } catch (error) {
-    console.error('❌ Error generating sessions:', error);
-    console.error('❌ Error details:', {
+    console.error("❌ Error generating sessions:", error);
+    console.error("❌ Error details:", {
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
     throw error;
+  }
+}
+
+/**
+ * ✅ Release meeting link when session is completed/cancelled
+ */
+export async function releaseMeetingLink(sessionId) {
+  try {
+    if (!MeetingLink) {
+      console.log(
+        "⚠️ Meeting link release disabled - MeetingLink model not available",
+      );
+      return { success: true, message: "Meeting link model not available" };
+    }
+
+    const Session = (await import("../app/models/Session")).default;
+    const session = await Session.findById(sessionId);
+
+    if (!session) {
+      console.log(`ℹ️ Session not found: ${sessionId}`);
+      return { success: false, error: "Session not found" };
+    }
+
+    if (!session.meetingLinkId) {
+      console.log(`ℹ️ No meeting link to release for session: ${sessionId}`);
+      return { success: true, message: "No meeting link associated" };
+    }
+
+    const meetingLink = await MeetingLink.findById(session.meetingLinkId);
+
+    if (!meetingLink) {
+      console.warn(`⚠️ Meeting link not found: ${session.meetingLinkId}`);
+      return { success: false, error: "Meeting link not found" };
+    }
+
+    // Calculate actual duration
+    const sessionStart = new Date(session.scheduledDate);
+    const [startHours, startMinutes] = session.startTime.split(":").map(Number);
+    sessionStart.setHours(startHours, startMinutes, 0, 0);
+
+    const sessionEnd = new Date(session.scheduledDate);
+    const [endHours, endMinutes] = session.endTime.split(":").map(Number);
+    sessionEnd.setHours(endHours, endMinutes, 0, 0);
+
+    const actualDuration = (sessionEnd - sessionStart) / (1000 * 60); // minutes
+
+    const result = await meetingLink.releaseLink(actualDuration);
+
+    console.log(`✅ Released meeting link for session: ${sessionId}`);
+
+    // Update session to remove meeting link info
+    await Session.findByIdAndUpdate(sessionId, {
+      $set: {
+        meetingLink: null,
+        meetingLinkId: null,
+        meetingCredentials: null,
+        meetingPlatform: null,
+        "automationEvents.meetingLinkAssigned": false,
+      },
+    });
+
+    return result;
+  } catch (error) {
+    console.error("❌ Error releasing meeting link:", error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -494,35 +749,54 @@ export async function generateSessionsForGroup(groupId, group, userId) {
 export async function regenerateSessionsForGroup(groupId, group, userId) {
   try {
     console.log(`🔄 Regenerating sessions for group: ${groupId}`);
-    
-    // ✅ FIX: استيراد صحيح من المسار الصحيح
-    const Session = (await import('@/models/Session')).default;
-    
-    // First, mark all existing sessions as deleted
+
+    // ✅ FIX: Correct import from the right path
+    const Session = (await import("../app/models/Session")).default;
+
+    // First, release any meeting links from existing sessions
+    const existingSessions = await Session.find({
+      groupId: groupId,
+      isDeleted: false,
+      meetingLinkId: { $ne: null },
+    });
+
+    for (const session of existingSessions) {
+      try {
+        await releaseMeetingLink(session._id);
+      } catch (releaseError) {
+        console.error(
+          `⚠️ Failed to release meeting link for session ${session._id}:`,
+          releaseError.message,
+        );
+      }
+    }
+
+    // Then, mark all existing sessions as deleted
     await Session.updateMany(
       { groupId: groupId, isDeleted: false },
-      { 
-        $set: { 
-          isDeleted: true, 
+      {
+        $set: {
+          isDeleted: true,
           deletedAt: new Date(),
-          status: 'cancelled'
-        } 
-      }
+          status: "cancelled",
+        },
+      },
     );
-    
+
     console.log(`🗑️  Marked existing sessions as deleted`);
-    
+
     // Then generate new sessions
     const result = await generateSessionsForGroup(groupId, group, userId);
-    
+
     if (result.success) {
-      console.log(`✅ Regenerated ${result.totalGenerated} sessions for group ${groupId}`);
+      console.log(
+        `✅ Regenerated ${result.totalGenerated} sessions for group ${groupId}`,
+      );
     }
-    
+
     return result;
-    
   } catch (error) {
-    console.error('❌ Error regenerating sessions:', error);
+    console.error("❌ Error regenerating sessions:", error);
     throw error;
   }
 }
@@ -536,7 +810,7 @@ export function getSessionDisplayInfo(sessions) {
       total: 0,
       byDay: {},
       byModule: {},
-      timeline: []
+      timeline: [],
     };
   }
 
@@ -544,16 +818,18 @@ export function getSessionDisplayInfo(sessions) {
   const byModule = {};
   const timeline = [];
 
-  sessions.forEach(session => {
-    const day = new Date(session.scheduledDate).toLocaleDateString('en-US', { weekday: 'long' });
-    const date = session.scheduledDate.toISOString().split('T')[0];
-    
+  sessions.forEach((session) => {
+    const day = new Date(session.scheduledDate).toLocaleDateString("en-US", {
+      weekday: "long",
+    });
+    const date = session.scheduledDate.toISOString().split("T")[0];
+
     // Group by day
     if (!byDay[day]) {
       byDay[day] = {
         day: day,
         count: 0,
-        sessions: []
+        sessions: [],
       };
     }
     byDay[day].count++;
@@ -562,7 +838,8 @@ export function getSessionDisplayInfo(sessions) {
       title: session.title,
       time: `${session.startTime} - ${session.endTime}`,
       module: session.moduleIndex + 1,
-      sessionNumber: session.sessionNumber
+      sessionNumber: session.sessionNumber,
+      hasMeetingLink: !!session.meetingLink,
     });
 
     // Group by module
@@ -571,7 +848,7 @@ export function getSessionDisplayInfo(sessions) {
       byModule[moduleKey] = {
         module: session.moduleIndex + 1,
         count: 0,
-        sessions: []
+        sessions: [],
       };
     }
     byModule[moduleKey].count++;
@@ -580,7 +857,8 @@ export function getSessionDisplayInfo(sessions) {
       sessionNumber: session.sessionNumber,
       date: date,
       day: day,
-      time: `${session.startTime} - ${session.endTime}`
+      time: `${session.startTime} - ${session.endTime}`,
+      hasMeetingLink: !!session.meetingLink,
     });
 
     // Timeline
@@ -590,7 +868,9 @@ export function getSessionDisplayInfo(sessions) {
       time: `${session.startTime} - ${session.endTime}`,
       title: session.title,
       module: session.moduleIndex + 1,
-      sessionNumber: session.sessionNumber
+      sessionNumber: session.sessionNumber,
+      hasMeetingLink: !!session.meetingLink,
+      meetingLink: session.meetingLink,
     });
   });
 
@@ -606,8 +886,9 @@ export function getSessionDisplayInfo(sessions) {
       daysCount: Object.keys(byDay).length,
       modulesCount: Object.keys(byModule).length,
       firstDate: timeline[0]?.date,
-      lastDate: timeline[timeline.length - 1]?.date
-    }
+      lastDate: timeline[timeline.length - 1]?.date,
+      sessionsWithLinks: timeline.filter((s) => s.hasMeetingLink).length,
+    },
   };
 }
 
@@ -618,28 +899,28 @@ export function validateSessionDistribution(sessions, expectedDaysOfWeek) {
   if (!sessions || sessions.length === 0) {
     return {
       valid: false,
-      error: 'No sessions to validate'
+      error: "No sessions to validate",
     };
   }
 
   if (!expectedDaysOfWeek || expectedDaysOfWeek.length !== 3) {
     return {
       valid: false,
-      error: 'Expected exactly 3 days of week'
+      error: "Expected exactly 3 days of week",
     };
   }
 
   const dayMap = {
-    'Sunday': 0,
-    'Monday': 1,
-    'Tuesday': 2,
-    'Wednesday': 3,
-    'Thursday': 4,
-    'Friday': 5,
-    'Saturday': 6
+    Sunday: 0,
+    Monday: 1,
+    Tuesday: 2,
+    Wednesday: 3,
+    Thursday: 4,
+    Friday: 5,
+    Saturday: 6,
   };
 
-  const expectedDayNumbers = expectedDaysOfWeek.map(day => dayMap[day]);
+  const expectedDayNumbers = expectedDaysOfWeek.map((day) => dayMap[day]);
   const usedDayNumbers = new Set();
   const issues = [];
 
@@ -649,22 +930,28 @@ export function validateSessionDistribution(sessions, expectedDaysOfWeek) {
 
     // Check if this session's day is in expected days
     if (!expectedDayNumbers.includes(sessionDay)) {
-      issues.push(`Session ${index + 1} (${session.title}) is on day ${sessionDay} which is not in expected days`);
+      issues.push(
+        `Session ${index + 1} (${session.title}) is on day ${sessionDay} which is not in expected days`,
+      );
     }
 
     // Check session number corresponds to correct day index
     const expectedDayIndex = (session.sessionNumber - 1) % 3;
     const expectedDayNumber = expectedDayNumbers[expectedDayIndex];
-    
+
     if (sessionDay !== expectedDayNumber) {
-      issues.push(`Session ${session.sessionNumber} should be on ${getDayName(expectedDayNumber)} but is on ${getDayName(sessionDay)}`);
+      issues.push(
+        `Session ${session.sessionNumber} should be on ${getDayName(expectedDayNumber)} but is on ${getDayName(sessionDay)}`,
+      );
     }
   });
 
   // Check all expected days are used
-  const missingDays = expectedDayNumbers.filter(day => !usedDayNumbers.has(day));
+  const missingDays = expectedDayNumbers.filter(
+    (day) => !usedDayNumbers.has(day),
+  );
   if (missingDays.length > 0) {
-    missingDays.forEach(day => {
+    missingDays.forEach((day) => {
       issues.push(`Day ${getDayName(day)} is not used in any session`);
     });
   }
@@ -672,7 +959,115 @@ export function validateSessionDistribution(sessions, expectedDaysOfWeek) {
   return {
     valid: issues.length === 0,
     issues: issues,
-    usedDays: Array.from(usedDayNumbers).map(day => getDayName(day)),
-    expectedDays: expectedDaysOfWeek
+    usedDays: Array.from(usedDayNumbers).map((day) => getDayName(day)),
+    expectedDays: expectedDaysOfWeek,
   };
+}
+
+/**
+ * ✅ Get available meeting links for manual assignment
+ */
+export async function getAvailableMeetingLinks(
+  startTime,
+  endTime,
+  platform = null,
+) {
+  try {
+    if (!MeetingLink) {
+      console.log("⚠️ Meeting link functionality disabled");
+      return [];
+    }
+
+    const links = await MeetingLink.findAvailableLinks(startTime, endTime, 10);
+
+    // Filter by platform if specified
+    if (platform) {
+      return links.filter((link) => link.platform === platform);
+    }
+
+    return links;
+  } catch (error) {
+    console.error("❌ Error getting available meeting links:", error);
+    return [];
+  }
+}
+
+/**
+ * ✅ Manually assign meeting link to a session
+ */
+export async function manuallyAssignMeetingLink(
+  sessionId,
+  meetingLinkId,
+  userId,
+) {
+  try {
+    if (!MeetingLink) {
+      throw new Error("Meeting link functionality disabled");
+    }
+
+    const Session = (await import("../app/models/Session")).default;
+    const session = await Session.findById(sessionId);
+
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    // Release existing meeting link if any
+    if (session.meetingLinkId) {
+      await releaseMeetingLink(sessionId);
+    }
+
+    const meetingLink = await MeetingLink.findById(meetingLinkId);
+
+    if (!meetingLink) {
+      throw new Error("Meeting link not found");
+    }
+
+    // Create date objects for the session time
+    const startTime = new Date(session.scheduledDate);
+    const [hours, minutes] = session.startTime.split(":").map(Number);
+    startTime.setHours(hours, minutes, 0, 0);
+
+    const endTime = new Date(startTime);
+    const [endHours, endMinutes] = session.endTime.split(":").map(Number);
+    endTime.setHours(endHours, endMinutes, 0, 0);
+
+    // Reserve the link
+    const reservationResult = await meetingLink.reserveForSession(
+      sessionId,
+      session.groupId,
+      startTime,
+      endTime,
+      userId,
+    );
+
+    // Update session with meeting link
+    await Session.findByIdAndUpdate(sessionId, {
+      $set: {
+        meetingLink: reservationResult.link,
+        meetingCredentials: {
+          username: meetingLink.credentials.username,
+          password: meetingLink.credentials.password,
+        },
+        meetingLinkId: meetingLinkId,
+        meetingPlatform: meetingLink.platform,
+        "automationEvents.meetingLinkAssigned": true,
+        "automationEvents.meetingLinkAssignedAt": new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      message: "Meeting link assigned successfully",
+      link: reservationResult.link,
+      credentials: reservationResult.credentials,
+      meetingLinkId: meetingLinkId,
+    };
+  } catch (error) {
+    console.error("❌ Error manually assigning meeting link:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
 }

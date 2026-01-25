@@ -20,77 +20,122 @@ interface SectionImageHeroFormProps {
   initial?: any;
   onClose: () => void;
   onSaved: () => void;
+  existingLanguages?: string[];
 }
 
 interface FormData {
-  sectionName: string;
   language: string;
   imageUrl: string;
   secondImageUrl: string;
   imageAlt: string;
   secondImageAlt: string;
-  heroTitle: string;
-  heroDescription: string;
-  instructor1: string;
-  instructor1Role: string;
-  instructor2: string;
-  instructor2Role: string;
-  welcomeTitle: string;
-  welcomeSubtitle1: string;
-  welcomeSubtitle2: string;
-  welcomeFeature1: string;
-  welcomeFeature2: string;
-  welcomeFeature3: string;
-  welcomeFeature4: string;
-  welcomeFeature5: string;
-  welcomeFeature6: string;
+  
+  // Hero Arabic
+  heroTitleAr: string;
+  heroDescriptionAr: string;
+  instructor1Ar: string;
+  instructor1RoleAr: string;
+  instructor2Ar: string;
+  instructor2RoleAr: string;
+  
+  // Hero English
+  heroTitleEn: string;
+  heroDescriptionEn: string;
+  instructor1En: string;
+  instructor1RoleEn: string;
+  instructor2En: string;
+  instructor2RoleEn: string;
+  
+  // Welcome Arabic
+  welcomeTitleAr: string;
+  welcomeSubtitle1Ar: string;
+  welcomeSubtitle2Ar: string;
+  welcomeFeature1Ar: string;
+  welcomeFeature2Ar: string;
+  welcomeFeature3Ar: string;
+  welcomeFeature4Ar: string;
+  welcomeFeature5Ar: string;
+  welcomeFeature6Ar: string;
+  
+  // Welcome English
+  welcomeTitleEn: string;
+  welcomeSubtitle1En: string;
+  welcomeSubtitle2En: string;
+  welcomeFeature1En: string;
+  welcomeFeature2En: string;
+  welcomeFeature3En: string;
+  welcomeFeature4En: string;
+  welcomeFeature5En: string;
+  welcomeFeature6En: string;
+  
+  // Numbers
   discount: number;
   happyParents: string;
   graduates: string;
+  
   isActive: boolean;
   displayOrder: number;
 }
 
-interface SectionOption {
-  value: string;
-  label: string;
-}
-
-interface LanguageOption {
-  value: string;
-  label: string;
-}
-
-// Helper type for dynamic form field access
 type FormField = keyof FormData;
 
-const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, onClose, onSaved }) => {
+const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ 
+  initial, 
+  onClose, 
+  onSaved,
+  existingLanguages = [] 
+}) => {
   const { t } = useI18n();
   const [form, setForm] = useState<FormData>({
-    sectionName: initial?.sectionName || "hero-section",
     language: initial?.language || "ar",
     imageUrl: initial?.imageUrl || "",
     secondImageUrl: initial?.secondImageUrl || "",
     imageAlt: initial?.imageAlt || "",
     secondImageAlt: initial?.secondImageAlt || "",
-    heroTitle: initial?.heroTitle || "",
-    instructor1: initial?.instructor1 || "",
-    instructor1Role: initial?.instructor1Role || "",
-    heroDescription: initial?.heroDescription || "",
-    instructor2: initial?.instructor2 || "",
-    instructor2Role: initial?.instructor2Role || "",
-    welcomeTitle: initial?.welcomeTitle || "",
-    welcomeSubtitle1: initial?.welcomeSubtitle1 || "",
-    welcomeSubtitle2: initial?.welcomeSubtitle2 || "",
-    welcomeFeature1: initial?.welcomeFeature1 || "",
-    welcomeFeature2: initial?.welcomeFeature2 || "",
-    welcomeFeature3: initial?.welcomeFeature3 || "",
-    welcomeFeature4: initial?.welcomeFeature4 || "",
-    welcomeFeature5: initial?.welcomeFeature5 || "",
-    welcomeFeature6: initial?.welcomeFeature6 || "",
+    
+    // Hero Arabic
+    heroTitleAr: initial?.heroTitleAr || "",
+    heroDescriptionAr: initial?.heroDescriptionAr || "",
+    instructor1Ar: initial?.instructor1Ar || "",
+    instructor1RoleAr: initial?.instructor1RoleAr || "",
+    instructor2Ar: initial?.instructor2Ar || "",
+    instructor2RoleAr: initial?.instructor2RoleAr || "",
+    
+    // Hero English
+    heroTitleEn: initial?.heroTitleEn || "",
+    heroDescriptionEn: initial?.heroDescriptionEn || "",
+    instructor1En: initial?.instructor1En || "",
+    instructor1RoleEn: initial?.instructor1RoleEn || "",
+    instructor2En: initial?.instructor2En || "",
+    instructor2RoleEn: initial?.instructor2RoleEn || "",
+    
+    // Welcome Arabic
+    welcomeTitleAr: initial?.welcomeTitleAr || "",
+    welcomeSubtitle1Ar: initial?.welcomeSubtitle1Ar || "",
+    welcomeSubtitle2Ar: initial?.welcomeSubtitle2Ar || "",
+    welcomeFeature1Ar: initial?.welcomeFeature1Ar || "",
+    welcomeFeature2Ar: initial?.welcomeFeature2Ar || "",
+    welcomeFeature3Ar: initial?.welcomeFeature3Ar || "",
+    welcomeFeature4Ar: initial?.welcomeFeature4Ar || "",
+    welcomeFeature5Ar: initial?.welcomeFeature5Ar || "",
+    welcomeFeature6Ar: initial?.welcomeFeature6Ar || "",
+    
+    // Welcome English
+    welcomeTitleEn: initial?.welcomeTitleEn || "",
+    welcomeSubtitle1En: initial?.welcomeSubtitle1En || "",
+    welcomeSubtitle2En: initial?.welcomeSubtitle2En || "",
+    welcomeFeature1En: initial?.welcomeFeature1En || "",
+    welcomeFeature2En: initial?.welcomeFeature2En || "",
+    welcomeFeature3En: initial?.welcomeFeature3En || "",
+    welcomeFeature4En: initial?.welcomeFeature4En || "",
+    welcomeFeature5En: initial?.welcomeFeature5En || "",
+    welcomeFeature6En: initial?.welcomeFeature6En || "",
+    
+    // Numbers
     discount: initial?.discount || 30,
     happyParents: initial?.happyParents || "250",
     graduates: initial?.graduates || "130",
+    
     isActive: initial?.isActive ?? true,
     displayOrder: initial?.displayOrder || 0,
   });
@@ -133,6 +178,13 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
     try {
       const payload = { ...form };
 
+      // منع إنشاء سجل بلغة موجودة مسبقاً (في حالة الإنشاء فقط)
+      if (!initial && existingLanguages.includes(payload.language)) {
+        alert(`يوجد بالفعل سجل للغة ${payload.language}. يمكنك تعديله بدلاً من إنشاء جديد.`);
+        setLoading(false);
+        return;
+      }
+
       const method = initial?._id ? "PUT" : "POST";
       const url = initial?._id
         ? `/api/section-images-hero/${initial._id}`
@@ -159,19 +211,17 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
     }
   };
 
-  const sectionOptions: SectionOption[] = [
-    { value: "hero-section", label: t('sectionNames.hero-section') || "Hero Section" },
-    { value: "welcome-popup", label: t('sectionNames.welcome-popup') || "Welcome Popup" },
-  ];
-
-  const languageOptions: LanguageOption[] = [
+  const languageOptions = [
     { value: "ar", label: "العربية" },
     { value: "en", label: "English" },
-  ];
+  ].filter(option => 
+    // في حالة التعديل، نعرض كل اللغات
+    // في حالة الإنشاء، نعرض فقط اللغات غير الموجودة
+    initial ? true : !existingLanguages.includes(option.value)
+  );
 
-  // Helper function to safely access welcome feature fields
-  const getWelcomeFeatureValue = (num: number): string => {
-    const fieldName = `welcomeFeature${num}` as keyof FormData;
+  const getWelcomeFeatureValue = (num: number, lang: string): string => {
+    const fieldName = `welcomeFeature${num}${lang === 'ar' ? 'Ar' : 'En'}` as keyof FormData;
     return form[fieldName] as string;
   };
 
@@ -188,31 +238,12 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
               {t('sectionImages.basicInfo') || "Basic Information"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              {t('sectionImages.basicInfoDescription') || "Basic details about the section image"}
+              {t('sectionImages.basicInfoDescription') || "Basic details about the image"}
             </p>
           </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-              {t('sectionImages.sectionName') || "Section Name"} *
-            </label>
-            <select
-              value={form.sectionName}
-              onChange={(e) => onChange("sectionName", e.target.value)}
-              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-              required
-            >
-              <option value="">{t('sectionImages.chooseSection') || "Choose a section..."}</option>
-              {sectionOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
               {t('common.language') || "Language"} *
@@ -222,30 +253,37 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
               onChange={(e) => onChange("language", e.target.value)}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
               required
+              disabled={!!initial} // لا يمكن تغيير اللغة عند التعديل
             >
+              <option value="">{t('sectionImages.chooseLanguage') || "Choose language..."}</option>
               {languageOptions.map(option => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
             </select>
+            {initial && (
+              <p className="text-11 text-SlateBlueText dark:text-darktext mt-1">
+                لا يمكن تغيير اللغة عند التعديل
+              </p>
+            )}
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-            {t('sectionImages.displayOrder') || "Display Order"}
-          </label>
-          <input
-            type="number"
-            value={form.displayOrder}
-            onChange={(e) => onChange("displayOrder", parseInt(e.target.value) || 0)}
-            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-            min="0"
-          />
-          <p className="text-11 text-SlateBlueText dark:text-darktext">
-            {t('sectionImages.displayOrderHint') || "Lower numbers appear first"}
-          </p>
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              {t('sectionImages.displayOrder') || "Display Order"}
+            </label>
+            <input
+              type="number"
+              value={form.displayOrder}
+              onChange={(e) => onChange("displayOrder", parseInt(e.target.value) || 0)}
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+              min="0"
+            />
+            <p className="text-11 text-SlateBlueText dark:text-darktext">
+              {t('sectionImages.displayOrderHint') || "Lower numbers appear first"}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -260,7 +298,7 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
               {t('sectionImages.imageUpload') || "Image Upload"}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              {t('sectionImages.imageUploadDescription') || "Upload or provide links for section images"}
+              {t('sectionImages.imageUploadDescription') || "Upload or provide links for images"}
             </p>
           </div>
         </div>
@@ -374,189 +412,357 @@ const SectionImageHeroForm: React.FC<SectionImageHeroFormProps> = ({ initial, on
         </div>
       </div>
 
-      {/* Hero Section Data */}
-      {form.sectionName === "hero-section" && (
-        <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-ElectricAqua/10 rounded-lg flex items-center justify-center">
-              <User className="w-4 h-4 text-ElectricAqua" />
-            </div>
-            <div>
-              <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-                {t('heroSection.title') || "Hero Section Data"}
-              </h3>
-              <p className="text-12 text-SlateBlueText dark:text-darktext">
-                {t('heroSection.description') || "Information for the hero section"}
-              </p>
-            </div>
+      {/* Hero Section Data - العربية */}
+      <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-ElectricAqua/10 rounded-lg flex items-center justify-center">
+            <User className="w-4 h-4 text-ElectricAqua" />
           </div>
-
-          <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-              {t('heroSection.heroTitle') || "Hero Title"}
-            </label>
-            <input
-              type="text"
-              value={form.heroTitle}
-              onChange={(e) => onChange("heroTitle", e.target.value)}
-              placeholder={t('heroSection.heroTitlePlaceholder') || "Hero section title"}
-              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-            />
-          </div>
-
-          {/* Hero Description */}
-          <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <FileEdit className="w-3 h-3" />
-              {t('heroSection.heroDescription') || "Hero Description"}
-            </label>
-            <textarea
-              value={form.heroDescription}
-              onChange={(e) => onChange("heroDescription", e.target.value)}
-              placeholder={t('heroSection.heroDescriptionPlaceholder') || "Detailed description for the hero section..."}
-              rows={4}
-              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white resize-none"
-            />
-            <p className="text-11 text-SlateBlueText dark:text-darktext">
-              {t('heroSection.heroDescriptionHint') || "This description will be shown in the hero section with a 'Read More' option"}
+          <div>
+            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
+              بيانات قسم الهيرو - العربية
+            </h3>
+            <p className="text-12 text-SlateBlueText dark:text-darktext">
+              معلومات قسم الهيرو باللغة العربية
             </p>
           </div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                {t('heroSection.instructor1') || "Instructor 1 Name"}
-              </label>
-              <input
-                type="text"
-                value={form.instructor1}
-                onChange={(e) => onChange("instructor1", e.target.value)}
-                placeholder={t('heroSection.instructorPlaceholder') || "Instructor name"}
-                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                {t('heroSection.instructor1Role') || "Instructor 1 Role"}
-              </label>
-              <input
-                type="text"
-                value={form.instructor1Role}
-                onChange={(e) => onChange("instructor1Role", e.target.value)}
-                placeholder={t('heroSection.instructorRolePlaceholder') || "Instructor role"}
-                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-              />
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                {t('heroSection.instructor2') || "Instructor 2 Name"}
-              </label>
-              <input
-                type="text"
-                value={form.instructor2}
-                onChange={(e) => onChange("instructor2", e.target.value)}
-                placeholder={t('heroSection.instructorPlaceholder') || "Instructor name"}
-                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                {t('heroSection.instructor2Role') || "Instructor 2 Role"}
-              </label>
-              <input
-                type="text"
-                value={form.instructor2Role}
-                onChange={(e) => onChange("instructor2Role", e.target.value)}
-                placeholder={t('heroSection.instructorRolePlaceholder') || "Instructor role"}
-                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-              />
-            </div>
-          </div>
         </div>
-      )}
 
-      {/* Welcome Popup Data */}
-      {form.sectionName === "welcome-popup" && (
-        <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-LightYellow/10 rounded-lg flex items-center justify-center">
-              <Eye className="w-4 h-4 text-LightYellow" />
-            </div>
-            <div>
-              <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-                {t('welcomePopup.title') || "Welcome Popup Data"}
-              </h3>
-              <p className="text-12 text-SlateBlueText dark:text-darktext">
-                {t('welcomePopup.description') || "Information for the welcome popup"}
-              </p>
-            </div>
-          </div>
+        <div className="space-y-2">
+          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+            عنوان الهيرو (عربي)
+          </label>
+          <input
+            type="text"
+            value={form.heroTitleAr}
+            onChange={(e) => onChange("heroTitleAr", e.target.value)}
+            placeholder="عنوان قسم الهيرو بالعربية"
+            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+          />
+        </div>
 
+        <div className="space-y-2">
+          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+            <FileEdit className="w-3 h-3" />
+            وصف الهيرو (عربي)
+          </label>
+          <textarea
+            value={form.heroDescriptionAr}
+            onChange={(e) => onChange("heroDescriptionAr", e.target.value)}
+            placeholder="وصف قسم الهيرو بالعربية..."
+            rows={3}
+            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white resize-none"
+          />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-              {t('welcomePopup.welcomeTitle') || "Welcome Title"}
+              المدرب الأول (عربي)
             </label>
             <input
               type="text"
-              value={form.welcomeTitle}
-              onChange={(e) => onChange("welcomeTitle", e.target.value)}
-              placeholder={t('welcomePopup.welcomeTitlePlaceholder') || "Welcome popup title"}
+              value={form.instructor1Ar}
+              onChange={(e) => onChange("instructor1Ar", e.target.value)}
+              placeholder="اسم المدرب بالعربية"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
             />
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                {t('welcomePopup.subtitle1') || "Subtitle 1"}
-              </label>
-              <input
-                type="text"
-                value={form.welcomeSubtitle1}
-                onChange={(e) => onChange("welcomeSubtitle1", e.target.value)}
-                placeholder={t('welcomePopup.subtitlePlaceholder') || "First subtitle"}
-                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                {t('welcomePopup.subtitle2') || "Subtitle 2"}
-              </label>
-              <input
-                type="text"
-                value={form.welcomeSubtitle2}
-                onChange={(e) => onChange("welcomeSubtitle2", e.target.value)}
-                placeholder={t('welcomePopup.subtitlePlaceholder') || "Second subtitle"}
-                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-              />
-            </div>
-          </div>
-
-          {/* Welcome Features */}
-          <div className="grid md:grid-cols-2 gap-4">
-            {[1, 2, 3, 4, 5, 6].map(num => (
-              <div key={num} className="space-y-2">
-                <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
-                  {t(`welcomePopup.feature${num}`) || `Feature ${num}`}
-                </label>
-                <input
-                  type="text"
-                  value={getWelcomeFeatureValue(num)}
-                  onChange={(e) => onChange(`welcomeFeature${num}` as FormField, e.target.value)}
-                  placeholder={t('welcomePopup.featurePlaceholder') || `Feature ${num}`}
-                  className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-                />
-              </div>
-            ))}
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              دور المدرب الأول (عربي)
+            </label>
+            <input
+              type="text"
+              value={form.instructor1RoleAr}
+              onChange={(e) => onChange("instructor1RoleAr", e.target.value)}
+              placeholder="دور المدرب بالعربية"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
           </div>
         </div>
-      )}
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              المدرب الثاني (عربي)
+            </label>
+            <input
+              type="text"
+              value={form.instructor2Ar}
+              onChange={(e) => onChange("instructor2Ar", e.target.value)}
+              placeholder="اسم المدرب بالعربية"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              دور المدرب الثاني (عربي)
+            </label>
+            <input
+              type="text"
+              value={form.instructor2RoleAr}
+              onChange={(e) => onChange("instructor2RoleAr", e.target.value)}
+              placeholder="دور المدرب بالعربية"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Hero Section Data - English */}
+      <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-LightYellow/10 rounded-lg flex items-center justify-center">
+            <User className="w-4 h-4 text-LightYellow" />
+          </div>
+          <div>
+            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
+              Hero Section Data - English
+            </h3>
+            <p className="text-12 text-SlateBlueText dark:text-darktext">
+              Hero section information in English
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+            Hero Title (English)
+          </label>
+          <input
+            type="text"
+            value={form.heroTitleEn}
+            onChange={(e) => onChange("heroTitleEn", e.target.value)}
+            placeholder="Hero section title in English"
+            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+            <FileEdit className="w-3 h-3" />
+            Hero Description (English)
+          </label>
+          <textarea
+            value={form.heroDescriptionEn}
+            onChange={(e) => onChange("heroDescriptionEn", e.target.value)}
+            placeholder="Hero section description in English..."
+            rows={3}
+            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white resize-none"
+          />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              Instructor 1 (English)
+            </label>
+            <input
+              type="text"
+              value={form.instructor1En}
+              onChange={(e) => onChange("instructor1En", e.target.value)}
+              placeholder="Instructor name in English"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              Instructor 1 Role (English)
+            </label>
+            <input
+              type="text"
+              value={form.instructor1RoleEn}
+              onChange={(e) => onChange("instructor1RoleEn", e.target.value)}
+              placeholder="Instructor role in English"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              Instructor 2 (English)
+            </label>
+            <input
+              type="text"
+              value={form.instructor2En}
+              onChange={(e) => onChange("instructor2En", e.target.value)}
+              placeholder="Instructor name in English"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              Instructor 2 Role (English)
+            </label>
+            <input
+              type="text"
+              value={form.instructor2RoleEn}
+              onChange={(e) => onChange("instructor2RoleEn", e.target.value)}
+              placeholder="Instructor role in English"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Welcome Popup Data - العربية */}
+      <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-ElectricAqua/10 rounded-lg flex items-center justify-center">
+            <Eye className="w-4 h-4 text-ElectricAqua" />
+          </div>
+          <div>
+            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
+              بيانات نافذة الترحيب - العربية
+            </h3>
+            <p className="text-12 text-SlateBlueText dark:text-darktext">
+              معلومات نافذة الترحيب باللغة العربية
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+            عنوان الترحيب (عربي)
+          </label>
+          <input
+            type="text"
+            value={form.welcomeTitleAr}
+            onChange={(e) => onChange("welcomeTitleAr", e.target.value)}
+            placeholder="عنوان نافذة الترحيب بالعربية"
+            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+          />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              العنوان الفرعي 1 (عربي)
+            </label>
+            <input
+              type="text"
+              value={form.welcomeSubtitle1Ar}
+              onChange={(e) => onChange("welcomeSubtitle1Ar", e.target.value)}
+              placeholder="العنوان الفرعي الأول بالعربية"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              العنوان الفرعي 2 (عربي)
+            </label>
+            <input
+              type="text"
+              value={form.welcomeSubtitle2Ar}
+              onChange={(e) => onChange("welcomeSubtitle2Ar", e.target.value)}
+              placeholder="العنوان الفرعي الثاني بالعربية"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+        </div>
+
+        {/* Welcome Features Arabic */}
+        <div className="grid md:grid-cols-2 gap-4">
+          {[1, 2, 3, 4, 5, 6].map(num => (
+            <div key={num} className="space-y-2">
+              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+                الميزة {num} (عربي)
+              </label>
+              <input
+                type="text"
+                value={getWelcomeFeatureValue(num, 'ar')}
+                onChange={(e) => onChange(`welcomeFeature${num}Ar` as FormField, e.target.value)}
+                placeholder={`الميزة ${num} بالعربية`}
+                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Welcome Popup Data - English */}
+      <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-LightYellow/10 rounded-lg flex items-center justify-center">
+            <Eye className="w-4 h-4 text-LightYellow" />
+          </div>
+          <div>
+            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
+              Welcome Popup Data - English
+            </h3>
+            <p className="text-12 text-SlateBlueText dark:text-darktext">
+              Welcome popup information in English
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+            Welcome Title (English)
+          </label>
+          <input
+            type="text"
+            value={form.welcomeTitleEn}
+            onChange={(e) => onChange("welcomeTitleEn", e.target.value)}
+            placeholder="Welcome popup title in English"
+            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+          />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              Subtitle 1 (English)
+            </label>
+            <input
+              type="text"
+              value={form.welcomeSubtitle1En}
+              onChange={(e) => onChange("welcomeSubtitle1En", e.target.value)}
+              placeholder="First subtitle in English"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+              Subtitle 2 (English)
+            </label>
+            <input
+              type="text"
+              value={form.welcomeSubtitle2En}
+              onChange={(e) => onChange("welcomeSubtitle2En", e.target.value)}
+              placeholder="Second subtitle in English"
+              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+            />
+          </div>
+        </div>
+
+        {/* Welcome Features English */}
+        <div className="grid md:grid-cols-2 gap-4">
+          {[1, 2, 3, 4, 5, 6].map(num => (
+            <div key={num} className="space-y-2">
+              <label className="block text-13 font-medium text-MidnightNavyText dark:text-white">
+                Feature {num} (English)
+              </label>
+              <input
+                type="text"
+                value={getWelcomeFeatureValue(num, 'en')}
+                onChange={(e) => onChange(`welcomeFeature${num}En` as FormField, e.target.value)}
+                placeholder={`Feature ${num} in English`}
+                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Numbers & Statistics */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border shadow-sm">

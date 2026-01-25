@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useRouter } from "next/navigation";
@@ -25,35 +25,56 @@ interface WelcomePopupProps {
   onClose: () => void;
 }
 
-interface WelcomePopupData {
-  // الصور
-  imageUrl?: string;
-  secondImageUrl?: string;
-  imageAlt?: string;
-  secondImageAlt?: string;
+interface SiteContent {
+  _id: string;
+  imageUrl: string;
+  secondImageUrl: string;
+  imageAlt: string;
+  secondImageAlt: string;
   
-  // بيانات الـ Welcome Popup
-  welcomeTitle?: string;
-  welcomeSubtitle1?: string;
-  welcomeSubtitle2?: string;
-  welcomeFeature1?: string;
-  welcomeFeature2?: string;
-  welcomeFeature3?: string;
-  welcomeFeature4?: string;
-  welcomeFeature5?: string;
-  welcomeFeature6?: string;
+  // بيانات الـ Welcome Popup - عربي
+  welcomeTitleAr?: string;
+  welcomeSubtitle1Ar?: string;
+  welcomeSubtitle2Ar?: string;
+  welcomeFeature1Ar?: string;
+  welcomeFeature2Ar?: string;
+  welcomeFeature3Ar?: string;
+  welcomeFeature4Ar?: string;
+  welcomeFeature5Ar?: string;
+  welcomeFeature6Ar?: string;
+  
+  // بيانات الـ Welcome Popup - انجليزي
+  welcomeTitleEn?: string;
+  welcomeSubtitle1En?: string;
+  welcomeSubtitle2En?: string;
+  welcomeFeature1En?: string;
+  welcomeFeature2En?: string;
+  welcomeFeature3En?: string;
+  welcomeFeature4En?: string;
+  welcomeFeature5En?: string;
+  welcomeFeature6En?: string;
+  
+  // بيانات الـ Hero (للاستخدام إذا لم توجد بيانات Welcome)
+  heroTitleAr?: string;
+  heroDescriptionAr?: string;
+  heroTitleEn?: string;
+  heroDescriptionEn?: string;
   
   // الأرقام
   discount?: number;
   happyParents?: string;
   graduates?: string;
+  
+  isActive: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ✅ Cache خارج المكون
 let welcomeDataCache: {
-  data: WelcomePopupData | null;
+  data: SiteContent | null;
   timestamp: number;
-  locale: string;
 } | null = null;
 const WELCOME_CACHE_DURATION = 10 * 60 * 1000; // 10 دقائق
 
@@ -62,7 +83,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
   const { t } = useI18n();
   const router = useRouter();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [welcomeData, setWelcomeData] = useState<WelcomePopupData | null>(null);
+  const [siteContent, setSiteContent] = useState<SiteContent | null>(null);
   const [loading, setLoading] = useState(false);
 
   const isRTL = locale === "ar";
@@ -85,17 +106,16 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
         // ✅ التحقق من الـ cache أولاً
         if (
           welcomeDataCache &&
-          Date.now() - welcomeDataCache.timestamp < WELCOME_CACHE_DURATION &&
-          welcomeDataCache.locale === locale
+          Date.now() - welcomeDataCache.timestamp < WELCOME_CACHE_DURATION
         ) {
           if (isSubscribed) {
-            setWelcomeData(welcomeDataCache.data);
+            setSiteContent(welcomeDataCache.data);
           }
           return;
         }
 
         setLoading(true);
-        const res = await fetch(`/api/section-images-hero?sectionName=welcome-popup&activeOnly=true&language=${locale}`, {
+        const res = await fetch(`/api/section-images-hero?activeOnly=true`, {
           signal: controller.signal,
           cache: 'force-cache',
           headers: {
@@ -111,9 +131,8 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
           welcomeDataCache = {
             data: result.data[0],
             timestamp: Date.now(),
-            locale
           };
-          setWelcomeData(result.data[0]);
+          setSiteContent(result.data[0]);
         }
       } catch (error: any) {
         if (error.name !== 'AbortError' && isSubscribed) {
@@ -132,7 +151,62 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
       isSubscribed = false;
       controller.abort();
     };
-  }, [isOpen, locale]);
+  }, [isOpen]);
+
+  // ✅ الحصول على البيانات بناءً على اللغة الحالية
+  const getContentByLanguage = useMemo(() => {
+    if (!siteContent) return null;
+    
+    if (locale === "ar") {
+      return {
+        // بيانات Welcome بالعربي
+        welcomeTitle: siteContent.welcomeTitleAr || siteContent.heroTitleAr || t("hero.title"),
+        welcomeSubtitle1: siteContent.welcomeSubtitle1Ar || t("welcome.subtitle1"),
+        welcomeSubtitle2: siteContent.welcomeSubtitle2Ar || t("welcome.subtitle2"),
+        welcomeFeatures: [
+          siteContent.welcomeFeature1Ar || t("welcome.feature1"),
+          siteContent.welcomeFeature2Ar || t("welcome.feature2"),
+          siteContent.welcomeFeature3Ar || t("welcome.feature3"),
+          siteContent.welcomeFeature4Ar || t("welcome.feature4"),
+          siteContent.welcomeFeature5Ar || t("welcome.feature5"),
+          siteContent.welcomeFeature6Ar || t("welcome.feature6"),
+        ],
+        // الصور
+        imageUrl: siteContent.imageUrl,
+        secondImageUrl: siteContent.secondImageUrl,
+        imageAlt: siteContent.imageAlt || "صورة الترحيب",
+        secondImageAlt: siteContent.secondImageAlt || "الصورة الثانية",
+        // الأرقام
+        discount: siteContent.discount || 30,
+        happyParents: siteContent.happyParents || "250",
+        graduates: siteContent.graduates || "130",
+      };
+    } else {
+      return {
+        // بيانات Welcome بالإنجليزية
+        welcomeTitle: siteContent.welcomeTitleEn || siteContent.heroTitleEn || t("hero.title"),
+        welcomeSubtitle1: siteContent.welcomeSubtitle1En || t("welcome.subtitle1"),
+        welcomeSubtitle2: siteContent.welcomeSubtitle2En || t("welcome.subtitle2"),
+        welcomeFeatures: [
+          siteContent.welcomeFeature1En || t("welcome.feature1"),
+          siteContent.welcomeFeature2En || t("welcome.feature2"),
+          siteContent.welcomeFeature3En || t("welcome.feature3"),
+          siteContent.welcomeFeature4En || t("welcome.feature4"),
+          siteContent.welcomeFeature5En || t("welcome.feature5"),
+          siteContent.welcomeFeature6En || t("welcome.feature6"),
+        ],
+        // الصور
+        imageUrl: siteContent.imageUrl,
+        secondImageUrl: siteContent.secondImageUrl,
+        imageAlt: siteContent.imageAlt || "Welcome image",
+        secondImageAlt: siteContent.secondImageAlt || "Second image",
+        // الأرقام
+        discount: siteContent.discount || 30,
+        happyParents: siteContent.happyParents || "250",
+        graduates: siteContent.graduates || "130",
+      };
+    }
+  }, [siteContent, locale, t]);
 
   // ✅ تحسين الـ interval مع cleanup
   useEffect(() => {
@@ -186,34 +260,38 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
   };
 
   // ✅ استخدام useMemo للـ slides لمنع إعادة الإنشاء
-  const slides = React.useMemo(() => [
-    {
-      title: welcomeData?.welcomeTitle || t("hero.title") || "Empower Young Minds!",
-      subtitle: welcomeData?.welcomeSubtitle1 || t("welcome.subtitle1") || "Transform your child's future with coding",
-      imageUrl: getImageSrc(welcomeData?.imageUrl, "/images/hero/john.png"),
-      features: [
-        welcomeData?.welcomeFeature1 || t("welcome.feature1") || "Expert Coding Instructors",
-        welcomeData?.welcomeFeature2 || t("welcome.feature2") || "Interactive Learning Platform",
-        welcomeData?.welcomeFeature3 || t("welcome.feature3") || "Project-Based Curriculum",
-      ],
-      icon: GraduationCap,
-    },
-    {
-      title: t("welcome.specialOffer") || "Special Launch Offer!",
-      subtitle: welcomeData?.welcomeSubtitle2 || t("welcome.subtitle2") || "Get 30% off on all courses",
-      imageUrl: getImageSrc(welcomeData?.secondImageUrl, "/images/hero/maria.png"),
-      features: [
-        welcomeData?.welcomeFeature4 || t("welcome.feature4") || "All Age Groups (6-18)",
-        welcomeData?.welcomeFeature5 || t("welcome.feature5") || "International Certificate",
-        welcomeData?.welcomeFeature6 || t("welcome.feature6") || "Flexible Schedule",
-      ],
-      icon: Heart,
-    },
-  ], [welcomeData, t]);
+  const slides = useMemo(() => {
+    if (!getContentByLanguage) return [];
+    
+    return [
+      {
+        title: getContentByLanguage.welcomeTitle,
+        subtitle: getContentByLanguage.welcomeSubtitle1 || t("welcome.subtitle1"),
+        imageUrl: getImageSrc(getContentByLanguage.imageUrl, "/images/hero/john.png"),
+        features: [
+          getContentByLanguage.welcomeFeatures[0],
+          getContentByLanguage.welcomeFeatures[1],
+          getContentByLanguage.welcomeFeatures[2],
+        ],
+        icon: GraduationCap,
+      },
+      {
+        title: t("welcome.specialOffer") || "Special Launch Offer!",
+        subtitle: getContentByLanguage.welcomeSubtitle2 || t("welcome.subtitle2"),
+        imageUrl: getImageSrc(getContentByLanguage.secondImageUrl, "/images/hero/maria.png"),
+        features: [
+          getContentByLanguage.welcomeFeatures[3],
+          getContentByLanguage.welcomeFeatures[4],
+          getContentByLanguage.welcomeFeatures[5],
+        ],
+        icon: Heart,
+      },
+    ];
+  }, [getContentByLanguage, t]);
 
-  const currentSlideData = slides[currentSlide];
-  const CurrentIcon = currentSlideData.icon;
-  const discount = welcomeData?.discount || 30;
+  const currentSlideData = slides[currentSlide] || {};
+  const CurrentIcon = currentSlideData.icon || GraduationCap;
+  const discount = getContentByLanguage?.discount || 30;
 
   const handleWhatsAppContact = () => {
     const number = "201140474129";
@@ -267,7 +345,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
 
   return (
     <AnimatePresence>
-      {isOpen && (
+      {isOpen && getContentByLanguage && (
         <>
           <motion.div
             initial={{ opacity: 0 }}
@@ -337,8 +415,8 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
 
                     <div className="bg-white/10 backdrop-blur-sm rounded-14 sm:rounded-22 p-3 sm:p-4 mb-4 sm:mb-6 mx-auto max-w-[280px]">
                       <Image
-                        src={currentSlideData.imageUrl}
-                        alt={welcomeData?.imageAlt || "Welcome"}
+                        src={currentSlideData.imageUrl || "/images/hero/john.png"}
+                        alt={getContentByLanguage.imageAlt}
                         width={200}
                         height={200}
                         className="w-20 h-20 sm:w-60 sm:h-60 md:w-40 md:h-40 object-contain mx-auto rounded-14"
@@ -348,7 +426,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                     </div>
 
                     <div className="w-full max-w-md mx-auto grid grid-cols-1 gap-2 sm:gap-3">
-                      {currentSlideData.features.map((feature, index) => (
+                      {currentSlideData.features?.map((feature, index) => (
                         <motion.div
                           key={index}
                           initial={{ opacity: 0, x: isRTL ? 20 : -20 }}
@@ -504,7 +582,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
                         <div className="flex items-center gap-1">
                           <Users className="w-4 h-4 text-primary" />
                           <span className="font-medium">
-                            {welcomeData?.happyParents || t("welcome.happyParents") || "Happy Parents"}
+                            {getContentByLanguage.happyParents}
                           </span>
                         </div>
                       </div>

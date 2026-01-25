@@ -23,26 +23,41 @@ import { useI18n } from "@/i18n/I18nProvider";
 
 interface SectionImageHero {
   _id: string;
-  sectionName: string;
   language: string;
   imageUrl: string;
   secondImageUrl?: string;
   imageAlt?: string;
   secondImageAlt?: string;
-  heroTitle?: string;
-  instructor1?: string;
-  instructor1Role?: string;
-  instructor2?: string;
-  instructor2Role?: string;
-  welcomeTitle?: string;
-  welcomeSubtitle1?: string;
-  welcomeSubtitle2?: string;
-  welcomeFeature1?: string;
-  welcomeFeature2?: string;
-  welcomeFeature3?: string;
-  welcomeFeature4?: string;
-  welcomeFeature5?: string;
-  welcomeFeature6?: string;
+  heroTitleAr?: string;
+  heroDescriptionAr?: string;
+  instructor1Ar?: string;
+  instructor1RoleAr?: string;
+  instructor2Ar?: string;
+  instructor2RoleAr?: string;
+  heroTitleEn?: string;
+  heroDescriptionEn?: string;
+  instructor1En?: string;
+  instructor1RoleEn?: string;
+  instructor2En?: string;
+  instructor2RoleEn?: string;
+  welcomeTitleAr?: string;
+  welcomeSubtitle1Ar?: string;
+  welcomeSubtitle2Ar?: string;
+  welcomeFeature1Ar?: string;
+  welcomeFeature2Ar?: string;
+  welcomeFeature3Ar?: string;
+  welcomeFeature4Ar?: string;
+  welcomeFeature5Ar?: string;
+  welcomeFeature6Ar?: string;
+  welcomeTitleEn?: string;
+  welcomeSubtitle1En?: string;
+  welcomeSubtitle2En?: string;
+  welcomeFeature1En?: string;
+  welcomeFeature2En?: string;
+  welcomeFeature3En?: string;
+  welcomeFeature4En?: string;
+  welcomeFeature5En?: string;
+  welcomeFeature6En?: string;
   discount: number;
   happyParents: string;
   graduates: string;
@@ -53,7 +68,6 @@ interface SectionImageHero {
 }
 
 interface Filters {
-  sectionName: string;
   language: string;
   status: string;
 }
@@ -65,7 +79,6 @@ const SectionImagesAdminHero: React.FC = () => {
   const [open, setOpen] = useState<boolean>(false);
   const [editing, setEditing] = useState<SectionImageHero | null>(null);
   const [filters, setFilters] = useState<Filters>({
-    sectionName: "",
     language: "",
     status: ""
   });
@@ -90,8 +103,8 @@ const SectionImagesAdminHero: React.FC = () => {
         setImages(json.data);
       }
     } catch (err) {
-      console.error("Error loading section images:", err);
-      toast.error(t('sectionImages.failedToLoad') || "Failed to load section images");
+      console.error("Error loading images:", err);
+      toast.error(t('sectionImages.failedToLoad') || "Failed to load images");
     } finally {
       setLoading(false);
     }
@@ -103,7 +116,7 @@ const SectionImagesAdminHero: React.FC = () => {
 
   const onSaved = async (): Promise<void> => {
     await loadImages();
-    toast.success(t('sectionImages.savedSuccess') || "Section image saved successfully");
+    toast.success(t('sectionImages.savedSuccess') || "Image saved successfully");
   };
 
   const onEdit = (image: SectionImageHero): void => {
@@ -184,7 +197,7 @@ const SectionImagesAdminHero: React.FC = () => {
       });
 
       if (res.ok) {
-        setImages(prev => prev.map(img => 
+        setImages(prev => prev.map(img =>
           img._id === id ? { ...img, isActive: !currentStatus } : img
         ));
         toast.success(t('sectionImages.statusUpdated') || "Status updated successfully");
@@ -198,7 +211,6 @@ const SectionImagesAdminHero: React.FC = () => {
   };
 
   const filteredImages = images.filter(image => {
-    if (filters.sectionName && image.sectionName !== filters.sectionName) return false;
     if (filters.language && image.language !== filters.language) return false;
     if (filters.status === "active" && !image.isActive) return false;
     if (filters.status === "inactive" && image.isActive) return false;
@@ -210,6 +222,10 @@ const SectionImagesAdminHero: React.FC = () => {
     active: images.filter(img => img.isActive).length,
     arabic: images.filter(img => img.language === "ar").length,
     english: images.filter(img => img.language === "en").length,
+  };
+
+  const getLanguageLabel = (lang: string): string => {
+    return lang === "ar" ? "العربية" : "English";
   };
 
   if (loading) {
@@ -228,10 +244,10 @@ const SectionImagesAdminHero: React.FC = () => {
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
               <Image className="w-7 h-7 text-primary" />
-              {t('sectionImages.management') || "Section Images Management"}
+              {t('sectionImages.management') || "Images Management"}
             </h1>
             <p className="text-sm text-SlateBlueText dark:text-darktext max-w-2xl">
-              {t('sectionImages.managementDescription') || "Manage images for different sections of your website. Upload and organize images for hero sections, event pages, and more."}
+              {t('sectionImages.managementDescription') || "Manage website images and content for different languages. Each language has its own image and content."}
             </p>
           </div>
           <button
@@ -239,10 +255,17 @@ const SectionImagesAdminHero: React.FC = () => {
               setEditing(null);
               setOpen(true);
             }}
-            className="mt-4 lg:mt-0 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
+            disabled={images.length >= 2}
+            className={`mt-4 lg:mt-0 px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 ${images.length >= 2
+                ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed"
+                : "bg-primary hover:bg-primary/90 text-white"
+              }`}
           >
             <Plus className="w-4 h-4" />
             {t('sectionImages.addNew') || "Add New Image"}
+            {images.length >= 2 && (
+              <span className="ml-2 text-xs">(حد أقصى صورتين)</span>
+            )}
           </button>
         </div>
       </div>
@@ -256,7 +279,7 @@ const SectionImagesAdminHero: React.FC = () => {
                 {t('sectionImages.totalImages') || "Total Images"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
-                {stats.total}
+                {stats.total}/2
               </p>
             </div>
             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -285,10 +308,10 @@ const SectionImagesAdminHero: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                {t('sectionImages.arabicImages') || "Arabic Images"}
+                {t('sectionImages.arabicImages') || "Arabic Version"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
-                {stats.arabic}
+                {stats.arabic > 0 ? "✓" : "✗"}
               </p>
             </div>
             <div className="w-10 h-10 bg-Aquamarine/10 rounded-lg flex items-center justify-center">
@@ -301,10 +324,10 @@ const SectionImagesAdminHero: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                {t('sectionImages.englishImages') || "English Images"}
+                {t('sectionImages.englishImages') || "English Version"}
               </p>
               <p className="text-2xl font-bold text-MidnightNavyText dark:text-white mt-1">
-                {stats.english}
+                {stats.english > 0 ? "✓" : "✗"}
               </p>
             </div>
             <div className="w-10 h-10 bg-LightYellow/10 rounded-lg flex items-center justify-center">
@@ -316,22 +339,7 @@ const SectionImagesAdminHero: React.FC = () => {
 
       {/* Filters */}
       <div className="bg-white dark:bg-darkmode rounded-xl p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-              {t('sectionImages.sectionName') || "Section Name"}
-            </label>
-            <select
-              value={filters.sectionName}
-              onChange={(e) => setFilters(prev => ({ ...prev, sectionName: e.target.value }))}
-              className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white"
-            >
-              <option value="">{t('sectionImages.allSections') || "All Sections"}</option>
-              <option value="hero-section">Hero Section</option>
-              <option value="welcome-popup">Welcome Popup</option>
-            </select>
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
               {t('common.language') || "Language"}
@@ -364,7 +372,7 @@ const SectionImagesAdminHero: React.FC = () => {
 
           <div className="flex items-end">
             <button
-              onClick={() => setFilters({ sectionName: "", language: "", status: "" })}
+              onClick={() => setFilters({ language: "", status: "" })}
               className="w-full bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white py-2 px-4 rounded-lg font-semibold text-sm border border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-darklight transition-colors"
             >
               {t('sectionImages.clearFilters') || "Clear Filters"}
@@ -374,29 +382,35 @@ const SectionImagesAdminHero: React.FC = () => {
       </div>
 
       {/* Images Grid */}
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-2">
         {filteredImages.map((image) => (
           <div
             key={image._id}
-            className={`relative rounded-xl border p-6 transition-all duration-300 hover:shadow-md ${
-              image.isActive
+            className={`relative rounded-xl border p-6 transition-all duration-300 hover:shadow-md ${image.isActive
                 ? "border-Aquamarine bg-gradient-to-br from-Aquamarine/5 to-Aquamarine/10"
                 : "border-PowderBlueBorder bg-white dark:bg-darkmode dark:border-dark_border"
-            }`}
+              }`}
           >
             {/* Status Badge */}
             <div className="absolute top-4 right-4">
               <button
                 onClick={() => toggleStatus(image._id, image.isActive)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition-colors ${
-                  image.isActive
+                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition-colors ${image.isActive
                     ? "bg-Aquamarine/20 text-Salem dark:bg-Aquamarine/30 hover:bg-Aquamarine/30"
                     : "bg-SlateBlueText/20 text-SlateBlueText dark:bg-darktext/30 hover:bg-SlateBlueText/30"
-                }`}
+                  }`}
               >
                 {image.isActive ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                 {image.isActive ? (t('sectionImages.status.active') || "Active") : (t('sectionImages.status.inactive') || "Inactive")}
               </button>
+            </div>
+
+            {/* Language Badge */}
+            <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-semibold ${image.language === "ar"
+                ? "bg-primary/20 text-primary"
+                : "bg-LightYellow/20 text-LightYellow"
+              }`}>
+              {getLanguageLabel(image.language)}
             </div>
 
             {/* Image Preview */}
@@ -418,11 +432,11 @@ const SectionImagesAdminHero: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-1">
-                  {image.sectionName}
+                  {getLanguageLabel(image.language)} Version
                 </h3>
                 <div className="flex items-center gap-2 text-sm text-SlateBlueText dark:text-darktext">
                   <Globe className="w-3 h-3" />
-                  <span className="uppercase font-medium">{image.language}</span>
+                  <span>Language: {image.language.toUpperCase()}</span>
                   <span>•</span>
                   <span>Order: {image.displayOrder}</span>
                 </div>
@@ -484,14 +498,14 @@ const SectionImagesAdminHero: React.FC = () => {
             <Image className="w-8 h-8 text-primary" />
           </div>
           <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
-            {images.length === 0 
-              ? (t('sectionImages.noImages') || "No section images yet")
+            {images.length === 0
+              ? (t('sectionImages.noImages') || "No images yet")
               : (t('sectionImages.noResults') || "No matching images found")
             }
           </h3>
           <p className="text-sm text-SlateBlueText dark:text-darktext mb-6 max-w-md mx-auto">
             {images.length === 0
-              ? (t('sectionImages.createFirst') || "Create your first section image to enhance the visual appearance of your website.")
+              ? (t('sectionImages.createFirst') || "Create your first image for Arabic or English language.")
               : (t('sectionImages.tryDifferentSearch') || "Try adjusting your search criteria or filters.")
             }
           </p>
@@ -510,12 +524,12 @@ const SectionImagesAdminHero: React.FC = () => {
       {/* Modal */}
       <Modal
         open={open}
-        title={editing ? (t('sectionImages.editImage') || "Edit Section Image") : (t('sectionImages.createImage') || "Create New Section Image")}
+        title={editing ? (t('sectionImages.editImage') || "Edit Image") : (t('sectionImages.createImage') || "Create New Image")}
         onClose={() => {
           setOpen(false);
           setEditing(null);
         }}
-        
+
       >
         <SectionImageHeroForm
           initial={editing}
@@ -524,6 +538,7 @@ const SectionImagesAdminHero: React.FC = () => {
             setEditing(null);
           }}
           onSaved={onSaved}
+          existingLanguages={images.map(img => img.language)}
         />
       </Modal>
     </div>

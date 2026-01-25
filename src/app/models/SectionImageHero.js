@@ -2,18 +2,14 @@ import mongoose from "mongoose";
 
 const SectionImageHeroSchema = new mongoose.Schema(
   {
-    sectionName: {
-      type: String,
-      required: true,
-      enum: ["hero-section", "welcome-popup"],
-      default: "hero-section"
-    },
     language: {
       type: String,
       required: true,
       enum: ["ar", "en"],
       default: "ar"
     },
+    
+    // الصور
     imageUrl: {
       type: String,
       required: true
@@ -31,71 +27,135 @@ const SectionImageHeroSchema = new mongoose.Schema(
       default: ""
     },
     
-    // Hero Section Data
-    heroTitle: {
+    // بيانات الهيرو (عربي)
+    heroTitleAr: {
       type: String,
       default: "إطلاق طاقة المبدعين الصغار!"
     },
-    heroDescription: { // ← الحقل الجديد
+    heroDescriptionAr: {
       type: String,
       default: ""
     },
-    instructor1: {
+    instructor1Ar: {
       type: String,
       default: "ياسين عبدالله"
     },
-    instructor1Role: {
+    instructor1RoleAr: {
       type: String,
       default: "تعلم الآلة"
     },
-    instructor2: {
+    instructor2Ar: {
       type: String,
       default: "فريدة عبدالله"
     },
-    instructor2Role: {
+    instructor2RoleAr: {
       type: String,
       default: "تطوير الويب"
     },
     
-    // Welcome Popup Data
-    welcomeTitle: {
+    // بيانات الهيرو (انجليزي)
+    heroTitleEn: {
       type: String,
       default: "Empower Young Minds!"
     },
-    welcomeSubtitle1: {
+    heroDescriptionEn: {
       type: String,
-      default: "Transform your child's future with coding"
+      default: ""
     },
-    welcomeSubtitle2: {
+    instructor1En: {
       type: String,
-      default: "Get 30% off on all courses"
+      default: "Yassin Abdullah"
     },
-    welcomeFeature1: {
+    instructor1RoleEn: {
+      type: String,
+      default: "Machine Learning"
+    },
+    instructor2En: {
+      type: String,
+      default: "Farida Abdullah"
+    },
+    instructor2RoleEn: {
+      type: String,
+      default: "Web Development"
+    },
+    
+    // بيانات Welcome Popup (عربي)
+    welcomeTitleAr: {
+      type: String,
+      default: "ارتقِ بعقول الشباب!"
+    },
+    welcomeSubtitle1Ar: {
+      type: String,
+      default: "حوّل مستقبل طفلك مع البرمجة"
+    },
+    welcomeSubtitle2Ar: {
+      type: String,
+      default: "احصل على خصم 30% على جميع الدورات"
+    },
+    welcomeFeature1Ar: {
       type: String,
       default: "130 ألف+ خريج"
     },
-    welcomeFeature2: {
+    welcomeFeature2Ar: {
       type: String,
       default: "مدربون خبراء"
     },
-    welcomeFeature3: {
+    welcomeFeature3Ar: {
       type: String,
       default: "تعلم تفاعلي"
     },
-    welcomeFeature4: {
+    welcomeFeature4Ar: {
       type: String,
       default: "لفترة محدودة فقط"
     },
-    welcomeFeature5: {
+    welcomeFeature5Ar: {
       type: String,
       default: "جميع الفئات العمرية"
     },
-    welcomeFeature6: {
+    welcomeFeature6Ar: {
       type: String,
       default: "شهادة معتمدة"
     },
     
-    // Numbers
+    // بيانات Welcome Popup (انجليزي)
+    welcomeTitleEn: {
+      type: String,
+      default: "Empower Young Minds!"
+    },
+    welcomeSubtitle1En: {
+      type: String,
+      default: "Transform your child's future with coding"
+    },
+    welcomeSubtitle2En: {
+      type: String,
+      default: "Get 30% off on all courses"
+    },
+    welcomeFeature1En: {
+      type: String,
+      default: "130K+ Graduates"
+    },
+    welcomeFeature2En: {
+      type: String,
+      default: "Expert Trainers"
+    },
+    welcomeFeature3En: {
+      type: String,
+      default: "Interactive Learning"
+    },
+    welcomeFeature4En: {
+      type: String,
+      default: "Limited Time Only"
+    },
+    welcomeFeature5En: {
+      type: String,
+      default: "All Age Groups"
+    },
+    welcomeFeature6En: {
+      type: String,
+      default: "Certified Certificate"
+    },
+    
+    // Numbers - نفس القيم للغتين
     discount: {
       type: Number,
       default: 30

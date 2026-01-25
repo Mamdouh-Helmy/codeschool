@@ -4,14 +4,14 @@ import toast from "react-hot-toast";
 import { useAuth } from "@/hooks/useAuth";
 import {
   Save,
-  Plus,
   Trash2,
-  ChevronDown,
-  ChevronUp,
   AlertCircle,
   X,
+  BookOpen,
+  Eye,
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
+import CurriculumManager from "./CurriculumManager";
 
 interface Lesson {
   title: string;
@@ -27,6 +27,21 @@ interface Module {
   lessons: Lesson[];
   projects: string[];
   totalSessions: number; // Always 3
+}
+
+interface Curriculum {
+  _id: string;
+  title: string;
+  description?: string;
+  level: "beginner" | "intermediate" | "advanced";
+  modules: Module[];
+  grade?: string;
+  subject?: string;
+  createdBy?: {
+    name: string;
+    email: string;
+  };
+  createdAt?: string;
 }
 
 interface Course {
@@ -65,12 +80,16 @@ export default function CourseForm({
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [expandedModules, setExpandedModules] = useState<Set<number>>(
-    new Set([0])
-  );
   const [instructorsList, setInstructorsList] = useState<any[]>([]);
   const [instructorsLoading, setInstructorsLoading] = useState(true);
-  const [newProjectInputs, setNewProjectInputs] = useState<Record<number, string>>({});
+
+  // States for curriculum selection
+  const [curriculums, setCurriculums] = useState<Curriculum[]>([]);
+  const [curriculumsLoading, setCurriculumsLoading] = useState(true);
+  const [selectedCurriculumId, setSelectedCurriculumId] = useState<string>("");
+  const [selectedCurriculum, setSelectedCurriculum] = useState<Curriculum | null>(null);
+  const [showCurriculumManager, setShowCurriculumManager] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const [form, setForm] = useState<Course>({
     title: "",
@@ -89,7 +108,10 @@ export default function CourseForm({
   useEffect(() => {
     if (initial) {
       setForm(initial);
-      setExpandedModules(new Set([0]));
+      // If initial course has curriculum, try to find matching curriculum
+      if (initial.curriculum && initial.curriculum.length > 0) {
+        // We'll set this after loading curriculums
+      }
     }
   }, [initial]);
 
@@ -113,17 +135,37 @@ export default function CourseForm({
     fetchInstructors();
   }, []);
 
-  const toggleModule = (index: number) => {
-    setExpandedModules((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
-      } else {
-        next.add(index);
+  useEffect(() => {
+    const fetchCurriculums = async () => {
+      try {
+        setCurriculumsLoading(true);
+        const res = await fetch("/api/curriculum-course", { cache: "no-store" });
+        const json = await res.json();
+        if (json.success) {
+          setCurriculums(json.data);
+
+          // If editing and course has curriculum, try to find matching curriculum
+          if (initial && initial.curriculum && initial.curriculum.length > 0) {
+            // Find curriculum by matching first module title or level
+            const matchedCurriculum = json.data.find((c: Curriculum) =>
+              c.level === initial.level ||
+              (c.modules && c.modules[0]?.title === initial.curriculum[0]?.title)
+            );
+            if (matchedCurriculum) {
+              setSelectedCurriculumId(matchedCurriculum._id);
+              setSelectedCurriculum(matchedCurriculum);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching curriculums:", err);
+      } finally {
+        setCurriculumsLoading(false);
       }
-      return next;
-    });
-  };
+    };
+
+    fetchCurriculums();
+  }, [initial]);
 
   // Helper function to calculate sessionNumber from lesson order
   const calculateSessionNumber = (lessonOrder: number): number => {
@@ -140,99 +182,50 @@ export default function CourseForm({
     return colors[sessionNumber as keyof typeof colors] || colors[1];
   };
 
-  const addModule = () => {
-    const newModule: Module = {
-      title: "",
-      description: "",
-      order: form.curriculum.length + 1,
-      lessons: Array(6)
-        .fill(null)
-        .map((_, i) => ({
-          title: "",
-          description: "",
-          order: i + 1,
-          sessionNumber: calculateSessionNumber(i + 1),
-        })),
-      projects: [],
-      totalSessions: 3,
-    };
-    setForm((prev) => ({
-      ...prev,
-      curriculum: [...prev.curriculum, newModule],
+  // Apply curriculum to course
+  const applyCurriculum = (curriculumId: string) => {
+    const curriculum = curriculums.find(c => c._id === curriculumId);
+    if (!curriculum) return;
+
+    setSelectedCurriculumId(curriculumId);
+    setSelectedCurriculum(curriculum);
+
+    // Update course level
+    setForm(prev => ({ ...prev, level: curriculum.level }));
+
+    // Map curriculum modules to course modules
+    const mappedModules = curriculum.modules.map((module, index) => ({
+      title: module.title,
+      description: module.description || "",
+      order: module.order || index + 1,
+      lessons: module.lessons?.map((lesson) => ({
+        title: lesson.title,
+        description: lesson.description || "",
+        order: lesson.order,
+        sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order),
+      })) || [],
+      projects: module.projects || [],
+      totalSessions: module.totalSessions || 3,
     }));
-    setExpandedModules((prev) => new Set(prev).add(form.curriculum.length));
-  };
 
-  const removeModule = (moduleIndex: number) => {
-    setForm((prev) => ({
+    setForm(prev => ({
       ...prev,
-      curriculum: prev.curriculum.filter((_, i) => i !== moduleIndex),
+      curriculum: mappedModules,
     }));
+
+    toast.success(t("courses.curriculumApplied") || `Curriculum applied: ${curriculum.title}`);
   };
 
-  const updateModule = (
-    moduleIndex: number,
-    field: "title" | "description" | "order",
-    value: string | number
-  ) => {
-    setForm((prev) => {
-      const updated = [...prev.curriculum];
-      updated[moduleIndex] = {
-        ...updated[moduleIndex],
-        [field]: value,
-      };
-      return { ...prev, curriculum: updated };
-    });
-  };
-
-  const updateLesson = (
-    moduleIndex: number,
-    lessonIndex: number,
-    field: "title" | "description" | "order",
-    value: string | number
-  ) => {
-    setForm((prev) => {
-      const updated = [...prev.curriculum];
-      const currentLesson = updated[moduleIndex].lessons[lessonIndex];
-      const newOrder = field === "order" ? Number(value) : currentLesson.order;
-      
-      updated[moduleIndex].lessons[lessonIndex] = {
-        ...currentLesson,
-        [field]: value,
-        sessionNumber: calculateSessionNumber(newOrder),
-      };
-      return { ...prev, curriculum: updated };
-    });
-  };
-
-  const addProjectToModule = (moduleIndex: number) => {
-    const projectText = newProjectInputs[moduleIndex]?.trim();
-    if (!projectText) {
-      toast.error(t("courses.projectEmpty") || "Project name cannot be empty");
-      return;
-    }
-
-    setForm((prev) => {
-      const updated = [...prev.curriculum];
-      updated[moduleIndex] = {
-        ...updated[moduleIndex],
-        projects: [...(updated[moduleIndex].projects || []), projectText],
-      };
-      return { ...prev, curriculum: updated };
-    });
-
-    setNewProjectInputs((prev) => ({ ...prev, [moduleIndex]: "" }));
-  };
-
-  const removeProjectFromModule = (moduleIndex: number, projectIndex: number) => {
-    setForm((prev) => {
-      const updated = [...prev.curriculum];
-      updated[moduleIndex] = {
-        ...updated[moduleIndex],
-        projects: updated[moduleIndex].projects.filter((_, i) => i !== projectIndex),
-      };
-      return { ...prev, curriculum: updated };
-    });
+  // Remove applied curriculum
+  const removeCurriculum = () => {
+    setSelectedCurriculumId("");
+    setSelectedCurriculum(null);
+    setForm(prev => ({
+      ...prev,
+      curriculum: [],
+      level: "beginner", // Reset to default
+    }));
+    toast.success(t("courses.curriculumRemoved") || "Curriculum removed");
   };
 
   const toggleInstructor = (instructorId: string) => {
@@ -264,33 +257,9 @@ export default function CourseForm({
         t("courses.descriptionRequired") || "Description is required";
     }
 
-    if (form.curriculum.length > 0) {
-      form.curriculum.forEach((module, mIdx) => {
-        if (!module.title.trim()) {
-          newErrors[`module_${mIdx}_title`] =
-            t("courses.moduleTitleRequired") || "Module title is required";
-        }
-
-        if (module.lessons.length !== 6) {
-          newErrors[`module_${mIdx}_lessons`] =
-            t("courses.exact6Lessons") ||
-            "Each module must have exactly 6 lessons (3 sessions)";
-        }
-
-        module.lessons.forEach((lesson, lIdx) => {
-          if (!lesson.title.trim()) {
-            newErrors[`module_${mIdx}_lesson_${lIdx}_title`] =
-              t("courses.lessonTitleRequired") || "Lesson title is required";
-          }
-
-          // Verify sessionNumber matches lesson order
-          const expectedSession = calculateSessionNumber(lesson.order);
-          if (lesson.sessionNumber !== expectedSession) {
-            newErrors[`module_${mIdx}_lesson_${lIdx}_session`] =
-              `Session number mismatch: Lesson ${lesson.order} should be in Session ${expectedSession}`;
-          }
-        });
-      });
+    // Check if curriculum is required
+    if (!selectedCurriculumId && form.curriculum.length === 0) {
+      newErrors.curriculum = t("courses.curriculumRequired") || "Please select a curriculum";
     }
 
     setErrors(newErrors);
@@ -428,11 +397,10 @@ export default function CourseForm({
               if (errors.title) setErrors({ ...errors, title: "" });
             }}
             placeholder="e.g., Web Development Fundamentals"
-            className={`w-full px-4 py-2 rounded-lg border transition-colors bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${
-              errors.title
+            className={`w-full px-4 py-2 rounded-lg border transition-colors bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${errors.title
                 ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                 : "border-PowderBlueBorder dark:border-dark_border focus:border-primary focus:ring-primary/20"
-            } focus:outline-none focus:ring-4`}
+              } focus:outline-none focus:ring-4`}
           />
           {errors.title && (
             <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
@@ -456,11 +424,10 @@ export default function CourseForm({
             }}
             placeholder="Describe what students will learn..."
             rows={3}
-            className={`w-full px-4 py-2 rounded-lg border transition-colors bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${
-              errors.description
+            className={`w-full px-4 py-2 rounded-lg border transition-colors bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${errors.description
                 ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                 : "border-PowderBlueBorder dark:border-dark_border focus:border-primary focus:ring-primary/20"
-            } focus:outline-none focus:ring-4 resize-none`}
+              } focus:outline-none focus:ring-4 resize-none`}
           />
           {errors.description && (
             <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
@@ -551,295 +518,117 @@ export default function CourseForm({
         </div>
       </div>
 
-      {/* Curriculum Section */}
+      {/* Curriculum Selection Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
             <span className="w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">
               2
             </span>
-            {t("courses.curriculum") || "Curriculum"}
+            {t("courses.selectCurriculum") || "Select Curriculum Template"}
             <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-              {form.curriculum.length} {t("courses.modules") || "modules"}
+              {form.curriculum.length} {t("courses.modules") || "modules"} {t("common.selected") || "selected"}
             </span>
           </h3>
-          <button
-            type="button"
-            onClick={addModule}
-            className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            {t("courses.addModule") || "Add Module"}
-          </button>
         </div>
 
-        {/* Sessions System Info */}
-        <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-900/50 rounded-lg">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
-                {t("courses.sessionsSystemTitle") || "📚 Sessions System (3 Sessions for 6 Lessons)"}
-              </p>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className={`p-2 rounded ${getSessionColor(1)}`}>
-                  <div className="font-bold">Session 1</div>
-                  <div>Lessons 1 & 2</div>
-                </div>
-                <div className={`p-2 rounded ${getSessionColor(2)}`}>
-                  <div className="font-bold">Session 2</div>
-                  <div>Lessons 3 & 4</div>
-                </div>
-                <div className={`p-2 rounded ${getSessionColor(3)}`}>
-                  <div className="font-bold">Session 3</div>
-                  <div>Lessons 5 & 6</div>
-                </div>
-              </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
+                {t("courses.chooseCurriculum") || "Choose Curriculum Template"}
+              </label>
+              <select
+                value={selectedCurriculumId}
+                onChange={(e) => applyCurriculum(e.target.value)}
+                className={`w-full px-4 py-2 rounded-lg border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary ${errors.curriculum
+                    ? "border-red-500"
+                    : "border-PowderBlueBorder dark:border-dark_border"
+                  }`}
+              >
+                <option value="">-- {t("courses.selectCurriculumPlaceholder") || "Select a curriculum template"} --</option>
+                {curriculumsLoading ? (
+                  <option disabled>{t("common.loading") || "Loading curriculums..."}</option>
+                ) : curriculums.map((curriculum) => (
+                  <option key={curriculum._id} value={curriculum._id}>
+                    {curriculum.title} ({curriculum.level}) {curriculum.grade ? `- ${t("courses.grade") || "Grade"} ${curriculum.grade}` : ''}
+                  </option>
+                ))}
+              </select>
+              {errors.curriculum && (
+                <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {errors.curriculum}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCurriculumManager(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors w-full justify-center"
+              >
+                <BookOpen className="w-4 h-4" />
+                {t("courses.manageCurriculums") || "Manage Curriculums"}
+              </button>
+
+              {selectedCurriculum && (
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-600 rounded-lg hover:bg-blue-500/20 transition-colors"
+                >
+                  <Eye className="w-4 h-4" />
+                  {t("common.preview") || "Preview"}
+                </button>
+              )}
             </div>
           </div>
-        </div>
 
-        {form.curriculum.length === 0 && (
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/50 rounded-lg flex gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              {t("courses.curriculumOptional") ||
-                "Curriculum is optional. Add modules with lessons to structure your course content. Each module must have exactly 6 lessons organized in 3 sessions."}
-            </p>
-          </div>
-        )}
-
-        {/* Modules List */}
-        <div className="space-y-3">
-          {form.curriculum.map((module, moduleIndex) => {
-            const isExpanded = expandedModules.has(moduleIndex);
-            const moduleTitleError = errors[`module_${moduleIndex}_title`];
-            const moduleLessonsError = errors[`module_${moduleIndex}_lessons`];
-
-            return (
-              <div
-                key={moduleIndex}
-                className="border border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden"
-              >
-                {/* Module Header */}
-                <div
-                  className="p-4 bg-gray-50 dark:bg-dark_input flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-dark_input/80 transition-colors"
-                  onClick={() => toggleModule(moduleIndex)}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      {isExpanded ? (
-                        <ChevronUp className="w-5 h-5 text-primary" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-SlateBlueText dark:text-darktext" />
-                      )}
-                      <div>
-                        <h4 className="font-semibold text-MidnightNavyText dark:text-white">
-                          {module.title ||
-                            `${t("courses.module") || "Module"} ${
-                              moduleIndex + 1
-                            }`}
-                        </h4>
-                        <p className="text-xs text-SlateBlueText dark:text-darktext">
-                          {module.lessons.length}{" "}
-                          {t("courses.lessons") || "lessons"} • 3 {t("courses.sessions") || "sessions"}
-                          {module.projects && module.projects.length > 0 && (
-                            <span className="ml-2">
-                              • {module.projects.length}{" "}
-                              {t("courses.projects") || "projects"}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeModule(moduleIndex);
-                    }}
-                    className="p-2 text-SlateBlueText dark:text-darktext hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Module Content */}
-                {isExpanded && (
-                  <div className="p-4 space-y-4 border-t border-PowderBlueBorder dark:border-dark_border">
-                    {/* Module Title */}
-                    <div>
-                      <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-1">
-                        {t("courses.moduleTitle") || "Module Title"}
-                        <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={module.title}
-                        onChange={(e) =>
-                          updateModule(moduleIndex, "title", e.target.value)
-                        }
-                        placeholder="e.g., HTML Basics"
-                        className={`w-full px-3 py-2 rounded-lg border transition-colors bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white text-sm ${
-                          moduleTitleError
-                            ? "border-red-500 focus:ring-red-500/20"
-                            : "border-PowderBlueBorder dark:border-dark_border focus:ring-primary/20"
-                        } focus:outline-none focus:ring-4 focus:border-primary`}
-                      />
-                      {moduleTitleError && (
-                        <p className="text-red-500 text-xs mt-1">
-                          {moduleTitleError}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Module Description */}
-                    <div>
-                      <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-1">
-                        {t("courses.description") || "Description"}
-                      </label>
-                      <textarea
-                        value={module.description || ""}
-                        onChange={(e) =>
-                          updateModule(
-                            moduleIndex,
-                            "description",
-                            e.target.value
-                          )
-                        }
-                        placeholder="Optional module description"
-                        rows={2}
-                        className="w-full px-3 py-2 rounded-lg border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary resize-none"
-                      />
-                    </div>
-
-                    {/* Module Projects Section */}
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white">
-                        {t("courses.moduleProjects") || "Module Projects"}
-                      </label>
-                      
-                      {/* Projects List */}
-                      {module.projects && module.projects.length > 0 && (
-                        <div className="space-y-2 mb-2">
-                          {module.projects.map((project, projectIndex) => (
-                            <div
-                              key={projectIndex}
-                              className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/20 rounded-lg"
-                            >
-                              <span className="flex-1 text-sm text-MidnightNavyText dark:text-white">
-                                {projectIndex + 1}. {project}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  removeProjectFromModule(moduleIndex, projectIndex)
-                                }
-                                className="p-1 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Add Project Input */}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newProjectInputs[moduleIndex] || ""}
-                          onChange={(e) =>
-                            setNewProjectInputs((prev) => ({
-                              ...prev,
-                              [moduleIndex]: e.target.value,
-                            }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              addProjectToModule(moduleIndex);
-                            }
-                          }}
-                          placeholder={t("courses.addProjectPlaceholder") || "Add a project for this module..."}
-                          className="flex-1 px-3 py-2 rounded-lg border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => addProjectToModule(moduleIndex)}
-                          className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium flex items-center gap-1"
-                        >
-                          <Plus className="w-4 h-4" />
-                          {t("common.add") || "Add"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {moduleLessonsError && (
-                      <p className="text-red-500 text-xs flex items-center gap-1 bg-red-50 dark:bg-red-900/20 p-2 rounded">
-                        <AlertCircle className="w-3 h-3" />
-                        {moduleLessonsError}
-                      </p>
+          {selectedCurriculum && (
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/50 rounded-lg">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg font-semibold text-green-800 dark:text-green-300">
+                      {selectedCurriculum.title}
+                    </span>
+                    <span className={`px-2 py-1 text-xs font-semibold rounded ${selectedCurriculum.level === 'beginner' ? 'bg-green-100 text-green-800' :
+                        selectedCurriculum.level === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                      }`}>
+                      {selectedCurriculum.level}
+                    </span>
+                    {selectedCurriculum.grade && (
+                      <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded">
+                        {t("courses.grade") || "Grade"} {selectedCurriculum.grade}
+                      </span>
                     )}
-
-                    {/* Lessons Section */}
-                    <div className="space-y-3 bg-gray-50 dark:bg-dark_input p-3 rounded-lg">
-                      <p className="text-xs font-semibold text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                        {t("courses.lessons") || "Lessons"} ({module.lessons.length}/6)
-                      </p>
-
-                      {module.lessons.map((lesson, lessonIndex) => {
-                        const lessonTitleError = errors[`module_${moduleIndex}_lesson_${lessonIndex}_title`];
-                        const sessionNum = lesson.sessionNumber;
-
-                        return (
-                          <div
-                            key={lessonIndex}
-                            className="bg-white dark:bg-dark_border rounded p-3 space-y-2"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-semibold">
-                                {lessonIndex + 1}
-                              </span>
-                              <input
-                                type="text"
-                                value={lesson.title}
-                                onChange={(e) =>
-                                  updateLesson(
-                                    moduleIndex,
-                                    lessonIndex,
-                                    "title",
-                                    e.target.value
-                                  )
-                                }
-                                placeholder={`Lesson ${lessonIndex + 1} title`}
-                                className={`flex-1 px-2 py-1 rounded border text-sm bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white ${
-                                  lessonTitleError
-                                    ? "border-red-500 focus:ring-red-500/20"
-                                    : "border-PowderBlueBorder dark:border-dark_border focus:ring-primary/20"
-                                } focus:outline-none focus:ring-4 focus:border-primary`}
-                              />
-                              <div className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${getSessionColor(sessionNum)}`}>
-                                S{sessionNum}
-                              </div>
-                            </div>
-
-                            {lessonTitleError && (
-                              <p className="text-red-500 text-xs ml-8">
-                                {lessonTitleError}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
-                )}
+                  <p className="text-sm text-green-700 dark:text-green-300 mb-1">
+                    {selectedCurriculum.description}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    {selectedCurriculum.modules?.length || 0} {t("courses.modules") || "modules"} • {selectedCurriculum.modules?.reduce((total, m) => total + (m.lessons?.length || 0), 0) || 0} {t("courses.lessons") || "lessons"}
+                  </p>
+                  {selectedCurriculum.createdBy && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      {t("courses.createdBy") || "Created by"}: {selectedCurriculum.createdBy.name}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={removeCurriculum}
+                  className="p-2 text-red-600 hover:bg-red-100 rounded-lg"
+                  title={t("courses.removeCurriculum") || "Remove curriculum"}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -928,6 +717,179 @@ export default function CourseForm({
           )}
         </button>
       </div>
+
+      {/* Curriculum Manager Modal */}
+      {showCurriculumManager && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-darkmode rounded-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-MidnightNavyText dark:text-white">
+                  {t("courses.curriculumManager") || "Curriculum Manager"}
+                </h3>
+                <button
+                  onClick={() => setShowCurriculumManager(false)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-dark_input rounded-lg"
+                  title={t("common.close") || "Close"}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <CurriculumManager
+                onSelect={(id) => {
+                  applyCurriculum(id);
+                  setShowCurriculumManager(false);
+                }}
+                selectedId={selectedCurriculumId}
+                disableForm={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Curriculum Preview Modal */}
+      {showPreview && selectedCurriculum && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-darkmode rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-MidnightNavyText dark:text-white">
+                    {t("courses.curriculumPreview") || "Curriculum Preview"}
+                  </h3>
+                  <p className="text-sm text-SlateBlueText dark:text-darktext">
+                    {selectedCurriculum.title}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowPreview(false)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-dark_input rounded-lg"
+                  title={t("common.close") || "Close"}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="space-y-6">
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">
+                    {t("courses.curriculumDetails") || "Curriculum Details"}
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-blue-700 dark:text-blue-400">
+                        {t("courses.level") || "Level"}
+                      </p>
+                      <p className="font-medium">{selectedCurriculum.level}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-blue-700 dark:text-blue-400">
+                        {t("courses.grade") || "Grade"}
+                      </p>
+                      <p className="font-medium">{selectedCurriculum.grade || t("courses.notSpecified") || "Not specified"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-blue-700 dark:text-blue-400">
+                        {t("courses.subject") || "Subject"}
+                      </p>
+                      <p className="font-medium">{selectedCurriculum.subject || t("courses.notSpecified") || "Not specified"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-blue-700 dark:text-blue-400">
+                        {t("courses.modules") || "Modules"}
+                      </p>
+                      <p className="font-medium">{selectedCurriculum.modules?.length || 0}</p>
+                    </div>
+                  </div>
+                  {selectedCurriculum.description && (
+                    <div className="mt-4">
+                      <p className="text-sm text-blue-700 dark:text-blue-400">
+                        {t("courses.description") || "Description"}
+                      </p>
+                      <p className="text-sm mt-1">{selectedCurriculum.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-MidnightNavyText dark:text-white">
+                    {t("courses.modules") || "Modules"} ({selectedCurriculum.modules?.length || 0})
+                  </h4>
+                  {selectedCurriculum.modules?.map((module, moduleIndex) => (
+                    <div key={moduleIndex} className="border border-PowderBlueBorder dark:border-dark_border rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h5 className="font-semibold text-MidnightNavyText dark:text-white">
+                            {t("courses.module") || "Module"} {moduleIndex + 1}: {module.title}
+                          </h5>
+                          {module.description && (
+                            <p className="text-sm text-SlateBlueText dark:text-darktext mt-1">
+                              {module.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-sm text-SlateBlueText dark:text-darktext">
+                          {module.lessons?.length || 0} {t("courses.lessons") || "lessons"} • 3 {t("courses.sessions") || "sessions"}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h6 className="text-sm font-semibold text-MidnightNavyText dark:text-white">
+                          {t("courses.lessons") || "Lessons"}
+                        </h6>
+                        <div className="grid grid-cols-2 gap-2">
+                          {module.lessons?.map((lesson, lessonIndex) => (
+                            <div key={lessonIndex} className="p-2 bg-gray-50 dark:bg-dark_input rounded">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-1 rounded text-xs font-semibold ${getSessionColor(lesson.sessionNumber)}`}>
+                                  {t("courses.sessionShort") || "S"}{lesson.sessionNumber}
+                                </span>
+                                <span className="text-sm font-medium">{lesson.title}</span>
+                              </div>
+                              {lesson.description && (
+                                <p className="text-xs text-SlateBlueText dark:text-darktext mt-1">
+                                  {lesson.description}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {module.projects && module.projects.length > 0 && (
+                        <div className="mt-4">
+                          <h6 className="text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
+                            {t("courses.projects") || "Projects"}
+                          </h6>
+                          <div className="space-y-1">
+                            {module.projects.map((project, projectIndex) => (
+                              <div key={projectIndex} className="flex items-center gap-2 p-2 bg-primary/5 rounded">
+                                <span className="text-sm">{project}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-PowderBlueBorder dark:border-dark_border">
+              <button
+                onClick={() => setShowPreview(false)}
+                className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+              >
+                {t("common.closePreview") || "Close Preview"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
