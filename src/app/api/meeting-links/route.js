@@ -5,6 +5,17 @@ import MeetingLink from "../../models/MeetingLink";
 import Session from "../../models/Session";
 import { requireAdmin } from "@/utils/authMiddleware";
 
+// Days of week for reference - MOVED TO TOP
+const daysOfWeek = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
 // GET: Fetch all meeting links
 export async function GET(req) {
   try {
@@ -264,7 +275,7 @@ export async function POST(req) {
       capacity: capacity || 100,
       durationLimit: durationLimit || 120,
       status: status || "available",
-      allowedDays: allowedDays || daysOfWeek,
+      allowedDays: allowedDays || daysOfWeek, // Now correctly referenced
       allowedTimeSlots: allowedTimeSlots || [],
       metadata: {
         createdBy: adminUser.id,
@@ -344,14 +355,3 @@ export async function POST(req) {
     );
   }
 }
-
-// Days of week for reference
-const daysOfWeek = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];

@@ -1,10 +1,10 @@
-// app/api/courses/route.js
+// app/api/courses/route.js - FIXED COMPLETE VERSION
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Course from "../../models/Course";
-import User from "../../models/User"; // ✅ CRITICAL: Import User model
+import User from "../../models/User";
 
-// Helper: Validate curriculum structure
+// Helper: Validate curriculum structure - FIXED version
 const validateCurriculumStructure = (curriculum) => {
   if (!curriculum || curriculum.length === 0) {
     return { valid: true, errors: [] };
@@ -14,6 +14,11 @@ const validateCurriculumStructure = (curriculum) => {
 
   curriculum.forEach((module, moduleIndex) => {
     // Check module has required fields
+    if (!module || typeof module !== "object") {
+      errors.push(`Module ${moduleIndex + 1}: must be an object`);
+      return;
+    }
+
     if (!module.title || module.title.trim() === "") {
       errors.push(`Module ${moduleIndex + 1}: title is required`);
     }
@@ -30,44 +35,34 @@ const validateCurriculumStructure = (curriculum) => {
 
     if (module.lessons.length !== 6) {
       errors.push(
-        `Module ${moduleIndex + 1}: must have exactly 6 lessons (found ${
-          module.lessons.length
-        })`
+        `Module ${moduleIndex + 1}: must have exactly 6 lessons (found ${module.lessons.length})`
       );
     }
 
     // Validate each lesson
     module.lessons.forEach((lesson, lessonIndex) => {
+      if (!lesson || typeof lesson !== "object") {
+        errors.push(`Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: must be an object`);
+        return;
+      }
+
       if (!lesson.title || lesson.title.trim() === "") {
-        errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${
-            lessonIndex + 1
-          }: title is required`
-        );
+        errors.push(`Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: title is required`);
       }
 
       if (lesson.order === undefined || lesson.order === null) {
-        errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${
-            lessonIndex + 1
-          }: order is required`
-        );
+        errors.push(`Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: order is required`);
+      } else if (lesson.order < 1 || lesson.order > 6) {
+        errors.push(`Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: order must be between 1 and 6`);
       }
 
       // التحقق من رقم السيشن الصحيح
-      // Lessons 1-2 → Session 1
-      // Lessons 3-4 → Session 2
-      // Lessons 5-6 → Session 3
       const expectedSession = Math.ceil(lesson.order / 2);
-      if (lesson.sessionNumber !== expectedSession) {
+      if (lesson.sessionNumber === undefined || lesson.sessionNumber === null) {
+        errors.push(`Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionNumber is required`);
+      } else if (lesson.sessionNumber !== expectedSession) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${
-            lessonIndex + 1
-          }: sessionNumber must be ${expectedSession} for lesson order ${
-            lesson.order
-          } (found ${
-            lesson.sessionNumber
-          }). System: Lessons 1-2→Session 1, Lessons 3-4→Session 2, Lessons 5-6→Session 3`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionNumber must be ${expectedSession} for lesson order ${lesson.order} (found ${lesson.sessionNumber})`
         );
       }
     });
@@ -81,7 +76,10 @@ const validateCurriculumStructure = (curriculum) => {
 
 export async function GET(request) {
   try {
+    console.log("🔍 Fetching courses...");
+    
     await connectDB();
+    console.log("✅ Database connected");
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
@@ -90,7 +88,7 @@ export async function GET(request) {
 
     const total = await Course.countDocuments();
 
-    // ✅ FIX: Populate with proper error handling
+    // ✅ FIXED: Fetch courses with better error handling
     let courses;
     try {
       courses = await Course.find()
@@ -100,10 +98,7 @@ export async function GET(request) {
         .populate("instructors", "name email")
         .lean();
     } catch (populateError) {
-      console.warn(
-        "⚠️ Warning: Could not populate instructors:",
-        populateError.message
-      );
+      console.warn("⚠️ Warning: Could not populate instructors:", populateError.message);
       // Fallback: fetch without populate
       courses = await Course.find()
         .sort({ createdAt: -1 })
@@ -141,14 +136,25 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  let startTime = Date.now();
+  
   try {
     console.log("🚀 Starting course creation process...");
 
     await connectDB();
-    console.log("✅ Database connected");
+    console.log("✅ Database connected in", Date.now() - startTime, "ms");
 
     const body = await request.json();
-    console.log("📥 Received course data:", JSON.stringify(body, null, 2));
+    console.log("📥 Received course data");
+    
+    // ✅ FIXED: إزالة تسجيل البيانات الكامل لتجنب المشاكل
+    console.log("📊 Data structure:", {
+      hasTitle: !!body.title,
+      hasDescription: !!body.description,
+      hasLevel: !!body.level,
+      hasCreatedBy: !!body.createdBy,
+      curriculumLength: body.curriculum?.length || 0,
+    });
 
     const {
       title,
@@ -165,31 +171,65 @@ export async function POST(request) {
     } = body;
 
     // Required field validation
-    if (!title || !description || !level) {
-      console.log("❌ Missing required fields");
+    if (!title || title.trim() === "") {
+      console.log("❌ Missing title");
       return NextResponse.json(
         {
           success: false,
-          error: "Title, description, and level are required",
-          message: "Title, description, and level are required",
+          error: "Title is required",
+          message: "عنوان الكورس مطلوب",
         },
         { status: 400 }
       );
     }
 
-    if (
-      !createdBy ||
-      !createdBy.id ||
-      !createdBy.name ||
-      !createdBy.email ||
-      !createdBy.role
-    ) {
-      console.log("❌ Missing createdBy information");
+    if (!description || description.trim() === "") {
+      console.log("❌ Missing description");
       return NextResponse.json(
         {
           success: false,
-          error: "createdBy information (id, name, email, role) is required",
-          message: "createdBy information (id, name, email, role) is required",
+          error: "Description is required",
+          message: "وصف الكورس مطلوب",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!level || !["beginner", "intermediate", "advanced"].includes(level)) {
+      console.log("❌ Invalid level:", level);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Level must be one of: beginner, intermediate, advanced",
+          message: "المستوى يجب أن يكون: مبتدئ، متوسط، متقدم",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ✅ FIXED: تبسيط التحقق من createdBy
+    if (!createdBy || typeof createdBy !== "object") {
+      console.log("❌ Missing createdBy object");
+      return NextResponse.json(
+        {
+          success: false,
+          error: "createdBy information is required",
+          message: "معلومات المنشئ مطلوبة",
+        },
+        { status: 400 }
+      );
+    }
+
+    const requiredCreatedByFields = ["id", "name", "email", "role"];
+    const missingFields = requiredCreatedByFields.filter(field => !createdBy[field]);
+
+    if (missingFields.length > 0) {
+      console.log("❌ Missing createdBy fields:", missingFields);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Missing createdBy fields: ${missingFields.join(", ")}`,
+          message: `حقول ناقصة في معلومات المنشئ: ${missingFields.join(", ")}`,
         },
         { status: 400 }
       );
@@ -198,24 +238,16 @@ export async function POST(request) {
     // Validate curriculum structure if provided
     if (curriculum && curriculum.length > 0) {
       console.log("🔍 Validating curriculum structure...");
-      console.log(
-        "📊 Curriculum details:",
-        JSON.stringify(curriculum, null, 2)
-      );
-
+      
       const curriculumValidation = validateCurriculumStructure(curriculum);
       if (!curriculumValidation.valid) {
-        console.log(
-          "❌ Curriculum validation failed:",
-          curriculumValidation.errors
-        );
+        console.log("❌ Curriculum validation failed:", curriculumValidation.errors);
         return NextResponse.json(
           {
             success: false,
             error: "Invalid curriculum structure",
-            message:
-              "Invalid curriculum structure - 6 Lessons must have 3 Sessions (Lessons 1-2→S1, 3-4→S2, 5-6→S3)",
-            details: curriculumValidation.errors,
+            message: "هيكل المنهج الدراسي غير صالح",
+            details: curriculumValidation.errors.slice(0, 5), // إظهار أول 5 أخطاء فقط
           },
           { status: 400 }
         );
@@ -225,72 +257,109 @@ export async function POST(request) {
 
     console.log("📝 Creating course in database...");
 
-    // ✅ تنظيف البيانات قبل الحفظ
+    // ✅ FIXED: تنظيف البيانات بشكل آمن
     const courseData = {
       title: title.trim(),
       description: description.trim(),
-      level,
+      level: level,
       curriculum: curriculum || [],
       projects: projects || [],
       instructors: instructors || [],
-      price: price || 0,
-      isActive: isActive !== undefined ? isActive : true,
-      featured: featured !== undefined ? featured : false,
-      thumbnail:
-        thumbnail && thumbnail.trim() !== "" ? thumbnail.trim() : undefined,
+      price: typeof price === "number" ? price : 0,
+      isActive: isActive !== undefined ? Boolean(isActive) : true,
+      featured: featured !== undefined ? Boolean(featured) : false,
+      thumbnail: thumbnail && thumbnail.trim() !== "" ? thumbnail.trim() : "",
       createdBy: {
-        id: createdBy.id,
-        name: createdBy.name,
-        email: createdBy.email,
+        id: createdBy.id.toString().trim(),
+        name: createdBy.name.trim(),
+        email: createdBy.email.trim(),
         role: createdBy.role,
       },
     };
 
     console.log("📋 Course data prepared:", {
-      title: courseData.title,
+      title: courseData.title.substring(0, 50) + (courseData.title.length > 50 ? "..." : ""),
       level: courseData.level,
       curriculumModules: courseData.curriculum.length,
       totalLessons: courseData.curriculum.reduce(
         (sum, m) => sum + (m.lessons?.length || 0),
         0
       ),
-      totalSessions: courseData.curriculum.length * 3, // كل module له 3 سيشنات
-      instructors: courseData.instructors.length,
+      hasCreatedBy: !!courseData.createdBy,
     });
 
-    const course = await Course.create(courseData);
-
-    // ✅ FIX: Populate with error handling
-    let populatedCourse;
+    // ✅ FIXED: محاولة إنشاء الكورس مع معالجة الأخطاء المحددة
+    let course;
     try {
-      populatedCourse = await Course.findById(course._id).populate(
-        "instructors",
-        "name email"
-      );
-    } catch (populateError) {
-      console.warn(
-        "⚠️ Warning: Could not populate instructors:",
-        populateError.message
-      );
-      populatedCourse = course;
+      console.log("💾 Saving course to database...");
+      course = await Course.create(courseData);
+      console.log("✅ Course created successfully:", course._id);
+    } catch (createError) {
+      console.error("❌ Error creating course:", {
+        name: createError.name,
+        message: createError.message,
+        errors: createError.errors,
+        code: createError.code,
+      });
+
+      // معالجة خطأ Mongoose بشكل أفضل
+      if (createError.name === "ValidationError") {
+        const errorDetails = {};
+        if (createError.errors) {
+          for (const field in createError.errors) {
+            errorDetails[field] = createError.errors[field].message;
+          }
+        }
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Validation failed",
+            message: "فشل التحقق من البيانات",
+            details: errorDetails,
+          },
+          { status: 400 }
+        );
+      }
+
+      // معالجة أخطاء التكرار
+      if (createError.code === 11000) {
+        const duplicateField = Object.keys(createError.keyPattern || {})[0] || "unknown";
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Duplicate entry",
+            message: `هذا الكورس موجود بالفعل (حقل مكرر: ${duplicateField})`,
+            field: duplicateField,
+          },
+          { status: 409 }
+        );
+      }
+
+      throw createError; // إعادة رمي الخطأ للمعالجة العامة
     }
 
-    console.log("✅ Course created successfully:", course._id);
-    console.log("📊 Course structure:", {
-      modules: populatedCourse.curriculum.length,
-      lessons: populatedCourse.curriculum.reduce(
-        (sum, m) => sum + m.lessons.length,
-        0
-      ),
-      sessions: populatedCourse.curriculum.length * 3,
-    });
+    // ✅ FIXED: محاولة جلب الكورس مع populate
+    let populatedCourse;
+    try {
+      populatedCourse = await Course.findById(course._id)
+        .populate("instructors", "name email")
+        .lean();
+      console.log("✅ Course populated successfully");
+    } catch (populateError) {
+      console.warn("⚠️ Could not populate instructors:", populateError.message);
+      populatedCourse = course.toObject ? course.toObject() : course;
+    }
+
+    const totalTime = Date.now() - startTime;
+    console.log(`🎉 Course creation completed in ${totalTime}ms`);
 
     return NextResponse.json(
       {
         success: true,
         data: populatedCourse,
         message:
-          "Course created successfully with 3 sessions per module (2 lessons per session)",
+          "تم إنشاء الكورس بنجاح مع 3 جلسات لكل وحدة (حصتين لكل جلسة)",
       },
       { status: 201 }
     );
@@ -298,54 +367,34 @@ export async function POST(request) {
     console.error("❌ Error creating course:", {
       message: error.message,
       name: error.name,
-      code: error.code,
       stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      errors: error.errors,
-      keyPattern: error.keyPattern,
-      keyValue: error.keyValue,
     });
 
-    // Handle Mongoose validation errors
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors || {})
-        .map((err) => err.message || err.toString())
-        .join("; ");
-      console.error("❌ Validation errors:", messages);
+    // ✅ FIXED: معالجة خطأ "e is not a function" بشكل محدد
+    if (error.name === "TypeError" && error.message && error.message.includes("is not a function")) {
+      console.error("🔍 TypeError details:", {
+        message: error.message,
+        stack: error.stack,
+      });
+
       return NextResponse.json(
         {
           success: false,
-          error: "Validation failed",
-          message:
-            "فشل التحقق من البيانات - تأكد من أن كل Module يحتوي على 6 حصص مع 3 سيشنات",
-          details: messages,
+          error: "Internal validation error",
+          message: "خطأ داخلي في التحقق من البيانات. يرجى التحقق من تنسيق البيانات المرسلة.",
+          suggestion: "تأكد من أن جميع الحقول مرسلة بالتنسيق الصحيح وأن curriculum يحتوي على هيكل صالح.",
         },
-        { status: 400 }
+        { status: 500 }
       );
     }
 
-    // Handle duplicate key errors
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern || {})[0] || "unknown";
-      console.error("❌ Duplicate field error:", field);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Duplicate ${field}`,
-          message: `الكورس موجود مسبقاً: ${field}`,
-          field: field,
-        },
-        { status: 409 }
-      );
-    }
-
-    // Handle CastError (invalid ObjectId, etc.)
+    // ✅ معالجة أخطاء Mongoose الأخرى
     if (error.name === "CastError") {
-      console.error("❌ Cast error:", error.path, error.value);
       return NextResponse.json(
         {
           success: false,
           error: `Invalid value for field: ${error.path}`,
-          message: `قيمة غير صحيحة للحقل: ${error.path}`,
+          message: `قيمة غير صالحة للحقل: ${error.path}`,
           field: error.path,
           value: error.value,
         },
@@ -353,37 +402,24 @@ export async function POST(request) {
       );
     }
 
-    // Handle TypeError (like "e is not a function")
-    if (
-      error.name === "TypeError" &&
-      error.message.includes("is not a function")
-    ) {
-      console.error("❌ TypeError - function call error:", error.message);
+    // ✅ معالجة أخطاء الـ Reference
+    if (error.name === "ReferenceError") {
       return NextResponse.json(
         {
           success: false,
-          error: "Internal validation error",
-          message:
-            "خطأ في التحقق من البيانات. يرجى التحقق من صحة البيانات المدخلة.",
-          details: error.message,
+          error: "Internal reference error",
+          message: "خطأ مرجعي داخلي. يرجى إعادة المحاولة.",
         },
         { status: 500 }
       );
     }
 
-    // Generic error response
+    // ✅ رد الخطأ العام
     return NextResponse.json(
       {
         success: false,
         error: error.message || "Failed to create course",
-        message: error.message || "فشل في إنشاء الكورس",
-        ...(process.env.NODE_ENV === "development" && {
-          stack: error.stack,
-          details: {
-            name: error.name,
-            code: error.code,
-          },
-        }),
+        message: "فشل في إنشاء الكورس",
       },
       { status: 500 }
     );
