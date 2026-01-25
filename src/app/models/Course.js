@@ -1,7 +1,7 @@
 // models/Course.js
 import mongoose from "mongoose";
 
-// Custom validators
+// Simplified validators
 const validateLessonsCount = function (lessons) {
   if (!Array.isArray(lessons)) return false;
   return lessons.length === 6;
@@ -30,16 +30,17 @@ const validateCurriculum = function (curriculum) {
         return false;
       }
 
+      // Validate lessons exist
+      if (!Array.isArray(module.lessons)) {
+        return false;
+      }
+
       // Validate module has exactly 6 lessons
       if (!validateLessonsCount(module.lessons)) {
         return false;
       }
 
       // Validate each lesson has valid sessionNumber (1, 2, or 3)
-      if (!Array.isArray(module.lessons)) {
-        return false;
-      }
-
       for (let j = 0; j < module.lessons.length; j++) {
         const lesson = module.lessons[j];
         if (!validateSessionNumber(lesson)) {
@@ -64,6 +65,7 @@ const LessonSchema = new mongoose.Schema(
     },
     description: {
       type: String,
+      default: "",
     },
     order: {
       type: Number,
@@ -76,21 +78,9 @@ const LessonSchema = new mongoose.Schema(
       required: true,
       min: 1,
       max: 3,
-      validate: {
-        validator: function (value) {
-          // التحقق من أن رقم السيشن يتناسب مع ترتيب الحصة
-          // Lesson 1,2 → Session 1
-          // Lesson 3,4 → Session 2
-          // Lesson 5,6 → Session 3
-          const expectedSession = Math.ceil(this.order / 2);
-          return value === expectedSession;
-        },
-        message:
-          "Session number must match lesson order (Lessons 1-2: Session 1, Lessons 3-4: Session 2, Lessons 5-6: Session 3)",
-      },
     },
   },
-  { _id: true }
+  { _id: true, _id: false } // Disable _id for lessons if they're always nested
 );
 
 const ModuleSchema = new mongoose.Schema(
@@ -102,13 +92,16 @@ const ModuleSchema = new mongoose.Schema(
     },
     description: {
       type: String,
+      default: "",
     },
     order: {
       type: Number,
       required: [true, "Module order is required"],
+      min: 1,
     },
     lessons: {
       type: [LessonSchema],
+      default: [],
       validate: {
         validator: function (lessons) {
           return validateLessonsCount(lessons);
@@ -123,7 +116,7 @@ const ModuleSchema = new mongoose.Schema(
     },
     totalSessions: {
       type: Number,
-      default: 3, // دائماً 3 سيشنات لكل 6 حصص
+      default: 3,
     },
   },
   { _id: true }
@@ -141,6 +134,7 @@ const CourseSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
+      sparse: true,
     },
     description: {
       type: String,
@@ -162,11 +156,10 @@ const CourseSchema = new mongoose.Schema(
           "Invalid curriculum structure. Each module must have exactly 6 lessons with 3 sessions (2 lessons per session)",
       },
     },
-    projects: [
-      {
-        type: String,
-      },
-    ],
+    projects: {
+      type: [String],
+      default: [],
+    },
     instructors: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -188,28 +181,35 @@ const CourseSchema = new mongoose.Schema(
     },
     thumbnail: {
       type: String,
+      default: "",
     },
     createdBy: {
-      id: {
-        type: String,
-        required: [true, "Creator ID is required"],
-        trim: true,
-      },
-      name: {
-        type: String,
-        required: [true, "Creator name is required"],
-        trim: true,
-      },
-      email: {
-        type: String,
-        required: [true, "Creator email is required"],
-        trim: true,
-      },
-      role: {
-        type: String,
-        enum: ["admin", "instructor"],
-        required: [true, "Creator role is required"],
-      },
+      type: new mongoose.Schema(
+        {
+          id: {
+            type: String,
+            required: [true, "Creator ID is required"],
+            trim: true,
+          },
+          name: {
+            type: String,
+            required: [true, "Creator name is required"],
+            trim: true,
+          },
+          email: {
+            type: String,
+            required: [true, "Creator email is required"],
+            trim: true,
+          },
+          role: {
+            type: String,
+            enum: ["admin", "instructor"],
+            required: [true, "Creator role is required"],
+          },
+        },
+        { _id: false }
+      ),
+      required: true,
     },
   },
   {
@@ -220,37 +220,42 @@ const CourseSchema = new mongoose.Schema(
 // Generate slug from title before saving
 CourseSchema.pre("save", function (next) {
   if (this.isModified("title")) {
-    this.slug = this.title
+    const slug = this.title
       .toLowerCase()
       .replace(/[^\w\s-]/g, "")
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
       .trim();
+    
+    // Ensure slug is not empty
+    this.slug = slug || `course-${Date.now()}`;
   }
-  next();
-});
-
-// تعيين رقم السيشن تلقائياً لكل حصة حسب ترتيبها
-CourseSchema.pre("save", function (next) {
+  
+  // Auto-calculate session numbers for lessons if not set
   if (this.curriculum && this.curriculum.length > 0) {
     this.curriculum.forEach((module) => {
-      if (module.lessons) {
+      if (module.lessons && module.lessons.length > 0) {
         module.lessons.forEach((lesson) => {
-          // حساب رقم السيشن من ترتيب الحصة
-          // Lesson 1,2 → Session 1
-          // Lesson 3,4 → Session 2
-          // Lesson 5,6 → Session 3
-          lesson.sessionNumber = Math.ceil(lesson.order / 2);
+          // Only set sessionNumber if not already set
+          if (!lesson.sessionNumber || lesson.sessionNumber < 1 || lesson.sessionNumber > 3) {
+            // Calculate session number from order: 
+            // Lessons 1-2 → Session 1, Lessons 3-4 → Session 2, Lessons 5-6 → Session 3
+            lesson.sessionNumber = Math.ceil(lesson.order / 2);
+          }
         });
-        // تعيين إجمالي عدد السيشنات
-        module.totalSessions = 3;
       }
+      // Ensure totalSessions is 3
+      module.totalSessions = 3;
     });
   }
+  
   next();
 });
 
-delete mongoose.connection.models.Course;
+// Fix for hot reloading in development
+if (mongoose.models.Course) {
+  delete mongoose.models.Course;
+}
 
 const Course = mongoose.model("Course", CourseSchema);
 
