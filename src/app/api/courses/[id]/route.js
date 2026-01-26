@@ -5,68 +5,71 @@ import Course from "../../../models/Course";
 import mongoose from "mongoose";
 
 // Helper: Validate curriculum structure
-const validateCurriculumStructure = (curriculum) => {
+function validateCurriculumStructure(curriculum) {
   if (!curriculum || curriculum.length === 0) {
     return { valid: true, errors: [] };
   }
 
   const errors = [];
 
-  curriculum.forEach((module, moduleIndex) => {
+  // Use traditional for loop instead of forEach
+  for (let moduleIndex = 0; moduleIndex < curriculum.length; moduleIndex++) {
+    const module = curriculum[moduleIndex];
+
     // Check module has required fields
     if (!module.title || module.title.trim() === "") {
-      errors.push(
-        `Module ${moduleIndex + 1}: title is required`
-      );
+      errors.push(`Module ${moduleIndex + 1}: title is required`);
     }
 
     if (module.order === undefined || module.order === null) {
-      errors.push(
-        `Module ${moduleIndex + 1}: order is required`
-      );
+      errors.push(`Module ${moduleIndex + 1}: order is required`);
     }
 
     // Check lessons count
     if (!Array.isArray(module.lessons)) {
-      errors.push(
-        `Module ${moduleIndex + 1}: lessons must be an array`
-      );
-      return;
+      errors.push(`Module ${moduleIndex + 1}: lessons must be an array`);
+      continue;
     }
 
     if (module.lessons.length !== 6) {
       errors.push(
-        `Module ${moduleIndex + 1}: must have exactly 6 lessons (found ${module.lessons.length})`
+        `Module ${moduleIndex + 1}: must have exactly 6 lessons (found ${module.lessons.length})`,
       );
     }
 
     // Validate each lesson
-    module.lessons.forEach((lesson, lessonIndex) => {
+    for (
+      let lessonIndex = 0;
+      lessonIndex < module.lessons.length;
+      lessonIndex++
+    ) {
+      const lesson = module.lessons[lessonIndex];
+
       if (!lesson.title || lesson.title.trim() === "") {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: title is required`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: title is required`,
         );
       }
 
       if (lesson.order === undefined || lesson.order === null) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: order is required`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: order is required`,
         );
       }
 
-      if (lesson.sessionsCount !== 2) {
+      if (lesson.sessionNumber === undefined || lesson.sessionNumber === null) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionsCount must be 2 (found ${lesson.sessionsCount})`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionNumber is required`,
         );
       }
-    });
-  });
+    }
+  }
 
   return {
     valid: errors.length === 0,
     errors,
   };
-};
+}
 
 export async function GET(request, { params }) {
   try {
@@ -80,7 +83,7 @@ export async function GET(request, { params }) {
           success: false,
           error: "Invalid course ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -94,7 +97,7 @@ export async function GET(request, { params }) {
           success: false,
           error: "Course not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -111,7 +114,7 @@ export async function GET(request, { params }) {
         success: false,
         error: error.message || "Failed to fetch course",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -119,7 +122,7 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     console.log(`✏️ Updating course with ID: ${params.id}`);
-    
+
     await connectDB();
     console.log("✅ Database connected");
 
@@ -133,21 +136,22 @@ export async function PUT(request, { params }) {
           error: "Invalid course ID",
           message: "Invalid course ID format",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const body = await request.json();
-    console.log("📥 Update data received:", JSON.stringify(body, null, 2));
+    console.log("📥 Update data received");
 
     // Validate curriculum structure if provided in update
     if (body.curriculum !== undefined) {
       console.log("🔍 Validating curriculum structure...");
-      const curriculumValidation = validateCurriculumStructure(
-        body.curriculum
-      );
+      const curriculumValidation = validateCurriculumStructure(body.curriculum);
       if (!curriculumValidation.valid) {
-        console.log("❌ Curriculum validation failed:", curriculumValidation.errors);
+        console.log(
+          "❌ Curriculum validation failed:",
+          curriculumValidation.errors,
+        );
         return NextResponse.json(
           {
             success: false,
@@ -155,7 +159,7 @@ export async function PUT(request, { params }) {
             message: "Invalid curriculum structure",
             details: curriculumValidation.errors,
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
       console.log("✅ Curriculum validation passed");
@@ -168,8 +172,12 @@ export async function PUT(request, { params }) {
     };
 
     // Trim string fields if they exist
-    if (updateData.title) updateData.title = updateData.title.trim();
-    if (updateData.description) updateData.description = updateData.description.trim();
+    if (updateData.title) {
+      updateData.title = updateData.title.trim();
+    }
+    if (updateData.description) {
+      updateData.description = updateData.description.trim();
+    }
 
     console.log("🔄 Executing database update...");
 
@@ -179,9 +187,8 @@ export async function PUT(request, { params }) {
       {
         new: true,
         runValidators: true,
-      }
-    )
-      .populate("instructors", "name email");
+      },
+    ).populate("instructors", "name email");
 
     if (!course) {
       console.log("❌ Course not found:", id);
@@ -191,7 +198,7 @@ export async function PUT(request, { params }) {
           error: "Course not found",
           message: "Course not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -207,29 +214,29 @@ export async function PUT(request, { params }) {
       message: error.message,
       name: error.name,
       code: error.code,
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
 
     // Handle Mongoose validation errors
     if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors)
-        .map((err) => err.message)
-        .join("; ");
-      console.error("❌ Validation errors:", messages);
+      const messages = [];
+      for (const key in error.errors) {
+        messages.push(error.errors[key].message);
+      }
+      console.error("❌ Validation errors:", messages.join("; "));
       return NextResponse.json(
         {
           success: false,
           error: "Validation failed",
           message: "Validation failed",
-          details: messages,
+          details: messages.join("; "),
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Handle duplicate key errors
     if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+      const field = Object.keys(error.keyPattern || {})[0] || "unknown";
       console.error("❌ Duplicate field error:", field);
       return NextResponse.json(
         {
@@ -238,7 +245,7 @@ export async function PUT(request, { params }) {
           message: `A course with this ${field} already exists`,
           field: field,
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -248,7 +255,7 @@ export async function PUT(request, { params }) {
         error: error.message || "Failed to update course",
         message: error.message || "Failed to update course",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -265,7 +272,7 @@ export async function DELETE(request, { params }) {
           success: false,
           error: "Invalid course ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -277,7 +284,7 @@ export async function DELETE(request, { params }) {
           success: false,
           error: "Course not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -294,7 +301,7 @@ export async function DELETE(request, { params }) {
         success: false,
         error: error.message || "Failed to delete course",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -43,7 +43,7 @@ const validateCurriculumStructure = (curriculum) => {
     // Check exact 6 lessons
     if (module.lessons.length !== 6) {
       errors.push(
-        `Module ${moduleIndex + 1}: must have exactly 6 lessons (found ${module.lessons.length})`
+        `Module ${moduleIndex + 1}: must have exactly 6 lessons (found ${module.lessons.length})`,
       );
     }
 
@@ -51,7 +51,7 @@ const validateCurriculumStructure = (curriculum) => {
     module.lessons.forEach((lesson, lessonIndex) => {
       if (!lesson || typeof lesson !== "object") {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: must be an object`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: must be an object`,
         );
         return;
       }
@@ -59,18 +59,18 @@ const validateCurriculumStructure = (curriculum) => {
       // Check lesson title
       if (!lesson.title || lesson.title.trim() === "") {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: title is required`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: title is required`,
         );
       }
 
       // Check lesson order
       if (lesson.order === undefined || lesson.order === null) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: order is required`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: order is required`,
         );
       } else if (lesson.order < 1 || lesson.order > 6) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: order must be between 1 and 6`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: order must be between 1 and 6`,
         );
       }
 
@@ -78,11 +78,11 @@ const validateCurriculumStructure = (curriculum) => {
       const expectedSession = Math.ceil(lesson.order / 2);
       if (lesson.sessionNumber === undefined || lesson.sessionNumber === null) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionNumber is required`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionNumber is required`,
         );
       } else if (lesson.sessionNumber !== expectedSession) {
         errors.push(
-          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionNumber must be ${expectedSession} for lesson order ${lesson.order}`
+          `Module ${moduleIndex + 1}, Lesson ${lessonIndex + 1}: sessionNumber must be ${expectedSession} for lesson order ${lesson.order}`,
         );
       }
     });
@@ -135,7 +135,10 @@ export async function GET(request) {
 
       console.log(`✅ Fetched ${courses.length} courses`);
     } catch (populateError) {
-      console.warn("⚠️ Populate failed, fetching without populate:", populateError.message);
+      console.warn(
+        "⚠️ Populate failed, fetching without populate:",
+        populateError.message,
+      );
       courses = await Course.find()
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -161,7 +164,7 @@ export async function GET(request) {
           hasPrev: page > 1,
         },
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
     console.error("❌ GET /api/courses Error:", error.message);
@@ -171,7 +174,7 @@ export async function GET(request) {
         error: error.message || "Failed to fetch courses",
         message: "فشل في جلب الكورسات",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -222,7 +225,7 @@ export async function POST(request) {
           error: "Title is required and must be a non-empty string",
           message: "العنوان مطلوب ويجب أن يكون نصاً غير فارغ",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -234,12 +237,16 @@ export async function POST(request) {
           error: "Title must be at least 3 characters long",
           message: "العنوان يجب أن يكون 3 أحرف على الأقل",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Validate description
-    if (!description || typeof description !== "string" || description.trim() === "") {
+    if (
+      !description ||
+      typeof description !== "string" ||
+      description.trim() === ""
+    ) {
       console.log("❌ Validation failed: Missing or invalid description");
       return NextResponse.json(
         {
@@ -247,7 +254,7 @@ export async function POST(request) {
           error: "Description is required and must be a non-empty string",
           message: "الوصف مطلوب ويجب أن يكون نصاً غير فارغ",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -259,7 +266,7 @@ export async function POST(request) {
           error: "Description must be at least 10 characters long",
           message: "الوصف يجب أن يكون 10 أحرف على الأقل",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -272,7 +279,7 @@ export async function POST(request) {
           error: "Level must be one of: beginner, intermediate, advanced",
           message: "المستوى يجب أن يكون: مبتدئ، متوسط، أو متقدم",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -285,19 +292,25 @@ export async function POST(request) {
           error: "createdBy must be a valid object",
           message: "createdBy يجب أن يكون كائن صحيح",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (!createdBy.id || !createdBy.name || !createdBy.email || !createdBy.role) {
+    if (
+      !createdBy.id ||
+      !createdBy.name ||
+      !createdBy.email ||
+      !createdBy.role
+    ) {
       console.log("❌ Validation failed: Missing createdBy fields");
       return NextResponse.json(
         {
           success: false,
           error: "createdBy must include: id, name, email, and role",
-          message: "createdBy يجب أن يحتوي على: المعرف، الاسم، البريد الإلكتروني، والدور",
+          message:
+            "createdBy يجب أن يحتوي على: المعرف، الاسم، البريد الإلكتروني، والدور",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -313,7 +326,7 @@ export async function POST(request) {
             message: "هيكل المناهج غير صحيح",
             details: curriculumValidation.errors,
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -399,13 +412,14 @@ export async function POST(request) {
             message: "فشل التحقق من البيانات",
             details: errorDetails,
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
       // Handle duplicate key errors
       if (saveError.code === 11000) {
-        const duplicateField = Object.keys(saveError.keyPattern || {})[0] || "unknown";
+        const duplicateField =
+          Object.keys(saveError.keyPattern || {})[0] || "unknown";
         let errorMessage = "This course already exists";
         let arabicMessage = "هذا الكورس موجود بالفعل";
 
@@ -421,7 +435,7 @@ export async function POST(request) {
             message: arabicMessage,
             field: duplicateField,
           },
-          { status: 409 }
+          { status: 409 },
         );
       }
 
@@ -442,13 +456,15 @@ export async function POST(request) {
     } catch (populateError) {
       console.warn("⚠️ Could not populate instructors:", populateError.message);
       // Return course without populated instructors
-      populatedCourse = course.toObject ? course.toObject() : {
-        ...courseData,
-        _id: course._id,
-        id: course._id,
-        createdAt: course.createdAt,
-        updatedAt: course.updatedAt,
-      };
+      populatedCourse = course.toObject
+        ? course.toObject()
+        : {
+            ...courseData,
+            _id: course._id,
+            id: course._id,
+            createdAt: course.createdAt,
+            updatedAt: course.updatedAt,
+          };
     }
 
     const duration = Date.now() - startTime;
@@ -461,7 +477,7 @@ export async function POST(request) {
         message: "تم إنشاء الكورس بنجاح",
         duration: `${duration}ms`,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("❌ POST /api/courses Error:", error);
@@ -471,7 +487,7 @@ export async function POST(request) {
         error: error.message || "Failed to create course",
         message: "فشل في إنشاء الكورس",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -498,7 +514,7 @@ export async function DELETE(request) {
           error: "Course ID is required",
           message: "معرف الكورس مطلوب",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -511,7 +527,7 @@ export async function DELETE(request) {
           error: "Course not found",
           message: "الكورس غير موجود",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -522,7 +538,7 @@ export async function DELETE(request) {
         success: true,
         message: "تم حذف الكورس بنجاح",
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
     console.error("❌ DELETE error:", error.message);
@@ -532,7 +548,7 @@ export async function DELETE(request) {
         error: error.message || "Failed to delete course",
         message: "فشل في حذف الكورس",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
