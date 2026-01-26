@@ -1,4 +1,4 @@
-// models/Group.js - FINAL FIXED VERSION
+// models/Group.js - FINAL FIXED (NO TRY-CATCH)
 import mongoose from "mongoose";
 
 const groupSchema = new mongoose.Schema(
@@ -80,7 +80,7 @@ const groupSchema = new mongoose.Schema(
       timeFrom: {
         type: String,
         required: true,
-        match: /^([01]\d|2[0-3]):([0-5]\d)$/, // HH:MM format
+        match: /^([01]\d|2[0-3]):([0-5]\d)$/,
       },
       timeTo: {
         type: String,
@@ -177,7 +177,7 @@ const groupSchema = new mongoose.Schema(
       default: false,
     },
 
-    // 📈 NEW: Marketing Automation Metadata
+    // Marketing Automation Metadata
     marketing: {
       enabled: {
         type: Boolean,
@@ -210,52 +210,43 @@ const groupSchema = new mongoose.Schema(
   }
 );
 
-// ==================== FIXED MIDDLEWARE ====================
+// ==================== MIDDLEWARE - NO TRY-CATCH ====================
 
-// REMOVE ALL complex middleware temporarily
-// Add simple validation instead
-
-// Simple pre-save hook to validate schedule days
+// ✅ SIMPLE pre-save hook - NO TRY-CATCH
 groupSchema.pre("save", function (next) {
-  try {
-    // Update timestamp
-    this.updatedAt = new Date();
+  // Update timestamp
+  this.updatedAt = new Date();
+  
+  // Validate schedule days count
+  if (this.schedule && this.schedule.daysOfWeek) {
+    const days = this.schedule.daysOfWeek;
     
-    // Validate schedule days count
-    if (this.schedule && this.schedule.daysOfWeek) {
-      const days = this.schedule.daysOfWeek;
-      
-      // Must have exactly 3 days
-      if (!Array.isArray(days) || days.length !== 3) {
-        return next(new Error("Schedule must have exactly 3 days"));
-      }
-      
-      // Validate unique days
-      const uniqueDays = [...new Set(days)];
-      if (uniqueDays.length !== 3) {
-        return next(new Error("Schedule days must be unique"));
-      }
+    // Must have exactly 3 days
+    if (!Array.isArray(days) || days.length !== 3) {
+      return next(new Error("Schedule must have exactly 3 days"));
     }
     
-    next();
-  } catch (error) {
-    next(error);
+    // Validate unique days
+    const uniqueDays = [...new Set(days)];
+    if (uniqueDays.length !== 3) {
+      return next(new Error("Schedule days must be unique"));
+    }
   }
+  
+  next();
 });
 
 // ==================== VIRTUAL PROPERTIES ====================
 
-// Student capacity percentage
 groupSchema.virtual("capacityPercentage").get(function () {
   if (this.maxStudents === 0) return 0;
   return Math.round((this.currentStudentsCount / this.maxStudents) * 100);
 });
 
-// Days remaining
 groupSchema.virtual("daysRemaining").get(function () {
   if (!this.schedule?.startDate || this.totalSessionsCount === 0) return 0;
   
-  const sessionsPerWeek = 3; // 3 sessions per week
+  const sessionsPerWeek = 3;
   const totalWeeks = Math.ceil(this.totalSessionsCount / sessionsPerWeek);
   const daysRequired = totalWeeks * 7;
   
@@ -272,7 +263,6 @@ groupSchema.virtual("daysRemaining").get(function () {
 
 // ==================== METHODS ====================
 
-// Add student
 groupSchema.methods.addStudent = function (studentId) {
   if (!this.students.includes(studentId)) {
     this.students.push(studentId);
@@ -281,7 +271,6 @@ groupSchema.methods.addStudent = function (studentId) {
   return this.save();
 };
 
-// Remove student
 groupSchema.methods.removeStudent = function (studentId) {
   const index = this.students.indexOf(studentId);
   if (index > -1) {
@@ -291,14 +280,12 @@ groupSchema.methods.removeStudent = function (studentId) {
   return this.save();
 };
 
-// Check if full
 groupSchema.methods.isFull = function () {
   return this.currentStudentsCount >= this.maxStudents;
 };
 
 // ==================== STATIC METHODS ====================
 
-// Find active groups
 groupSchema.statics.findActive = function () {
   return this.find({ 
     status: "active", 
@@ -306,7 +293,6 @@ groupSchema.statics.findActive = function () {
   }).populate("courseId instructors");
 };
 
-// Find by course
 groupSchema.statics.findByCourse = function (courseId) {
   return this.find({ 
     courseId, 
