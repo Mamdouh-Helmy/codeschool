@@ -1,63 +1,28 @@
-// models/Course.js - FINAL CLEAN VERSION
+// models/Course.js - ULTRA MINIMAL (NO MIDDLEWARE)
 import mongoose from "mongoose";
 
-// ==================== LESSON SCHEMA ====================
 const LessonSchema = new mongoose.Schema(
   {
-    title: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-    description: {
-      type: String,
-      default: "",
-    },
-    order: {
-      type: Number,
-      default: 1,
-    },
-    sessionNumber: {
-      type: Number,
-      default: 1,
-    },
+    title: { type: String, trim: true, default: "" },
+    description: { type: String, default: "" },
+    order: { type: Number, default: 1 },
+    sessionNumber: { type: Number, default: 1 },
   },
   { _id: false }
 );
 
-// ==================== MODULE SCHEMA ====================
 const ModuleSchema = new mongoose.Schema(
   {
-    title: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-    description: {
-      type: String,
-      default: "",
-    },
-    order: {
-      type: Number,
-      default: 1,
-    },
-    lessons: {
-      type: [LessonSchema],
-      default: [],
-    },
-    projects: {
-      type: [String],
-      default: [],
-    },
-    totalSessions: {
-      type: Number,
-      default: 3,
-    },
+    title: { type: String, trim: true, default: "" },
+    description: { type: String, default: "" },
+    order: { type: Number, default: 1 },
+    lessons: { type: [LessonSchema], default: [] },
+    projects: { type: [String], default: [] },
+    totalSessions: { type: Number, default: 3 },
   },
   { _id: true }
 );
 
-// ==================== COURSE SCHEMA ====================
 const CourseSchema = new mongoose.Schema(
   {
     title: {
@@ -87,37 +52,18 @@ const CourseSchema = new mongoose.Schema(
         message: "Level must be beginner, intermediate, or advanced",
       },
     },
-    curriculum: {
-      type: [ModuleSchema],
-      default: [],
-    },
-    projects: {
-      type: [String],
-      default: [],
-    },
+    curriculum: { type: [ModuleSchema], default: [] },
+    projects: { type: [String], default: [] },
     instructors: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
-    price: {
-      type: Number,
-      default: 0,
-      min: [0, "Price cannot be negative"],
-    },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    featured: {
-      type: Boolean,
-      default: false,
-    },
-    thumbnail: {
-      type: String,
-      default: "",
-    },
+    price: { type: Number, default: 0, min: [0, "Price cannot be negative"] },
+    isActive: { type: Boolean, default: true },
+    featured: { type: Boolean, default: false },
+    thumbnail: { type: String, default: "" },
     createdBy: {
       id: {
         type: mongoose.Schema.Types.ObjectId,
@@ -164,33 +110,7 @@ const CourseSchema = new mongoose.Schema(
   }
 );
 
-// ==================== MIDDLEWARE ====================
-
-// ✅ CLEAN Pre-save hook - NO TRY-CATCH
-CourseSchema.pre("save", function (next) {
-  console.log("🔧 Running pre-save hook for course...");
-
-  // Generate slug from title
-  if (this.isModified("title") || !this.slug) {
-    const title = this.title || "";
-    const slug =
-      title
-        .toLowerCase()
-        .replace(/[^\w\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-")
-        .trim() || `course-${Date.now()}`;
-
-    this.slug = slug;
-    console.log("📝 Generated slug:", this.slug);
-  }
-
-  console.log("✅ Pre-save hook completed successfully");
-  next();
-});
-
-// ==================== VIRTUAL PROPERTIES ====================
-
+// ✅ NO PRE-SAVE HOOK - Generate slug in API instead
 CourseSchema.virtual("totalLessons").get(function () {
   if (!this.curriculum) return 0;
   let total = 0;
@@ -211,8 +131,6 @@ CourseSchema.virtual("durationWeeks").get(function () {
   const totalModules = this.curriculum ? this.curriculum.length : 0;
   return Math.ceil(totalModules * 1.5);
 });
-
-// ==================== STATIC METHODS ====================
 
 CourseSchema.statics.findBySlug = async function (slug) {
   return this.findOne({ slug: slug, isActive: true });
@@ -258,8 +176,6 @@ CourseSchema.statics.searchCourses = async function (searchTerm, options) {
     .populate("instructors", "name email avatar");
 };
 
-// ==================== INSTANCE METHODS ====================
-
 CourseSchema.methods.getSummary = function () {
   const desc = this.description || "";
   return {
@@ -297,8 +213,6 @@ CourseSchema.methods.removeInstructor = async function (instructorId) {
   return this;
 };
 
-// ==================== INDEXES ====================
-
 CourseSchema.index({ slug: 1 }, { unique: true, sparse: true });
 CourseSchema.index({ title: "text", description: "text" });
 CourseSchema.index({ level: 1 });
@@ -306,10 +220,7 @@ CourseSchema.index({ isActive: 1, featured: 1 });
 CourseSchema.index({ "createdBy.id": 1 });
 CourseSchema.index({ createdAt: -1 });
 
-// ==================== MODEL CREATION ====================
-
 let Course;
-
 try {
   Course = mongoose.model("Course");
 } catch (error) {

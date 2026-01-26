@@ -1,7 +1,20 @@
-// app/api/courses/route.js - GET و POST فقط (بدون DELETE)
+// app/api/courses/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Course from "../../models/Course";
+
+// ✅ Helper: Generate slug
+function generateSlug(title) {
+  if (!title) {
+    return `course-${Date.now()}`;
+  }
+  return title
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim() || `course-${Date.now()}`;
+}
 
 export async function GET(request) {
   const startTime = Date.now();
@@ -203,10 +216,15 @@ export async function POST(request) {
 
     console.log("📋 Preparing course data...");
 
+    // ✅ Generate slug in API (not in model)
+    const slug = generateSlug(title);
+    console.log("📝 Generated slug:", slug);
+
     const courseData = {
       title: title.trim(),
       description: description.trim(),
       level: level.toLowerCase(),
+      slug: slug,
       createdBy: {
         id: createdBy.id,
         name: createdBy.name.trim(),
