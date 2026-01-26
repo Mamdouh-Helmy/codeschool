@@ -1,4 +1,4 @@
-// models/Course.js - FIXED VERSION (Removed problematic functions)
+// models/Course.js - FINAL CLEAN VERSION
 import mongoose from "mongoose";
 
 // ==================== LESSON SCHEMA ====================
@@ -22,7 +22,7 @@ const LessonSchema = new mongoose.Schema(
       default: 1,
     },
   },
-  { _id: false },
+  { _id: false }
 );
 
 // ==================== MODULE SCHEMA ====================
@@ -54,7 +54,7 @@ const ModuleSchema = new mongoose.Schema(
       default: 3,
     },
   },
-  { _id: true },
+  { _id: true }
 );
 
 // ==================== COURSE SCHEMA ====================
@@ -161,37 +161,32 @@ const CourseSchema = new mongoose.Schema(
         return ret;
       },
     },
-  },
+  }
 );
 
 // ==================== MIDDLEWARE ====================
 
-// ✅ MINIMAL Pre-save hook - Only generate slug
+// ✅ CLEAN Pre-save hook - NO TRY-CATCH
 CourseSchema.pre("save", function (next) {
   console.log("🔧 Running pre-save hook for course...");
 
-  try {
-    // Generate slug only
-    if (this.isModified("title") || !this.slug) {
-      const title = this.title || "";
-      const slug =
-        title
-          .toLowerCase()
-          .replace(/[^\w\s-]/g, "")
-          .replace(/\s+/g, "-")
-          .replace(/-+/g, "-")
-          .trim() || `course-${Date.now()}`;
+  // Generate slug from title
+  if (this.isModified("title") || !this.slug) {
+    const title = this.title || "";
+    const slug =
+      title
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .trim() || `course-${Date.now()}`;
 
-      this.slug = slug;
-      console.log("📝 Generated slug:", this.slug);
-    }
-
-    console.log("✅ Pre-save hook completed successfully");
-    next();
-  } catch (err) {
-    console.error("❌ Error in pre-save hook:", err.message);
-    next(err);
+    this.slug = slug;
+    console.log("📝 Generated slug:", this.slug);
   }
+
+  console.log("✅ Pre-save hook completed successfully");
+  next();
 });
 
 // ==================== VIRTUAL PROPERTIES ====================
@@ -283,7 +278,6 @@ CourseSchema.methods.getSummary = function () {
 };
 
 CourseSchema.methods.addInstructor = async function (instructorId) {
-  const exists = false;
   for (let i = 0; i < this.instructors.length; i++) {
     if (this.instructors[i].toString() === instructorId.toString()) {
       return this;
