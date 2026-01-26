@@ -1,4 +1,4 @@
-// models/Course.js - FIXED VERSION (No Arrow Functions)
+// models/Course.js - FIXED VERSION (Removed problematic functions)
 import mongoose from "mongoose";
 
 // ==================== LESSON SCHEMA ====================
@@ -22,7 +22,7 @@ const LessonSchema = new mongoose.Schema(
       default: 1,
     },
   },
-  { _id: false }
+  { _id: false },
 );
 
 // ==================== MODULE SCHEMA ====================
@@ -54,7 +54,7 @@ const ModuleSchema = new mongoose.Schema(
       default: 3,
     },
   },
-  { _id: true }
+  { _id: true },
 );
 
 // ==================== COURSE SCHEMA ====================
@@ -161,93 +161,36 @@ const CourseSchema = new mongoose.Schema(
         return ret;
       },
     },
-  }
+  },
 );
-
-// ==================== HELPER FUNCTION ====================
-function generateSlug(title) {
-  if (!title) {
-    return `course-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }
-  return title
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
-}
-
-function processCurriculum(curriculum) {
-  if (!curriculum || !Array.isArray(curriculum) || curriculum.length === 0) {
-    return curriculum;
-  }
-
-  curriculum.forEach(function (module, moduleIndex) {
-    if (!module) return;
-
-    if (module.order === undefined || module.order === null) {
-      module.order = moduleIndex + 1;
-    }
-
-    if (!module.title || module.title.trim() === "") {
-      module.title = `Module ${module.order}`;
-    }
-
-    if (!Array.isArray(module.lessons)) {
-      module.lessons = [];
-    }
-
-    if (module.lessons && module.lessons.length > 0) {
-      module.lessons.forEach(function (lesson, lessonIndex) {
-        if (!lesson || typeof lesson !== "object") return;
-
-        if (lesson.order === undefined || lesson.order === null) {
-          lesson.order = lessonIndex + 1;
-        }
-
-        if (lesson.sessionNumber === undefined || lesson.sessionNumber === null) {
-          lesson.sessionNumber = Math.ceil(lesson.order / 2);
-        }
-
-        if (lesson.sessionNumber < 1) lesson.sessionNumber = 1;
-        if (lesson.sessionNumber > 3) lesson.sessionNumber = 3;
-
-        if (!lesson.title || (typeof lesson.title === "string" && lesson.title.trim() === "")) {
-          lesson.title = `Lesson ${lesson.order}`;
-        }
-      });
-    }
-
-    module.totalSessions = 3;
-  });
-
-  return curriculum;
-}
 
 // ==================== MIDDLEWARE ====================
 
-// ✅ Pre-save hook - SIMPLIFIED
+// ✅ MINIMAL Pre-save hook - Only generate slug
 CourseSchema.pre("save", function (next) {
   console.log("🔧 Running pre-save hook for course...");
 
   try {
-    // Generate slug from title
+    // Generate slug only
     if (this.isModified("title") || !this.slug) {
-      this.slug = generateSlug(this.title);
-      console.log(`📝 Generated slug: ${this.slug}`);
-    }
+      const title = this.title || "";
+      const slug =
+        title
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, "")
+          .replace(/\s+/g, "-")
+          .replace(/-+/g, "-")
+          .trim() || `course-${Date.now()}`;
 
-    // Process curriculum
-    if (this.curriculum && Array.isArray(this.curriculum)) {
-      console.log(`📚 Processing ${this.curriculum.length} modules...`);
-      this.curriculum = processCurriculum(this.curriculum);
+      this.slug = slug;
+      console.log("📝 Generated slug:", this.slug);
     }
 
     console.log("✅ Pre-save hook completed successfully");
-    return next();
+    next();
   } catch (err) {
-    console.error("❌ Error in pre-save hook:", err.message || err);
-    return next(err);
+    console.error("❌ Error in pre-save hook:", err.message);
+    next(err);
   }
 });
 
@@ -255,35 +198,41 @@ CourseSchema.pre("save", function (next) {
 
 CourseSchema.virtual("totalLessons").get(function () {
   if (!this.curriculum) return 0;
-  return this.curriculum.reduce(function (total, module) {
-    return total + (module.lessons?.length || 0);
-  }, 0);
+  let total = 0;
+  for (let i = 0; i < this.curriculum.length; i++) {
+    const module = this.curriculum[i];
+    if (module && module.lessons) {
+      total += module.lessons.length;
+    }
+  }
+  return total;
 });
 
 CourseSchema.virtual("totalModules").get(function () {
-  return this.curriculum?.length || 0;
+  return this.curriculum ? this.curriculum.length : 0;
 });
 
 CourseSchema.virtual("durationWeeks").get(function () {
-  const totalModules = this.curriculum?.length || 0;
+  const totalModules = this.curriculum ? this.curriculum.length : 0;
   return Math.ceil(totalModules * 1.5);
 });
 
 // ==================== STATIC METHODS ====================
 
 CourseSchema.statics.findBySlug = async function (slug) {
-  return this.findOne({ slug, isActive: true });
+  return this.findOne({ slug: slug, isActive: true });
 };
 
 CourseSchema.statics.getActiveCourses = async function (options) {
   const opts = options || {};
   const limit = opts.limit || 10;
   const page = opts.page || 1;
-  const featured = opts.featured || false;
   const skip = (page - 1) * limit;
 
   const query = { isActive: true };
-  if (featured) query.featured = true;
+  if (opts.featured) {
+    query.featured = true;
+  }
 
   return this.find(query)
     .sort({ createdAt: -1 })
@@ -317,13 +266,12 @@ CourseSchema.statics.searchCourses = async function (searchTerm, options) {
 // ==================== INSTANCE METHODS ====================
 
 CourseSchema.methods.getSummary = function () {
+  const desc = this.description || "";
   return {
     id: this._id,
     title: this.title,
     slug: this.slug,
-    description:
-      this.description.substring(0, 150) +
-      (this.description.length > 150 ? "..." : ""),
+    description: desc.substring(0, 150) + (desc.length > 150 ? "..." : ""),
     level: this.level,
     totalModules: this.totalModules,
     totalLessons: this.totalLessons,
@@ -335,18 +283,22 @@ CourseSchema.methods.getSummary = function () {
 };
 
 CourseSchema.methods.addInstructor = async function (instructorId) {
-  if (!this.instructors.includes(instructorId)) {
-    this.instructors.push(instructorId);
-    await this.save();
+  const exists = false;
+  for (let i = 0; i < this.instructors.length; i++) {
+    if (this.instructors[i].toString() === instructorId.toString()) {
+      return this;
+    }
   }
-  return this;
+  this.instructors.push(instructorId);
+  return this.save();
 };
 
 CourseSchema.methods.removeInstructor = async function (instructorId) {
-  const index = this.instructors.indexOf(instructorId);
-  if (index > -1) {
-    this.instructors.splice(index, 1);
-    await this.save();
+  for (let i = 0; i < this.instructors.length; i++) {
+    if (this.instructors[i].toString() === instructorId.toString()) {
+      this.instructors.splice(i, 1);
+      return this.save();
+    }
   }
   return this;
 };
