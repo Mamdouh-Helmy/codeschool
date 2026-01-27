@@ -210,31 +210,8 @@ const groupSchema = new mongoose.Schema(
   }
 );
 
-// ==================== MIDDLEWARE - NO TRY-CATCH ====================
-
-// ✅ SIMPLE pre-save hook - NO TRY-CATCH
-groupSchema.pre("save", function (next) {
-  // Update timestamp
-  this.updatedAt = new Date();
-  
-  // Validate schedule days count
-  if (this.schedule && this.schedule.daysOfWeek) {
-    const days = this.schedule.daysOfWeek;
-    
-    // Must have exactly 3 days
-    if (!Array.isArray(days) || days.length !== 3) {
-      return next(new Error("Schedule must have exactly 3 days"));
-    }
-    
-    // Validate unique days
-    const uniqueDays = [...new Set(days)];
-    if (uniqueDays.length !== 3) {
-      return next(new Error("Schedule days must be unique"));
-    }
-  }
-  
-  next();
-});
+// ==================== MIDDLEWARE - REMOVED ====================
+// ✅ NO PRE-SAVE HOOKS - All validation in API layer
 
 // ==================== VIRTUAL PROPERTIES ====================
 
