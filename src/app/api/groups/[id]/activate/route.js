@@ -1,4 +1,4 @@
-// app/api/groups/[id]/activate/route.js - النسخة المحدثة
+// app/api/groups/[id]/activate/route.js - الإصدار المحدث
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../../models/Group";
@@ -61,11 +61,11 @@ export async function POST(req, { params }) {
     console.log(`📊 Existing sessions: ${existingSessionsCount}`);
 
     // ✅ FIXED: السماح بإعادة التفعيل حتى لو كانت المجموعة مفعلة مسبقاً
+    let isReactivation = false;
+    
     if (group.status === "active") {
       console.log(`🔄 Group is already active, regenerating sessions...`);
-      
-      // ❌ لا نعيد تعيين status إلى draft
-      // ❌ لا نرمي خطأ، بل نستمر في عملية إعادة التوليد
+      isReactivation = true;
     }
 
     if (group.status === "completed") {
@@ -106,26 +106,22 @@ export async function POST(req, { params }) {
     }
 
     // ✅ تحديث الـ status إلى active (إذا لم يكن active مسبقاً)
-    if (group.status !== "active") {
-      await Group.findByIdAndUpdate(id, {
-        $set: {
-          status: "active",
-          "metadata.activatedAt": new Date(),
-          "metadata.lastModifiedBy": adminUser.id,
-          "metadata.updatedAt": new Date(),
-        },
-      });
+    const updateData = {
+      $set: {
+        "metadata.lastModifiedBy": adminUser.id,
+        "metadata.updatedAt": new Date(),
+      }
+    };
+
+    if (!isReactivation) {
+      updateData.$set.status = "active";
+      updateData.$set["metadata.activatedAt"] = new Date();
     } else {
-      console.log(`✅ Group is already active, updating metadata only`);
-      await Group.findByIdAndUpdate(id, {
-        $set: {
-          "metadata.reactivatedAt": new Date(),
-          "metadata.lastModifiedBy": adminUser.id,
-          "metadata.updatedAt": new Date(),
-          "metadata.lastRegeneration": new Date(),
-        },
-      });
+      updateData.$set["metadata.reactivatedAt"] = new Date();
+      updateData.$set["metadata.lastRegeneration"] = new Date();
     }
+
+    await Group.findByIdAndUpdate(id, updateData);
 
     const updatedGroup = await Group.findById(id)
       .populate("courseId", "title level curriculum")
@@ -190,18 +186,19 @@ export async function POST(req, { params }) {
 
       return NextResponse.json({
         success: true,
-        message: "Group activated successfully",
+        message: isReactivation ? "Group reactivated successfully" : "Group activated successfully",
         data: {
           id: updatedGroup._id,
           code: updatedGroup.code,
           name: updatedGroup.name,
           status: updatedGroup.status,
-          activatedAt: updatedGroup.metadata.activatedAt,
-          reactivatedAt: updatedGroup.metadata.reactivatedAt,
+          activatedAt: updatedGroup.metadata?.activatedAt || null,
+          reactivatedAt: updatedGroup.metadata?.reactivatedAt || null,
           course: updatedGroup.courseId,
           instructors: updatedGroup.instructors,
           sessionsGenerated: true,
           totalSessions: automationResult.sessionsGenerated,
+          isReactivation: isReactivation,
         },
         automation: {
           sessions: {
@@ -226,7 +223,7 @@ export async function POST(req, { params }) {
       console.error("❌ Automation failed:", automationError);
 
       // Rollback group status only if it was newly activated
-      if (group.status !== "active") {
+      if (!isReactivation) {
         await Group.findByIdAndUpdate(id, {
           $set: {
             status: "draft",
