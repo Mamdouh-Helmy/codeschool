@@ -12,6 +12,7 @@ import { wapilotService } from "./wapilot-service";
  * ✅ EVENT 1: Group Activated (for session generation)
  * EXISTING - NO CHANGES
  */
+// services/groupAutomation.js - تحديث دالة onGroupActivated
 export async function onGroupActivated(groupId, userId) {
   try {
     console.log(`\n🎯 EVENT: Group Activated ==========`);
@@ -49,18 +50,63 @@ export async function onGroupActivated(groupId, userId) {
       throw new Error("Group must have exactly 3 days selected for schedule");
     }
 
-    // ✅ FIX: حذف أي سيشنات قديمة أولاً قبل إنشاء جديدة
-    console.log("🗑️  Hard deleting any existing sessions...");
-    const deleteResult = await Session.deleteMany({
+    // ✅ FIXED: التحقق مما إذا كانت الحصص موجودة مسبقاً
+    const Session = (await import("../models/Session")).default;
+    const existingSessionsCount = await Session.countDocuments({
       groupId: groupId,
+      isDeleted: false,
     });
-    console.log(`✅ Deleted ${deleteResult.deletedCount} existing sessions`);
+
+    console.log(`📊 Existing sessions count: ${existingSessionsCount}`);
+    console.log(`📊 Group sessionsGenerated flag: ${group.sessionsGenerated}`);
+
+    // ✅ FIXED: إعادة توليد الحصص إذا لزم الأمر
+    if (group.sessionsGenerated || existingSessionsCount > 0) {
+      console.log(`🔄 Regenerating sessions for group ${group.code}...`);
+      
+      // ✅ حذف جميع الحصص القديمة أولاً
+      console.log("🗑️  Deleting existing sessions...");
+      
+      // Release meeting links first
+      const existingSessions = await Session.find({
+        groupId: groupId,
+        isDeleted: false,
+        meetingLinkId: { $ne: null },
+      });
+
+      for (const session of existingSessions) {
+        try {
+          // Import releaseMeetingLink function
+          const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
+          await releaseMeetingLink(session._id);
+        } catch (releaseError) {
+          console.warn(
+            `⚠️ Failed to release meeting link for session ${session._id}:`,
+            releaseError.message,
+          );
+        }
+      }
+
+      // Delete sessions
+      const deleteResult = await Session.deleteMany({
+        groupId: groupId,
+      });
+      console.log(`✅ Deleted ${deleteResult.deletedCount} existing sessions`);
+
+      // Reset group flag
+      await Group.findByIdAndUpdate(groupId, {
+        $set: {
+          sessionsGenerated: false,
+          totalSessionsCount: 0,
+        },
+      });
+    }
 
     // ✅ Generate Sessions using the updated generateSessionsForGroup
     console.log("📅 Generating new sessions...");
 
     const { generateSessionsForGroup } =
-      await import("@/utils/sessionGenerator");
+      await import("../../utils/sessionGenerator");
 
     const sessionsResult = await generateSessionsForGroup(
       groupId,
@@ -186,6 +232,7 @@ export async function onGroupActivated(groupId, userId) {
       distribution: sessionsResult.distribution,
       startDate: sessionsResult.startDate,
       endDate: sessionsResult.endDate,
+      regeneration: existingSessionsCount > 0,
     };
   } catch (error) {
     console.error("❌ Error in onGroupActivated:", error);

@@ -1,4 +1,4 @@
-// app/api/groups/[id]/activate/route.js - النسخة النهائية
+// app/api/groups/[id]/activate/route.js - النسخة المحدثة
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../../models/Group";
@@ -52,11 +52,20 @@ export async function POST(req, { params }) {
       );
     }
 
+    // ✅ FIXED: التحقق مما إذا كانت المجموعة لها حصص مسبقاً
+    const existingSessionsCount = await Session.countDocuments({
+      groupId: id,
+      isDeleted: false,
+    });
+
+    console.log(`📊 Existing sessions: ${existingSessionsCount}`);
+
+    // ✅ FIXED: السماح بإعادة التفعيل حتى لو كانت المجموعة مفعلة مسبقاً
     if (group.status === "active") {
-      return NextResponse.json(
-        { success: false, error: "Group is already active" },
-        { status: 400 }
-      );
+      console.log(`🔄 Group is already active, regenerating sessions...`);
+      
+      // ❌ لا نعيد تعيين status إلى draft
+      // ❌ لا نرمي خطأ، بل نستمر في عملية إعادة التوليد
     }
 
     if (group.status === "completed") {
@@ -96,21 +105,33 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ تحديث الـ status إلى active
-    await Group.findByIdAndUpdate(id, {
-      $set: {
-        status: "active",
-        "metadata.activatedAt": new Date(),
-        "metadata.lastModifiedBy": adminUser.id,
-        "metadata.updatedAt": new Date(),
-      },
-    });
+    // ✅ تحديث الـ status إلى active (إذا لم يكن active مسبقاً)
+    if (group.status !== "active") {
+      await Group.findByIdAndUpdate(id, {
+        $set: {
+          status: "active",
+          "metadata.activatedAt": new Date(),
+          "metadata.lastModifiedBy": adminUser.id,
+          "metadata.updatedAt": new Date(),
+        },
+      });
+    } else {
+      console.log(`✅ Group is already active, updating metadata only`);
+      await Group.findByIdAndUpdate(id, {
+        $set: {
+          "metadata.reactivatedAt": new Date(),
+          "metadata.lastModifiedBy": adminUser.id,
+          "metadata.updatedAt": new Date(),
+          "metadata.lastRegeneration": new Date(),
+        },
+      });
+    }
 
     const updatedGroup = await Group.findById(id)
       .populate("courseId", "title level curriculum")
       .populate("instructors", "name email profile");
 
-    console.log(`✅ Group activated: ${updatedGroup.code}`);
+    console.log(`✅ Group ${updatedGroup.code} ready for session generation`);
 
     // محاولة إصلاح الفهارس
     try {
@@ -176,6 +197,7 @@ export async function POST(req, { params }) {
           name: updatedGroup.name,
           status: updatedGroup.status,
           activatedAt: updatedGroup.metadata.activatedAt,
+          reactivatedAt: updatedGroup.metadata.reactivatedAt,
           course: updatedGroup.courseId,
           instructors: updatedGroup.instructors,
           sessionsGenerated: true,
@@ -187,6 +209,7 @@ export async function POST(req, { params }) {
             status: "completed",
             generated: automationResult.sessionsGenerated,
             details: automationResult,
+            regeneration: automationResult.regeneration || false,
           },
           instructorNotifications: {
             triggered: updatedGroup.instructors?.length > 0,
@@ -202,13 +225,15 @@ export async function POST(req, { params }) {
     } catch (automationError) {
       console.error("❌ Automation failed:", automationError);
 
-      // Rollback group status if automation fails
-      await Group.findByIdAndUpdate(id, {
-        $set: {
-          status: "draft",
-          "metadata.updatedAt": new Date(),
-        },
-      });
+      // Rollback group status only if it was newly activated
+      if (group.status !== "active") {
+        await Group.findByIdAndUpdate(id, {
+          $set: {
+            status: "draft",
+            "metadata.updatedAt": new Date(),
+          },
+        });
+      }
 
       return NextResponse.json(
         {
