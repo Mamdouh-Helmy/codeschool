@@ -1,5 +1,5 @@
 'use client';
-import { memo } from 'react';
+import React, { memo } from 'react';
 import { Play, Code, Blocks, Rocket } from 'lucide-react';
 
 interface PlatformIconProps {
@@ -7,7 +7,7 @@ interface PlatformIconProps {
 }
 
 const PlatformIcon = memo(({ platform }: PlatformIconProps) => {
-    const platformIcons: Record<string, JSX.Element> = {
+    const platformIcons: Record<string, React.JSX.Element> = {
         'Code.org': <Code className="w-5 h-5" />,
         'Scratch': <Blocks className="w-5 h-5" />,
         'Replit': <Play className="w-5 h-5" />,
