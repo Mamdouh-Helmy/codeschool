@@ -609,6 +609,12 @@ export default function SessionsAdmin() {
               const loadingToast = toast.loading(`جاري إرسال تذكير ${reminderLabel}...`);
 
               try {
+                // ✅ التأكد من وجود session.id
+                if (!session?.id) {
+                  toast.error('معرف الجلسة غير صالح', { id: loadingToast });
+                  return;
+                }
+
                 const res = await fetch(`/api/sessions/${session.id}/send-reminder`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -628,6 +634,7 @@ export default function SessionsAdmin() {
                 }
               } catch (error) {
                 toast.error('حدث خطأ', { id: loadingToast });
+                console.error('Error sending reminder:', error);
               }
             }}
             className="px-3 py-1 bg-primary text-white rounded text-sm"

@@ -85,8 +85,9 @@ const Schedules = () => {
   useEffect(() => {
     const fetchSchedule = async () => {
       try {
-        const res = await fetch("/api/schedules", { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed to fetch schedule");
+        // ✅ تغيير الـ endpoint من /api/schedules إلى /api/events
+        const res = await fetch("/api/events", { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to fetch events");
         const result = await res.json();
 
         const normalized = (result.data || []).map((e: ScheduleEvent) => ({
@@ -103,7 +104,7 @@ const Schedules = () => {
 
         setEvents(normalized);
       } catch (err) {
-        console.error("Error fetching schedule:", err);
+        console.error("Error fetching events:", err);
         setError(t("common.error"));
       } finally {
         setLoading(false);
@@ -192,7 +193,7 @@ const Schedules = () => {
 
               <div className="flex items-center flex-wrap gap-30 lg:min-w-96 min-w-max">
                 <div className="flex items-center">
-                  {event.speakers.length > 0 ? (
+                  {event.speakers && event.speakers.length > 0 ? (
                     event.speakers.map((spk, i) => {
                       const { src, useImgTag } = getImageInfo(
                         spk.image || "/images/default-avatar.jpg"
@@ -252,7 +253,7 @@ const Schedules = () => {
                     {t("schedules.speechBy")}
                   </p>
                   <div className="text-lg font-medium text-secondary dark:text-white">
-                    {event.speakers.length > 0 ? (
+                    {event.speakers && event.speakers.length > 0 ? (
                       <span className="flex flex-col md:inline-block">
                         {event.speakers.map((s, index) => (
                           <span key={index} className="md:inline block">

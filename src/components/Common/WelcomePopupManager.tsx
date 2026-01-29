@@ -7,9 +7,8 @@ const WelcomePopupManager = () => {
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        // ✅ استخدام requestAnimationFrame بدل setTimeout لتحسين الأداء
         const checkAndShowPopup = () => {
-            const isHomePage = window.location.pathname === "/";
+            const isHomePage = window.location.pathname === "/" || window.location.pathname === "/ar";
             const hasSeenPopup = sessionStorage.getItem("welcomePopupSeen");
 
             if (isHomePage && !hasSeenPopup) {
@@ -20,7 +19,7 @@ const WelcomePopupManager = () => {
             }
         };
 
-        // ✅ تأخير التنفيذ قليلاً لمنع التأثير على التحميل الأولي
+        // ✅ تأخير بسيط لتجنب التأثير على التحميل الأولي
         const delayedCheck = setTimeout(checkAndShowPopup, 100);
 
         return () => {

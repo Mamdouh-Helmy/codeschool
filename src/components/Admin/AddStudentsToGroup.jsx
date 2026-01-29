@@ -7,44 +7,151 @@ import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
 
 // Helper function to generate default welcome message template
-const getDefaultWelcomeMessage = (language, group, studentName = "{studentName}") => {
+// Helper function to generate default welcome message template
+const getDefaultWelcomeMessage = async (language, group, studentName = "{studentName}") => {
+  // دالة ذكية لجلب رابط الاجتماع المناسب - فقط أول سيشن (Session 1) في أول موديول (Module 0)
+  const getFirstSessionLink = async () => {
+    if (!group || !group._id) {
+      console.log("❌ No group or group._id found");
+      return null;
+    }
+
+    console.log(`🔍 Looking for FIRST SESSION (Session 1) in group: ${group.name} (${group._id})`);
+
+    try {
+      // جلب جميع جلسات المجموعة
+      const response = await fetch(`/api/groups/${group._id}/sessions`, {
+        method: 'GET',
+        cache: 'no-store'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`📊 Total sessions found: ${result.data?.length || 0}`);
+
+        if (result.success && result.data && result.data.length > 0) {
+          // عرض جميع الجلسات للتأكد
+          result.data.forEach((session, index) => {
+            console.log(`Session ${index + 1}: Module ${session.moduleIndex}, Session ${session.sessionNumber}, Title: ${session.title}`);
+          });
+
+          // البحث عن أول سيشن (Session 1) في أول موديول (Module 0)
+          const firstSession = result.data.find(session =>
+            session.moduleIndex === 0 && session.sessionNumber === 1
+          );
+
+          if (firstSession) {
+            console.log(`✅ FOUND FIRST SESSION!`);
+            console.log(`   Title: ${firstSession.title}`);
+            console.log(`   Module: ${firstSession.moduleIndex}, Session: ${firstSession.sessionNumber}`);
+            console.log(`   Scheduled Date: ${firstSession.scheduledDate}`);
+            console.log(`   Has meetingLink: ${!!firstSession.meetingLink}`);
+            console.log(`   Has meetingLinkId: ${!!firstSession.meetingLinkId}`);
+
+            // إذا كان هناك meetingLink مباشر في السيشن
+            if (firstSession.meetingLink) {
+              console.log(`✅ Using direct meeting link from session: ${firstSession.meetingLink}`);
+              return firstSession.meetingLink;
+            }
+
+            // إذا لم يكن هناك meetingLink مباشر، جربه من MeetingLink collection
+            if (firstSession.meetingLinkId) {
+              try {
+                const meetingLinkResponse = await fetch(`/api/meeting-links/${firstSession.meetingLinkId}`, {
+                  method: 'GET',
+                  cache: 'no-store'
+                });
+
+                if (meetingLinkResponse.ok) {
+                  const meetingLinkData = await meetingLinkResponse.json();
+                  if (meetingLinkData.success && meetingLinkData.data && meetingLinkData.data.link) {
+                    console.log(`✅ Found meeting link from collection: ${meetingLinkData.data.link}`);
+                    return meetingLinkData.data.link;
+                  }
+                }
+              } catch (meetingError) {
+                console.error("❌ Error fetching meeting link from collection:", meetingError);
+              }
+            }
+
+            console.log("⚠️ First session found but NO meeting link available");
+            return null;
+          } else {
+            console.log("❌ First session (Module 0, Session 1) NOT FOUND!");
+
+            // بحث عن أي سيشن 1 في أي موديول
+            const anySession1 = result.data.find(session => session.sessionNumber === 1);
+            if (anySession1) {
+              console.log(`ℹ️ Found Session 1 in Module ${anySession1.moduleIndex}`);
+              if (anySession1.meetingLink) {
+                console.log(`✅ Using meeting link from Session 1 in Module ${anySession1.moduleIndex}: ${anySession1.meetingLink}`);
+                return anySession1.meetingLink;
+              }
+            }
+
+            return null;
+          }
+        } else {
+          console.log("📭 No sessions exist for this group yet");
+          return null;
+        }
+      } else {
+        console.error("❌ Failed to fetch sessions from API");
+        return null;
+      }
+    } catch (error) {
+      console.error("❌ Error fetching sessions:", error);
+      return null;
+    }
+
+    // إذا لم نجد أي شيء
+    return null;
+  };
+
+  // جلب رابط الاجتماع الأول
+  const firstSessionLink = await getFirstSessionLink();
+
+  console.log(`🎯 Final decision: ${firstSessionLink ? `✅ Found link` : `❌ No link`}`);
+
   const template = language === "ar"
-    ? `🎉 مرحباً بك في {groupName}!
+    ? `🎉 مرحباً بك في Code School!
 
-عزيزي/عزيزتي {studentName},
-
-تم تسجيلك في:
-📚 الكورس: {courseName}
+{studentName}،
+يسرنا إعلامك بأنه تم تسجيلك/تسجيل طفلك بنجاح في البرنامج التالي في Code School:
+📘 البرنامج: {courseName}
 👥 المجموعة: {groupCode}
 📅 تاريخ البدء: {startDate}
-⏰ الوقت: {timeFrom} - {timeTo}
-{instructor}
+⏰ الموعد: {timeFrom} – {timeTo}
+👨‍🏫 المدرب: {instructor}
 
-رحلتك التعليمية ستبدأ قريباً! 🚀
+هذا البرنامج مصمم لبناء التفكير المنطقي ومهارات حل المشكلات والإبداع لدى طفلك من خلال التعليم البرمجي المنظم والمناسب للعمر.
 
-مع أطيب التحيات،
-فريق Code School 💻`
-    : `🎉 Welcome to {groupName}!
+${firstSessionLink ? `📌 رابط الاجتماع للجلسة الأولى:
+${firstSessionLink}
 
-Dear {studentName},
+` : ''}متحمسون لبدء رحلتنا معاً!`
+    : `🎉 Welcome to Code School!
 
-You have been enrolled in:
-📚 Course: {courseName}
+{studentName},
+We are pleased to confirm that you/your child has been successfully enrolled in the following program at Code School:
+📘 Program: {courseName}
 👥 Group: {groupCode}
 📅 Start Date: {startDate}
-⏰ Time: {timeFrom} - {timeTo}
-{instructor}
+⏰ Schedule: {timeFrom} – {timeTo}
+👨‍🏫 Instructor: {instructor}
 
-Your learning journey starts soon! 🚀
+This program is designed to build your child's logical thinking, problem-solving skills, and creativity through structured, age-appropriate programming education.
 
-Best regards,
-Code School Team 💻`;
+${firstSessionLink ? `📌 First Session Meeting Link:
+${firstSessionLink}
+
+` : ''}Excited to Start Our Journey Together!`;
 
   if (!group) return template;
 
   // استبدال المتغيرات
   return template
-    .replace(/\{groupName\}/g, group.name || "{groupName}")
+    .replace(/\{studentName\}/g, studentName)
     .replace(/\{courseName\}/g, group.courseSnapshot?.title || group.course?.title || "{courseName}")
     .replace(/\{groupCode\}/g, group.code || "{groupCode}")
     .replace(
@@ -67,8 +174,7 @@ Code School Team 💻`;
           ? `👨‍🏫 المدرب: ${group.instructors[0].name}`
           : `👨‍🏫 Instructor: ${group.instructors[0].name}`
         : ""
-    )
-    .replace(/\{studentName\}/g, studentName);
+    );
 };
 
 export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded }) {
@@ -86,15 +192,84 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
   const isRTL = locale === "ar";
 
+  // رسالة افتراضية احتياطية
+  const getFallbackMessage = (isRTL, group, studentName = "{studentName}") => {
+    const fallbackTemplate = isRTL
+      ? `🎉 مرحباً بك في Code School!
+
+{studentName}،
+يسرنا إعلامك بأنه تم تسجيلك/تسجيل طفلك بنجاح في البرنامج التالي في Code School:
+📘 البرنامج: {courseName}
+👥 المجموعة: {groupCode}
+📅 تاريخ البدء: {startDate}
+⏰ الموعد: {timeFrom} – {timeTo}
+👨‍🏫 المدرب: {instructor}
+
+هذا البرنامج مصمم لبناء التفكير المنطقي ومهارات حل المشكلات والإبداع لدى طفلك من خلال التعليم البرمجي المنظم والمناسب للعمر.
+
+متحمسون لبدء رحلتنا معاً!`
+      : `🎉 Welcome to Code School!
+
+{studentName},
+We are pleased to confirm that you/your child has been successfully enrolled in the following program at Code School:
+📘 Program: {courseName}
+👥 Group: {groupCode}
+📅 Start Date: {startDate}
+⏰ Schedule: {timeFrom} – {timeTo}
+👨‍🏫 Instructor: {instructor}
+
+This program is designed to build your child's logical thinking, problem-solving skills, and creativity through structured, age-appropriate programming education.
+
+Excited to Start Our Journey Together!`;
+
+    if (!group) return fallbackTemplate;
+
+    return fallbackTemplate
+      .replace(/\{studentName\}/g, studentName)
+      .replace(/\{courseName\}/g, group.courseSnapshot?.title || group.course?.title || "{courseName}")
+      .replace(/\{groupCode\}/g, group.code || "{groupCode}")
+      .replace(
+        /\{startDate\}/g,
+        group.schedule?.startDate
+          ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? "ar-EG" : "en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })
+          : "{startDate}"
+      )
+      .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "{timeFrom}")
+      .replace(/\{timeTo\}/g, group.schedule?.timeTo || "{timeTo}")
+      .replace(
+        /\{instructor\}/g,
+        group.instructors?.[0]?.name
+          ? isRTL
+            ? `👨‍🏫 المدرب: ${group.instructors[0].name}`
+            : `👨‍🏫 Instructor: ${group.instructors[0].name}`
+          : ""
+      );
+  };
+
   // Default welcome message based on group and language
   useEffect(() => {
     if (group) {
-      const defaultMessage = getDefaultWelcomeMessage(
-        isRTL ? "ar" : "en",
-        group,
-        "{studentName}"
-      );
-      setCustomMessage(defaultMessage);
+      const loadDefaultMessage = async () => {
+        try {
+          const defaultMessage = await getDefaultWelcomeMessage(
+            isRTL ? "ar" : "en",
+            group,
+            "{studentName}"
+          );
+          setCustomMessage(defaultMessage);
+        } catch (error) {
+          console.error("❌ Error loading default message:", error);
+          // استخدم رسالة افتراضية في حالة الخطأ
+          const fallbackMessage = getFallbackMessage(isRTL, group, "{studentName}");
+          setCustomMessage(fallbackMessage);
+        }
+      };
+      loadDefaultMessage();
     }
   }, [group, isRTL]);
 
@@ -247,7 +422,17 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         }));
 
         setSelectedStudent(null);
-        setCustomMessage(getDefaultWelcomeMessage(isRTL ? "ar" : "en", group, "{studentName}"));
+
+        // إعادة تعيين الرسالة إلى القيمة الافتراضية
+        try {
+          const newMessage = await getDefaultWelcomeMessage(isRTL ? "ar" : "en", group, "{studentName}");
+          setCustomMessage(newMessage);
+        } catch (error) {
+          console.error("❌ Error resetting message:", error);
+          const fallbackMessage = getFallbackMessage(isRTL, group, "{studentName}");
+          setCustomMessage(fallbackMessage);
+        }
+
         setPreviewMessage("");
 
         if (onStudentAdded) {
@@ -387,8 +572,8 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 key={studentId}
                 onClick={() => !isFull && setSelectedStudent(student)}
                 className={`p-4 border rounded-lg cursor-pointer transition-all ${isSelected
-                    ? "border-primary bg-primary/5"
-                    : "border-PowderBlueBorder dark:border-dark_border hover:border-primary/50"
+                  ? "border-primary bg-primary/5"
+                  : "border-PowderBlueBorder dark:border-dark_border hover:border-primary/50"
                   } ${isFull ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <div className="flex items-start justify-between">
@@ -416,8 +601,8 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                         </span>
                       )}
                       <span className={`px-2 py-1 rounded ${student.communicationPreferences?.preferredLanguage === 'ar'
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                          : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                        : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
                         }`}>
                         🌐 {student.communicationPreferences?.preferredLanguage === 'ar' ? 'العربية' : 'English'}
                       </span>
@@ -496,11 +681,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 <textarea
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
-                  placeholder={getDefaultWelcomeMessage(
-                    isRTL ? "ar" : "en",
-                    group,
-                    "{studentName}"
-                  )}
+                  placeholder="Loading welcome message..."
                   className="w-full px-3 py-2.5 border border-blue-300 dark:border-blue-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white resize-none h-32 font-mono text-sm"
                   dir={isRTL ? 'rtl' : 'ltr'}
                 />
@@ -541,7 +722,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
         <button
           onClick={handleAddStudent}
-          disabled={!selectedStudent || !customMessage.trim() || isFull || adding}
+          disabled={!selectedStudent || !customMessage || !customMessage.trim() || isFull || adding}
           className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           {adding ? (

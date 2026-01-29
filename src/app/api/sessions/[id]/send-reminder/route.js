@@ -13,7 +13,7 @@ export async function POST(req, { params }) {
   try {
     await connectDB();
 
-    const { id } = params;
+    const { id } = await params; // ✅ إضافة await هنا
     const body = await req.json();
     const { reminderType = '24hours' } = body;
 

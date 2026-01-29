@@ -1,4 +1,4 @@
-// models/MeetingLink.js - الإصاح النهائي مع جميع التوابع المطلوبة
+// models/MeetingLink.js - الإصدار النهائي المعدل
 import mongoose from "mongoose";
 
 const meetingLinkSchema = new mongoose.Schema({
@@ -26,11 +26,11 @@ const meetingLinkSchema = new mongoose.Schema({
     default: "zoom"
   },
   
-  // Status
+  // Status - المحدث: تغيير القيم لتناسب frontend
   status: {
     type: String,
-    enum: ["active", "inactive", "maintenance", "reserved"],
-    default: "active"
+    enum: ["available", "reserved", "in_use", "maintenance", "inactive"],
+    default: "available" // تغيير من "active" إلى "available"
   },
   
   // Settings
@@ -167,7 +167,7 @@ meetingLinkSchema.statics.findAvailableLinks = async function (startTime, endTim
   try {
     const availableLinks = [];
     const allLinks = await this.find({
-      status: "active",
+      status: "available", // تغيير من "active" إلى "available"
       isDeleted: false
     }).lean();
 
@@ -228,7 +228,7 @@ meetingLinkSchema.statics.checkLinkAvailability = async function (linkId, startT
   try {
     const link = await this.findById(linkId);
     
-    if (!link || link.status !== "active" || link.isDeleted) {
+    if (!link || link.status !== "available" || link.isDeleted) { // تغيير من "active" إلى "available"
       return false;
     }
 
@@ -315,6 +315,9 @@ meetingLinkSchema.methods.reserveForSession = async function (sessionId, groupId
       reservedBy: userId
     };
 
+    // Update status to reserved
+    this.status = "reserved";
+
     // Update statistics
     this.stats.totalUses = (this.stats.totalUses || 0) + 1;
     this.stats.totalHours = (this.stats.totalHours || 0) + (durationMinutes / 60);
@@ -370,8 +373,9 @@ meetingLinkSchema.methods.releaseLink = async function (actualDurationMinutes = 
       usedAt: new Date()
     });
 
-    // Clear current reservation
+    // Clear current reservation and update status
     this.currentReservation = null;
+    this.status = "available";
 
     await this.save();
 
@@ -392,7 +396,7 @@ meetingLinkSchema.methods.releaseLink = async function (actualDurationMinutes = 
  * ✅ Check if link is currently available
  */
 meetingLinkSchema.methods.isCurrentlyAvailable = function () {
-  if (this.status !== "active" || this.isDeleted) {
+  if (this.status !== "available" || this.isDeleted) {
     return false;
   }
 
@@ -434,7 +438,8 @@ meetingLinkSchema.methods.getUsageStats = function () {
     usageHistoryCount: this.usageHistory.length,
     currentReservation: this.currentReservation,
     isCurrentlyAvailable: this.isCurrentlyAvailable(),
-    nextAvailableSlot: this.getNextAvailableSlot()
+    nextAvailableSlot: this.getNextAvailableSlot(),
+    status: this.status
   };
 };
 
@@ -442,6 +447,12 @@ meetingLinkSchema.methods.getUsageStats = function () {
  * ✅ Update link status
  */
 meetingLinkSchema.methods.updateStatus = async function (newStatus, notes = null) {
+  // Validate status
+  const validStatuses = ["available", "reserved", "in_use", "maintenance", "inactive"];
+  if (!validStatuses.includes(newStatus)) {
+    throw new Error(`Invalid status: ${newStatus}. Valid statuses are: ${validStatuses.join(", ")}`);
+  }
+
   this.status = newStatus;
   
   if (notes) {
@@ -511,7 +522,7 @@ meetingLinkSchema.methods.addAllowedDay = async function (day) {
 // ==================== VIRTUAL PROPERTIES ====================
 
 meetingLinkSchema.virtual("isReserved").get(function () {
-  return !!(this.currentReservation && this.currentReservation.sessionId);
+  return this.status === "reserved" || !!(this.currentReservation && this.currentReservation.sessionId);
 });
 
 meetingLinkSchema.virtual("reservationDetails").get(function () {
@@ -533,8 +544,11 @@ meetingLinkSchema.virtual("usageSummary").get(function () {
     totalHours: this.stats.totalHours || 0,
     averageDuration: this.stats.averageUsageDuration || 0,
     lastUsed: this.stats.lastUsed,
-    isActive: this.status === "active",
-    isReserved: this.isReserved
+    isAvailable: this.status === "available",
+    isReserved: this.status === "reserved",
+    isInUse: this.status === "in_use",
+    isMaintenance: this.status === "maintenance",
+    isInactive: this.status === "inactive"
   };
 });
 

@@ -1,6 +1,5 @@
-// ============================================
-// services/groupAutomation.js - ENHANCED WITH GROUP COMPLETION
-// ============================================
+"use strict";
+
 import mongoose from "mongoose";
 import Group from "../models/Group";
 import Student from "../models/Student";
@@ -63,10 +62,10 @@ export async function onGroupActivated(groupId, userId) {
     // ✅ FIXED: إعادة توليد الحصص إذا لزم الأمر
     if (group.sessionsGenerated || existingSessionsCount > 0) {
       console.log(`🔄 Regenerating sessions for group ${group.code}...`);
-      
+
       // ✅ حذف جميع الحصص القديمة أولاً
       console.log("🗑️  Deleting existing sessions...");
-      
+
       // Release meeting links first
       const existingSessions = await Session.find({
         groupId: groupId,
@@ -77,7 +76,8 @@ export async function onGroupActivated(groupId, userId) {
       for (const session of existingSessions) {
         try {
           // Import releaseMeetingLink function
-          const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
+          const { releaseMeetingLink } =
+            await import("../../utils/sessionGenerator");
           await releaseMeetingLink(session._id);
         } catch (releaseError) {
           console.warn(
@@ -494,10 +494,6 @@ async function sendToStudentWithLogging({
  * EVENT 2: Student Added to Group
  * EXISTING - NO CHANGES
  */
-/**
- * EVENT 2: Student Added to Group
- * MODIFIED: Always use prepareGroupWelcomeMessage for default messages
- */
 export async function onStudentAddedToGroup(
   studentId,
   groupId,
@@ -551,10 +547,11 @@ export async function onStudentAddedToGroup(
 
       let finalMessage;
       if (customMessage) {
-        finalMessage = customMessage;
-        console.log("📝 Using custom message from admin");
+        // ✅ التصحيح: استبدال المتغيرات في الرسالة المخصصة
+        finalMessage = replaceStudentVariables(customMessage, student, group);
+        console.log("📝 Using custom message from admin (variables replaced)");
       } else {
-        // ✅ MODIFIED: Always use prepareGroupWelcomeMessage for default messages
+        // ✅ استخدام الرسالة الافتراضية مع اسم الطالب
         finalMessage = prepareGroupWelcomeMessage(
           student.personalInfo.fullName,
           group,
@@ -611,6 +608,44 @@ export async function onStudentAddedToGroup(
     console.error("❌ Error in onStudentAddedToGroup:", error);
     throw error;
   }
+}
+
+/**
+ * ✅ دالة مساعدة لاستبدال متغيرات الطالب في الرسالة
+ */
+function replaceStudentVariables(message, student, group) {
+  const studentName = student.personalInfo?.fullName || "{studentName}";
+  const groupName = group.name || "{groupName}";
+  const groupCode = group.code || "{groupCode}";
+  const courseName =
+    group.courseSnapshot?.title || group.courseId?.title || "{courseName}";
+
+  const startDate = group.schedule?.startDate
+    ? new Date(group.schedule.startDate).toLocaleDateString("ar-EG", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "{startDate}";
+
+  const timeFrom = group.schedule?.timeFrom || "{timeFrom}";
+  const timeTo = group.schedule?.timeTo || "{timeTo}";
+
+  const instructor = group.instructors?.[0]?.name;
+  const instructorText = instructor
+    ? `👨‍🏫 المدرب: ${instructor}`
+    : "{instructor}";
+
+  return message
+    .replace(/\{studentName\}/g, studentName)
+    .replace(/\{groupName\}/g, groupName)
+    .replace(/\{groupCode\}/g, groupCode)
+    .replace(/\{courseName\}/g, courseName)
+    .replace(/\{startDate\}/g, startDate)
+    .replace(/\{timeFrom\}/g, timeFrom)
+    .replace(/\{timeTo\}/g, timeTo)
+    .replace(/\{instructor\}/g, instructorText);
 }
 
 /**
@@ -769,6 +804,10 @@ ${record.notes ? `\n📝 ملاحظات: ${record.notes}` : ""}
  * EVENT 5: Session Status Changed
  * EXISTING - NO CHANGES
  */
+/**
+ * EVENT 5: Session Status Changed
+ * ✅ FIXED: Variable replacement for guardian/student names
+ */
 export async function onSessionStatusChanged(
   sessionId,
   newStatus,
@@ -792,7 +831,7 @@ export async function onSessionStatusChanged(
         populate: {
           path: "students",
           select:
-            "personalInfo.fullName personalInfo.whatsappNumber communicationPreferences",
+            "personalInfo.fullName personalInfo.whatsappNumber guardianInfo communicationPreferences enrollmentNumber",
           match: { isDeleted: false },
         },
       })
@@ -814,7 +853,7 @@ export async function onSessionStatusChanged(
         isDeleted: false,
       })
         .select(
-          "personalInfo.fullName personalInfo.whatsappNumber communicationPreferences",
+          "personalInfo.fullName personalInfo.whatsappNumber guardianInfo communicationPreferences enrollmentNumber",
         )
         .lean();
     }
@@ -826,39 +865,101 @@ export async function onSessionStatusChanged(
       return { success: false, error: "No students in group" };
     }
 
-    // Send notifications to all students
+    // Send notifications to all students/guardians
     let successCount = 0;
     let failCount = 0;
+    const notificationResults = [];
 
     for (const student of students) {
       try {
-        const whatsappNumber = student.personalInfo?.whatsappNumber;
+        const studentName = student.personalInfo?.fullName || "الطالب";
+        const guardianName = student.guardianInfo?.name || "ولي الأمر";
+        const guardianWhatsApp = student.guardianInfo?.whatsappNumber;
+        const studentWhatsApp = student.personalInfo?.whatsappNumber;
+        const enrollmentNumber = student.enrollmentNumber || "N/A";
 
-        if (!whatsappNumber) {
+        console.log(`\n📱 Processing: ${studentName}`);
+        console.log(`   Guardian: ${guardianName}`);
+        console.log(`   Guardian WhatsApp: ${guardianWhatsApp || "NOT SET"}`);
+        console.log(`   Student WhatsApp: ${studentWhatsApp || "NOT SET"}`);
+
+        // ✅ Determine recipient (prefer guardian for cancellation/postponement)
+        const recipientWhatsApp = guardianWhatsApp || studentWhatsApp;
+        const recipientType = guardianWhatsApp ? "guardian" : "student";
+        const recipientName = guardianWhatsApp ? guardianName : studentName;
+
+        if (!recipientWhatsApp) {
           failCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName,
+            guardianName,
+            status: "failed",
+            reason: "No WhatsApp number available",
+          });
           continue;
         }
 
-        let message = customMessage;
+        // ✅ Prepare message with all variables
+        let finalMessage = customMessage;
 
-        if (!message) {
-          const statusText =
-            newStatus === "cancelled" ? "تم إلغاء" : "تم تأجيل";
-          message = `عزيزي ${student.personalInfo?.fullName || "الطالب"},
+        if (!finalMessage) {
+          // Use default template
+          const language =
+            student.communicationPreferences?.preferredLanguage || "ar";
+          finalMessage = prepareSessionUpdateMessage(
+            recipientName,
+            session,
+            group,
+            newStatus,
+            language,
+            guardianName,
+            studentName,
+            enrollmentNumber,
+          );
+        } else {
+          // ✅ Replace ALL variables in custom message
+          const sessionDate = new Date(session.scheduledDate);
+          const formattedDate = sessionDate.toLocaleDateString("ar-EG", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
 
-${statusText} حصة ${session.title}
-المقررة في: ${new Date(session.scheduledDate).toLocaleDateString("ar-EG")}
+          const variables = {
+            guardianName,
+            studentName,
+            enrollmentNumber,
+            sessionName: session.title || "الجلسة",
+            sessionNumber: `الجلسة ${session.sessionNumber || "N/A"}`,
+            date: formattedDate,
+            time: `${session.startTime} - ${session.endTime}`,
+            module: `الوحدة ${(session.moduleIndex || 0) + 1}`,
+            groupCode: group.code || "N/A",
+            groupName: group.name || "N/A",
+            courseName:
+              group.courseId?.title || group.courseSnapshot?.title || "الكورس",
+            newDate: "{newDate}", // Placeholder
+            newTime: "{newTime}", // Placeholder
+          };
 
-للمزيد من المعلومات، يرجى التواصل معنا.
+          // Replace all variables
+          Object.entries(variables).forEach(([key, value]) => {
+            const regex = new RegExp(`\\{${key}\\}`, "g");
+            finalMessage = finalMessage.replace(regex, value);
+          });
 
-مع التحية،
-فريق Code School`;
+          console.log(`✅ Variables replaced in custom message`);
         }
+
+        console.log(`📤 Sending to ${recipientType}: ${recipientName}`);
+        console.log(`   Message preview: ${finalMessage.substring(0, 100)}...`);
 
         const result = await wapilotService.sendAndLogMessage({
           studentId: student._id,
-          phoneNumber: whatsappNumber,
-          messageContent: message,
+          phoneNumber: recipientWhatsApp,
+          messageContent: finalMessage,
           messageType: "session_" + newStatus,
           language: student.communicationPreferences?.preferredLanguage || "ar",
           metadata: {
@@ -868,18 +969,46 @@ ${statusText} حصة ${session.title}
             oldStatus: session.status,
             newStatus,
             isCustomMessage: !!customMessage,
-            recipientType: "student",
+            recipientType,
+            guardianName,
+            studentName,
+            enrollmentNumber,
           },
         });
 
         if (result.success) {
           successCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName,
+            guardianName,
+            recipientType,
+            recipientName,
+            whatsappNumber: recipientWhatsApp,
+            status: "sent",
+            sentAt: new Date(),
+          });
+          console.log(`✅ Message sent successfully`);
         } else {
           failCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName,
+            guardianName,
+            status: "failed",
+            reason: result.error,
+          });
+          console.log(`❌ Failed: ${result.error}`);
         }
       } catch (error) {
         console.error(`Error notifying student:`, error);
         failCount++;
+        notificationResults.push({
+          studentId: student._id,
+          studentName: student.personalInfo?.fullName || "Unknown",
+          status: "failed",
+          error: error.message,
+        });
       }
     }
 
@@ -890,6 +1019,7 @@ ${statusText} حصة ${session.title}
       totalStudents: students.length,
       successCount,
       failCount,
+      notificationResults,
     };
   } catch (error) {
     console.error(`❌ Error in onSessionStatusChanged:`, error);
@@ -901,15 +1031,16 @@ ${statusText} حصة ${session.title}
 }
 
 /**
- * ✅ Prepare reminder message (used by both cron and manual)
- * EXISTING - NO CHANGES
+ * ✅ NEW: Prepare reminder messages for both guardian and student
  */
-export function prepareReminderMessage(
+export function prepareReminderMessages(
   studentName,
   session,
   group,
   reminderType,
   language,
+  guardianName,
+  enrollmentNumber = "",
 ) {
   const sessionDate = new Date(session.scheduledDate);
   const formattedDate = sessionDate.toLocaleDateString(
@@ -917,67 +1048,216 @@ export function prepareReminderMessage(
     { weekday: "long", year: "numeric", month: "long", day: "numeric" },
   );
 
-  const timeWindow =
-    reminderType === "24hours"
-      ? language === "en"
-        ? "24 hours"
-        : "24 ساعة"
-      : language === "en"
-        ? "1 hour"
-        : "ساعة واحدة";
+  // الرسالة لولي الأمر
+  const guardianMessage = {};
+
+  // الرسالة للطالب
+  const studentMessage = {};
 
   if (language === "en") {
-    return `⏰ Session Reminder (${timeWindow})
+    if (reminderType === "1hour") {
+      // رسالة ولي الأمر (ساعة واحدة)
+      guardianMessage.content = `⏰ Session Reminder – Code School
 
-Hello ${studentName}!
+Dear ${guardianName},
 
-Your upcoming session is in ${timeWindow}:
+This is a reminder for the upcoming session for ${studentName} (ID: ${enrollmentNumber}) at Code School:
 
-📚 Session: ${session.title}
-📖 Module ${session.moduleIndex + 1} - Session ${session.sessionNumber}
-👥 Group: ${group.code || group.name}
+📘 Session: ${session.title}
+📚 Module: ${session.moduleIndex + 1} – Session ${session.sessionNumber}
+👥 Group: ${group.name || group.code}
 📅 Date: ${formattedDate}
-⏰ Time: ${session.startTime} - ${session.endTime}
-
+⏰ Time: ${session.startTime} – ${session.endTime}
 ${session.meetingLink ? `🔗 Meeting Link: ${session.meetingLink}\n` : ""}
-${
-  reminderType === "24hours" ? "Be ready for tomorrow!" : "Session starts soon!"
-}
 
-See you there! 🚀
+📌 Important Notes:
+- Please make sure your child attends on time.
+- His laptop is ready & charged.
+- In case of absence, please inform us in advance.
+- Regular attendance is essential for maintaining learning progress.
 
+We look forward to seeing ${studentName} in the session.
+Best regards,
 Code School Team 💻`;
+
+      // رسالة الطالب (ساعة واحدة)
+      studentMessage.content = `⏰ Session Reminder – Code School
+
+Hello ${studentName},
+
+This is a reminder for your upcoming session at Code School:
+
+📘 Session: ${session.title}
+📚 Module: ${session.moduleIndex + 1} – Session ${session.sessionNumber}
+👥 Group: ${group.name || group.code}
+📅 Date: ${formattedDate}
+⏰ Time: ${session.startTime} – ${session.endTime}
+${session.meetingLink ? `🔗 Meeting Link: ${session.meetingLink}\n` : ""}
+
+📌 Please prepare:
+- Your laptop/device is ready & charged.
+- Complete any required pre-work.
+- Join the session 5 minutes early.
+
+See you in class! 🚀
+Code School Team 💻`;
+    } else if (reminderType === "24hours") {
+      // رسالة ولي الأمر (24 ساعة)
+      guardianMessage.content = `📅 Session Reminder – Code School
+
+Dear ${guardianName},
+
+This is a 24-hour reminder for the upcoming session for ${studentName} (ID: ${enrollmentNumber}) at Code School:
+
+📘 Session: ${session.title}
+📚 Module: ${session.moduleIndex + 1} – Session ${session.sessionNumber}
+👥 Group: ${group.name || group.code}
+📅 Date: ${formattedDate}
+⏰ Time: ${session.startTime} – ${session.endTime}
+
+📌 Please note:
+- Please confirm your child's attendance.
+- Ensure all required materials are prepared.
+- Contact us if there are any scheduling conflicts.
+
+Thank you for your cooperation.
+Best regards,
+Code School Team 💻`;
+
+      // رسالة الطالب (24 ساعة)
+      studentMessage.content = `📅 Session Reminder – Code School
+
+Hello ${studentName},
+
+This is a 24-hour reminder for your upcoming session:
+
+📘 Session: ${session.title}
+📚 Module: ${session.moduleIndex + 1} – Session ${session.sessionNumber}
+👥 Group: ${group.name || group.code}
+📅 Date: ${formattedDate}
+⏰ Time: ${session.startTime} – ${session.endTime}
+
+📌 Preparation checklist:
+- Review previous session materials
+- Complete any pending assignments
+- Prepare questions for the instructor
+- Test your equipment/connection
+
+Get ready for an amazing learning session! 🎯
+Code School Team 💻`;
+    }
   } else {
-    return `⏰ تذكير بالمحاضرة (خلال ${timeWindow})
+    // اللغة العربية
+    if (reminderType === "1hour") {
+      // رسالة ولي الأمر (ساعة واحدة)
+      guardianMessage.content = `⏰ تذكير الجلسة – Code School
 
-مرحباً ${studentName}!
+عزيزي/عزيزتي ${guardianName}،
 
-محاضرتك القادمة خلال ${timeWindow}:
+هذا تذكير للجلسة القادمة لـ${studentName} (الرقم الجامعي: ${enrollmentNumber}) في Code School:
 
-📚 المحاضرة: ${session.title}
-📖 الوحدة ${session.moduleIndex + 1} - الحصة ${session.sessionNumber}
-👥 المجموعة: ${group.code || group.name}
+📘 الجلسة: ${session.title}
+📚 الوحدة: ${session.moduleIndex + 1} – الجلسة ${session.sessionNumber}
+👥 المجموعة: ${group.name || group.code}
 📅 التاريخ: ${formattedDate}
-⏰ الوقت: ${session.startTime} - ${session.endTime}
-
+⏰ الوقت: ${session.startTime} – ${session.endTime}
 ${session.meetingLink ? `🔗 رابط الاجتماع: ${session.meetingLink}\n` : ""}
-${reminderType === "24hours" ? "كن مستقداً للغد!" : "المحاضرة ستبدأ قريباً!"}
 
-نراك هناك! 🚀
+📌 ملاحظات هامة:
+- الرجاء التأكد من حضور طفلك في الوقت المحدد.
+- جهازه اللوحي/الكمبيوتر المحمول جاهز ومشحون.
+- في حال الغياب، يرجى إبلاغنا مسبقاً.
+- الحضور المنتظم ضروري للحفاظ على تقدم التعلم.
 
+نتطلع لرؤية ${studentName} في الجلسة.
+أطيب التحيات،
 فريق Code School 💻`;
+
+      // رسالة الطالب (ساعة واحدة)
+      studentMessage.content = `⏰ تذكير الجلسة – Code School
+
+مرحباً ${studentName}،
+
+هذا تذكير لجلستك القادمة في Code School:
+
+📘 الجلسة: ${session.title}
+📚 الوحدة: ${session.moduleIndex + 1} – الجلسة ${session.sessionNumber}
+👥 المجموعة: ${group.name || group.code}
+📅 التاريخ: ${formattedDate}
+⏰ الوقت: ${session.startTime} – ${session.endTime}
+${session.meetingLink ? `🔗 رابط الاجتماع: ${session.meetingLink}\n` : ""}
+
+📌 الرجاء التحضير:
+- تأكد من جاهزية جهازك وشحن البطارية.
+- أكمل أي واجبات مطلوبة مسبقاً.
+- انضم للجلسة قبل 5 دقائق من بدايتها.
+
+نراكم في الفصل! 🚀
+فريق Code School 💻`;
+    } else if (reminderType === "24hours") {
+      // رسالة ولي الأمر (24 ساعة)
+      guardianMessage.content = `📅 تذكير الجلسة – Code School
+
+عزيزي/عزيزتي ${guardianName}،
+
+هذا تذكير قبل 24 ساعة للجلسة القادمة لـ${studentName} (الرقم الجامعي: ${enrollmentNumber}) في Code School:
+
+📘 الجلسة: ${session.title}
+📚 الوحدة: ${session.moduleIndex + 1} – الجلسة ${session.sessionNumber}
+👥 المجموعة: ${group.name || group.code}
+📅 التاريخ: ${formattedDate}
+⏰ الوقت: ${session.startTime} – ${session.endTime}
+
+📌 يرجى ملاحظة:
+- الرجاء تأكيد حضور طفلك.
+- التأكد من تجهيز جميع المواد المطلوبة.
+- التواصل معنا في حال وجود أي تعارض في الجدول.
+
+شكراً لتعاونكم.
+أطيب التحيات،
+فريق Code School 💻`;
+
+      // رسالة الطالب (24 ساعة)
+      studentMessage.content = `📅 تذكير الجلسة – Code School
+
+مرحباً ${studentName}،
+
+هذا تذكير قبل 24 ساعة لجلستك القادمة:
+
+📘 الجلسة: ${session.title}
+📚 الوحدة: ${session.moduleIndex + 1} – الجلسة ${session.sessionNumber}
+👥 المجموعة: ${group.name || group.code}
+📅 التاريخ: ${formattedDate}
+⏰ الوقت: ${session.startTime} – ${session.endTime}
+
+📌 قائمة التحضير:
+- راجع مواد الجلسة السابقة
+- أكمل أي مهام معلقة
+- جهز أسئلتك للمدرب
+- اختبر جهازك/اتصالك بالإنترنت
+
+استعد لجلسة تعليمية رائعة! 🎯
+فريق Code School 💻`;
+    }
   }
+
+  guardianMessage.recipientType = "guardian";
+  studentMessage.recipientType = "student";
+
+  return { guardianMessage, studentMessage };
 }
 
 /**
- * ✅ Send manual session reminder
- * EXISTING - NO CHANGES
+ * ✅ NEW: Send manual session reminder to both guardian and student
  */
 export async function sendManualSessionReminder(sessionId, reminderType) {
   try {
     console.log(`\n🎯 EVENT: Manual Session Reminder ==========`);
     console.log(`📋 Session: ${sessionId}`);
     console.log(`⏰ Type: ${reminderType}`);
+
+    // ✅ استيراد Session هنا فقط
+    const Session = (await import("../models/Session")).default;
 
     const session = await Session.findById(sessionId)
       .populate("groupId")
@@ -997,105 +1277,211 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
       };
     }
 
+    // ✅ استيراد Student هنا فقط
+    const Student = (await import("../models/Student")).default;
+
     // ✅ Get students who need this reminder
-    const students = await Student.getStudentsForReminder(
-      group._id,
-      session._id,
-      reminderType,
-    );
+    const students = await Student.find({
+      "academicInfo.groupIds": group._id,
+      isDeleted: false,
+    })
+      .select(
+        "personalInfo.fullName personalInfo.whatsappNumber communicationPreferences guardianInfo enrollmentNumber",
+      )
+      .lean();
 
     console.log(`👥 Found ${students.length} students to notify`);
 
     if (students.length === 0) {
       return {
         success: false,
-        reason: "All students already received this reminder",
+        reason: "No students found in group",
         group: group.name,
         totalStudents: group.students?.length || 0,
       };
     }
 
-    let successCount = 0;
-    let failCount = 0;
+    let guardianSuccessCount = 0;
+    let guardianFailCount = 0;
+    let studentSuccessCount = 0;
+    let studentFailCount = 0;
     const notificationResults = [];
 
     for (const student of students) {
       try {
         const language =
           student.communicationPreferences?.preferredLanguage || "ar";
+        const studentName = student.personalInfo?.fullName || "Student";
+        const enrollmentNumber = student.enrollmentNumber || "";
 
-        const message = prepareReminderMessage(
-          student.personalInfo?.fullName,
+        // ✅ الحصول على معلومات ولي الأمر
+        const guardianName = student.guardianInfo?.name || "Guardian";
+        const guardianWhatsapp = student.guardianInfo?.whatsappNumber || null;
+        const studentWhatsapp = student.personalInfo?.whatsappNumber;
+
+        // ✅ تحضير رسالتي التذكير
+        const messages = prepareReminderMessages(
+          studentName,
           session,
           group,
           reminderType,
           language,
+          guardianName,
+          enrollmentNumber,
         );
 
-        // ✅ Send with auto-logging
-        await wapilotService.sendAndLogMessage({
-          studentId: student._id,
-          phoneNumber: student.personalInfo?.whatsappNumber,
-          messageContent: message,
-          messageType: "session_reminder",
-          language,
-          metadata: {
-            sessionId: session._id,
-            sessionTitle: session.title,
-            groupId: group._id,
-            groupName: group.name,
-            reminderType,
-            automationType: "session_reminder",
-          },
-        });
+        console.log(`\n📱 Processing: ${studentName}`);
+        console.log(`   📞 Student WhatsApp: ${studentWhatsapp || "NOT SET"}`);
+        console.log(
+          `   👨‍👦 Guardian WhatsApp: ${guardianWhatsapp || "NOT SET"}`,
+        );
 
-        // ✅ Also add to sessionReminders array
-        await student.addSessionReminder({
-          sessionId: session._id,
-          groupId: group._id,
-          reminderType,
-          message,
-          language,
-          status: "sent",
-          sessionDetails: {
-            title: session.title,
-            scheduledDate: session.scheduledDate,
-            startTime: session.startTime,
-            endTime: session.endTime,
-            moduleIndex: session.moduleIndex,
-            sessionNumber: session.sessionNumber,
-          },
-        });
+        // ✅ إرسال الرسالة لولي الأمر (إذا كان رقم WhatsApp متوفر)
+        if (guardianWhatsapp) {
+          try {
+            await wapilotService.sendAndLogMessage({
+              studentId: student._id,
+              phoneNumber: guardianWhatsapp,
+              messageContent: messages.guardianMessage.content,
+              messageType: "session_reminder_guardian",
+              language,
+              metadata: {
+                sessionId: session._id,
+                sessionTitle: session.title,
+                groupId: group._id,
+                groupName: group.name,
+                reminderType,
+                automationType: "session_reminder",
+                recipientType: "guardian",
+                guardianName,
+              },
+            });
 
-        successCount++;
-        notificationResults.push({
-          studentId: student._id,
-          studentName: student.personalInfo?.fullName,
-          whatsappNumber: student.personalInfo?.whatsappNumber,
-          status: "sent",
-          language,
-          sentAt: new Date(),
-        });
+            guardianSuccessCount++;
+            notificationResults.push({
+              studentId: student._id,
+              studentName,
+              recipientType: "guardian",
+              whatsappNumber: guardianWhatsapp,
+              status: "sent",
+              language,
+              sentAt: new Date(),
+            });
+
+            console.log(`   ✅ Guardian message sent successfully`);
+          } catch (guardianError) {
+            guardianFailCount++;
+            notificationResults.push({
+              studentId: student._id,
+              studentName,
+              recipientType: "guardian",
+              status: "failed",
+              error: guardianError.message,
+            });
+            console.log(
+              `   ❌ Guardian message failed: ${guardianError.message}`,
+            );
+          }
+        } else {
+          guardianFailCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName,
+            recipientType: "guardian",
+            status: "skipped",
+            reason: "No guardian WhatsApp number",
+          });
+          console.log(`   ⚠️ Guardian message skipped (no WhatsApp number)`);
+        }
+
+        // ✅ إرسال الرسالة للطالب (إذا كان رقم WhatsApp متوفر)
+        if (studentWhatsapp) {
+          try {
+            await wapilotService.sendAndLogMessage({
+              studentId: student._id,
+              phoneNumber: studentWhatsapp,
+              messageContent: messages.studentMessage.content,
+              messageType: "session_reminder_student",
+              language,
+              metadata: {
+                sessionId: session._id,
+                sessionTitle: session.title,
+                groupId: group._id,
+                groupName: group.name,
+                reminderType,
+                automationType: "session_reminder",
+                recipientType: "student",
+              },
+            });
+
+            studentSuccessCount++;
+            notificationResults.push({
+              studentId: student._id,
+              studentName,
+              recipientType: "student",
+              whatsappNumber: studentWhatsapp,
+              status: "sent",
+              language,
+              sentAt: new Date(),
+            });
+
+            console.log(`   ✅ Student message sent successfully`);
+          } catch (studentError) {
+            studentFailCount++;
+            notificationResults.push({
+              studentId: student._id,
+              studentName,
+              recipientType: "student",
+              status: "failed",
+              error: studentError.message,
+            });
+            console.log(
+              `   ❌ Student message failed: ${studentError.message}`,
+            );
+          }
+        } else {
+          studentFailCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName,
+            recipientType: "student",
+            status: "skipped",
+            reason: "No student WhatsApp number",
+          });
+          console.log(`   ⚠️ Student message skipped (no WhatsApp number)`);
+        }
       } catch (studentError) {
-        failCount++;
+        console.error(`   ❌ Error processing student:`, studentError);
+        guardianFailCount++;
+        studentFailCount++;
         notificationResults.push({
           studentId: student._id,
-          studentName: student.personalInfo?.fullName,
+          studentName: student.personalInfo?.fullName || "Unknown",
           status: "failed",
           error: studentError.message,
         });
       }
     }
 
+    console.log(`\n📊 Manual reminder summary:`);
     console.log(
-      `\n✅ Manual reminder complete: ${successCount} sent, ${failCount} failed`,
+      `   📞 Guardian messages: ${guardianSuccessCount} sent, ${guardianFailCount} failed/skipped`,
+    );
+    console.log(
+      `   👨‍🎓 Student messages: ${studentSuccessCount} sent, ${studentFailCount} failed/skipped`,
     );
 
     return {
-      success: successCount > 0,
+      success: guardianSuccessCount > 0 || studentSuccessCount > 0,
       totalStudents: students.length,
-      successCount,
-      failCount,
+      guardian: {
+        successCount: guardianSuccessCount,
+        failCount: guardianFailCount,
+      },
+      student: {
+        successCount: studentSuccessCount,
+        failCount: studentFailCount,
+      },
       reminderType,
       sessionTitle: session.title,
       group: group.name,
@@ -1110,9 +1496,6 @@ export async function sendManualSessionReminder(sessionId, reminderType) {
 /**
  * ✅ NEW EVENT 6: Group Completed
  * Triggered when the last session is completed and group status changes to 'completed'
- */
-/**
- * ✅ FIXED: Group Completed Event with Correct WhatsApp Service
  */
 export async function onGroupCompleted(
   groupId,
@@ -1753,13 +2136,30 @@ ${studentName} كان/ت غائب/ة بعذر عن محاضرة اليوم:
 /**
  * ✅ Prepare session update message
  */
+/**
+ * ✅ Prepare session update message with ALL variables
+ */
 function prepareSessionUpdateMessage(
-  studentName,
+  recipientName,
   session,
   group,
   status,
   language = "ar",
+  guardianName = "ولي الأمر",
+  studentName = "الطالب",
+  enrollmentNumber = "N/A",
 ) {
+  const sessionDate = new Date(session.scheduledDate);
+  const formattedDate = sessionDate.toLocaleDateString(
+    language === "en" ? "en-US" : "ar-EG",
+    {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    },
+  );
+
   const statusText =
     language === "en"
       ? status === "cancelled"
@@ -1770,37 +2170,94 @@ function prepareSessionUpdateMessage(
         : "مؤجلة";
 
   if (language === "en") {
-    return `⚠️ Session ${statusText}
+    if (status === "cancelled") {
+      return `ℹ️ Session Cancellation Notice – Code School
 
-Hello ${studentName},
+Dear ${guardianName},
 
-The following session has been ${status}:
+We would like to inform you that today's session has been cancelled by Code School for the following reason:
 
-📚 Session: ${session.title}
-👥 Group: ${group.code}
-📅 Original Date: ${new Date(session.scheduledDate).toLocaleDateString("en-US")}
+📘 Session: ${session.title}
+👨‍🎓 Student: ${studentName} (ID: ${enrollmentNumber})
+📅 Date: ${formattedDate}
 ⏰ Time: ${session.startTime} - ${session.endTime}
 
-We will notify you with updates.
+📌 Important Notes:
+- This session will NOT be counted against your child's package.
+- A makeup session/alternate date will be arranged, and our team will contact you shortly with details.
 
+We apologize for any inconvenience this may cause and appreciate your understanding.
+
+Thank you for trusting Code School.
+Best regards,
 Code School Team 💻`;
+    } else {
+      return `📅 Session Rescheduling Notice – Code School
+
+Dear ${guardianName},
+
+We would like to inform you that the upcoming session has been rescheduled by Code School:
+
+📘 Session: ${session.title}
+👨‍🎓 Student: ${studentName} (ID: ${enrollmentNumber})
+📅 Original Date: ${formattedDate}
+⏰ Time: ${session.startTime} - ${session.endTime}
+
+📌 Please Note:
+- This session will NOT be lost or deducted from your child's package.
+- The full session will be delivered on the new scheduled date.
+- No action required from your side.
+
+We apologize for any inconvenience and appreciate your understanding.
+Thank you for your continued trust in Code School.
+Best regards,
+Code School Team 💻`;
+    }
   } else {
-    return `⚠️ المحاضرة ${statusText}
+    // Arabic messages
+    if (status === "cancelled") {
+      return `ℹ️ إشعار إلغاء الجلسة – Code School
 
-مرحباً ${studentName},
+عزيزي/عزيزتي ${guardianName}،
 
-تم ${status === "cancelled" ? "إلغاء" : "تأجيل"} المحاضرة التالية:
+نود إعلامك بأن جلسة اليوم قد تم إلغاؤها من قبل Code School:
 
-📚 المحاضرة: ${session.title}
-👥 المجموعة: ${group.code}
-📅 التاريخ الأصلي: ${new Date(session.scheduledDate).toLocaleDateString(
-      "ar-EG",
-    )}
+📘 الجلسة: ${session.title}
+👨‍🎓 الطالب: ${studentName} (الرقم: ${enrollmentNumber})
+📅 التاريخ: ${formattedDate}
 ⏰ الوقت: ${session.startTime} - ${session.endTime}
 
-سنوافيك بالتحديثات.
+📌 ملاحظات هامة:
+- هذه الجلسة لن تحسب من باقة طفلك.
+- سيتم ترتيب جلسة تعويضية / تاريخ بديل، وسيتواصل فريقنا معكم قريباً بالتفاصيل.
 
-فريق Code School 💻`;
+نعتذر عن أي إزعاج قد يسببه ذلك ونقدر تفهمكم.
+
+شكراً لثقتكم في Code School.
+أطيب التحيات،
+إدارة Code School 💻`;
+    } else {
+      return `📅 إشعار إعادة جدولة الجلسة – Code School
+
+عزيزي/عزيزتي ${guardianName}،
+
+نود إعلامكم بأن الجلسة القادمة تمت إعادة جدولتها من قبل Code School:
+
+📘 الجلسة: ${session.title}
+👨‍🎓 الطالب: ${studentName} (الرقم: ${enrollmentNumber})
+📅 التاريخ الأصلي: ${formattedDate}
+⏰ الوقت: ${session.startTime} - ${session.endTime}
+
+📌 يرجى ملاحظة:
+- هذه الجلسة لن تضيع أو تخصم من باقة طفلك.
+- سيتم تقديم الجلسة كاملة في التاريخ الجديد المحدد.
+- لا يلزم اتخاذ أي إجراء من جانبكم.
+
+نعتذر عن أي إزعاج ونقدر تفهمكم.
+شكراً لثقتكم المستمرة في Code School.
+أطيب التحيات،
+إدارة Code School 💻`;
+    }
   }
 }
 

@@ -2,8 +2,8 @@
 // services/wapilot-service.js - Fixed Logging
 // ============================================
 
-import Student from '../models/Student.js';
-import { connectDB } from '@/lib/mongodb';
+import Student from "../models/Student.js";
+import { connectDB } from "@/lib/mongodb";
 
 const FORCE_PRODUCTION = true;
 
@@ -11,19 +11,23 @@ class WapilotService {
   constructor() {
     console.log("🔍 WhatsApp Service Initialization:");
 
-    this.baseURL = process.env.WHATSAPP_API_URL || "https://api.wapilot.net/api/v2";
+    this.baseURL =
+      process.env.WHATSAPP_API_URL || "https://api.wapilot.net/api/v2";
     this.apiToken = process.env.WHATSAPP_API_TOKEN;
     this.instanceId = process.env.WHATSAPP_INSTANCE_ID;
     this.isEnabled = !!this.apiToken && !!this.instanceId;
-    this.mode = FORCE_PRODUCTION || (this.isEnabled && process.env.NODE_ENV === "production")
-        ? "production"  // ✅ lowercase!
+    this.mode =
+      FORCE_PRODUCTION ||
+      (this.isEnabled && process.env.NODE_ENV === "production")
+        ? "production" // ✅ lowercase!
         : "simulation";
 
     console.log("📱 Wapilot WhatsApp Service initialized:", {
       enabled: this.isEnabled,
       instance: this.instanceId ? "Configured" : "Not configured",
       mode: this.mode,
-      autoLogging: "✅ ENABLED - All messages logged to Student.whatsappMessages"
+      autoLogging:
+        "✅ ENABLED - All messages logged to Student.whatsappMessages",
     });
   }
 
@@ -32,23 +36,26 @@ class WapilotService {
     phoneNumber,
     messageContent,
     messageType,
-    language = 'ar',
-    metadata = {}
+    language = "ar",
+    metadata = {},
   }) {
     try {
       console.log(`📤 Sending ${messageType} to ${phoneNumber}...`);
 
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) {
-        throw new Error('Invalid phone number format');
+        throw new Error("Invalid phone number format");
       }
 
       let sendResult;
 
-      if (this.mode === 'production') {
+      if (this.mode === "production") {
         sendResult = await this.sendTextMessage(preparedNumber, messageContent);
       } else {
-        sendResult = await this.simulateSendMessage(preparedNumber, messageContent);
+        sendResult = await this.simulateSendMessage(
+          preparedNumber,
+          messageContent,
+        );
       }
 
       // ✅ Auto-log to student schema
@@ -57,25 +64,28 @@ class WapilotService {
           messageType,
           messageContent,
           language,
-          status: sendResult.success ? 'sent' : 'failed',
+          status: sendResult.success ? "sent" : "failed",
           recipientNumber: preparedNumber,
           wapilotMessageId: sendResult.messageId || null,
           sentAt: new Date(),
           metadata: {
             ...metadata,
-            recipientType: metadata.recipientType || 'student'
+            recipientType: metadata.recipientType || "student",
           },
-          error: sendResult.success ? null : (sendResult.error || 'Unknown error'),
-          errorDetails: !sendResult.success ? {
-            message: sendResult.error || 'Failed to send',
-            code: 'WAPILOT_ERROR',
-            timestamp: new Date()
-          } : null
+          error: sendResult.success
+            ? null
+            : sendResult.error || "Unknown error",
+          errorDetails: !sendResult.success
+            ? {
+                message: sendResult.error || "Failed to send",
+                code: "WAPILOT_ERROR",
+                timestamp: new Date(),
+              }
+            : null,
         });
       }
 
       return sendResult;
-
     } catch (error) {
       console.error(`❌ Error in sendAndLogMessage:`, error.message);
 
@@ -85,22 +95,22 @@ class WapilotService {
             messageType,
             messageContent,
             language,
-            status: 'failed',
+            status: "failed",
             recipientNumber: phoneNumber,
             sentAt: new Date(),
             metadata: {
               ...metadata,
-              recipientType: metadata.recipientType || 'student'
+              recipientType: metadata.recipientType || "student",
             },
             error: error.message,
             errorDetails: {
               message: error.message,
-              code: 'EXCEPTION_ERROR',
-              stack: error.stack
-            }
+              code: "EXCEPTION_ERROR",
+              stack: error.stack,
+            },
           });
         } catch (logError) {
-          console.error('❌ Failed to log error:', logError.message);
+          console.error("❌ Failed to log error:", logError.message);
         }
       }
 
@@ -129,26 +139,27 @@ class WapilotService {
       }
 
       console.log(`🔧 Calling logWhatsAppMessage method...`);
-      
+
       // ✅ Pass raw messageData - method will handle field mapping
       await student.logWhatsAppMessage(messageData);
 
       console.log(`✅ [LOG] Message logged successfully`);
-      console.log(`   Total messages: ${student.whatsappMessages?.length || 0}`);
+      console.log(
+        `   Total messages: ${student.whatsappMessages?.length || 0}`,
+      );
 
       return true;
-
     } catch (error) {
       console.error(`❌ [LOG] Error logging to student schema:`, error.message);
-      
+
       // ✅ Log validation errors more clearly
-      if (error.name === 'ValidationError') {
+      if (error.name === "ValidationError") {
         console.error(`   Validation Error Details:`);
         Object.entries(error.errors).forEach(([field, err]) => {
           console.error(`   - ${field}: ${err.message}`);
         });
       }
-      
+
       return false;
     }
   }
@@ -157,7 +168,10 @@ class WapilotService {
     if (!phoneNumber) return null;
 
     try {
-      let cleanNumber = phoneNumber.toString().replace(/\s+/g, "").replace(/^0+/, "");
+      let cleanNumber = phoneNumber
+        .toString()
+        .replace(/\s+/g, "")
+        .replace(/^0+/, "");
 
       if (!cleanNumber.startsWith("+")) {
         if (cleanNumber.startsWith("1") && cleanNumber.length >= 10) {
@@ -340,19 +354,28 @@ class WapilotService {
       },
     };
 
-    console.log("✅ SIMULATION: Message sent successfully", simulatedResponse.debug);
+    console.log(
+      "✅ SIMULATION: Message sent successfully",
+      simulatedResponse.debug,
+    );
 
     return simulatedResponse;
   }
 
-  async sendWelcomeMessages(studentId, studentName, phoneNumber, customFirstMessage, customSecondMessage) {
+  async sendWelcomeMessages(
+    studentId,
+    studentName,
+    phoneNumber,
+    customFirstMessage,
+    customSecondMessage,
+  ) {
     try {
       console.log("🎯 WhatsApp automation for student:", {
         studentId,
         name: studentName,
         whatsappNumber: phoneNumber,
         mode: this.mode,
-        hasCustomMessages: !!(customFirstMessage || customSecondMessage)
+        hasCustomMessages: !!(customFirstMessage || customSecondMessage),
       });
 
       if (!phoneNumber) {
@@ -373,31 +396,24 @@ class WapilotService {
         };
       }
 
-      const firstMessage = customFirstMessage || this.prepareFirstWelcomeMessage(studentName);
-      const secondMessage = customSecondMessage || "اختر اللغة المفضلة / Choose your preferred language";
+      // ✅ الرسالة الأولى تم إزالتها تمامًا
+      // ✅ نبدأ مباشرة برسالة اختيار اللغة
+      const languageMessage =
+        customSecondMessage ||
+        `Welcome to Code School, please select your preferred language so we can communicate with you comfortably:
 
-      // ✅ Message 1: Welcome
-      const firstResult = await this.sendAndLogMessage({
-        studentId,
-        phoneNumber: preparedNumber,
-        messageContent: firstMessage,
-        messageType: 'welcome',
-        language: 'ar',
-        metadata: {
-          isCustomMessage: !!customFirstMessage,
-          automationType: 'student_creation'
-        }
-      });
+أهلا بك في كود سكول، من فضلك اختر اللغة المفضلة للتواصل معنا:
+➡️ العربية
+➡️ English`;
 
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      let languageResult;
 
-      // ✅ Message 2: Language selection (List or Text)
-      let secondResult;
-      if (this.mode === 'production') {
-        secondResult = await this.sendListMessage(
+      // ✅ إرسال رسالة اختيار اللغة (قائمة تفاعلية أو نصية)
+      if (this.mode === "production") {
+        languageResult = await this.sendListMessage(
           preparedNumber,
           "🌍 Language | اللغة",
-          secondMessage,
+          languageMessage,
           "Choose | اختر",
           [
             {
@@ -405,66 +421,76 @@ class WapilotService {
               rows: [
                 {
                   rowId: "arabic_lang",
-                  title: "🇸🇦 العربية",
+                  title: "➡️ العربية",
                   description: "اختر العربية كلغة مفضلة",
                 },
                 {
                   rowId: "english_lang",
-                  title: "🇺🇸 English",
+                  title: "➡️ English",
                   description: "Choose English as preferred language",
                 },
               ],
             },
-          ]
+          ],
         );
       } else {
-        secondResult = await this.simulateSendMessage(preparedNumber, secondMessage, true);
+        languageResult = await this.simulateSendMessage(
+          preparedNumber,
+          languageMessage,
+          true,
+        );
       }
 
-      // ✅ Log second message
+      // ✅ تسجيل رسالة اختيار اللغة
       if (studentId) {
         await this.logToStudentSchema(studentId, {
-          messageType: 'language_selection',
-          messageContent: secondMessage,
-          language: 'ar',
-          status: secondResult.success ? 'sent' : 'failed',
+          messageType: "language_selection",
+          messageContent: languageMessage,
+          language: "ar",
+          status: languageResult.success ? "sent" : "failed",
           recipientNumber: preparedNumber,
-          wapilotMessageId: secondResult.messageId || null,
+          wapilotMessageId: languageResult.messageId || null,
           sentAt: new Date(),
           metadata: {
             isCustomMessage: !!customSecondMessage,
             interactive: true,
-            automationType: 'student_creation',
-            recipientType: 'student'
+            automationType: "student_creation",
+            recipientType: "student",
+            isFirstMessage: true, // ✅ إضافة علامة أن هذه هي الرسالة الأولى
           },
-          error: secondResult.success ? null : (secondResult.error || 'Unknown error')
+          error: languageResult.success
+            ? null
+            : languageResult.error || "Unknown error",
         });
       }
 
       return {
         success: true,
-        messages: [
-          { type: "welcome", result: firstResult },
-          { type: "interactive_list", result: secondResult },
-        ],
+        messages: [{ type: "language_selection", result: languageResult }],
         studentId,
         studentName: studentName,
         whatsappNumber: preparedNumber,
         mode: this.mode,
-        totalMessages: 2,
+        totalMessages: 1, // ✅ تم تغيير العدد إلى 1 فقط
         interactive: true,
         messageType: "list_message",
         nextStep: "Waiting for list selection (arabic_lang or english_lang)",
         webhookEndpoint: "/api/whatsapp/webhook",
+        notes:
+          "First welcome message removed - starting with language selection directly", // ✅ إضافة ملاحظة
       };
-
     } catch (error) {
       console.error("❌ Error in sendWelcomeMessages:", error.message);
       throw error;
     }
   }
 
-  async sendLanguageConfirmationMessage(studentId, phoneNumber, studentName, selectedLanguage) {
+  async sendLanguageConfirmationMessage(
+    studentId,
+    phoneNumber,
+    studentName,
+    selectedLanguage,
+  ) {
     try {
       console.log("📱 Sending language confirmation:", {
         studentId,
@@ -482,84 +508,62 @@ class WapilotService {
         preparedNumber = `+20${preparedNumber.replace(/^\+/, "")}`;
       }
 
-      const messageText = this.prepareLanguageConfirmationMessage(studentName, selectedLanguage);
+      const messageText = this.prepareLanguageConfirmationMessage(
+        studentName,
+        selectedLanguage,
+      );
 
       const sendResult = await this.sendAndLogMessage({
         studentId,
         phoneNumber: preparedNumber,
         messageContent: messageText,
-        messageType: 'language_confirmation',
+        messageType: "language_confirmation",
         language: selectedLanguage,
         metadata: {
           selectedLanguage,
-          automationType: 'language_selection_response',
-          recipientType: 'student'
-        }
+          automationType: "language_selection_response",
+          recipientType: "student",
+        },
       });
 
       return sendResult;
-
     } catch (error) {
       console.error("❌ Error sending confirmation:", error.message);
       throw error;
     }
   }
 
-  prepareFirstWelcomeMessage(studentName) {
-    return `🎉 أهلاً وسهلاً بك في Code School! | Welcome to Code School!
-
-مرحباً ${studentName} 👋 | Hello ${studentName} 👋
-
-يسعدنا جداً انضمامك إلى مجتمع البرمجة لدينا! 🚀
-We're thrilled to have you join our coding community! 🚀
-
-**ماذا تتعلم معنا؟ | What will you learn with us?**
-🔹 برمجة الويب | Web Development
-🔹 تطبيقات الجوال | Mobile Applications
-🔹 الذكاء الاصطناعي | Artificial Intelligence
-🔹 قواعد البيانات | Databases
-
-📅 ستصلك جدول الحصص في أقرب وقت.
-Your class schedule will be sent to you soon.`;
-  }
-
   prepareLanguageConfirmationMessage(studentName, selectedLanguage) {
     if (selectedLanguage === "en") {
-      return `✅ *Language Preference Confirmed!*
+      return `✅ Language Preference Confirmed
 
-Dear ${studentName},
+${studentName},
+Thank you. Your preferred communication language has been set to English.
 
-Thank you for choosing *English* as your preferred language.
+📌 From now on:
+- All messages and notifications will be sent in English
+- Course-related communication and support will be provided in English
 
-📋 *What's next?*
-• All future communications will be in English
-• Course materials will be provided in English
-• Support will be available in English
+If you wish to change this preference at any time, please contact our support team.
 
-💡 *Quick tip:* You can change your language preference anytime by contacting our support team.
-
-Thank you for choosing Code School! 🚀
-
+Thank you for choosing Code School.
 Best regards,
-*The Code School Team* 💻✨`;
+Code School Team 💻`;
     } else {
-      return `✅ *تم تأكيد تفضيل اللغة!*
+      return `✅ تم تأكيد تفضيل اللغة
 
-عزيزي/عزيزتي ${studentName},
+${studentName}،
+شكراً لك. تم تعيين اللغة العربية كلغة التواصل المفضلة لديك.
 
-شكراً لك على اختيار *العربية* كلغتك المفضلة.
+📌 من الآن فصاعداً:
+- سيتم إرسال جميع الرسائل والإشعارات باللغة العربية
+- سيتم توفير التواصل والدعم الفني المتعلق بالدورات باللغة العربية
 
-📋 *ماذا بعد؟*
-• جميع المراسلات المستقبلية ستكون باللغة العربية
-• المواد التعليمية ستكون باللغة العربية
-• الدعم الفني سيكون متاحاً باللغة العربية
+إذا كنت ترغب في تغيير هذا التفضيل في أي وقت، يرجى التواصل مع فريق الدعم لدينا.
 
-💡 *نصيحة سريعة:* يمكنك تغيير تفضيل اللغة في أي وقت من خلال التواصل مع فريق الدعم.
-
-شكراً لاختيارك Code School! 🚀
-
+شكراً لاختيارك Code School.
 مع أطيب التحيات،
-*فريق Code School* 💻✨`;
+فريق Code School 💻`;
     }
   }
 
@@ -577,8 +581,9 @@ Best regards,
         "auto-confirmation",
         "webhook-processing",
         "database-sync",
-        "custom-messages"
-      ]
+        "custom-messages",
+      ],
+      currentFlow: "Direct language selection (no initial welcome message)", // ✅ تحديث وصف سير العمل
     };
   }
 }

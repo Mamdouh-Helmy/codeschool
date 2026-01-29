@@ -20,12 +20,50 @@ export default function InstructorNotificationModal({
     const [selectedInstructors, setSelectedInstructors] = useState([]);
 
     // Initialize messages for each instructor
+    // Initialize messages for each instructor
     useEffect(() => {
         if (!instructors || instructors.length === 0) return;
 
         const defaultMsg = isRTL
-            ? `🎉 مرحباً {instructorName}\n\nتم تفعيل المجموعة بنجاح!\n\n📚 الكورس: {courseName}\n👥 المجموعة: {groupCode}\n📅 أول حصة: {startDate}\n⏰ الساعة: {timeFrom} - {timeTo}\n👨‍🎓 عدد الطلاب: {studentCount}\n\nجاهز تبدأ معهم؟ 🚀`
-            : `🎉 Hello {instructorName}\n\nGroup has been activated successfully!\n\n📚 Course: {courseName}\n👥 Group: {groupCode}\n📅 First Session: {startDate}\n⏰ Time: {timeFrom} - {timeTo}\n👨‍🎓 Students: {studentCount}\n\nReady to get started? 🚀`;
+            ? `
+عزيزي/عزيزتي {instructorName}،
+يسرنا إعلامك بأن مجموعة جديدة قد تم تعيينها وتفعيلها بنجاح تحت إشرافك بالتفاصيل التالية:
+📘 البرنامج: {courseName}
+👥 رمز المجموعة: {groupCode}
+📅 تاريخ الحصة الأولى: {startDate}
+⏰ الموعد: {timeFrom} – {timeTo}
+👦👧 عدد الطلاب: {studentCount}
+
+📌 يرجى التأكد من التالي:
+- مراجعة المنهج وخطة الجلسة قبل الحصة الأولى.
+- فتح رابط الاجتماع الخاص بنا قبل ١٠-١٥ دقيقة على الأقل للتحضير.
+- التأكد من جاهزية جميع الأدوات والحسابات والمواد المطلوبة.
+- يجب تسجيل الحضور وتقييم الجلسة بعد كل حصة.
+
+نقدر التزامك واحترافيتك ونتمنى لك رحلة تعليمية ناجحة ومؤثرة مع طلابك.
+
+مع أطيب التحيات،
+إدارة Code School 💻`
+            : `Teaching Assignment Confirmation – Code School
+
+Dear {instructorName},
+We are pleased to inform you that a new group has been successfully assigned and activated under your supervision with the following details:
+📘 Program: {courseName}
+👥 Group Code: {groupCode}
+📅 First Session Date: {startDate}
+⏰ Schedule: {timeFrom} – {timeTo}
+👦👧 Number of Students: {studentCount}
+
+📌 Please ensure the following:
+- Review the curriculum and session plan before the first session.
+- Open our meeting link at least 10–15 minutes early for preparation.
+- Make sure all required tools, accounts, and materials are ready.
+- Attendance and session feedback must be recorded after each class.
+
+We appreciate your commitment and professionalism and wish you a successful and impactful learning journey with your students.
+
+Best regards,
+Code School Management 💻`;
 
         const newMessages = {};
         const newPreviews = {};

@@ -1,4 +1,3 @@
-// components/MeetingLinkForm.js - FIXED VERSION
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -41,12 +40,13 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         { value: "other", label: "Other", icon: "🔗" },
     ];
 
-    // Status options - FIXED: Remove JSX from option values
+    // Status options - المحدث: مع القيم الصحيحة
     const statusOptions = [
-        { value: "available", label: "Available", color: "bg-green-100 text-green-800" },
-        { value: "reserved", label: "Reserved", color: "bg-blue-100 text-blue-800" },
-        { value: "in_use", label: "In Use", color: "bg-purple-100 text-purple-800" },
-        { value: "maintenance", label: "Maintenance", color: "bg-yellow-100 text-yellow-800" },
+        { value: "available", label: "Available", color: "bg-green-100 text-green-800", description: "Available for reservation" },
+        { value: "reserved", label: "Reserved", color: "bg-blue-100 text-blue-800", description: "Currently reserved for a session" },
+        { value: "in_use", label: "In Use", color: "bg-purple-100 text-purple-800", description: "Currently being used in an active session" },
+        { value: "maintenance", label: "Maintenance", color: "bg-yellow-100 text-yellow-800", description: "Under maintenance, not available" },
+        { value: "inactive", label: "Inactive", color: "bg-gray-100 text-gray-800", description: "Permanently inactive" },
     ];
 
     const [form, setForm] = useState(() => ({
@@ -62,7 +62,7 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         status: initial?.status || "available",
         allowedDays: initial?.allowedDays || [...daysOfWeek], // Default to all days
         allowedTimeSlots: initial?.allowedTimeSlots || [],
-        notes: initial?.metadata?.notes || "",
+        notes: initial?.metadata?.notes || initial?.notes || "",
     }));
 
     const [loading, setLoading] = useState(false);
@@ -228,7 +228,25 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         }
     }, [form.platform]);
 
-    // Submit form
+    // Get status description
+    const getStatusDescription = useCallback((statusValue) => {
+        const status = statusOptions.find(s => s.value === statusValue);
+        return status ? status.description : "";
+    }, []);
+
+    // Get status color class - المحدث
+    const getStatusColorClass = (statusValue) => {
+        switch (statusValue) {
+            case 'available': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+            case 'reserved': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+            case 'in_use': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+            case 'maintenance': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+            case 'inactive': return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+            default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+        }
+    };
+
+    // Submit form - FIXED: إصلاح مشكلة الـ ID في التحديث
     const submit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -245,6 +263,9 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
                 return;
             }
 
+            // ✅ FIXED: استخدام _id بدلاً من id
+            const meetingLinkId = initial?._id || initial?.id;
+            
             // Prepare payload
             const payload = {
                 ...form,
@@ -252,8 +273,9 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
                 durationLimit: parseInt(form.durationLimit),
             };
 
-            const method = initial?.id ? "PUT" : "POST";
-            const url = initial?.id ? `/api/meeting-links/${initial.id}` : "/api/meeting-links";
+            const method = meetingLinkId ? "PUT" : "POST";
+            // ✅ FIXED: استخدام _id في URL
+            const url = meetingLinkId ? `/api/meeting-links/${meetingLinkId}` : "/api/meeting-links";
 
             const res = await fetch(url, {
                 method,
@@ -268,7 +290,7 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
             }
 
             toast.success(
-                initial ? "Meeting link updated successfully" : "Meeting link created successfully",
+                meetingLinkId ? "Meeting link updated successfully" : "Meeting link created successfully",
                 { id: toastId }
             );
 
@@ -280,12 +302,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         } finally {
             setLoading(false);
         }
-    };
-
-    // Get status color class
-    const getStatusColorClass = (statusValue) => {
-        const status = statusOptions.find(s => s.value === statusValue);
-        return status ? status.color : "bg-gray-100 text-gray-800";
     };
 
     // Handle new time slot input change
@@ -356,10 +372,13 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
                                     </option>
                                 ))}
                             </select>
-                            <div className="mt-2">
+                            <div className="mt-2 flex items-start gap-2">
                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${getStatusColorClass(form.status)}`}>
                                     {statusOptions.find(s => s.value === form.status)?.label || "Unknown"}
                                 </span>
+                                <p className="text-xs text-gray-500 flex-1">
+                                    {getStatusDescription(form.status)}
+                                </p>
                             </div>
                         </div>
                     </div>
