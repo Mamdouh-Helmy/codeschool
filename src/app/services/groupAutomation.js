@@ -650,7 +650,7 @@ function replaceStudentVariables(message, student, group) {
 
 /**
  * EVENT 4: Attendance Submitted
- * EXISTING - NO CHANGES
+ * ✅ FIXED: Variable replacement in custom messages
  */
 export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
   try {
@@ -694,7 +694,7 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
     for (const record of studentsToNotify) {
       try {
         const student = await Student.findById(record.studentId)
-          .select("personalInfo.fullName guardianInfo communicationPreferences")
+          .select("personalInfo.fullName guardianInfo communicationPreferences enrollmentNumber")
           .lean();
 
         if (!student) {
@@ -715,10 +715,41 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
           continue;
         }
 
-        // Use custom message if provided, otherwise use default
+        // ✅ Get custom message or use default
         let message = customMessages[student._id.toString()];
 
-        if (!message) {
+        if (message) {
+          // ✅ Replace ALL variables in custom message
+          const sessionDate = new Date(session.scheduledDate);
+          const formattedDate = sessionDate.toLocaleDateString("ar-EG", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
+
+          const variables = {
+            guardianName: student.guardianInfo?.name || "ولي الأمر",
+            studentName: student.personalInfo?.fullName || "الطالب",
+            enrollmentNumber: student.enrollmentNumber || "N/A",
+            sessionName: session.title || "الجلسة",
+            sessionNumber: `الجلسة ${session.sessionNumber || "N/A"}`,
+            date: formattedDate,
+            time: `${session.startTime} - ${session.endTime}`,
+            module: `الوحدة ${(session.moduleIndex || 0) + 1}`,
+            groupCode: group.code || "N/A",
+            groupName: group.name || "N/A",
+          };
+
+          // Replace all variables
+          Object.entries(variables).forEach(([key, value]) => {
+            const regex = new RegExp(`\\{${key}\\}`, "g");
+            message = message.replace(regex, value);
+          });
+
+          console.log(`✅ Variables replaced in custom message for ${student.personalInfo?.fullName}`);
+        } else {
+          // Use default message
           const statusAr = {
             absent: "غائب",
             late: "متأخر",
@@ -799,6 +830,8 @@ ${record.notes ? `\n📝 ملاحظات: ${record.notes}` : ""}
     };
   }
 }
+
+// ... (باقي الكود كما هو)
 
 /**
  * EVENT 5: Session Status Changed
