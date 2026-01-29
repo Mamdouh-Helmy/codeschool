@@ -2863,9 +2863,9 @@ const en = {
   "sessions.edit.notifyStudents.livePreview": "Live Preview",
   "sessions.edit.notifyStudents.whatStudentsWillSee": "What students will see",
   "sessions.edit.templates.cancelled":
-    "📢 Session Cancelled\n\nDear student,\n\nWe regret to inform you that the session {sessionName} scheduled for {date} at {time} has been cancelled.\n\nReason: [Write reason here]\n\nWe apologize for any inconvenience.\n\nProgramming School Team 💻",
+    "ℹ️ Session Cancellation Notice – Code School\n\nDear {guardianName},\n\nWe would like to inform you that today’s session has been cancelled by Code School for the following reason:\n\n📘 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\n📌 Important Notes:\n- This session will not be deducted from your child’s package.\n- A make-up session or alternative date will be arranged, and our team will contact you shortly with the details.\n\nWe apologize for any inconvenience this may cause and appreciate your understanding.\n\nThank you for your trust in Code School.\n\nBest regards,\nCode School Management 💻",
   "sessions.edit.templates.postponed":
-    "📅 Session Postponed\n\nDear student,\n\nThe session {sessionName} scheduled for {date} at {time} has been postponed.\n\nNew date: [Write new date here]\n\nWe'll keep you updated with the new schedule.\n\nProgramming School Team 💻",
+    "📅 Session Rescheduling Notice – Code School\n\nDear {guardianName},\n\nWe would like to inform you that the upcoming session has been rescheduled by Code School for the reason mentioned below:\n\n📘 Session: {sessionName}\n📅 Original Date: {date}\n⏰ Original Time: {time}\n\n📌 New Scheduled Date: {newDate}\n⏰ New Time: {newTime}\n\n📌 Please Note:\n- This session will not be lost or deducted from your child’s package.\n- The session will be delivered in full on the new scheduled date.\n- No action is required from your side.\n\nWe apologize for any inconvenience and appreciate your understanding.\nThank you for your continued trust in Code School.\n\nBest regards,\nCode School Management 💻",
   "sessions.edit.defaults.sessionName": "Session",
   "sessions.edit.defaults.session": "Session",
   "sessions.edit.defaults.lesson": "Lesson",
@@ -3059,6 +3059,15 @@ const en = {
   "courses.curriculumRequired": "Curriculum is required",
   "nav.curriculumCourse": "Curriculum–Course Mapping",
   "nav.meetingLink": "Meeting Link",
+
+  "sessions.attendance.placeholders.absent":
+    "Optional: Write a custom message or leave it empty to use the default absence notification.\n\nExample Template:\n\nDear {guardianName},\n\nWe noticed that {studentName} was absent from today’s session:\n\n📚 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\nReason: [Write the reason for absence here]\n\nCode School Team 💻",
+
+  "sessions.attendance.placeholders.late":
+    "Optional: Write a custom message or leave it empty to use the default late attendance notification.\n\nExample Template:\n\nDear {guardianName},\n\n{studentName} arrived late to today’s session:\n\n📚 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\nPlease ensure punctuality in future sessions.\n\nCode School Team 💻",
+
+  "sessions.attendance.placeholders.excused":
+    "Optional: Write a custom message or leave it empty to use the default excused absence notification.\n\nExample Template:\n\nDear {guardianName},\n\n{studentName} was excused from today’s session:\n\n📚 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\nReason: [Write the reason for the excused absence here]\n\nCode School Team 💻",
 };
 
 export default en;

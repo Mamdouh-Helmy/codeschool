@@ -39,6 +39,7 @@ const CurriculumSchema = new mongoose.Schema(
     slug: {
       type: String,
       unique: true,
+      sparse: true, // Allow multiple null values
       lowercase: true,
       trim: true,
     },
@@ -63,16 +64,55 @@ const CurriculumSchema = new mongoose.Schema(
   },
 );
 
-// Generate slug
-CurriculumSchema.pre("save", function (next) {
-  if (this.isModified("title")) {
-    this.slug = this.title
+// Generate unique slug
+CurriculumSchema.pre("save", async function (next) {
+  if (this.isModified("title") && this.title) {
+    let baseSlug = this.title
       .toLowerCase()
       .replace(/[^\w\s-]/g, "")
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
       .trim();
+    
+    // If slug is empty after processing, use a default
+    if (!baseSlug) {
+      baseSlug = "curriculum";
+    }
+    
+    // Check for duplicate slugs and append number if needed
+    let slug = baseSlug;
+    let counter = 1;
+    
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const currentDoc = this;
+    
+    while (true) {
+      const existing = await mongoose.models.Curriculum.findOne({ 
+        slug, 
+        _id: { $ne: currentDoc._id } 
+      });
+      
+      if (!existing) {
+        break;
+      }
+      
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    
+    this.slug = slug;
+  } else if (!this.slug && this.title) {
+    // If no slug but has title, generate one
+    const baseSlug = this.title
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .trim() || "curriculum";
+    
+    this.slug = `${baseSlug}-${Date.now()}`;
   }
+  
   next();
 });
 
@@ -191,6 +231,18 @@ export async function POST(request) {
     );
   } catch (error) {
     console.error("Error creating curriculum:", error);
+    
+    // Handle duplicate key error specifically
+    if (error.code === 11000) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "A curriculum with this slug already exists. Please try a different title.",
+        },
+        { status: 409 },
+      );
+    }
+    
     return NextResponse.json(
       {
         success: false,
