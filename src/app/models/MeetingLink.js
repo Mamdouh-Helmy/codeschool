@@ -175,22 +175,16 @@ meetingLinkSchema.statics.findAvailableLinks = async function (
   try {
     const now = new Date();
 
-    // Find links that are:
-    // 1. Not deleted
-    // 2. Status is 'available' or 'reserved' (but reservation expired)
-    // 3. Not currently reserved OR reservation ended
     const availableLinks = await this.find({
       isDeleted: false,
       status: { $in: ["available", "reserved"] },
       $or: [
-        // No current reservation
         { "currentReservation.sessionId": { $exists: false } },
         { "currentReservation.sessionId": null },
-        // Reservation ended
         { "currentReservation.endTime": { $lt: now } },
       ],
     })
-      .sort({ "stats.totalUses": 1 }) // Prefer less-used links
+      .sort({ "stats.totalUses": 1 })
       .limit(limit)
       .lean();
 
@@ -252,16 +246,13 @@ meetingLinkSchema.methods.reserveForSession = async function (
   try {
     console.log(`🔒 Reserving link ${this.name} for session ${sessionId}`);
 
-    // Check if link is available
     if (this.status === "maintenance" || this.status === "inactive") {
       throw new Error(`Link is not available (status: ${this.status})`);
     }
 
-    // Check for conflicting reservations
     if (this.currentReservation && this.currentReservation.sessionId) {
       const currentEndTime = new Date(this.currentReservation.endTime);
       if (currentEndTime > new Date()) {
-        // Check if it's the same session (allow re-reservation)
         if (
           this.currentReservation.sessionId.toString() !== sessionId.toString()
         ) {
@@ -270,7 +261,6 @@ meetingLinkSchema.methods.reserveForSession = async function (
       }
     }
 
-    // Update the link with reservation
     this.currentReservation = {
       sessionId: sessionId,
       groupId: groupId,
@@ -310,7 +300,6 @@ meetingLinkSchema.methods.releaseLink = async function (actualDuration = null) {
   try {
     console.log(`🔓 Releasing link ${this.name}`);
 
-    // Add to usage history if there was a reservation
     if (this.currentReservation && this.currentReservation.sessionId) {
       const usageRecord = {
         sessionId: this.currentReservation.sessionId,
@@ -329,14 +318,12 @@ meetingLinkSchema.methods.releaseLink = async function (actualDuration = null) {
 
       this.usageHistory.push(usageRecord);
 
-      // Update stats
       this.stats.totalUses += 1;
       this.stats.lastUsed = new Date();
 
       if (actualDuration) {
         this.stats.totalHours += actualDuration / 60;
 
-        // Calculate average
         const totalMinutes = this.stats.totalHours * 60;
         this.stats.averageUsageDuration = Math.round(
           totalMinutes / this.stats.totalUses
@@ -344,7 +331,6 @@ meetingLinkSchema.methods.releaseLink = async function (actualDuration = null) {
       }
     }
 
-    // Clear reservation
     this.currentReservation = undefined;
     this.status = "available";
     this.metadata.updatedAt = new Date();
@@ -375,12 +361,10 @@ meetingLinkSchema.methods.isAvailableForTimeSlot = function (
     return false;
   }
 
-  // Check current reservation
   if (this.currentReservation && this.currentReservation.sessionId) {
     const reservedStart = new Date(this.currentReservation.startTime);
     const reservedEnd = new Date(this.currentReservation.endTime);
 
-    // Check for overlap
     if (startTime < reservedEnd && endTime > reservedStart) {
       return false;
     }
@@ -404,14 +388,6 @@ meetingLinkSchema.methods.getUsageStats = function () {
     ),
   };
 };
-
-// ==================== MIDDLEWARE ====================
-
-// Update timestamp on save
-meetingLinkSchema.pre("save", function (next) {
-  this.metadata.updatedAt = new Date();
-  next();
-});
 
 // ==================== VIRTUAL PROPERTIES ====================
 
@@ -439,7 +415,6 @@ meetingLinkSchema.set("toJSON", {
   virtuals: true,
   transform: function (doc, ret) {
     delete ret.__v;
-    // Don't expose password in JSON by default
     if (ret.credentials && ret.credentials.password) {
       ret.credentials.passwordSet = true;
       delete ret.credentials.password;
@@ -459,4 +434,4 @@ if (mongoose.models.MeetingLink) {
 
 const MeetingLink = mongoose.model("MeetingLink", meetingLinkSchema);
 
-export default MeetingLink
+export default MeetingLink;
