@@ -1,4 +1,4 @@
-// models/MeetingLink.js - إصدار مبسط خالي من المشاكل
+// models/MeetingLink.js
 import mongoose from "mongoose";
 
 const meetingLinkSchema = new mongoose.Schema(
@@ -40,7 +40,7 @@ const meetingLinkSchema = new mongoose.Schema(
       default: 100,
     },
     durationLimit: {
-      type: Number, // in minutes
+      type: Number,
       default: 120,
     },
 
@@ -62,8 +62,8 @@ const meetingLinkSchema = new mongoose.Schema(
 
     allowedTimeSlots: [
       {
-        startTime: String, // Format: "HH:MM"
-        endTime: String, // Format: "HH:MM"
+        startTime: String,
+        endTime: String,
       },
     ],
 
@@ -80,7 +80,7 @@ const meetingLinkSchema = new mongoose.Schema(
         },
         startTime: Date,
         endTime: Date,
-        duration: Number, // in minutes
+        duration: Number,
         usedAt: {
           type: Date,
           default: Date.now,
@@ -156,10 +156,9 @@ const meetingLinkSchema = new mongoose.Schema(
   }
 );
 
-// ✅ إزالة جميع الـ middleware المسبب للمشكلة
-// لا نستخدم أي pre أو post hooks
-
-// ✅ إنشاء المودل بشكل نظيف
-const MeetingLink = mongoose.model("MeetingLink", meetingLinkSchema);
-
-export default MeetingLink;
+// ✅ الحل: التحقق مما إذا كان المودل موجود بالفعل
+if (mongoose.models && mongoose.models.MeetingLink) {
+  module.exports = mongoose.models.MeetingLink;
+} else {
+  module.exports = mongoose.model("MeetingLink", meetingLinkSchema);
+}

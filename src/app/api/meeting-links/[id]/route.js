@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import MeetingLink from "../../../models/MeetingLink";
-import Session from "../../../models/Session";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
-// ✅ FIX: استخراج الـ params بشكل صحيح
+// GET: جلب رابط واحد بواسطة ID
 export async function GET(req, { params }) {
   try {
     console.log("🔍 Fetching meeting link by ID...");
@@ -17,10 +16,8 @@ export async function GET(req, { params }) {
 
     await connectDB();
 
-    // ✅ FIX: استخدام await مع params
+    // استخراج الـ params
     const { id } = await params;
-
-    console.log("📝 Requested ID:", id);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -41,10 +38,10 @@ export async function GET(req, { params }) {
       );
     }
 
-    // Format the response
+    // تنسيق الرد
     const formattedLink = {
       id: meetingLink._id,
-      _id: meetingLink._id, // ✅ إضافة _id
+      _id: meetingLink._id,
       name: meetingLink.name,
       link: meetingLink.link,
       platform: meetingLink.platform,
@@ -65,18 +62,6 @@ export async function GET(req, { params }) {
         "Saturday",
       ],
       allowedTimeSlots: meetingLink.allowedTimeSlots || [],
-      stats: meetingLink.stats || {
-        totalUses: 0,
-        totalHours: 0,
-        averageUsageDuration: 0,
-        lastUsed: null,
-      },
-      metadata: meetingLink.metadata || {
-        createdBy: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        notes: "",
-      },
       notes: meetingLink.metadata?.notes || "",
     };
 
@@ -96,7 +81,7 @@ export async function GET(req, { params }) {
   }
 }
 
-// PUT: Update meeting link
+// PUT: تحديث رابط
 export async function PUT(req, { params }) {
   try {
     console.log("✏️ Updating meeting link...");
@@ -106,13 +91,10 @@ export async function PUT(req, { params }) {
       return authCheck.response;
     }
 
-    const adminUser = authCheck.user;
-
     await connectDB();
 
-    // ✅ FIX: استخدام await مع params
+    // استخراج الـ params
     const { id } = await params;
-    console.log("📝 Meeting Link ID to update:", id);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -124,7 +106,7 @@ export async function PUT(req, { params }) {
     const body = await req.json();
     console.log("📥 Update data:", JSON.stringify(body, null, 2));
 
-    // Find existing meeting link
+    // البحث عن الرابط الموجود
     const existingLink = await MeetingLink.findOne({
       _id: id,
       isDeleted: false,
@@ -137,7 +119,7 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // Validate status
+    // التحقق من الحالة (status)
     const validStatuses = [
       "available",
       "reserved",
@@ -155,8 +137,9 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // Check if link is being changed and validate URL
+    // التحقق إذا كان الرابط يتغير والتحقق من صحة الرابط
     if (body.link && body.link !== existingLink.link) {
+      // التحقق من تنسيق الرابط
       const urlPattern = /^(https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w-./?%&=]*)?$/;
       if (!urlPattern.test(body.link)) {
         return NextResponse.json(
@@ -168,9 +151,9 @@ export async function PUT(req, { params }) {
         );
       }
 
-      // Check for duplicate URL
+      // التحقق من تكرار الرابط
       const duplicateLink = await MeetingLink.findOne({
-        link: { $regex: new RegExp(`^${body.link}$`, "i") },
+        link: body.link,
         _id: { $ne: id },
         isDeleted: false,
       });
@@ -186,16 +169,15 @@ export async function PUT(req, { params }) {
       }
     }
 
-    // Prepare update data
+    // إعداد بيانات التحديث
     const updateData = {
       metadata: {
         ...existingLink.metadata,
         updatedAt: new Date(),
-        lastModifiedBy: adminUser.id,
       },
     };
 
-    // Only update fields that are provided
+    // تحديث الحقول المقدمة فقط
     if (body.name !== undefined) updateData.name = body.name.trim();
     if (body.link !== undefined) updateData.link = body.link.trim();
     if (body.platform !== undefined) updateData.platform = body.platform;
@@ -213,7 +195,7 @@ export async function PUT(req, { params }) {
       updateData.metadata.notes = body.notes;
     }
 
-    // Handle credentials update
+    // تحديث بيانات الدخول (credentials)
     if (body.credentials) {
       updateData.credentials = {
         username:
@@ -225,11 +207,11 @@ export async function PUT(req, { params }) {
       };
     }
 
-    // Update the meeting link
+    // تحديث الرابط
     const updatedLink = await MeetingLink.findByIdAndUpdate(
       id,
       { $set: updateData },
-      { new: true, runValidators: true },
+      { new: true },
     );
 
     if (!updatedLink) {
@@ -245,7 +227,7 @@ export async function PUT(req, { params }) {
       success: true,
       data: {
         id: updatedLink._id,
-        _id: updatedLink._id, // ✅ إضافة _id
+        _id: updatedLink._id,
         name: updatedLink.name,
         link: updatedLink.link,
         platform: updatedLink.platform,
@@ -258,7 +240,6 @@ export async function PUT(req, { params }) {
         durationLimit: updatedLink.durationLimit,
         allowedDays: updatedLink.allowedDays,
         allowedTimeSlots: updatedLink.allowedTimeSlots,
-        metadata: updatedLink.metadata,
         notes: updatedLink.metadata?.notes || "",
       },
       message: "Meeting link updated successfully",
@@ -267,15 +248,11 @@ export async function PUT(req, { params }) {
     console.error("❌ Error updating meeting link:", error);
 
     if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors || {})
-        .map((err) => err.message)
-        .join("; ");
-
       return NextResponse.json(
         {
           success: false,
           error: "Validation failed",
-          details: messages,
+          details: error.message,
         },
         { status: 400 },
       );
@@ -285,7 +262,7 @@ export async function PUT(req, { params }) {
       return NextResponse.json(
         {
           success: false,
-          error: "Meeting link already exists with this name or URL",
+          error: "Meeting link already exists with this URL",
         },
         { status: 409 },
       );
@@ -301,21 +278,19 @@ export async function PUT(req, { params }) {
   }
 }
 
-// DELETE: Delete meeting link
+// DELETE: حذف رابط
 export async function DELETE(req, { params }) {
   try {
-    console.log("🗑️ Deleting meeting link...");
+    console.log("🗑️ Deleting meeting link from database...");
 
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
       return authCheck.response;
     }
 
-    const adminUser = authCheck.user;
-
     await connectDB();
 
-    // ✅ FIX: استخدام await مع params
+    // استخراج الـ params
     const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -325,7 +300,7 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // Find meeting link
+    // البحث عن الرابط
     const meetingLink = await MeetingLink.findOne({
       _id: id,
       isDeleted: false,
@@ -338,26 +313,19 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // Soft delete the meeting link
-    meetingLink.isDeleted = true;
-    meetingLink.deletedAt = new Date();
-    meetingLink.status = "inactive";
-    meetingLink.metadata = meetingLink.metadata || {};
-    meetingLink.metadata.updatedAt = new Date();
-    meetingLink.metadata.lastModifiedBy = adminUser.id;
+    // ✅ HARD DELETE - حذف فعلي من الداتابيس
+    const deletedLink = await MeetingLink.findByIdAndDelete(id);
 
-    await meetingLink.save();
-
-    console.log("✅ Meeting link soft deleted:", meetingLink.name);
+    console.log("✅ Meeting link permanently deleted:", deletedLink.name);
 
     return NextResponse.json({
       success: true,
-      message: "Meeting link deleted successfully",
+      message: "Meeting link permanently deleted from database",
       data: {
-        id: meetingLink._id,
-        name: meetingLink.name,
-        deletedAt: meetingLink.deletedAt,
-        status: meetingLink.status,
+        id: deletedLink._id,
+        name: deletedLink.name,
+        link: deletedLink.link,
+        deletedAt: new Date(),
       },
     });
   } catch (error) {
