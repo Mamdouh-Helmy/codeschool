@@ -253,7 +253,7 @@ export async function PUT(req, { params }) {
       setTimeout(async () => {
         try {
           // استيراد ديناميكي لتجنب التبعيات الدائرية
-          const { whatsappService } = await import('@/app/services/whatsappService');
+          const { whatsappService } = await import('../../../services/whatsappService');
           const result = await whatsappService.sendUpdateNotification(updatedStudent);
           console.log('✅ WhatsApp update notification sent:', result);
         } catch (automationError) {
@@ -415,7 +415,7 @@ export async function DELETE(req, { params }) {
         console.log(`📧 Sending deletion notification for student: ${deletedStudent.enrollmentNumber}`);
         
         // استيراد ديناميكي لخدمة الواتساب
-        const { whatsappService } = await import('@/app/services/whatsappService');
+        const { whatsappService } = await import('../../../services/whatsappService');
         const result = await whatsappService.sendDeletionNotification(deletedStudent);
         console.log('✅ WhatsApp deletion notification sent:', result);
       } catch (notificationError) {

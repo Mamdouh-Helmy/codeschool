@@ -1,4 +1,4 @@
-// app/api/groups/[id]/route.js - الإصدار المصحح
+// app/api/groups/[id]/route.js - الإصدار النهائي مع الحذف الفعلي
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
@@ -37,7 +37,7 @@ export async function GET(req, { params }) {
       );
     }
 
-    const group = await Group.findOne({ _id: id, isDeleted: false })
+    const group = await Group.findOne({ _id: id })
       .populate("courseId", "title level")
       .populate("instructors", "name email profile")
       .populate("students", "personalInfo.fullName enrollmentNumber")
@@ -145,7 +145,7 @@ export async function PUT(req, { params }) {
     const updateData = await req.json();
     console.log("📥 Update data:", JSON.stringify(updateData, null, 2));
 
-    const existingGroup = await Group.findOne({ _id: id, isDeleted: false });
+    const existingGroup = await Group.findById(id);
 
     if (!existingGroup) {
       return NextResponse.json(
@@ -154,38 +154,28 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // Prevent updating if sessions are generated and group is active
-    if (existingGroup.sessionsGenerated && existingGroup.status === "active") {
-      const restrictedFields = ["schedule", "courseId"];
-      const hasRestrictedChanges = restrictedFields.some(
-        (field) => updateData[field] !== undefined
-      );
-
-      if (hasRestrictedChanges) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Cannot modify schedule or course for active groups with generated sessions",
-            suggestion: "Cancel and recreate the group, or regenerate sessions",
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Build update payload correctly
+    // ✅ FIXED: بناء metadata بشكل صحيح
+    const metadata = existingGroup.metadata || {};
+    
     const updatePayload = {
       ...updateData,
       metadata: {
-        ...existingGroup.metadata.toObject(),
+        ...metadata,
         updatedBy: adminUser.id,
         updatedAt: new Date(),
       },
+      updatedAt: new Date(),
     };
 
-    const updatedGroup = await Group.findOneAndUpdate(
-      { _id: id, isDeleted: false },
+    // ✅ إزالة metadata من updateData إذا كانت موجودة لتفادي التضارب
+    if (updateData.metadata) {
+      delete updatePayload.metadata; // نترك الـ metadata الذي بنيناه
+    }
+
+    console.log("🔄 Executing database update with payload:", updatePayload);
+
+    const updatedGroup = await Group.findByIdAndUpdate(
+      id,
       { $set: updatePayload },
       {
         new: true,
@@ -212,6 +202,7 @@ export async function PUT(req, { params }) {
     });
   } catch (error) {
     console.error("❌ Error updating group:", error);
+    console.error("❌ Error details:", error.stack);
 
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors || {})
@@ -238,18 +229,16 @@ export async function PUT(req, { params }) {
   }
 }
 
-// DELETE: Soft delete group
+// DELETE: Hard delete group from database
 export async function DELETE(req, { params }) {
   try {
     const { id } = await params;
-    console.log(`🗑️ Soft deleting group: ${id}`);
+    console.log(`🔥 Hard deleting group from database: ${id}`);
 
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
       return authCheck.response;
     }
-
-    const adminUser = authCheck.user;
 
     await connectDB();
 
@@ -260,8 +249,9 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    const existingGroup = await Group.findOne({ _id: id, isDeleted: false });
-
+    // تحقق إذا كان العنصر موجوداً
+    const existingGroup = await Group.findById(id);
+    
     if (!existingGroup) {
       return NextResponse.json(
         { success: false, error: "Group not found" },
@@ -269,43 +259,28 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // Soft delete the group
-    const deletedGroup = await Group.findOneAndUpdate(
-      { _id: id, isDeleted: false },
-      {
-        $set: {
-          isDeleted: true,
-          deletedAt: new Date(),
-          status: "cancelled",
-          "metadata.updatedBy": adminUser.id,
-          "metadata.updatedAt": new Date(),
-        },
-      },
-      { new: true }
+    // ❗ HARD DELETE - حذف فعلي من الداتابيس
+    const deletedGroup = await Group.findByIdAndDelete(id);
+
+    // حذف الجلسات المرتبطة أيضاً
+    await Session.deleteMany({ groupId: id });
+
+    // إزالة المجموعة من الطلاب المرتبطين
+    await Student.updateMany(
+      { groups: id },
+      { $pull: { groups: id } }
     );
 
-    // Also soft delete all related sessions
-    await Session.updateMany(
-      { groupId: id, isDeleted: false },
-      {
-        $set: {
-          isDeleted: true,
-          deletedAt: new Date(),
-          status: "cancelled",
-        },
-      }
-    );
-
-    console.log(`✅ Group deleted: ${deletedGroup.code}`);
-
+    console.log(`✅ Group permanently deleted: ${deletedGroup?.code || id}`);
+    console.log(`✅ Related sessions deleted`);
+    
     return NextResponse.json({
       success: true,
-      message: "Group deleted successfully (soft delete)",
+      message: "Group permanently deleted from database",
       data: {
-        id: deletedGroup._id,
-        code: deletedGroup.code,
-        name: deletedGroup.name,
-        deletedAt: deletedGroup.deletedAt,
+        id: deletedGroup?._id || id,
+        name: deletedGroup?.name,
+        code: deletedGroup?.code,
       },
     });
   } catch (error) {

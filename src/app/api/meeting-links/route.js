@@ -43,7 +43,7 @@ export async function GET(req) {
       .limit(limit)
       .lean();
 
-    // Get statistics - FIXED: استخدام قيم status الصحيحة
+    // Get statistics
     const stats = {
       total: await MeetingLink.countDocuments({ isDeleted: false }),
       available: await MeetingLink.countDocuments({
@@ -92,7 +92,7 @@ export async function GET(req) {
   }
 }
 
-// POST: أبسط نسخة - FIXED: إصلاح مشكلة validStatus
+// POST: إنشاء رابط جديد - إصلاح مشكلة الـ `validStatus`
 export async function POST(req) {
   try {
     await connectDB();
@@ -100,10 +100,7 @@ export async function POST(req) {
     const body = await req.json();
     console.log("Creating meeting link:", body.name);
 
-    // ✅ FIXED: استخدام ObjectId صالح
-    const adminUserId = new mongoose.Types.ObjectId(); // إنشاء ID جديد
-
-    // ✅ FIXED: استخدام التحقق الصحيح من status
+    // ✅ تحقق من أن `body.status` موجود وصالح
     const validStatuses = [
       "available",
       "reserved",
@@ -111,9 +108,35 @@ export async function POST(req) {
       "maintenance",
       "inactive",
     ];
-    const status = validStatuses.includes(body.status)
-      ? body.status
-      : "available";
+
+    const status =
+      body.status && validStatuses.includes(body.status)
+        ? body.status
+        : "available";
+
+    // ✅ التحقق من الحقول المطلوبة
+    if (!body.name || !body.link) {
+      return NextResponse.json(
+        { success: false, error: "Name and link are required" },
+        { status: 400 },
+      );
+    }
+
+    // ✅ التحقق من أن الرابط فريد
+    const existingLink = await MeetingLink.findOne({
+      link: body.link,
+      isDeleted: false,
+    });
+
+    if (existingLink) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "A meeting link with this URL already exists",
+        },
+        { status: 409 },
+      );
+    }
 
     const meetingLinkData = {
       name: body.name || "New Link",
@@ -125,7 +148,7 @@ export async function POST(req) {
       },
       capacity: body.capacity || 100,
       durationLimit: body.durationLimit || 120,
-      status: status, // ✅ استخدام status صالح
+      status: status,
       allowedDays: body.allowedDays || [
         "Sunday",
         "Monday",
@@ -137,7 +160,7 @@ export async function POST(req) {
       ],
       allowedTimeSlots: body.allowedTimeSlots || [],
       metadata: {
-        createdBy: adminUserId, // ✅ ObjectId صالح
+        createdBy: body.createdBy || new mongoose.Types.ObjectId(),
         createdAt: new Date(),
         updatedAt: new Date(),
         notes: body.notes || "",
@@ -161,11 +184,15 @@ export async function POST(req) {
         success: true,
         data: {
           id: meetingLink._id,
+          _id: meetingLink._id, // ✅ إضافة _id للتأكد
           name: meetingLink.name,
           link: meetingLink.link,
           platform: meetingLink.platform,
           status: meetingLink.status,
-          credentials: meetingLink.credentials,
+          credentials: {
+            username: meetingLink.credentials?.username || "",
+            password: meetingLink.credentials?.password || "",
+          },
           capacity: meetingLink.capacity,
           durationLimit: meetingLink.durationLimit,
           allowedDays: meetingLink.allowedDays,
@@ -177,16 +204,38 @@ export async function POST(req) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("Error creating meeting link:", error.message);
+    console.error("❌ Error creating meeting link:", error);
+    console.error("❌ Error details:", {
+      message: error.message,
+      stack: error.stack,
+      ...(error.code && { code: error.code }),
+    });
 
-    // فقط معالجة أخطاء الـ duplicate
+    // معالجة أخطاء الـ duplicate
     if (error.code === 11000) {
       return NextResponse.json(
         {
           success: false,
           error: "This link already exists",
+          details: "Duplicate link URL",
         },
         { status: 409 },
+      );
+    }
+
+    // معالجة أخطاء التحقق
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors || {})
+        .map((err) => err.message)
+        .join("; ");
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Validation failed",
+          details: messages,
+        },
+        { status: 400 },
       );
     }
 
@@ -194,6 +243,7 @@ export async function POST(req) {
       {
         success: false,
         error: error.message || "Failed to create meeting link",
+        ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
       },
       { status: 500 },
     );

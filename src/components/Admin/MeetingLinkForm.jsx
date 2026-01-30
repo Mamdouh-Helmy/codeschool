@@ -4,15 +4,12 @@ import {
     Link as LinkIcon,
     Globe,
     Lock,
-    Unlock,
     Calendar,
     Clock,
     Users,
     AlertCircle,
     Eye,
     EyeOff,
-    CheckCircle,
-    XCircle,
     Save,
     X,
     Plus,
@@ -21,7 +18,6 @@ import {
 import toast from "react-hot-toast";
 
 export default function MeetingLinkForm({ initial, onClose, onSaved }) {
-    // Days of week
     const daysOfWeek = [
         "Sunday",
         "Monday",
@@ -32,7 +28,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         "Saturday",
     ];
 
-    // Platform options
     const platforms = [
         { value: "zoom", label: "Zoom", icon: "🔷" },
         { value: "google_meet", label: "Google Meet", icon: "🔴" },
@@ -40,7 +35,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         { value: "other", label: "Other", icon: "🔗" },
     ];
 
-    // Status options - المحدث: مع القيم الصحيحة
     const statusOptions = [
         { value: "available", label: "Available", color: "bg-green-100 text-green-800", description: "Available for reservation" },
         { value: "reserved", label: "Reserved", color: "bg-blue-100 text-blue-800", description: "Currently reserved for a session" },
@@ -60,7 +54,7 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         capacity: initial?.capacity || 100,
         durationLimit: initial?.durationLimit || 120,
         status: initial?.status || "available",
-        allowedDays: initial?.allowedDays || [...daysOfWeek], // Default to all days
+        allowedDays: initial?.allowedDays || [...daysOfWeek],
         allowedTimeSlots: initial?.allowedTimeSlots || [],
         notes: initial?.metadata?.notes || initial?.notes || "",
     }));
@@ -70,7 +64,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
     const [newTimeSlot, setNewTimeSlot] = useState({ startTime: "08:00", endTime: "22:00" });
     const [timeSlotError, setTimeSlotError] = useState("");
 
-    // Handle form field changes
     const onChange = useCallback((path, value) => {
         const paths = path.split(".");
         setForm((prev) => {
@@ -84,7 +77,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         });
     }, []);
 
-    // Handle credentials changes
     const onCredentialsChange = useCallback((field, value) => {
         setForm((prev) => ({
             ...prev,
@@ -95,13 +87,11 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         }));
     }, []);
 
-    // Toggle day selection
     const toggleDay = useCallback((day) => {
         setForm((prev) => {
             const currentDays = prev.allowedDays;
             const isSelected = currentDays.includes(day);
 
-            // Don't allow removing all days
             if (isSelected && currentDays.length === 1) {
                 toast.error("At least one day must be selected");
                 return prev;
@@ -116,17 +106,14 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         });
     }, []);
 
-    // Add time slot
     const addTimeSlot = useCallback(() => {
         const { startTime, endTime } = newTimeSlot;
 
-        // Validate time slot
         if (startTime >= endTime) {
             setTimeSlotError("End time must be after start time");
             return;
         }
 
-        // Check for overlapping slots
         const hasOverlap = form.allowedTimeSlots.some(
             (slot) =>
                 (startTime >= slot.startTime && startTime < slot.endTime) ||
@@ -145,11 +132,9 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
             allowedTimeSlots: [...prev.allowedTimeSlots, { startTime, endTime }],
         }));
 
-        // Reset new time slot
         setNewTimeSlot({ startTime: "08:00", endTime: "22:00" });
     }, [form.allowedTimeSlots, newTimeSlot]);
 
-    // Remove time slot
     const removeTimeSlot = useCallback((index) => {
         setForm((prev) => ({
             ...prev,
@@ -157,7 +142,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         }));
     }, []);
 
-    // Validate form
     const validateForm = useCallback(() => {
         if (!form.name.trim()) {
             toast.error("Meeting link name is required");
@@ -173,16 +157,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         const urlPattern = /^(https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w-./?%&=]*)?$/;
         if (!urlPattern.test(form.link)) {
             toast.error("Please enter a valid URL");
-            return false;
-        }
-
-        if (!form.credentials.username.trim()) {
-            toast.error("Username is required");
-            return false;
-        }
-
-        if (!form.credentials.password.trim()) {
-            toast.error("Password is required");
             return false;
         }
 
@@ -204,7 +178,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         return true;
     }, [form]);
 
-    // Generate random password
     const generatePassword = useCallback(() => {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
         let password = "";
@@ -214,7 +187,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         onCredentialsChange("password", password);
     }, [onCredentialsChange]);
 
-    // Get platform placeholder
     const getPlatformPlaceholder = useCallback(() => {
         switch (form.platform) {
             case "zoom":
@@ -228,13 +200,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         }
     }, [form.platform]);
 
-    // Get status description
-    const getStatusDescription = useCallback((statusValue) => {
-        const status = statusOptions.find(s => s.value === statusValue);
-        return status ? status.description : "";
-    }, []);
-
-    // Get status color class - المحدث
     const getStatusColorClass = (statusValue) => {
         switch (statusValue) {
             case 'available': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
@@ -246,7 +211,12 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         }
     };
 
-    // Submit form - FIXED: إصلاح مشكلة الـ ID في التحديث
+    const getStatusDescription = (statusValue) => {
+        const status = statusOptions.find(s => s.value === statusValue);
+        return status ? status.description : "";
+    };
+
+    // ✅ FIX: دالة السابميت المعدلة
     const submit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -256,15 +226,14 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
         );
 
         try {
-            // Validate form
             if (!validateForm()) {
                 toast.dismiss(toastId);
                 setLoading(false);
                 return;
             }
 
-            // ✅ FIXED: استخدام _id بدلاً من id
-            const meetingLinkId = initial?._id || initial?.id;
+            // ✅ FIX: استخدام id بشكل صحيح
+            const meetingLinkId = initial?.id || initial?._id;
             
             // Prepare payload
             const payload = {
@@ -273,9 +242,14 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
                 durationLimit: parseInt(form.durationLimit),
             };
 
+            console.log("📤 Sending payload:", payload);
+            console.log("📤 Meeting Link ID:", meetingLinkId);
+
             const method = meetingLinkId ? "PUT" : "POST";
-            // ✅ FIXED: استخدام _id في URL
             const url = meetingLinkId ? `/api/meeting-links/${meetingLinkId}` : "/api/meeting-links";
+
+            console.log("📤 API URL:", url);
+            console.log("📤 Method:", method);
 
             const res = await fetch(url, {
                 method,
@@ -284,6 +258,7 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
             });
 
             const result = await res.json();
+            console.log("📥 API Response:", result);
 
             if (!res.ok) {
                 throw new Error(result.error || "Failed to save meeting link");
@@ -294,17 +269,16 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
                 { id: toastId }
             );
 
-            onSaved();
-            onClose();
+            if (onSaved) onSaved();
+            if (onClose) onClose();
         } catch (err) {
-            console.error("Error saving meeting link:", err);
+            console.error("❌ Error saving meeting link:", err);
             toast.error(err.message || "Failed to save meeting link", { id: toastId });
         } finally {
             setLoading(false);
         }
     };
 
-    // Handle new time slot input change
     const handleNewTimeSlotChange = (field, value) => {
         setNewTimeSlot(prev => ({ ...prev, [field]: value }));
     };
@@ -416,7 +390,7 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-                            Username *
+                            Username
                         </label>
                         <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
@@ -428,14 +402,13 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
                                 onChange={(e) => onCredentialsChange("username", e.target.value)}
                                 placeholder="e.g., admin, host, meeting.user"
                                 className="flex-1 px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-                                required
                             />
                         </div>
                     </div>
 
                     <div>
                         <label className="block text-13 font-medium text-MidnightNavyText dark:text-white mb-2">
-                            Password *
+                            Password
                         </label>
                         <div className="flex items-center gap-2">
                             <div className="relative flex-1">
@@ -445,7 +418,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
                                     onChange={(e) => onCredentialsChange("password", e.target.value)}
                                     placeholder="Enter meeting password"
                                     className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white pr-10"
-                                    required
                                 />
                                 <button
                                     type="button"
@@ -678,25 +650,6 @@ export default function MeetingLinkForm({ initial, onClose, onSaved }) {
                         rows="3"
                         className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white resize-none"
                     />
-                </div>
-            </div>
-
-            {/* Quick Info */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-5">
-                <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                    <div className="space-y-2">
-                        <h4 className="font-medium text-blue-800 dark:text-blue-300">
-                            How Meeting Links Work:
-                        </h4>
-                        <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1 list-disc pl-5">
-                            <li>Meeting links are automatically assigned to sessions during generation</li>
-                            <li>The system checks for availability based on schedule and time slots</li>
-                            <li>Links are reserved for the exact session duration</li>
-                            <li>After session completion, links are automatically released</li>
-                            <li>Links with least usage are prioritized for assignment</li>
-                        </ul>
-                    </div>
                 </div>
             </div>
 

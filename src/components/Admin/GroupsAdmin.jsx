@@ -146,67 +146,83 @@ export default function GroupsAdmin() {
     };
 
     const onDelete = async (id, name) => {
-        toast(
-            (toastInstance) => (
-                <div className="w-404 max-w-full bg-white dark:bg-darkmode rounded-14 shadow-round-box p-4">
-                    <div className="flex items-start gap-3">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold">
-                            !
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-16 font-semibold">{t("groups.delete.title")}</p>
-                            <p
-                                className="text-14 mt-1 text-slate-500 dark:text-darktext"
-                                dangerouslySetInnerHTML={{
-                                    __html: t("groups.delete.message", { name })
-                                }}
-                            />
+        // إنشاء عنصر تأكيد مخصص
+        const confirmationModal = document.createElement('div');
+        confirmationModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+        confirmationModal.innerHTML = `
+            <div class="bg-white dark:bg-darkmode rounded-xl shadow-xl max-w-md w-full p-6">
+                <div class="flex items-start gap-4 mb-6">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.196 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
                         </div>
                     </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                        <button
-                            className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-                            onClick={() => toast.dismiss(toastInstance.id)}
-                        >
-                            {t("groups.delete.cancel")}
-                        </button>
-                        <button
-                            className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
-                            onClick={async () => {
-                                toast.dismiss(toastInstance.id);
-                                try {
-                                    const res = await fetch(`/api/groups/${id}`, {
-                                        method: "DELETE",
-                                    });
-
-                                    if (res.ok) {
-                                        await loadGroups();
-                                        toast.success(t("groups.delete.success"));
-                                    } else {
-                                        const error = await res.json();
-                                        toast.error(error.error || t("groups.delete.failed"));
-                                    }
-                                } catch (err) {
-                                    console.error("Error deleting group:", err);
-                                    toast.error(t("groups.delete.failed"));
-                                }
-                            }}
-                        >
-                            {t("groups.delete.confirm")}
-                        </button>
+                    <div class="flex-1">
+                        <h3 class="text-lg font-bold text-MidnightNavyText dark:text-white mb-2">
+                            ${t("groups.delete.title")}
+                        </h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">
+                            ${t("groups.delete.message", { name: `<strong>"${name}"</strong>` }).replace('<strong>', '<strong class="text-red-600 dark:text-red-400">')}
+                        </p>
+                        <p class="text-xs text-red-600 dark:text-red-400 mt-2 font-medium">
+                            ⚠️ ${t("groups.delete.warning")}
+                        </p>
                     </div>
                 </div>
-            ),
-            { duration: Infinity, position: "top-center" }
-        );
+                <div class="flex justify-end gap-3">
+                    <button id="cancelDelete" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        ${t("groups.delete.cancel")}
+                    </button>
+                    <button id="confirmDelete" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
+                        ${t("groups.delete.confirm")}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // إضافة العنصر للصفحة
+        document.body.appendChild(confirmationModal);
+
+        // التعامل مع النقر على الإلغاء
+        document.getElementById('cancelDelete').onclick = () => {
+            document.body.removeChild(confirmationModal);
+        };
+
+        // التعامل مع النقر على التأكيد
+        document.getElementById('confirmDelete').onclick = async () => {
+            const loadingToast = toast.loading(t("groups.delete.processing"));
+            
+            try {
+                const res = await fetch(`/api/groups/${id}`, {
+                    method: "DELETE",
+                });
+
+                if (res.ok) {
+                    await loadGroups();
+                    toast.success(t("groups.delete.success"), { id: loadingToast });
+                } else {
+                    const error = await res.json();
+                    toast.error(error.error || t("groups.delete.failed"), { id: loadingToast });
+                }
+            } catch (err) {
+                console.error("Error deleting group:", err);
+                toast.error(t("groups.delete.failed"), { id: loadingToast });
+            } finally {
+                document.body.removeChild(confirmationModal);
+            }
+        };
+
+        // إغلاق النافذة عند النقر خارجها
+        confirmationModal.onclick = (e) => {
+            if (e.target === confirmationModal) {
+                document.body.removeChild(confirmationModal);
+            }
+        };
     };
 
-
-
-    // Replace the old onActivate method with this simplified version
-
     const onActivate = async (id, name) => {
-        // ✅ Simply open the notification modal
         onActivateWithNotification(id);
     };
 
@@ -254,9 +270,7 @@ export default function GroupsAdmin() {
         }
     };
 
-
     const handleActivateAndNotify = async (instructorMessages) => {
-        // ✅ FIX: استخدم group id من state بشكل آمن
         const groupId = instructorNotificationModal?.groupData?._id || instructorNotificationModal?.groupData?.id;
 
         console.log(`🔄 Activating group with ID: ${groupId}`);
@@ -270,7 +284,6 @@ export default function GroupsAdmin() {
         const loadingToast = toast.loading(t("groups.activate.loading"));
 
         try {
-            // ✅ تأكد من تمرير الـ ID بشكل صحيح
             const res = await fetch(`/api/groups/${groupId}/activate`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -781,7 +794,6 @@ export default function GroupsAdmin() {
                 instructors={instructorNotificationModal.instructors}
                 groupData={instructorNotificationModal.groupData}
                 onSendNotifications={handleActivateAndNotify}
-
             />
         </div>
     );

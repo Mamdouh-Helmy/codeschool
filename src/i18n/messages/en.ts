@@ -3068,6 +3068,10 @@ const en = {
 
   "sessions.attendance.placeholders.excused":
     "Optional: Write a custom message or leave it empty to use the default excused absence notification.\n\nExample Template:\n\nDear {guardianName},\n\n{studentName} was excused from today’s session:\n\n📚 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\nReason: [Write the reason for the excused absence here]\n\nCode School Team 💻",
+
+  "groups.delete.warning":
+    "This action will permanently delete the group from the database and cannot be undone!",
+  "groups.delete.processing": "Deleting the group...",
 };
 
 export default en;

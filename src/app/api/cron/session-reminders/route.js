@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server';
-import { connectDB } from '@/lib/mongodb';
-import Session from '../../../models/Session';
-import Group from '../../../models/Group';
-import Student from '../../../models/Student';
-import { wapilotService } from '@/app/services/wapilot-service';
-import { prepareReminderMessage } from '@/app/services/groupAutomation';
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongodb";
+import Session from "../../../models/Session";
+import Group from "../../../models/Group";
+import Student from "../../../models/Student";
+import { wapilotService } from "../../../services/wapilot-service";
+import { prepareReminderMessage } from "../../../services/groupAutomation";
 
 /**
  * ✅ Cron Job: Session Reminders
@@ -13,17 +13,17 @@ import { prepareReminderMessage } from '@/app/services/groupAutomation';
  */
 export async function GET(req) {
   try {
-    console.log('⏰ Starting session reminder cron job...');
+    console.log("⏰ Starting session reminder cron job...");
 
     // Security check
-    const authHeader = req.headers.get('authorization');
+    const authHeader = req.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      console.log('❌ Unauthorized cron request');
+      console.log("❌ Unauthorized cron request");
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
       );
     }
 
@@ -34,19 +34,21 @@ export async function GET(req) {
 
     // Find active groups with reminders enabled
     const activeGroups = await Group.find({
-      status: 'active',
-      'automation.whatsappEnabled': true,
-      'automation.reminderEnabled': true,
-      isDeleted: false
+      status: "active",
+      "automation.whatsappEnabled": true,
+      "automation.reminderEnabled": true,
+      isDeleted: false,
     }).lean();
 
-    console.log(`📊 Found ${activeGroups.length} groups with reminders enabled`);
+    console.log(
+      `📊 Found ${activeGroups.length} groups with reminders enabled`,
+    );
 
     let stats = {
       groupsChecked: activeGroups.length,
       sessionsProcessed: 0,
       reminders24h: { sent: 0, failed: 0, skipped: 0 },
-      reminders1h: { sent: 0, failed: 0, skipped: 0 }
+      reminders1h: { sent: 0, failed: 0, skipped: 0 },
     };
 
     for (const group of activeGroups) {
@@ -58,16 +60,18 @@ export async function GET(req) {
 
       const sessions24h = await Session.find({
         groupId: group._id,
-        status: 'scheduled',
+        status: "scheduled",
         scheduledDate: {
           $gte: new Date(reminder24hTime.getTime() - 30 * 60000), // 30 min before
-          $lte: new Date(reminder24hTime.getTime() + 30 * 60000)  // 30 min after
+          $lte: new Date(reminder24hTime.getTime() + 30 * 60000), // 30 min after
         },
-        'automationEvents.reminder24hSent': { $ne: true }, // لم يتم إرساله
-        isDeleted: false
+        "automationEvents.reminder24hSent": { $ne: true }, // لم يتم إرساله
+        isDeleted: false,
       });
 
-      console.log(`📅 Found ${sessions24h.length} sessions needing 24h reminder`);
+      console.log(
+        `📅 Found ${sessions24h.length} sessions needing 24h reminder`,
+      );
 
       // ✅ Find sessions needing 1-hour reminder
       const reminder1hTime = new Date(now);
@@ -75,20 +79,24 @@ export async function GET(req) {
 
       const sessions1h = await Session.find({
         groupId: group._id,
-        status: 'scheduled',
+        status: "scheduled",
         scheduledDate: {
           $gte: new Date(reminder1hTime.getTime() - 15 * 60000), // 15 min before
-          $lte: new Date(reminder1hTime.getTime() + 15 * 60000)  // 15 min after
+          $lte: new Date(reminder1hTime.getTime() + 15 * 60000), // 15 min after
         },
-        'automationEvents.reminder1hSent': { $ne: true }, // لم يتم إرساله
-        isDeleted: false
+        "automationEvents.reminder1hSent": { $ne: true }, // لم يتم إرساله
+        isDeleted: false,
       });
 
       console.log(`⏰ Found ${sessions1h.length} sessions needing 1h reminder`);
 
       // ✅ Process 24-hour reminders
       for (const session of sessions24h) {
-        const result = await sendSessionReminderInternal(session, group, '24hours');
+        const result = await sendSessionReminderInternal(
+          session,
+          group,
+          "24hours",
+        );
         stats.sessionsProcessed++;
         stats.reminders24h.sent += result.sent;
         stats.reminders24h.failed += result.failed;
@@ -98,19 +106,23 @@ export async function GET(req) {
         if (result.sent > 0) {
           await Session.findByIdAndUpdate(session._id, {
             $set: {
-              'automationEvents.reminder24hSent': true,
-              'automationEvents.reminder24hSentAt': new Date(),
-              'automationEvents.reminder24hStudentsNotified': result.sent,
-              'automationEvents.reminderStats.total24hSent': result.sent,
-              'automationEvents.reminderStats.total24hFailed': result.failed
-            }
+              "automationEvents.reminder24hSent": true,
+              "automationEvents.reminder24hSentAt": new Date(),
+              "automationEvents.reminder24hStudentsNotified": result.sent,
+              "automationEvents.reminderStats.total24hSent": result.sent,
+              "automationEvents.reminderStats.total24hFailed": result.failed,
+            },
           });
         }
       }
 
       // ✅ Process 1-hour reminders
       for (const session of sessions1h) {
-        const result = await sendSessionReminderInternal(session, group, '1hour');
+        const result = await sendSessionReminderInternal(
+          session,
+          group,
+          "1hour",
+        );
         stats.sessionsProcessed++;
         stats.reminders1h.sent += result.sent;
         stats.reminders1h.failed += result.failed;
@@ -120,32 +132,35 @@ export async function GET(req) {
         if (result.sent > 0) {
           await Session.findByIdAndUpdate(session._id, {
             $set: {
-              'automationEvents.reminder1hSent': true,
-              'automationEvents.reminder1hSentAt': new Date(),
-              'automationEvents.reminder1hStudentsNotified': result.sent,
-              'automationEvents.reminderStats.total1hSent': result.sent,
-              'automationEvents.reminderStats.total1hFailed': result.failed
-            }
+              "automationEvents.reminder1hSent": true,
+              "automationEvents.reminder1hSentAt": new Date(),
+              "automationEvents.reminder1hStudentsNotified": result.sent,
+              "automationEvents.reminderStats.total1hSent": result.sent,
+              "automationEvents.reminderStats.total1hFailed": result.failed,
+            },
           });
         }
       }
     }
 
-    console.log('\n✅ Cron job completed');
-    console.log('📊 Stats:', stats);
+    console.log("\n✅ Cron job completed");
+    console.log("📊 Stats:", stats);
 
     return NextResponse.json({
       success: true,
-      message: 'Session reminders processed',
+      message: "Session reminders processed",
       stats,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
-    console.error('❌ Error in cron job:', error);
+    console.error("❌ Error in cron job:", error);
     return NextResponse.json(
-      { success: false, error: error.message, timestamp: new Date().toISOString() },
-      { status: 500 }
+      {
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 },
     );
   }
 }
@@ -162,7 +177,7 @@ async function sendSessionReminderInternal(session, group, reminderType) {
     const students = await Student.getStudentsForReminder(
       group._id,
       session._id,
-      reminderType
+      reminderType,
     );
 
     console.log(`👥 ${students.length} students to notify`);
@@ -170,25 +185,26 @@ async function sendSessionReminderInternal(session, group, reminderType) {
     for (const student of students) {
       try {
         const whatsappNumber = student.personalInfo?.whatsappNumber;
-        
+
         if (!whatsappNumber) {
           result.skipped++;
           continue;
         }
 
-        const language = student.communicationPreferences?.preferredLanguage || 'ar';
+        const language =
+          student.communicationPreferences?.preferredLanguage || "ar";
 
         const message = prepareReminderMessage(
           student.personalInfo?.fullName,
           session,
           group,
           reminderType,
-          language
+          language,
         );
 
         await wapilotService.sendTextMessage(
           wapilotService.preparePhoneNumber(whatsappNumber),
-          message
+          message,
         );
 
         await student.addSessionReminder({
@@ -197,30 +213,29 @@ async function sendSessionReminderInternal(session, group, reminderType) {
           reminderType,
           message,
           language,
-          status: 'sent',
+          status: "sent",
           sessionDetails: {
             title: session.title,
             scheduledDate: session.scheduledDate,
             startTime: session.startTime,
             endTime: session.endTime,
             moduleIndex: session.moduleIndex,
-            sessionNumber: session.sessionNumber
-          }
+            sessionNumber: session.sessionNumber,
+          },
         });
 
         result.sent++;
-
       } catch (studentError) {
         console.error(`❌ Failed:`, studentError.message);
-        
+
         try {
           await student.addSessionReminder({
             sessionId: session._id,
             groupId: group._id,
             reminderType,
-            message: 'Failed',
-            language: 'ar',
-            status: 'failed',
+            message: "Failed",
+            language: "ar",
+            status: "failed",
             error: studentError.message,
             sessionDetails: {
               title: session.title,
@@ -228,20 +243,21 @@ async function sendSessionReminderInternal(session, group, reminderType) {
               startTime: session.startTime,
               endTime: session.endTime,
               moduleIndex: session.moduleIndex,
-              sessionNumber: session.sessionNumber
-            }
+              sessionNumber: session.sessionNumber,
+            },
           });
         } catch {}
 
         result.failed++;
       }
     }
-
   } catch (error) {
     console.error(`❌ Error:`, error);
   }
 
-  console.log(`📊 ${reminderType}: ${result.sent} sent, ${result.failed} failed`);
+  console.log(
+    `📊 ${reminderType}: ${result.sent} sent, ${result.failed} failed`,
+  );
   return result;
 }
 
