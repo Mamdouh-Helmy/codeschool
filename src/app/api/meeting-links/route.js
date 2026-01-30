@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/mongodb";
 import MeetingLink from "../../models/MeetingLink";
 import mongoose from "mongoose";
 
-// GET: أبسط نسخة
+// GET: Get all meeting links with filters
 export async function GET(req) {
   try {
     await connectDB();
@@ -84,7 +84,7 @@ export async function GET(req) {
       },
     });
   } catch (error) {
-    console.error("Error:", error.message);
+    console.error("❌ Error in GET /api/meeting-links:", error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 },
@@ -92,6 +92,7 @@ export async function GET(req) {
   }
 }
 
+// POST: Create new meeting link
 export async function POST(req) {
   try {
     await connectDB();
@@ -116,8 +117,8 @@ export async function POST(req) {
         username: body.credentials?.username || "",
         password: body.credentials?.password || "",
       },
-      capacity: body.capacity || 100,
-      durationLimit: body.durationLimit || 120,
+      capacity: parseInt(body.capacity) || 100,
+      durationLimit: parseInt(body.durationLimit) || 120,
       status: body.status || "available",
       allowedDays: body.allowedDays || [
         "Sunday",
@@ -142,6 +143,8 @@ export async function POST(req) {
       isDeleted: false,
     };
 
+    console.log("📋 Meeting link data:", meetingLinkData);
+
     // حفظ البيانات
     const meetingLink = new MeetingLink(meetingLinkData);
     await meetingLink.save();
@@ -164,7 +167,8 @@ export async function POST(req) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("❌ Error creating meeting link:", error.message);
+    console.error("❌ Error creating meeting link:", error);
+    console.error("❌ Error stack:", error.stack);
 
     // معالجة أخطاء الـ duplicate
     if (error.code === 11000) {

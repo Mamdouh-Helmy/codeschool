@@ -459,4 +459,4 @@ if (mongoose.models.MeetingLink) {
 
 const MeetingLink = mongoose.model("MeetingLink", meetingLinkSchema);
 
-export default MeetingLink;
+export default MeetingLink
