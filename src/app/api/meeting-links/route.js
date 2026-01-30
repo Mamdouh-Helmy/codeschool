@@ -92,29 +92,14 @@ export async function GET(req) {
   }
 }
 
-// POST: إنشاء رابط جديد - إصلاح مشكلة الـ `validStatus`
 export async function POST(req) {
   try {
     await connectDB();
 
     const body = await req.json();
-    console.log("Creating meeting link:", body.name);
+    console.log("📤 Creating meeting link:", body.name);
 
-    // ✅ تحقق من أن `body.status` موجود وصالح
-    const validStatuses = [
-      "available",
-      "reserved",
-      "in_use",
-      "maintenance",
-      "inactive",
-    ];
-
-    const status =
-      body.status && validStatuses.includes(body.status)
-        ? body.status
-        : "available";
-
-    // ✅ التحقق من الحقول المطلوبة
+    // التحقق من الحقول المطلوبة
     if (!body.name || !body.link) {
       return NextResponse.json(
         { success: false, error: "Name and link are required" },
@@ -122,25 +107,10 @@ export async function POST(req) {
       );
     }
 
-    // ✅ التحقق من أن الرابط فريد
-    const existingLink = await MeetingLink.findOne({
-      link: body.link,
-      isDeleted: false,
-    });
-
-    if (existingLink) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "A meeting link with this URL already exists",
-        },
-        { status: 409 },
-      );
-    }
-
+    // إنشاء البيانات الأساسية
     const meetingLinkData = {
-      name: body.name || "New Link",
-      link: body.link || "",
+      name: body.name,
+      link: body.link,
       platform: body.platform || "zoom",
       credentials: {
         username: body.credentials?.username || "",
@@ -148,7 +118,7 @@ export async function POST(req) {
       },
       capacity: body.capacity || 100,
       durationLimit: body.durationLimit || 120,
-      status: status,
+      status: body.status || "available",
       allowedDays: body.allowedDays || [
         "Sunday",
         "Monday",
@@ -160,10 +130,9 @@ export async function POST(req) {
       ],
       allowedTimeSlots: body.allowedTimeSlots || [],
       metadata: {
-        createdBy: body.createdBy || new mongoose.Types.ObjectId(),
+        notes: body.notes || "",
         createdAt: new Date(),
         updatedAt: new Date(),
-        notes: body.notes || "",
       },
       stats: {
         totalUses: 0,
@@ -173,43 +142,29 @@ export async function POST(req) {
       isDeleted: false,
     };
 
-    // حفظ البيانات مباشرة
+    // حفظ البيانات
     const meetingLink = new MeetingLink(meetingLinkData);
     await meetingLink.save();
 
-    console.log("✅ Created:", meetingLink.name);
+    console.log("✅ Created meeting link:", meetingLink.name);
 
     return NextResponse.json(
       {
         success: true,
         data: {
           id: meetingLink._id,
-          _id: meetingLink._id, // ✅ إضافة _id للتأكد
+          _id: meetingLink._id,
           name: meetingLink.name,
           link: meetingLink.link,
           platform: meetingLink.platform,
           status: meetingLink.status,
-          credentials: {
-            username: meetingLink.credentials?.username || "",
-            password: meetingLink.credentials?.password || "",
-          },
-          capacity: meetingLink.capacity,
-          durationLimit: meetingLink.durationLimit,
-          allowedDays: meetingLink.allowedDays,
-          allowedTimeSlots: meetingLink.allowedTimeSlots,
-          metadata: meetingLink.metadata,
         },
         message: "Meeting link created successfully",
       },
       { status: 201 },
     );
   } catch (error) {
-    console.error("❌ Error creating meeting link:", error);
-    console.error("❌ Error details:", {
-      message: error.message,
-      stack: error.stack,
-      ...(error.code && { code: error.code }),
-    });
+    console.error("❌ Error creating meeting link:", error.message);
 
     // معالجة أخطاء الـ duplicate
     if (error.code === 11000) {
@@ -217,25 +172,8 @@ export async function POST(req) {
         {
           success: false,
           error: "This link already exists",
-          details: "Duplicate link URL",
         },
         { status: 409 },
-      );
-    }
-
-    // معالجة أخطاء التحقق
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors || {})
-        .map((err) => err.message)
-        .join("; ");
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Validation failed",
-          details: messages,
-        },
-        { status: 400 },
       );
     }
 
@@ -243,7 +181,6 @@ export async function POST(req) {
       {
         success: false,
         error: error.message || "Failed to create meeting link",
-        ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
       },
       { status: 500 },
     );
