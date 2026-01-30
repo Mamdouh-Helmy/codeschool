@@ -1,5 +1,5 @@
 // ============================================
-// services/wapilot-service.js - Fixed Logging
+// services/wapilot-service.js - Send to Student & Guardian
 // ============================================
 
 import Student from "../models/Student.js";
@@ -26,6 +26,7 @@ class WapilotService {
       enabled: this.isEnabled,
       instance: this.instanceId ? "Configured" : "Not configured",
       mode: this.mode,
+      recipients: "✅ Student + Guardian (Dual sending)",
       autoLogging:
         "✅ ENABLED - All messages logged to Student.whatsappMessages",
     });
@@ -127,6 +128,9 @@ class WapilotService {
       console.log(`   Type: ${messageData.messageType}`);
       console.log(`   Status: ${messageData.status}`);
       console.log(`   To: ${messageData.recipientNumber}`);
+      console.log(
+        `   Recipient Type: ${messageData.metadata?.recipientType || "student"}`,
+      );
 
       // ✅ Ensure DB connection
       await connectDB();
@@ -362,122 +366,183 @@ class WapilotService {
     return simulatedResponse;
   }
 
+  /**
+   * إرسال رسائل الترحيب للطالب وولي الأمر
+   */
   async sendWelcomeMessages(
     studentId,
     studentName,
-    phoneNumber,
+    studentPhone,
+    guardianPhone,
     customFirstMessage,
     customSecondMessage,
   ) {
     try {
-      console.log("🎯 WhatsApp automation for student:", {
+      console.log("🎯 WhatsApp automation for student & guardian:", {
         studentId,
         name: studentName,
-        whatsappNumber: phoneNumber,
+        studentWhatsapp: studentPhone,
+        guardianWhatsapp: guardianPhone,
         mode: this.mode,
         hasCustomMessages: !!(customFirstMessage || customSecondMessage),
       });
 
-      if (!phoneNumber) {
-        console.log("⚠️ WhatsApp number not provided, skipping...");
+      // ✅ التحقق من وجود أرقام WhatsApp
+      if (!studentPhone && !guardianPhone) {
+        console.log("⚠️ No WhatsApp numbers provided, skipping...");
         return {
           success: false,
           skipped: true,
-          reason: "WhatsApp number not provided",
+          reason: "No WhatsApp numbers provided",
         };
       }
 
-      const preparedNumber = this.preparePhoneNumber(phoneNumber);
-      if (!preparedNumber) {
-        console.error("❌ Could not prepare WhatsApp number");
-        return {
-          success: false,
-          reason: "Invalid WhatsApp number format",
-        };
-      }
+      const results = {
+        student: null,
+        guardian: null,
+      };
 
-      // ✅ الرسالة الأولى تم إزالتها تمامًا
-      // ✅ نبدأ مباشرة برسالة اختيار اللغة
-      const languageMessage =
-        customSecondMessage ||
-        `Welcome to Code School, please select your preferred language so we can communicate with you comfortably:
+      // ✅ 1. إرسال رسالة اختيار اللغة للطالب فقط (قائمة تفاعلية)
+      if (studentPhone) {
+        const preparedStudentNumber = this.preparePhoneNumber(studentPhone);
+        if (preparedStudentNumber) {
+          // ✅ رسالة اختيار اللغة (الرسالة الأولى والوحيدة)
+          const languageMessage =
+            customSecondMessage ||
+            `Welcome to Code School, please select your preferred language so we can communicate with you comfortably:
 
 أهلا بك في كود سكول، من فضلك اختر اللغة المفضلة للتواصل معنا:
 ➡️ العربية
 ➡️ English`;
 
-      let languageResult;
-
-      // ✅ إرسال رسالة اختيار اللغة (قائمة تفاعلية أو نصية)
-      if (this.mode === "production") {
-        languageResult = await this.sendListMessage(
-          preparedNumber,
-          "🌍 Language | اللغة",
-          languageMessage,
-          "Choose | اختر",
-          [
-            {
-              title: "Available Languages",
-              rows: [
+          if (this.mode === "production") {
+            results.student = await this.sendListMessage(
+              preparedStudentNumber,
+              "🌍 Language | اللغة",
+              languageMessage,
+              "Choose | اختر",
+              [
                 {
-                  rowId: "arabic_lang",
-                  title: "➡️ العربية",
-                  description: "اختر العربية كلغة مفضلة",
-                },
-                {
-                  rowId: "english_lang",
-                  title: "➡️ English",
-                  description: "Choose English as preferred language",
+                  title: "Available Languages",
+                  rows: [
+                    {
+                      rowId: "arabic_lang",
+                      title: "➡️ العربية",
+                      description: "اختر العربية كلغة مفضلة",
+                    },
+                    {
+                      rowId: "english_lang",
+                      title: "➡️ English",
+                      description: "Choose English as preferred language",
+                    },
+                  ],
                 },
               ],
-            },
-          ],
-        );
-      } else {
-        languageResult = await this.simulateSendMessage(
-          preparedNumber,
-          languageMessage,
-          true,
-        );
+            );
+          } else {
+            results.student = await this.simulateSendMessage(
+              preparedStudentNumber,
+              languageMessage,
+              true,
+            );
+          }
+
+          // ✅ تسجيل رسالة اختيار اللغة للطالب
+          if (studentId) {
+            await this.logToStudentSchema(studentId, {
+              messageType: "language_selection",
+              messageContent: languageMessage,
+              language: "ar",
+              status: results.student.success ? "sent" : "failed",
+              recipientNumber: preparedStudentNumber,
+              wapilotMessageId: results.student.messageId || null,
+              sentAt: new Date(),
+              metadata: {
+                isCustomMessage: !!customSecondMessage,
+                interactive: true,
+                automationType: "student_creation",
+                recipientType: "student",
+                isFirstMessage: true,
+              },
+              error: results.student.success
+                ? null
+                : results.student.error || "Unknown error",
+            });
+          }
+        }
       }
 
-      // ✅ تسجيل رسالة اختيار اللغة
-      if (studentId) {
-        await this.logToStudentSchema(studentId, {
-          messageType: "language_selection",
-          messageContent: languageMessage,
-          language: "ar",
-          status: languageResult.success ? "sent" : "failed",
-          recipientNumber: preparedNumber,
-          wapilotMessageId: languageResult.messageId || null,
-          sentAt: new Date(),
-          metadata: {
-            isCustomMessage: !!customSecondMessage,
-            interactive: true,
-            automationType: "student_creation",
-            recipientType: "student",
-            isFirstMessage: true, // ✅ إضافة علامة أن هذه هي الرسالة الأولى
-          },
-          error: languageResult.success
-            ? null
-            : languageResult.error || "Unknown error",
-        });
+      // ✅ 2. إرسال رسالة إعلامية لولي الأمر (بدون قائمة تفاعلية)
+      if (guardianPhone) {
+        const preparedGuardianNumber = this.preparePhoneNumber(guardianPhone);
+        if (preparedGuardianNumber) {
+          const guardianMessage = ` 🌟 Welcome to Code School! We're excited to welcome ${studentName} to our learning community.
+
+🌟 أهلاً بك في Code School! يسعدنا ترحيب ${studentName} في مجتمعنا التعليمي.
+
+📌 **Registration Confirmed | تأكيد التسجيل**
+✅ ${studentName} has been successfully enrolled in Code School.
+✅ تم تسجيل ${studentName} بنجاح في Code School.
+
+🌐 **Language Selection | اختيار اللغة**
+The student will receive a WhatsApp message to select their preferred language (Arabic or English) for all future communication.
+سيستلم الطالب رسالة على الواتساب لاختيار اللغة المفضلة (العربية أو الإنجليزية) لجميع التواصل المستقبلي.
+
+مع أطيب التحيات،
+فريق Code School 💻`;
+
+          if (this.mode === "production") {
+            results.guardian = await this.sendTextMessage(
+              preparedGuardianNumber,
+              guardianMessage,
+            );
+          } else {
+            results.guardian = await this.simulateSendMessage(
+              preparedGuardianNumber,
+              guardianMessage,
+            );
+          }
+
+          // ✅ تسجيل رسالة ولي الأمر
+          if (studentId) {
+            await this.logToStudentSchema(studentId, {
+              messageType: "guardian_notification",
+              messageContent: guardianMessage,
+              language: "ar",
+              status: results.guardian.success ? "sent" : "failed",
+              recipientNumber: preparedGuardianNumber,
+              wapilotMessageId: results.guardian.messageId || null,
+              sentAt: new Date(),
+              metadata: {
+                automationType: "student_creation",
+                recipientType: "guardian",
+                guardianName: "Guardian",
+                studentName: studentName,
+              },
+              error: results.guardian.success
+                ? null
+                : results.guardian.error || "Unknown error",
+            });
+          }
+        }
       }
 
       return {
-        success: true,
-        messages: [{ type: "language_selection", result: languageResult }],
+        success: results.student?.success || results.guardian?.success || false,
+        results,
         studentId,
         studentName: studentName,
-        whatsappNumber: preparedNumber,
+        whatsappNumbers: {
+          student: studentPhone,
+          guardian: guardianPhone,
+        },
         mode: this.mode,
-        totalMessages: 1, // ✅ تم تغيير العدد إلى 1 فقط
+        totalMessages: (studentPhone ? 1 : 0) + (guardianPhone ? 1 : 0),
         interactive: true,
-        messageType: "list_message",
-        nextStep: "Waiting for list selection (arabic_lang or english_lang)",
+        messageType: "dual_messages",
+        nextStep: "Waiting for student language selection",
         webhookEndpoint: "/api/whatsapp/webhook",
-        notes:
-          "First welcome message removed - starting with language selection directly", // ✅ إضافة ملاحظة
+        notes: "Sent language selection to student + notification to guardian",
       };
     } catch (error) {
       console.error("❌ Error in sendWelcomeMessages:", error.message);
@@ -485,48 +550,112 @@ class WapilotService {
     }
   }
 
+  /**
+   * إرسال تأكيد اللغة للطالب وولي الأمر
+   */
   async sendLanguageConfirmationMessage(
     studentId,
-    phoneNumber,
+    studentPhone,
+    guardianPhone,
     studentName,
     selectedLanguage,
   ) {
     try {
-      console.log("📱 Sending language confirmation:", {
+      console.log("📱 Sending language confirmation to student & guardian:", {
         studentId,
-        phoneNumber,
+        studentPhone,
+        guardianPhone,
         studentName,
         selectedLanguage,
         mode: this.mode,
       });
 
-      let preparedNumber = phoneNumber;
-      if (!preparedNumber.startsWith("+")) {
-        preparedNumber = `+${preparedNumber}`;
-      }
-      if (!preparedNumber.startsWith("+20")) {
-        preparedNumber = `+20${preparedNumber.replace(/^\+/, "")}`;
-      }
+      const results = {
+        student: null,
+        guardian: null,
+      };
 
-      const messageText = this.prepareLanguageConfirmationMessage(
-        studentName,
-        selectedLanguage,
-      );
+      // ✅ 1. إرسال تأكيد اللغة للطالب
+      if (studentPhone) {
+        let preparedStudentNumber = studentPhone;
+        if (!preparedStudentNumber.startsWith("+")) {
+          preparedStudentNumber = `+${preparedStudentNumber}`;
+        }
+        if (!preparedStudentNumber.startsWith("+20")) {
+          preparedStudentNumber = `+20${preparedStudentNumber.replace(/^\+/, "")}`;
+        }
 
-      const sendResult = await this.sendAndLogMessage({
-        studentId,
-        phoneNumber: preparedNumber,
-        messageContent: messageText,
-        messageType: "language_confirmation",
-        language: selectedLanguage,
-        metadata: {
+        const studentMessageText = this.prepareLanguageConfirmationMessage(
+          studentName,
           selectedLanguage,
-          automationType: "language_selection_response",
-          recipientType: "student",
-        },
-      });
+        );
 
-      return sendResult;
+        results.student = await this.sendAndLogMessage({
+          studentId,
+          phoneNumber: preparedStudentNumber,
+          messageContent: studentMessageText,
+          messageType: "language_confirmation",
+          language: selectedLanguage,
+          metadata: {
+            selectedLanguage,
+            automationType: "language_selection_response",
+            recipientType: "student",
+          },
+        });
+      }
+
+      // ✅ 2. إرسال إعلام لولي الأمر
+      if (guardianPhone) {
+        let preparedGuardianNumber = guardianPhone;
+        if (!preparedGuardianNumber.startsWith("+")) {
+          preparedGuardianNumber = `+${preparedGuardianNumber}`;
+        }
+        if (!preparedGuardianNumber.startsWith("+20")) {
+          preparedGuardianNumber = `+20${preparedGuardianNumber.replace(/^\+/, "")}`;
+        }
+
+        const guardianMessage =
+          selectedLanguage === "en"
+            ? `Language Preference Confirmed
+
+${studentName} has selected English as their preferred language for communication.
+
+All future communication with the student will be in English.
+
+Code School Team 💻`
+            : `تم تأكيد تفضيل اللغة
+
+${studentName} قام باختيار اللغة العربية كلغة التواصل المفضلة.
+
+سيتم التواصل مع الطالب باللغة العربية مستقبلاً.
+
+فريق Code School 💻`;
+
+        results.guardian = await this.sendAndLogMessage({
+          studentId,
+          phoneNumber: preparedGuardianNumber,
+          messageContent: guardianMessage,
+          messageType: "language_confirmation_guardian",
+          language: selectedLanguage,
+          metadata: {
+            selectedLanguage,
+            automationType: "language_selection_response",
+            recipientType: "guardian",
+            guardianName: "Guardian",
+            studentName: studentName,
+          },
+        });
+      }
+
+      return {
+        success: results.student?.success || results.guardian?.success || false,
+        results,
+        summary: {
+          studentConfirmed: !!results.student?.success,
+          guardianNotified: !!results.guardian?.success,
+          language: selectedLanguage,
+        },
+      };
     } catch (error) {
       console.error("❌ Error sending confirmation:", error.message);
       throw error;
@@ -576,6 +705,7 @@ ${studentName}،
       lastChecked: new Date(),
       features: [
         "✅ AUTO-LOGGING (All messages logged to Student.whatsappMessages)",
+        "✅ DUAL RECIPIENTS (Student + Guardian)",
         "dual-language-welcome",
         "interactive-list-messages",
         "auto-confirmation",
@@ -583,7 +713,7 @@ ${studentName}،
         "database-sync",
         "custom-messages",
       ],
-      currentFlow: "Direct language selection (no initial welcome message)", // ✅ تحديث وصف سير العمل
+      currentFlow: "Direct language selection + Guardian notification",
     };
   }
 }

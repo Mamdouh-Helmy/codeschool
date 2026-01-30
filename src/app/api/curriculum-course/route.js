@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import mongoose from "mongoose";
 
-// Define schemas
+// Define schemas (same as above but without slug field)
 const LessonSchema = new mongoose.Schema({
   title: String,
   description: String,
@@ -36,13 +36,6 @@ const CurriculumSchema = new mongoose.Schema(
       trim: true,
     },
     description: String,
-    slug: {
-      type: String,
-      unique: true,
-      sparse: true, // Allow multiple null values
-      lowercase: true,
-      trim: true,
-    },
     modules: [ModuleSchema],
     level: {
       type: String,
@@ -64,78 +57,43 @@ const CurriculumSchema = new mongoose.Schema(
   },
 );
 
-// Generate unique slug
-CurriculumSchema.pre("save", async function (next) {
-  if (this.isModified("title") && this.title) {
-    let baseSlug = this.title
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .trim();
-    
-    // If slug is empty after processing, use a default
-    if (!baseSlug) {
-      baseSlug = "curriculum";
-    }
-    
-    // Check for duplicate slugs and append number if needed
-    let slug = baseSlug;
-    let counter = 1;
-    
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const currentDoc = this;
-    
-    while (true) {
-      const existing = await mongoose.models.Curriculum.findOne({ 
-        slug, 
-        _id: { $ne: currentDoc._id } 
-      });
-      
-      if (!existing) {
-        break;
-      }
-      
-      slug = `${baseSlug}-${counter}`;
-      counter++;
-    }
-    
-    this.slug = slug;
-  } else if (!this.slug && this.title) {
-    // If no slug but has title, generate one
-    const baseSlug = this.title
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .trim() || "curriculum";
-    
-    this.slug = `${baseSlug}-${Date.now()}`;
-  }
-  
-  next();
-});
-
 const Curriculum =
   mongoose.models.Curriculum || mongoose.model("Curriculum", CurriculumSchema);
 
+// GET all curriculums
 export async function GET(request) {
   try {
     await connectDB();
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
+    const level = searchParams.get("level");
+    const grade = searchParams.get("grade");
+    const subject = searchParams.get("subject");
 
     let query = {};
+    
+    // Build search query
     if (search) {
-      query = {
-        $or: [
-          { title: { $regex: search, $options: "i" } },
-          { description: { $regex: search, $options: "i" } },
-          { grade: { $regex: search, $options: "i" } },
-          { subject: { $regex: search, $options: "i" } },
-        ],
-      };
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { grade: { $regex: search, $options: "i" } },
+        { subject: { $regex: search, $options: "i" } },
+      ];
+    }
+    
+    // Add filters
+    if (level) {
+      query.level = level;
+    }
+    
+    if (grade) {
+      query.grade = { $regex: grade, $options: "i" };
+    }
+    
+    if (subject) {
+      query.subject = { $regex: subject, $options: "i" };
     }
 
     const curriculums = await Curriculum.find(query)
@@ -145,19 +103,21 @@ export async function GET(request) {
     return NextResponse.json({
       success: true,
       data: curriculums,
+      count: curriculums.length,
     });
   } catch (error) {
-    console.error("Error fetching curriculums:", error);
+    console.error("❌ Error fetching curriculums:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message,
+        error: error.message || "Failed to fetch curriculums",
       },
       { status: 500 },
     );
   }
 }
 
+// CREATE new curriculum
 export async function POST(request) {
   try {
     await connectDB();
@@ -174,20 +134,41 @@ export async function POST(request) {
       createdBy,
     } = body;
 
-    if (!title || !level) {
+    // Validation
+    if (!title || !title.trim()) {
       return NextResponse.json(
         {
           success: false,
-          error: "Title and level are required",
+          error: "Title is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!level) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Level is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!createdBy || !createdBy.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Creator information is required",
         },
         { status: 400 },
       );
     }
 
     // Validate modules structure
-    if (modules && modules.length > 0) {
+    if (modules && Array.isArray(modules)) {
       for (const module of modules) {
-        if (!module.title) {
+        if (!module.title || !module.title.trim()) {
           return NextResponse.json(
             {
               success: false,
@@ -197,27 +178,51 @@ export async function POST(request) {
           );
         }
 
-        // Ensure each module has 6 lessons
-        if (module.lessons && module.lessons.length !== 6) {
+        // Ensure each module has lessons array
+        if (!module.lessons || !Array.isArray(module.lessons)) {
           return NextResponse.json(
             {
               success: false,
-              error: "Each module must have exactly 6 lessons",
+              error: "Each module must have lessons array",
             },
             { status: 400 },
           );
+        }
+
+        // Ensure sessions array exists
+        if (!module.sessions || !Array.isArray(module.sessions)) {
+          module.sessions = [
+            {
+              sessionNumber: 1,
+              objectives: [],
+              outline: [],
+              projects: [],
+            },
+            {
+              sessionNumber: 2,
+              objectives: [],
+              outline: [],
+              projects: [],
+            },
+            {
+              sessionNumber: 3,
+              objectives: [],
+              outline: [],
+              projects: [],
+            },
+          ];
         }
       }
     }
 
     const curriculum = await Curriculum.create({
-      title,
-      description,
+      title: title.trim(),
+      description: description?.trim() || "",
       modules: modules || [],
       level,
-      grade,
-      subject,
-      duration,
+      grade: grade?.trim() || "",
+      subject: subject?.trim() || "",
+      duration: duration?.trim() || "",
       createdBy,
     });
 
@@ -230,23 +235,23 @@ export async function POST(request) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("Error creating curriculum:", error);
+    console.error("❌ Error creating curriculum:", error);
     
-    // Handle duplicate key error specifically
-    if (error.code === 11000) {
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
       return NextResponse.json(
         {
           success: false,
-          error: "A curriculum with this slug already exists. Please try a different title.",
+          error: "Validation error: " + Object.values(error.errors).map(e => e.message).join(', '),
         },
-        { status: 409 },
+        { status: 400 },
       );
     }
     
     return NextResponse.json(
       {
         success: false,
-        error: error.message,
+        error: error.message || "Failed to create curriculum",
       },
       { status: 500 },
     );

@@ -124,6 +124,12 @@ export async function POST(req) {
         whatsappConversationId: `conv_${Date.now()}_${Math.random()
           .toString(36)
           .substr(2, 9)}`,
+        
+        // ✅ إضافة حقول جديدة لتتبع حالة ولي الأمر
+        whatsappGuardianNotified: false,
+        whatsappGuardianPhone: null,
+        whatsappGuardianNotificationSent: false,
+        whatsappGuardianNotificationAt: null,
       },
     };
 
@@ -175,7 +181,14 @@ export async function POST(req) {
 
     console.log("📱 Triggering WhatsApp automation...");
 
-    // ✅ استخدام customMessages
+    // ✅ الحصول على رقم ولي الأمر
+    const guardianPhone = savedStudent.guardianInfo?.whatsappNumber || 
+                         savedStudent.guardianInfo?.phone || 
+                         null;
+
+    console.log("📞 Guardian WhatsApp number:", guardianPhone);
+
+    // ✅ استخدام customMessages مع رقم ولي الأمر
     setTimeout(async () => {
       try {
         console.log("🔄 Starting WhatsApp automation in background...");
@@ -184,11 +197,12 @@ export async function POST(req) {
           "@/app/services/wapilot-service"
         );
 
-        // ✅ تمرير الرسائل المخصصة مع studentId
+        // ✅ تمرير رقم ولي الأمر مع الطالب
         const whatsappResult = await wapilotService.sendWelcomeMessages(
-          savedStudent._id, // ✅ إضافة studentId
+          savedStudent._id, // ✅ studentId
           savedStudent.personalInfo.fullName,
-          savedStudent.personalInfo.whatsappNumber,
+          savedStudent.personalInfo.whatsappNumber, // ✅ student phone
+          guardianPhone, // ✅ guardian phone
           customMessages.firstMessage,
           customMessages.secondMessage
         );
@@ -205,19 +219,19 @@ export async function POST(req) {
               "metadata.whatsappSentAt": new Date(),
               "metadata.whatsappStatus": "sent",
               "metadata.whatsappMode": whatsappResult.mode,
-              "metadata.whatsappMessagesCount":
-                whatsappResult.totalMessages || 2,
-              "metadata.whatsappTotalMessages":
-                whatsappResult.totalMessages || 2,
+              "metadata.whatsappMessagesCount": whatsappResult.totalMessages || 2,
+              "metadata.whatsappTotalMessages": whatsappResult.totalMessages || 2,
               "metadata.updatedAt": new Date(),
+              // ✅ إضافة معلومات ولي الأمر
+              "metadata.whatsappGuardianNotified": !!guardianPhone,
+              "metadata.whatsappGuardianPhone": guardianPhone,
+              "metadata.whatsappGuardianNotificationSent": !!whatsappResult.results?.guardian?.success,
+              "metadata.whatsappGuardianNotificationAt": new Date(),
             };
 
-            if (whatsappResult.messages && whatsappResult.messages.length > 1) {
-              const secondMessage = whatsappResult.messages[1];
-              if (secondMessage.result && secondMessage.result.messageId) {
-                updateData["metadata.whatsappMessageId"] =
-                  secondMessage.result.messageId;
-              }
+            if (whatsappResult.results?.student?.messageId) {
+              updateData["metadata.whatsappMessageId"] =
+                whatsappResult.results.student.messageId;
             }
 
             await Student.findByIdAndUpdate(savedStudent._id, {
@@ -296,6 +310,7 @@ export async function POST(req) {
             email: savedStudent.personalInfo.email,
             status: savedStudent.enrollmentInfo.status,
             whatsappNumber: savedStudent.personalInfo.whatsappNumber,
+            guardianWhatsapp: guardianPhone,
             hasUserAccount: !!cleanData.authUserId,
             language: savedStudent.communicationPreferences.preferredLanguage,
             whatsappMode: whatsappMode,
@@ -304,33 +319,39 @@ export async function POST(req) {
           whatsappAutomation: {
             triggered: true,
             status: "processing",
+            dualRecipients: {
+              student: !!savedStudent.personalInfo.whatsappNumber,
+              guardian: !!guardianPhone,
+            },
             messages: {
-              total: 2,
-              sent: 0,
-              pending: 2,
+              student: savedStudent.personalInfo.whatsappNumber ? "language_selection (interactive)" : "none",
+              guardian: guardianPhone ? "notification (text)" : "none",
+              total: (savedStudent.personalInfo.whatsappNumber ? 1 : 0) + (guardianPhone ? 1 : 0),
             },
             messageFlow: [
               {
                 step: 1,
-                type: "welcome",
+                type: "language_selection",
+                recipient: "student",
                 content:
-                  customMessages.firstMessage ||
-                  "Welcome message (custom or default)",
+                  customMessages.secondMessage ||
+                  "Language selection with interactive buttons",
+                interactive: true,
                 status: "pending",
               },
               {
                 step: 2,
-                type: "interactive_buttons",
-                content:
-                  customMessages.secondMessage ||
-                  "Language selection with interactive buttons",
-                buttons: whatsappButtons,
-                status: "pending",
+                type: "guardian_notification",
+                recipient: "guardian",
+                content: "Student enrollment notification",
+                interactive: false,
+                status: guardianPhone ? "pending" : "skipped",
               },
               {
                 step: 3,
-                type: "confirmation",
-                content: "Will be sent after button click",
+                type: "language_confirmation",
+                content: "Will be sent after student selects language",
+                recipients: "student + guardian",
                 status: "waiting",
               },
             ],
@@ -341,7 +362,7 @@ export async function POST(req) {
               url: "/api/whatsapp/webhook",
               status: "active",
               method: "POST",
-              supported_responses: ["arabic_btn", "english_btn", "1", "2"],
+              supported_responses: ["arabic_lang", "english_lang", "1", "2", "arabic", "english"],
             },
           },
         },
@@ -379,7 +400,6 @@ export async function POST(req) {
   }
 }
 
-
 // GET: الحصول على جميع الطلاب
 export async function GET(req) {
   try {
@@ -400,6 +420,7 @@ export async function GET(req) {
     const whatsappStatus = searchParams.get("whatsappStatus");
     const language = searchParams.get("language");
     const hasWhatsappResponse = searchParams.get("hasWhatsappResponse");
+    const guardianNotified = searchParams.get("guardianNotified");
 
     const query = { isDeleted: false };
 
@@ -409,6 +430,11 @@ export async function GET(req) {
     if (whatsappStatus) query["metadata.whatsappStatus"] = whatsappStatus;
     if (language)
       query["communicationPreferences.preferredLanguage"] = language;
+    if (guardianNotified === "true") {
+      query["metadata.whatsappGuardianNotificationSent"] = true;
+    } else if (guardianNotified === "false") {
+      query["metadata.whatsappGuardianNotificationSent"] = false;
+    }
 
     if (hasWhatsappResponse === "true") {
       query["metadata.whatsappResponseReceived"] = true;
@@ -423,6 +449,9 @@ export async function GET(req) {
         { enrollmentNumber: { $regex: search, $options: "i" } },
         { "personalInfo.phone": { $regex: search, $options: "i" } },
         { "personalInfo.nationalId": { $regex: search, $options: "i" } },
+        { "guardianInfo.name": { $regex: search, $options: "i" } },
+        { "guardianInfo.phone": { $regex: search, $options: "i" } },
+        { "guardianInfo.whatsappNumber": { $regex: search, $options: "i" } },
       ];
     }
 
@@ -472,8 +501,16 @@ export async function GET(req) {
       whatsappConfirmationSent:
         student.metadata?.whatsappConfirmationSent || false,
       whatsappMessagesCount: student.metadata?.whatsappMessagesCount || 0,
+      
+      // ✅ معلومات ولي الأمر الجديدة
+      whatsappGuardianNotified: student.metadata?.whatsappGuardianNotified || false,
+      whatsappGuardianPhone: student.metadata?.whatsappGuardianPhone || null,
+      whatsappGuardianNotificationSent: student.metadata?.whatsappGuardianNotificationSent || false,
+      whatsappGuardianNotificationAt: student.metadata?.whatsappGuardianNotificationAt || null,
+      
       language: student.communicationPreferences?.preferredLanguage || "ar",
       conversationId: student.metadata?.whatsappConversationId,
+      whatsappMessages: student.whatsappMessages || [],
     }));
 
     const whatsappStats = {
@@ -502,6 +539,27 @@ export async function GET(req) {
         ...query,
         "metadata.whatsappResponseReceived": true,
       }),
+      
+      // ✅ إحصائيات ولي الأمر الجديدة
+      guardianStats: {
+        totalWithGuardianWhatsapp: await Student.countDocuments({
+          ...query,
+          $or: [
+            { "guardianInfo.whatsappNumber": { $exists: true, $ne: null, $ne: "" } },
+            { "guardianInfo.phone": { $exists: true, $ne: null, $ne: "" } }
+          ]
+        }),
+        guardianNotified: await Student.countDocuments({
+          ...query,
+          "metadata.whatsappGuardianNotificationSent": true,
+        }),
+        guardianNotificationPending: await Student.countDocuments({
+          ...query,
+          "metadata.whatsappGuardianNotified": true,
+          "metadata.whatsappGuardianNotificationSent": false,
+        }),
+      },
+      
       languageStats: {
         arabic: await Student.countDocuments({
           ...query,
@@ -526,11 +584,11 @@ export async function GET(req) {
       buttonStats: {
         arabicSelected: await Student.countDocuments({
           ...query,
-          "metadata.whatsappButtonSelected": { $in: ["1", "arabic_btn"] },
+          "metadata.whatsappButtonSelected": { $in: ["1", "arabic_btn", "arabic_lang"] },
         }),
         englishSelected: await Student.countDocuments({
           ...query,
-          "metadata.whatsappButtonSelected": { $in: ["2", "english_btn"] },
+          "metadata.whatsappButtonSelected": { $in: ["2", "english_btn", "english_lang"] },
         }),
       },
     };
@@ -856,6 +914,13 @@ export async function PATCH(req, { params }) {
       );
     }
 
+    // ✅ الحصول على رقم ولي الأمر
+    const guardianPhone = student.guardianInfo?.whatsappNumber || 
+                         student.guardianInfo?.phone || 
+                         null;
+
+    console.log("📞 Guardian WhatsApp number for resend:", guardianPhone);
+
     await Student.findByIdAndUpdate(id, {
       $set: {
         "metadata.whatsappStatus": "pending",
@@ -871,9 +936,14 @@ export async function PATCH(req, { params }) {
         const { wapilotService } = await import(
           "@/app/services/wapilot-service"
         );
+        
         const whatsappResult = await wapilotService.sendWelcomeMessages(
+          student._id,
           student.personalInfo.fullName,
-          student.personalInfo.whatsappNumber
+          student.personalInfo.whatsappNumber,
+          guardianPhone,
+          "", // custom first message
+          ""  // custom second message
         );
 
         if (whatsappResult.success) {
@@ -884,11 +954,16 @@ export async function PATCH(req, { params }) {
               "metadata.whatsappWelcomeSent": true,
               "metadata.whatsappSentAt": new Date(),
               "metadata.whatsappMessageId":
-                whatsappResult.messages?.[1]?.result?.messageId,
+                whatsappResult.results?.student?.messageId,
               "metadata.whatsappStatus": "sent",
               "metadata.whatsappMode": whatsappResult.mode,
               "metadata.whatsappMessagesCount":
                 whatsappResult.totalMessages || 2,
+              "metadata.whatsappTotalMessages": whatsappResult.totalMessages || 2,
+              "metadata.whatsappGuardianNotified": !!guardianPhone,
+              "metadata.whatsappGuardianPhone": guardianPhone,
+              "metadata.whatsappGuardianNotificationSent": !!whatsappResult.results?.guardian?.success,
+              "metadata.whatsappGuardianNotificationAt": new Date(),
               "metadata.updatedAt": new Date(),
             },
           });
@@ -924,11 +999,15 @@ export async function PATCH(req, { params }) {
       data: {
         studentId: student._id,
         studentName: student.personalInfo.fullName,
-        whatsappNumber: student.personalInfo.whatsappNumber,
+        whatsappNumbers: {
+          student: student.personalInfo.whatsappNumber,
+          guardian: guardianPhone,
+        },
         status: "resending",
         estimatedTime: "5-10 seconds",
-        messages: "Welcome + Language selection (2 messages)",
-        note: "Confirmation message will be sent when student responds with 1 or 2",
+        messages: "Language selection + Guardian notification",
+        dualRecipients: true,
+        note: "Confirmation message will be sent when student responds with language selection",
       },
     });
   } catch (error) {

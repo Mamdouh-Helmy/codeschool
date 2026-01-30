@@ -1,4 +1,3 @@
-// app/api/courses/[id]/route.js - COMPLETELY CLEAN
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Course from "../../../models/Course";
@@ -9,7 +8,9 @@ export async function GET(request, { params }) {
     console.log("📖 GET /api/courses/[id]");
     await connectDB();
 
-    const { id } = params;
+    // FIX: Await the params
+    const { id } = await params;
+    
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, error: "Invalid course ID" },
@@ -44,7 +45,9 @@ export async function PUT(request, { params }) {
     console.log("✏️ PUT /api/courses/[id]");
     await connectDB();
 
-    const { id } = params;
+    // FIX: Await the params
+    const { id } = await params;
+    
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, error: "Invalid course ID" },
@@ -125,7 +128,9 @@ export async function DELETE(request, { params }) {
     console.log("🗑️ DELETE /api/courses/[id]");
     await connectDB();
 
-    const { id } = params;
+    // FIX: Await the params
+    const { id } = await params;
+    
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, error: "Invalid course ID" },
