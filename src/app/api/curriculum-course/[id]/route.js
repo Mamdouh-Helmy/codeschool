@@ -57,9 +57,6 @@ const CurriculumSchema = new mongoose.Schema(
   },
 );
 
-// Remove the problematic pre-save hook for slug generation
-// We'll handle slug generation in a simpler way
-
 const Curriculum =
   mongoose.models.Curriculum || mongoose.model("Curriculum", CurriculumSchema);
 
@@ -67,8 +64,7 @@ const Curriculum =
 export async function GET(request, { params }) {
   try {
     await connectDB();
-    
-    // IMPORTANT: Await the params
+
     const { id } = await params;
 
     if (!id) {
@@ -113,8 +109,7 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     await connectDB();
-    
-    // IMPORTANT: Await the params
+
     const { id } = await params;
 
     if (!id) {
@@ -128,15 +123,15 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { 
-      title, 
-      description, 
-      modules, 
-      level, 
-      grade, 
-      subject, 
+    const {
+      title,
+      description,
+      modules,
+      level,
+      grade,
+      subject,
       duration,
-      createdBy 
+      createdBy,
     } = body;
 
     // Validation
@@ -196,19 +191,15 @@ export async function PUT(request, { params }) {
       duration: duration?.trim() || "",
     };
 
-    // Include createdBy if provided (for new curriculum)
+    // Include createdBy if provided
     if (createdBy) {
       updateData.createdBy = createdBy;
     }
 
-    const curriculum = await Curriculum.findByIdAndUpdate(
-      id,
-      updateData,
-      { 
-        new: true, 
-        runValidators: true 
-      },
-    ).lean();
+    const curriculum = await Curriculum.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    }).lean();
 
     if (!curriculum) {
       return NextResponse.json(
@@ -227,20 +218,24 @@ export async function PUT(request, { params }) {
     });
   } catch (error) {
     console.error("❌ Error updating curriculum:", error);
-    
+
     // Handle validation errors
-    if (error.name === 'ValidationError') {
+    if (error.name === "ValidationError") {
       return NextResponse.json(
         {
           success: false,
-          error: "Validation error: " + Object.values(error.errors).map(e => e.message).join(', '),
+          error:
+            "Validation error: " +
+            Object.values(error.errors)
+              .map((e) => e.message)
+              .join(", "),
         },
         { status: 400 },
       );
     }
-    
+
     // Handle cast error (invalid ID)
-    if (error.name === 'CastError') {
+    if (error.name === "CastError") {
       return NextResponse.json(
         {
           success: false,
@@ -249,7 +244,7 @@ export async function PUT(request, { params }) {
         { status: 400 },
       );
     }
-    
+
     return NextResponse.json(
       {
         success: false,
@@ -264,8 +259,7 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
-    
-    // IMPORTANT: Await the params
+
     const { id } = await params;
 
     if (!id) {
@@ -296,9 +290,9 @@ export async function DELETE(request, { params }) {
     });
   } catch (error) {
     console.error("❌ Error deleting curriculum:", error);
-    
+
     // Handle cast error (invalid ID)
-    if (error.name === 'CastError') {
+    if (error.name === "CastError") {
       return NextResponse.json(
         {
           success: false,
@@ -307,7 +301,7 @@ export async function DELETE(request, { params }) {
         { status: 400 },
       );
     }
-    
+
     return NextResponse.json(
       {
         success: false,

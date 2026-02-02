@@ -65,7 +65,7 @@ export async function POST(req) {
             success: false,
             message: "User not found with provided authUserId",
           },
-          { status: 404 }
+          { status: 404 },
         );
       }
       console.log("✅ User found:", userExists.email);
@@ -82,7 +82,7 @@ export async function POST(req) {
             message: "User already has a student profile",
             existingStudentId: existingStudent._id,
           },
-          { status: 409 }
+          { status: 409 },
         );
       }
     }
@@ -124,7 +124,7 @@ export async function POST(req) {
         whatsappConversationId: `conv_${Date.now()}_${Math.random()
           .toString(36)
           .substr(2, 9)}`,
-        
+
         // ✅ إضافة حقول جديدة لتتبع حالة ولي الأمر
         whatsappGuardianNotified: false,
         whatsappGuardianPhone: null,
@@ -155,7 +155,7 @@ export async function POST(req) {
             field: field,
             value: saveError.keyValue[field],
           },
-          { status: 409 }
+          { status: 409 },
         );
       }
 
@@ -172,7 +172,7 @@ export async function POST(req) {
             error: "Validation failed",
             errors: errors,
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -182,9 +182,10 @@ export async function POST(req) {
     console.log("📱 Triggering WhatsApp automation...");
 
     // ✅ الحصول على رقم ولي الأمر
-    const guardianPhone = savedStudent.guardianInfo?.whatsappNumber || 
-                         savedStudent.guardianInfo?.phone || 
-                         null;
+    const guardianPhone =
+      savedStudent.guardianInfo?.whatsappNumber ||
+      savedStudent.guardianInfo?.phone ||
+      null;
 
     console.log("📞 Guardian WhatsApp number:", guardianPhone);
 
@@ -193,9 +194,8 @@ export async function POST(req) {
       try {
         console.log("🔄 Starting WhatsApp automation in background...");
 
-        const { wapilotService } = await import(
-          "@/app/services/wapilot-service"
-        );
+        const { wapilotService } =
+          await import("@/app/services/wapilot-service");
 
         // ✅ تمرير رقم ولي الأمر مع الطالب
         const whatsappResult = await wapilotService.sendWelcomeMessages(
@@ -204,7 +204,7 @@ export async function POST(req) {
           savedStudent.personalInfo.whatsappNumber, // ✅ student phone
           guardianPhone, // ✅ guardian phone
           customMessages.firstMessage,
-          customMessages.secondMessage
+          customMessages.secondMessage,
         );
 
         console.log("📦 WhatsApp automation result:", whatsappResult);
@@ -219,13 +219,16 @@ export async function POST(req) {
               "metadata.whatsappSentAt": new Date(),
               "metadata.whatsappStatus": "sent",
               "metadata.whatsappMode": whatsappResult.mode,
-              "metadata.whatsappMessagesCount": whatsappResult.totalMessages || 2,
-              "metadata.whatsappTotalMessages": whatsappResult.totalMessages || 2,
+              "metadata.whatsappMessagesCount":
+                whatsappResult.totalMessages || 2,
+              "metadata.whatsappTotalMessages":
+                whatsappResult.totalMessages || 2,
               "metadata.updatedAt": new Date(),
               // ✅ إضافة معلومات ولي الأمر
               "metadata.whatsappGuardianNotified": !!guardianPhone,
               "metadata.whatsappGuardianPhone": guardianPhone,
-              "metadata.whatsappGuardianNotificationSent": !!whatsappResult.results?.guardian?.success,
+              "metadata.whatsappGuardianNotificationSent":
+                !!whatsappResult.results?.guardian?.success,
               "metadata.whatsappGuardianNotificationAt": new Date(),
             };
 
@@ -324,9 +327,13 @@ export async function POST(req) {
               guardian: !!guardianPhone,
             },
             messages: {
-              student: savedStudent.personalInfo.whatsappNumber ? "language_selection (interactive)" : "none",
+              student: savedStudent.personalInfo.whatsappNumber
+                ? "language_selection (interactive)"
+                : "none",
               guardian: guardianPhone ? "notification (text)" : "none",
-              total: (savedStudent.personalInfo.whatsappNumber ? 1 : 0) + (guardianPhone ? 1 : 0),
+              total:
+                (savedStudent.personalInfo.whatsappNumber ? 1 : 0) +
+                (guardianPhone ? 1 : 0),
             },
             messageFlow: [
               {
@@ -362,12 +369,19 @@ export async function POST(req) {
               url: "/api/whatsapp/webhook",
               status: "active",
               method: "POST",
-              supported_responses: ["arabic_lang", "english_lang", "1", "2", "arabic", "english"],
+              supported_responses: [
+                "arabic_lang",
+                "english_lang",
+                "1",
+                "2",
+                "arabic",
+                "english",
+              ],
             },
           },
         },
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("❌ Error creating student:", error);
@@ -382,7 +396,7 @@ export async function POST(req) {
           field: field,
           value: error.keyValue?.[field],
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -395,7 +409,7 @@ export async function POST(req) {
           stack: error.stack,
         }),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -464,7 +478,7 @@ export async function GET(req) {
       .populate("metadata.createdBy", "name email")
       .populate(
         "enrollmentInfo.referredBy",
-        "personalInfo.fullName enrollmentNumber"
+        "personalInfo.fullName enrollmentNumber",
       )
       .sort({ "metadata.createdAt": -1 })
       .skip(skip)
@@ -501,13 +515,16 @@ export async function GET(req) {
       whatsappConfirmationSent:
         student.metadata?.whatsappConfirmationSent || false,
       whatsappMessagesCount: student.metadata?.whatsappMessagesCount || 0,
-      
+
       // ✅ معلومات ولي الأمر الجديدة
-      whatsappGuardianNotified: student.metadata?.whatsappGuardianNotified || false,
+      whatsappGuardianNotified:
+        student.metadata?.whatsappGuardianNotified || false,
       whatsappGuardianPhone: student.metadata?.whatsappGuardianPhone || null,
-      whatsappGuardianNotificationSent: student.metadata?.whatsappGuardianNotificationSent || false,
-      whatsappGuardianNotificationAt: student.metadata?.whatsappGuardianNotificationAt || null,
-      
+      whatsappGuardianNotificationSent:
+        student.metadata?.whatsappGuardianNotificationSent || false,
+      whatsappGuardianNotificationAt:
+        student.metadata?.whatsappGuardianNotificationAt || null,
+
       language: student.communicationPreferences?.preferredLanguage || "ar",
       conversationId: student.metadata?.whatsappConversationId,
       whatsappMessages: student.whatsappMessages || [],
@@ -539,15 +556,21 @@ export async function GET(req) {
         ...query,
         "metadata.whatsappResponseReceived": true,
       }),
-      
+
       // ✅ إحصائيات ولي الأمر الجديدة
       guardianStats: {
         totalWithGuardianWhatsapp: await Student.countDocuments({
           ...query,
           $or: [
-            { "guardianInfo.whatsappNumber": { $exists: true, $ne: null, $ne: "" } },
-            { "guardianInfo.phone": { $exists: true, $ne: null, $ne: "" } }
-          ]
+            {
+              "guardianInfo.whatsappNumber": {
+                $exists: true,
+                $ne: null,
+                $ne: "",
+              },
+            },
+            { "guardianInfo.phone": { $exists: true, $ne: null, $ne: "" } },
+          ],
         }),
         guardianNotified: await Student.countDocuments({
           ...query,
@@ -559,7 +582,7 @@ export async function GET(req) {
           "metadata.whatsappGuardianNotificationSent": false,
         }),
       },
-      
+
       languageStats: {
         arabic: await Student.countDocuments({
           ...query,
@@ -584,11 +607,15 @@ export async function GET(req) {
       buttonStats: {
         arabicSelected: await Student.countDocuments({
           ...query,
-          "metadata.whatsappButtonSelected": { $in: ["1", "arabic_btn", "arabic_lang"] },
+          "metadata.whatsappButtonSelected": {
+            $in: ["1", "arabic_btn", "arabic_lang"],
+          },
         }),
         englishSelected: await Student.countDocuments({
           ...query,
-          "metadata.whatsappButtonSelected": { $in: ["2", "english_btn", "english_lang"] },
+          "metadata.whatsappButtonSelected": {
+            $in: ["2", "english_btn", "english_lang"],
+          },
         }),
       },
     };
@@ -607,7 +634,7 @@ export async function GET(req) {
           hasPrevPage: page > 1,
         },
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
     console.error("Error fetching students:", error);
@@ -617,15 +644,19 @@ export async function GET(req) {
         message: "Failed to fetch students",
         error: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-// PUT: تحديث طالب
-export async function PUT(req, { params }) {
+// ✅ PUT: تحديث طالب (FIXED)
+export async function PUT(req, context) {
   try {
-    console.log(`✏️ Updating student with ID: ${params.id}`);
+    // ✅ await params
+    const params = await context.params;
+    const { id } = params;
+
+    console.log(`✏️ Updating student with ID: ${id}`);
 
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
@@ -638,19 +669,18 @@ export async function PUT(req, { params }) {
 
     await connectDB();
 
-    const { id } = params;
     const updateData = await req.json();
 
     console.log(
       "📥 Update data received:",
-      JSON.stringify(updateData, null, 2)
+      JSON.stringify(updateData, null, 2),
     );
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       console.log(`❌ Invalid student ID format: ${id}`);
       return NextResponse.json(
         { success: false, message: "Invalid student ID format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -663,7 +693,7 @@ export async function PUT(req, { params }) {
       console.log(`❌ Student not found or deleted: ${id}`);
       return NextResponse.json(
         { success: false, message: "Student not found or has been deleted" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -700,7 +730,7 @@ export async function PUT(req, { params }) {
         new: true,
         runValidators: true,
         context: "query",
-      }
+      },
     )
       .populate("metadata.lastModifiedBy", "name email")
       .populate("authUserId", "name email");
@@ -709,12 +739,12 @@ export async function PUT(req, { params }) {
       console.log(`❌ Student update failed for ID: ${id}`);
       return NextResponse.json(
         { success: false, message: "Failed to update student" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     console.log(
-      `✅ Student updated successfully: ${updatedStudent.enrollmentNumber}`
+      `✅ Student updated successfully: ${updatedStudent.enrollmentNumber}`,
     );
 
     return NextResponse.json(
@@ -732,10 +762,10 @@ export async function PUT(req, { params }) {
           },
         },
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
-    console.error(`❌ Error updating student ${params.id}:`, error);
+    console.error(`❌ Error updating student:`, error);
 
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
@@ -748,7 +778,7 @@ export async function PUT(req, { params }) {
           value: error.keyValue[field],
           suggestion: "Use a unique value for this field",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -766,7 +796,7 @@ export async function PUT(req, { params }) {
           message: "Validation failed",
           errors: errors,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -777,15 +807,19 @@ export async function PUT(req, { params }) {
         error: error.message,
         ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-// DELETE: حذف طري للطالب
-export async function DELETE(req, { params }) {
+// ✅ DELETE: حذف طري للطالب (FIXED)
+export async function DELETE(req, context) {
   try {
-    console.log(`🗑️ Soft deleting student with ID: ${params.id}`);
+    // ✅ await params
+    const params = await context.params;
+    const { id } = params;
+
+    console.log(`🗑️ Soft deleting student with ID: ${id}`);
 
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
@@ -798,13 +832,11 @@ export async function DELETE(req, { params }) {
 
     await connectDB();
 
-    const { id } = params;
-
     if (!mongoose.Types.ObjectId.isValid(id)) {
       console.log(`❌ Invalid student ID format: ${id}`);
       return NextResponse.json(
         { success: false, message: "Invalid student ID format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -821,7 +853,7 @@ export async function DELETE(req, { params }) {
           message: "Student not found or has already been deleted",
           suggestion: "Check student status or restore from trash if needed",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -839,19 +871,19 @@ export async function DELETE(req, { params }) {
       {
         new: true,
         runValidators: true,
-      }
+      },
     );
 
     if (!deletedStudent) {
       console.log(`❌ Soft delete failed for student: ${id}`);
       return NextResponse.json(
         { success: false, message: "Failed to delete student" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     console.log(
-      `✅ Student soft deleted successfully: ${deletedStudent.enrollmentNumber}`
+      `✅ Student soft deleted successfully: ${deletedStudent.enrollmentNumber}`,
     );
 
     return NextResponse.json(
@@ -868,10 +900,10 @@ export async function DELETE(req, { params }) {
           restorationNote: "Student can be restored within 30 days",
         },
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
-    console.error(`❌ Error deleting student ${params.id}:`, error);
+    console.error(`❌ Error deleting student:`, error);
     return NextResponse.json(
       {
         success: false,
@@ -879,15 +911,19 @@ export async function DELETE(req, { params }) {
         error: error.message,
         ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-// PATCH: إعادة إرسال رسالة WhatsApp
-export async function PATCH(req, { params }) {
+// ✅ PATCH: إعادة إرسال رسالة WhatsApp (FIXED)
+export async function PATCH(req, context) {
   try {
-    console.log(`🔄 Resending WhatsApp message for student: ${params.id}`);
+    // ✅ await params
+    const params = await context.params;
+    const { id } = params;
+
+    console.log(`🔄 Resending WhatsApp message for student: ${id}`);
 
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
@@ -897,12 +933,10 @@ export async function PATCH(req, { params }) {
 
     await connectDB();
 
-    const { id } = params;
-
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid student ID format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -910,14 +944,14 @@ export async function PATCH(req, { params }) {
     if (!student) {
       return NextResponse.json(
         { success: false, message: "Student not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // ✅ الحصول على رقم ولي الأمر
-    const guardianPhone = student.guardianInfo?.whatsappNumber || 
-                         student.guardianInfo?.phone || 
-                         null;
+    const guardianPhone =
+      student.guardianInfo?.whatsappNumber ||
+      student.guardianInfo?.phone ||
+      null;
 
     console.log("📞 Guardian WhatsApp number for resend:", guardianPhone);
 
@@ -933,17 +967,16 @@ export async function PATCH(req, { params }) {
       try {
         console.log("🔄 Starting WhatsApp resend in background...");
 
-        const { wapilotService } = await import(
-          "@/app/services/wapilot-service"
-        );
-        
+        const { wapilotService } =
+          await import("@/app/services/wapilot-service");
+
         const whatsappResult = await wapilotService.sendWelcomeMessages(
           student._id,
           student.personalInfo.fullName,
           student.personalInfo.whatsappNumber,
           guardianPhone,
-          "", // custom first message
-          ""  // custom second message
+          "",
+          "",
         );
 
         if (whatsappResult.success) {
@@ -959,10 +992,12 @@ export async function PATCH(req, { params }) {
               "metadata.whatsappMode": whatsappResult.mode,
               "metadata.whatsappMessagesCount":
                 whatsappResult.totalMessages || 2,
-              "metadata.whatsappTotalMessages": whatsappResult.totalMessages || 2,
+              "metadata.whatsappTotalMessages":
+                whatsappResult.totalMessages || 2,
               "metadata.whatsappGuardianNotified": !!guardianPhone,
               "metadata.whatsappGuardianPhone": guardianPhone,
-              "metadata.whatsappGuardianNotificationSent": !!whatsappResult.results?.guardian?.success,
+              "metadata.whatsappGuardianNotificationSent":
+                !!whatsappResult.results?.guardian?.success,
               "metadata.whatsappGuardianNotificationAt": new Date(),
               "metadata.updatedAt": new Date(),
             },
@@ -1018,7 +1053,7 @@ export async function PATCH(req, { params }) {
         message: "Failed to resend WhatsApp message",
         error: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

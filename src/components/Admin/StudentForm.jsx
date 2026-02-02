@@ -104,7 +104,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
 
       // استخدام service مباشرة
       const { wapilotService } = await import('@/app/services/wapilot-service');
-      
+
       console.log("🔍 Wapilot service mode:", wapilotService.mode);
 
       // إرسال الرسالتين (ترحيب + اختيار اللغة)
@@ -120,7 +120,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
           mode: result.mode,
           simulated: result.simulated
         });
-        
+
         if (result.simulated) {
           toast.success(`📱 Simulation: Welcome messages prepared for ${studentData.personalInfo.fullName}! (Not sent in simulation)`);
         } else {
@@ -303,7 +303,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     }
   };
 
-  // إرسال الفورم مع WhatsApp automation
+  // ✅ إرسال الفورم - بدون استدعاء WhatsApp من Client
   const submit = async (e) => {
     e.preventDefault();
 
@@ -347,18 +347,18 @@ export default function StudentForm({ initial, onClose, onSaved }) {
         try {
           const dateStr = form.personalInfo.dateOfBirth;
           const dateObj = new Date(dateStr + 'T12:00:00');
-          
+
           if (isNaN(dateObj.getTime())) {
             throw new Error("Invalid date value");
           }
-          
+
           dateOfBirthISO = dateObj.toISOString();
         } catch (dateError) {
           console.error("❌ Date conversion error:", dateError);
           throw new Error(`تاريخ الميلاد غير صحيح: ${dateError.message}`);
         }
       }
-      
+
       const studentPayload = {
         ...form,
         authUserId: userId,
@@ -368,13 +368,18 @@ export default function StudentForm({ initial, onClose, onSaved }) {
         }
       };
 
-      // تحديد method وURL
-      const method = initial?.id ? "PUT" : "POST";
-      const url = initial?.id
-        ? `/api/allStudents/${initial.id}`
+      const studentId = initial?.id || initial?._id;
+
+      const method = studentId ? "PUT" : "POST";
+      const url = studentId
+        ? `/api/allStudents/${studentId}`
         : "/api/allStudents";
 
       console.log("📤 Submitting student data...", {
+        method,
+        url,
+        studentId,
+        hasInitial: !!initial,
         dateOfBirth: dateOfBirthISO,
         hasAuthUserId: !!userId,
         whatsappMessages: {
@@ -394,40 +399,37 @@ export default function StudentForm({ initial, onClose, onSaved }) {
 
       if (!res.ok) {
         let errorMessage = result.message || `HTTP error! status: ${res.status}`;
-        
+
         if (result.errors && Array.isArray(result.errors)) {
           const errorDetails = result.errors.map(err => `${err.field}: ${err.message}`).join(', ');
           errorMessage += ` - ${errorDetails}`;
         }
-        
+
         if (result.field) {
           errorMessage += ` - Field: ${result.field}, Value: ${result.value}`;
         }
-        
+
         throw new Error(errorMessage);
       }
 
       if (result.success) {
-        const successMessage = selectedStudent
+        const successMessage = studentId
           ? t("students.updatedSuccess")
           : t("students.createdSuccess");
 
         toast.success(successMessage, { id: toastId });
 
-        // إرسال رسائل الترحيب عبر WhatsApp فوراً للطلاب الجدد
-        if (!selectedStudent || selectedStudent.isManual) {
-          console.log("📱 Preparing to send WhatsApp welcome messages...");
+        // ✅ WhatsApp automation يحدث تلقائياً في Server API
+        // لا حاجة لاستدعاء أي service من هنا
+        if (!studentId && result.data?.whatsappAutomation) {
+          console.log("📱 WhatsApp automation triggered on server:", result.data.whatsappAutomation);
 
-          setTimeout(async () => {
-            try {
-              const messageSent = await sendWhatsAppWelcomeMessage(form);
-              if (messageSent) {
-                console.log("✅ WhatsApp automation completed successfully");
-              }
-            } catch (whatsappError) {
-              console.error("❌ WhatsApp automation error:", whatsappError);
-            }
-          }, 1500);
+          // إظهار notification للمستخدم بناءً على النتيجة
+          if (result.data.whatsappAutomation.triggered) {
+            toast.success("📱 WhatsApp messages will be sent automatically", {
+              duration: 3000
+            });
+          }
         }
 
         onSaved();
@@ -442,6 +444,8 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       setLoading(false);
     }
   };
+
+
 
   return (
     <form onSubmit={submit} className="space-y-6">

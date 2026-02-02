@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import mongoose from "mongoose";
 
-// Define schemas (same as above but without slug field)
+// Define schemas
 const LessonSchema = new mongoose.Schema({
   title: String,
   description: String,
@@ -54,7 +54,7 @@ const CurriculumSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  },
+  }
 );
 
 const Curriculum =
@@ -64,6 +64,15 @@ const Curriculum =
 export async function GET(request) {
   try {
     await connectDB();
+
+    // حذف الـ index القديم للـ slug (سيتم تنفيذه مرة واحدة فقط)
+    try {
+      const collection = mongoose.connection.db.collection('curriculums');
+      await collection.dropIndex('slug_1');
+      console.log('✅ Old slug index removed');
+    } catch (err) {
+      // Index already removed or doesn't exist - ignore
+    }
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
