@@ -193,7 +193,8 @@ export default function CurriculumManager({
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentModuleIndex, setCurrentModuleIndex] = useState<number | null>(null);
     const [tempModule, setTempModule] = useState<Module | null>(null);
-    const [moduleStep, setModuleStep] = useState(1); // 1: Info, 2: Lessons, 3: Sessions
+    const [moduleStep, setModuleStep] = useState(1); // 1: Info, 2-4: Sessions Lessons (1-3), 5-7: Sessions Details (1-3)
+    const [currentSessionStep, setCurrentSessionStep] = useState(0); // 0-2 for sessions 1-3
 
     // Load all curriculums
     useEffect(() => {
@@ -295,6 +296,7 @@ export default function CurriculumManager({
             });
         }
         setModuleStep(1);
+        setCurrentSessionStep(0);
         setIsModalOpen(true);
     };
 
@@ -321,6 +323,8 @@ export default function CurriculumManager({
         setIsModalOpen(false);
         setTempModule(null);
         setCurrentModuleIndex(null);
+        setModuleStep(1);
+        setCurrentSessionStep(0);
     };
 
     const removeModule = (moduleIndex: number) => {
@@ -512,6 +516,17 @@ export default function CurriculumManager({
         if (onSelect && curriculum._id) {
             onSelect(curriculum._id);
         }
+    };
+
+    const getModuleStepLabel = (step: number): string => {
+        if (step === 1) return "Basic Info";
+        if (step >= 2 && step <= 4) return `Session ${step - 1} Lessons`;
+        if (step >= 5 && step <= 7) return `Session ${step - 4} Details`;
+        return "";
+    };
+
+    const getTotalModuleSteps = (): number => {
+        return 7; // 1: Info, 2-4: Lessons, 5-7: Sessions Details
     };
 
     if (authLoading) {
@@ -819,6 +834,7 @@ export default function CurriculumManager({
                         setTempModule(null);
                         setCurrentModuleIndex(null);
                         setModuleStep(1);
+                        setCurrentSessionStep(0);
                     }}
                     title={`Module ${currentModuleIndex !== null ? currentModuleIndex + 1 : form.modules.length + 1}: ${tempModule?.title || "Untitled"}`}
                 >
@@ -827,37 +843,32 @@ export default function CurriculumManager({
                             {/* Module Step Indicator */}
                             <div className="pb-4 sm:pb-6 border-b border-gray-200 dark:border-dark_border overflow-x-auto">
                                 <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-max px-2">
-                                    {[
-                                        { num: 1, label: "Basic Info" },
-                                        { num: 2, label: "Module" },
-                                        { num: 3, label: "Lessons" },
-                                        { num: 4, label: "Sessions" }
-                                    ].map((step, idx) => (
-                                        <React.Fragment key={step.num}>
+                                    {[1, 2, 3, 4, 5, 6, 7].map((step, idx) => (
+                                        <React.Fragment key={step}>
                                             <div className="flex flex-col items-center">
                                                 <div
-                                                    className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm transition-all ${
-                                                        step.num < moduleStep
+                                                    className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-semibold text-xs transition-all ${
+                                                        step < moduleStep
                                                             ? "bg-green-500 text-white"
-                                                            : step.num === moduleStep
+                                                            : step === moduleStep
                                                             ? "bg-primary text-white ring-2 sm:ring-4 ring-primary/20"
                                                             : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
                                                     }`}
                                                 >
-                                                    {step.num < moduleStep ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : step.num}
+                                                    {step < moduleStep ? <Check className="w-3 h-3 sm:w-4 sm:h-4" /> : step}
                                                 </div>
-                                                <span className={`text-[10px] sm:text-xs mt-1 font-medium transition-colors whitespace-nowrap ${
-                                                    step.num === moduleStep 
+                                                <span className={`text-[9px] sm:text-[10px] mt-1 font-medium transition-colors whitespace-nowrap ${
+                                                    step === moduleStep 
                                                         ? "text-primary dark:text-primary" 
                                                         : "text-gray-600 dark:text-gray-400"
                                                 }`}>
-                                                    {step.label}
+                                                    {getModuleStepLabel(step)}
                                                 </span>
                                             </div>
-                                            {idx < 3 && (
+                                            {idx < 6 && (
                                                 <div
-                                                    className={`w-6 sm:w-8 md:w-12 h-0.5 sm:h-1 rounded-full transition-all mb-4 sm:mb-5 ${
-                                                        step.num < moduleStep
+                                                    className={`w-4 sm:w-6 md:w-8 h-0.5 rounded-full transition-all mb-3 sm:mb-4 ${
+                                                        step < moduleStep
                                                             ? "bg-green-500"
                                                             : "bg-gray-200 dark:bg-gray-700"
                                                     }`}
@@ -914,165 +925,201 @@ export default function CurriculumManager({
                                 </div>
                             )}
 
-                            {/* Module Step 2: Lessons */}
-                            {moduleStep === 2 && (
+                            {/* Module Steps 2-4: Individual Session Lessons */}
+                            {moduleStep >= 2 && moduleStep <= 4 && (
                                 <div className="space-y-4">
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-4">
-                                        <p className="text-sm text-blue-800 dark:text-blue-300">
-                                            <strong>Structure:</strong> 6 lessons organized into 3 sessions (2 lessons per session)
-                                        </p>
-                                    </div>
+                                    {(() => {
+                                        const sessionNum = moduleStep - 1;
+                                        
+                                        return (
+                                            <>
+                                                <div className={`border-2 rounded-xl p-6 ${getSessionColor(sessionNum)}`}>
+                                                    <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-6 flex items-center gap-2">
+                                                        <span className={`px-3 py-1 rounded-lg text-sm ${getSessionBadgeColor(sessionNum)}`}>
+                                                            Session {sessionNum}
+                                                        </span>
+                                                        <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
+                                                            Add 2 lessons for this session
+                                                        </span>
+                                                    </h4>
+                                                    
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {tempModule.lessons
+                                                            .filter(l => l.sessionNumber === sessionNum)
+                                                            .map((lesson, idx) => {
+                                                                const lessonIndex = tempModule.lessons.findIndex(
+                                                                    l => l.order === lesson.order
+                                                                );
+                                                                return (
+                                                                    <div key={idx} className="bg-white dark:bg-dark_input rounded-lg p-4 border-2 border-gray-200 dark:border-dark_border">
+                                                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
+                                                                            📚 Lesson {lesson.order}
+                                                                        </label>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={lesson.title}
+                                                                            onChange={(e) => updateTempLesson(lessonIndex, "title", e.target.value)}
+                                                                            placeholder={`Lesson ${lesson.order} title`}
+                                                                            className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm mb-3 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                                        />
+                                                                        <textarea
+                                                                            value={lesson.description || ""}
+                                                                            onChange={(e) => updateTempLesson(lessonIndex, "description", e.target.value)}
+                                                                            placeholder="Lesson description..."
+                                                                            rows={3}
+                                                                            className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                                        />
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                    </div>
+                                                </div>
 
-                                    {[1, 2, 3].map((sessionNum) => (
-                                        <div key={sessionNum} className={`border-2 rounded-xl p-4 ${getSessionColor(sessionNum)}`}>
-                                            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-                                                <span className={`px-3 py-1 rounded-lg text-sm ${getSessionBadgeColor(sessionNum)}`}>
-                                                    Session {sessionNum}
-                                                </span>
-                                            </h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                {tempModule.lessons
-                                                    .filter(l => l.sessionNumber === sessionNum)
-                                                    .map((lesson, idx) => {
-                                                        const lessonIndex = tempModule.lessons.findIndex(
-                                                            l => l.order === lesson.order
-                                                        );
-                                                        return (
-                                                            <div key={idx} className="bg-white dark:bg-dark_input rounded-lg p-3 border border-gray-200 dark:border-dark_border">
-                                                                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                                    Lesson {lesson.order}
-                                                                </label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={lesson.title}
-                                                                    onChange={(e) => updateTempLesson(lessonIndex, "title", e.target.value)}
-                                                                    placeholder={`Lesson ${lesson.order} title`}
-                                                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm mb-2 focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                                                                />
-                                                                <textarea
-                                                                    value={lesson.description || ""}
-                                                                    onChange={(e) => updateTempLesson(lessonIndex, "description", e.target.value)}
-                                                                    placeholder="Lesson description..."
-                                                                    rows={2}
-                                                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                                                                />
-                                                            </div>
-                                                        );
-                                                    })}
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setModuleStep(1)}
-                                            className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
-                                        >
-                                            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                                            Back
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setModuleStep(3)}
-                                            className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base order-1 sm:order-2"
-                                        >
-                                            Next: Add Sessions Details
-                                            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                                        </button>
-                                    </div>
+                                                <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (moduleStep === 2) {
+                                                                setModuleStep(1);
+                                                            } else {
+                                                                setModuleStep(moduleStep - 1);
+                                                            }
+                                                        }}
+                                                        className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
+                                                    >
+                                                        <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                        Back
+                                                    </button>
+                                                    
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setModuleStep(moduleStep + 1)}
+                                                        className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base order-1 sm:order-2"
+                                                    >
+                                                        {moduleStep === 4 ? "Next: Session 1 Details" : `Next: Session ${sessionNum + 1} Lessons`}
+                                                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                    </button>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             )}
 
-                            {/* Module Step 3: Sessions Details */}
-                            {moduleStep === 3 && (
+                            {/* Module Steps 5-7: Individual Session Details */}
+                            {moduleStep >= 5 && moduleStep <= 7 && (
                                 <div className="space-y-4">
-                                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4 mb-4">
-                                        <p className="text-sm text-purple-800 dark:text-purple-300">
-                                            Define objectives, outline, and resources for each session
-                                        </p>
-                                    </div>
+                                    {(() => {
+                                        const sessionIndex = moduleStep - 5;
+                                        const session = tempModule.sessions[sessionIndex];
+                                        const sessionNum = session.sessionNumber;
 
-                                    <div className="grid grid-cols-1 gap-4">
-                                        {tempModule.sessions.map((session, sessionIndex) => (
-                                            <div key={sessionIndex} className={`border-2 rounded-xl p-4 ${getSessionColor(session.sessionNumber)}`}>
-                                                <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
-                                                    <span className={`px-3 py-1 rounded-lg text-sm ${getSessionBadgeColor(session.sessionNumber)}`}>
-                                                        Session {session.sessionNumber}
-                                                    </span>
-                                                </h4>
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                                            Session Objectives
-                                                        </label>
-                                                        <textarea
-                                                            value={session.objectives?.join('\n') || ''}
-                                                            onChange={(e) => updateTempSession(sessionIndex, "objectives", e.target.value)}
-                                                            placeholder="Enter one objective per line..."
-                                                            rows={3}
-                                                            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-dark_border bg-white/80 dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                                            Session Outline
-                                                        </label>
-                                                        <textarea
-                                                            value={session.outline?.join('\n') || ''}
-                                                            onChange={(e) => updateTempSession(sessionIndex, "outline", e.target.value)}
-                                                            placeholder="Enter one outline item per line..."
-                                                            rows={3}
-                                                            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-dark_border bg-white/80 dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                                            Presentation URL (Optional)
-                                                        </label>
-                                                        <input
-                                                            type="url"
-                                                            value={session.presentationUrl || ''}
-                                                            onChange={(e) => updateTempSession(sessionIndex, "presentationUrl", e.target.value)}
-                                                            placeholder="https://..."
-                                                            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-dark_border bg-white/80 dark:bg-dark_input text-sm focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                                            Session Projects
-                                                        </label>
-                                                        <textarea
-                                                            value={session.projects?.join('\n') || ''}
-                                                            onChange={(e) => updateTempSession(sessionIndex, "projects", e.target.value)}
-                                                            placeholder="Enter one project per line..."
-                                                            rows={2}
-                                                            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-dark_border bg-white/80 dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                                                        />
+                                        return (
+                                            <>
+                                                <div className={`border-2 rounded-xl p-6 ${getSessionColor(sessionNum)}`}>
+                                                    <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-6 flex items-center gap-2">
+                                                        <span className={`px-3 py-1 rounded-lg text-sm ${getSessionBadgeColor(sessionNum)}`}>
+                                                            Session {sessionNum}
+                                                        </span>
+                                                        <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
+                                                            Configure session details
+                                                        </span>
+                                                    </h4>
+                                                    
+                                                    <div className="space-y-4">
+                                                        <div>
+                                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                                                Session Objectives
+                                                            </label>
+                                                            <textarea
+                                                                value={session.objectives?.join('\n') || ''}
+                                                                onChange={(e) => updateTempSession(sessionIndex, "objectives", e.target.value)}
+                                                                placeholder="Enter one objective per line..."
+                                                                rows={3}
+                                                                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                                                Session Outline
+                                                            </label>
+                                                            <textarea
+                                                                value={session.outline?.join('\n') || ''}
+                                                                onChange={(e) => updateTempSession(sessionIndex, "outline", e.target.value)}
+                                                                placeholder="Enter one outline item per line..."
+                                                                rows={3}
+                                                                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                                                Presentation URL (Optional)
+                                                            </label>
+                                                            <input
+                                                                type="url"
+                                                                value={session.presentationUrl || ''}
+                                                                onChange={(e) => updateTempSession(sessionIndex, "presentationUrl", e.target.value)}
+                                                                placeholder="https://..."
+                                                                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                                                Session Projects
+                                                            </label>
+                                                            <textarea
+                                                                value={session.projects?.join('\n') || ''}
+                                                                onChange={(e) => updateTempSession(sessionIndex, "projects", e.target.value)}
+                                                                placeholder="Enter one project per line..."
+                                                                rows={2}
+                                                                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
-                                    </div>
 
-                                    <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setModuleStep(2)}
-                                            className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
-                                        >
-                                            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                                            Back
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={saveModule}
-                                            className="bg-green-600 hover:bg-green-700 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl text-sm sm:text-base order-1 sm:order-2"
-                                        >
-                                            <Check className="w-4 h-4 sm:w-5 sm:h-5" />
-                                            {currentModuleIndex !== null ? "Update Module" : "Add Module"}
-                                        </button>
-                                    </div>
+                                                <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (moduleStep === 5) {
+                                                                setModuleStep(4);
+                                                            } else {
+                                                                setModuleStep(moduleStep - 1);
+                                                            }
+                                                        }}
+                                                        className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
+                                                    >
+                                                        <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                        Back
+                                                    </button>
+                                                    
+                                                    {moduleStep < 7 ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setModuleStep(moduleStep + 1)}
+                                                            className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base order-1 sm:order-2"
+                                                        >
+                                                            Next: Session {sessionNum + 1} Details
+                                                            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={saveModule}
+                                                            className="bg-green-600 hover:bg-green-700 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl text-sm sm:text-base order-1 sm:order-2"
+                                                        >
+                                                            <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                            {currentModuleIndex !== null ? "Update Module" : "Add Module"}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             )}
                         </div>
