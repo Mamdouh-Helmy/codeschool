@@ -10,15 +10,17 @@ import {
   Image as ImageIcon,
   Hash,
   Upload,
-  Trash2
+  Trash2,
+  Loader2
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 
-export default function InstructorForm({ initial, onClose, onSaved }) {
+export default function InstructorForm({ initial, isCreating, onClose, onSaved }) {
   const { t } = useI18n();
   const [form, setForm] = useState({
     name: initial?.name || "",
+    email: initial?.email || "",
     username: initial?.username || "",
     phone: initial?.profile?.phone || "",
     image: initial?.image || "",
@@ -33,37 +35,43 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
-  // دالة لرفع الصور إلى السيرفر
-  const uploadImageToServer = async (file) => {
-    const formData = new FormData();
-    formData.append("file", file);
+  /**
+   * رفع الصورة إلى Cloudinary
+   */
+  const uploadImageToCloudinary = async (base64Image) => {
+    setUploadingImage(true);
+    const toastId = toast.loading("جاري رفع الصورة...");
 
-    console.log("🔼 Uploading image to server...");
+    try {
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          image: base64Image,
+          folder: 'instructors' // مجلد خاص بصور المدرسين
+        })
+      });
 
-    const response = await fetch("/api/upload", {
-      method: "POST",
-      body: formData,
-    });
+      const data = await response.json();
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Upload failed:", errorText);
-      throw new Error("فشل في اتصال السيرفر");
+      if (data.success) {
+        onChange("image", data.imageUrl);
+        setImagePreview(data.imageUrl);
+        toast.success("تم رفع الصورة بنجاح!", { id: toastId });
+        return data.imageUrl;
+      } else {
+        throw new Error(data.message || "فشل رفع الصورة");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error(error.message || "حدث خطأ أثناء رفع الصورة", { id: toastId });
+      throw error;
+    } finally {
+      setUploadingImage(false);
     }
-
-    const data = await response.json();
-
-    if (!data.success) {
-      console.error("❌ Upload failed:", data.message);
-      throw new Error(data.message || "فشل رفع الصورة");
-    }
-
-    console.log("✅ Image uploaded successfully:", data.url);
-    return data.url;
   };
 
-  // معالجة رفع الصورة
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -80,38 +88,25 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
       return;
     }
 
-    setUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const result = e.target?.result;
+      
+      // عرض معاينة فورية
+      setImagePreview(result);
 
-    try {
-      // عرض معاينة محلية
-      const localPreview = URL.createObjectURL(file);
-      setImagePreview(localPreview);
-
-      // رفع الملف إلى السيرفر
-      const imageUrl = await uploadImageToServer(file);
-
-      // حفظ الرابط في الحالة
-      onChange("image", imageUrl);
-      setImagePreview(imageUrl);
-
-      // تنظيف المعاينة المحلية
-      setTimeout(() => {
-        URL.revokeObjectURL(localPreview);
-      }, 1000);
-
-      toast.success("تم رفع الصورة بنجاح");
-
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error(`خطأ في رفع الصورة: ${error.message}`);
-      setImagePreview(initial?.image || "");
-      onChange("image", initial?.image || "");
-    } finally {
-      setUploadingImage(false);
-    }
+      try {
+        // رفع الصورة إلى Cloudinary
+        await uploadImageToCloudinary(result);
+      } catch (error) {
+        // إعادة المعاينة للصورة القديمة في حالة الفشل
+        setImagePreview(initial?.image || "");
+        onChange("image", initial?.image || "");
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
-  // تحديث معاينة الصورة عند تغيير الرابط يدوياً
   useEffect(() => {
     if (form.image && form.image !== imagePreview) {
       setImagePreview(form.image);
@@ -127,6 +122,16 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
       return;
     }
 
+    if (isCreating && !form.email.trim()) {
+      toast.error(t("instructorForm.emailRequired") || "Email is required");
+      return;
+    }
+
+    if (isCreating && !form.password) {
+      toast.error(t("instructorForm.passwordRequired") || "Password is required");
+      return;
+    }
+
     if (form.password && form.password !== form.passwordConfirm) {
       toast.error(t("instructorForm.passwordMismatch"));
       return;
@@ -138,7 +143,11 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
     }
 
     setLoading(true);
-    const toastId = toast.loading(t("instructorForm.updating"));
+    const toastId = toast.loading(
+      isCreating 
+        ? t("instructorForm.creating") || "Creating instructor..."
+        : t("instructorForm.updating")
+    );
 
     try {
       const payload = {
@@ -146,11 +155,18 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
         username: form.username.trim(),
         phone: form.phone.trim(),
         image: form.image.trim(),
+        ...(isCreating && { email: form.email.trim() }),
         ...(form.password && { password: form.password })
       };
 
-      const res = await fetch(`/api/instructor/${initial._id}`, {
-        method: "PUT",
+      const url = isCreating 
+        ? "/api/instructor"
+        : `/api/instructor/${initial._id}`;
+
+      const method = isCreating ? "POST" : "PUT";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
@@ -158,15 +174,20 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
       const result = await res.json();
 
       if (!res.ok) {
-        throw new Error(result.message || t("instructorForm.updateFailed"));
+        throw new Error(result.message || (isCreating ? t("instructorForm.createFailed") : t("instructorForm.updateFailed")));
       }
 
       if (result.success) {
-        toast.success(t("instructorForm.updatedSuccess"), { id: toastId });
+        toast.success(
+          isCreating 
+            ? t("instructorForm.createdSuccess") || "Instructor created successfully"
+            : t("instructorForm.updatedSuccess"), 
+          { id: toastId }
+        );
         onSaved();
         onClose();
       } else {
-        throw new Error(result.message || t("instructorForm.updateFailed"));
+        throw new Error(result.message || (isCreating ? t("instructorForm.createFailed") : t("instructorForm.updateFailed")));
       }
     } catch (err) {
       console.error("Error:", err);
@@ -211,21 +232,30 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
             />
           </div>
 
-          {/* Email (Read-only) */}
+          {/* Email */}
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <Mail className="w-3 h-3" />
-              {t("instructorForm.email")}
+              {t("instructorForm.email")} {isCreating && "*"}
             </label>
             <input
               type="email"
-              value={initial?.email || ""}
-              className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-              disabled
+              value={form.email}
+              onChange={(e) => onChange('email', e.target.value)}
+              placeholder="instructor@example.com"
+              className={`w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:text-white ${
+                isCreating 
+                  ? "dark:bg-dark_input" 
+                  : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+              }`}
+              disabled={!isCreating}
+              required={isCreating}
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {t("instructorForm.emailReadOnly")}
-            </p>
+            {!isCreating && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {t("instructorForm.emailReadOnly")}
+              </p>
+            )}
           </div>
 
           {/* Username */}
@@ -270,43 +300,34 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
 
             <div className="flex gap-4 items-start">
               <div className="flex-1 space-y-3">
-                {/* رابط الصورة بعد الرفع */}
-                {form.image && (
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                    <div className="flex items-center gap-2 text-green-700 dark:text-green-300 mb-2">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      <span className="text-sm font-medium">
-                        {t("instructorForm.imageUploaded") || "تم رفع الصورة بنجاح"}
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      value={form.image}
-                      onChange={(e) => onChange('image', e.target.value)}
-                      placeholder="https://example.com/image.jpg"
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-sm"
-                    />
-                  </div>
-                )}
-
-                {/* حقل إدخال الرابط يدوياً */}
-                {!form.image && (
-                  <input
-                    type="url"
-                    value={form.image}
-                    onChange={(e) => onChange('image', e.target.value)}
-                    placeholder="https://example.com/image.jpg"
-                    className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-                  />
-                )}
+                {/* رابط الصورة */}
+                <input
+                  type="url"
+                  value={form.image}
+                  onChange={(e) => onChange('image', e.target.value)}
+                  placeholder="أو أدخل رابط الصورة مباشرة"
+                  className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
+                  disabled={uploadingImage}
+                />
 
                 {/* أزرار التحكم */}
                 <div className="flex gap-2">
-                  <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary/10 text-primary rounded-lg text-13 font-medium cursor-pointer hover:bg-primary/20 transition-colors border border-primary/20">
-                    <Upload className="w-4 h-4" />
-                    {form.image ? (t('instructorForm.changeImage') || "تغيير الصورة") : (t('instructorForm.uploadImage') || "رفع صورة")}
+                  <label className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-13 font-medium transition-colors border ${
+                    uploadingImage 
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-300' 
+                      : 'bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 cursor-pointer'
+                  }`}>
+                    {uploadingImage ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {t('instructorForm.uploading') || "جاري الرفع..."}
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        {form.image ? (t('instructorForm.changeImage') || "تغيير الصورة") : (t('instructorForm.uploadImage') || "رفع صورة")}
+                      </>
+                    )}
                     <input
                       type="file"
                       accept="image/jpeg,image/jpg,image/png,image/webp"
@@ -316,7 +337,7 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
                     />
                   </label>
 
-                  {form.image && (
+                  {form.image && !uploadingImage && (
                     <button
                       type="button"
                       onClick={() => {
@@ -331,14 +352,6 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
                   )}
                 </div>
 
-                {/* رسالة أثناء الرفع */}
-                {uploadingImage && (
-                  <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                    {t('instructorForm.uploading') || "جاري رفع الصورة..."}
-                  </div>
-                )}
-
                 <div className="text-11 text-SlateBlueText dark:text-darktext">
                   {t('instructorForm.imageRequirements') || "الحد الأقصى: 5MB • JPEG, PNG, WebP"}
                 </div>
@@ -346,7 +359,7 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
 
               {/* معاينة الصورة */}
               {imagePreview && (
-                <div className="w-24 h-24 border-2 border-dashed border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden bg-gray-50 dark:bg-dark_input flex items-center justify-center">
+                <div className="w-24 h-24 border-2 border-dashed border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden bg-gray-50 dark:bg-dark_input flex items-center justify-center relative">
                   <img
                     src={imagePreview}
                     alt="Preview"
@@ -355,6 +368,11 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
                       e.target.src = "/images/default-avatar.jpg";
                     }}
                   />
+                  {uploadingImage && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -370,10 +388,16 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              {t("instructorForm.changePassword")}
+              {isCreating 
+                ? t("instructorForm.setPassword") || "Set Password"
+                : t("instructorForm.changePassword")
+              }
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              {t("instructorForm.passwordOptional")}
+              {isCreating 
+                ? t("instructorForm.passwordRequired") || "Password is required for new instructor"
+                : t("instructorForm.passwordOptional")
+              }
             </p>
           </div>
         </div>
@@ -381,7 +405,10 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="block text-13 font-medium text-gray-700 dark:text-gray-300">
-              {t("instructorForm.newPassword")}
+              {isCreating 
+                ? t("instructorForm.password") || "Password" 
+                : t("instructorForm.newPassword")
+              } {isCreating && "*"}
             </label>
             <input
               type="password"
@@ -389,12 +416,13 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
               onChange={(e) => onChange('password', e.target.value)}
               placeholder="••••••••"
               className="w-full px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white bg-white/50"
+              required={isCreating}
             />
           </div>
 
           <div className="space-y-2">
             <label className="block text-13 font-medium text-gray-700 dark:text-gray-300">
-              {t("instructorForm.confirmPassword")}
+              {t("instructorForm.confirmPassword")} {isCreating && "*"}
             </label>
             <input
               type="password"
@@ -402,6 +430,7 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
               onChange={(e) => onChange('passwordConfirm', e.target.value)}
               placeholder="••••••••"
               className="w-full px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white bg-white/50"
+              required={isCreating}
             />
           </div>
         </div>
@@ -410,7 +439,7 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
           <p className="font-medium mb-1">{t("instructorForm.passwordRequirements")}</p>
           <ul className="space-y-1 list-disc list-inside">
             <li>{t("instructorForm.minChars")}</li>
-            <li>{t("instructorForm.leaveBlank")}</li>
+            {!isCreating && <li>{t("instructorForm.leaveBlank")}</li>}
           </ul>
         </div>
       </div>
@@ -422,7 +451,7 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
             type="button"
             onClick={onClose}
             disabled={loading || uploadingImage}
-            className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50"
+            className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-4 h-4" />
             {t("common.cancel")}
@@ -434,13 +463,19 @@ export default function InstructorForm({ initial, onClose, onSaved }) {
           >
             {loading ? (
               <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                {t("instructorForm.updating")}
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {isCreating 
+                  ? t("instructorForm.creating") || "Creating..."
+                  : t("instructorForm.updating")
+                }
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                {t("instructorForm.saveChanges")}
+                {isCreating 
+                  ? t("instructorForm.create") || "Create Instructor"
+                  : t("instructorForm.saveChanges")
+                }
               </>
             )}
           </button>

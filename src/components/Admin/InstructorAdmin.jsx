@@ -18,7 +18,8 @@ import {
     Eye,
     UserCog,
     Shield,
-    Hash
+    Hash,
+    UserPlus
 } from "lucide-react";
 import Modal from "./Modal";
 import InstructorForm from "./InstructorForm";
@@ -30,6 +31,7 @@ export default function InstructorAdmin() {
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingInstructor, setEditingInstructor] = useState(null);
+    const [isCreating, setIsCreating] = useState(false);
     const [filters, setFilters] = useState({
         search: "",
         page: 1,
@@ -42,7 +44,6 @@ export default function InstructorAdmin() {
         totalPages: 1
     });
 
-    // تنسيق التاريخ
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         try {
@@ -57,7 +58,6 @@ export default function InstructorAdmin() {
         }
     };
 
-    // تحميل المدرسين
     const loadInstructors = async () => {
         setLoading(true);
         try {
@@ -109,10 +109,21 @@ export default function InstructorAdmin() {
 
     const onSaved = async () => {
         await loadInstructors();
-        toast.success(t("instructors.savedSuccess"));
+        toast.success(
+            isCreating 
+                ? t("instructors.createdSuccess") || "Instructor created successfully"
+                : t("instructors.savedSuccess")
+        );
+    };
+
+    const onAddNew = () => {
+        setIsCreating(true);
+        setEditingInstructor(null);
+        setModalOpen(true);
     };
 
     const onEdit = (instructor) => {
+        setIsCreating(false);
         setEditingInstructor(instructor);
         setModalOpen(true);
     };
@@ -123,6 +134,7 @@ export default function InstructorAdmin() {
             const json = await res.json();
 
             if (json.success) {
+                setIsCreating(false);
                 setEditingInstructor(json.data);
                 setModalOpen(true);
             }
@@ -161,7 +173,7 @@ export default function InstructorAdmin() {
                             onClick={async () => {
                                 toast.dismiss(toastInstance.id);
                                 try {
-                                    const res = await fetch(`/api/instructors/${id}`, {
+                                    const res = await fetch(`/api/instructor/${id}`, {
                                         method: "DELETE",
                                     });
 
@@ -215,6 +227,15 @@ export default function InstructorAdmin() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Add New Instructor Button */}
+                    <button
+                        onClick={onAddNew}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200"
+                    >
+                        <UserPlus className="w-4 h-4" />
+                        <span>{t("instructors.addNew") || "Add New Instructor"}</span>
+                    </button>
                 </div>
             </div>
 
@@ -424,6 +445,13 @@ export default function InstructorAdmin() {
                                 ? t("instructors.noMatchingResults")
                                 : t("instructors.noInstructorsDescription")}
                         </p>
+                        <button
+                            onClick={onAddNew}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium text-sm transition-colors"
+                        >
+                            <UserPlus className="w-4 h-4" />
+                            {t("instructors.addFirst") || "Add Your First Instructor"}
+                        </button>
                     </div>
                 )}
 
@@ -479,18 +507,27 @@ export default function InstructorAdmin() {
             {/* Modal */}
             <Modal
                 open={modalOpen}
-                title={editingInstructor ? t("instructorForm.updateInstructor") : t("instructorForm.viewInstructor")}
+                title={
+                    isCreating 
+                        ? t("instructorForm.addInstructor") || "Add New Instructor"
+                        : editingInstructor 
+                            ? t("instructorForm.updateInstructor") 
+                            : t("instructorForm.viewInstructor")
+                }
                 onClose={() => {
                     setModalOpen(false);
                     setEditingInstructor(null);
+                    setIsCreating(false);
                 }}
                 size="md"
             >
                 <InstructorForm
                     initial={editingInstructor}
+                    isCreating={isCreating}
                     onClose={() => {
                         setModalOpen(false);
                         setEditingInstructor(null);
+                        setIsCreating(false);
                     }}
                     onSaved={onSaved}
                 />

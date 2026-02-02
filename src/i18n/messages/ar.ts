@@ -3203,6 +3203,13 @@ const ar = {
   "groups.delete.warning":
     "هذا الإجراء سيحذف المجموعة نهائياً من قاعدة البيانات ولا يمكن التراجع عنه!",
   "groups.delete.processing": "جاري حذف المجموعة...",
+
+  "instructors.addNew": "إضافة مدرب جديد",
+  "instructorForm.uploadImage": "رفع صورة",
+  "instructorForm.create": "إنشاء المدرب",
+  "instructorForm.setPassword": "تعيين كلمة مرور",
+  "instructorForm.passwordRequired": "كلمة المرور مطلوبة",
+  "instructorForm.password": "كلمة المرور",
 };
 
 export default ar;

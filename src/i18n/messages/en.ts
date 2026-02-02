@@ -3072,6 +3072,13 @@ const en = {
   "groups.delete.warning":
     "This action will permanently delete the group from the database and cannot be undone!",
   "groups.delete.processing": "Deleting the group...",
+
+  "instructors.addNew": "Add New Instructor",
+  "instructorForm.uploadImage": "Upload Image",
+  "instructorForm.create": "Create Instructor",
+  "instructorForm.setPassword": "Set Password",
+  "instructorForm.passwordRequired": "Password is required",
+  "instructorForm.password": "Password",
 };
 
 export default en;
