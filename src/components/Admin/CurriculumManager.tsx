@@ -83,42 +83,44 @@ const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; total
     ];
 
     return (
-        <div className="flex items-center justify-center gap-2">
-            {steps.map((step, idx) => (
-                <React.Fragment key={step.num}>
-                    <div className="flex flex-col items-center">
-                        <div
-                            className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
-                                step.num < currentStep
-                                    ? "bg-green-500 text-white shadow-lg"
-                                    : step.num === currentStep
-                                    ? "bg-primary text-white ring-4 ring-primary/20 shadow-lg"
-                                    : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
-                            }`}
-                        >
-                            {step.num < currentStep ? <Check className="w-6 h-6" /> : step.num}
+        <div className="w-full overflow-x-auto pb-2">
+            <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-max px-4">
+                {steps.map((step, idx) => (
+                    <React.Fragment key={step.num}>
+                        <div className="flex flex-col items-center">
+                            <div
+                                className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-all ${
+                                    step.num < currentStep
+                                        ? "bg-green-500 text-white shadow-lg"
+                                        : step.num === currentStep
+                                        ? "bg-primary text-white ring-2 sm:ring-4 ring-primary/20 shadow-lg"
+                                        : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                                }`}
+                            >
+                                {step.num < currentStep ? <Check className="w-5 h-5 sm:w-6 sm:h-6" /> : step.num}
+                            </div>
+                            <span className={`text-[10px] sm:text-xs mt-1 sm:mt-2 font-semibold transition-colors whitespace-nowrap ${
+                                step.num === currentStep 
+                                    ? "text-primary dark:text-primary" 
+                                    : step.num < currentStep
+                                    ? "text-green-600 dark:text-green-400"
+                                    : "text-gray-500 dark:text-gray-500"
+                            }`}>
+                                {step.label}
+                            </span>
                         </div>
-                        <span className={`text-xs mt-2 font-semibold transition-colors ${
-                            step.num === currentStep 
-                                ? "text-primary dark:text-primary" 
-                                : step.num < currentStep
-                                ? "text-green-600 dark:text-green-400"
-                                : "text-gray-500 dark:text-gray-500"
-                        }`}>
-                            {step.label}
-                        </span>
-                    </div>
-                    {idx < steps.length - 1 && (
-                        <div
-                            className={`w-16 h-1 rounded-full transition-all mb-6 ${
-                                step.num < currentStep
-                                    ? "bg-green-500"
-                                    : "bg-gray-200 dark:bg-gray-700"
-                            }`}
-                        />
-                    )}
-                </React.Fragment>
-            ))}
+                        {idx < steps.length - 1 && (
+                            <div
+                                className={`w-8 sm:w-12 md:w-16 h-0.5 sm:h-1 rounded-full transition-all mb-4 sm:mb-6 ${
+                                    step.num < currentStep
+                                        ? "bg-green-500"
+                                        : "bg-gray-200 dark:bg-gray-700"
+                                }`}
+                            />
+                        )}
+                    </React.Fragment>
+                ))}
+            </div>
         </div>
     );
 };
@@ -138,20 +140,20 @@ const Modal = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-darklight rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="sticky top-0 bg-white dark:bg-darklight border-b border-gray-200 dark:border-dark_border p-6 flex items-center justify-between rounded-t-2xl">
-                    <h3 className="text-xl font-bold text-MidnightNavyText dark:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-darklight rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+                <div className="sticky top-0 bg-white dark:bg-darklight border-b border-gray-200 dark:border-dark_border p-4 sm:p-6 flex items-center justify-between rounded-t-xl sm:rounded-t-2xl z-10">
+                    <h3 className="text-lg sm:text-xl font-bold text-MidnightNavyText dark:text-white pr-8">
                         {title}
                     </h3>
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-dark_input rounded-lg transition-colors"
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-dark_input rounded-lg transition-colors flex-shrink-0"
                     >
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                     {children}
                 </div>
             </div>
@@ -526,13 +528,13 @@ export default function CurriculumManager({
             <div className="min-h-screen bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-darkmode dark:via-darklight dark:to-darkmode py-8 px-4">
                 <div className="max-w-5xl mx-auto">
                     {/* Header */}
-                    <div className="bg-white dark:bg-darklight rounded-2xl shadow-lg p-6 mb-6">
-                        <div className="flex items-center justify-between mb-4">
+                    <div className="bg-white dark:bg-darklight rounded-2xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                             <div>
-                                <h2 className="text-2xl font-bold text-MidnightNavyText dark:text-white">
+                                <h2 className="text-xl sm:text-2xl font-bold text-MidnightNavyText dark:text-white">
                                     {editingCurriculum ? "Edit Curriculum" : "Create New Curriculum"}
                                 </h2>
-                                <p className="text-sm text-SlateBlueText dark:text-darktext mt-1">
+                                <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext mt-1">
                                     Build your curriculum step by step
                                 </p>
                             </div>
@@ -552,7 +554,7 @@ export default function CurriculumManager({
                                         duration: "",
                                     });
                                 }}
-                                className="px-4 py-2 border border-gray-300 dark:border-dark_border rounded-xl text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input transition-colors"
+                                className="px-4 py-2 border border-gray-300 dark:border-dark_border rounded-xl text-sm sm:text-base text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input transition-colors w-full sm:w-auto"
                             >
                                 Cancel
                             </button>
@@ -562,11 +564,11 @@ export default function CurriculumManager({
 
                     {/* Step 1: Basic Info */}
                     {currentStep === 1 && (
-                        <div className="bg-white dark:bg-darklight rounded-2xl shadow-lg p-8">
-                            <h3 className="text-xl font-bold text-MidnightNavyText dark:text-white mb-6">
+                        <div className="bg-white dark:bg-darklight rounded-2xl shadow-lg p-4 sm:p-6 md:p-8">
+                            <h3 className="text-lg sm:text-xl font-bold text-MidnightNavyText dark:text-white mb-4 sm:mb-6">
                                 Curriculum Basic Information
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
                                         Curriculum Title *
@@ -576,7 +578,7 @@ export default function CurriculumManager({
                                         value={form.title}
                                         onChange={(e) => setForm({ ...form, title: e.target.value })}
                                         placeholder="e.g., Game Design I - Grade 2"
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
                                         required
                                     />
                                 </div>
@@ -588,7 +590,7 @@ export default function CurriculumManager({
                                     <select
                                         value={form.level}
                                         onChange={(e) => setForm({ ...form, level: e.target.value as any })}
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
                                     >
                                         <option value="beginner">Beginner</option>
                                         <option value="intermediate">Intermediate</option>
@@ -605,7 +607,7 @@ export default function CurriculumManager({
                                         value={form.grade}
                                         onChange={(e) => setForm({ ...form, grade: e.target.value })}
                                         placeholder="e.g., Grade 2"
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
                                     />
                                 </div>
 
@@ -618,7 +620,7 @@ export default function CurriculumManager({
                                         value={form.subject}
                                         onChange={(e) => setForm({ ...form, subject: e.target.value })}
                                         placeholder="e.g., Coding, Math, Science"
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
                                     />
                                 </div>
 
@@ -631,7 +633,7 @@ export default function CurriculumManager({
                                         value={form.duration}
                                         onChange={(e) => setForm({ ...form, duration: e.target.value })}
                                         placeholder="e.g., 12 weeks, 6 months"
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
                                     />
                                 </div>
 
@@ -644,12 +646,12 @@ export default function CurriculumManager({
                                         onChange={(e) => setForm({ ...form, description: e.target.value })}
                                         placeholder="Describe the curriculum overview, goals, and what students will learn..."
                                         rows={4}
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none text-sm sm:text-base"
                                     />
                                 </div>
                             </div>
 
-                            <div className="flex justify-end mt-8">
+                            <div className="flex justify-end mt-6 sm:mt-8">
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -659,10 +661,10 @@ export default function CurriculumManager({
                                         }
                                         setCurrentStep(2);
                                     }}
-                                    className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl"
+                                    className="bg-primary hover:bg-primary/90 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl text-sm sm:text-base w-full sm:w-auto justify-center"
                                 >
                                     Next: Manage Modules
-                                    <ArrowRight className="w-5 h-5" />
+                                    <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </button>
                             </div>
                         </div>
@@ -670,69 +672,69 @@ export default function CurriculumManager({
 
                     {/* Step 2, 3, 4: Modules Management */}
                     {currentStep >= 2 && (
-                        <div className="space-y-6">
-                            <div className="bg-white dark:bg-darklight rounded-2xl shadow-lg p-8">
-                                <div className="flex items-center justify-between mb-6">
+                        <div className="space-y-4 sm:space-y-6">
+                            <div className="bg-white dark:bg-darklight rounded-2xl shadow-lg p-4 sm:p-6 md:p-8">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
                                     <div>
-                                        <h3 className="text-xl font-bold text-MidnightNavyText dark:text-white">
+                                        <h3 className="text-lg sm:text-xl font-bold text-MidnightNavyText dark:text-white">
                                             Curriculum Modules
                                         </h3>
-                                        <p className="text-sm text-SlateBlueText dark:text-darktext mt-1">
+                                        <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext mt-1">
                                             {form.modules.length} module{form.modules.length !== 1 ? 's' : ''} added
                                         </p>
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => openModuleModal()}
-                                        className="bg-primary/10 hover:bg-primary/20 text-primary px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all"
+                                        className="bg-primary/10 hover:bg-primary/20 text-primary px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base w-full sm:w-auto"
                                     >
-                                        <Plus className="w-5 h-5" />
+                                        <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                                         Add Module
                                     </button>
                                 </div>
 
                                 {form.modules.length === 0 ? (
-                                    <div className="text-center py-12 border-2 border-dashed border-gray-300 dark:border-dark_border rounded-xl bg-gray-50/50 dark:bg-dark_input/50">
-                                        <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                                        <h4 className="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                                    <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 dark:border-dark_border rounded-xl bg-gray-50/50 dark:bg-dark_input/50">
+                                        <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3" />
+                                        <h4 className="text-base sm:text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">
                                             No modules yet
                                         </h4>
-                                        <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+                                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-500 mb-4 px-4">
                                             Start building your curriculum by adding your first module
                                         </p>
                                         <button
                                             type="button"
                                             onClick={() => openModuleModal()}
-                                            className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl font-semibold inline-flex items-center gap-2 transition-all"
+                                            className="bg-primary hover:bg-primary/90 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold inline-flex items-center gap-2 transition-all text-sm sm:text-base"
                                         >
-                                            <Plus className="w-5 h-5" />
+                                            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                                             Add Your First Module
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 gap-4">
+                                    <div className="grid grid-cols-1 gap-3 sm:gap-4">
                                         {form.modules.map((module, index) => (
                                             <div
                                                 key={index}
-                                                className="border-2 border-gray-200 dark:border-dark_border rounded-xl p-6 bg-gradient-to-br from-white to-gray-50/50 dark:from-darklight dark:to-dark_input/50 hover:shadow-md transition-all"
+                                                className="border-2 border-gray-200 dark:border-dark_border rounded-xl p-4 sm:p-6 bg-gradient-to-br from-white to-gray-50/50 dark:from-darklight dark:to-dark_input/50 hover:shadow-md transition-all"
                                             >
-                                                <div className="flex items-start justify-between mb-4">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                            <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg text-sm font-bold">
+                                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                                                            <span className="bg-primary/10 text-primary px-2.5 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-bold flex-shrink-0">
                                                                 Module {index + 1}
                                                             </span>
-                                                            <h4 className="text-lg font-bold text-MidnightNavyText dark:text-white">
+                                                            <h4 className="text-base sm:text-lg font-bold text-MidnightNavyText dark:text-white break-words">
                                                                 {module.title || "Untitled Module"}
                                                             </h4>
                                                         </div>
                                                         {module.description && (
-                                                            <p className="text-sm text-SlateBlueText dark:text-darktext">
+                                                            <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext line-clamp-2">
                                                                 {module.description}
                                                             </p>
                                                         )}
                                                     </div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
                                                         <button
                                                             type="button"
                                                             onClick={() => openModuleModal(index)}
@@ -752,16 +754,16 @@ export default function CurriculumManager({
                                                     </div>
                                                 </div>
 
-                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-4 border-t border-gray-200 dark:border-dark_border">
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-3 sm:pt-4 border-t border-gray-200 dark:border-dark_border">
                                                     {module.lessons.map((lesson, lessonIndex) => (
                                                         <div
                                                             key={lessonIndex}
                                                             className="text-xs p-2 bg-white dark:bg-dark_input rounded-lg border border-gray-200 dark:border-dark_border"
                                                         >
-                                                            <span className={`px-2 py-0.5 rounded text-xs font-semibold mr-2 ${getSessionBadgeColor(lesson.sessionNumber)}`}>
+                                                            <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold mr-1 sm:mr-2 ${getSessionBadgeColor(lesson.sessionNumber)}`}>
                                                                 S{lesson.sessionNumber}-L{lesson.order}
                                                             </span>
-                                                            <span className="text-gray-700 dark:text-gray-300">
+                                                            <span className="text-gray-700 dark:text-gray-300 text-[10px] sm:text-xs break-words">
                                                                 {lesson.title || `Lesson ${lesson.order}`}
                                                             </span>
                                                         </div>
@@ -774,13 +776,13 @@ export default function CurriculumManager({
                             </div>
 
                             {/* Navigation Buttons */}
-                            <div className="flex justify-between">
+                            <div className="flex flex-col sm:flex-row justify-between gap-3">
                                 <button
                                     type="button"
                                     onClick={() => setCurrentStep(1)}
-                                    className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all"
+                                    className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
                                 >
-                                    <ArrowLeft className="w-5 h-5" />
+                                    <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                                     Back to Basic Info
                                 </button>
                                 <button
@@ -790,16 +792,16 @@ export default function CurriculumManager({
                                         handleSubmit(e);
                                     }}
                                     disabled={loading || form.modules.length === 0}
-                                    className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-8 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
+                                    className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl disabled:cursor-not-allowed text-sm sm:text-base order-1 sm:order-2"
                                 >
                                     {loading ? (
                                         <>
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                            <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-white"></div>
                                             Saving...
                                         </>
                                     ) : (
                                         <>
-                                            <Save className="w-5 h-5" />
+                                            <Save className="w-4 h-4 sm:w-5 sm:h-5" />
                                             {editingCurriculum ? "Update Curriculum" : "Create Curriculum"}
                                         </>
                                     )}
@@ -823,45 +825,47 @@ export default function CurriculumManager({
                     {tempModule && (
                         <div className="space-y-6">
                             {/* Module Step Indicator */}
-                            <div className="flex items-center justify-center gap-2 pb-6 border-b border-gray-200 dark:border-dark_border">
-                                {[
-                                    { num: 1, label: "Basic Info" },
-                                    { num: 2, label: "Module" },
-                                    { num: 3, label: "Lessons" },
-                                    { num: 4, label: "Sessions" }
-                                ].map((step, idx) => (
-                                    <React.Fragment key={step.num}>
-                                        <div className="flex flex-col items-center">
-                                            <div
-                                                className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all ${
-                                                    step.num < moduleStep
-                                                        ? "bg-green-500 text-white"
-                                                        : step.num === moduleStep
-                                                        ? "bg-primary text-white ring-4 ring-primary/20"
-                                                        : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
-                                                }`}
-                                            >
-                                                {step.num < moduleStep ? <Check className="w-5 h-5" /> : step.num}
+                            <div className="pb-4 sm:pb-6 border-b border-gray-200 dark:border-dark_border overflow-x-auto">
+                                <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-max px-2">
+                                    {[
+                                        { num: 1, label: "Basic Info" },
+                                        { num: 2, label: "Module" },
+                                        { num: 3, label: "Lessons" },
+                                        { num: 4, label: "Sessions" }
+                                    ].map((step, idx) => (
+                                        <React.Fragment key={step.num}>
+                                            <div className="flex flex-col items-center">
+                                                <div
+                                                    className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm transition-all ${
+                                                        step.num < moduleStep
+                                                            ? "bg-green-500 text-white"
+                                                            : step.num === moduleStep
+                                                            ? "bg-primary text-white ring-2 sm:ring-4 ring-primary/20"
+                                                            : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                                                    }`}
+                                                >
+                                                    {step.num < moduleStep ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : step.num}
+                                                </div>
+                                                <span className={`text-[10px] sm:text-xs mt-1 font-medium transition-colors whitespace-nowrap ${
+                                                    step.num === moduleStep 
+                                                        ? "text-primary dark:text-primary" 
+                                                        : "text-gray-600 dark:text-gray-400"
+                                                }`}>
+                                                    {step.label}
+                                                </span>
                                             </div>
-                                            <span className={`text-xs mt-1 font-medium transition-colors ${
-                                                step.num === moduleStep 
-                                                    ? "text-primary dark:text-primary" 
-                                                    : "text-gray-600 dark:text-gray-400"
-                                            }`}>
-                                                {step.label}
-                                            </span>
-                                        </div>
-                                        {idx < 3 && (
-                                            <div
-                                                className={`w-12 h-1 rounded-full transition-all ${
-                                                    step.num < moduleStep
-                                                        ? "bg-green-500"
-                                                        : "bg-gray-200 dark:bg-gray-700"
-                                                }`}
-                                            />
-                                        )}
-                                    </React.Fragment>
-                                ))}
+                                            {idx < 3 && (
+                                                <div
+                                                    className={`w-6 sm:w-8 md:w-12 h-0.5 sm:h-1 rounded-full transition-all mb-4 sm:mb-5 ${
+                                                        step.num < moduleStep
+                                                            ? "bg-green-500"
+                                                            : "bg-gray-200 dark:bg-gray-700"
+                                                    }`}
+                                                />
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+                                </div>
                             </div>
 
                             {/* Module Step 1: Basic Info */}
@@ -901,10 +905,10 @@ export default function CurriculumManager({
                                                 }
                                                 setModuleStep(2);
                                             }}
-                                            className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all"
+                                            className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base w-full sm:w-auto"
                                         >
                                             Next: Add Lessons
-                                            <ArrowRight className="w-5 h-5" />
+                                            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                                         </button>
                                     </div>
                                 </div>
@@ -959,22 +963,22 @@ export default function CurriculumManager({
                                         </div>
                                     ))}
 
-                                    <div className="flex justify-between pt-4">
+                                    <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
                                         <button
                                             type="button"
                                             onClick={() => setModuleStep(1)}
-                                            className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all"
+                                            className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
                                         >
-                                            <ArrowLeft className="w-5 h-5" />
+                                            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                                             Back
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setModuleStep(3)}
-                                            className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all"
+                                            className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base order-1 sm:order-2"
                                         >
                                             Next: Add Sessions Details
-                                            <ArrowRight className="w-5 h-5" />
+                                            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                                         </button>
                                     </div>
                                 </div>
@@ -1051,21 +1055,21 @@ export default function CurriculumManager({
                                         ))}
                                     </div>
 
-                                    <div className="flex justify-between pt-4">
+                                    <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
                                         <button
                                             type="button"
                                             onClick={() => setModuleStep(2)}
-                                            className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all"
+                                            className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
                                         >
-                                            <ArrowLeft className="w-5 h-5" />
+                                            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                                             Back
                                         </button>
                                         <button
                                             type="button"
                                             onClick={saveModule}
-                                            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl"
+                                            className="bg-green-600 hover:bg-green-700 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl text-sm sm:text-base order-1 sm:order-2"
                                         >
-                                            <Check className="w-5 h-5" />
+                                            <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                                             {currentModuleIndex !== null ? "Update Module" : "Add Module"}
                                         </button>
                                     </div>
@@ -1080,23 +1084,23 @@ export default function CurriculumManager({
 
     // ========== CURRICULUM LIST VIEW ==========
     return (
-        <div className="space-y-6 px-4">
-            <div className="flex items-center justify-between">
+        <div className="space-y-4 sm:space-y-6 px-2 sm:px-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-3">
-                        <BookOpen className="w-7 h-7 text-primary" />
+                    <h2 className="text-xl sm:text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-2 sm:gap-3">
+                        <BookOpen className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
                         Curriculum Management
                     </h2>
-                    <p className="text-sm text-SlateBlueText dark:text-darktext mt-1">
+                    <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext mt-1">
                         Create and manage curriculum templates for courses
                     </p>
                 </div>
                 <button
                     type="button"
                     onClick={() => setShowForm(true)}
-                    className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 shadow-lg hover:shadow-xl transition-all"
+                    className="bg-primary hover:bg-primary/90 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all text-sm sm:text-base w-full sm:w-auto"
                 >
-                    <Plus className="w-5 h-5" />
+                    <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                     Create New Curriculum
                 </button>
             </div>
