@@ -1278,6 +1278,32 @@ ${session.meetingLink ? `🔗 رابط الاجتماع: ${session.meetingLink}\
 }
 
 /**
+ * ✅ FIX: Export the function that route.js expects
+ * هذا هو الحل الرئيسي للمشكلة
+ */
+export function prepareReminderMessage(
+  studentName,
+  session,
+  group,
+  reminderType,
+  language = "ar"
+) {
+  // Use existing function
+  const messages = prepareReminderMessages(
+    studentName,
+    session,
+    group,
+    reminderType,
+    language,
+    "ولي الأمر", // default guardian
+    "" // default enrollment
+  );
+  
+  // Return student message by default
+  return messages.studentMessage.content;
+}
+
+/**
  * ✅ NEW: Send manual session reminder to both guardian and student
  */
 export async function sendManualSessionReminder(sessionId, reminderType) {

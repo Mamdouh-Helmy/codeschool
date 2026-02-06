@@ -1,7 +1,6 @@
-// ============================================
-// services/wapilot-service.js - Send to Student & Guardian
-// ============================================
-'use server'
+// ❌ إزالة 'use server' من السطر الأول تماماً
+
+// ✅ ابدأ بالاستيرادات مباشرة
 import Student from "../models/Student.js";
 import { connectDB } from "@/lib/mongodb";
 

@@ -91,7 +91,11 @@ export async function POST(req: Request) {
         requestData = await req.json();
       }
 
-      console.log("📥 Received blog data");
+      console.log("📥 Received blog data:", {
+        hasViewCount: requestData.viewCount !== undefined,
+        viewCount: requestData.viewCount,
+        viewCountType: typeof requestData.viewCount
+      });
     } catch (parseError: any) {
       console.error("❌ Failed to parse request:", parseError.message);
       return NextResponse.json(
@@ -103,6 +107,14 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+
+    // ✅ تحليل viewCount بشكل آمن
+    let viewCountValue = 0;
+    if (requestData.viewCount !== undefined && requestData.viewCount !== null) {
+      const parsed = parseInt(requestData.viewCount.toString());
+      viewCountValue = isNaN(parsed) ? 0 : Math.max(0, parsed);
+    }
+    console.log("✅ Parsed viewCount for saving:", viewCountValue);
 
     // التحقق من البيانات المطلوبة
     if (
@@ -201,15 +213,20 @@ export async function POST(req: Request) {
       readTime: calculateReadTime(
         requestData.body_ar || requestData.body_en || "",
       ),
-      viewCount: 0,
+      // ✅ FIXED: استخدم القيمة المحللة من الطلب بدلاً من 0 ثابت
+      viewCount: viewCountValue,
     };
 
-    console.log("📝 Creating blog post...");
+    console.log("📝 Creating blog post with viewCount:", blogData.viewCount);
 
     // حفظ المقال في قاعدة البيانات
     const newPost = await BlogPost.create(blogData);
 
-    console.log("✅ Blog post created successfully!");
+    console.log("✅ Blog post created successfully!", {
+      id: newPost._id,
+      title: newPost.title_ar || newPost.title_en,
+      viewCount: newPost.viewCount,
+    });
 
     return NextResponse.json(
       {
@@ -225,6 +242,7 @@ export async function POST(req: Request) {
           excerpt_ar: newPost.excerpt_ar,
           excerpt_en: newPost.excerpt_en,
           image: newPost.image,
+          viewCount: newPost.viewCount, // ✅ تأكد من إرجاع القيمة المحفوظة
         },
         message: "Blog post created successfully",
       },
