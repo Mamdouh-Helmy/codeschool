@@ -3381,6 +3381,10 @@ const ar = {
   "admins.table.noPhone": "لا يوجد رقم هاتف",
   "dashboard.Admin": "الإدارة",
   "dashboard.Marketing": "التسويق",
+
+  "blogForm.viewCount": "عدد المشاهدات",
+  "blogForm.viewCountHint": "عدد مرات مشاهدة المقال",
+  "blogForm.uploading": "جارٍ الرفع...",
 };
 
 export default ar;

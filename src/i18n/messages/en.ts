@@ -3248,6 +3248,10 @@ const en = {
   "admins.table.noPhone": "No phone",
   "dashboard.Admin": "Admin",
   "dashboard.Marketing": "Marketing",
+
+  "blogForm.viewCount": "View count",
+  "blogForm.viewCountHint": "Number of times the post has been viewed",
+  "blogForm.uploading": "Uploading...",
 };
 
 export default en;

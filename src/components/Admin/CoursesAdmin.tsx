@@ -22,20 +22,30 @@ import Modal from "./Modal";
 import CourseForm from "./CourseForm";
 import { useI18n } from "@/i18n/I18nProvider";
 
-interface Lesson {
+// In CoursesAdmin.tsx, replace the existing Module and Lesson interfaces:
+
+interface Session {
+    _id?: string;
     title: string;
     description?: string;
+    duration?: number;
     order: number;
-    sessionNumber: number;
+    resources?: string[];
+    videoUrl?: string;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 interface Module {
+    _id?: string;
     title: string;
     description?: string;
     order: number;
-    lessons: Lesson[];
-    projects: string[];
-    totalSessions: number;
+    sessions: Session[];  // Changed from 'lessons' to 'sessions'
+    projects?: string[];  // Optional now
+    totalSessions?: number; // Optional now
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 interface Course {
@@ -346,8 +356,8 @@ export default function CoursesAdmin() {
                         <div
                             key={course._id}
                             className={`relative rounded-xl border p-6 transition-all duration-300 hover:shadow-md ${course.featured
-                                    ? "border-primary bg-gradient-to-br from-primary/5 to-primary/10"
-                                    : "border-PowderBlueBorder bg-white dark:bg-darkmode dark:border-dark_border"
+                                ? "border-primary bg-gradient-to-br from-primary/5 to-primary/10"
+                                : "border-PowderBlueBorder bg-white dark:bg-darkmode dark:border-dark_border"
                                 }`}
                         >
                             {/* Featured Badge */}
@@ -364,8 +374,8 @@ export default function CoursesAdmin() {
                             <div className="absolute top-4 right-4">
                                 <span
                                     className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${course.isActive
-                                            ? "bg-Aquamarine/20 text-Salem dark:bg-Aquamarine/30"
-                                            : "bg-SlateBlueText/20 text-SlateBlueText dark:bg-darktext/30"
+                                        ? "bg-Aquamarine/20 text-Salem dark:bg-Aquamarine/30"
+                                        : "bg-SlateBlueText/20 text-SlateBlueText dark:bg-darktext/30"
                                         }`}
                                 >
                                     <CheckCircle className="w-3 h-3" />
@@ -549,7 +559,7 @@ export default function CoursesAdmin() {
                 }}
             >
                 <CourseForm
-                    initial={editing || undefined}
+                    initial={editing as any || undefined}
                     onClose={() => {
                         setOpen(false);
                         setEditing(null);
