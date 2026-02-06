@@ -1,7 +1,7 @@
 // ============================================
 // services/wapilot-service.js - Send to Student & Guardian
 // ============================================
-
+'use server'
 import Student from "../models/Student.js";
 import { connectDB } from "@/lib/mongodb";
 
