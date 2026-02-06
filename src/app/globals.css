@@ -352,3 +352,109 @@ body {
 }
 
 
+/* 🎨 Custom styling for blog HTML content - FIXED VERSION */
+.blog-content h1 {
+  @apply text-2xl sm:text-3xl md:text-4xl font-bold text-MidnightNavyText dark:text-white mb-4 mt-6;
+}
+
+.blog-content h2 {
+  @apply text-xl sm:text-2xl md:text-3xl font-bold text-MidnightNavyText dark:text-white mb-3 mt-5;
+}
+
+.blog-content h3 {
+  @apply text-lg sm:text-xl md:text-2xl font-semibold text-MidnightNavyText dark:text-white mb-3 mt-4;
+}
+
+.blog-content h4 {
+  @apply text-base sm:text-lg md:text-xl font-semibold text-MidnightNavyText dark:text-white mb-2 mt-3;
+}
+
+.blog-content h5 {
+  @apply text-sm sm:text-base md:text-lg font-medium text-MidnightNavyText dark:text-white mb-2 mt-3;
+}
+
+.blog-content h6 {
+  @apply text-sm sm:text-base font-medium text-SlateBlueText dark:text-gray-300 mb-2 mt-3;
+}
+
+.blog-content p {
+  @apply text-SlateBlueText dark:text-gray-300 leading-relaxed mb-4 text-sm sm:text-base;
+}
+
+.blog-content strong,
+.blog-content b {
+  @apply font-semibold text-MidnightNavyText dark:text-white;
+}
+
+.blog-content em,
+.blog-content i {
+  @apply italic;
+}
+
+.blog-content a {
+  @apply text-primary dark:text-primary underline hover:no-underline transition-all;
+}
+
+.blog-content ul {
+  @apply list-disc list-inside mb-4 space-y-2;
+}
+
+.blog-content ol {
+  @apply list-decimal list-inside mb-4 space-y-2;
+}
+
+.blog-content li {
+  @apply text-SlateBlueText dark:text-gray-300 text-sm sm:text-base;
+}
+
+.blog-content blockquote {
+  @apply border-l-4 border-primary pl-4 italic text-SlateBlueText dark:text-gray-400 my-4;
+}
+
+.blog-content code {
+  @apply bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.blog-content pre {
+  @apply bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto my-4;
+}
+
+.blog-content pre code {
+  @apply bg-transparent p-0;
+}
+
+.blog-content img {
+  @apply rounded-lg w-full h-auto my-6;
+}
+
+.blog-content table {
+  @apply w-full border-collapse my-4;
+}
+
+.blog-content th {
+  @apply bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 px-4 py-2 text-left font-semibold;
+}
+
+.blog-content td {
+  @apply border border-gray-300 dark:border-gray-700 px-4 py-2;
+}
+
+.blog-content hr {
+  @apply my-6 border-gray-300 dark:border-gray-700;
+}
+
+/* للتعامل مع الفقرات الطويلة */
+.blog-content {
+  @apply break-words;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* تحسين المسافات العامة */
+.blog-content > *:first-child {
+  @apply mt-0;
+}
+
+.blog-content > *:last-child {
+  @apply mb-0;
+}

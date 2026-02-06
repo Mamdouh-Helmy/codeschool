@@ -17,6 +17,8 @@ import {
   Mail,
   Shield,
   Languages,
+  Loader2,
+  TrendingUp,
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
 import RichTextEditor from "../Blog/RichTextEditor";
@@ -70,6 +72,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     tags_en: initial?.tags_en || [],
     featured: initial?.featured || false,
     status: initial?.status || "draft",
+    viewCount: initial?.viewCount || 0, // ✅ عدد المشاهدات قابل للتعديل
   }));
 
   const [tagsAr, setTagsAr] = useState<string[]>(initial?.tags_ar || []);
@@ -80,41 +83,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   const [imagePreview, setImagePreview] = useState("");
   const [authorAvatarPreview, setAuthorAvatarPreview] = useState("");
   const [activeLanguage, setActiveLanguage] = useState<"ar" | "en">("ar");
-
-  // ✅ دالة محسنة لتحويل الملف إلى Base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        if (reader.result) {
-          resolve(reader.result as string);
-        } else {
-          reject(new Error("Failed to read file"));
-        }
-      };
-      reader.onerror = error => reject(error);
-    });
-  };
-
-  // ✅ دالة محسنة لتنظيف رابط الصورة
-  const cleanImageUrl = (url: string): string => {
-    if (!url || typeof url !== 'string') return '';
-    
-    let cleaned = url.trim();
-    
-    // إزالة أي / زائدة في النهاية
-    if (cleaned.endsWith('/')) {
-      cleaned = cleaned.slice(0, -1);
-    }
-    
-    // إذا كان الرابط يحتوي فقط على /uploads/ بدون اسم ملف
-    if (cleaned === '/uploads/' || cleaned === '/uploads') {
-      return '';
-    }
-    
-    return cleaned;
-  };
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // معاينة الصور
   useEffect(() => {
@@ -185,7 +155,44 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     }
   };
 
-  // ✅ معالجة رفع صورة المقال - تستخدم Base64 مباشرة
+  /**
+   * ✅ رفع صورة المقال إلى Cloudinary
+   */
+  const uploadImageToCloudinary = async (base64Image: string) => {
+    setUploadingImage(true);
+
+    try {
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: base64Image,
+          folder: 'blog-posts' // مجلد خاص بصور المقالات
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        onChange("image", data.imageUrl);
+        setImagePreview(data.imageUrl);
+        console.log("✅ Blog image uploaded to Cloudinary:", data.imageUrl);
+        return data.imageUrl;
+      } else {
+        throw new Error(data.message || "فشل رفع الصورة");
+      }
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      alert(`خطأ في رفع الصورة: ${error.message}`);
+      throw error;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  /**
+   * ✅ معالجة رفع صورة المقال
+   */
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -203,40 +210,63 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
       return;
     }
 
-    const previousLoading = loading;
-    setLoading(true);
-    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const result = e.target?.result as string;
+
+      // عرض معاينة فورية
+      setImagePreview(result);
+
+      try {
+        // رفع الصورة إلى Cloudinary
+        await uploadImageToCloudinary(result);
+      } catch (error) {
+        // إعادة المعاينة للصورة القديمة في حالة الفشل
+        setImagePreview(initial?.image || "");
+        onChange("image", initial?.image || "");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  /**
+   * ✅ رفع صورة المؤلف إلى Cloudinary
+   */
+  const uploadAuthorAvatarToCloudinary = async (base64Image: string) => {
+    setUploadingAvatar(true);
+
     try {
-      // ✅ تحويل الملف إلى Base64 مباشرة
-      const base64Image = await fileToBase64(file);
-      
-      // ✅ تنظيف الصورة إذا كانت URL
-      const cleanedImage = cleanImageUrl(base64Image);
-      
-      // ✅ حفظ Base64 في الحالة
-      onChange("image", cleanedImage);
-      
-      // عرض معاينة محلية
-      const localPreview = URL.createObjectURL(file);
-      setImagePreview(localPreview);
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: base64Image,
+          folder: 'blog-authors' // مجلد خاص بصور المؤلفين
+        })
+      });
 
-      // تنظيف المعاينة المحلية بعد ثانية
-      setTimeout(() => {
-        URL.revokeObjectURL(localPreview);
-      }, 1000);
+      const data = await response.json();
 
-      console.log("✅ Image converted to Base64 successfully");
-
+      if (data.success) {
+        onChangeAuthor("avatar", data.imageUrl);
+        setAuthorAvatarPreview(data.imageUrl);
+        console.log("✅ Author avatar uploaded to Cloudinary:", data.imageUrl);
+        return data.imageUrl;
+      } else {
+        throw new Error(data.message || "فشل رفع الصورة");
+      }
     } catch (error: any) {
       console.error("Upload error:", error);
-      alert(`خطأ في تحويل الصورة: ${error.message}`);
-      setImagePreview("");
+      alert(`خطأ في رفع الصورة: ${error.message}`);
+      throw error;
     } finally {
-      setLoading(previousLoading);
+      setUploadingAvatar(false);
     }
   };
 
-  // ✅ معالجة رفع صورة المؤلف - تستخدم Base64 مباشرة
+  /**
+   * ✅ معالجة رفع صورة المؤلف
+   */
   const handleAuthorAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -252,36 +282,23 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
       return;
     }
 
-    const previousLoading = loading;
-    setLoading(true);
-    
-    try {
-      // ✅ تحويل الملف إلى Base64 مباشرة
-      const base64Image = await fileToBase64(file);
-      
-      // ✅ تنظيف الصورة
-      const cleanedAvatar = cleanImageUrl(base64Image);
-      
-      // ✅ حفظ Base64 في الحالة
-      onChangeAuthor("avatar", cleanedAvatar || "/images/default-avatar.jpg");
-      
-      // عرض معاينة محلية
-      const localPreview = URL.createObjectURL(file);
-      setAuthorAvatarPreview(localPreview);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const result = e.target?.result as string;
 
-      setTimeout(() => {
-        URL.revokeObjectURL(localPreview);
-      }, 1000);
+      // عرض معاينة فورية
+      setAuthorAvatarPreview(result);
 
-      console.log("✅ Author avatar converted to Base64 successfully");
-
-    } catch (error: any) {
-      console.error("Upload error:", error);
-      alert(`خطأ في تحويل الصورة: ${error.message}`);
-      setAuthorAvatarPreview("");
-    } finally {
-      setLoading(previousLoading);
-    }
+      try {
+        // رفع الصورة إلى Cloudinary
+        await uploadAuthorAvatarToCloudinary(result);
+      } catch (error) {
+        // إعادة المعاينة للصورة القديمة في حالة الفشل
+        setAuthorAvatarPreview(initial?.author?.avatar || "/images/default-avatar.jpg");
+        onChangeAuthor("avatar", initial?.author?.avatar || "/images/default-avatar.jpg");
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // توليد excerpt تلقائياً من النص
@@ -309,14 +326,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
     setLoading(true);
 
     try {
-      // ✅ تنظيف روابط الصور قبل الإرسال
       const cleanedForm = {
         ...form,
-        image: cleanImageUrl(form.image),
-        author: {
-          ...form.author,
-          avatar: cleanImageUrl(form.author.avatar) || "/images/default-avatar.jpg"
-        },
         tags_ar: tagsAr,
         tags_en: tagsEn,
         publishDate: form.publishDate
@@ -327,10 +338,9 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
       console.log("📤 Submitting blog data:", {
         title_ar: cleanedForm.title_ar,
         title_en: cleanedForm.title_en,
-        image: cleanedForm.image ? "Base64 image (truncated)" : "No image",
-        authorAvatar: cleanedForm.author.avatar ? "Base64 avatar (truncated)" : "Default avatar",
-        tags_ar: cleanedForm.tags_ar.length,
-        tags_en: cleanedForm.tags_en.length
+        image: cleanedForm.image,
+        authorAvatar: cleanedForm.author.avatar,
+        viewCount: cleanedForm.viewCount,
       });
 
       // إضافة تحقق من البيانات المطلوبة
@@ -346,7 +356,6 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         return;
       }
 
-      // ✅ إرسال البيانات مباشرة
       const method = initial?._id ? "PUT" : "POST";
       const url = initial?._id
         ? `/api/blog/${encodeURIComponent(initial._id)}`
@@ -591,27 +600,40 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
                 onChange={(e) => onChangeAuthor("avatar", e.target.value)}
                 placeholder={t('blogForm.avatarPlaceholder') || "Avatar URL or upload file"}
                 className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+                disabled={uploadingAvatar}
               />
-              <div className="mt-2">
-                <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-Aquamarine/10 text-Aquamarine rounded-lg text-12 cursor-pointer hover:bg-Aquamarine/20 transition-colors">
-                  <Upload className="w-3 h-3" />
-                  {t('blogForm.uploadAvatar') || "Upload Avatar"}
+              <div className="mt-2 flex gap-2">
+                <label className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-12 cursor-pointer transition-colors ${uploadingAvatar
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                    : 'bg-Aquamarine/10 text-Aquamarine hover:bg-Aquamarine/20'
+                  }`}>
+                  {uploadingAvatar ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      {t('blogForm.uploading') || "جاري الرفع..."}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3 h-3" />
+                      {t('blogForm.uploadAvatar') || "Upload Avatar"}
+                    </>
+                  )}
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleAuthorAvatarUpload}
                     className="hidden"
-                    disabled={loading}
+                    disabled={uploadingAvatar || loading}
                   />
                 </label>
-                {authorAvatarPreview && (
+                {authorAvatarPreview && !uploadingAvatar && (
                   <button
                     type="button"
                     onClick={() => {
                       onChangeAuthor("avatar", "/images/default-avatar.jpg");
                       setAuthorAvatarPreview("");
                     }}
-                    className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 cursor-pointer hover:bg-red-500/20 transition-colors"
                   >
                     <Trash2 className="w-3 h-3" />
                     {t('blogForm.remove') || "Remove"}
@@ -621,12 +643,17 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
             </div>
 
             {authorAvatarPreview && (
-              <div className="w-16 h-16 border border-PowderBlueBorder rounded-full overflow-hidden">
+              <div className="w-16 h-16 border border-PowderBlueBorder rounded-full overflow-hidden relative">
                 <img
                   src={authorAvatarPreview}
                   alt="Author Avatar"
                   className="w-full h-full object-cover"
                 />
+                {uploadingAvatar && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -688,70 +715,75 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
 
           <div className="flex gap-4 items-start">
             <div className="flex-1 space-y-3">
-              {/* ✅ رسالة توضيحية للصورة */}
-              {form.image && form.image.includes('base64') && (
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-sm">✅ الصورة جاهزة للإرسال (Base64)</span>
-                  </div>
-                  <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">
-                    سيتم حفظ الصورة كبيانات مباشرة في قاعدة البيانات
-                  </div>
-                </div>
-              )}
+              {/* رابط الصورة */}
+              <input
+                type="url"
+                value={form.image}
+                onChange={(e) => onChange('image', e.target.value)}
+                placeholder="أو أدخل رابط الصورة مباشرة"
+                className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13"
+                disabled={uploadingImage}
+              />
 
-              {/* زر الرفع */}
-              <div>
-                <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary/10 text-primary rounded-lg text-13 font-medium cursor-pointer hover:bg-primary/20 transition-colors border border-primary/20">
-                  <Upload className="w-4 h-4" />
-                  {form.image ? (t('blogForm.changeImage') || "Change Image") : (t('blogForm.uploadImage') || "Upload Image")}
+              {/* أزرار التحكم */}
+              <div className="flex gap-2">
+                <label className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-13 font-medium transition-colors border ${uploadingImage
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-300'
+                    : 'bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 cursor-pointer'
+                  }`}>
+                  {uploadingImage ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {t('blogForm.uploading') || "جاري الرفع..."}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      {form.image ? (t('blogForm.changeImage') || "Change Image") : (t('blogForm.uploadImage') || "Upload Image")}
+                    </>
+                  )}
                   <input
                     type="file"
                     accept="image/jpeg,image/jpg,image/png,image/webp"
                     onChange={handleImageUpload}
                     className="hidden"
-                    disabled={loading}
+                    disabled={uploadingImage || loading}
                   />
                 </label>
-                
-                <div className="text-11 text-SlateBlueText dark:text-darktext mt-2">
-                  {t('blogForm.imageRequirements') || "الحد الأقصى: 5MB • JPEG, PNG, WebP"}
-                </div>
+
+                {form.image && !uploadingImage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange("image", "");
+                      setImagePreview("");
+                    }}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 font-medium hover:bg-red-500/20 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    {t('blogForm.removeImage') || "حذف الصورة"}
+                  </button>
+                )}
               </div>
 
-              {loading && (
-                <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  {t('blogForm.uploading') || "جاري تحويل الصورة..."}
-                </div>
-              )}
-
-              {form.image && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange("image", "");
-                    setImagePreview("");
-                  }}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-12 font-medium hover:bg-red-500/20 transition-colors"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  {t('blogForm.removeImage') || "حذف الصورة"}
-                </button>
-              )}
+              <div className="text-11 text-SlateBlueText dark:text-darktext">
+                {t('blogForm.imageRequirements') || "الحد الأقصى: 5MB • JPEG, PNG, WebP"}
+              </div>
             </div>
 
             {/* معاينة الصورة */}
             {imagePreview && (
-              <div className="w-24 h-24 border-2 border-dashed border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden bg-gray-50 dark:bg-dark_input flex items-center justify-center">
+              <div className="w-24 h-24 border-2 border-dashed border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden bg-gray-50 dark:bg-dark_input flex items-center justify-center relative">
                 <img
                   src={imagePreview}
                   alt="Preview"
                   className="w-full h-full object-cover"
                 />
+                {uploadingImage && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -897,6 +929,25 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           </div>
         </div>
 
+        {/* ✅ عدد المشاهدات - قابل للتحكم اليدوي */}
+        <div className="space-y-2 pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
+          <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+            <TrendingUp className="w-3 h-3 text-primary" />
+            {t('blogForm.viewCount') || "عدد المشاهدات"}
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={form.viewCount}
+            onChange={(e) => onChange("viewCount", parseInt(e.target.value) || 0)}
+            placeholder="0"
+            className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200"
+          />
+          <p className="text-11 text-SlateBlueText dark:text-darktext">
+            {t('blogForm.viewCountHint') || "يمكنك التحكم في عدد المشاهدات يدوياً. سيتم زيادته تلقائياً عند مشاهدة المقال."}
+          </p>
+        </div>
+
         <div className="space-y-3 pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
           <label className="flex items-center space-x-3 p-3 border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-IcyBreeze dark:hover:bg-dark_input transition-all duration-200 cursor-pointer group">
             <div className="w-8 h-8 bg-Aquamarine/10 rounded flex items-center justify-center group-hover:bg-Aquamarine/20 transition-colors">
@@ -927,19 +978,20 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight hover:shadow-md flex items-center justify-center gap-2"
+          disabled={loading || uploadingImage || uploadingAvatar}
+          className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 hover:bg-IcyBreeze dark:hover:bg-darklight hover:shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <X className="w-3 h-3" />
           {t('common.cancel') || "Cancel"}
         </button>
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || uploadingImage || uploadingAvatar}
           className="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-semibold text-13 transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
             <>
-              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <Loader2 className="w-3 h-3 animate-spin" />
               {t('common.saving') || "Saving..."}
             </>
           ) : initial ? (

@@ -1,4 +1,4 @@
-// app/api/groups/route.js - FIXED VERSION
+// app/api/groups/route.js - UPDATED WITH FLEXIBLE DAY VALIDATION
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../models/Group';
@@ -18,7 +18,6 @@ export async function GET(req) {
       return authCheck.response;
     }
 
-    // ✅ تأكد من الاتصال بقاعدة البيانات
     const dbConnection = await connectDB();
     console.log('✅ Database connected:', dbConnection.connection.readyState);
 
@@ -43,7 +42,6 @@ export async function GET(req) {
 
     console.log('📊 Query:', query);
 
-    // ✅ تحقق من وجود النموذج
     if (!Group || !Group.countDocuments) {
       console.error('❌ Group model not properly initialized');
       throw new Error('Group model not properly initialized');
@@ -59,8 +57,8 @@ export async function GET(req) {
       .populate('courseId', 'title level')
       .populate('instructors', 'name email')
       .populate('students', 'personalInfo.fullName enrollmentNumber')
-      .populate('createdBy', 'name email') // ✅ تم التصحيح هنا
-      .sort({ createdAt: -1 }) // ✅ تم التصحيح هنا
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
@@ -87,9 +85,9 @@ export async function GET(req) {
       automation: group.automation,
       sessionsGenerated: group.sessionsGenerated,
       totalSessions: group.totalSessionsCount,
-      createdBy: group.createdBy, // ✅ تم التصحيح هنا
-      createdAt: group.createdAt, // ✅ تم التصحيح هنا
-      updatedAt: group.updatedAt // ✅ تم التصحيح هنا
+      createdBy: group.createdBy,
+      createdAt: group.createdAt,
+      updatedAt: group.updatedAt
     }));
 
     const stats = {
@@ -129,7 +127,7 @@ export async function GET(req) {
   }
 }
 
-// POST: Create new group - FIXED VERSION
+// POST: Create new group - UPDATED WITH FLEXIBLE DAY VALIDATION
 export async function POST(req) {
   try {
     console.log('🚀 Creating new group...');
@@ -167,12 +165,12 @@ export async function POST(req) {
       );
     }
 
-    // Validate schedule has exactly 3 days
-    if (!schedule.daysOfWeek || schedule.daysOfWeek.length !== 3) {
+    // ✅ UPDATED: Validate 1-3 days (instead of exactly 3)
+    if (!schedule.daysOfWeek || schedule.daysOfWeek.length === 0 || schedule.daysOfWeek.length > 3) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Schedule must have exactly 3 days'
+          error: 'Schedule must have between 1 and 3 days selected'
         },
         { status: 400 }
       );
@@ -180,11 +178,25 @@ export async function POST(req) {
 
     // Validate unique days
     const uniqueDays = [...new Set(schedule.daysOfWeek)];
-    if (uniqueDays.length !== 3) {
+    if (uniqueDays.length !== schedule.daysOfWeek.length) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Schedule days must be unique'
+          error: 'Schedule days must be unique (no duplicates)'
+        },
+        { status: 400 }
+      );
+    }
+
+    // ✅ UPDATED: Validate first day matches start date
+    const startDate = new Date(schedule.startDate);
+    const startDayName = startDate.toLocaleDateString('en-US', { weekday: 'long' });
+    
+    if (!schedule.daysOfWeek.includes(startDayName)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `First selected day must be ${startDayName} (based on start date ${schedule.startDate})`
         },
         { status: 400 }
       );
@@ -232,7 +244,7 @@ export async function POST(req) {
       .substr(2, 4)
       .toUpperCase()}`;
 
-    // Create group - FIXED: استخدام createdBy مباشرة وليس داخل metadata
+    // Create group
     const groupData = {
       name,
       code: groupCode,
@@ -244,7 +256,7 @@ export async function POST(req) {
       currentStudentsCount: 0,
       schedule: {
         startDate: new Date(schedule.startDate),
-        daysOfWeek: schedule.daysOfWeek,
+        daysOfWeek: schedule.daysOfWeek, // ✅ Now 1-3 days allowed
         timeFrom: schedule.timeFrom,
         timeTo: schedule.timeTo,
         timezone: schedule.timezone || 'Africa/Cairo'
@@ -269,7 +281,7 @@ export async function POST(req) {
       status: 'draft',
       sessionsGenerated: false,
       totalSessionsCount: totalSessions,
-      createdBy: adminUser.id, // ✅ تصحيح هنا: حقل مباشر
+      createdBy: adminUser.id,
       updatedAt: new Date()
     };
 
@@ -280,17 +292,23 @@ export async function POST(req) {
     const populatedGroup = await Group.findById(group._id)
       .populate('courseId', 'title level')
       .populate('instructors', 'name email')
-      .populate('createdBy', 'name email') // ✅ تصحيح هنا
+      .populate('createdBy', 'name email')
       .lean();
 
     console.log('✅ Group created:', group.code);
+    console.log(`📅 Schedule: ${schedule.daysOfWeek.length} day(s) per week - ${schedule.daysOfWeek.join(', ')}`);
 
     return NextResponse.json(
       {
         success: true,
         data: populatedGroup,
         message: 'Group created successfully',
-        sessionDistribution: getSessionDistributionSummary(course.curriculum)
+        sessionDistribution: getSessionDistributionSummary(course.curriculum),
+        scheduleInfo: {
+          daysPerWeek: schedule.daysOfWeek.length,
+          selectedDays: schedule.daysOfWeek,
+          estimatedWeeks: Math.ceil(totalSessions / schedule.daysOfWeek.length)
+        }
       },
       { status: 201 }
     );
@@ -317,7 +335,6 @@ export async function POST(req) {
       );
     }
 
-    // Handle duplicate key error for group code
     if (error.code === 11000) {
       return NextResponse.json(
         {

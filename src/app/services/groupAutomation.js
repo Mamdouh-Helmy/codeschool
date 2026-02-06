@@ -9,9 +9,8 @@ import { wapilotService } from "./wapilot-service";
 
 /**
  * ✅ EVENT 1: Group Activated (for session generation)
- * EXISTING - NO CHANGES
+ * UPDATED: Remove "exactly 3 days" check
  */
-// services/groupAutomation.js - تحديث دالة onGroupActivated
 export async function onGroupActivated(groupId, userId) {
   try {
     console.log(`\n🎯 EVENT: Group Activated ==========`);
@@ -44,10 +43,14 @@ export async function onGroupActivated(groupId, userId) {
       `   Time: ${group.schedule.timeFrom} - ${group.schedule.timeTo}`,
     );
 
-    // ✅ التحقق من أن هناك 3 أيام مختارة
-    if (!group.schedule.daysOfWeek || group.schedule.daysOfWeek.length !== 3) {
-      throw new Error("Group must have exactly 3 days selected for schedule");
+    // ✅ UPDATED: التحقق من أن هناك 1-3 أيام مختارة (بدلاً من 3 فقط)
+    if (!group.schedule.daysOfWeek || 
+        group.schedule.daysOfWeek.length === 0 || 
+        group.schedule.daysOfWeek.length > 3) {
+      throw new Error(`Group must have 1 to 3 days selected for schedule (currently has ${group.schedule.daysOfWeek?.length || 0} days)`);
     }
+
+    console.log(`✅ Schedule validated: ${group.schedule.daysOfWeek.length} day(s) selected - ${group.schedule.daysOfWeek.join(', ')}`);
 
     // ✅ FIXED: التحقق مما إذا كانت الحصص موجودة مسبقاً
     const Session = (await import("../models/Session")).default;
@@ -831,12 +834,6 @@ ${record.notes ? `\n📝 ملاحظات: ${record.notes}` : ""}
   }
 }
 
-// ... (باقي الكود كما هو)
-
-/**
- * EVENT 5: Session Status Changed
- * EXISTING - NO CHANGES
- */
 /**
  * EVENT 5: Session Status Changed
  * ✅ FIXED: Variable replacement for guardian/student names
@@ -2166,9 +2163,6 @@ ${studentName} كان/ت غائب/ة بعذر عن محاضرة اليوم:
   return `Notification for ${studentName} - Status: ${status}`;
 }
 
-/**
- * ✅ Prepare session update message
- */
 /**
  * ✅ Prepare session update message with ALL variables
  */

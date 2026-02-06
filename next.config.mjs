@@ -49,8 +49,15 @@ const nextConfig = {
   },
 
   env: {
-    MAX_FILE_SIZE: "5242880",
+    MAX_FILE_SIZE: "15728640", // 15 MB (15 * 1024 * 1024)
     ALLOWED_IMAGE_TYPES: "image/jpeg,image/jpg,image/png,image/webp,image/gif",
+  },
+
+  // إضافة إعدادات الـ body parser للـ API routes
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '15mb',
+    },
   },
 
   staticPageGenerationTimeout: 180,

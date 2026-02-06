@@ -11,16 +11,19 @@ import {
     AlertCircle,
     X,
     BookOpen,
-    Download,
-    Upload,
     Copy,
     Edit,
     Eye,
     ArrowRight,
     ArrowLeft,
     Check,
+    Calendar,
+    Users,
+    Target,
+    Presentation,
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
+import RichTextEditor from "../Blog/RichTextEditor";
 
 interface Lesson {
     title: string;
@@ -31,10 +34,7 @@ interface Lesson {
 
 interface Session {
     sessionNumber: number;
-    objectives: string[];
-    outline: string[];
     presentationUrl?: string;
-    projects: string[];
 }
 
 interface Module {
@@ -47,16 +47,20 @@ interface Module {
     totalSessions: number;
 }
 
-interface Curriculum {
+interface Course {
     _id?: string;
     title: string;
     description?: string;
     slug?: string;
-    modules: Module[];
+    curriculum: Module[];
     level: "beginner" | "intermediate" | "advanced";
     grade?: string;
     subject?: string;
     duration?: string;
+    projects: string[];
+    isActive: boolean;
+    featured: boolean;
+    thumbnail?: string;
     createdBy?: {
         id: string;
         name: string;
@@ -67,17 +71,16 @@ interface Curriculum {
     updatedAt?: string;
 }
 
-interface CurriculumManagerProps {
-    onSelect?: (curriculumId: string) => void;
+interface CourseManagerProps {
+    onSelect?: (courseId: string) => void;
     selectedId?: string;
-    disableForm?: boolean;
 }
 
 // Step indicator component
 const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) => {
     const steps = [
         { num: 1, label: "Basic Info" },
-        { num: 2, label: "Modules" },
+        { num: 2, label: "Curriculum" },
         { num: 3, label: "Review" },
         { num: 4, label: "Complete" }
     ];
@@ -158,31 +161,31 @@ const Modal = ({
     );
 };
 
-export default function CurriculumManager({
+export default function CourseManager({
     onSelect,
     selectedId,
-    disableForm = false,
-}: CurriculumManagerProps) {
+}: CourseManagerProps) {
     const { t } = useI18n();
     const { user, loading: authLoading } = useAuth();
 
     const [loading, setLoading] = useState(false);
-    const [curriculums, setCurriculums] = useState<Curriculum[]>([]);
-    const [expandedCurriculums, setExpandedCurriculums] = useState<Set<number>>(
-        new Set()
-    );
+    const [courses, setCourses] = useState<Course[]>([]);
+    const [expandedCourses, setExpandedCourses] = useState<Set<number>>(new Set());
     const [showForm, setShowForm] = useState(false);
-    const [editingCurriculum, setEditingCurriculum] = useState<Curriculum | null>(
-        null
-    );
-    const [form, setForm] = useState<Curriculum>({
+    const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+    
+    const [form, setForm] = useState<Course>({
         title: "",
         description: "",
         level: "beginner",
-        modules: [],
+        curriculum: [],
         grade: "",
         subject: "",
         duration: "",
+        projects: [],
+        isActive: true,
+        featured: false,
+        thumbnail: "",
     });
 
     // Multi-step state
@@ -190,32 +193,76 @@ export default function CurriculumManager({
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentModuleIndex, setCurrentModuleIndex] = useState<number | null>(null);
     const [tempModule, setTempModule] = useState<Module | null>(null);
-    const [moduleStep, setModuleStep] = useState(1); // 1: Info, 2-4: Sessions Lessons (1-3), 5-7: Sessions Details (1-3)
-    const [currentSessionStep, setCurrentSessionStep] = useState(0); // 0-2 for sessions 1-3
+    const [moduleStep, setModuleStep] = useState(1);
 
-    // Load all curriculums
+    // State لإدارة المشاريع
+    const [newProject, setNewProject] = useState("");
+
+    // State لتخزين بيانات الجلسات المؤقتة (مع Presentation)
+    const [sessionLessonsData, setSessionLessonsData] = useState<{
+        [key: number]: {
+            title: string;
+            description: string;
+            presentationUrl: string;
+        }
+    }>({
+        1: { title: "", description: "", presentationUrl: "" },
+        2: { title: "", description: "", presentationUrl: "" },
+        3: { title: "", description: "", presentationUrl: "" },
+    });
+
+    // Load all courses
     useEffect(() => {
-        loadCurriculums();
+        loadCourses();
     }, []);
 
-    const loadCurriculums = async () => {
+    const loadCourses = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/curriculum-course", { cache: "no-store" });
+            const res = await fetch("/api/courses", { cache: "no-store" });
             const json = await res.json();
             if (json.success) {
-                setCurriculums(json.data);
+                setCourses(json.data);
             }
         } catch (err) {
-            console.error("Error loading curriculums:", err);
-            toast.error(t("curriculum.failedToLoad") || "Failed to load curriculums");
+            console.error("Error loading courses:", err);
+            toast.error("Failed to load courses");
         } finally {
             setLoading(false);
         }
     };
 
-    const toggleCurriculum = (index: number) => {
-        setExpandedCurriculums((prev) => {
+    // دالة خاصة لتحديث الـ description مع RichTextEditor
+    const handleDescriptionChange = (value: string) => {
+        setForm(prev => ({
+            ...prev,
+            description: value
+        }));
+    };
+
+    // Functions لإدارة المشاريع
+    const addProject = () => {
+        if (!newProject.trim()) {
+            toast.error("Please enter a project name");
+            return;
+        }
+
+        setForm({
+            ...form,
+            projects: [...form.projects, newProject.trim()]
+        });
+        setNewProject("");
+        toast.success("Project added");
+    };
+
+    const removeProject = (index: number) => {
+        const updatedProjects = form.projects.filter((_, i) => i !== index);
+        setForm({ ...form, projects: updatedProjects });
+        toast.success("Project removed");
+    };
+
+    const toggleCourse = (index: number) => {
+        setExpandedCourses((prev) => {
             const next = new Set(prev);
             if (next.has(index)) {
                 next.delete(index);
@@ -248,18 +295,60 @@ export default function CurriculumManager({
         return colors[sessionNumber as keyof typeof colors] || colors[1];
     };
 
+    const getLevelBadgeColor = (level: string): string => {
+        const colors = {
+            beginner: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+            intermediate: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
+            advanced: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        };
+        return colors[level as keyof typeof colors] || colors.beginner;
+    };
+
+    // ✅ FIXED: openModuleModal with proper checks for undefined arrays
     const openModuleModal = (moduleIndex?: number) => {
         if (moduleIndex !== undefined) {
             // Edit existing module
             setCurrentModuleIndex(moduleIndex);
-            setTempModule({ ...form.modules[moduleIndex] });
+            setTempModule({ ...form.curriculum[moduleIndex] });
+            
+            // استرجاع بيانات الجلسات من الدروس والـ sessions الموجودة
+            const existingModule = form.curriculum[moduleIndex];
+            const newSessionData: any = {
+                1: { title: "", description: "", presentationUrl: "" },
+                2: { title: "", description: "", presentationUrl: "" },
+                3: { title: "", description: "", presentationUrl: "" },
+            };
+            
+            // ✅ التحقق من وجود lessons قبل استخدام forEach
+            if (existingModule.lessons && Array.isArray(existingModule.lessons)) {
+                existingModule.lessons.forEach(lesson => {
+                    if (lesson.sessionNumber >= 1 && lesson.sessionNumber <= 3) {
+                        newSessionData[lesson.sessionNumber] = {
+                            title: lesson.title,
+                            description: lesson.description || "",
+                            presentationUrl: newSessionData[lesson.sessionNumber].presentationUrl
+                        };
+                    }
+                });
+            }
+            
+            // ✅ التحقق من وجود sessions قبل استخدام forEach
+            if (existingModule.sessions && Array.isArray(existingModule.sessions)) {
+                existingModule.sessions.forEach(session => {
+                    if (session.sessionNumber >= 1 && session.sessionNumber <= 3) {
+                        newSessionData[session.sessionNumber].presentationUrl = session.presentationUrl || "";
+                    }
+                });
+            }
+            
+            setSessionLessonsData(newSessionData);
         } else {
             // Create new module
             setCurrentModuleIndex(null);
             setTempModule({
                 title: "",
                 description: "",
-                order: form.modules.length + 1,
+                order: form.curriculum.length + 1,
                 lessons: Array(6)
                     .fill(null)
                     .map((_, i) => ({
@@ -271,29 +360,29 @@ export default function CurriculumManager({
                 sessions: [
                     {
                         sessionNumber: 1,
-                        objectives: [],
-                        outline: [],
-                        projects: [],
+                        presentationUrl: "",
                     },
                     {
                         sessionNumber: 2,
-                        objectives: [],
-                        outline: [],
-                        projects: [],
+                        presentationUrl: "",
                     },
                     {
                         sessionNumber: 3,
-                        objectives: [],
-                        outline: [],
-                        projects: [],
+                        presentationUrl: "",
                     },
                 ],
                 projects: [],
                 totalSessions: 3,
             });
+            
+            // إعادة تعيين بيانات الجلسات
+            setSessionLessonsData({
+                1: { title: "", description: "", presentationUrl: "" },
+                2: { title: "", description: "", presentationUrl: "" },
+                3: { title: "", description: "", presentationUrl: "" },
+            });
         }
         setModuleStep(1);
-        setCurrentSessionStep(0);
         setIsModalOpen(true);
     };
 
@@ -305,15 +394,42 @@ export default function CurriculumManager({
             return;
         }
 
+        // التحقق من أن جميع الجلسات لها عنوان
+        for (let i = 1; i <= 3; i++) {
+            if (!sessionLessonsData[i].title.trim()) {
+                toast.error(`Session ${i} lessons title is required`);
+                return;
+            }
+        }
+
+        // تحديث الدروس بناءً على بيانات الجلسات
+        const updatedLessons = tempModule.lessons.map(lesson => ({
+            ...lesson,
+            title: sessionLessonsData[lesson.sessionNumber].title,
+            description: sessionLessonsData[lesson.sessionNumber].description,
+        }));
+
+        // تحديث الـ sessions بناءً على presentation URLs
+        const updatedSessions = tempModule.sessions.map(session => ({
+            sessionNumber: session.sessionNumber,
+            presentationUrl: sessionLessonsData[session.sessionNumber].presentationUrl,
+        }));
+
+        const updatedModule = {
+            ...tempModule,
+            lessons: updatedLessons,
+            sessions: updatedSessions
+        };
+
         if (currentModuleIndex !== null) {
             // Update existing module
-            const updated = [...form.modules];
-            updated[currentModuleIndex] = tempModule;
-            setForm({ ...form, modules: updated });
+            const updated = [...form.curriculum];
+            updated[currentModuleIndex] = updatedModule;
+            setForm({ ...form, curriculum: updated });
             toast.success("Module updated successfully");
         } else {
             // Add new module
-            setForm({ ...form, modules: [...form.modules, tempModule] });
+            setForm({ ...form, curriculum: [...form.curriculum, updatedModule] });
             toast.success("Module added successfully");
         }
 
@@ -321,14 +437,18 @@ export default function CurriculumManager({
         setTempModule(null);
         setCurrentModuleIndex(null);
         setModuleStep(1);
-        setCurrentSessionStep(0);
+        setSessionLessonsData({
+            1: { title: "", description: "", presentationUrl: "" },
+            2: { title: "", description: "", presentationUrl: "" },
+            3: { title: "", description: "", presentationUrl: "" },
+        });
     };
 
     const removeModule = (moduleIndex: number) => {
         if (!confirm("Are you sure you want to delete this module?")) return;
         setForm((prev) => ({
             ...prev,
-            modules: prev.modules.filter((_, i) => i !== moduleIndex),
+            curriculum: prev.curriculum.filter((_, i) => i !== moduleIndex),
         }));
         toast.success("Module deleted");
     };
@@ -338,51 +458,22 @@ export default function CurriculumManager({
         setTempModule({ ...tempModule, [field]: value });
     };
 
-    const updateTempLesson = (
-        lessonIndex: number,
-        field: "title" | "description",
-        value: string
-    ) => {
-        if (!tempModule) return;
-        const updated = [...tempModule.lessons];
-        updated[lessonIndex] = {
-            ...updated[lessonIndex],
-            [field]: value,
-        };
-        setTempModule({ ...tempModule, lessons: updated });
-    };
-
-    const updateTempSession = (
-        sessionIndex: number,
-        field: "objectives" | "outline" | "presentationUrl" | "projects",
-        value: any
-    ) => {
-        if (!tempModule) return;
-        const updated = [...tempModule.sessions];
-
-        if (field === "objectives" || field === "outline" || field === "projects") {
-            const items = typeof value === 'string'
-                ? value.split('\n').filter(item => item.trim() !== '')
-                : Array.isArray(value) ? value : [];
-            updated[sessionIndex] = {
-                ...updated[sessionIndex],
-                [field]: items,
-            };
-        } else {
-            updated[sessionIndex] = {
-                ...updated[sessionIndex],
-                [field]: value,
-            };
-        }
-
-        setTempModule({ ...tempModule, sessions: updated });
+    // دالة لتحديث بيانات الجلسة
+    const updateSessionLessonsData = (sessionNumber: number, field: 'title' | 'description' | 'presentationUrl', value: string) => {
+        setSessionLessonsData(prev => ({
+            ...prev,
+            [sessionNumber]: {
+                ...prev[sessionNumber],
+                [field]: value
+            }
+        }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!user?.id) {
-            toast.error("Please login to create curriculum");
+            toast.error("Please login to create course");
             return;
         }
 
@@ -393,33 +484,49 @@ export default function CurriculumManager({
 
         setLoading(true);
         try {
-            const method = editingCurriculum?._id ? "PUT" : "POST";
-            const url = editingCurriculum?._id
-                ? `/api/curriculum-course/${editingCurriculum._id}`
-                : "/api/curriculum-course";
+            const method = editingCourse?._id ? "PUT" : "POST";
+            const url = editingCourse?._id
+                ? `/api/courses/${editingCourse._id}`
+                : "/api/courses";
+
+            // ✅ تحقق من أن الـ projects موجودة
+            console.log("🔍 Current form projects:", form.projects);
+            console.log("🔍 Projects array length:", form.projects.length);
+            console.log("🔍 Projects array content:", JSON.stringify(form.projects));
 
             const payload = {
                 title: form.title,
-                description: form.description,
+                description: form.description || "",
                 level: form.level,
-                modules: form.modules.map(module => ({
+                curriculum: form.curriculum.map(module => ({
                     ...module,
                     totalSessions: 3,
                     lessons: module.lessons.map(lesson => ({
                         ...lesson,
                         sessionNumber: calculateSessionNumber(lesson.order)
-                    }))
+                    })),
+                    sessions: module.sessions || [
+                        { sessionNumber: 1, presentationUrl: "" },
+                        { sessionNumber: 2, presentationUrl: "" },
+                        { sessionNumber: 3, presentationUrl: "" }
+                    ]
                 })),
                 grade: form.grade,
                 subject: form.subject,
                 duration: form.duration,
-                createdBy: editingCurriculum?.createdBy || {
+                projects: form.projects || [], // ✅ تأكد من وجود قيمة افتراضية
+                isActive: form.isActive,
+                featured: form.featured,
+                thumbnail: form.thumbnail,
+                createdBy: editingCourse?.createdBy || {
                     id: user.id,
                     name: user.name || "Admin",
                     email: user.email || "",
                     role: user.role || "admin",
                 },
             };
+
+            console.log("📤 Full payload to send:", JSON.stringify(payload, null, 2));
 
             const res = await fetch(url, {
                 method,
@@ -430,100 +537,112 @@ export default function CurriculumManager({
             const json = await res.json();
 
             if (!res.ok) {
-                toast.error(json.error || json.message || "Failed to save curriculum");
+                console.error("❌ API Error Response:", json);
+                toast.error(json.error || json.message || "Failed to save course");
                 return;
             }
 
+            console.log("✅ API Success Response:", json);
+            
             toast.success(
                 method === "POST"
-                    ? "Curriculum created successfully"
-                    : "Curriculum updated successfully"
+                    ? "Course created successfully"
+                    : "Course updated successfully"
             );
 
-            await loadCurriculums();
+            await loadCourses();
             setShowForm(false);
-            setEditingCurriculum(null);
+            setEditingCourse(null);
             setCurrentStep(1);
             setForm({
                 title: "",
                 description: "",
                 level: "beginner",
-                modules: [],
+                curriculum: [],
                 grade: "",
                 subject: "",
                 duration: "",
+                projects: [], // ✅ إعادة تعيين الـ projects
+                isActive: true,
+                featured: false,
+                thumbnail: "",
             });
         } catch (err) {
-            console.error("❌ Error saving curriculum:", err);
-            toast.error("Failed to save curriculum");
+            console.error("❌ Error saving course:", err);
+            toast.error("Failed to save course");
         } finally {
             setLoading(false);
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this curriculum?")) return;
+        if (!confirm("Are you sure you want to delete this course?")) return;
 
         try {
-            const res = await fetch(`/api/curriculum-course/${id}`, {
+            const res = await fetch(`/api/courses/${id}`, {
                 method: "DELETE",
             });
 
             if (res.ok) {
-                toast.success("Curriculum deleted successfully");
-                await loadCurriculums();
+                toast.success("Course deleted successfully");
+                await loadCourses();
             } else {
-                toast.error("Failed to delete curriculum");
+                toast.error("Failed to delete course");
             }
         } catch (err) {
-            console.error("Error deleting curriculum:", err);
-            toast.error("Error deleting curriculum");
+            console.error("Error deleting course:", err);
+            toast.error("Error deleting course");
         }
     };
 
-    const handleEdit = (curriculum: Curriculum) => {
-        setEditingCurriculum(curriculum);
+    const handleEdit = (course: Course) => {
+        setEditingCourse(course);
         setForm({
-            title: curriculum.title,
-            description: curriculum.description || "",
-            level: curriculum.level,
-            modules: curriculum.modules || [],
-            grade: curriculum.grade || "",
-            subject: curriculum.subject || "",
-            duration: curriculum.duration || "",
+            title: course.title,
+            description: course.description || "",
+            level: course.level,
+            curriculum: course.curriculum || [],
+            grade: course.grade || "",
+            subject: course.subject || "",
+            duration: course.duration || "",
+            projects: course.projects || [],
+            isActive: course.isActive !== false,
+            featured: course.featured || false,
+            thumbnail: course.thumbnail || "",
         });
         setShowForm(true);
     };
 
-    const handleDuplicate = (curriculum: Curriculum) => {
+    const handleDuplicate = (course: Course) => {
         setForm({
-            title: `${curriculum.title} (Copy)`,
-            description: curriculum.description || "",
-            level: curriculum.level,
-            modules: curriculum.modules || [],
-            grade: curriculum.grade || "",
-            subject: curriculum.subject || "",
-            duration: curriculum.duration || "",
+            title: `${course.title} (Copy)`,
+            description: course.description || "",
+            level: course.level,
+            curriculum: course.curriculum || [],
+            grade: course.grade || "",
+            subject: course.subject || "",
+            duration: course.duration || "",
+            projects: course.projects || [],
+            isActive: true,
+            featured: false,
+            thumbnail: course.thumbnail || "",
         });
-        setEditingCurriculum(null);
+        setEditingCourse(null);
         setShowForm(true);
     };
 
-    const handleSelect = (curriculum: Curriculum) => {
-        if (onSelect && curriculum._id) {
-            onSelect(curriculum._id);
+    const handleSelect = (course: Course) => {
+        if (onSelect && course._id) {
+            onSelect(course._id);
         }
     };
 
     const getModuleStepLabel = (step: number): string => {
         if (step === 1) return "Basic Info";
-        if (step >= 2 && step <= 4) return `Session ${step - 1} Lessons`;
-        if (step >= 5 && step <= 7) return `Session ${step - 4} Details`;
+        if (step === 2) return "Session 1";
+        if (step === 3) return "Session 2";
+        if (step === 4) return "Session 3";
         return "";
-    };
-
-    const getTotalModuleSteps = (): number => {
-        return 7; // 1: Info, 2-4: Lessons, 5-7: Sessions Details
     };
 
     if (authLoading) {
@@ -534,7 +653,7 @@ export default function CurriculumManager({
         );
     }
 
-    // ========== CURRICULUM FORM VIEW ==========
+    // ========== COURSE FORM VIEW ==========
     if (showForm) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-darkmode dark:via-darklight dark:to-darkmode py-8 px-4">
@@ -544,26 +663,30 @@ export default function CurriculumManager({
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                             <div>
                                 <h2 className="text-xl sm:text-2xl font-bold text-MidnightNavyText dark:text-white">
-                                    {editingCurriculum ? "Edit Curriculum" : "Create New Curriculum"}
+                                    {editingCourse ? "Edit Course" : "Create New Course"}
                                 </h2>
                                 <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext mt-1">
-                                    Build your curriculum step by step
+                                    Build your course step by step
                                 </p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => {
                                     setShowForm(false);
-                                    setEditingCurriculum(null);
+                                    setEditingCourse(null);
                                     setCurrentStep(1);
                                     setForm({
                                         title: "",
                                         description: "",
                                         level: "beginner",
-                                        modules: [],
+                                        curriculum: [],
                                         grade: "",
                                         subject: "",
                                         duration: "",
+                                        projects: [],
+                                        isActive: true,
+                                        featured: false,
+                                        thumbnail: "",
                                     });
                                 }}
                                 className="px-4 py-2 border border-gray-300 dark:border-dark_border rounded-xl text-sm sm:text-base text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input transition-colors w-full sm:w-auto"
@@ -578,18 +701,18 @@ export default function CurriculumManager({
                     {currentStep === 1 && (
                         <div className="bg-white dark:bg-darklight rounded-2xl shadow-lg p-4 sm:p-6 md:p-8">
                             <h3 className="text-lg sm:text-xl font-bold text-MidnightNavyText dark:text-white mb-4 sm:mb-6">
-                                Curriculum Basic Information
+                                Course Basic Information
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
-                                        Curriculum Title *
+                                        Course Title *
                                     </label>
                                     <input
                                         type="text"
                                         value={form.title}
                                         onChange={(e) => setForm({ ...form, title: e.target.value })}
-                                        placeholder="e.g., Game Design I - Grade 2"
+                                        placeholder="e.g., Web Development Fundamentals"
                                         className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
                                         required
                                     />
@@ -612,13 +735,80 @@ export default function CurriculumManager({
 
                                 <div>
                                     <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
+                                        Duration
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={form.duration}
+                                        onChange={(e) => setForm({ ...form, duration: e.target.value })}
+                                        placeholder="e.g., 12 weeks, 6 months"
+                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
+                                    />
+                                </div>
+
+                                {/* Projects Section */}
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
+                                        Course Projects
+                                    </label>
+                                    <div className="space-y-3">
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={newProject}
+                                                onChange={(e) => setNewProject(e.target.value)}
+                                                placeholder="Enter project name..."
+                                                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={addProject}
+                                                className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-semibold flex items-center gap-2 transition-all"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                                Add
+                                            </button>
+                                        </div>
+                                        
+                                        {form.projects.length > 0 && (
+                                            <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl p-4">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-sm font-semibold text-MidnightNavyText dark:text-white">
+                                                        Added Projects ({form.projects.length})
+                                                    </span>
+                                                    {form.projects.length > 0 && (
+                                                        <span className="text-xs text-gray-500">
+                                                            Click on a project to remove it
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {form.projects.map((project, index) => (
+                                                        <div
+                                                            key={index}
+                                                            onClick={() => removeProject(index)}
+                                                            className="group cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg flex items-center gap-2 transition-all hover:scale-105"
+                                                        >
+                                                            <Target className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                            <span className="text-xs sm:text-sm font-medium">{project}</span>
+                                                            <X className="w-3 h-3 sm:w-4 sm:h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
                                         Grade
                                     </label>
                                     <input
                                         type="text"
                                         value={form.grade}
                                         onChange={(e) => setForm({ ...form, grade: e.target.value })}
-                                        placeholder="e.g., Grade 2"
+                                        placeholder="e.g., Grade 10"
                                         className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
                                     />
                                 </div>
@@ -631,35 +821,47 @@ export default function CurriculumManager({
                                         type="text"
                                         value={form.subject}
                                         onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                                        placeholder="e.g., Coding, Math, Science"
+                                        placeholder="e.g., Computer Science"
                                         className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
                                     />
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
-                                        Duration
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={form.duration}
-                                        onChange={(e) => setForm({ ...form, duration: e.target.value })}
-                                        placeholder="e.g., 12 weeks, 6 months"
-                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
-                                    />
-                                </div>
-
+                                {/* ✅ حقل Description باستخدام RichTextEditor */}
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
                                         Description
                                     </label>
-                                    <textarea
-                                        value={form.description}
-                                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                                        placeholder="Describe the curriculum overview, goals, and what students will learn..."
-                                        rows={4}
-                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none text-sm sm:text-base"
-                                    />
+                                    <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl overflow-hidden">
+                                        <RichTextEditor
+                                            value={form.description || ""}
+                                            onChange={handleDescriptionChange}
+                                            placeholder="Describe the course overview, goals, and what students will learn..."
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                        Use the editor above to create rich text content for your course description
+                                    </p>
+                                </div>
+
+                                <div className="md:col-span-2 flex gap-4">
+                                    <label className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.isActive}
+                                            onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                                            className="w-4 h-4 rounded"
+                                        />
+                                        <span className="text-sm">Active</span>
+                                    </label>
+                                    <label className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.featured}
+                                            onChange={(e) => setForm({ ...form, featured: e.target.checked })}
+                                            className="w-4 h-4 rounded"
+                                        />
+                                        <span className="text-sm">Featured</span>
+                                    </label>
                                 </div>
                             </div>
 
@@ -668,31 +870,31 @@ export default function CurriculumManager({
                                     type="button"
                                     onClick={() => {
                                         if (!form.title.trim()) {
-                                            toast.error("Please enter a curriculum title");
+                                            toast.error("Please enter a course title");
                                             return;
                                         }
                                         setCurrentStep(2);
                                     }}
                                     className="bg-primary hover:bg-primary/90 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl text-sm sm:text-base w-full sm:w-auto justify-center"
                                 >
-                                    Next: Manage Modules
+                                    Next: Manage Curriculum
                                     <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    {/* Step 2, 3, 4: Modules Management */}
+                    {/* Step 2: Curriculum Management */}
                     {currentStep >= 2 && (
                         <div className="space-y-4 sm:space-y-6">
                             <div className="bg-white dark:bg-darklight rounded-2xl shadow-lg p-4 sm:p-6 md:p-8">
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
                                     <div>
                                         <h3 className="text-lg sm:text-xl font-bold text-MidnightNavyText dark:text-white">
-                                            Curriculum Modules
+                                            Course Curriculum
                                         </h3>
                                         <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext mt-1">
-                                            {form.modules.length} module{form.modules.length !== 1 ? 's' : ''} added
+                                            {form.curriculum.length} module{form.curriculum.length !== 1 ? 's' : ''} added
                                         </p>
                                     </div>
                                     <button
@@ -705,14 +907,14 @@ export default function CurriculumManager({
                                     </button>
                                 </div>
 
-                                {form.modules.length === 0 ? (
+                                {form.curriculum.length === 0 ? (
                                     <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 dark:border-dark_border rounded-xl bg-gray-50/50 dark:bg-dark_input/50">
                                         <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3" />
                                         <h4 className="text-base sm:text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">
                                             No modules yet
                                         </h4>
                                         <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-500 mb-4 px-4">
-                                            Start building your curriculum by adding your first module
+                                            Start building your course by adding your first module
                                         </p>
                                         <button
                                             type="button"
@@ -725,7 +927,7 @@ export default function CurriculumManager({
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 gap-3 sm:gap-4">
-                                        {form.modules.map((module, index) => (
+                                        {form.curriculum.map((module, index) => (
                                             <div
                                                 key={index}
                                                 className="border-2 border-gray-200 dark:border-dark_border rounded-xl p-4 sm:p-6 bg-gradient-to-br from-white to-gray-50/50 dark:from-darklight dark:to-dark_input/50 hover:shadow-md transition-all"
@@ -767,7 +969,7 @@ export default function CurriculumManager({
                                                 </div>
 
                                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-3 sm:pt-4 border-t border-gray-200 dark:border-dark_border">
-                                                    {module.lessons.map((lesson, lessonIndex) => (
+                                                    {module.lessons && module.lessons.map((lesson, lessonIndex) => (
                                                         <div
                                                             key={lessonIndex}
                                                             className="text-xs p-2 bg-white dark:bg-dark_input rounded-lg border border-gray-200 dark:border-dark_border"
@@ -803,7 +1005,7 @@ export default function CurriculumManager({
                                         e.preventDefault();
                                         handleSubmit(e);
                                     }}
-                                    disabled={loading || form.modules.length === 0}
+                                    disabled={loading || form.curriculum.length === 0}
                                     className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl disabled:cursor-not-allowed text-sm sm:text-base order-1 sm:order-2"
                                 >
                                     {loading ? (
@@ -814,7 +1016,7 @@ export default function CurriculumManager({
                                     ) : (
                                         <>
                                             <Save className="w-4 h-4 sm:w-5 sm:h-5" />
-                                            {editingCurriculum ? "Update Curriculum" : "Create Curriculum"}
+                                            {editingCourse ? "Update Course" : "Create Course"}
                                         </>
                                     )}
                                 </button>
@@ -831,16 +1033,20 @@ export default function CurriculumManager({
                         setTempModule(null);
                         setCurrentModuleIndex(null);
                         setModuleStep(1);
-                        setCurrentSessionStep(0);
+                        setSessionLessonsData({
+                            1: { title: "", description: "", presentationUrl: "" },
+                            2: { title: "", description: "", presentationUrl: "" },
+                            3: { title: "", description: "", presentationUrl: "" },
+                        });
                     }}
-                    title={`Module ${currentModuleIndex !== null ? currentModuleIndex + 1 : form.modules.length + 1}: ${tempModule?.title || "Untitled"}`}
+                    title={`Module ${currentModuleIndex !== null ? currentModuleIndex + 1 : form.curriculum.length + 1}: ${tempModule?.title || "Untitled"}`}
                 >
                     {tempModule && (
                         <div className="space-y-6">
                             {/* Module Step Indicator */}
                             <div className="pb-4 sm:pb-6 border-b border-gray-200 dark:border-dark_border overflow-x-auto">
                                 <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-max px-2">
-                                    {[1, 2, 3, 4, 5, 6, 7].map((step, idx) => (
+                                    {[1, 2, 3, 4].map((step, idx) => (
                                         <React.Fragment key={step}>
                                             <div className="flex flex-col items-center">
                                                 <div
@@ -860,7 +1066,7 @@ export default function CurriculumManager({
                                                     {getModuleStepLabel(step)}
                                                 </span>
                                             </div>
-                                            {idx < 6 && (
+                                            {idx < 3 && (
                                                 <div
                                                     className={`w-4 sm:w-6 md:w-8 h-0.5 rounded-full transition-all mb-3 sm:mb-4 ${step < moduleStep
                                                             ? "bg-green-500"
@@ -884,7 +1090,7 @@ export default function CurriculumManager({
                                             type="text"
                                             value={tempModule.title}
                                             onChange={(e) => updateTempModule("title", e.target.value)}
-                                            placeholder="e.g., Introduction to Game Design"
+                                            placeholder="e.g., Introduction to Web Development"
                                             className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                                         />
                                     </div>
@@ -912,14 +1118,14 @@ export default function CurriculumManager({
                                             }}
                                             className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base w-full sm:w-auto"
                                         >
-                                            Next: Add Lessons
+                                            Next: Session 1
                                             <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                                         </button>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Module Steps 2-4: Individual Session Lessons */}
+                            {/* Module Steps 2-4: Individual Sessions */}
                             {moduleStep >= 2 && moduleStep <= 4 && (
                                 <div className="space-y-4">
                                     {(() => {
@@ -933,39 +1139,59 @@ export default function CurriculumManager({
                                                             Session {sessionNum}
                                                         </span>
                                                         <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
-                                                            Add 2 lessons for this session
+                                                            Configure lessons for Session {sessionNum}
                                                         </span>
                                                     </h4>
 
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        {tempModule.lessons
-                                                            .filter(l => l.sessionNumber === sessionNum)
-                                                            .map((lesson, idx) => {
-                                                                const lessonIndex = tempModule.lessons.findIndex(
-                                                                    l => l.order === lesson.order
-                                                                );
-                                                                return (
-                                                                    <div key={idx} className="bg-white dark:bg-dark_input rounded-lg p-4 border-2 border-gray-200 dark:border-dark_border">
-                                                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
-                                                                            📚 Lesson {lesson.order}
-                                                                        </label>
-                                                                        <input
-                                                                            type="text"
-                                                                            value={lesson.title}
-                                                                            onChange={(e) => updateTempLesson(lessonIndex, "title", e.target.value)}
-                                                                            placeholder={`Lesson ${lesson.order} title`}
-                                                                            className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm mb-3 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                                                                        />
-                                                                        <textarea
-                                                                            value={lesson.description || ""}
-                                                                            onChange={(e) => updateTempLesson(lessonIndex, "description", e.target.value)}
-                                                                            placeholder="Lesson description..."
-                                                                            rows={3}
-                                                                            className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                                                                        />
-                                                                    </div>
-                                                                );
-                                                            })}
+                                                    <div className="space-y-4 bg-white dark:bg-dark_input rounded-lg p-4 border-2 border-gray-200 dark:border-dark_border">
+                                                        <div>
+                                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
+                                                                📚 Lessons Title (for both Lesson {sessionNum * 2 - 1} & Lesson {sessionNum * 2})
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={sessionLessonsData[sessionNum].title}
+                                                                onChange={(e) => updateSessionLessonsData(sessionNum, 'title', e.target.value)}
+                                                                placeholder={`Enter title for Session ${sessionNum} lessons`}
+                                                                className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
+                                                                📝 Lessons Description (for both Lesson {sessionNum * 2 - 1} & Lesson {sessionNum * 2})
+                                                            </label>
+                                                            <textarea
+                                                                value={sessionLessonsData[sessionNum].description}
+                                                                onChange={(e) => updateSessionLessonsData(sessionNum, 'description', e.target.value)}
+                                                                placeholder={`Enter description for Session ${sessionNum} lessons`}
+                                                                rows={3}
+                                                                className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                                                                <Presentation className="w-4 h-4" />
+                                                                Presentation URL (Optional)
+                                                            </label>
+                                                            <input
+                                                                type="url"
+                                                                value={sessionLessonsData[sessionNum].presentationUrl}
+                                                                onChange={(e) => updateSessionLessonsData(sessionNum, 'presentationUrl', e.target.value)}
+                                                                placeholder="https://..."
+                                                                className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                            />
+                                                        </div>
+
+                                                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-4">
+                                                            <p className="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                                                                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                                                <span>
+                                                                    This title and description will be used for <strong>both Lesson {sessionNum * 2 - 1}</strong> and <strong>Lesson {sessionNum * 2}</strong> in Session {sessionNum}.
+                                                                </span>
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -985,125 +1211,31 @@ export default function CurriculumManager({
                                                         Back
                                                     </button>
 
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setModuleStep(moduleStep + 1)}
-                                                        className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base order-1 sm:order-2"
-                                                    >
-                                                        {moduleStep === 4 ? "Next: Session 1 Details" : `Next: Session ${sessionNum + 1} Lessons`}
-                                                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                                                    </button>
-                                                </div>
-                                            </>
-                                        );
-                                    })()}
-                                </div>
-                            )}
-
-                            {/* Module Steps 5-7: Individual Session Details */}
-                            {moduleStep >= 5 && moduleStep <= 7 && (
-                                <div className="space-y-4">
-                                    {(() => {
-                                        const sessionIndex = moduleStep - 5;
-                                        const session = tempModule.sessions[sessionIndex];
-                                        const sessionNum = session.sessionNumber;
-
-                                        return (
-                                            <>
-                                                <div className={`border-2 rounded-xl p-6 ${getSessionColor(sessionNum)}`}>
-                                                    <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-6 flex items-center gap-2">
-                                                        <span className={`px-3 py-1 rounded-lg text-sm ${getSessionBadgeColor(sessionNum)}`}>
-                                                            Session {sessionNum}
-                                                        </span>
-                                                        <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
-                                                            Configure session details
-                                                        </span>
-                                                    </h4>
-
-                                                    <div className="space-y-4">
-                                                        <div>
-                                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                                Session Objectives
-                                                            </label>
-                                                            <textarea
-                                                                value={session.objectives?.join('\n') || ''}
-                                                                onChange={(e) => updateTempSession(sessionIndex, "objectives", e.target.value)}
-                                                                placeholder="Enter one objective per line..."
-                                                                rows={3}
-                                                                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                                Session Outline
-                                                            </label>
-                                                            <textarea
-                                                                value={session.outline?.join('\n') || ''}
-                                                                onChange={(e) => updateTempSession(sessionIndex, "outline", e.target.value)}
-                                                                placeholder="Enter one outline item per line..."
-                                                                rows={3}
-                                                                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                                Presentation URL (Optional)
-                                                            </label>
-                                                            <input
-                                                                type="url"
-                                                                value={session.presentationUrl || ''}
-                                                                onChange={(e) => updateTempSession(sessionIndex, "presentationUrl", e.target.value)}
-                                                                placeholder="https://..."
-                                                                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                                Session Projects
-                                                            </label>
-                                                            <textarea
-                                                                value={session.projects?.join('\n') || ''}
-                                                                onChange={(e) => updateTempSession(sessionIndex, "projects", e.target.value)}
-                                                                placeholder="Enter one project per line..."
-                                                                rows={2}
-                                                                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (moduleStep === 5) {
-                                                                setModuleStep(4);
-                                                            } else {
-                                                                setModuleStep(moduleStep - 1);
-                                                            }
-                                                        }}
-                                                        className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
-                                                    >
-                                                        <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                                                        Back
-                                                    </button>
-
-                                                    {moduleStep < 7 ? (
+                                                    {moduleStep < 4 ? (
                                                         <button
                                                             type="button"
-                                                            onClick={() => setModuleStep(moduleStep + 1)}
+                                                            onClick={() => {
+                                                                if (!sessionLessonsData[sessionNum].title.trim()) {
+                                                                    toast.error(`Please enter a title for Session ${sessionNum} lessons`);
+                                                                    return;
+                                                                }
+                                                                setModuleStep(moduleStep + 1);
+                                                            }}
                                                             className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base order-1 sm:order-2"
                                                         >
-                                                            Next: Session {sessionNum + 1} Details
+                                                            Next: Session {sessionNum + 1}
                                                             <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                                                         </button>
                                                     ) : (
                                                         <button
                                                             type="button"
-                                                            onClick={saveModule}
+                                                            onClick={() => {
+                                                                if (!sessionLessonsData[sessionNum].title.trim()) {
+                                                                    toast.error(`Please enter a title for Session ${sessionNum} lessons`);
+                                                                    return;
+                                                                }
+                                                                saveModule();
+                                                            }}
                                                             className="bg-green-600 hover:bg-green-700 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl text-sm sm:text-base order-1 sm:order-2"
                                                         >
                                                             <Check className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1123,17 +1255,17 @@ export default function CurriculumManager({
         );
     }
 
-    // ========== CURRICULUM LIST VIEW ==========
+    // ========== COURSE LIST VIEW ==========
     return (
         <div className="space-y-4 sm:space-y-6 px-2 sm:px-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h2 className="text-xl sm:text-2xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-2 sm:gap-3">
                         <BookOpen className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
-                        Curriculum Management
+                        Course Management
                     </h2>
                     <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext mt-1">
-                        Create and manage curriculum templates for courses
+                        Create and manage courses with built-in curriculum
                     </p>
                 </div>
                 <button
@@ -1142,26 +1274,26 @@ export default function CurriculumManager({
                     className="bg-primary hover:bg-primary/90 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all text-sm sm:text-base w-full sm:w-auto"
                 >
                     <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Create New Curriculum
+                    Create New Course
                 </button>
             </div>
 
-            {/* Curriculums List */}
+            {/* Courses List */}
             <div className="space-y-4">
                 {loading ? (
                     <div className="flex justify-center items-center p-12">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                     </div>
-                ) : curriculums.length === 0 ? (
+                ) : courses.length === 0 ? (
                     <div className="text-center py-16 border-2 border-dashed border-gray-300 dark:border-dark_border rounded-2xl bg-gradient-to-br from-blue-50/50 to-purple-50/50 dark:from-darkmode dark:to-darklight">
                         <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                             <BookOpen className="w-8 h-8 text-primary" />
                         </div>
                         <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-3">
-                            No curriculums yet
+                            No courses yet
                         </h3>
                         <p className="text-sm text-SlateBlueText dark:text-darktext mb-6">
-                            Create your first curriculum template to get started
+                            Create your first course to get started
                         </p>
                         <button
                             type="button"
@@ -1169,37 +1301,49 @@ export default function CurriculumManager({
                             className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-semibold flex items-center gap-2 mx-auto shadow-lg hover:shadow-xl transition-all"
                         >
                             <Plus className="w-5 h-5" />
-                            Create Your First Curriculum
+                            Create Your First Course
                         </button>
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {curriculums.map((curriculum, index) => (
+                        {courses.map((course, index) => (
                             <div
-                                key={curriculum._id || index}
+                                key={course._id || index}
                                 className="border-2 border-gray-200 dark:border-dark_border rounded-xl overflow-hidden hover:shadow-lg transition-all bg-white dark:bg-darklight"
                             >
                                 <div
                                     className="p-4 bg-gradient-to-r from-gray-50 to-white dark:from-dark_input dark:to-darklight flex items-center justify-between cursor-pointer hover:from-gray-100 hover:to-gray-50 dark:hover:from-dark_input/80 dark:hover:to-darklight/80 transition-all"
-                                    onClick={() => toggleCurriculum(index)}
+                                    onClick={() => toggleCourse(index)}
                                 >
                                     <div className="flex-1 flex items-center gap-4">
-                                        {expandedCurriculums.has(index) ? (
+                                        {expandedCourses.has(index) ? (
                                             <ChevronUp className="w-5 h-5 text-primary flex-shrink-0" />
                                         ) : (
                                             <ChevronDown className="w-5 h-5 text-SlateBlueText dark:text-darktext flex-shrink-0" />
                                         )}
                                         <div>
                                             <h4 className="font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
-                                                {curriculum.title}
-                                                {selectedId === curriculum._id && (
+                                                {course.title}
+                                                {course.featured && (
+                                                    <span className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 px-2 py-1 rounded-lg font-semibold">
+                                                        Featured
+                                                    </span>
+                                                )}
+                                                {selectedId === course._id && (
                                                     <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-lg font-semibold">
                                                         Selected
                                                     </span>
                                                 )}
                                             </h4>
                                             <p className="text-xs text-SlateBlueText dark:text-darktext mt-1">
-                                                {curriculum.level} • {curriculum.grade || "No grade"} • {curriculum.modules?.length || 0} modules
+                                                <span className={`px-2 py-0.5 rounded text-xs ${getLevelBadgeColor(course.level)}`}>
+                                                    {course.level}
+                                                </span>
+                                                <span className="mx-2">•</span>
+                                                <Target className="w-3 h-3 inline mr-1" />
+                                                {course.projects?.length || 0} projects
+                                                <span className="mx-2">•</span>
+                                                {course.curriculum?.length || 0} modules
                                             </p>
                                         </div>
                                     </div>
@@ -1209,7 +1353,7 @@ export default function CurriculumManager({
                                                 type="button"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    handleSelect(curriculum);
+                                                    handleSelect(course);
                                                 }}
                                                 className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 transition-colors font-semibold"
                                             >
@@ -1220,7 +1364,7 @@ export default function CurriculumManager({
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                handleEdit(curriculum);
+                                                handleEdit(course);
                                             }}
                                             className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                                             title="Edit"
@@ -1231,7 +1375,7 @@ export default function CurriculumManager({
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                handleDuplicate(curriculum);
+                                                handleDuplicate(course);
                                             }}
                                             className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
                                             title="Duplicate"
@@ -1242,7 +1386,7 @@ export default function CurriculumManager({
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                if (curriculum._id) handleDelete(curriculum._id);
+                                                if (course._id) handleDelete(course._id);
                                             }}
                                             className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                             title="Delete"
@@ -1252,39 +1396,62 @@ export default function CurriculumManager({
                                     </div>
                                 </div>
 
-                                {expandedCurriculums.has(index) && (
+                                {expandedCourses.has(index) && (
                                     <div className="p-6 border-t-2 border-gray-100 dark:border-dark_border bg-gradient-to-br from-gray-50/50 to-white dark:from-darkmode/50 dark:to-darklight">
-                                        {curriculum.description && (
-                                            <p className="text-sm text-SlateBlueText dark:text-darktext mb-4">
-                                                {curriculum.description}
-                                            </p>
+                                        {course.description && (
+                                            <div className="mb-4">
+                                                <h5 className="font-semibold text-MidnightNavyText dark:text-white mb-2">Description:</h5>
+                                                <div 
+                                                    className="text-sm text-SlateBlueText dark:text-darktext prose prose-sm max-w-none"
+                                                    dangerouslySetInnerHTML={{ __html: course.description }}
+                                                />
+                                            </div>
                                         )}
 
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                                             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                                 <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">Level</p>
-                                                <p className="font-semibold text-blue-900 dark:text-blue-200 capitalize">{curriculum.level}</p>
+                                                <p className="font-semibold text-blue-900 dark:text-blue-200 capitalize">{course.level}</p>
                                             </div>
                                             <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                                <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">Grade</p>
-                                                <p className="font-semibold text-green-900 dark:text-green-200">{curriculum.grade || "Not specified"}</p>
+                                                <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">Projects</p>
+                                                <p className="font-semibold text-green-900 dark:text-green-200">{course.projects?.length || 0} projects</p>
                                             </div>
                                             <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                                                <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">Subject</p>
-                                                <p className="font-semibold text-purple-900 dark:text-purple-200">{curriculum.subject || "Not specified"}</p>
+                                                <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">Modules</p>
+                                                <p className="font-semibold text-purple-900 dark:text-purple-200">{course.curriculum?.length || 0} modules</p>
                                             </div>
                                             <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                                                <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-1">Duration</p>
-                                                <p className="font-semibold text-orange-900 dark:text-orange-200">{curriculum.duration || "Not specified"}</p>
+                                                <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-1">Status</p>
+                                                <p className={`font-semibold ${course.isActive ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {course.isActive ? 'Active' : 'Inactive'}
+                                                </p>
                                             </div>
                                         </div>
+
+                                        {course.projects && course.projects.length > 0 && (
+                                            <div className="mb-6">
+                                                <h5 className="font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2 mb-3">
+                                                    <Target className="w-4 h-4 text-primary" />
+                                                    Course Projects ({course.projects.length})
+                                                </h5>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {course.projects.map((project, idx) => (
+                                                        <div key={idx} className="bg-primary/10 text-primary px-3 py-1.5 rounded-lg flex items-center gap-2">
+                                                            <Target className="w-3 h-3" />
+                                                            <span className="text-sm font-medium">{project}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <div className="space-y-3">
                                             <h5 className="font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
                                                 <BookOpen className="w-4 h-4 text-primary" />
-                                                Modules ({curriculum.modules?.length || 0})
+                                                Curriculum ({course.curriculum?.length || 0} modules)
                                             </h5>
-                                            {curriculum.modules?.map((module, moduleIndex) => (
+                                            {course.curriculum?.map((module, moduleIndex) => (
                                                 <div key={moduleIndex} className="p-4 border-2 border-gray-200 dark:border-dark_border rounded-xl bg-white dark:bg-darklight">
                                                     <h6 className="font-semibold text-MidnightNavyText dark:text-white mb-3 flex items-center gap-2">
                                                         <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg text-sm">
@@ -1292,6 +1459,34 @@ export default function CurriculumManager({
                                                         </span>
                                                         {module.title}
                                                     </h6>
+                                                    
+                                                    {/* عرض Presentation URLs للـ sessions */}
+                                                    {module.sessions && module.sessions.length > 0 && (
+                                                        <div className="mb-3 p-3 bg-gray-50 dark:bg-dark_input rounded-lg">
+                                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                                                                📊 Session Presentations:
+                                                            </p>
+                                                            <div className="space-y-1">
+                                                                {module.sessions.map((session, sessionIdx) => (
+                                                                    session.presentationUrl && (
+                                                                        <div key={sessionIdx} className="text-xs flex items-center gap-2">
+                                                                            <Presentation className="w-3 h-3 text-primary" />
+                                                                            <span className="font-medium">Session {session.sessionNumber}:</span>
+                                                                            <a 
+                                                                                href={session.presentationUrl} 
+                                                                                target="_blank" 
+                                                                                rel="noopener noreferrer"
+                                                                                className="text-primary hover:underline truncate max-w-xs"
+                                                                            >
+                                                                                {session.presentationUrl}
+                                                                            </a>
+                                                                        </div>
+                                                                    )
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
                                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                                         {module.lessons?.map((lesson, lessonIndex) => (
                                                             <div key={lessonIndex} className="text-xs p-2 bg-gray-50 dark:bg-dark_input rounded-lg border border-gray-200 dark:border-dark_border">

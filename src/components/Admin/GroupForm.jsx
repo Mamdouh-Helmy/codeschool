@@ -70,9 +70,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   const getDayNameFromDate = (dateString) => {
     if (!dateString) return null;
     const date = new Date(dateString);
-    const dayIndex = date.getDay(); // 0=Sunday, 1=Monday, etc.
-    
-    // Return in current language
+    const dayIndex = date.getDay();
     return daysOfWeek[dayIndex];
   };
 
@@ -132,7 +130,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       schedule: {
         ...prev.schedule,
         startDate: dateString,
-        // Store in English for backend
         daysOfWeek: englishDay ? [englishDay] : [] 
       }
     }));
@@ -159,7 +156,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     const englishFirstDay = getEnglishDayNameFromDate(form.schedule.startDate);
     const currentFirstDay = getDayNameFromDate(form.schedule.startDate);
 
-    // Find corresponding English day
     const dayIndex = daysOfWeek.indexOf(day);
     const englishDay = englishDays[dayIndex];
 
@@ -173,7 +169,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       const currentDays = prev.schedule.daysOfWeek;
       const isSelected = currentDays.includes(englishDay);
 
-      // ✅ If trying to add and already have 3 days
+      // ✅ Allow up to 3 days (changed from exactly 3)
       if (!isSelected && currentDays.length >= 3) {
         toast.error(t("groups.form.errors.maxDays"));
         return prev;
@@ -185,7 +181,10 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           ...prev.schedule,
           daysOfWeek: isSelected
             ? currentDays.filter(d => d !== englishDay)
-            : [...currentDays, englishDay]
+            : [...currentDays, englishDay].sort((a, b) => {
+                // ✅ Sort by day order
+                return englishDays.indexOf(a) - englishDays.indexOf(b);
+              })
         }
       };
     });
@@ -214,9 +213,9 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         throw new Error(t("groups.form.errors.requiredFields"));
       }
 
-      // ✅ Validate exactly 3 days
-      if (form.schedule.daysOfWeek.length !== 3) {
-        throw new Error(t("groups.form.errors.exactly3Days"));
+      // ✅ Validate at least 1 day selected
+      if (form.schedule.daysOfWeek.length === 0) {
+        throw new Error(t("groups.form.errors.atLeastOneDay"));
       }
 
       // ✅ Validate first day matches startDate
@@ -429,19 +428,19 @@ export default function GroupForm({ initial, onClose, onSaved }) {
               {t("groups.form.daysOfWeek")}
             </label>
             
-            {/* ✅ Info message */}
+            {/* ✅ Updated Info message */}
             <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <div className="text-xs text-blue-800 dark:text-blue-300">
                 <p className="font-medium mb-1">{t("groups.form.help.scheduleInfo")}:</p>
-                <p>{t("groups.form.help.day1")}</p>
-                <p>{t("groups.form.help.day2")}</p>
-                <p>{t("groups.form.help.day3")}</p>
+                <p>• {language === 'ar' ? 'اختر من 1 إلى 3 أيام للحصص الأسبوعية' : 'Select 1 to 3 days for weekly sessions'}</p>
+                <p>• {language === 'ar' ? 'اليوم الأول يجب أن يكون' : 'First day must be'} <strong>{firstDayName || '---'}</strong></p>
+                <p>• {language === 'ar' ? 'السيشنات ستتوزع على الأيام المختارة بالترتيب' : 'Sessions will be distributed across selected days in order'}</p>
                 <p className="mt-1 text-blue-600 dark:text-blue-400">
-                  {t("groups.form.help.selectedDays", { 
-                    count: form.schedule.daysOfWeek.length,
-                    day: firstDayName 
-                  })}
+                  {language === 'ar' 
+                    ? `✓ محدد: ${form.schedule.daysOfWeek.length} يوم` 
+                    : `✓ Selected: ${form.schedule.daysOfWeek.length} day(s)`
+                  }
                 </p>
               </div>
             </div>

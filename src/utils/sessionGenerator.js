@@ -24,7 +24,6 @@ const dayMapReverse = {
 
 /**
  * ✅ Calculate total sessions from course curriculum
- * NEW: Each 6 lessons = 3 sessions (2 lessons per session)
  */
 export function calculateTotalSessions(curriculum) {
   if (!curriculum || !Array.isArray(curriculum) || curriculum.length === 0) {
@@ -39,7 +38,6 @@ export function calculateTotalSessions(curriculum) {
       Array.isArray(module.lessons) &&
       module.lessons.length > 0
     ) {
-      // ✅ Each module has 6 lessons = 3 sessions
       total += module.totalSessions || 3;
     }
   });
@@ -106,95 +104,83 @@ function calculateDayDifference(startDay, targetDay) {
 }
 
 /**
- * ✅ Adjust date to target day of week
+ * ✅ NEW: Create weekly schedule for 1-3 days (FLEXIBLE)
+ * This function distributes sessions across selected days cyclically
  */
-function adjustDateToTargetDay(date, targetDay) {
-  const currentDay = date.getDay();
-  const diff = calculateDayDifference(currentDay, targetDay);
-  const newDate = new Date(date);
-  newDate.setDate(newDate.getDate() + diff);
-  return newDate;
-}
+function createFlexibleWeeklySchedule(baseDate, scheduleDays, totalSessions) {
+  const schedule = [];
+  
+  // Convert day names to numbers and sort them
+  const dayNumbers = scheduleDays
+    .map((day) => dayMap[day])
+    .sort((a, b) => a - b);
 
-/**
- * ✅ Create weekly schedule for 3 days correctly
- */
-function createWeeklySchedule(baseDate, scheduleDays, totalWeeks) {
-  const weeklySchedule = [];
+  const daysPerWeek = dayNumbers.length; // ✅ 1, 2, or 3 days
 
-  // Convert day names to numbers
-  const dayNumbers = scheduleDays.map((day) => dayMap[day]);
-
-  console.log(`📅 Creating schedule for ${totalWeeks} weeks`);
+  console.log(`📅 Creating flexible schedule:`);
+  console.log(`  Total sessions needed: ${totalSessions}`);
+  console.log(`  Days per week: ${daysPerWeek}`);
   console.log(`  Schedule days: ${scheduleDays} → ${dayNumbers}`);
 
-  // Start date
   const startDate = new Date(baseDate);
-
-  // ✅ Adjust start date to be the first day of the schedule
+  
+  // Adjust start date to be the first selected day
   let adjustedStartDate = new Date(startDate);
-
-  // Calculate offset to reach the first schedule day
   const currentDay = startDate.getDay();
-  const targetDay = dayNumbers[0];
-  let daysToAdd = targetDay - currentDay;
+  const firstSelectedDay = dayNumbers[0];
+  
+  let daysToAdd = firstSelectedDay - currentDay;
   if (daysToAdd < 0) {
     daysToAdd += 7;
   }
-
+  
   adjustedStartDate.setDate(startDate.getDate() + daysToAdd);
 
-  console.log(
-    `  Original start date: ${startDate.toISOString().split("T")[0]} (${getDayName(startDate.getDay())})`
-  );
-  console.log(
-    `  Adjusted start date: ${adjustedStartDate.toISOString().split("T")[0]} (${getDayName(adjustedStartDate.getDay())})`
-  );
+  console.log(`  Original start date: ${startDate.toISOString().split("T")[0]} (${getDayName(startDate.getDay())})`);
+  console.log(`  Adjusted start date: ${adjustedStartDate.toISOString().split("T")[0]} (${getDayName(adjustedStartDate.getDay())})`);
 
-  // For each week
-  for (let week = 0; week < totalWeeks; week++) {
-    const weekDays = [];
-
-    // For each of the three days
-    for (let i = 0; i < 3; i++) {
-      const date = new Date(adjustedStartDate);
-
-      // Calculate offset: (week × 7 days) + day difference
-      const weekOffset = week * 7;
-
-      if (i === 0) {
-        // First day: adjusted start date + week offset
-        date.setDate(adjustedStartDate.getDate() + weekOffset);
-      } else {
-        // For other days: calculate difference between first day and current day
-        const dayDifference = calculateDayDifference(dayNumbers[0], dayNumbers[i]);
-        date.setDate(adjustedStartDate.getDate() + weekOffset + dayDifference);
-      }
-
-      weekDays.push(new Date(date));
+  // ✅ Generate dates for all sessions cyclically
+  for (let sessionIndex = 0; sessionIndex < totalSessions; sessionIndex++) {
+    // Which day in the cycle? (0, 1, or 2 for 3 days; 0 or 1 for 2 days; always 0 for 1 day)
+    const dayInCycle = sessionIndex % daysPerWeek;
+    
+    // How many complete weeks have passed?
+    const weeksElapsed = Math.floor(sessionIndex / daysPerWeek);
+    
+    // Calculate the actual date
+    const sessionDate = new Date(adjustedStartDate);
+    
+    // Add weeks
+    sessionDate.setDate(adjustedStartDate.getDate() + (weeksElapsed * 7));
+    
+    // Add days within the week (if not first day)
+    if (dayInCycle > 0) {
+      const dayDifference = calculateDayDifference(dayNumbers[0], dayNumbers[dayInCycle]);
+      sessionDate.setDate(sessionDate.getDate() + dayDifference);
     }
+    
+    schedule.push(sessionDate);
 
-    weeklySchedule.push(weekDays);
-
-    console.log(`  🗓️ Week ${week + 1}:`);
-    weekDays.forEach((date, idx) => {
+    if (sessionIndex < 10 || sessionIndex >= totalSessions - 5) { // Log first 10 and last 5
       console.log(
-        `    Day ${idx + 1}: ${date.toISOString().split("T")[0]} (${getDayName(date.getDay())})`
+        `  Session ${sessionIndex + 1}: ${sessionDate.toISOString().split("T")[0]} (${getDayName(sessionDate.getDay())})`
       );
-    });
+    } else if (sessionIndex === 10) {
+      console.log(`  ... (${totalSessions - 15} sessions omitted) ...`);
+    }
   }
 
-  return weeklySchedule;
+  return schedule;
 }
 
 /**
  * ✅ Validate schedule days selection
  */
 function validateScheduleDays(startDate, daysOfWeek) {
-  if (!startDate || !daysOfWeek || daysOfWeek.length !== 3) {
+  if (!startDate || !daysOfWeek || daysOfWeek.length === 0 || daysOfWeek.length > 3) {
     return {
       valid: false,
-      error: "Must select exactly 3 days for schedule",
+      error: "Must select between 1 and 3 days for schedule",
     };
   }
 
@@ -211,7 +197,7 @@ function validateScheduleDays(startDate, daysOfWeek) {
 
   // Check for duplicate days
   const uniqueDays = [...new Set(daysOfWeek)];
-  if (uniqueDays.length !== 3) {
+  if (uniqueDays.length !== daysOfWeek.length) {
     return {
       valid: false,
       error: "Duplicate days are not allowed",
@@ -221,6 +207,7 @@ function validateScheduleDays(startDate, daysOfWeek) {
   return {
     valid: true,
     startDayName,
+    daysCount: daysOfWeek.length
   };
 }
 
@@ -231,7 +218,6 @@ async function assignMeetingLinkToSession(sessionData, userId) {
   try {
     console.log(`🔗 Looking for meeting link for session: ${sessionData.title}`);
 
-    // Create date objects for the session time
     const startTime = new Date(sessionData.scheduledDate);
     const [hours, minutes] = sessionData.startTime.split(":").map(Number);
     startTime.setHours(hours, minutes, 0, 0);
@@ -244,7 +230,6 @@ async function assignMeetingLinkToSession(sessionData, userId) {
       `  Session time: ${startTime.toISOString()} to ${endTime.toISOString()}`
     );
 
-    // ✅ Find available links using the static method
     const availableLinks = await MeetingLink.findAvailableLinks(
       startTime,
       endTime,
@@ -258,7 +243,6 @@ async function assignMeetingLinkToSession(sessionData, userId) {
 
     console.log(`📋 Found ${availableLinks.length} available links`);
 
-    // Get the first available link (full document, not lean)
     const bestLinkId = availableLinks[0]._id;
     const bestLink = await MeetingLink.findById(bestLinkId);
 
@@ -269,7 +253,6 @@ async function assignMeetingLinkToSession(sessionData, userId) {
 
     console.log(`  📌 Selected link: ${bestLink.name}`);
 
-    // ✅ Reserve the link using instance method
     const reservationResult = await bestLink.reserveForSession(
       sessionData._id || new mongoose.Types.ObjectId(),
       sessionData.groupId,
@@ -280,7 +263,6 @@ async function assignMeetingLinkToSession(sessionData, userId) {
 
     console.log(`✅ Link reserved: ${reservationResult.link.substring(0, 50)}...`);
 
-    // Return updated session data
     return {
       ...sessionData,
       meetingLink: reservationResult.link,
@@ -299,20 +281,17 @@ async function assignMeetingLinkToSession(sessionData, userId) {
   } catch (error) {
     console.error("❌ Error assigning meeting link:", error.message);
     console.error(error.stack);
-    // Don't fail session creation if link assignment fails
     return sessionData;
   }
 }
 
 /**
- * ✅ Generate all sessions for a group based on course curriculum
- * NEW SYSTEM: 3 sessions per module (2 lessons per session)
- * Distribution: The three sessions are distributed over the three selected days
+ * ✅ NEW: Generate all sessions for a group with FLEXIBLE day selection (1-3 days)
  */
 export async function generateSessionsForGroup(groupId, group, userId) {
   try {
     console.log(
-      `\n🔄 ========== GENERATING SESSIONS (3 SESSIONS SYSTEM) ==========`
+      `\n🔄 ========== GENERATING SESSIONS (FLEXIBLE 1-3 DAYS) ==========`
     );
     console.log(`Group ID: ${groupId}`);
     console.log(`Group Name: ${group.name}`);
@@ -322,7 +301,6 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       throw new Error("Group not found");
     }
 
-    // ✅ Check status
     if (group.status !== "active") {
       throw new Error(`Group must be active. Current status: ${group.status}`);
     }
@@ -348,18 +326,18 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       totalSessions: course.curriculum.length * 3,
     });
 
-    // Parse schedule
     const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
 
-    if (!startDate || !daysOfWeek || daysOfWeek.length !== 3) {
+    if (!startDate || !daysOfWeek || daysOfWeek.length === 0) {
       throw new Error(
-        "Invalid schedule: Must have start date and exactly 3 days selected"
+        "Invalid schedule: Must have start date and at least 1 selected day"
       );
     }
 
     console.log("📅 Schedule configuration:", {
       startDate: new Date(startDate).toISOString().split("T")[0],
       daysOfWeek: daysOfWeek,
+      daysPerWeek: daysOfWeek.length,
       timeFrom: timeFrom,
       timeTo: timeTo,
     });
@@ -371,32 +349,29 @@ export async function generateSessionsForGroup(groupId, group, userId) {
     }
 
     console.log(
-      `✅ Schedule validated. Start day: ${scheduleValidation.startDayName}`
+      `✅ Schedule validated. Start day: ${scheduleValidation.startDayName}, Days per week: ${scheduleValidation.daysCount}`
     );
 
-    // Convert day names to numbers
-    const scheduleDayNumbers = daysOfWeek.map((day) => dayMap[day]);
-    console.log("📅 Days as numbers:", scheduleDayNumbers);
+    // Calculate total sessions needed
+    const totalSessions = course.curriculum.length * 3; // 3 sessions per module
 
-    // Calculate required weeks (each module needs one full week)
-    const totalWeeks = Math.ceil(course.curriculum.length / 1);
-    console.log(`📅 Total weeks required: ${totalWeeks}`);
-
-    // Create weekly schedule
-    const weeklySchedule = createWeeklySchedule(
+    // ✅ Create flexible weekly schedule
+    const sessionDates = createFlexibleWeeklySchedule(
       startDate,
       daysOfWeek,
-      totalWeeks
+      totalSessions
     );
 
-    if (weeklySchedule.length === 0) {
-      throw new Error("Failed to create weekly schedule");
+    if (sessionDates.length === 0) {
+      throw new Error("Failed to create session dates");
     }
+
+    console.log(`\n📊 Generated ${sessionDates.length} session dates`);
 
     // ✅ Generate sessions
     const sessions = [];
+    let sessionIndex = 0;
 
-    // For each module
     for (
       let moduleIdx = 0;
       moduleIdx < course.curriculum.length;
@@ -413,30 +388,6 @@ export async function generateSessionsForGroup(groupId, group, userId) {
         continue;
       }
 
-      // Determine the week for this module
-      const weekIndex = moduleIdx;
-      const weekDays = weeklySchedule[weekIndex];
-
-      if (!weekDays || weekDays.length !== 3) {
-        console.error(
-          `❌ Error: No valid week days for module ${moduleIdx + 1}`
-        );
-        continue;
-      }
-
-      // ✅ Sort dates chronologically
-      const sortedWeekDays = [...weekDays].sort((a, b) => {
-        return new Date(a) - new Date(b);
-      });
-
-      console.log(`  🗓️ Week ${weekIndex + 1} dates (sorted by date):`);
-      sortedWeekDays.forEach((date, idx) => {
-        console.log(
-          `    Day ${idx + 1}: ${date.toISOString().split("T")[0]} (${getDayName(date.getDay())}) - Session ${idx + 1}`
-        );
-      });
-
-      // ✅ Create 3 sessions for this module
       const sessionGroups = [
         {
           sessionNumber: 1,
@@ -458,13 +409,14 @@ export async function generateSessionsForGroup(groupId, group, userId) {
         },
       ];
 
-      // For each of the 3 sessions
       for (const sessionGroup of sessionGroups) {
-        const dayIndex = sessionGroup.sessionNumber - 1;
-        const scheduledDate = new Date(sortedWeekDays[dayIndex]);
+        if (sessionIndex >= sessionDates.length) {
+          console.error(`❌ Ran out of session dates at session ${sessionIndex + 1}`);
+          break;
+        }
 
+        const scheduledDate = sessionDates[sessionIndex];
         const lessonTitles = sessionGroup.lessons.map((l) => l.title).join(" & ");
-
         const sessionTitle = `${module.title} - Session ${sessionGroup.sessionNumber}: ${lessonTitles}`;
 
         const session = {
@@ -498,6 +450,7 @@ export async function generateSessionsForGroup(groupId, group, userId) {
         };
 
         sessions.push(session);
+        sessionIndex++;
 
         console.log(
           `  ✅ Session ${sessionGroup.sessionNumber} (Lessons ${sessionGroup.lessonNumbers})`
@@ -517,6 +470,8 @@ export async function generateSessionsForGroup(groupId, group, userId) {
     console.log(`  Total Sessions Generated: ${sessions.length}`);
     console.log(`  Expected Sessions: ${course.curriculum.length * 3}`);
     console.log(`  Sessions per Module: 3`);
+    console.log(`  Days per Week: ${daysOfWeek.length}`);
+    console.log(`  Selected Days: ${daysOfWeek.join(', ')}`);
 
     // ✅ Assign meeting links to sessions
     console.log(`\n🔗 Assigning meeting links to sessions...`);
@@ -532,14 +487,8 @@ export async function generateSessionsForGroup(groupId, group, userId) {
 
         if (sessionWithLink.meetingLink) {
           linksAssigned++;
-          console.log(
-            `  ✅ Link assigned to Session ${session.sessionNumber} of Module ${session.moduleIndex + 1}`
-          );
         } else {
           linksFailed++;
-          console.log(
-            `  ⚠️ No link assigned to Session ${session.sessionNumber} of Module ${session.moduleIndex + 1}`
-          );
         }
       } catch (linkError) {
         console.error(`  ❌ Failed to assign link: ${linkError.message}`);
@@ -571,11 +520,6 @@ export async function generateSessionsForGroup(groupId, group, userId) {
     });
 
     console.log(`\n📅 Unique Dates Used: ${dateSet.size}`);
-    Array.from(dateSet)
-      .sort()
-      .forEach((date) => {
-        console.log(`  ${date}`);
-      });
 
     if (sessionsWithLinks.length > 0) {
       console.log(
@@ -599,6 +543,7 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       uniqueDates: Array.from(dateSet).sort(),
       schedule: {
         daysOfWeek: daysOfWeek,
+        daysPerWeek: daysOfWeek.length,
         startDate: new Date(startDate),
         timeFrom: timeFrom,
         timeTo: timeTo,
@@ -645,7 +590,6 @@ export async function releaseMeetingLink(sessionId) {
       return { success: false, error: "Meeting link not found" };
     }
 
-    // Calculate actual duration
     const sessionStart = new Date(session.scheduledDate);
     const [startHours, startMinutes] = session.startTime.split(":").map(Number);
     sessionStart.setHours(startHours, startMinutes, 0, 0);
@@ -660,7 +604,6 @@ export async function releaseMeetingLink(sessionId) {
 
     console.log(`✅ Released meeting link for session: ${sessionId}`);
 
-    // Update session to remove meeting link info
     await Session.findByIdAndUpdate(sessionId, {
       $set: {
         meetingLink: null,
@@ -687,7 +630,6 @@ export async function regenerateSessionsForGroup(groupId, group, userId) {
 
     const Session = (await import("../app/models/Session")).default;
 
-    // First, release any meeting links from existing sessions
     const existingSessions = await Session.find({
       groupId: groupId,
       isDeleted: false,
@@ -705,7 +647,6 @@ export async function regenerateSessionsForGroup(groupId, group, userId) {
       }
     }
 
-    // Then, mark all existing sessions as deleted
     await Session.updateMany(
       { groupId: groupId, isDeleted: false },
       {
@@ -719,7 +660,6 @@ export async function regenerateSessionsForGroup(groupId, group, userId) {
 
     console.log(`🗑️ Marked existing sessions as deleted`);
 
-    // Then generate new sessions
     const result = await generateSessionsForGroup(groupId, group, userId);
 
     if (result.success) {
@@ -758,7 +698,6 @@ export function getSessionDisplayInfo(sessions) {
     });
     const date = session.scheduledDate.toISOString().split("T")[0];
 
-    // Group by day
     if (!byDay[day]) {
       byDay[day] = {
         day: day,
@@ -776,7 +715,6 @@ export function getSessionDisplayInfo(sessions) {
       hasMeetingLink: !!session.meetingLink,
     });
 
-    // Group by module
     const moduleKey = `Module ${session.moduleIndex + 1}`;
     if (!byModule[moduleKey]) {
       byModule[moduleKey] = {
@@ -795,7 +733,6 @@ export function getSessionDisplayInfo(sessions) {
       hasMeetingLink: !!session.meetingLink,
     });
 
-    // Timeline
     timeline.push({
       date: date,
       day: day,
@@ -808,7 +745,6 @@ export function getSessionDisplayInfo(sessions) {
     });
   });
 
-  // Sort timeline by date
   timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
 
   return {
@@ -837,10 +773,10 @@ export function validateSessionDistribution(sessions, expectedDaysOfWeek) {
     };
   }
 
-  if (!expectedDaysOfWeek || expectedDaysOfWeek.length !== 3) {
+  if (!expectedDaysOfWeek || expectedDaysOfWeek.length === 0 || expectedDaysOfWeek.length > 3) {
     return {
       valid: false,
-      error: "Expected exactly 3 days of week",
+      error: "Expected 1-3 days of week",
     };
   }
 
@@ -855,15 +791,6 @@ export function validateSessionDistribution(sessions, expectedDaysOfWeek) {
     if (!expectedDayNumbers.includes(sessionDay)) {
       issues.push(
         `Session ${index + 1} (${session.title}) is on day ${sessionDay} which is not in expected days`
-      );
-    }
-
-    const expectedDayIndex = (session.sessionNumber - 1) % 3;
-    const expectedDayNumber = expectedDayNumbers[expectedDayIndex];
-
-    if (sessionDay !== expectedDayNumber) {
-      issues.push(
-        `Session ${session.sessionNumber} should be on ${getDayName(expectedDayNumber)} but is on ${getDayName(sessionDay)}`
       );
     }
   });
@@ -925,7 +852,6 @@ export async function manuallyAssignMeetingLink(
       throw new Error("Session not found");
     }
 
-    // Release existing meeting link if any
     if (session.meetingLinkId) {
       await releaseMeetingLink(sessionId);
     }
@@ -936,7 +862,6 @@ export async function manuallyAssignMeetingLink(
       throw new Error("Meeting link not found");
     }
 
-    // Create date objects for the session time
     const startTime = new Date(session.scheduledDate);
     const [hours, minutes] = session.startTime.split(":").map(Number);
     startTime.setHours(hours, minutes, 0, 0);
@@ -945,7 +870,6 @@ export async function manuallyAssignMeetingLink(
     const [endHours, endMinutes] = session.endTime.split(":").map(Number);
     endTime.setHours(endHours, endMinutes, 0, 0);
 
-    // Reserve the link
     const reservationResult = await meetingLink.reserveForSession(
       sessionId,
       session.groupId,
@@ -954,7 +878,6 @@ export async function manuallyAssignMeetingLink(
       userId
     );
 
-    // Update session with meeting link
     await Session.findByIdAndUpdate(sessionId, {
       $set: {
         meetingLink: reservationResult.link,

@@ -1,4 +1,4 @@
-// app/api/groups/[id]/activate/route.js - الإصدار المحدث
+// app/api/groups/[id]/activate/route.js - UPDATED WITH FLEXIBLE DAY VALIDATION
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../../models/Group";
@@ -89,21 +89,24 @@ export async function POST(req, { params }) {
       );
     }
 
+    // ✅ UPDATED: Validate 1-3 days (instead of exactly 3)
     if (
       !group.schedule ||
       !group.schedule.startDate ||
       !group.schedule.daysOfWeek ||
-      group.schedule.daysOfWeek.length !== 3
+      group.schedule.daysOfWeek.length === 0 ||
+      group.schedule.daysOfWeek.length > 3
     ) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Group must have a valid schedule with exactly 3 days selected",
+          error: `Group must have a valid schedule with 1 to 3 days selected (currently has ${group.schedule?.daysOfWeek?.length || 0} days)`,
         },
         { status: 400 }
       );
     }
+
+    console.log(`✅ Schedule validated: ${group.schedule.daysOfWeek.length} day(s) selected - ${group.schedule.daysOfWeek.join(', ')}`);
 
     // ✅ تحديث الـ status إلى active (إذا لم يكن active مسبقاً)
     const updateData = {
@@ -128,6 +131,7 @@ export async function POST(req, { params }) {
       .populate("instructors", "name email profile");
 
     console.log(`✅ Group ${updatedGroup.code} ready for session generation`);
+    console.log(`📅 Schedule: ${updatedGroup.schedule.daysOfWeek.length} day(s) - ${updatedGroup.schedule.daysOfWeek.join(', ')}`);
 
     // محاولة إصلاح الفهارس
     try {
@@ -199,6 +203,11 @@ export async function POST(req, { params }) {
           sessionsGenerated: true,
           totalSessions: automationResult.sessionsGenerated,
           isReactivation: isReactivation,
+          scheduleInfo: {
+            daysPerWeek: updatedGroup.schedule.daysOfWeek.length,
+            selectedDays: updatedGroup.schedule.daysOfWeek,
+            startDate: updatedGroup.schedule.startDate,
+          },
         },
         automation: {
           sessions: {

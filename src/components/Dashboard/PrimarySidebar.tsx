@@ -3,6 +3,7 @@
 import { Icon } from "@iconify/react";
 import type { ReactNode } from "react";
 import { useI18n } from "@/i18n/I18nProvider";
+import useSWR from "swr";
 
 export type DashboardNavItem = {
     label: string;
@@ -28,6 +29,14 @@ type PrimarySidebarProps = {
     isRTL?: boolean;
 };
 
+// Fetcher function for SWR
+const fetcher = async (url: string) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch stats');
+    const data = await res.json();
+    return data;
+};
+
 const PrimarySidebar = ({
     categories,
     activeCategory,
@@ -38,6 +47,29 @@ const PrimarySidebar = ({
     isRTL = false
 }: PrimarySidebarProps) => {
     const { t } = useI18n();
+    
+    // استخدام SWR للـ real-time updates
+    const { data, error, isLoading } = useSWR(
+        '/api/admin/stats',
+        fetcher,
+        {
+            refreshInterval: 3000, // تحديث كل 3 ثواني
+            revalidateOnFocus: true, // تحديث عند العودة للصفحة
+            revalidateOnReconnect: true, // تحديث عند إعادة الاتصال
+            dedupingInterval: 2000, // منع الطلبات المكررة
+        }
+    );
+
+    // البيانات من الـ API
+    const stats = data?.success ? data.data : {
+        totalUsers: 0,
+        activeCourses: 0,
+    };
+
+    // دالة لتنسيق الأرقام
+    const formatNumber = (num: number) => {
+        return new Intl.NumberFormat('en-US').format(num);
+    };
 
     // For mobile, keep the full sidebar
     if (isMobile) {
@@ -198,21 +230,46 @@ const PrimarySidebar = ({
 
                 {/* Quick Stats Section - Hidden by default, shown on hover */}
                 <div className="mt-8 border-t border-slate-200 px-4 pt-6 dark:border-dark_border opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className={`mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-darktext ${isRTL ? 'text-right' : 'text-left'}`}>
-                        {t('dashboard.quickStats') || "Quick Stats"}
+                    <div className={`mb-4 flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
+                        <div className={`text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-darktext ${isRTL ? 'text-right' : 'text-left'}`}>
+                            {t('dashboard.quickStats') || "Quick Stats"}
+                        </div>
+                        {/* Live indicator */}
+                        {!isLoading && !error && (
+                            <div className="flex items-center gap-1">
+                                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                                <span className="text-[10px] text-green-600 dark:text-green-400">Live</span>
+                            </div>
+                        )}
                     </div>
                     <div className="space-y-3">
                         <div className={`flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3 dark:bg-darkmode ${isRTL ? 'flex-row-reverse' : ''}`}>
                             <span className="text-sm text-slate-600 dark:text-darktext">
                                 {t('dashboard.totalUsers') || "Total Users"}
                             </span>
-                            <span className="text-sm font-semibold text-primary">1,234</span>
+                            {isLoading ? (
+                                <div className="h-4 w-12 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                            ) : error ? (
+                                <span className="text-sm font-semibold text-red-500">--</span>
+                            ) : (
+                                <span className="text-sm font-semibold text-primary transition-all duration-300">
+                                    {formatNumber(stats.totalUsers)}
+                                </span>
+                            )}
                         </div>
                         <div className={`flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3 dark:bg-darkmode ${isRTL ? 'flex-row-reverse' : ''}`}>
                             <span className="text-sm text-slate-600 dark:text-darktext">
                                 {t('dashboard.activeCourses') || "Active Courses"}
                             </span>
-                            <span className="text-sm font-semibold text-primary">48</span>
+                            {isLoading ? (
+                                <div className="h-4 w-12 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                            ) : error ? (
+                                <span className="text-sm font-semibold text-red-500">--</span>
+                            ) : (
+                                <span className="text-sm font-semibold text-primary transition-all duration-300">
+                                    {formatNumber(stats.activeCourses)}
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>

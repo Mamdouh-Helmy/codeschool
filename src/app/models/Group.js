@@ -1,4 +1,4 @@
-// models/Group.js - FINAL FIXED (NO TRY-CATCH)
+// models/Group.js - UPDATED WITH FLEXIBLE DAY SELECTION
 import mongoose from "mongoose";
 
 const groupSchema = new mongoose.Schema(
@@ -57,7 +57,7 @@ const groupSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // Schedule
+    // Schedule - ✅ UPDATED: 1-3 days allowed
     schedule: {
       startDate: {
         type: Date,
@@ -210,9 +210,6 @@ const groupSchema = new mongoose.Schema(
   }
 );
 
-// ==================== MIDDLEWARE - REMOVED ====================
-// ✅ NO PRE-SAVE HOOKS - All validation in API layer
-
 // ==================== VIRTUAL PROPERTIES ====================
 
 groupSchema.virtual("capacityPercentage").get(function () {
@@ -223,8 +220,9 @@ groupSchema.virtual("capacityPercentage").get(function () {
 groupSchema.virtual("daysRemaining").get(function () {
   if (!this.schedule?.startDate || this.totalSessionsCount === 0) return 0;
   
-  const sessionsPerWeek = 3;
-  const totalWeeks = Math.ceil(this.totalSessionsCount / sessionsPerWeek);
+  // ✅ Calculate based on actual selected days per week
+  const daysPerWeek = this.schedule.daysOfWeek?.length || 1;
+  const totalWeeks = Math.ceil(this.totalSessionsCount / daysPerWeek);
   const daysRequired = totalWeeks * 7;
   
   const startDate = new Date(this.schedule.startDate);

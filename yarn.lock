@@ -932,7 +932,7 @@ delayed-stream@~1.0.0:
   resolved "https://registry.npmjs.org/delayed-stream/-/delayed-stream-1.0.0.tgz"
   integrity sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==
 
-dequal@^2.0.0:
+dequal@^2.0.0, dequal@^2.0.3:
   version "2.0.3"
   resolved "https://registry.npmjs.org/dequal/-/dequal-2.0.3.tgz"
   integrity sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==
@@ -2694,6 +2694,14 @@ swiper@^12.0.3:
   resolved "https://registry.npmjs.org/swiper/-/swiper-12.0.3.tgz"
   integrity sha512-BHd6U1VPEIksrXlyXjMmRWO0onmdNPaTAFduzqR3pgjvi7KfmUCAm/0cj49u2D7B0zNjMw02TSeXfinC1hDCXg==
 
+swr@^2.4.0:
+  version "2.4.0"
+  resolved "https://registry.npmjs.org/swr/-/swr-2.4.0.tgz"
+  integrity sha512-sUlC20T8EOt1pHmDiqueUWMmRRX03W7w5YxovWX7VR2KHEPCTMly85x05vpkP5i6Bu4h44ePSMD9Tc+G2MItFw==
+  dependencies:
+    dequal "^2.0.3"
+    use-sync-external-store "^1.6.0"
+
 tabbable@^6.0.1:
   version "6.4.0"
   resolved "https://registry.npmjs.org/tabbable/-/tabbable-6.4.0.tgz"
@@ -2892,6 +2900,11 @@ uploadthing@^7.7.4:
     "@uploadthing/mime-types" "0.3.6"
     "@uploadthing/shared" "7.1.10"
     effect "3.17.7"
+
+use-sync-external-store@^1.6.0:
+  version "1.6.0"
+  resolved "https://registry.npmjs.org/use-sync-external-store/-/use-sync-external-store-1.6.0.tgz"
+  integrity sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==
 
 util-deprecate@^1.0.2:
   version "1.0.2"

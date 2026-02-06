@@ -77,7 +77,7 @@ const WelcomePopup: React.FC<WelcomePopupProps> = ({ isOpen, onClose }) => {
     const fetchWelcomeData = async () => {
       try {
         setLoadingContent(true);
-        const response = await fetch(`/api/section-images-hero?activeOnly=true&language=${locale}`);
+        const response = await fetch(`/api/section-images-hero?activeOnly=true`);
         const result = await response.json();
 
         if (result.success && result.data.length > 0) {

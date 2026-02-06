@@ -114,12 +114,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           icon: "ion:school-outline",
           badge: createBadge(t('common.new') || "New"),
         },
-        {
-          label: t('nav.curriculumCourse') || "Curriculum Course",
-          href: "/admin/curriculumCourse",
-          icon: "ion:bookmarks-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
+        // {
+        //   label: t('nav.curriculumCourse') || "Curriculum Course",
+        //   href: "/admin/curriculumCourse",
+        //   icon: "ion:bookmarks-outline",
+        //   badge: createBadge(t('common.new') || "New"),
+        // },
         {
           label: t('dashboard.courses') || "Courses",
           href: "/admin/courses",
@@ -147,15 +147,28 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
         {
           label: t('dashboard.students') || "Students",
           href: "/admin/allStudents",
-          icon: "ion:person-outline",
+          icon: "ion:school-outline", // طلاب
           badge: createBadge(t('common.new') || "New"),
         },
         {
           label: t('dashboard.instructors') || "Instructors",
           href: "/admin/InstructorsPage",
-          icon: "ion:people-outline",
+          icon: "ion:person-circle-outline", // مدرسين
           badge: createBadge(t('common.new') || "New"),
         },
+        {
+          label: t('dashboard.Marketing') || "Marketing",
+          href: "/admin/MarketingPage",
+          icon: "ion:megaphone-outline", // تسويق
+          badge: createBadge(t('common.new') || "New"),
+        },
+        {
+          label: t('dashboard.Admin') || "Admin",
+          href: "/admin/AdminPage",
+          icon: "ion:shield-checkmark-outline", // إدارة / صلاحيات
+          badge: createBadge(t('common.new') || "New"),
+        },
+
       ]
     },
     {

@@ -1,6 +1,6 @@
 // app/admin/courses/page.tsx
-import CoursesAdmin from "@/components/Admin/CoursesAdmin";
+import CourseManager from "@/components/Admin/CourseManager";
 
 export default function CoursesPage() {
-    return <CoursesAdmin />;
+    return <CourseManager />;
 }

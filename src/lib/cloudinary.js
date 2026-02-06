@@ -19,6 +19,7 @@ export const uploadToCloudinary = async (fileStr, folder = 'section-images') => 
     const uploadResponse = await cloudinary.uploader.upload(fileStr, {
       folder: folder,
       resource_type: 'auto',
+      chunk_size: 15000000, // 15 MB in bytes (15 * 1024 * 1024 = 15728640)
       transformation: [
         { width: 1920, height: 1080, crop: 'limit' }, // Limit max size
         { quality: 'auto:good' }, // Auto optimize quality

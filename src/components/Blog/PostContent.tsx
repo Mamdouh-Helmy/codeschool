@@ -285,13 +285,39 @@ export function PostContent({ slug }: { slug: string }) {
                   {title || t("blog.untitled") || "Untitled"}
                 </h2>
 
-                <div className="prose prose-sm sm:prose-base lg:prose-lg dark:prose-invert max-w-none
-                  prose-headings:break-words
-                  prose-p:break-words
-                  prose-li:break-words
+                {/* 🔥 الحل: إضافة custom CSS classes مع prose */}
+                <div className="blog-content prose prose-sm sm:prose-base lg:prose-lg dark:prose-invert max-w-none
+                  prose-headings:text-midnight_text dark:prose-headings:text-white
+                  prose-headings:font-bold
+                  prose-h1:text-2xl sm:prose-h1:text-3xl md:prose-h1:text-4xl
+                  prose-h1:mb-4 prose-h1:mt-6
+                  prose-h2:text-xl sm:prose-h2:text-2xl md:prose-h2:text-3xl
+                  prose-h2:mb-3 prose-h2:mt-5
+                  prose-h3:text-lg sm:prose-h3:text-xl md:prose-h3:text-2xl
+                  prose-h3:mb-3 prose-h3:mt-4
+                  prose-p:text-gray-700 dark:prose-p:text-gray-300
+                  prose-p:leading-relaxed
+                  prose-p:mb-4
+                  prose-strong:text-midnight_text dark:prose-strong:text-white
+                  prose-strong:font-semibold
+                  prose-a:text-primary dark:prose-a:text-primary
+                  prose-a:no-underline hover:prose-a:underline
                   prose-img:rounded-lg
                   prose-img:w-full
-                  prose-img:h-auto">
+                  prose-img:h-auto
+                  prose-img:my-6
+                  prose-ul:list-disc prose-ul:list-inside
+                  prose-ol:list-decimal prose-ol:list-inside
+                  prose-li:text-gray-700 dark:prose-li:text-gray-300
+                  prose-li:mb-2
+                  prose-blockquote:border-l-4 prose-blockquote:border-primary
+                  prose-blockquote:pl-4 prose-blockquote:italic
+                  prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400
+                  prose-code:bg-gray-100 dark:prose-code:bg-gray-800
+                  prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+                  prose-code:text-sm
+                  prose-pre:bg-gray-100 dark:prose-pre:bg-gray-800
+                  prose-pre:p-4 prose-pre:rounded-lg">
                   {body ? (
                     <div
                       dangerouslySetInnerHTML={{
