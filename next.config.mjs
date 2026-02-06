@@ -81,13 +81,21 @@ const nextConfig = {
         '*.codeschool.online'
       ],
     },
-    // ✅ FIX: إضافة هذا لمعالجة حزم MongoDB
-    serverComponentsExternalPackages: [
-      'mongoose',
-      'mongodb',
-      'mongodb-client-encryption'
-    ],
+    // ✅ إضافة هذا لمعالجة حزم MongoDB
+    // serverComponentsExternalPackages تم نقلها خارج experimental
   },
+
+  // ✅ FIX: نقل serverComponentsExternalPackages هنا (خارج experimental)
+  serverExternalPackages: [
+    'mongoose',
+    'mongodb',
+    'mongodb-client-encryption',
+    'socks',
+    'aws4'
+  ],
+
+  // ✅ إزالة transpilePackages لأنها تتعارض مع serverExternalPackages
+  // transpilePackages: [], // إزالة هذا السطر بالكامل
 
   // ✅ تحسين إعدادات الملفات الثابتة
   staticPageGenerationTimeout: 180,
@@ -123,16 +131,8 @@ const nextConfig = {
     ];
   },
 
-  // ✅ FIX: إعدادات الـ transpile لمعالجة حزم MongoDB
-  transpilePackages: [
-    'mongoose',
-    'mongodb',
-    'mongodb-client-encryption'
-  ],
-
   // ✅ تحسين إعدادات الـ bundle
   compiler: {
-    // removeConsole: process.env.NODE_ENV === 'production',
     removeConsole: {
       exclude: ['error', 'warn'],
     },
