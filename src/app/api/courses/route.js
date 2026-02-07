@@ -1,10 +1,10 @@
-// app/api/courses/route.js - FIXED VERSION
+// app/api/courses/route.js
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Course from "../../models/Course";
 
-function generateSlug(title) {
+const generateSlug = (title) => {
   if (!title) return `course-${Date.now()}`;
   return title
     .toLowerCase()
@@ -12,11 +12,39 @@ function generateSlug(title) {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .trim() || `course-${Date.now()}`;
-}
+};
 
-function calculateSessionNumber(lessonOrder) {
-  return Math.ceil(lessonOrder / 2);
-}
+const calculateSessionNumber = (lessonOrder) => Math.ceil(lessonOrder / 2);
+
+const processModule = (module, moduleIndex) => {
+  const blogBodyAr = (module.blog?.bodyAr || module.blogBodyAr || "").trim();
+  const blogBodyEn = (module.blog?.bodyEn || module.blogBodyEn || "").trim();
+
+  return {
+    title: module.title?.trim() || `Module ${moduleIndex + 1}`,
+    description: module.description?.trim() || "",
+    order: module.order || moduleIndex + 1,
+    totalSessions: module.totalSessions || 3,
+    projects: Array.isArray(module.projects) 
+      ? module.projects.filter(p => p?.trim()) 
+      : [],
+    blogBodyAr,
+    blogBodyEn,
+    blogCreatedAt: module.blog?.createdAt || module.blogCreatedAt || new Date(),
+    blogUpdatedAt: new Date(),
+    lessons: (module.lessons || []).map((lesson, lessonIndex) => ({
+      title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
+      description: lesson.description?.trim() || "",
+      order: lesson.order || lessonIndex + 1,
+      sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
+      duration: lesson.duration || "45 mins",
+    })),
+    sessions: (module.sessions || []).map((session, sessionIndex) => ({
+      sessionNumber: session.sessionNumber || sessionIndex + 1,
+      presentationUrl: session.presentationUrl?.trim() || "",
+    })),
+  };
+};
 
 export async function GET(request) {
   try {
@@ -95,9 +123,7 @@ export async function POST(request) {
       createdBy,
     } = body;
 
-    console.log("📥 Received course data");
-    console.log("📊 Raw curriculum:", JSON.stringify(curriculum, null, 2));
-
+    // Validation
     if (!title?.trim()) {
       return NextResponse.json(
         { success: false, error: "Title is required" },
@@ -126,71 +152,13 @@ export async function POST(request) {
       );
     }
 
-    // ✅ Process curriculum with EXPLICIT blog field preservation
-    let processedCurriculum = [];
-    if (curriculum && Array.isArray(curriculum)) {
-      processedCurriculum = curriculum.map((module, moduleIndex) => {
-        console.log(`\n📦 Processing module ${moduleIndex + 1}:`);
-        console.log("  - Title:", module.title);
-        console.log("  - Projects:", module.projects?.length || 0);
-        console.log("  - Blog (nested):", {
-          hasBodyAr: !!module.blog?.bodyAr,
-          hasBodyEn: !!module.blog?.bodyEn,
-          bodyArLength: module.blog?.bodyAr?.length || 0,
-          bodyEnLength: module.blog?.bodyEn?.length || 0,
-        });
-        
-        // ✅ Extract blog data properly
-        const blogBodyAr = (module.blog?.bodyAr || module.blogBodyAr || "").trim();
-        const blogBodyEn = (module.blog?.bodyEn || module.blogBodyEn || "").trim();
-        
-        console.log("  - Extracted blog:", {
-          blogBodyAr: blogBodyAr.substring(0, 100),
-          blogBodyEn: blogBodyEn.substring(0, 100),
-          blogBodyArLength: blogBodyAr.length,
-          blogBodyEnLength: blogBodyEn.length,
-        });
-        
-        const processedModule = {
-          title: module.title?.trim() || `Module ${moduleIndex + 1}`,
-          description: module.description?.trim() || "",
-          order: module.order || moduleIndex + 1,
-          totalSessions: module.totalSessions || 3,
-          projects: Array.isArray(module.projects) ? module.projects.filter(p => p?.trim()) : [],
-          
-          // ✅ EXPLICIT blog fields
-          blogBodyAr: blogBodyAr,
-          blogBodyEn: blogBodyEn,
-          blogCreatedAt: module.blog?.createdAt || module.blogCreatedAt || new Date(),
-          blogUpdatedAt: new Date(),
-          
-          lessons: (module.lessons || []).map((lesson, lessonIndex) => ({
-            title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
-            description: lesson.description?.trim() || "",
-            order: lesson.order || lessonIndex + 1,
-            sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
-            duration: lesson.duration || "45 mins",
-          })),
-          
-          sessions: (module.sessions || []).map((session, sessionIndex) => ({
-            sessionNumber: session.sessionNumber || sessionIndex + 1,
-            presentationUrl: session.presentationUrl?.trim() || "",
-          })),
-        };
-        
-        console.log("  ✅ Processed module:", {
-          title: processedModule.title,
-          blogBodyArLength: processedModule.blogBodyAr.length,
-          blogBodyEnLength: processedModule.blogBodyEn.length,
-        });
-        
-        return processedModule;
-      });
-    }
+    // Process curriculum
+    const processedCurriculum = curriculum && Array.isArray(curriculum)
+      ? curriculum.map(processModule)
+      : [];
 
-    console.log("\n📊 Final processed curriculum:", JSON.stringify(processedCurriculum, null, 2));
-
-    const courseData = {
+    // Create course
+    const course = new Course({
       title: title.trim(),
       description: description.trim(),
       slug: generateSlug(title),
@@ -208,51 +176,22 @@ export async function POST(request) {
         email: createdBy.email.trim().toLowerCase(),
         role: createdBy.role.trim(),
       },
-    };
-
-    console.log("\n💾 Creating course with data:", {
-      title: courseData.title,
-      curriculumCount: courseData.curriculum.length,
-      firstModuleBlog: courseData.curriculum[0] ? {
-        blogBodyArLength: courseData.curriculum[0].blogBodyAr?.length || 0,
-        blogBodyEnLength: courseData.curriculum[0].blogBodyEn?.length || 0,
-      } : null,
     });
 
-    const course = new Course(courseData);
-
-    console.log("💾 Saving course to database...");
-    const savedCourse = await course.save();
+    await course.save();
     
-    console.log("✅ Course saved successfully!");
-    console.log("✅ Saved course ID:", savedCourse._id);
-    
-    // ✅ Verify the saved data
-    const verifiedCourse = await Course.findById(savedCourse._id).lean();
-    console.log("\n🔍 VERIFICATION - Fetched from DB:");
-    if (verifiedCourse.curriculum && verifiedCourse.curriculum.length > 0) {
-      verifiedCourse.curriculum.forEach((module, idx) => {
-        console.log(`Module ${idx + 1}:`, {
-          title: module.title,
-          blogBodyAr: module.blogBodyAr?.substring(0, 50) || 'EMPTY',
-          blogBodyEn: module.blogBodyEn?.substring(0, 50) || 'EMPTY',
-          blogBodyArLength: module.blogBodyAr?.length || 0,
-          blogBodyEnLength: module.blogBodyEn?.length || 0,
-        });
-      });
-    }
+    const savedCourse = await Course.findById(course._id).lean();
 
     return NextResponse.json(
       {
         success: true,
-        data: verifiedCourse,
+        data: savedCourse,
         message: "Course created successfully",
       },
       { status: 201 }
     );
   } catch (error) {
     console.error("❌ POST Error:", error);
-    console.error("❌ Error stack:", error.stack);
     
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(err => err.message);
