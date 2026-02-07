@@ -20,7 +20,6 @@ export default function InstructorNotificationModal({
     const [selectedInstructors, setSelectedInstructors] = useState([]);
 
     // Initialize messages for each instructor
-    // Initialize messages for each instructor
     useEffect(() => {
         if (!instructors || instructors.length === 0) return;
 
@@ -29,7 +28,7 @@ export default function InstructorNotificationModal({
 عزيزي/عزيزتي {instructorName}،
 يسرنا إعلامك بأن مجموعة جديدة قد تم تعيينها وتفعيلها بنجاح تحت إشرافك بالتفاصيل التالية:
 📘 البرنامج: {courseName}
-👥 رمز المجموعة: {groupCode}
+👥 المجموعة: {groupName}
 📅 تاريخ الحصة الأولى: {startDate}
 ⏰ الموعد: {timeFrom} – {timeTo}
 👦👧 عدد الطلاب: {studentCount}
@@ -49,7 +48,7 @@ export default function InstructorNotificationModal({
 Dear {instructorName},
 We are pleased to inform you that a new group has been successfully assigned and activated under your supervision with the following details:
 📘 Program: {courseName}
-👥 Group Code: {groupCode}
+👥 Group: {groupName}
 📅 First Session Date: {startDate}
 ⏰ Schedule: {timeFrom} – {timeTo}
 👦👧 Number of Students: {studentCount}
@@ -97,7 +96,6 @@ Code School Management 💻`;
         const preview = messageTemplate
             .replace(/\{instructorName\}/g, instructor.name || t("instructorNotification.defaults.instructor"))
             .replace(/\{courseName\}/g, groupData.courseSnapshot?.title || groupData.course?.title || t("instructorNotification.defaults.course"))
-            .replace(/\{groupCode\}/g, groupData.code || t("instructorNotification.defaults.groupCode"))
             .replace(/\{groupName\}/g, groupData.name || t("instructorNotification.defaults.groupName"))
             .replace(/\{startDate\}/g, formatDate(groupData.schedule?.startDate))
             .replace(/\{timeFrom\}/g, groupData.schedule?.timeFrom || t("instructorNotification.defaults.time"))
@@ -197,7 +195,7 @@ Code School Management 💻`;
                         <div className="space-y-3">
                             <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-white text-sm font-bold">
-                                    {groupData.code?.slice(0, 2) || t("instructorNotification.defaults.groupInitials")}
+                                    {groupData.name?.slice(0, 2) || t("instructorNotification.defaults.groupInitials")}
                                 </div>
                                 <div>
                                     <h3 className="font-semibold">{groupData.name}</h3>
@@ -338,7 +336,7 @@ Code School Management 💻`;
                             <div className="space-y-1 text-xs font-mono">
                                 <p>{"{instructorName}"} - {isRTL ? t("instructorNotification.variables.instructorName") : "Instructor name"}</p>
                                 <p>{"{courseName}"} - {isRTL ? t("instructorNotification.variables.courseName") : "Course name"}</p>
-                                <p>{"{groupCode}"} - {isRTL ? t("instructorNotification.variables.groupCode") : "Group code"}</p>
+                                <p>{"{groupName}"} - {isRTL ? t("instructorNotification.variables.groupName") : "Group name"}</p>
                                 <p>{"{startDate}"} - {isRTL ? t("instructorNotification.variables.startDate") : "Start date"}</p>
                                 <p>{"{timeFrom}"} - {isRTL ? t("instructorNotification.variables.timeFrom") : "Start time"}</p>
                                 <p>{"{timeTo}"} - {isRTL ? t("instructorNotification.variables.timeTo") : "End time"}</p>

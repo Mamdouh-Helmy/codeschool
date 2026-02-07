@@ -1,4 +1,4 @@
-// models/Course.js - COMPLETE FIX
+// models/Course.js - FINAL FIX
 
 import mongoose from "mongoose";
 
@@ -17,20 +17,23 @@ const SessionSchema = new mongoose.Schema({
   presentationUrl: { type: String, default: "" },
 }, { _id: false });
 
-// ✅ Module Schema - WITH INLINE BLOG (NO SEPARATE SCHEMA)
+// ✅ Module Schema - REMOVED _id: false to allow proper saving
 const ModuleSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
   description: { type: String, default: "" },
   order: { type: Number, required: true },
-  lessons: { type: [LessonSchema], default: [] },
-  sessions: { type: [SessionSchema], default: [] },
-  projects: { type: [String], default: [] },
-  blogBodyAr: { type: String, default: "" },  // ✅ FLAT STRUCTURE
-  blogBodyEn: { type: String, default: "" },  // ✅ FLAT STRUCTURE
+  lessons: [LessonSchema],
+  sessions: [SessionSchema],
+  projects: [{ type: String }],
+  
+  // ✅ EXPLICIT BLOG FIELDS - These MUST be defined explicitly
+  blogBodyAr: { type: String, default: "" },
+  blogBodyEn: { type: String, default: "" },
   blogCreatedAt: { type: Date, default: Date.now },
   blogUpdatedAt: { type: Date, default: Date.now },
+  
   totalSessions: { type: Number, default: 3 },
-}, { _id: false });
+});
 
 // ✅ Course Schema
 const CourseSchema = new mongoose.Schema(
@@ -64,7 +67,8 @@ const CourseSchema = new mongoose.Schema(
     subject: { type: String, default: "" },
     duration: { type: String, default: "" },
     
-    curriculum: { type: [ModuleSchema], default: [] },
+    // ✅ Curriculum as array of ModuleSchema
+    curriculum: [ModuleSchema],
     
     isActive: { type: Boolean, default: true },
     featured: { type: Boolean, default: false },
@@ -123,26 +127,44 @@ CourseSchema.index({ level: 1 });
 CourseSchema.index({ isActive: 1, featured: 1 });
 CourseSchema.index({ createdAt: -1 });
 
-// Pre-save hook
+// ✅ Pre-save hook with detailed logging
 CourseSchema.pre('save', function(next) {
-  console.log('💾 SAVING COURSE - CURRICULUM CHECK:');
+  console.log('💾 PRE-SAVE HOOK - CURRICULUM DATA:');
   if (this.curriculum && this.curriculum.length > 0) {
     this.curriculum.forEach((module, idx) => {
-      console.log(`Module ${idx + 1}:`, {
+      console.log(`Module ${idx + 1} BEFORE SAVE:`, {
         title: module.title,
-        blogBodyAr: module.blogBodyAr?.substring(0, 50),
-        blogBodyEn: module.blogBodyEn?.substring(0, 50),
+        blogBodyAr: module.blogBodyAr || 'UNDEFINED',
+        blogBodyEn: module.blogBodyEn || 'UNDEFINED',
+        blogBodyArLength: module.blogBodyAr?.length || 0,
+        blogBodyEnLength: module.blogBodyEn?.length || 0,
       });
     });
   }
   next();
 });
 
-let Course;
-try {
-  Course = mongoose.model("Course");
-} catch (error) {
-  Course = mongoose.model("Course", CourseSchema);
+// ✅ Post-save hook to verify data was saved
+CourseSchema.post('save', async function(doc) {
+  console.log('✅ POST-SAVE HOOK - VERIFICATION:');
+  if (doc.curriculum && doc.curriculum.length > 0) {
+    doc.curriculum.forEach((module, idx) => {
+      console.log(`Module ${idx + 1} AFTER SAVE:`, {
+        title: module.title,
+        blogBodyAr: module.blogBodyAr || 'UNDEFINED',
+        blogBodyEn: module.blogBodyEn || 'UNDEFINED',
+        blogBodyArLength: module.blogBodyAr?.length || 0,
+        blogBodyEnLength: module.blogBodyEn?.length || 0,
+      });
+    });
+  }
+});
+
+// Clear any existing model
+if (mongoose.models.Course) {
+  delete mongoose.models.Course;
 }
+
+const Course = mongoose.model("Course", CourseSchema);
 
 export default Course;

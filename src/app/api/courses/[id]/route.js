@@ -1,4 +1,4 @@
-// app/api/courses/[id]/route.js - UPDATED PUT
+// app/api/courses/[id]/route.js - FIXED VERSION
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
@@ -41,27 +41,36 @@ export async function PUT(request, { params }) {
     const body = await request.json();
     
     console.log("📥 Updating course:", id);
+    console.log("📊 Raw curriculum:", JSON.stringify(body.curriculum, null, 2));
     
-    // ✅ FIXED: Process curriculum with FLAT blog fields
+    // ✅ Process curriculum with EXPLICIT blog field preservation
     if (body.curriculum && Array.isArray(body.curriculum)) {
       body.curriculum = body.curriculum.map((module, moduleIndex) => {
-        console.log(`📦 Processing module ${moduleIndex + 1}:`, {
-          title: module.title,
-          projectsCount: module.projects?.length || 0,
-          blogBodyAr: module.blog?.bodyAr?.substring(0, 50) || module.blogBodyAr?.substring(0, 50) || 'empty',
-          blogBodyEn: module.blog?.bodyEn?.substring(0, 50) || module.blogBodyEn?.substring(0, 50) || 'empty',
+        console.log(`\n📦 Processing module ${moduleIndex + 1}:`);
+        console.log("  - Title:", module.title);
+        console.log("  - Projects:", module.projects?.length || 0);
+        
+        // ✅ Extract blog data from both nested and flat formats
+        const blogBodyAr = (module.blog?.bodyAr || module.blogBodyAr || "").trim();
+        const blogBodyEn = (module.blog?.bodyEn || module.blogBodyEn || "").trim();
+        
+        console.log("  - Extracted blog:", {
+          blogBodyArLength: blogBodyAr.length,
+          blogBodyEnLength: blogBodyEn.length,
+          blogBodyArPreview: blogBodyAr.substring(0, 50),
+          blogBodyEnPreview: blogBodyEn.substring(0, 50),
         });
         
-        return {
+        const processedModule = {
           title: module.title?.trim() || `Module ${moduleIndex + 1}`,
           description: module.description?.trim() || "",
           order: module.order || moduleIndex + 1,
           totalSessions: module.totalSessions || 3,
           projects: Array.isArray(module.projects) ? module.projects.filter(p => p?.trim()) : [],
           
-          // ✅ FLAT BLOG FIELDS - support both nested and flat formats
-          blogBodyAr: module.blog?.bodyAr?.trim() || module.blogBodyAr?.trim() || "",
-          blogBodyEn: module.blog?.bodyEn?.trim() || module.blogBodyEn?.trim() || "",
+          // ✅ EXPLICIT blog fields
+          blogBodyAr: blogBodyAr,
+          blogBodyEn: blogBodyEn,
           blogCreatedAt: module.blog?.createdAt || module.blogCreatedAt || new Date(),
           blogUpdatedAt: new Date(),
           
@@ -72,16 +81,26 @@ export async function PUT(request, { params }) {
             sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
             duration: lesson.duration || "45 mins",
           })),
+          
           sessions: (module.sessions || []).map((session, sessionIndex) => ({
             sessionNumber: session.sessionNumber || sessionIndex + 1,
             presentationUrl: session.presentationUrl?.trim() || "",
           })),
         };
+        
+        console.log("  ✅ Processed module:", {
+          title: processedModule.title,
+          blogBodyArLength: processedModule.blogBodyAr.length,
+          blogBodyEnLength: processedModule.blogBodyEn.length,
+        });
+        
+        return processedModule;
       });
     }
     
-    console.log("📊 Processed curriculum with blog:", JSON.stringify(body.curriculum, null, 2));
+    console.log("\n📊 Final processed curriculum:", JSON.stringify(body.curriculum, null, 2));
     
+    console.log("💾 Updating course in database...");
     const course = await Course.findByIdAndUpdate(
       id,
       { $set: body },
@@ -95,15 +114,31 @@ export async function PUT(request, { params }) {
       );
     }
     
-    console.log("✅ Course updated successfully");
+    console.log("✅ Course updated successfully!");
+    
+    // ✅ Verify the saved data
+    const verifiedCourse = await Course.findById(id).lean();
+    console.log("\n🔍 VERIFICATION - Fetched from DB:");
+    if (verifiedCourse.curriculum && verifiedCourse.curriculum.length > 0) {
+      verifiedCourse.curriculum.forEach((module, idx) => {
+        console.log(`Module ${idx + 1}:`, {
+          title: module.title,
+          blogBodyAr: module.blogBodyAr?.substring(0, 50) || 'EMPTY',
+          blogBodyEn: module.blogBodyEn?.substring(0, 50) || 'EMPTY',
+          blogBodyArLength: module.blogBodyAr?.length || 0,
+          blogBodyEnLength: module.blogBodyEn?.length || 0,
+        });
+      });
+    }
     
     return NextResponse.json({
       success: true,
-      data: course,
+      data: verifiedCourse,
       message: "Course updated successfully",
     });
   } catch (error) {
     console.error("❌ PUT Error:", error);
+    console.error("❌ Error stack:", error.stack);
     
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(err => err.message);
