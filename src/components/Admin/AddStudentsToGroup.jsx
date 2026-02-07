@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { UserPlus, Search, X, CheckCircle, AlertCircle, Users, Loader2, MessageCircle, Info, Copy } from "lucide-react";
+import { UserPlus, Search, X, CheckCircle, AlertCircle, Users, Loader2, MessageCircle, Info, Copy, Phone, User } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
 
-// Helper function to generate default welcome message template
 // Helper function to generate default welcome message template
 const getDefaultWelcomeMessage = async (language, group, studentName = "{studentName}") => {
   // دالة ذكية لجلب رابط الاجتماع المناسب - فقط أول سيشن (Session 1) في أول موديول (Module 0)
@@ -30,11 +29,6 @@ const getDefaultWelcomeMessage = async (language, group, studentName = "{student
         console.log(`📊 Total sessions found: ${result.data?.length || 0}`);
 
         if (result.success && result.data && result.data.length > 0) {
-          // عرض جميع الجلسات للتأكد
-          result.data.forEach((session, index) => {
-            console.log(`Session ${index + 1}: Module ${session.moduleIndex}, Session ${session.sessionNumber}, Title: ${session.title}`);
-          });
-
           // البحث عن أول سيشن (Session 1) في أول موديول (Module 0)
           const firstSession = result.data.find(session =>
             session.moduleIndex === 0 && session.sessionNumber === 1
@@ -119,12 +113,10 @@ const getDefaultWelcomeMessage = async (language, group, studentName = "{student
 {studentName}،
 يسرنا إعلامك بأنه تم تسجيلك/تسجيل طفلك بنجاح في البرنامج التالي في Code School:
 📘 البرنامج: {courseName}
-👥 المجموعة: {groupCode}
+👥 المجموعة: {groupName}
 📅 تاريخ البدء: {startDate}
 ⏰ الموعد: {timeFrom} – {timeTo}
 👨‍🏫 المدرب: {instructor}
-
-هذا البرنامج مصمم لبناء التفكير المنطقي ومهارات حل المشكلات والإبداع لدى طفلك من خلال التعليم البرمجي المنظم والمناسب للعمر.
 
 ${firstSessionLink ? `📌 رابط الاجتماع للجلسة الأولى:
 ${firstSessionLink}
@@ -135,12 +127,10 @@ ${firstSessionLink}
 {studentName},
 We are pleased to confirm that you/your child has been successfully enrolled in the following program at Code School:
 📘 Program: {courseName}
-👥 Group: {groupCode}
+👥 Group: {groupName}
 📅 Start Date: {startDate}
 ⏰ Schedule: {timeFrom} – {timeTo}
 👨‍🏫 Instructor: {instructor}
-
-This program is designed to build your child's logical thinking, problem-solving skills, and creativity through structured, age-appropriate programming education.
 
 ${firstSessionLink ? `📌 First Session Meeting Link:
 ${firstSessionLink}
@@ -153,7 +143,7 @@ ${firstSessionLink}
   return template
     .replace(/\{studentName\}/g, studentName)
     .replace(/\{courseName\}/g, group.courseSnapshot?.title || group.course?.title || "{courseName}")
-    .replace(/\{groupCode\}/g, group.code || "{groupCode}")
+    .replace(/\{groupName\}/g, group.name || "{groupName}")
     .replace(
       /\{startDate\}/g,
       group.schedule?.startDate
@@ -200,7 +190,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 {studentName}،
 يسرنا إعلامك بأنه تم تسجيلك/تسجيل طفلك بنجاح في البرنامج التالي في Code School:
 📘 البرنامج: {courseName}
-👥 المجموعة: {groupCode}
+👥 المجموعة: {groupName}
 📅 تاريخ البدء: {startDate}
 ⏰ الموعد: {timeFrom} – {timeTo}
 👨‍🏫 المدرب: {instructor}
@@ -213,7 +203,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 {studentName},
 We are pleased to confirm that you/your child has been successfully enrolled in the following program at Code School:
 📘 Program: {courseName}
-👥 Group: {groupCode}
+👥 Group: {groupName}
 📅 Start Date: {startDate}
 ⏰ Schedule: {timeFrom} – {timeTo}
 👨‍🏫 Instructor: {instructor}
@@ -227,7 +217,7 @@ Excited to Start Our Journey Together!`;
     return fallbackTemplate
       .replace(/\{studentName\}/g, studentName)
       .replace(/\{courseName\}/g, group.courseSnapshot?.title || group.course?.title || "{courseName}")
-      .replace(/\{groupCode\}/g, group.code || "{groupCode}")
+      .replace(/\{groupName\}/g, group.name || "{groupName}")
       .replace(
         /\{startDate\}/g,
         group.schedule?.startDate
@@ -338,6 +328,7 @@ Excited to Start Our Journey Together!`;
     if (!selectedStudent || !group || !message) return "";
 
     const studentName = selectedStudent.personalInfo?.fullName || t("addStudents.preview.defaults.studentName");
+    const guardianName = selectedStudent.guardianInfo?.name || t("addStudents.preview.defaults.guardianName");
     const groupName = group.name;
     const courseName = group.courseSnapshot?.title || group.course?.title || t("addStudents.preview.defaults.courseName");
 
@@ -361,6 +352,7 @@ Excited to Start Our Journey Together!`;
 
     let preview = message
       .replace(/\{studentName\}/g, studentName)
+      .replace(/\{guardianName\}/g, guardianName)
       .replace(/\{groupName\}/g, groupName)
       .replace(/\{courseName\}/g, courseName)
       .replace(/\{startDate\}/g, startDate)
@@ -415,6 +407,31 @@ Excited to Start Our Journey Together!`;
 
       if (res.ok && result.success) {
         toast.success(t("addStudents.messages.success"), { id: loadingToast });
+
+        // عرض نتائج إرسال الرسائل
+        if (result.automation?.messagesSent) {
+          const { student, guardian } = result.automation.messagesSent;
+          const studentName = result.data.student.name;
+          
+          if (student && guardian) {
+            toast.success(`${t("addStudents.messages.sentBoth")} ${studentName}`, {
+              duration: 5000,
+              icon: '✅'
+            });
+          } else if (student) {
+            toast.success(`${t("addStudents.messages.sentStudent")} ${studentName}`, {
+              duration: 5000,
+              icon: '✅'
+            });
+          } else if (guardian) {
+            toast.success(`${t("addStudents.messages.sentGuardian")} ${studentName}`, {
+              duration: 5000,
+              icon: '✅'
+            });
+          } else {
+            toast.error(t("addStudents.messages.sendFailed"), { id: loadingToast });
+          }
+        }
 
         setStudents(prev => prev.filter(s => {
           const sid = s._id || s.id;
@@ -567,6 +584,9 @@ Excited to Start Our Journey Together!`;
               (selectedStudent._id || selectedStudent.id)?.toString() === studentId?.toString()
             );
 
+            const hasStudentWhatsapp = !!student.personalInfo?.whatsappNumber;
+            const hasGuardianWhatsapp = !!student.guardianInfo?.whatsappNumber;
+
             return (
               <div
                 key={studentId}
@@ -591,15 +611,28 @@ Excited to Start Our Journey Together!`;
                       {student.personalInfo?.email}
                     </p>
 
-                    <div className="flex flex-wrap gap-2 text-xs">
+                    <div className="flex flex-wrap gap-2 text-xs mb-2">
                       <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">
                         {t("addStudents.labels.enrollment")}: {student.enrollmentNumber}
                       </span>
-                      {student.personalInfo?.whatsappNumber && (
-                        <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded flex items-center gap-1">
-                          📱 {student.personalInfo.whatsappNumber}
+                      
+                      {/* WhatsApp Indicators */}
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded flex items-center gap-1 ${hasStudentWhatsapp
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
+                          <User className="w-3 h-3" />
+                          {hasStudentWhatsapp ? '📱' : '❌'}
                         </span>
-                      )}
+                        
+                        <span className={`px-2 py-1 rounded flex items-center gap-1 ${hasGuardianWhatsapp
+                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
+                          <Phone className="w-3 h-3" />
+                          {hasGuardianWhatsapp ? '👨‍👦' : '❌'}
+                        </span>
+                      </div>
+                      
                       <span className={`px-2 py-1 rounded ${student.communicationPreferences?.preferredLanguage === 'ar'
                         ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                         : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
@@ -607,6 +640,14 @@ Excited to Start Our Journey Together!`;
                         🌐 {student.communicationPreferences?.preferredLanguage === 'ar' ? 'العربية' : 'English'}
                       </span>
                     </div>
+
+                    {/* Guardian Info Preview */}
+                    {student.guardianInfo?.name && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        👨‍👦 {t("addStudents.labels.guardian")}: {student.guardianInfo.name}
+                        {student.guardianInfo.relationship && ` (${student.guardianInfo.relationship})`}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -614,6 +655,68 @@ Excited to Start Our Journey Together!`;
           })
         )}
       </div>
+
+      {/* Guardian Information */}
+      {selectedStudent && selectedStudent.guardianInfo && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
+                {t("addStudents.guardian.title")}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">
+                    {t("addStudents.guardian.name")}:
+                  </span>
+                  <p className="text-gray-800 dark:text-gray-200">
+                    {selectedStudent.guardianInfo?.name || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">
+                    {t("addStudents.guardian.relationship")}:
+                  </span>
+                  <p className="text-gray-800 dark:text-gray-200">
+                    {selectedStudent.guardianInfo?.relationship || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">
+                    {t("addStudents.guardian.phone")}:
+                  </span>
+                  <p className="text-gray-800 dark:text-gray-200">
+                    {selectedStudent.guardianInfo?.phone || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">
+                    {t("addStudents.guardian.whatsapp")}:
+                  </span>
+                  <p className="text-gray-800 dark:text-gray-200">
+                    {selectedStudent.guardianInfo?.whatsappNumber ? (
+                      <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                        📱 {selectedStudent.guardianInfo.whatsappNumber}
+                        <span className="text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-1.5 py-0.5 rounded">
+                          {t("addStudents.guardian.willReceive")}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-red-500 dark:text-red-400">
+                        ❌ {t("addStudents.guardian.noWhatsapp")}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-3">
+                ⓘ {t("addStudents.guardian.note")}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Message Customization */}
       {selectedStudent && (
@@ -633,6 +736,9 @@ Excited to Start Our Journey Together!`;
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
                     {`{studentName}`} → {selectedStudent.personalInfo?.fullName}
+                  </div>
+                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                    {`{guardianName}`} → {selectedStudent.guardianInfo?.name || "N/A"}
                   </div>
                   <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
                     {`{groupName}`} → {group.name}

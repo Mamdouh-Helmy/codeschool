@@ -1,14 +1,13 @@
-// app/api/courses/[id]/route.js - COMPLETE FIXED VERSION
+// app/api/courses/[id]/route.js - UPDATED PUT
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Course from "../../../models/Course";
 
-// دالة مساعدة لحساب رقم الجلسة بناءً على ترتيب الدرس
 function calculateSessionNumber(lessonOrder) {
-  return Math.ceil(lessonOrder / 2); // 2 درس لكل جلسة
+  return Math.ceil(lessonOrder / 2);
 }
 
-// GET - جلب كورس بواسطة ID
 export async function GET(request, { params }) {
   try {
     await connectDB();
@@ -34,7 +33,6 @@ export async function GET(request, { params }) {
   }
 }
 
-// PUT - تحديث كورس
 export async function PUT(request, { params }) {
   try {
     await connectDB();
@@ -42,28 +40,47 @@ export async function PUT(request, { params }) {
     const { id } = await params;
     const body = await request.json();
     
-    // ✅ معالجة curriculum بشكل صحيح INCLUDING SESSIONS WITH presentationUrl
+    console.log("📥 Updating course:", id);
+    
+    // ✅ FIXED: Process curriculum with FLAT blog fields
     if (body.curriculum && Array.isArray(body.curriculum)) {
-      body.curriculum = body.curriculum.map((module, moduleIndex) => ({
-        title: module.title?.trim() || `Module ${moduleIndex + 1}`,
-        description: module.description?.trim() || "",
-        order: module.order || moduleIndex + 1,
-        totalSessions: module.totalSessions || 3,
-        projects: module.projects || [],
-        lessons: (module.lessons || []).map((lesson, lessonIndex) => ({
-          title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
-          description: lesson.description?.trim() || "",
-          order: lesson.order || lessonIndex + 1,
-          sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
-          duration: lesson.duration || "45 mins",
-        })),
-        // ✅ إضافة معالجة sessions مع presentationUrl
-        sessions: (module.sessions || []).map((session, sessionIndex) => ({
-          sessionNumber: session.sessionNumber || sessionIndex + 1,
-          presentationUrl: session.presentationUrl?.trim() || "",
-        })),
-      }));
+      body.curriculum = body.curriculum.map((module, moduleIndex) => {
+        console.log(`📦 Processing module ${moduleIndex + 1}:`, {
+          title: module.title,
+          projectsCount: module.projects?.length || 0,
+          blogBodyAr: module.blog?.bodyAr?.substring(0, 50) || module.blogBodyAr?.substring(0, 50) || 'empty',
+          blogBodyEn: module.blog?.bodyEn?.substring(0, 50) || module.blogBodyEn?.substring(0, 50) || 'empty',
+        });
+        
+        return {
+          title: module.title?.trim() || `Module ${moduleIndex + 1}`,
+          description: module.description?.trim() || "",
+          order: module.order || moduleIndex + 1,
+          totalSessions: module.totalSessions || 3,
+          projects: Array.isArray(module.projects) ? module.projects.filter(p => p?.trim()) : [],
+          
+          // ✅ FLAT BLOG FIELDS - support both nested and flat formats
+          blogBodyAr: module.blog?.bodyAr?.trim() || module.blogBodyAr?.trim() || "",
+          blogBodyEn: module.blog?.bodyEn?.trim() || module.blogBodyEn?.trim() || "",
+          blogCreatedAt: module.blog?.createdAt || module.blogCreatedAt || new Date(),
+          blogUpdatedAt: new Date(),
+          
+          lessons: (module.lessons || []).map((lesson, lessonIndex) => ({
+            title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
+            description: lesson.description?.trim() || "",
+            order: lesson.order || lessonIndex + 1,
+            sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
+            duration: lesson.duration || "45 mins",
+          })),
+          sessions: (module.sessions || []).map((session, sessionIndex) => ({
+            sessionNumber: session.sessionNumber || sessionIndex + 1,
+            presentationUrl: session.presentationUrl?.trim() || "",
+          })),
+        };
+      });
     }
+    
+    console.log("📊 Processed curriculum with blog:", JSON.stringify(body.curriculum, null, 2));
     
     const course = await Course.findByIdAndUpdate(
       id,
@@ -77,6 +94,8 @@ export async function PUT(request, { params }) {
         { status: 404 }
       );
     }
+    
+    console.log("✅ Course updated successfully");
     
     return NextResponse.json({
       success: true,
@@ -101,7 +120,6 @@ export async function PUT(request, { params }) {
   }
 }
 
-// DELETE - حذف كورس
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
@@ -116,6 +134,8 @@ export async function DELETE(request, { params }) {
         { status: 404 }
       );
     }
+    
+    console.log("✅ Course deleted successfully");
     
     return NextResponse.json({
       success: true,

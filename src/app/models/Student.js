@@ -82,6 +82,9 @@ const whatsappMessageSchema = new mongoose.Schema(
         "absence_notification",
         "session_cancelled",
         "session_postponed",
+        "group_welcome_guardian", // ✅ أضف هذا
+        "session_reminder_guardian", // ✅ أضف هذا
+        "session_reminder_student", // ✅ أضف هذا
         "custom",
         "other",
       ],

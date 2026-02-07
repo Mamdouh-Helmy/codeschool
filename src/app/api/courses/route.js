@@ -1,10 +1,9 @@
-// app/api/courses/route.js - COMPLETE FIXED VERSION
+// app/api/courses/route.js - UPDATED POST
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Course from "../../models/Course";
-import mongoose from "mongoose";
 
-// توليد slug تلقائي
 function generateSlug(title) {
   if (!title) return `course-${Date.now()}`;
   return title
@@ -15,12 +14,10 @@ function generateSlug(title) {
     .trim() || `course-${Date.now()}`;
 }
 
-// دالة مساعدة لحساب رقم الجلسة بناءً على ترتيب الدرس
 function calculateSessionNumber(lessonOrder) {
-  return Math.ceil(lessonOrder / 2); // 2 درس لكل جلسة
+  return Math.ceil(lessonOrder / 2);
 }
 
-// GET - جلب كل الكورسات
 export async function GET(request) {
   try {
     await connectDB();
@@ -32,22 +29,18 @@ export async function GET(request) {
 
     const query = {};
     
-    // فلترة حسب المستوى
     if (searchParams.get("level")) {
       query.level = searchParams.get("level");
     }
     
-    // فلترة حسب النشاط
     if (searchParams.get("active") !== null) {
       query.isActive = searchParams.get("active") === "true";
     }
     
-    // فلترة حسب المميز
     if (searchParams.get("featured") === "true") {
       query.featured = true;
     }
     
-    // البحث النصي
     if (searchParams.get("search")) {
       query.$or = [
         { title: { $regex: searchParams.get("search"), $options: "i" } },
@@ -83,7 +76,6 @@ export async function GET(request) {
   }
 }
 
-// POST - إنشاء كورس جديد
 export async function POST(request) {
   try {
     await connectDB();
@@ -96,7 +88,6 @@ export async function POST(request) {
       curriculum,
       grade,
       subject,
-      projects, // ✅ تأكد من استقبال projects
       isActive,
       featured,
       thumbnail,
@@ -104,9 +95,8 @@ export async function POST(request) {
       createdBy,
     } = body;
 
-    console.log("📥 Received data with projects:", projects); // ✅ إضافة log
+    console.log("📥 Received course data");
 
-    // التحقق من البيانات المطلوبة
     if (!title?.trim()) {
       return NextResponse.json(
         { success: false, error: "Title is required" },
@@ -135,31 +125,47 @@ export async function POST(request) {
       );
     }
 
-    // معالجة المنهج الدراسي إذا وجد - INCLUDING SESSIONS WITH presentationUrl
+    // ✅ FIXED: Process curriculum with FLAT blog fields
     let processedCurriculum = [];
     if (curriculum && Array.isArray(curriculum)) {
-      processedCurriculum = curriculum.map((module, moduleIndex) => ({
-        title: module.title?.trim() || `Module ${moduleIndex + 1}`,
-        description: module.description?.trim() || "",
-        order: module.order || moduleIndex + 1,
-        totalSessions: module.totalSessions || 3,
-        projects: module.projects || [],
-        lessons: (module.lessons || []).map((lesson, lessonIndex) => ({
-          title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
-          description: lesson.description?.trim() || "",
-          order: lesson.order || lessonIndex + 1,
-          sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
-          duration: lesson.duration || "45 mins",
-        })),
-        // ✅ إضافة معالجة sessions مع presentationUrl
-        sessions: (module.sessions || []).map((session, sessionIndex) => ({
-          sessionNumber: session.sessionNumber || sessionIndex + 1,
-          presentationUrl: session.presentationUrl?.trim() || "",
-        })),
-      }));
+      processedCurriculum = curriculum.map((module, moduleIndex) => {
+        console.log(`📦 Processing module ${moduleIndex + 1}:`, {
+          title: module.title,
+          projectsCount: module.projects?.length || 0,
+          blogBodyAr: module.blog?.bodyAr?.substring(0, 50) || 'empty',
+          blogBodyEn: module.blog?.bodyEn?.substring(0, 50) || 'empty',
+        });
+        
+        return {
+          title: module.title?.trim() || `Module ${moduleIndex + 1}`,
+          description: module.description?.trim() || "",
+          order: module.order || moduleIndex + 1,
+          totalSessions: module.totalSessions || 3,
+          projects: Array.isArray(module.projects) ? module.projects.filter(p => p?.trim()) : [],
+          
+          // ✅ FLAT BLOG FIELDS
+          blogBodyAr: module.blog?.bodyAr?.trim() || "",
+          blogBodyEn: module.blog?.bodyEn?.trim() || "",
+          blogCreatedAt: module.blog?.createdAt || new Date(),
+          blogUpdatedAt: new Date(),
+          
+          lessons: (module.lessons || []).map((lesson, lessonIndex) => ({
+            title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
+            description: lesson.description?.trim() || "",
+            order: lesson.order || lessonIndex + 1,
+            sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
+            duration: lesson.duration || "45 mins",
+          })),
+          sessions: (module.sessions || []).map((session, sessionIndex) => ({
+            sessionNumber: session.sessionNumber || sessionIndex + 1,
+            presentationUrl: session.presentationUrl?.trim() || "",
+          })),
+        };
+      });
     }
 
-    // إنشاء الكورس
+    console.log("📊 Processed curriculum with blog:", JSON.stringify(processedCurriculum, null, 2));
+
     const course = new Course({
       title: title.trim(),
       description: description.trim(),
@@ -168,7 +174,6 @@ export async function POST(request) {
       grade: grade?.trim() || "",
       subject: subject?.trim() || "",
       curriculum: processedCurriculum,
-      projects: projects || [], // ✅ تأكد من حفظ projects
       isActive: isActive !== undefined ? isActive : true,
       featured: featured || false,
       thumbnail: thumbnail?.trim() || "",
@@ -181,9 +186,9 @@ export async function POST(request) {
       },
     });
 
-    console.log("📝 Saving course with projects:", course.projects); // ✅ إضافة log
-
+    console.log("💾 Saving course to database...");
     await course.save();
+    console.log("✅ Course saved successfully");
 
     return NextResponse.json(
       {

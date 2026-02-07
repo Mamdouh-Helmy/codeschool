@@ -44,13 +44,19 @@ export async function onGroupActivated(groupId, userId) {
     );
 
     // ✅ UPDATED: التحقق من أن هناك 1-3 أيام مختارة (بدلاً من 3 فقط)
-    if (!group.schedule.daysOfWeek || 
-        group.schedule.daysOfWeek.length === 0 || 
-        group.schedule.daysOfWeek.length > 3) {
-      throw new Error(`Group must have 1 to 3 days selected for schedule (currently has ${group.schedule.daysOfWeek?.length || 0} days)`);
+    if (
+      !group.schedule.daysOfWeek ||
+      group.schedule.daysOfWeek.length === 0 ||
+      group.schedule.daysOfWeek.length > 3
+    ) {
+      throw new Error(
+        `Group must have 1 to 3 days selected for schedule (currently has ${group.schedule.daysOfWeek?.length || 0} days)`,
+      );
     }
 
-    console.log(`✅ Schedule validated: ${group.schedule.daysOfWeek.length} day(s) selected - ${group.schedule.daysOfWeek.join(', ')}`);
+    console.log(
+      `✅ Schedule validated: ${group.schedule.daysOfWeek.length} day(s) selected - ${group.schedule.daysOfWeek.join(", ")}`,
+    );
 
     // ✅ FIXED: التحقق مما إذا كانت الحصص موجودة مسبقاً
     const Session = (await import("../models/Session")).default;
@@ -495,7 +501,11 @@ async function sendToStudentWithLogging({
 
 /**
  * EVENT 2: Student Added to Group
- * EXISTING - NO CHANGES
+ * ✅ UPDATED: Send to both student AND parent
+ */
+/**
+ * EVENT 2: Student Added to Group
+ * ✅ UPDATED: Send to both student AND parent with correct messageType
  */
 export async function onStudentAddedToGroup(
   studentId,
@@ -535,19 +545,22 @@ export async function onStudentAddedToGroup(
       `✅ Student ${student.personalInfo.fullName} added to group ${group.code}`,
     );
 
-    let welcomeMessageSent = false;
-    let messageContent = "";
+    let studentMessageSent = false;
+    let guardianMessageSent = false;
+    let studentMessageContent = "";
+    let guardianMessageContent = "";
 
     if (
       sendWhatsApp &&
       group.automation?.whatsappEnabled &&
       group.automation?.welcomeMessage
     ) {
-      console.log("📱 Sending WhatsApp welcome message...");
+      console.log("📱 Sending WhatsApp welcome messages...");
 
       const language =
         student.communicationPreferences?.preferredLanguage || "ar";
 
+      // ✅ الحصول على الرسالة النهائية
       let finalMessage;
       if (customMessage) {
         // ✅ التصحيح: استبدال المتغيرات في الرسالة المخصصة
@@ -563,33 +576,97 @@ export async function onStudentAddedToGroup(
         console.log("📝 Using default group welcome message");
       }
 
-      messageContent = finalMessage;
+      studentMessageContent = finalMessage;
+      guardianMessageContent = finalMessage;
 
-      const result = await sendToStudentWithLogging({
-        studentId,
-        student,
-        messageContent: finalMessage,
-        messageType: "group_welcome",
-        language,
-        metadata: {
-          groupId: group._id,
-          groupName: group.name,
-          groupCode: group.code,
-          isCustomMessage: !!customMessage,
-          automationType: "group_enrollment",
-        },
-      });
+      // ✅ إرسال الرسالة للطالب
+      const studentWhatsapp = student.personalInfo?.whatsappNumber;
+      if (studentWhatsapp) {
+        console.log(`📲 Sending to student: ${student.personalInfo.fullName}`);
 
-      if (result.success) {
-        welcomeMessageSent = true;
-        console.log(`✅ Welcome message sent to ${result.studentName}`);
+        const studentResult = await sendToStudentWithLogging({
+          studentId,
+          student,
+          messageContent: finalMessage,
+          messageType: "group_welcome", // ✅ هذا صحيح
+          language,
+          metadata: {
+            groupId: group._id,
+            groupName: group.name,
+            groupCode: group.code,
+            isCustomMessage: !!customMessage,
+            automationType: "group_enrollment",
+            recipientType: "student",
+          },
+        });
+
+        if (studentResult.success) {
+          studentMessageSent = true;
+          console.log(
+            `✅ Student message sent to ${studentResult.studentName}`,
+          );
+        } else {
+          console.log(
+            `⚠️ Student: ${studentResult.reason || studentResult.error}`,
+          );
+        }
       } else {
-        console.log(`⚠️ ${result.reason || result.error}`);
-        return {
-          success: false,
-          message: result.reason || result.error,
-          studentName: student.personalInfo.fullName,
-        };
+        console.log(
+          `⚠️ No student WhatsApp number for ${student.personalInfo.fullName}`,
+        );
+      }
+
+      // ✅ إرسال الرسالة لولي الأمر
+      const guardianWhatsapp = student.guardianInfo?.whatsappNumber;
+      if (guardianWhatsapp) {
+        console.log(
+          `📲 Sending to guardian: ${student.guardianInfo?.name || "Guardian"}`,
+        );
+
+        // ✅ تحضير رسالة خاصة لولي الأمر
+        let guardianMessage = finalMessage;
+
+        // يمكن إضافة مخصصات لرسالة ولي الأمر إذا لزم الأمر
+        if (language === "ar") {
+          guardianMessage =
+            `عزيزي/عزيزتي ${student.guardianInfo?.name || "ولي الأمر"}،\n\n` +
+            finalMessage;
+        } else {
+          guardianMessage =
+            `Dear ${student.guardianInfo?.name || "Guardian"},\n\n` +
+            finalMessage;
+        }
+
+        try {
+          // ✅ استخدام messageType صحيح من Enum
+          await wapilotService.sendAndLogMessage({
+            studentId,
+            phoneNumber: guardianWhatsapp,
+            messageContent: guardianMessage,
+            messageType: "group_welcome", // ✅ استخدام نفس النوع أو يمكن استخدام "custom"
+            language,
+            metadata: {
+              groupId: group._id,
+              groupName: group.name,
+              groupCode: group.code,
+              isCustomMessage: !!customMessage,
+              automationType: "group_enrollment",
+              recipientType: "guardian",
+              guardianName: student.guardianInfo?.name,
+            },
+          });
+
+          guardianMessageSent = true;
+          console.log(
+            `✅ Guardian message sent to ${student.guardianInfo?.name || "Guardian"}`,
+          );
+        } catch (guardianError) {
+          console.error(`❌ Guardian message failed:`, guardianError.message);
+        }
+      } else {
+        console.log(
+          `⚠️ No guardian WhatsApp number for ${student.personalInfo.fullName}`,
+        );
       }
     }
 
@@ -599,11 +676,19 @@ export async function onStudentAddedToGroup(
       groupId,
       groupCode: group.code,
       studentName: student.personalInfo.fullName,
-      whatsappNumber: student.personalInfo?.whatsappNumber,
-      welcomeMessageSent,
+      studentWhatsappNumber: student.personalInfo?.whatsappNumber,
+      guardianWhatsappNumber: student.guardianInfo?.whatsappNumber,
+      guardianName: student.guardianInfo?.name,
+      messagesSent: {
+        student: studentMessageSent,
+        guardian: guardianMessageSent,
+      },
       customMessageUsed: !!customMessage,
-      messagePreview: messageContent
-        ? messageContent.substring(0, 50) + "..."
+      studentMessagePreview: studentMessageContent
+        ? studentMessageContent.substring(0, 50) + "..."
+        : null,
+      guardianMessagePreview: guardianMessageContent
+        ? guardianMessageContent.substring(0, 50) + "..."
         : null,
       timestamp: new Date(),
     };
@@ -697,7 +782,9 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
     for (const record of studentsToNotify) {
       try {
         const student = await Student.findById(record.studentId)
-          .select("personalInfo.fullName guardianInfo communicationPreferences enrollmentNumber")
+          .select(
+            "personalInfo.fullName guardianInfo communicationPreferences enrollmentNumber",
+          )
           .lean();
 
         if (!student) {
@@ -750,7 +837,9 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
             message = message.replace(regex, value);
           });
 
-          console.log(`✅ Variables replaced in custom message for ${student.personalInfo?.fullName}`);
+          console.log(
+            `✅ Variables replaced in custom message for ${student.personalInfo?.fullName}`,
+          );
         } else {
           // Use default message
           const statusAr = {
@@ -1286,7 +1375,7 @@ export function prepareReminderMessage(
   session,
   group,
   reminderType,
-  language = "ar"
+  language = "ar",
 ) {
   // Use existing function
   const messages = prepareReminderMessages(
@@ -1296,9 +1385,9 @@ export function prepareReminderMessage(
     reminderType,
     language,
     "ولي الأمر", // default guardian
-    "" // default enrollment
+    "", // default enrollment
   );
-  
+
   // Return student message by default
   return messages.studentMessage.content;
 }

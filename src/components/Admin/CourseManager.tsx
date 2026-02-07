@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useAuth } from "@/hooks/useAuth";
+import RichTextEditor from "@/components/Blog/RichTextEditor";
 import {
     Save,
     Plus,
@@ -21,9 +22,10 @@ import {
     Users,
     Target,
     Presentation,
+    FileText,
+    Globe,
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
-import RichTextEditor from "../Blog/RichTextEditor";
 
 interface Lesson {
     title: string;
@@ -44,6 +46,10 @@ interface Module {
     lessons: Lesson[];
     sessions: Session[];
     projects: string[];
+    blogBodyAr?: string;  // ✅ FLAT STRUCTURE
+    blogBodyEn?: string;  // ✅ FLAT STRUCTURE
+    blogCreatedAt?: Date;
+    blogUpdatedAt?: Date;
     totalSessions: number;
 }
 
@@ -57,7 +63,6 @@ interface Course {
     grade?: string;
     subject?: string;
     duration?: string;
-    projects: string[];
     isActive: boolean;
     featured: boolean;
     thumbnail?: string;
@@ -141,7 +146,7 @@ const Modal = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-darklight rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="bg-white dark:bg-darklight rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
                 <div className="sticky top-0 bg-white dark:bg-darklight border-b border-gray-200 dark:border-dark_border p-4 sm:p-6 flex items-center justify-between rounded-t-xl sm:rounded-t-2xl z-10">
                     <h3 className="text-lg sm:text-xl font-bold text-MidnightNavyText dark:text-white pr-8">
                         {title}
@@ -182,7 +187,6 @@ export default function CourseManager({
         grade: "",
         subject: "",
         duration: "",
-        projects: [],
         isActive: true,
         featured: false,
         thumbnail: "",
@@ -195,8 +199,8 @@ export default function CourseManager({
     const [tempModule, setTempModule] = useState<Module | null>(null);
     const [moduleStep, setModuleStep] = useState(1);
 
-    // State لإدارة المشاريع
-    const [newProject, setNewProject] = useState("");
+    // State لإدارة المشاريع في المودول
+    const [newModuleProject, setNewModuleProject] = useState("");
 
     // State لتخزين بيانات الجلسات المؤقتة (مع Presentation)
     const [sessionLessonsData, setSessionLessonsData] = useState<{
@@ -232,33 +236,27 @@ export default function CourseManager({
         }
     };
 
-    // دالة خاصة لتحديث الـ description مع RichTextEditor
-    const handleDescriptionChange = (value: string) => {
-        setForm(prev => ({
-            ...prev,
-            description: value
-        }));
-    };
-
-    // Functions لإدارة المشاريع
-    const addProject = () => {
-        if (!newProject.trim()) {
+    // Functions لإدارة المشاريع في المودول
+    const addModuleProject = () => {
+        if (!tempModule) return;
+        if (!newModuleProject.trim()) {
             toast.error("Please enter a project name");
             return;
         }
 
-        setForm({
-            ...form,
-            projects: [...form.projects, newProject.trim()]
+        setTempModule({
+            ...tempModule,
+            projects: [...tempModule.projects, newModuleProject.trim()]
         });
-        setNewProject("");
-        toast.success("Project added");
+        setNewModuleProject("");
+        toast.success("Project added to module");
     };
 
-    const removeProject = (index: number) => {
-        const updatedProjects = form.projects.filter((_, i) => i !== index);
-        setForm({ ...form, projects: updatedProjects });
-        toast.success("Project removed");
+    const removeModuleProject = (index: number) => {
+        if (!tempModule) return;
+        const updatedProjects = tempModule.projects.filter((_, i) => i !== index);
+        setTempModule({ ...tempModule, projects: updatedProjects });
+        toast.success("Project removed from module");
     };
 
     const toggleCourse = (index: number) => {
@@ -304,22 +302,25 @@ export default function CourseManager({
         return colors[level as keyof typeof colors] || colors.beginner;
     };
 
-    // ✅ FIXED: openModuleModal with proper checks for undefined arrays
     const openModuleModal = (moduleIndex?: number) => {
         if (moduleIndex !== undefined) {
             // Edit existing module
             setCurrentModuleIndex(moduleIndex);
-            setTempModule({ ...form.curriculum[moduleIndex] });
+            const existingModule = form.curriculum[moduleIndex];
+            
+            setTempModule({ 
+                ...existingModule,
+                blogBodyAr: existingModule.blogBodyAr || "",
+                blogBodyEn: existingModule.blogBodyEn || "",
+            });
             
             // استرجاع بيانات الجلسات من الدروس والـ sessions الموجودة
-            const existingModule = form.curriculum[moduleIndex];
             const newSessionData: any = {
                 1: { title: "", description: "", presentationUrl: "" },
                 2: { title: "", description: "", presentationUrl: "" },
                 3: { title: "", description: "", presentationUrl: "" },
             };
             
-            // ✅ التحقق من وجود lessons قبل استخدام forEach
             if (existingModule.lessons && Array.isArray(existingModule.lessons)) {
                 existingModule.lessons.forEach(lesson => {
                     if (lesson.sessionNumber >= 1 && lesson.sessionNumber <= 3) {
@@ -332,7 +333,6 @@ export default function CourseManager({
                 });
             }
             
-            // ✅ التحقق من وجود sessions قبل استخدام forEach
             if (existingModule.sessions && Array.isArray(existingModule.sessions)) {
                 existingModule.sessions.forEach(session => {
                     if (session.sessionNumber >= 1 && session.sessionNumber <= 3) {
@@ -372,6 +372,10 @@ export default function CourseManager({
                     },
                 ],
                 projects: [],
+                blogBodyAr: "",
+                blogBodyEn: "",
+                blogCreatedAt: new Date(),
+                blogUpdatedAt: new Date(),
                 totalSessions: 3,
             });
             
@@ -384,6 +388,7 @@ export default function CourseManager({
         }
         setModuleStep(1);
         setIsModalOpen(true);
+        setNewModuleProject("");
     };
 
     const saveModule = () => {
@@ -415,11 +420,21 @@ export default function CourseManager({
             presentationUrl: sessionLessonsData[session.sessionNumber].presentationUrl,
         }));
 
+        // ✅ FIXED: Use flat blog structure
         const updatedModule = {
             ...tempModule,
             lessons: updatedLessons,
-            sessions: updatedSessions
+            sessions: updatedSessions,
+            blogBodyAr: tempModule.blogBodyAr || "",
+            blogBodyEn: tempModule.blogBodyEn || "",
+            blogUpdatedAt: new Date(),
         };
+
+        console.log("💾 Saving module with blog data:", {
+            title: updatedModule.title,
+            blogBodyAr: updatedModule.blogBodyAr?.substring(0, 100),
+            blogBodyEn: updatedModule.blogBodyEn?.substring(0, 100),
+        });
 
         if (currentModuleIndex !== null) {
             // Update existing module
@@ -437,6 +452,7 @@ export default function CourseManager({
         setTempModule(null);
         setCurrentModuleIndex(null);
         setModuleStep(1);
+        setNewModuleProject("");
         setSessionLessonsData({
             1: { title: "", description: "", presentationUrl: "" },
             2: { title: "", description: "", presentationUrl: "" },
@@ -458,7 +474,6 @@ export default function CourseManager({
         setTempModule({ ...tempModule, [field]: value });
     };
 
-    // دالة لتحديث بيانات الجلسة
     const updateSessionLessonsData = (sessionNumber: number, field: 'title' | 'description' | 'presentationUrl', value: string) => {
         setSessionLessonsData(prev => ({
             ...prev,
@@ -489,32 +504,40 @@ export default function CourseManager({
                 ? `/api/courses/${editingCourse._id}`
                 : "/api/courses";
 
-            // ✅ تحقق من أن الـ projects موجودة
-            console.log("🔍 Current form projects:", form.projects);
-            console.log("🔍 Projects array length:", form.projects.length);
-            console.log("🔍 Projects array content:", JSON.stringify(form.projects));
-
+            // ✅ FIXED: Send data with flat blog structure
             const payload = {
                 title: form.title,
                 description: form.description || "",
                 level: form.level,
                 curriculum: form.curriculum.map(module => ({
-                    ...module,
+                    title: module.title,
+                    description: module.description || "",
+                    order: module.order,
                     totalSessions: 3,
                     lessons: module.lessons.map(lesson => ({
-                        ...lesson,
-                        sessionNumber: calculateSessionNumber(lesson.order)
+                        title: lesson.title,
+                        description: lesson.description || "",
+                        order: lesson.order,
+                        sessionNumber: calculateSessionNumber(lesson.order),
+                        duration: lesson.duration || "45 mins",
                     })),
                     sessions: module.sessions || [
                         { sessionNumber: 1, presentationUrl: "" },
                         { sessionNumber: 2, presentationUrl: "" },
                         { sessionNumber: 3, presentationUrl: "" }
-                    ]
+                    ],
+                    projects: module.projects || [],
+                    // ✅ Send blog as nested object (API will flatten it)
+                    blog: {
+                        bodyAr: module.blogBodyAr || "",
+                        bodyEn: module.blogBodyEn || "",
+                        createdAt: module.blogCreatedAt || new Date(),
+                        updatedAt: new Date(),
+                    }
                 })),
                 grade: form.grade,
                 subject: form.subject,
                 duration: form.duration,
-                projects: form.projects || [], // ✅ تأكد من وجود قيمة افتراضية
                 isActive: form.isActive,
                 featured: form.featured,
                 thumbnail: form.thumbnail,
@@ -562,7 +585,6 @@ export default function CourseManager({
                 grade: "",
                 subject: "",
                 duration: "",
-                projects: [], // ✅ إعادة تعيين الـ projects
                 isActive: true,
                 featured: false,
                 thumbnail: "",
@@ -605,7 +627,6 @@ export default function CourseManager({
             grade: course.grade || "",
             subject: course.subject || "",
             duration: course.duration || "",
-            projects: course.projects || [],
             isActive: course.isActive !== false,
             featured: course.featured || false,
             thumbnail: course.thumbnail || "",
@@ -622,7 +643,6 @@ export default function CourseManager({
             grade: course.grade || "",
             subject: course.subject || "",
             duration: course.duration || "",
-            projects: course.projects || [],
             isActive: true,
             featured: false,
             thumbnail: course.thumbnail || "",
@@ -642,6 +662,7 @@ export default function CourseManager({
         if (step === 2) return "Session 1";
         if (step === 3) return "Session 2";
         if (step === 4) return "Session 3";
+        if (step === 5) return "Blog Content";
         return "";
     };
 
@@ -683,7 +704,6 @@ export default function CourseManager({
                                         grade: "",
                                         subject: "",
                                         duration: "",
-                                        projects: [],
                                         isActive: true,
                                         featured: false,
                                         thumbnail: "",
@@ -746,60 +766,6 @@ export default function CourseManager({
                                     />
                                 </div>
 
-                                {/* Projects Section */}
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
-                                        Course Projects
-                                    </label>
-                                    <div className="space-y-3">
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                value={newProject}
-                                                onChange={(e) => setNewProject(e.target.value)}
-                                                placeholder="Enter project name..."
-                                                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={addProject}
-                                                className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-semibold flex items-center gap-2 transition-all"
-                                            >
-                                                <Plus className="w-4 h-4" />
-                                                Add
-                                            </button>
-                                        </div>
-                                        
-                                        {form.projects.length > 0 && (
-                                            <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl p-4">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-sm font-semibold text-MidnightNavyText dark:text-white">
-                                                        Added Projects ({form.projects.length})
-                                                    </span>
-                                                    {form.projects.length > 0 && (
-                                                        <span className="text-xs text-gray-500">
-                                                            Click on a project to remove it
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {form.projects.map((project, index) => (
-                                                        <div
-                                                            key={index}
-                                                            onClick={() => removeProject(index)}
-                                                            className="group cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg flex items-center gap-2 transition-all hover:scale-105"
-                                                        >
-                                                            <Target className="w-3 h-3 sm:w-4 sm:h-4" />
-                                                            <span className="text-xs sm:text-sm font-medium">{project}</span>
-                                                            <X className="w-3 h-3 sm:w-4 sm:h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
                                 <div>
                                     <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
                                         Grade
@@ -826,20 +792,19 @@ export default function CourseManager({
                                     />
                                 </div>
 
-                                {/* ✅ حقل Description باستخدام RichTextEditor */}
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
                                         Description
                                     </label>
-                                    <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl overflow-hidden">
-                                        <RichTextEditor
-                                            value={form.description || ""}
-                                            onChange={handleDescriptionChange}
-                                            placeholder="Describe the course overview, goals, and what students will learn..."
-                                        />
-                                    </div>
+                                    <textarea
+                                        value={form.description || ""}
+                                        onChange={(e) => setForm({ ...form, description: e.target.value })}
+                                        placeholder="Describe the course overview, goals, and what students will learn..."
+                                        rows={5}
+                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base resize-none"
+                                    />
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                        Use the editor above to create rich text content for your course description
+                                        Provide a brief overview of the course content and learning objectives
                                     </p>
                                 </div>
 
@@ -943,10 +908,28 @@ export default function CourseManager({
                                                             </h4>
                                                         </div>
                                                         {module.description && (
-                                                            <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext line-clamp-2">
+                                                            <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext line-clamp-2 mb-2">
                                                                 {module.description}
                                                             </p>
                                                         )}
+                                                        <div className="flex flex-wrap gap-2 mt-2">
+                                                            {module.projects && module.projects.length > 0 && (
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {module.projects.map((project, idx) => (
+                                                                        <span key={idx} className="bg-primary/5 text-primary px-2 py-0.5 rounded text-xs flex items-center gap-1">
+                                                                            <Target className="w-3 h-3" />
+                                                                            {project}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            {(module.blogBodyAr || module.blogBodyEn) && (
+                                                                <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded text-xs flex items-center gap-1">
+                                                                    <FileText className="w-3 h-3" />
+                                                                    Blog Available
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <div className="flex items-center gap-2 flex-shrink-0">
                                                         <button
@@ -1033,6 +1016,7 @@ export default function CourseManager({
                         setTempModule(null);
                         setCurrentModuleIndex(null);
                         setModuleStep(1);
+                        setNewModuleProject("");
                         setSessionLessonsData({
                             1: { title: "", description: "", presentationUrl: "" },
                             2: { title: "", description: "", presentationUrl: "" },
@@ -1046,7 +1030,7 @@ export default function CourseManager({
                             {/* Module Step Indicator */}
                             <div className="pb-4 sm:pb-6 border-b border-gray-200 dark:border-dark_border overflow-x-auto">
                                 <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-max px-2">
-                                    {[1, 2, 3, 4].map((step, idx) => (
+                                    {[1, 2, 3, 4, 5].map((step, idx) => (
                                         <React.Fragment key={step}>
                                             <div className="flex flex-col items-center">
                                                 <div
@@ -1066,7 +1050,7 @@ export default function CourseManager({
                                                     {getModuleStepLabel(step)}
                                                 </span>
                                             </div>
-                                            {idx < 3 && (
+                                            {idx < 4 && (
                                                 <div
                                                     className={`w-4 sm:w-6 md:w-8 h-0.5 rounded-full transition-all mb-3 sm:mb-4 ${step < moduleStep
                                                             ? "bg-green-500"
@@ -1079,7 +1063,7 @@ export default function CourseManager({
                                 </div>
                             </div>
 
-                            {/* Module Step 1: Basic Info */}
+                            {/* Module Step 1: Basic Info + Projects */}
                             {moduleStep === 1 && (
                                 <div className="space-y-4">
                                     <div>
@@ -1106,6 +1090,67 @@ export default function CourseManager({
                                             className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                                         />
                                     </div>
+
+                                    {/* Module Projects Section */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-2">
+                                            Module Projects
+                                        </label>
+                                        <div className="space-y-3">
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={newModuleProject}
+                                                    onChange={(e) => setNewModuleProject(e.target.value)}
+                                                    placeholder="Enter project name..."
+                                                    className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm sm:text-base"
+                                                    onKeyPress={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            addModuleProject();
+                                                        }
+                                                    }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={addModuleProject}
+                                                    className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-semibold flex items-center gap-2 transition-all"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                    Add
+                                                </button>
+                                            </div>
+                                            
+                                            {tempModule.projects.length > 0 && (
+                                                <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl p-4">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-sm font-semibold text-MidnightNavyText dark:text-white">
+                                                            Added Projects ({tempModule.projects.length})
+                                                        </span>
+                                                        {tempModule.projects.length > 0 && (
+                                                            <span className="text-xs text-gray-500">
+                                                                Click on a project to remove it
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {tempModule.projects.map((project, index) => (
+                                                            <div
+                                                                key={index}
+                                                                onClick={() => removeModuleProject(index)}
+                                                                className="group cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg flex items-center gap-2 transition-all hover:scale-105"
+                                                            >
+                                                                <Target className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                                <span className="text-xs sm:text-sm font-medium">{project}</span>
+                                                                <X className="w-3 h-3 sm:w-4 sm:h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     <div className="flex justify-end pt-4">
                                         <button
                                             type="button"
@@ -1211,41 +1256,122 @@ export default function CourseManager({
                                                         Back
                                                     </button>
 
-                                                    {moduleStep < 4 ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                if (!sessionLessonsData[sessionNum].title.trim()) {
-                                                                    toast.error(`Please enter a title for Session ${sessionNum} lessons`);
-                                                                    return;
-                                                                }
-                                                                setModuleStep(moduleStep + 1);
-                                                            }}
-                                                            className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base order-1 sm:order-2"
-                                                        >
-                                                            Next: Session {sessionNum + 1}
-                                                            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                if (!sessionLessonsData[sessionNum].title.trim()) {
-                                                                    toast.error(`Please enter a title for Session ${sessionNum} lessons`);
-                                                                    return;
-                                                                }
-                                                                saveModule();
-                                                            }}
-                                                            className="bg-green-600 hover:bg-green-700 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl text-sm sm:text-base order-1 sm:order-2"
-                                                        >
-                                                            <Check className="w-4 h-4 sm:w-5 sm:h-5" />
-                                                            {currentModuleIndex !== null ? "Update Module" : "Add Module"}
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!sessionLessonsData[sessionNum].title.trim()) {
+                                                                toast.error(`Please enter a title for Session ${sessionNum} lessons`);
+                                                                return;
+                                                            }
+                                                            setModuleStep(moduleStep + 1);
+                                                        }}
+                                                        className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base order-1 sm:order-2"
+                                                    >
+                                                        {moduleStep === 4 ? 'Next: Blog Content' : `Next: Session ${sessionNum + 1}`}
+                                                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                    </button>
                                                 </div>
                                             </>
                                         );
                                     })()}
+                                </div>
+                            )}
+
+                            {/* Module Step 5: Blog Content */}
+                            {moduleStep === 5 && (
+                                <div className="space-y-6">
+                                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                                        <h4 className="text-lg font-bold text-MidnightNavyText dark:text-white flex items-center gap-2 mb-2">
+                                            <FileText className="w-5 h-5 text-primary" />
+                                            Module Blog Content
+                                        </h4>
+                                        <p className="text-sm text-SlateBlueText dark:text-darktext">
+                                            Add optional blog content in both Arabic and English for this module. This content will be available to students as supplementary learning material.
+                                        </p>
+                                    </div>
+
+                                    {/* Arabic Blog Content */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-MidnightNavyText dark:text-white mb-3 flex items-center gap-2">
+                                            <Globe className="w-4 h-4 text-primary" />
+                                            Arabic Blog Content (محتوى المدونة بالعربية)
+                                        </label>
+                                        <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl overflow-hidden">
+                                            <RichTextEditor
+                                                value={tempModule.blogBodyAr || ""}
+                                                onChange={(value) => {
+                                                    if (!tempModule) return;
+                                                    console.log("📝 Updating Arabic blog:", value.substring(0, 100));
+                                                    setTempModule({
+                                                        ...tempModule,
+                                                        blogBodyAr: value,
+                                                        blogUpdatedAt: new Date(),
+                                                    });
+                                                }}
+                                                placeholder="أدخل محتوى المدونة باللغة العربية... يمكنك استخدام التنسيق الغني، الصور، الجداول، والمزيد"
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                            Use the rich text editor to format your content with headings, lists, images, and more
+                                        </p>
+                                    </div>
+
+                                    {/* English Blog Content */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-MidnightNavyText dark:text-white mb-3 flex items-center gap-2">
+                                            <Globe className="w-4 h-4 text-primary" />
+                                            English Blog Content
+                                        </label>
+                                        <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl overflow-hidden">
+                                            <RichTextEditor
+                                                value={tempModule.blogBodyEn || ""}
+                                                onChange={(value) => {
+                                                    if (!tempModule) return;
+                                                    console.log("📝 Updating English blog:", value.substring(0, 100));
+                                                    setTempModule({
+                                                        ...tempModule,
+                                                        blogBodyEn: value,
+                                                        blogUpdatedAt: new Date(),
+                                                    });
+                                                }}
+                                                placeholder="Enter blog content in English... You can use rich formatting, images, tables, and more"
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                            استخدم المحرر النصي لتنسيق المحتوى بالعناوين، القوائم، الصور، والمزيد
+                                        </p>
+                                    </div>
+
+                                    {/* Info Box */}
+                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                                        <p className="text-sm text-yellow-800 dark:text-yellow-300 flex items-start gap-2">
+                                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                            <span>
+                                                <strong>Note:</strong> Blog content is optional. You can leave it empty and add it later by editing the module. At least one language version is recommended for better student experience.
+                                            </span>
+                                        </p>
+                                    </div>
+
+                                    {/* Navigation */}
+                                    <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setModuleStep(4)}
+                                            className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
+                                        >
+                                            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                                            Back to Session 3
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={saveModule}
+                                            className="bg-green-600 hover:bg-green-700 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl text-sm sm:text-base order-1 sm:order-2"
+                                        >
+                                            <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                                            {currentModuleIndex !== null ? "Update Module" : "Save Module"}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1340,9 +1466,6 @@ export default function CourseManager({
                                                     {course.level}
                                                 </span>
                                                 <span className="mx-2">•</span>
-                                                <Target className="w-3 h-3 inline mr-1" />
-                                                {course.projects?.length || 0} projects
-                                                <span className="mx-2">•</span>
                                                 {course.curriculum?.length || 0} modules
                                             </p>
                                         </div>
@@ -1401,10 +1524,9 @@ export default function CourseManager({
                                         {course.description && (
                                             <div className="mb-4">
                                                 <h5 className="font-semibold text-MidnightNavyText dark:text-white mb-2">Description:</h5>
-                                                <div 
-                                                    className="text-sm text-SlateBlueText dark:text-darktext prose prose-sm max-w-none"
-                                                    dangerouslySetInnerHTML={{ __html: course.description }}
-                                                />
+                                                <p className="text-sm text-SlateBlueText dark:text-darktext whitespace-pre-wrap">
+                                                    {course.description}
+                                                </p>
                                             </div>
                                         )}
 
@@ -1412,10 +1534,6 @@ export default function CourseManager({
                                             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                                 <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">Level</p>
                                                 <p className="font-semibold text-blue-900 dark:text-blue-200 capitalize">{course.level}</p>
-                                            </div>
-                                            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                                <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">Projects</p>
-                                                <p className="font-semibold text-green-900 dark:text-green-200">{course.projects?.length || 0} projects</p>
                                             </div>
                                             <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
                                                 <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">Modules</p>
@@ -1428,23 +1546,6 @@ export default function CourseManager({
                                                 </p>
                                             </div>
                                         </div>
-
-                                        {course.projects && course.projects.length > 0 && (
-                                            <div className="mb-6">
-                                                <h5 className="font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2 mb-3">
-                                                    <Target className="w-4 h-4 text-primary" />
-                                                    Course Projects ({course.projects.length})
-                                                </h5>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {course.projects.map((project, idx) => (
-                                                        <div key={idx} className="bg-primary/10 text-primary px-3 py-1.5 rounded-lg flex items-center gap-2">
-                                                            <Target className="w-3 h-3" />
-                                                            <span className="text-sm font-medium">{project}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
 
                                         <div className="space-y-3">
                                             <h5 className="font-semibold text-MidnightNavyText dark:text-white flex items-center gap-2">
@@ -1460,7 +1561,52 @@ export default function CourseManager({
                                                         {module.title}
                                                     </h6>
                                                     
-                                                    {/* عرض Presentation URLs للـ sessions */}
+                                                    {module.description && (
+                                                        <p className="text-sm text-SlateBlueText dark:text-darktext mb-3">
+                                                            {module.description}
+                                                        </p>
+                                                    )}
+                                                    
+                                                    {module.projects && module.projects.length > 0 && (
+                                                        <div className="mb-3 p-3 bg-gray-50 dark:bg-dark_input rounded-lg">
+                                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1">
+                                                                <Target className="w-3 h-3" />
+                                                                Module Projects:
+                                                            </p>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {module.projects.map((project, projectIdx) => (
+                                                                    <span key={projectIdx} className="bg-primary/10 text-primary px-2 py-1 rounded text-xs flex items-center gap-1">
+                                                                        <Target className="w-3 h-3" />
+                                                                        {project}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {(module.blogBodyAr || module.blogBodyEn) && (
+                                                        <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                                            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-1">
+                                                                <FileText className="w-3 h-3" />
+                                                                Blog Content Available:
+                                                            </p>
+                                                            <div className="flex gap-2">
+                                                                {module.blogBodyAr && (
+                                                                    <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded text-xs flex items-center gap-1">
+                                                                        <Globe className="w-3 h-3" />
+                                                                        Arabic ({module.blogBodyAr.length} chars)
+                                                                    </span>
+                                                                )}
+                                                                {module.blogBodyEn && (
+                                                                    <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded text-xs flex items-center gap-1">
+                                                                        <Globe className="w-3 h-3" />
+                                                                        English ({module.blogBodyEn.length} chars)
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
                                                     {module.sessions && module.sessions.length > 0 && (
                                                         <div className="mb-3 p-3 bg-gray-50 dark:bg-dark_input rounded-lg">
                                                             <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">

@@ -3252,6 +3252,24 @@ const en = {
   "blogForm.viewCount": "View count",
   "blogForm.viewCountHint": "Number of times the post has been viewed",
   "blogForm.uploading": "Uploading...",
+
+  "addStudents.guardian.title": "Guardian Information",
+  "addStudents.guardian.name": "Name",
+  "addStudents.guardian.relationship": "Relationship",
+  "addStudents.guardian.phone": "Phone Number",
+  "addStudents.guardian.whatsapp": "WhatsApp Number",
+  "addStudents.guardian.willReceive": "Will receive message",
+  "addStudents.guardian.noWhatsapp": "No WhatsApp number",
+  "addStudents.guardian.note":
+    "The same message will be sent to both student and guardian (if they have WhatsApp numbers)",
+  "addStudents.labels.guardian": "Guardian",
+  "addStudents.messages.sentBoth":
+    "Message sent successfully to both student and guardian:",
+  "addStudents.messages.sentStudent": "Message sent to student only:",
+  "addStudents.messages.sentGuardian": "Message sent to guardian only:",
+  "addStudents.messages.sendFailed":
+    "Failed to send messages, student added only",
+  "addStudents.preview.defaults.guardianName": "Guardian",
 };
 
 export default en;

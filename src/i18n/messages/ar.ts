@@ -3385,6 +3385,23 @@ const ar = {
   "blogForm.viewCount": "عدد المشاهدات",
   "blogForm.viewCountHint": "عدد مرات مشاهدة المقال",
   "blogForm.uploading": "جارٍ الرفع...",
+
+  "addStudents.guardian.title": "معلومات ولي الأمر",
+  "addStudents.guardian.name": "الاسم",
+  "addStudents.guardian.relationship": "العلاقة",
+  "addStudents.guardian.phone": "رقم الهاتف",
+  "addStudents.guardian.whatsapp": "رقم واتساب",
+  "addStudents.guardian.willReceive": "سيتلقى الرسالة",
+  "addStudents.guardian.noWhatsapp": "لا يوجد رقم واتساب",
+  "addStudents.guardian.note":
+    "سيتم إرسال نفس الرسالة إلى كل من الطالب وولي الأمر (إذا كان لديهما رقم واتساب)",
+  "addStudents.labels.guardian": "ولي الأمر",
+  "addStudents.messages.sentBoth":
+    "تم إرسال الرسالة بنجاح إلى الطالب وولي الأمر:",
+  "addStudents.messages.sentStudent": "تم إرسال الرسالة إلى الطالب فقط:",
+  "addStudents.messages.sentGuardian": "تم إرسال الرسالة إلى ولي الأمر فقط:",
+  "addStudents.messages.sendFailed": "فشل إرسال الرسائل، تم إضافة الطالب فقط",
+  "addStudents.preview.defaults.guardianName": "ولي الأمر",
 };
 
 export default ar;

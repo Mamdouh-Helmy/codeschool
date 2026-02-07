@@ -116,6 +116,8 @@ export async function POST(req, { params }) {
       name: student.personalInfo?.fullName,
       enrollment: student.enrollmentNumber,
       whatsappNumber: student.personalInfo?.whatsappNumber,
+      guardianName: student.guardianInfo?.name,
+      guardianWhatsapp: student.guardianInfo?.whatsappNumber,
       preferredLanguage: student.communicationPreferences?.preferredLanguage
     });
 
@@ -205,10 +207,15 @@ export async function POST(req, { params }) {
         automationResult = await onStudentAddedToGroup(
           studentId, 
           id, 
-          customMessage, // ✅ تمرير الرسالة المخصصة
+          customMessage, // ✅ الرسالة المخصصة
           sendWhatsApp
         );
-        console.log('✅ [AUTOMATION] Completed:', automationResult);
+        console.log('✅ [AUTOMATION] Completed:', {
+          success: automationResult?.success,
+          messagesSent: automationResult?.messagesSent,
+          studentWhatsapp: automationResult?.studentWhatsappNumber ? 'Yes' : 'No',
+          guardianWhatsapp: automationResult?.guardianWhatsappNumber ? 'Yes' : 'No'
+        });
       } catch (error) {
         console.error('❌ [AUTOMATION] Failed:', error.message);
         automationResult = {
@@ -237,13 +244,19 @@ export async function POST(req, { params }) {
           id: student._id,
           name: student.personalInfo?.fullName,
           enrollmentNumber: student.enrollmentNumber,
-          whatsappNumber: student.personalInfo?.whatsappNumber
+          whatsappNumber: student.personalInfo?.whatsappNumber,
+          guardianWhatsappNumber: student.guardianInfo?.whatsappNumber,
+          guardianName: student.guardianInfo?.name
         }
       },
       automation: {
         triggered: sendWhatsApp,
         status: automationResult?.success ? 'sent' : 'failed',
         customMessage: !!customMessage,
+        messagesSent: {
+          student: automationResult?.messagesSent?.student || false,
+          guardian: automationResult?.messagesSent?.guardian || false
+        },
         result: automationResult
       }
     }, { status: 200 });
