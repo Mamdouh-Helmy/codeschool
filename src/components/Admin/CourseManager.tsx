@@ -32,6 +32,7 @@ interface Lesson {
     description?: string;
     order: number;
     sessionNumber: number;
+    duration?: string;
 }
 
 interface Session {
@@ -98,19 +99,19 @@ const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; total
                         <div className="flex flex-col items-center">
                             <div
                                 className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-all ${step.num < currentStep
-                                        ? "bg-green-500 text-white shadow-lg"
-                                        : step.num === currentStep
-                                            ? "bg-primary text-white ring-2 sm:ring-4 ring-primary/20 shadow-lg"
-                                            : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                                    ? "bg-green-500 text-white shadow-lg"
+                                    : step.num === currentStep
+                                        ? "bg-primary text-white ring-2 sm:ring-4 ring-primary/20 shadow-lg"
+                                        : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
                                     }`}
                             >
                                 {step.num < currentStep ? <Check className="w-5 h-5 sm:w-6 sm:h-6" /> : step.num}
                             </div>
                             <span className={`text-[10px] sm:text-xs mt-1 sm:mt-2 font-semibold transition-colors whitespace-nowrap ${step.num === currentStep
-                                    ? "text-primary dark:text-primary"
-                                    : step.num < currentStep
-                                        ? "text-green-600 dark:text-green-400"
-                                        : "text-gray-500 dark:text-gray-500"
+                                ? "text-primary dark:text-primary"
+                                : step.num < currentStep
+                                    ? "text-green-600 dark:text-green-400"
+                                    : "text-gray-500 dark:text-gray-500"
                                 }`}>
                                 {step.label}
                             </span>
@@ -118,8 +119,8 @@ const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; total
                         {idx < steps.length - 1 && (
                             <div
                                 className={`w-8 sm:w-12 md:w-16 h-0.5 sm:h-1 rounded-full transition-all mb-4 sm:mb-6 ${step.num < currentStep
-                                        ? "bg-green-500"
-                                        : "bg-gray-200 dark:bg-gray-700"
+                                    ? "bg-green-500"
+                                    : "bg-gray-200 dark:bg-gray-700"
                                     }`}
                             />
                         )}
@@ -178,7 +179,7 @@ export default function CourseManager({
     const [expandedCourses, setExpandedCourses] = useState<Set<number>>(new Set());
     const [showForm, setShowForm] = useState(false);
     const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-    
+
     const [form, setForm] = useState<Course>({
         title: "",
         description: "",
@@ -307,20 +308,20 @@ export default function CourseManager({
             // Edit existing module
             setCurrentModuleIndex(moduleIndex);
             const existingModule = form.curriculum[moduleIndex];
-            
-            setTempModule({ 
+
+            setTempModule({
                 ...existingModule,
                 blogBodyAr: existingModule.blogBodyAr || "",
                 blogBodyEn: existingModule.blogBodyEn || "",
             });
-            
+
             // استرجاع بيانات الجلسات من الدروس والـ sessions الموجودة
             const newSessionData: any = {
                 1: { title: "", description: "", presentationUrl: "" },
                 2: { title: "", description: "", presentationUrl: "" },
                 3: { title: "", description: "", presentationUrl: "" },
             };
-            
+
             if (existingModule.lessons && Array.isArray(existingModule.lessons)) {
                 existingModule.lessons.forEach(lesson => {
                     if (lesson.sessionNumber >= 1 && lesson.sessionNumber <= 3) {
@@ -332,7 +333,7 @@ export default function CourseManager({
                     }
                 });
             }
-            
+
             if (existingModule.sessions && Array.isArray(existingModule.sessions)) {
                 existingModule.sessions.forEach(session => {
                     if (session.sessionNumber >= 1 && session.sessionNumber <= 3) {
@@ -340,7 +341,7 @@ export default function CourseManager({
                     }
                 });
             }
-            
+
             setSessionLessonsData(newSessionData);
         } else {
             // Create new module
@@ -356,6 +357,7 @@ export default function CourseManager({
                         description: "",
                         order: i + 1,
                         sessionNumber: calculateSessionNumber(i + 1),
+                        duration: "45 mins",
                     })),
                 sessions: [
                     {
@@ -378,7 +380,7 @@ export default function CourseManager({
                 blogUpdatedAt: new Date(),
                 totalSessions: 3,
             });
-            
+
             // إعادة تعيين بيانات الجلسات
             setSessionLessonsData({
                 1: { title: "", description: "", presentationUrl: "" },
@@ -566,7 +568,7 @@ export default function CourseManager({
             }
 
             console.log("✅ API Success Response:", json);
-            
+
             toast.success(
                 method === "POST"
                     ? "Course created successfully"
@@ -1035,17 +1037,17 @@ export default function CourseManager({
                                             <div className="flex flex-col items-center">
                                                 <div
                                                     className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-semibold text-xs transition-all ${step < moduleStep
-                                                            ? "bg-green-500 text-white"
-                                                            : step === moduleStep
-                                                                ? "bg-primary text-white ring-2 sm:ring-4 ring-primary/20"
-                                                                : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                                                        ? "bg-green-500 text-white"
+                                                        : step === moduleStep
+                                                            ? "bg-primary text-white ring-2 sm:ring-4 ring-primary/20"
+                                                            : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
                                                         }`}
                                                 >
                                                     {step < moduleStep ? <Check className="w-3 h-3 sm:w-4 sm:h-4" /> : step}
                                                 </div>
                                                 <span className={`text-[9px] sm:text-[10px] mt-1 font-medium transition-colors whitespace-nowrap ${step === moduleStep
-                                                        ? "text-primary dark:text-primary"
-                                                        : "text-gray-600 dark:text-gray-400"
+                                                    ? "text-primary dark:text-primary"
+                                                    : "text-gray-600 dark:text-gray-400"
                                                     }`}>
                                                     {getModuleStepLabel(step)}
                                                 </span>
@@ -1053,8 +1055,8 @@ export default function CourseManager({
                                             {idx < 4 && (
                                                 <div
                                                     className={`w-4 sm:w-6 md:w-8 h-0.5 rounded-full transition-all mb-3 sm:mb-4 ${step < moduleStep
-                                                            ? "bg-green-500"
-                                                            : "bg-gray-200 dark:bg-gray-700"
+                                                        ? "bg-green-500"
+                                                        : "bg-gray-200 dark:bg-gray-700"
                                                         }`}
                                                 />
                                             )}
@@ -1120,7 +1122,7 @@ export default function CourseManager({
                                                     Add
                                                 </button>
                                             </div>
-                                            
+
                                             {tempModule.projects.length > 0 && (
                                                 <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl p-4">
                                                     <div className="flex items-center justify-between mb-2">
@@ -1201,7 +1203,7 @@ export default function CourseManager({
                                                                 className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                                                             />
                                                         </div>
-                                                        
+
                                                         <div>
                                                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
                                                                 📝 Lessons Description (for both Lesson {sessionNum * 2 - 1} & Lesson {sessionNum * 2})
@@ -1560,13 +1562,13 @@ export default function CourseManager({
                                                         </span>
                                                         {module.title}
                                                     </h6>
-                                                    
+
                                                     {module.description && (
                                                         <p className="text-sm text-SlateBlueText dark:text-darktext mb-3">
                                                             {module.description}
                                                         </p>
                                                     )}
-                                                    
+
                                                     {module.projects && module.projects.length > 0 && (
                                                         <div className="mb-3 p-3 bg-gray-50 dark:bg-dark_input rounded-lg">
                                                             <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1">
@@ -1583,7 +1585,7 @@ export default function CourseManager({
                                                             </div>
                                                         </div>
                                                     )}
-                                                    
+
                                                     {(module.blogBodyAr || module.blogBodyEn) && (
                                                         <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                                             <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-1">
@@ -1606,7 +1608,7 @@ export default function CourseManager({
                                                             </div>
                                                         </div>
                                                     )}
-                                                    
+
                                                     {module.sessions && module.sessions.length > 0 && (
                                                         <div className="mb-3 p-3 bg-gray-50 dark:bg-dark_input rounded-lg">
                                                             <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
@@ -1618,9 +1620,9 @@ export default function CourseManager({
                                                                         <div key={sessionIdx} className="text-xs flex items-center gap-2">
                                                                             <Presentation className="w-3 h-3 text-primary" />
                                                                             <span className="font-medium">Session {session.sessionNumber}:</span>
-                                                                            <a 
-                                                                                href={session.presentationUrl} 
-                                                                                target="_blank" 
+                                                                            <a
+                                                                                href={session.presentationUrl}
+                                                                                target="_blank"
                                                                                 rel="noopener noreferrer"
                                                                                 className="text-primary hover:underline truncate max-w-xs"
                                                                             >
@@ -1632,7 +1634,7 @@ export default function CourseManager({
                                                             </div>
                                                         </div>
                                                     )}
-                                                    
+
                                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                                         {module.lessons?.map((lesson, lessonIndex) => (
                                                             <div key={lessonIndex} className="text-xs p-2 bg-gray-50 dark:bg-dark_input rounded-lg border border-gray-200 dark:border-dark_border">
