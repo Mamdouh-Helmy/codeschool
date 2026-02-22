@@ -1,31 +1,21 @@
-// app/api/groups/[id]/complete/route.js - ✅ FIXED VERSION
+// app/api/groups/[id]/complete/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../../models/Group";
 import Session from "../../../../models/Session";
 import Student from "../../../../models/Student";
 import { requireAdmin } from "@/utils/authMiddleware";
-import { onGroupCompleted } from "@/app/services/groupAutomation";
+import { wapilotService } from "@/app/services/wapilot-service";
 import mongoose from "mongoose";
 
-/**
- * POST: Complete a group and send completion messages
- */
 export async function POST(req, { params }) {
   try {
-    console.log(`\n🎯 ========== GROUP COMPLETION START ==========`);
-
     const { id } = await params;
-    console.log(`👥 Group ID: ${id}`);
 
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      return authCheck.response;
-    }
+    if (!authCheck.authorized) return authCheck.response;
 
     const adminUser = authCheck.user;
-    console.log(`👤 Admin: ${adminUser.email || adminUser.id}`);
-
     await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -35,102 +25,136 @@ export async function POST(req, { params }) {
       );
     }
 
-    const { customMessage, feedbackLink, autoDetected } = await req.json();
+    const body = await req.json();
+    const {
+      markOnly = false,
+      singleStudent = null,
+      feedbackLink = null,
+      autoDetected = false,
+    } = body;
 
-    console.log(`📝 Custom Message: ${customMessage ? "Yes" : "No"}`);
-    console.log(`📋 Feedback Link: ${feedbackLink || "Not provided"}`);
-    console.log(`🤖 Auto-detected: ${autoDetected ? "Yes" : "No"}`);
+    // ============================================================
+    // MODE 1: إرسال لطالب واحد فقط - الباك مش بيعمل حاجة تانية
+    // ============================================================
+    if (singleStudent) {
+      const { studentId, studentMessage, guardianMessage } = singleStudent;
 
-    // ✅ FIX 1: Populate students AND get students from academicInfo.groupIds
-    const group = await Group.findById(id)
-      .populate("courseId", "title level")
-      .populate({
-        path: "students",
-        select: "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo.whatsappNumber guardianInfo.name",
-        match: { isDeleted: false }
-      })
-      .lean();
+      if (!studentId) {
+        return NextResponse.json(
+          { success: false, error: "studentId is required" },
+          { status: 400 }
+        );
+      }
+
+      if (!studentMessage && !guardianMessage) {
+        return NextResponse.json(
+          { success: false, error: "At least one message is required" },
+          { status: 400 }
+        );
+      }
+
+      // جيب الطالب ده بس
+      const student = await Student.findById(studentId).lean();
+      if (!student) {
+        return NextResponse.json(
+          { success: false, error: "Student not found" },
+          { status: 404 }
+        );
+      }
+
+      const language = student.communicationPreferences?.preferredLanguage || "ar";
+      const sentTo = { student: false, guardian: false };
+      const errors = {};
+
+      // بعت للطالب لو عنده رقم ورسالة
+      if (studentMessage?.trim() && student.personalInfo?.whatsappNumber) {
+        try {
+          await wapilotService.sendAndLogMessage({
+            studentId,
+            phoneNumber: student.personalInfo.whatsappNumber,
+            messageContent: studentMessage.trim(),
+            messageType: "group_completion",
+            language,
+            metadata: {
+              groupId: id,
+              recipientType: "student",
+            },
+          });
+          sentTo.student = true;
+          console.log(`✅ Student msg sent → ${student.personalInfo?.fullName}`);
+        } catch (e) {
+          errors.student = e.message;
+          console.error(`❌ Student msg failed → ${student.personalInfo?.fullName}:`, e.message);
+        }
+      }
+
+      // بعت لولي الأمر لو عنده رقم ورسالة
+      if (guardianMessage?.trim() && student.guardianInfo?.whatsappNumber) {
+        try {
+          await wapilotService.sendAndLogMessage({
+            studentId,
+            phoneNumber: student.guardianInfo.whatsappNumber,
+            messageContent: guardianMessage.trim(),
+            messageType: "group_completion",
+            language,
+            metadata: {
+              groupId: id,
+              recipientType: "guardian",
+              guardianName: student.guardianInfo?.name,
+            },
+          });
+          sentTo.guardian = true;
+          console.log(`✅ Guardian msg sent → ${student.guardianInfo?.name}`);
+        } catch (e) {
+          errors.guardian = e.message;
+          console.error(`❌ Guardian msg failed → ${student.guardianInfo?.name}:`, e.message);
+        }
+      }
+
+      return NextResponse.json({
+        success: sentTo.student || sentTo.guardian,
+        studentId,
+        studentName: student.personalInfo?.fullName,
+        sentTo,
+        errors: Object.keys(errors).length > 0 ? errors : undefined,
+      });
+    }
+
+    // ============================================================
+    // MODE 2: تعليم الغروب كـ completed فقط (markOnly)
+    // ============================================================
+    const group = await Group.findById(id).populate("courseId", "title level").lean();
 
     if (!group) {
-      console.log(`❌ Group not found: ${id}`);
       return NextResponse.json(
         { success: false, error: "Group not found" },
         { status: 404 }
       );
     }
 
-    console.log(`✅ Group found: ${group.name} (${group.code})`);
-    console.log(`📊 Current status: ${group.status}`);
-    console.log(`👥 Students from group.students: ${group.students?.length || 0}`);
-
-    // ✅ FIX 2: If no students from populate, fetch from Student collection
-    let students = group.students || [];
-    
-    if (students.length === 0) {
-      console.log(`⚠️ No students from populate, fetching from Student collection...`);
-      
-      students = await Student.find({
-        'academicInfo.groupIds': new mongoose.Types.ObjectId(id),
-        isDeleted: false
-      })
-      .select('personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo.whatsappNumber guardianInfo.name')
-      .lean();
-      
-      console.log(`📊 Students from academicInfo.groupIds: ${students.length}`);
-    }
-
-    // ✅ Check if already completed
-    if (
-      group.status === "completed" &&
-      group.metadata?.completionMessagesSent
-    ) {
-      console.log(`⚠️ Group already completed and messages sent`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Completion messages already sent for this group",
-          sentAt: group.metadata.completionMessagesSentAt,
-          summary: group.metadata.completionMessagesSummary,
-        },
-        { status: 400 }
-      );
-    }
-
-    // ✅ Verify all sessions are completed
-    const sessions = await Session.find({
-      groupId: id,
-      isDeleted: false,
-    }).lean();
-
-    console.log(`📋 Total sessions: ${sessions.length}`);
-
-    const incompleteSessions = sessions.filter((s) => s.status !== "completed");
+    // التحقق من الجلسات
+    const sessions = await Session.find({ groupId: id, isDeleted: false }).lean();
+    const incompleteSessions = sessions.filter(
+      (s) => s.status !== "completed" && s.status !== "cancelled"
+    );
 
     if (incompleteSessions.length > 0 && !autoDetected) {
-      console.log(`⚠️ ${incompleteSessions.length} sessions not completed yet`);
       return NextResponse.json(
         {
           success: false,
-          error: "Not all sessions are completed",
-          totalSessions: sessions.length,
-          completedSessions: sessions.length - incompleteSessions.length,
+          error: "Not all sessions are completed or cancelled",
           incompleteSessions: incompleteSessions.map((s) => ({
             id: s._id,
             title: s.title,
             status: s.status,
-            scheduledDate: s.scheduledDate,
           })),
         },
         { status: 400 }
       );
     }
 
-    console.log(`✅ All sessions completed`);
-
-    // ✅ Update group status to completed
+    // عمل الغروب completed لو مش completed
     if (group.status !== "completed") {
-      console.log(`🔄 Updating group status to 'completed'...`);
-
       await Group.findByIdAndUpdate(id, {
         $set: {
           status: "completed",
@@ -139,82 +163,35 @@ export async function POST(req, { params }) {
           "metadata.completedBy": adminUser.id,
         },
       });
-
-      console.log(`✅ Group status updated to 'completed'`);
+      console.log(`✅ Group ${group.code} → 'completed'`);
     }
-
-    // ✅ Trigger completion automation
-    console.log(`\n📱 ========== TRIGGERING COMPLETION AUTOMATION ==========`);
-    console.log(`👥 Total students for automation: ${students.length}`);
-
-    const automationResult = await onGroupCompleted(
-      id,
-      customMessage || null,
-      feedbackLink || null
-    );
-
-    console.log(`\n✅ Automation result:`, {
-      success: automationResult.success,
-      sent: automationResult.successCount,
-      failed: automationResult.failCount,
-    });
-
-    console.log(`\n✅ ========== GROUP COMPLETION COMPLETE ==========\n`);
 
     return NextResponse.json({
       success: true,
-      message: "Group completed successfully and students notified",
+      message: "Group marked as completed",
       data: {
         groupId: id,
         groupName: group.name,
         groupCode: group.code,
-        courseName: group.courseId?.title,
         status: "completed",
         completedAt: new Date(),
-        totalSessions: sessions.length,
-        completedSessions: sessions.filter((s) => s.status === "completed")
-          .length,
-        totalStudents: students.length,
-      },
-      automation: {
-        completed: automationResult.success,
-        action: "Completion messages sent via WhatsApp",
-        totalStudents: automationResult.totalStudents,
-        successCount: automationResult.successCount,
-        failCount: automationResult.failCount,
-        customMessageUsed: automationResult.customMessageUsed,
-        feedbackLinkProvided: automationResult.feedbackLinkProvided,
-        successRate: automationResult.successRate,
-        details: automationResult.notificationResults || [],
       },
     });
   } catch (error) {
-    console.error(`\n❌ ========== GROUP COMPLETION ERROR ==========`);
-    console.error("Error:", error);
-    console.error("Stack:", error.stack);
-
+    console.error(`❌ GROUP COMPLETION ERROR:`, error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Failed to complete group",
-      },
+      { success: false, error: error.message || "Failed" },
       { status: 500 }
     );
   }
 }
 
-/**
- * GET: Check if group is ready for completion
- */
 export async function GET(req, { params }) {
   try {
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      return authCheck.response;
-    }
+    if (!authCheck.authorized) return authCheck.response;
 
     await connectDB();
-
     const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -224,13 +201,12 @@ export async function GET(req, { params }) {
       );
     }
 
-    // ✅ Populate students to get count
     const group = await Group.findById(id)
       .populate("courseId", "title level")
       .populate({
         path: "students",
         select: "personalInfo.fullName",
-        match: { isDeleted: false }
+        match: { isDeleted: false },
       })
       .lean();
 
@@ -241,36 +217,23 @@ export async function GET(req, { params }) {
       );
     }
 
-    // ✅ Get students count from both sources
     let studentsCount = group.students?.length || 0;
-    
     if (studentsCount === 0) {
-      const students = await Student.find({
-        'academicInfo.groupIds': new mongoose.Types.ObjectId(id),
-        isDeleted: false
-      }).countDocuments();
-      
-      studentsCount = students;
+      studentsCount = await Student.countDocuments({
+        "academicInfo.groupIds": new mongoose.Types.ObjectId(id),
+        isDeleted: false,
+      });
     }
 
-    // Check sessions status
-    const sessions = await Session.find({
-      groupId: id,
-      isDeleted: false,
-    }).lean();
-
-    const completedSessions = sessions.filter(
-      (s) => s.status === "completed"
+    const sessions = await Session.find({ groupId: id, isDeleted: false }).lean();
+    const doneSessions = sessions.filter(
+      (s) => s.status === "completed" || s.status === "cancelled"
     ).length;
     const totalSessions = sessions.length;
-    const allCompleted =
-      completedSessions === totalSessions && totalSessions > 0;
-
-    const incompleteSessions = sessions.filter((s) => s.status !== "completed");
-
-    const canComplete = allCompleted && group.status !== "completed";
-    const alreadyCompleted = group.status === "completed";
-    const messagesSent = group.metadata?.completionMessagesSent || false;
+    const allDone = doneSessions === totalSessions && totalSessions > 0;
+    const incompleteSessions = sessions.filter(
+      (s) => s.status !== "completed" && s.status !== "cancelled"
+    );
 
     return NextResponse.json({
       success: true,
@@ -279,16 +242,18 @@ export async function GET(req, { params }) {
         groupName: group.name,
         groupCode: group.code,
         currentStatus: group.status,
-        canComplete,
-        alreadyCompleted,
-        messagesSent,
+        canComplete: allDone && group.status !== "completed",
+        alreadyCompleted: group.status === "completed",
+        messagesSent: group.metadata?.completionMessagesSent || false,
         sentAt: group.metadata?.completionMessagesSentAt || null,
         totalStudents: studentsCount,
         sessions: {
           total: totalSessions,
-          completed: completedSessions,
+          completed: sessions.filter((s) => s.status === "completed").length,
+          cancelled: sessions.filter((s) => s.status === "cancelled").length,
+          done: doneSessions,
           incomplete: incompleteSessions.length,
-          allCompleted,
+          allDone,
         },
         incompleteSessions: incompleteSessions.map((s) => ({
           id: s._id,
@@ -300,8 +265,7 @@ export async function GET(req, { params }) {
         })),
         automation: {
           enabled: group.automation?.whatsappEnabled || false,
-          completionMessageEnabled:
-            group.automation?.completionMessage || false,
+          completionMessageEnabled: group.automation?.completionMessage || false,
         },
         summary: group.metadata?.completionMessagesSummary || null,
       },
@@ -309,10 +273,7 @@ export async function GET(req, { params }) {
   } catch (error) {
     console.error("❌ Error checking group completion status:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Failed to check completion status",
-      },
+      { success: false, error: error.message || "Failed to check completion status" },
       { status: 500 }
     );
   }

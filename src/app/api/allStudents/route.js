@@ -25,7 +25,7 @@ export async function POST(req) {
     const studentData = await req.json();
     console.log("📥 Received student data");
 
-    // ✅ احفظ الرسائل المخصصة
+    // ✅ حفظ الرسائل المخصصة
     const customMessages = {
       firstMessage: studentData.whatsappCustomMessages?.firstMessage || "",
       secondMessage: studentData.whatsappCustomMessages?.secondMessage || "",
@@ -45,6 +45,20 @@ export async function POST(req) {
         studentData.authUserId && studentData.authUserId.trim() !== ""
           ? studentData.authUserId
           : null,
+      personalInfo: {
+        ...studentData.personalInfo,
+        nickname: {
+          ar: studentData.personalInfo?.nickname?.ar || "",
+          en: studentData.personalInfo?.nickname?.en || ""
+        }
+      },
+      guardianInfo: {
+        ...studentData.guardianInfo,
+        nickname: {
+          ar: studentData.guardianInfo?.nickname?.ar || "",
+          en: studentData.guardianInfo?.nickname?.en || ""
+        }
+      },
       enrollmentInfo: {
         ...studentData.enrollmentInfo,
         referredBy:
@@ -124,8 +138,6 @@ export async function POST(req) {
         whatsappConversationId: `conv_${Date.now()}_${Math.random()
           .toString(36)
           .substr(2, 9)}`,
-
-        // ✅ إضافة حقول جديدة لتتبع حالة ولي الأمر
         whatsappGuardianNotified: false,
         whatsappGuardianPhone: null,
         whatsappGuardianNotificationSent: false,
@@ -142,6 +154,16 @@ export async function POST(req) {
         id: savedStudent._id,
         enrollmentNumber: savedStudent.enrollmentNumber,
         name: savedStudent.personalInfo.fullName,
+        nickname: {
+          ar: savedStudent.personalInfo.nickname?.ar || "N/A",
+          en: savedStudent.personalInfo.nickname?.en || "N/A"
+        },
+        guardianName: savedStudent.guardianInfo.name,
+        guardianNickname: {
+          ar: savedStudent.guardianInfo.nickname?.ar || "N/A",
+          en: savedStudent.guardianInfo.nickname?.en || "N/A"
+        },
+        guardianRelationship: savedStudent.guardianInfo.relationship,
       });
     } catch (saveError) {
       console.error("❌ Error saving student to database:", saveError);
@@ -195,14 +217,14 @@ export async function POST(req) {
         console.log("🔄 Starting WhatsApp automation in background...");
 
         const { wapilotService } =
-          await import("@/app/services/wapilot-service");
+          await import("../../services/wapilot-service");
 
         // ✅ تمرير رقم ولي الأمر مع الطالب
         const whatsappResult = await wapilotService.sendWelcomeMessages(
-          savedStudent._id, // ✅ studentId
+          savedStudent._id,
           savedStudent.personalInfo.fullName,
-          savedStudent.personalInfo.whatsappNumber, // ✅ student phone
-          guardianPhone, // ✅ guardian phone
+          savedStudent.personalInfo.whatsappNumber,
+          guardianPhone,
           customMessages.firstMessage,
           customMessages.secondMessage,
         );
@@ -224,7 +246,6 @@ export async function POST(req) {
               "metadata.whatsappTotalMessages":
                 whatsappResult.totalMessages || 2,
               "metadata.updatedAt": new Date(),
-              // ✅ إضافة معلومات ولي الأمر
               "metadata.whatsappGuardianNotified": !!guardianPhone,
               "metadata.whatsappGuardianPhone": guardianPhone,
               "metadata.whatsappGuardianNotificationSent":
@@ -310,10 +331,22 @@ export async function POST(req) {
             id: savedStudent._id,
             enrollmentNumber: savedStudent.enrollmentNumber,
             fullName: savedStudent.personalInfo.fullName,
+            nickname: {
+              ar: savedStudent.personalInfo.nickname?.ar || null,
+              en: savedStudent.personalInfo.nickname?.en || null
+            },
             email: savedStudent.personalInfo.email,
             status: savedStudent.enrollmentInfo.status,
             whatsappNumber: savedStudent.personalInfo.whatsappNumber,
             guardianWhatsapp: guardianPhone,
+            guardianInfo: {
+              name: savedStudent.guardianInfo.name,
+              nickname: {
+                ar: savedStudent.guardianInfo.nickname?.ar || null,
+                en: savedStudent.guardianInfo.nickname?.en || null
+              },
+              relationship: savedStudent.guardianInfo.relationship
+            },
             hasUserAccount: !!cleanData.authUserId,
             language: savedStudent.communicationPreferences.preferredLanguage,
             whatsappMode: whatsappMode,
@@ -414,7 +447,7 @@ export async function POST(req) {
   }
 }
 
-// GET: الحصول على جميع الطلاب
+// ✅ GET: الحصول على جميع الطلاب
 export async function GET(req) {
   try {
     const authCheck = await requireAdmin(req);
@@ -459,11 +492,15 @@ export async function GET(req) {
     if (search) {
       query["$or"] = [
         { "personalInfo.fullName": { $regex: search, $options: "i" } },
+        { "personalInfo.nickname.ar": { $regex: search, $options: "i" } },
+        { "personalInfo.nickname.en": { $regex: search, $options: "i" } },
         { "personalInfo.email": { $regex: search, $options: "i" } },
         { enrollmentNumber: { $regex: search, $options: "i" } },
         { "personalInfo.phone": { $regex: search, $options: "i" } },
         { "personalInfo.nationalId": { $regex: search, $options: "i" } },
         { "guardianInfo.name": { $regex: search, $options: "i" } },
+        { "guardianInfo.nickname.ar": { $regex: search, $options: "i" } },
+        { "guardianInfo.nickname.en": { $regex: search, $options: "i" } },
         { "guardianInfo.phone": { $regex: search, $options: "i" } },
         { "guardianInfo.whatsappNumber": { $regex: search, $options: "i" } },
       ];
@@ -488,8 +525,21 @@ export async function GET(req) {
     const formattedStudents = students.map((student) => ({
       id: student._id,
       enrollmentNumber: student.enrollmentNumber,
-      personalInfo: student.personalInfo,
-      guardianInfo: student.guardianInfo,
+      personalInfo: {
+        ...student.personalInfo,
+        nickname: {
+          ar: student.personalInfo?.nickname?.ar || null,
+          en: student.personalInfo?.nickname?.en || null
+        },
+      },
+      guardianInfo: {
+        ...student.guardianInfo,
+        nickname: {
+          ar: student.guardianInfo?.nickname?.ar || null,
+          en: student.guardianInfo?.nickname?.en || null
+        },
+        relationship: student.guardianInfo?.relationship || null,
+      },
       enrollmentInfo: student.enrollmentInfo,
       academicInfo: student.academicInfo,
       communicationPreferences: student.communicationPreferences,
@@ -497,7 +547,6 @@ export async function GET(req) {
       createdAt: student.metadata.createdAt,
       createdBy: student.metadata.createdBy,
       authUserId: student.authUserId,
-
       whatsappStatus: student.metadata?.whatsappStatus || "pending",
       whatsappInteractiveSent:
         student.metadata?.whatsappInteractiveSent || false,
@@ -515,8 +564,6 @@ export async function GET(req) {
       whatsappConfirmationSent:
         student.metadata?.whatsappConfirmationSent || false,
       whatsappMessagesCount: student.metadata?.whatsappMessagesCount || 0,
-
-      // ✅ معلومات ولي الأمر الجديدة
       whatsappGuardianNotified:
         student.metadata?.whatsappGuardianNotified || false,
       whatsappGuardianPhone: student.metadata?.whatsappGuardianPhone || null,
@@ -524,7 +571,6 @@ export async function GET(req) {
         student.metadata?.whatsappGuardianNotificationSent || false,
       whatsappGuardianNotificationAt:
         student.metadata?.whatsappGuardianNotificationAt || null,
-
       language: student.communicationPreferences?.preferredLanguage || "ar",
       conversationId: student.metadata?.whatsappConversationId,
       whatsappMessages: student.whatsappMessages || [],
@@ -556,8 +602,6 @@ export async function GET(req) {
         ...query,
         "metadata.whatsappResponseReceived": true,
       }),
-
-      // ✅ إحصائيات ولي الأمر الجديدة
       guardianStats: {
         totalWithGuardianWhatsapp: await Student.countDocuments({
           ...query,
@@ -582,7 +626,6 @@ export async function GET(req) {
           "metadata.whatsappGuardianNotificationSent": false,
         }),
       },
-
       languageStats: {
         arabic: await Student.countDocuments({
           ...query,
@@ -649,10 +692,9 @@ export async function GET(req) {
   }
 }
 
-// ✅ PUT: تحديث طالب (FIXED)
+// ✅ PUT: تحديث طالب
 export async function PUT(req, context) {
   try {
-    // ✅ await params
     const params = await context.params;
     const { id } = params;
 
@@ -703,6 +745,20 @@ export async function PUT(req, context) {
         updateData.authUserId && updateData.authUserId.trim() !== ""
           ? updateData.authUserId
           : null,
+      personalInfo: updateData.personalInfo ? {
+        ...updateData.personalInfo,
+        nickname: {
+          ar: updateData.personalInfo?.nickname?.ar || "",
+          en: updateData.personalInfo?.nickname?.en || ""
+        }
+      } : undefined,
+      guardianInfo: updateData.guardianInfo ? {
+        ...updateData.guardianInfo,
+        nickname: {
+          ar: updateData.guardianInfo?.nickname?.ar || "",
+          en: updateData.guardianInfo?.nickname?.en || ""
+        }
+      } : undefined,
       enrollmentInfo: updateData.enrollmentInfo
         ? {
             ...updateData.enrollmentInfo,
@@ -755,6 +811,18 @@ export async function PUT(req, context) {
           id: updatedStudent._id,
           enrollmentNumber: updatedStudent.enrollmentNumber,
           fullName: updatedStudent.personalInfo.fullName,
+          nickname: {
+            ar: updatedStudent.personalInfo.nickname?.ar || null,
+            en: updatedStudent.personalInfo.nickname?.en || null
+          },
+          guardianInfo: {
+            name: updatedStudent.guardianInfo.name,
+            nickname: {
+              ar: updatedStudent.guardianInfo.nickname?.ar || null,
+              en: updatedStudent.guardianInfo.nickname?.en || null
+            },
+            relationship: updatedStudent.guardianInfo.relationship,
+          },
           updatedFields: Object.keys(cleanUpdateData),
           metadata: {
             lastModifiedBy: updatedStudent.metadata.lastModifiedBy,
@@ -812,10 +880,9 @@ export async function PUT(req, context) {
   }
 }
 
-// ✅ DELETE: حذف طري للطالب (FIXED)
+// ✅ DELETE: حذف طري للطالب
 export async function DELETE(req, context) {
   try {
-    // ✅ await params
     const params = await context.params;
     const { id } = params;
 
@@ -894,6 +961,17 @@ export async function DELETE(req, context) {
           id: deletedStudent._id,
           enrollmentNumber: deletedStudent.enrollmentNumber,
           fullName: deletedStudent.personalInfo.fullName,
+          nickname: {
+            ar: deletedStudent.personalInfo.nickname?.ar || null,
+            en: deletedStudent.personalInfo.nickname?.en || null
+          },
+          guardianInfo: {
+            name: deletedStudent.guardianInfo.name,
+            nickname: {
+              ar: deletedStudent.guardianInfo.nickname?.ar || null,
+              en: deletedStudent.guardianInfo.nickname?.en || null
+            },
+          },
           deletedAt: deletedStudent.deletedAt,
           status: deletedStudent.enrollmentInfo.status,
           canBeRestored: true,
@@ -916,10 +994,9 @@ export async function DELETE(req, context) {
   }
 }
 
-// ✅ PATCH: إعادة إرسال رسالة WhatsApp (FIXED)
+// ✅ PATCH: إعادة إرسال رسالة WhatsApp
 export async function PATCH(req, context) {
   try {
-    // ✅ await params
     const params = await context.params;
     const { id } = params;
 
@@ -968,7 +1045,7 @@ export async function PATCH(req, context) {
         console.log("🔄 Starting WhatsApp resend in background...");
 
         const { wapilotService } =
-          await import("@/app/services/wapilot-service");
+          await import("../../services/wapilot-service");
 
         const whatsappResult = await wapilotService.sendWelcomeMessages(
           student._id,
@@ -985,6 +1062,7 @@ export async function PATCH(req, context) {
           await Student.findByIdAndUpdate(id, {
             $set: {
               "metadata.whatsappWelcomeSent": true,
+              "metadata.whatsappInteractiveSent": true,
               "metadata.whatsappSentAt": new Date(),
               "metadata.whatsappMessageId":
                 whatsappResult.results?.student?.messageId,
@@ -1034,6 +1112,16 @@ export async function PATCH(req, context) {
       data: {
         studentId: student._id,
         studentName: student.personalInfo.fullName,
+        studentNickname: {
+          ar: student.personalInfo.nickname?.ar || null,
+          en: student.personalInfo.nickname?.en || null
+        },
+        guardianName: student.guardianInfo.name,
+        guardianNickname: {
+          ar: student.guardianInfo.nickname?.ar || null,
+          en: student.guardianInfo.nickname?.en || null
+        },
+        guardianRelationship: student.guardianInfo.relationship,
         whatsappNumbers: {
           student: student.personalInfo.whatsappNumber,
           guardian: guardianPhone,

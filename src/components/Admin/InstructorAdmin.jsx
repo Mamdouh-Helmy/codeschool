@@ -58,6 +58,11 @@ export default function InstructorAdmin() {
         }
     };
 
+    const getGenderText = (gender) => {
+        if (!gender) return '-';
+        return gender === 'male' ? 'ذكر' : 'أنثى';
+    };
+
     const loadInstructors = async () => {
         setLoading(true);
         try {
@@ -339,6 +344,12 @@ export default function InstructorAdmin() {
                                     </th>
                                     <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
                                         <div className="flex items-center gap-1.5">
+                                            <User className="w-3.5 h-3.5" />
+                                            {t("instructors.table.gender") || "Gender"}
+                                        </div>
+                                    </th>
+                                    <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
+                                        <div className="flex items-center gap-1.5">
                                             <Hash className="w-3.5 h-3.5" />
                                             {t("instructors.table.username")}
                                         </div>
@@ -379,6 +390,11 @@ export default function InstructorAdmin() {
                                                     </p>
                                                 </div>
                                             </div>
+                                        </td>
+                                        <td className="py-2.5 px-3 md:px-4">
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                                {getGenderText(instructor.gender)}
+                                            </span>
                                         </td>
                                         <td className="py-2.5 px-3 md:px-4">
                                             <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">

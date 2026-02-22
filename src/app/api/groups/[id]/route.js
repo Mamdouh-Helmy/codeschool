@@ -1,138 +1,164 @@
-// app/api/groups/[id]/route.js - الإصدار النهائي مع الحذف الفعلي
+// app/api/groups/[id]/route.js - FIXED VERSION
+// ✅ الإصلاحات:
+// 1. جلب الـ instructors بـ User.find() منفصل مع toObject({ getters: true })
+// 2. إضافة firstMeetingLink من أول session
+// 3. إصلاح الـ duplicate index warnings في User.js
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../models/Group";
-import Course from "../../../models/Course";  
-import User from "../../../models/User";      
-import Student from "../../../models/Student"; 
-import Session from "../../../models/Session"; 
+import User from "../../../models/User";
+import Student from "../../../models/Student";
+import Session from "../../../models/Session";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
+// ============================================================
+// ✅ HELPER: جلب بيانات المدرسين صح مع gender وphone
+// ============================================================
+async function getInstructorsData(instructorIds) {
+  if (!instructorIds || instructorIds.length === 0) return [];
+
+  try {
+    // ✅ استخدام User.find() بدون lean() عشان الـ getters تشتغل
+    const instructors = await User.find({
+      _id: { $in: instructorIds },
+    }).select("name email gender profile");
+
+    // ✅ استخدام toObject({ getters: true }) لضمان تطبيق الـ getters
+    return instructors.map((inst) => {
+      const obj = inst.toObject({ getters: true });
+      
+      const gender = obj.gender 
+        ? String(obj.gender).toLowerCase().trim()
+        : null;
+        
+      const phone = obj.profile?.phone
+        ? String(obj.profile.phone).trim() || null
+        : null;
+
+      console.log(`   ✅ Instructor loaded: ${obj.name}`);
+      console.log(`      gender raw: "${obj.gender}" → normalized: "${gender}"`);
+      console.log(`      phone raw: "${obj.profile?.phone}" → normalized: "${phone}"`);
+
+      return {
+        _id: obj._id,
+        name: obj.name,
+        email: obj.email,
+        gender: gender,
+        phone: phone,
+      };
+    });
+  } catch (error) {
+    console.error("❌ Error fetching instructors:", error);
+    return [];
+  }
+}
+
+// ============================================================
+// ✅ HELPER: جلب رابط أول session
+// ============================================================
+async function getFirstSessionMeetingLink(groupId) {
+  try {
+    const firstSession = await Session.findOne({
+      groupId: groupId,
+      isDeleted: false,
+      status: { $in: ["scheduled", "completed"] },
+      meetingLink: { $exists: true, $ne: null, $ne: "" },
+    })
+      .sort({ scheduledDate: 1 })
+      .select("meetingLink scheduledDate title")
+      .lean();
+
+    const link = firstSession?.meetingLink || null;
+    console.log(`   🔗 First meeting link: ${link || "NOT FOUND"}`);
+    return link;
+  } catch (error) {
+    console.error("❌ Error fetching first session meeting link:", error);
+    return null;
+  }
+}
+
+// ============================================================
 // GET: Fetch single group by ID
+// ============================================================
 export async function GET(req, { params }) {
   try {
     const { id } = await params;
-
-    console.log(`🔍 GET Group Request: ${id}`);
+    console.log(`\n📥 Fetching group: ${id}`);
 
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      return authCheck.response;
-    }
+    if (!authCheck.authorized) return authCheck.response;
 
     await connectDB();
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      console.error(`❌ Invalid group ID format: ${id}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid group ID format",
-          received: id,
-          type: typeof id,
-        },
-        { status: 400 }
-      );
-    }
-
-    const group = await Group.findOne({ _id: id })
-      .populate("courseId", "title level")
-      .populate("instructors", "name email profile")
+    // ✅ Step 1: جلب المجموعة بدون populate للـ instructors
+    const group = await Group.findOne({ _id: id, isDeleted: false })
+      .populate("courseId", "title level curriculum")
       .populate("students", "personalInfo.fullName enrollmentNumber")
-      .lean();
+      .populate("createdBy", "name email")
+      .lean(); // ✅ lean() كويس هنا للباقي
 
     if (!group) {
-      console.error(`❌ Group not found: ${id}`);
       return NextResponse.json(
-        {
-          success: false,
-          error: "Group not found",
-        },
+        { success: false, error: "Group not found" },
         { status: 404 }
       );
     }
 
-    console.log(`✅ Group found: ${group.name}`);
-    console.log(`   ID: ${group._id}`);
-    console.log(`   Instructors: ${group.instructors?.length || 0}`);
+    // ✅ Step 2: جلب الـ instructors منفصل مع الـ getters
+    const instructorIds = group.instructors || [];
+    console.log(`📋 Fetching ${instructorIds.length} instructors separately...`);
+    const instructorsData = await getInstructorsData(instructorIds);
 
-    // Format response
-    const formattedGroup = {
-      id: group._id,
-      _id: group._id,
-      name: group.name,
-      code: group.code,
-      status: group.status,
-      course: {
-        id: group.courseId?._id,
-        title: group.courseId?.title,
-        level: group.courseId?.level,
-      },
-      courseSnapshot: group.courseSnapshot,
-      instructors: (group.instructors || []).map((inst) => ({
-        id: inst._id,
-        _id: inst._id,
+    // ✅ Step 3: جلب رابط أول session
+    console.log(`🔗 Fetching first session meeting link...`);
+    const firstMeetingLink = await getFirstSessionMeetingLink(id);
+
+    // ✅ Step 4: تجميع البيانات
+    const groupObj = {
+      ...group,
+      instructors: instructorsData,
+      firstMeetingLink: firstMeetingLink || null,
+    };
+
+    console.log(`✅ Group fetched: ${group.name}`);
+    console.log(`📋 Instructors: ${instructorsData.length}`);
+    instructorsData.forEach((inst, i) => {
+      console.log(`   Instructor ${i + 1}:`, {
         name: inst.name,
         email: inst.email,
-        profile: inst.profile,
-      })),
-      students: (group.students || []).map((std) => ({
-        id: std._id,
-        _id: std._id,
-        name: std.personalInfo?.fullName,
-        enrollmentNumber: std.enrollmentNumber,
-      })),
-      studentsCount: group.currentStudentsCount,
-      maxStudents: group.maxStudents,
-      availableSeats: group.maxStudents - group.currentStudentsCount,
-      isFull: group.currentStudentsCount >= group.maxStudents,
-      schedule: group.schedule,
-      pricing: group.pricing,
-      automation: group.automation,
-      sessionsGenerated: group.sessionsGenerated,
-      totalSessions: group.totalSessionsCount,
-      currentStudentsCount: group.currentStudentsCount,
-      metadata: group.metadata,
-    };
+        gender: inst.gender || "NOT SET IN DB",
+        phone: inst.phone || "NOT SET IN DB",
+      });
+    });
+    console.log(`🔗 First Meeting Link: ${firstMeetingLink || "NONE"}`);
 
     return NextResponse.json({
       success: true,
-      data: formattedGroup,
+      data: groupObj,
     });
   } catch (error) {
     console.error("❌ Error fetching group:", error);
-    console.error("❌ Error details:", {
-      name: error.name,
-      message: error.message,
-      ...(process.env.NODE_ENV === "development" && { stack: error.stack })
-    });
-    
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Failed to fetch group",
-        ...(process.env.NODE_ENV === "development" && { stack: error.stack })
-      },
+      { success: false, error: error.message },
       { status: 500 }
     );
   }
 }
 
+// ============================================================
 // PUT: Update group
+// ============================================================
 export async function PUT(req, { params }) {
   try {
     const { id } = await params;
     console.log(`✏️ Updating group: ${id}`);
 
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      return authCheck.response;
-    }
+    if (!authCheck.authorized) return authCheck.response;
 
     const adminUser = authCheck.user;
-
     await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -143,8 +169,6 @@ export async function PUT(req, { params }) {
     }
 
     const updateData = await req.json();
-    console.log("📥 Update data:", JSON.stringify(updateData, null, 2));
-
     const existingGroup = await Group.findById(id);
 
     if (!existingGroup) {
@@ -154,9 +178,7 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // ✅ FIXED: بناء metadata بشكل صحيح
     const metadata = existingGroup.metadata || {};
-    
     const updatePayload = {
       ...updateData,
       metadata: {
@@ -167,23 +189,15 @@ export async function PUT(req, { params }) {
       updatedAt: new Date(),
     };
 
-    // ✅ إزالة metadata من updateData إذا كانت موجودة لتفادي التضارب
-    if (updateData.metadata) {
-      delete updatePayload.metadata; // نترك الـ metadata الذي بنيناه
-    }
-
-    console.log("🔄 Executing database update with payload:", updatePayload);
+    if (updateData.metadata) delete updatePayload.metadata;
 
     const updatedGroup = await Group.findByIdAndUpdate(
       id,
       { $set: updatePayload },
-      {
-        new: true,
-        runValidators: true,
-      }
+      { new: true, runValidators: true }
     )
       .populate("courseId", "title level")
-      .populate("instructors", "name email")
+      .populate("instructors", "name email gender profile")
       .populate("students", "personalInfo.fullName enrollmentNumber");
 
     if (!updatedGroup) {
@@ -194,7 +208,6 @@ export async function PUT(req, { params }) {
     }
 
     console.log(`✅ Group updated: ${updatedGroup.code}`);
-
     return NextResponse.json({
       success: true,
       message: "Group updated successfully",
@@ -202,43 +215,32 @@ export async function PUT(req, { params }) {
     });
   } catch (error) {
     console.error("❌ Error updating group:", error);
-    console.error("❌ Error details:", error.stack);
-
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors || {})
         .map((err) => err.message)
         .join("; ");
-
       return NextResponse.json(
-        {
-          success: false,
-          error: "Validation failed",
-          details: messages,
-        },
+        { success: false, error: "Validation failed", details: messages },
         { status: 400 }
       );
     }
-
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Failed to update group",
-      },
+      { success: false, error: error.message || "Failed to update group" },
       { status: 500 }
     );
   }
 }
 
-// DELETE: Hard delete group from database
+// ============================================================
+// DELETE: Hard delete group
+// ============================================================
 export async function DELETE(req, { params }) {
   try {
     const { id } = await params;
-    console.log(`🔥 Hard deleting group from database: ${id}`);
+    console.log(`🔥 Hard deleting group: ${id}`);
 
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      return authCheck.response;
-    }
+    if (!authCheck.authorized) return authCheck.response;
 
     await connectDB();
 
@@ -249,9 +251,7 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // تحقق إذا كان العنصر موجوداً
     const existingGroup = await Group.findById(id);
-    
     if (!existingGroup) {
       return NextResponse.json(
         { success: false, error: "Group not found" },
@@ -259,21 +259,12 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // ❗ HARD DELETE - حذف فعلي من الداتابيس
     const deletedGroup = await Group.findByIdAndDelete(id);
-
-    // حذف الجلسات المرتبطة أيضاً
     await Session.deleteMany({ groupId: id });
-
-    // إزالة المجموعة من الطلاب المرتبطين
-    await Student.updateMany(
-      { groups: id },
-      { $pull: { groups: id } }
-    );
+    await Student.updateMany({ groups: id }, { $pull: { groups: id } });
 
     console.log(`✅ Group permanently deleted: ${deletedGroup?.code || id}`);
-    console.log(`✅ Related sessions deleted`);
-    
+
     return NextResponse.json({
       success: true,
       message: "Group permanently deleted from database",
@@ -286,10 +277,7 @@ export async function DELETE(req, { params }) {
   } catch (error) {
     console.error("❌ Error deleting group:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Failed to delete group",
-      },
+      { success: false, error: error.message || "Failed to delete group" },
       { status: 500 }
     );
   }

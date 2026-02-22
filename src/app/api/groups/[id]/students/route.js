@@ -1,3 +1,4 @@
+// /src/app/api/groups/[id]/students/route.js
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../../../models/Group';
@@ -36,12 +37,12 @@ export async function GET(req, { params }) {
       );
     }
 
-    // طريقة 1: من خلال reference مباشر
-    const students = await Student.find({
+    // ✅ طريقة 1: من خلال reference مباشر - مع جلب كل البيانات المطلوبة
+    let students = await Student.find({
       'academicInfo.groupIds': new mongoose.Types.ObjectId(id),
       isDeleted: false
     })
-    .select('personalInfo.fullName personalInfo.email personalInfo.phone enrollmentNumber guardianInfo.name guardianInfo.whatsappNumber academicInfo.groupIds')
+    .select('personalInfo enrollmentNumber guardianInfo communicationPreferences academicInfo.groupIds')
     .sort({ 'personalInfo.fullName': 1 })
     .lean();
 
@@ -52,7 +53,7 @@ export async function GET(req, { params }) {
       const groupWithRefs = await Group.findById(id)
         .populate({
           path: 'students',
-          select: 'personalInfo.fullName personalInfo.email personalInfo.phone enrollmentNumber guardianInfo.name guardianInfo.whatsappNumber',
+          select: 'personalInfo enrollmentNumber guardianInfo communicationPreferences',
           match: { isDeleted: false }
         })
         .lean();
@@ -63,19 +64,14 @@ export async function GET(req, { params }) {
       }
     }
 
+    // ✅ إرجاع البيانات كاملة بما فيها gender و relationship و nickname و communicationPreferences
     const formattedStudents = students.map(student => ({
       id: student._id,
       _id: student._id,
-      personalInfo: {
-        fullName: student.personalInfo?.fullName || 'Unknown Student',
-        email: student.personalInfo?.email || '',
-        phone: student.personalInfo?.phone || '',
-        enrollmentNumber: student.enrollmentNumber || 'N/A'
-      },
-      guardianInfo: {
-        name: student.guardianInfo?.name || '',
-        whatsappNumber: student.guardianInfo?.whatsappNumber || ''
-      }
+      enrollmentNumber: student.enrollmentNumber || 'N/A',
+      personalInfo: student.personalInfo || {},
+      guardianInfo: student.guardianInfo || {},
+      communicationPreferences: student.communicationPreferences || { preferredLanguage: 'ar' }
     }));
 
     return NextResponse.json({

@@ -1,0 +1,33 @@
+// /src/app/services/index.js
+
+// ✅ تصدير جميع دوال الأتمتة من مكان واحد
+export {
+  onStudentAddedToGroup,
+  replaceStudentVariables,
+  getDefaultStudentMessage,
+  getDefaultGuardianMessage,
+  onGroupActivated,
+  sendInstructorWelcomeMessages,
+  onAttendanceSubmitted,
+  onSessionStatusChanged,
+  prepareReminderMessages,
+  prepareReminderMessage,
+  sendManualSessionReminder,
+  onGroupCompleted,
+  prepareInstructorWelcomeMessage,
+  processCustomMessage,
+  processCompletionMessage,
+  prepareCompletionMessage,
+  prepareAbsenceNotificationMessage,
+  prepareSessionUpdateMessage,
+  getDefaultCompletionMessage,
+  replaceInstructorVariables,
+  sendToStudentWithLogging,
+  getMessageTemplate,
+  prepareStudentVariables,
+  replaceVariables,
+  sendToStudentWithLogging,
+  prepareGroupWelcomeMessage,
+  getAttendanceTemplates,
+  getAttendanceTemplatesForFrontend,
+} from "./groupAutomation";

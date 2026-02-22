@@ -11,12 +11,17 @@ import {
   Hash,
   Upload,
   Trash2,
-  Loader2
+  Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 
-export default function InstructorForm({ initial, isCreating, onClose, onSaved }) {
+export default function InstructorForm({
+  initial,
+  isCreating,
+  onClose,
+  onSaved,
+}) {
   const { t } = useI18n();
   const [form, setForm] = useState({
     name: initial?.name || "",
@@ -24,15 +29,16 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
     username: initial?.username || "",
     phone: initial?.profile?.phone || "",
     image: initial?.image || "",
+    gender: initial?.gender || "",
     password: "",
-    passwordConfirm: ""
+    passwordConfirm: "",
   });
   const [loading, setLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState(initial?.image || "");
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const onChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   /**
@@ -43,13 +49,13 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
     const toastId = toast.loading("جاري رفع الصورة...");
 
     try {
-      const response = await fetch('/api/upload-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+      const response = await fetch("/api/upload-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           image: base64Image,
-          folder: 'instructors' // مجلد خاص بصور المدرسين
-        })
+          folder: "instructors",
+        }),
       });
 
       const data = await response.json();
@@ -91,7 +97,7 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
     const reader = new FileReader();
     reader.onload = async (e) => {
       const result = e.target?.result;
-      
+
       // عرض معاينة فورية
       setImagePreview(result);
 
@@ -128,7 +134,9 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
     }
 
     if (isCreating && !form.password) {
-      toast.error(t("instructorForm.passwordRequired") || "Password is required");
+      toast.error(
+        t("instructorForm.passwordRequired") || "Password is required"
+      );
       return;
     }
 
@@ -144,22 +152,26 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
     setLoading(true);
     const toastId = toast.loading(
-      isCreating 
+      isCreating
         ? t("instructorForm.creating") || "Creating instructor..."
         : t("instructorForm.updating")
     );
 
     try {
+      // تجهيز البيانات للإرسال
       const payload = {
         name: form.name.trim(),
-        username: form.username.trim(),
-        phone: form.phone.trim(),
-        image: form.image.trim(),
         ...(isCreating && { email: form.email.trim() }),
-        ...(form.password && { password: form.password })
+        ...(form.username.trim() && { username: form.username.trim() }),
+        ...(form.phone.trim() && { phone: form.phone.trim() }),
+        ...(form.image.trim() && { image: form.image.trim() }),
+        ...(form.gender && { gender: form.gender }),
+        ...(form.password && { password: form.password }),
       };
 
-      const url = isCreating 
+      console.log("📤 Sending payload:", payload);
+
+      const url = isCreating
         ? "/api/instructor"
         : `/api/instructor/${initial._id}`;
 
@@ -168,30 +180,44 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       const result = await res.json();
+      console.log("📥 Response:", result);
 
       if (!res.ok) {
-        throw new Error(result.message || (isCreating ? t("instructorForm.createFailed") : t("instructorForm.updateFailed")));
+        throw new Error(
+          result.message ||
+            (isCreating
+              ? t("instructorForm.createFailed")
+              : t("instructorForm.updateFailed"))
+        );
       }
 
       if (result.success) {
         toast.success(
-          isCreating 
-            ? t("instructorForm.createdSuccess") || "Instructor created successfully"
-            : t("instructorForm.updatedSuccess"), 
+          isCreating
+            ? t("instructorForm.createdSuccess") ||
+                "Instructor created successfully"
+            : t("instructorForm.updatedSuccess"),
           { id: toastId }
         );
         onSaved();
         onClose();
       } else {
-        throw new Error(result.message || (isCreating ? t("instructorForm.createFailed") : t("instructorForm.updateFailed")));
+        throw new Error(
+          result.message ||
+            (isCreating
+              ? t("instructorForm.createFailed")
+              : t("instructorForm.updateFailed"))
+        );
       }
     } catch (err) {
       console.error("Error:", err);
-      toast.error(err.message || t("instructorForm.updateError"), { id: toastId });
+      toast.error(err.message || t("instructorForm.updateError"), {
+        id: toastId,
+      });
     } finally {
       setLoading(false);
     }
@@ -225,11 +251,59 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
             <input
               type="text"
               value={form.name}
-              onChange={(e) => onChange('name', e.target.value)}
+              onChange={(e) => onChange("name", e.target.value)}
               placeholder={t("instructorForm.namePlaceholder")}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
               required
             />
+          </div>
+
+          {/* Gender Field */}
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+              <User className="w-3 h-3" />
+              {t("instructorForm.gender") || "Gender"}
+              <span className="text-xs text-gray-500 font-normal">
+                ({t("common.optional") || "اختياري"})
+              </span>
+            </label>
+            <div className="flex gap-4 items-center">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="gender"
+                  value="male"
+                  checked={form.gender === "male"}
+                  onChange={(e) => onChange("gender", e.target.value)}
+                  className="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
+                />
+                <span className="text-sm text-MidnightNavyText dark:text-white">
+                  {t("common.male") || "ذكر"}
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="gender"
+                  value="female"
+                  checked={form.gender === "female"}
+                  onChange={(e) => onChange("gender", e.target.value)}
+                  className="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
+                />
+                <span className="text-sm text-MidnightNavyText dark:text-white">
+                  {t("common.female") || "أنثى"}
+                </span>
+              </label>
+              {form.gender && (
+                <button
+                  type="button"
+                  onClick={() => onChange("gender", "")}
+                  className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 underline"
+                >
+                  {t("common.clear") || "مسح"}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Email */}
@@ -241,11 +315,11 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
             <input
               type="email"
               value={form.email}
-              onChange={(e) => onChange('email', e.target.value)}
+              onChange={(e) => onChange("email", e.target.value)}
               placeholder="instructor@example.com"
               className={`w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:text-white ${
-                isCreating 
-                  ? "dark:bg-dark_input" 
+                isCreating
+                  ? "dark:bg-dark_input"
                   : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
               }`}
               disabled={!isCreating}
@@ -267,7 +341,12 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
             <input
               type="text"
               value={form.username}
-              onChange={(e) => onChange('username', e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              onChange={(e) =>
+                onChange(
+                  "username",
+                  e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")
+                )
+              }
               placeholder="john_doe"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
             />
@@ -285,7 +364,7 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
             <input
               type="tel"
               value={form.phone}
-              onChange={(e) => onChange('phone', e.target.value)}
+              onChange={(e) => onChange("phone", e.target.value)}
               placeholder="+201234567890"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
             />
@@ -304,7 +383,7 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
                 <input
                   type="url"
                   value={form.image}
-                  onChange={(e) => onChange('image', e.target.value)}
+                  onChange={(e) => onChange("image", e.target.value)}
                   placeholder="أو أدخل رابط الصورة مباشرة"
                   className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
                   disabled={uploadingImage}
@@ -312,20 +391,24 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
                 {/* أزرار التحكم */}
                 <div className="flex gap-2">
-                  <label className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-13 font-medium transition-colors border ${
-                    uploadingImage 
-                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-300' 
-                      : 'bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 cursor-pointer'
-                  }`}>
+                  <label
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-13 font-medium transition-colors border ${
+                      uploadingImage
+                        ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-300"
+                        : "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 cursor-pointer"
+                    }`}
+                  >
                     {uploadingImage ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        {t('instructorForm.uploading') || "جاري الرفع..."}
+                        {t("instructorForm.uploading") || "جاري الرفع..."}
                       </>
                     ) : (
                       <>
                         <Upload className="w-4 h-4" />
-                        {form.image ? (t('instructorForm.changeImage') || "تغيير الصورة") : (t('instructorForm.uploadImage') || "رفع صورة")}
+                        {form.image
+                          ? t("instructorForm.changeImage") || "تغيير الصورة"
+                          : t("instructorForm.uploadImage") || "رفع صورة"}
                       </>
                     )}
                     <input
@@ -341,19 +424,20 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
                     <button
                       type="button"
                       onClick={() => {
-                        onChange('image', '');
-                        setImagePreview('');
+                        onChange("image", "");
+                        setImagePreview("");
                       }}
                       className="inline-flex items-center gap-2 px-3 py-2.5 bg-red-500/10 text-red-500 rounded-lg text-13 font-medium hover:bg-red-500/20 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />
-                      {t('instructorForm.removeImage') || "حذف"}
+                      {t("instructorForm.removeImage") || "حذف"}
                     </button>
                   )}
                 </div>
 
                 <div className="text-11 text-SlateBlueText dark:text-darktext">
-                  {t('instructorForm.imageRequirements') || "الحد الأقصى: 5MB • JPEG, PNG, WebP"}
+                  {t("instructorForm.imageRequirements") ||
+                    "الحد الأقصى: 5MB • JPEG, PNG, WebP"}
                 </div>
               </div>
 
@@ -388,16 +472,15 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
           </div>
           <div>
             <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
-              {isCreating 
+              {isCreating
                 ? t("instructorForm.setPassword") || "Set Password"
-                : t("instructorForm.changePassword")
-              }
+                : t("instructorForm.changePassword")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              {isCreating 
-                ? t("instructorForm.passwordRequired") || "Password is required for new instructor"
-                : t("instructorForm.passwordOptional")
-              }
+              {isCreating
+                ? t("instructorForm.passwordRequired") ||
+                  "Password is required for new instructor"
+                : t("instructorForm.passwordOptional")}
             </p>
           </div>
         </div>
@@ -405,15 +488,15 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="block text-13 font-medium text-gray-700 dark:text-gray-300">
-              {isCreating 
-                ? t("instructorForm.password") || "Password" 
-                : t("instructorForm.newPassword")
-              } {isCreating && "*"}
+              {isCreating
+                ? t("instructorForm.password") || "Password"
+                : t("instructorForm.newPassword")}{" "}
+              {isCreating && "*"}
             </label>
             <input
               type="password"
               value={form.password}
-              onChange={(e) => onChange('password', e.target.value)}
+              onChange={(e) => onChange("password", e.target.value)}
               placeholder="••••••••"
               className="w-full px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white bg-white/50"
               required={isCreating}
@@ -427,7 +510,7 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
             <input
               type="password"
               value={form.passwordConfirm}
-              onChange={(e) => onChange('passwordConfirm', e.target.value)}
+              onChange={(e) => onChange("passwordConfirm", e.target.value)}
               placeholder="••••••••"
               className="w-full px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white bg-white/50"
               required={isCreating}
@@ -436,7 +519,9 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
         </div>
 
         <div className="text-xs text-gray-600 dark:text-gray-400 bg-white/50 dark:bg-gray-800/30 p-3 rounded border border-blue-100 dark:border-blue-900/30">
-          <p className="font-medium mb-1">{t("instructorForm.passwordRequirements")}</p>
+          <p className="font-medium mb-1">
+            {t("instructorForm.passwordRequirements")}
+          </p>
           <ul className="space-y-1 list-disc list-inside">
             <li>{t("instructorForm.minChars")}</li>
             {!isCreating && <li>{t("instructorForm.leaveBlank")}</li>}
@@ -464,18 +549,16 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {isCreating 
+                {isCreating
                   ? t("instructorForm.creating") || "Creating..."
-                  : t("instructorForm.updating")
-                }
+                  : t("instructorForm.updating")}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                {isCreating 
+                {isCreating
                   ? t("instructorForm.create") || "Create Instructor"
-                  : t("instructorForm.saveChanges")
-                }
+                  : t("instructorForm.saveChanges")}
               </>
             )}
           </button>

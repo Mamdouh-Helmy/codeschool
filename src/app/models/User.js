@@ -1,4 +1,4 @@
-// models/User.js - الإصدار المبسط
+// models/User.js
 import mongoose from "mongoose";
 
 const UserSchema = new mongoose.Schema(
@@ -11,9 +11,13 @@ const UserSchema = new mongoose.Schema(
     email: {
       type: String,
       required: [true, "Email is required"],
-      unique: true, 
+      unique: true,
       lowercase: true,
-      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please enter a valid email address']
+      trim: true,
+      match: [
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        "Please enter a valid email address",
+      ],
     },
     username: {
       type: String,
@@ -21,13 +25,25 @@ const UserSchema = new mongoose.Schema(
       sparse: true,
       trim: true,
       lowercase: true,
-      match: [/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers and underscores']
+      match: [
+        /^[a-zA-Z0-9_]+$/,
+        "Username can only contain letters, numbers and underscores",
+      ],
     },
     password: {
       type: String,
       required: [true, "Password is required"],
       minlength: 6,
-      select: false, 
+      select: false,
+    },
+    gender: {
+      type: String,
+      enum: {
+        values: ["male", "female"],
+        message: "{VALUE} is not a valid gender",
+      },
+      default: undefined,
+      
     },
     role: {
       type: String,
@@ -37,6 +53,7 @@ const UserSchema = new mongoose.Schema(
     image: {
       type: String,
       default: "/images/default-avatar.jpg",
+     
     },
     qrCode: {
       type: String,
@@ -49,52 +66,62 @@ const UserSchema = new mongoose.Schema(
     profile: {
       bio: {
         type: String,
-        default: ""
+        default: "",
       },
       jobTitle: {
         type: String,
-        default: "Developer"
+        default: "Developer",
       },
       company: {
         type: String,
-        default: ""
+        default: "",
       },
       website: {
         type: String,
-        default: ""
+        default: "",
       },
       location: {
         type: String,
-        default: ""
+        default: "",
       },
       phone: {
         type: String,
-        default: ""
-      }
+        default: "",
+       
+      },
     },
     emailVerified: {
       type: Boolean,
-      default: false
+      default: false,
     },
     isActive: {
       type: Boolean,
-      default: true
-    }
+      default: true,
+    },
   },
-  { 
+  {
     timestamps: true,
-    strict: true 
+    strict: true,
+    minimize: false,
   }
 );
 
 // إنشاء indexes
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ username: 1 }, { unique: true, sparse: true });
+UserSchema.index({ gender: 1 }, { sparse: true });
 
 // Virtual للحصول على profile URL
-UserSchema.virtual('profileUrl').get(function() {
+UserSchema.virtual("profileUrl").get(function () {
   return this.username ? `/portfolio/${this.username}` : null;
 });
 
-console.log("✅ User Schema loaded successfully (SIMPLIFIED VERSION)");
+// Virtual للحصول على النوع بالعربية
+UserSchema.virtual("genderAr").get(function () {
+  if (!this.gender) return null;
+  return this.gender === "male" ? "ذكر" : "أنثى";
+});
+
+console.log("✅ User Schema loaded successfully (FIXED VERSION)");
+
 export default mongoose.models.User || mongoose.model("User", UserSchema);

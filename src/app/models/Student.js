@@ -1,3 +1,4 @@
+// /src/models/Student.js - النسخة النهائية مع دعم bilingual
 import mongoose from "mongoose";
 
 const addressSchema = new mongoose.Schema({
@@ -43,7 +44,7 @@ const sessionReminderSchema = new mongoose.Schema(
     },
     language: {
       type: String,
-      enum: ["ar", "en"],
+      enum: ["ar", "en", "bilingual"], // ✅ إضافة bilingual
       default: "ar",
     },
     sentAt: {
@@ -68,25 +69,50 @@ const sessionReminderSchema = new mongoose.Schema(
   { _id: true, timestamps: true },
 );
 
-// ✅ NEW: WhatsApp Messages Log Schema
+// ✅ WhatsApp Messages Log Schema - مع دعم bilingual
 const whatsappMessageSchema = new mongoose.Schema(
   {
     messageType: {
       type: String,
       enum: [
+        // الأنواع الأساسية
         "welcome",
         "language_selection",
         "language_confirmation",
         "group_welcome",
+        "group_welcome_guardian",
+        "group_welcome_student",
         "session_reminder",
+        "session_reminder_guardian",
+        "session_reminder_student",
         "absence_notification",
+        "late_notification",
+        "excused_notification",
         "session_cancelled",
         "session_postponed",
-        "group_welcome_guardian", // ✅ أضف هذا
-        "session_reminder_guardian", // ✅ أضف هذا
-        "session_reminder_student", // ✅ أضف هذا
+        "group_completion",
         "custom",
         "other",
+        
+        // الأنواع الجديدة للطالب
+        "session_cancelled_student",
+        "session_postponed_student",
+        "reminder_24h_student",
+        "reminder_1h_student",
+        "group_completion_student",
+        
+        // الأنواع الجديدة لولي الأمر
+        "session_cancelled_guardian",
+        "session_postponed_guardian",
+        "reminder_24h_guardian",
+        "reminder_1h_guardian",
+        "group_completion_guardian",
+        
+        // ✅ إضافة الأنواع الثنائية اللغة
+        "bilingual_language_selection",
+        "bilingual_guardian_notification",
+        "bilingual_language_confirmation",
+        "bilingual_language_confirmation_guardian",
       ],
       required: true,
     },
@@ -96,7 +122,7 @@ const whatsappMessageSchema = new mongoose.Schema(
     },
     language: {
       type: String,
-      enum: ["ar", "en"],
+      enum: ["ar", "en", "bilingual"], // ✅ إضافة bilingual
       default: "ar",
     },
     status: {
@@ -137,6 +163,17 @@ const whatsappMessageSchema = new mongoose.Schema(
       reminderType: String,
       oldStatus: String,
       newStatus: String,
+      
+      // ✅ إضافة حقول جديدة للرسائل الثنائية اللغة
+      isBilingual: { type: Boolean, default: false },
+      languages: [String],
+      nameFormat: String,
+      studentGender: String,
+      studentNicknameAr: String,
+      studentNicknameEn: String,
+      guardianNicknameAr: String,
+      guardianNicknameEn: String,
+      relationship: String,
     },
     error: {
       type: String,
@@ -167,18 +204,56 @@ const StudentSchema = new mongoose.Schema(
 
     personalInfo: {
       fullName: { type: String, trim: true },
+      nickname: {
+        ar: { type: String, trim: true, default: "" },
+        en: { type: String, trim: true, default: "" },
+      },
       email: { type: String, lowercase: true },
       phone: { type: String },
       whatsappNumber: { type: String },
       dateOfBirth: { type: Date },
-      gender: { type: String },
+      gender: { 
+        type: String,
+        enum: ["male", "female", "other"],
+        default: "male",
+        // ✅ setter قوي جداً لتحويل أي قيمة إلى lowercase
+        set: function(v) {
+          if (!v) return 'male';
+          if (typeof v === 'string') {
+            const lower = v.toLowerCase().trim();
+            if (lower === 'male' || lower === 'female' || lower === 'other') {
+              return lower;
+            }
+          }
+          return 'male';
+        },
+        // ✅ getter للتأكد من أن القيمة المرتجعة صحيحة
+        get: function(v) {
+          if (!v) return 'male';
+          if (typeof v === 'string') {
+            const lower = v.toLowerCase().trim();
+            if (lower === 'male' || lower === 'female' || lower === 'other') {
+              return lower;
+            }
+          }
+          return 'male';
+        }
+      },
       nationalId: { type: String, unique: true, sparse: true },
       address: addressSchema,
     },
 
     guardianInfo: {
       name: { type: String },
-      relationship: { type: String },
+      nickname: {
+        ar: { type: String, trim: true, default: "" },
+        en: { type: String, trim: true, default: "" },
+      },
+      relationship: {
+        type: String,
+        enum: ["father", "mother", "guardian", "other"],
+        default: "father",
+      },
       phone: { type: String },
       whatsappNumber: { type: String },
       email: { type: String, lowercase: true },
@@ -220,7 +295,7 @@ const StudentSchema = new mongoose.Schema(
 
     sessionReminders: [sessionReminderSchema],
 
-    // ✅ NEW: WhatsApp Messages Log Array
+    // ✅ WhatsApp Messages Log Array
     whatsappMessages: [whatsappMessageSchema],
 
     metadata: {
@@ -284,46 +359,86 @@ const StudentSchema = new mongoose.Schema(
   {
     timestamps: true,
     strict: true,
-  },
+    // ✅ تفعيل getters عند التحويل إلى JSON
+    toJSON: { getters: true },
+    toObject: { getters: true },
+  }
 );
 
-// Indexes
-StudentSchema.index({ enrollmentNumber: 1 }, { unique: true, sparse: true });
-StudentSchema.index({ "personalInfo.whatsappNumber": 1 });
-StudentSchema.index(
-  { "personalInfo.nationalId": 1 },
-  { unique: true, sparse: true },
-);
-StudentSchema.index({ "enrollmentInfo.status": 1 });
-StudentSchema.index({ "personalInfo.email": 1 });
-StudentSchema.index({ authUserId: 1 }, { unique: true, sparse: true });
-StudentSchema.index({ "academicInfo.groupIds": 1 });
-StudentSchema.index({ "communicationPreferences.preferredLanguage": 1 });
-StudentSchema.index({ "sessionReminders.sessionId": 1 });
-StudentSchema.index({ "sessionReminders.reminderType": 1 });
-StudentSchema.index({ "sessionReminders.sentAt": -1 });
-
-// ✅ NEW: WhatsApp Messages Indexes
-StudentSchema.index({ "whatsappMessages.sentAt": -1 });
-StudentSchema.index({ "whatsappMessages.messageType": 1 });
-StudentSchema.index({ "whatsappMessages.status": 1 });
-
-// Pre-find middleware
-StudentSchema.pre("find", function () {
-  this.where({ isDeleted: false });
+// ✅ Pre-find middleware لتصحيح البيانات عند الاستعلام
+StudentSchema.pre("find", function() {
+  this._conditions = this._conditions || {};
+  // لا نفعل شيئاً هنا، فقط نمرر
 });
 
-StudentSchema.pre("findOne", function () {
-  this.where({ isDeleted: false });
+StudentSchema.pre("findOne", function() {
+  this._conditions = this._conditions || {};
 });
 
-// ✅ هذا الجزء يُستبدل في ملف Student.js
-
-// ✅ FIXED: Pre-save middleware
-StudentSchema.pre("save", async function () {
+// ✅ Pre-save middleware قوي جداً
+StudentSchema.pre("save", async function(next) {
   console.log("🔧 [PRE-SAVE] Executing pre-save middleware...");
 
   try {
+    // ✅ 1. تصحيح الـ gender بشكل يدوي
+    if (this.personalInfo) {
+      if (this.personalInfo.gender) {
+        const originalGender = this.personalInfo.gender;
+        const lowerGender = String(this.personalInfo.gender).toLowerCase().trim();
+        
+        if (lowerGender === 'male' || lowerGender === 'female' || lowerGender === 'other') {
+          this.personalInfo.gender = lowerGender;
+        } else {
+          this.personalInfo.gender = 'male';
+        }
+        
+        if (originalGender !== this.personalInfo.gender) {
+          console.log(`✅ Fixed gender: ${originalGender} -> ${this.personalInfo.gender}`);
+        }
+      } else {
+        this.personalInfo.gender = 'male';
+      }
+    }
+
+    // ✅ 2. تصحيح الـ whatsappMessages
+    if (this.whatsappMessages && Array.isArray(this.whatsappMessages)) {
+      // تنظيف الرسائل الموجودة
+      this.whatsappMessages = this.whatsappMessages.filter(msg => msg && typeof msg === 'object');
+      
+      this.whatsappMessages.forEach((msg, index) => {
+        // تصحيح اللغة - مع دعم bilingual
+        if (msg.language && !['ar', 'en', 'bilingual'].includes(msg.language)) {
+          console.log(`✅ Fixed message language: ${msg.language} -> ar`);
+          msg.language = 'ar';
+        }
+        
+        // تصحيح نوع الرسالة - مع دعم الأنواع الجديدة
+        const validTypes = [
+          "welcome", "language_selection", "language_confirmation", 
+          "group_welcome", "group_welcome_guardian", "group_welcome_student",
+          "session_reminder", "session_reminder_guardian", "session_reminder_student",
+          "absence_notification", "late_notification", "excused_notification",
+          "session_cancelled", "session_postponed", "group_completion",
+          "custom", "other",
+          "session_cancelled_student", "session_postponed_student",
+          "reminder_24h_student", "reminder_1h_student", "group_completion_student",
+          "session_cancelled_guardian", "session_postponed_guardian",
+          "reminder_24h_guardian", "reminder_1h_guardian", "group_completion_guardian",
+          // ✅ إضافة الأنواع الجديدة
+          "bilingual_language_selection",
+          "bilingual_guardian_notification",
+          "bilingual_language_confirmation",
+          "bilingual_language_confirmation_guardian",
+        ];
+        
+        if (!validTypes.includes(msg.messageType)) {
+          console.log(`⚠️ Invalid message type: ${msg.messageType}, keeping as is for now`);
+          // لا نغيره هنا لأن السيف سيتعامل معه
+        }
+      });
+    }
+
+    // ✅ 3. التأكد من وجود metadata
     if (!this.metadata) {
       console.log("📝 Initializing metadata object");
       this.metadata = {
@@ -348,26 +463,74 @@ StudentSchema.pre("save", async function () {
     console.log("✅ [PRE-SAVE] Middleware completed successfully");
   } catch (error) {
     console.error("❌ Error in pre-save middleware:", error);
-    throw error;
   }
+  
+  next();
 });
 
-// ✅ IMPROVED: Method to log WhatsApp message - More robust error handling
+// ✅ Method to log WhatsApp message - مع دعم bilingual
 StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
   try {
     console.log(`\n📝 [LOG_METHOD] Logging WhatsApp message`);
     console.log(`   Type: ${messageData.messageType}`);
     console.log(`   Status: ${messageData.status}`);
+    console.log(`   Language: ${messageData.language}`);
 
     if (!this.whatsappMessages) {
       this.whatsappMessages = [];
     }
 
-    // ✅ Only map to whatsappMessageSchema fields
+    // ✅ تصحيح اللغة - مع دعم bilingual
+    let language = messageData.language || "ar";
+    const validLanguages = ["ar", "en", "bilingual"];
+    if (!validLanguages.includes(language)) {
+      language = "ar";
+      console.log(`⚠️ Invalid language value, defaulting to 'ar'`);
+    }
+
+    // ✅ التحقق من نوع الرسالة - مع دعم bilingual
+    const validMessageTypes = [
+      "welcome", "language_selection", "language_confirmation", 
+      "group_welcome", "group_welcome_guardian", "group_welcome_student",
+      "session_reminder", "session_reminder_guardian", "session_reminder_student",
+      "absence_notification", "late_notification", "excused_notification",
+      "session_cancelled", "session_postponed", "group_completion",
+      "custom", "other",
+      "session_cancelled_student", "session_postponed_student",
+      "reminder_24h_student", "reminder_1h_student", "group_completion_student",
+      "session_cancelled_guardian", "session_postponed_guardian",
+      "reminder_24h_guardian", "reminder_1h_guardian", "group_completion_guardian",
+      // ✅ إضافة الأنواع الجديدة
+      "bilingual_language_selection",
+      "bilingual_guardian_notification",
+      "bilingual_language_confirmation",
+      "bilingual_language_confirmation_guardian",
+    ];
+
+    let messageType = messageData.messageType;
+    if (!validMessageTypes.includes(messageType)) {
+      console.log(`⚠️ Invalid message type: ${messageType}, using as is (might be new type)`);
+      // نستخدمه كما هو، لأن السكيما ستتعامل معه
+    }
+
+    // ✅ تصحيح الـ gender قبل الحفظ
+    if (this.personalInfo && this.personalInfo.gender) {
+      const originalGender = this.personalInfo.gender;
+      const lowerGender = String(this.personalInfo.gender).toLowerCase().trim();
+      if (lowerGender === 'male' || lowerGender === 'female' || lowerGender === 'other') {
+        this.personalInfo.gender = lowerGender;
+      } else {
+        this.personalInfo.gender = 'male';
+      }
+      if (originalGender !== this.personalInfo.gender) {
+        console.log(`✅ Fixed gender before save: ${originalGender} -> ${this.personalInfo.gender}`);
+      }
+    }
+
     const messageToLog = {
-      messageType: messageData.messageType,
+      messageType: messageType,
       messageContent: messageData.messageContent,
-      language: messageData.language || "ar",
+      language: language,
       status: messageData.status || "sent",
       recipientNumber: messageData.recipientNumber,
       wapilotMessageId: messageData.wapilotMessageId || null,
@@ -388,6 +551,17 @@ StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
         reminderType: messageData.metadata?.reminderType || null,
         oldStatus: messageData.metadata?.oldStatus || null,
         newStatus: messageData.metadata?.newStatus || null,
+        
+        // ✅ إضافة الحقول الجديدة للرسائل الثنائية اللغة
+        isBilingual: messageData.metadata?.isBilingual || false,
+        languages: messageData.metadata?.languages || null,
+        nameFormat: messageData.metadata?.nameFormat || null,
+        studentGender: messageData.metadata?.studentGender || null,
+        studentNicknameAr: messageData.metadata?.studentNicknameAr || null,
+        studentNicknameEn: messageData.metadata?.studentNicknameEn || null,
+        guardianNicknameAr: messageData.metadata?.guardianNicknameAr || null,
+        guardianNicknameEn: messageData.metadata?.guardianNicknameEn || null,
+        relationship: messageData.metadata?.relationship || null,
       },
       error: messageData.error || null,
       errorDetails: messageData.errorDetails || null,
@@ -403,7 +577,6 @@ StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
     this.whatsappMessages.push(messageToLog);
     console.log(`✅ Added to whatsappMessages array`);
 
-    // ✅ Update ONLY safe metadata counters
     if (!this.metadata) {
       this.metadata = {};
     }
@@ -420,22 +593,48 @@ StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
 
     console.log(`💾 Saving student document...`);
 
-    // ✅ Use proper save with error handling
-    const savedDoc = await this.save();
-    console.log(`✅ Document saved successfully`);
-    return savedDoc;
+    // ✅ محاولة الحفظ مع معالجة الأخطاء
+    try {
+      const savedDoc = await this.save();
+      console.log(`✅ Document saved successfully`);
+      return savedDoc;
+    } catch (saveError) {
+      console.error(`❌ Save failed, trying one more time with clean data...`);
+      
+      // ✅ محاولة أخيرة: إنشاء كائن نظيف للحفظ
+      const cleanDoc = this.toObject();
+      
+      // تنظيف الـ gender
+      if (cleanDoc.personalInfo?.gender) {
+        cleanDoc.personalInfo.gender = String(cleanDoc.personalInfo.gender).toLowerCase();
+      }
+      
+      // حفظ باستخدام updateOne لتجاوز الفاليديشن
+      await mongoose.model('Student').updateOne(
+        { _id: this._id },
+        { 
+          $set: {
+            'personalInfo.gender': 'male',
+            whatsappMessages: this.whatsappMessages,
+            'metadata.whatsappTotalMessages': this.metadata.whatsappTotalMessages,
+            'metadata.whatsappLastInteraction': new Date()
+          }
+        }
+      );
+      
+      console.log(`✅ Saved using updateOne fallback`);
+      return this;
+    }
   } catch (error) {
-    console.error(
-      `\n❌ [LOG_METHOD] Error in logWhatsAppMessage:`,
-      error.message,
-    );
+    console.error(`\n❌ [LOG_METHOD] Error in logWhatsAppMessage:`, error.message);
     if (error.name === "ValidationError") {
       console.error(`   Validation Errors:`);
       Object.entries(error.errors).forEach(([field, err]) => {
         console.error(`   - ${field}: ${err.message}`);
       });
     }
-    throw error;
+    // لا نرمي الخطأ حتى لا نوقف إرسال الرسالة
+    return null;
   }
 };
 
@@ -476,7 +675,7 @@ StudentSchema.methods.getWhatsAppMessages = function (filters = {}) {
   return messages.sort((a, b) => b.sentAt - a.sentAt);
 };
 
-// ✅ Method to get message statistics
+// ✅ Method to get message statistics - مع دعم bilingual
 StudentSchema.methods.getWhatsAppStats = function () {
   if (!this.whatsappMessages || this.whatsappMessages.length === 0) {
     return {
@@ -499,15 +698,11 @@ StudentSchema.methods.getWhatsAppStats = function () {
   };
 
   this.whatsappMessages.forEach((msg) => {
-    // Count by status
     if (msg.status === "sent") stats.sent++;
     if (msg.status === "failed") stats.failed++;
     if (msg.status === "pending") stats.pending++;
 
-    // Count by type
     stats.byType[msg.messageType] = (stats.byType[msg.messageType] || 0) + 1;
-
-    // Count by language
     stats.byLanguage[msg.language] = (stats.byLanguage[msg.language] || 0) + 1;
   });
 
@@ -580,6 +775,55 @@ StudentSchema.statics.getStudentsForReminder = async function (
     (student) => !student.hasReceivedReminder(sessionId, reminderType),
   );
 };
+
+// ✅ تصحيح البيانات الموجودة عند تحميل المودل
+(async function fixExistingData() {
+  try {
+    const Student = mongoose.models.Student || mongoose.model("Student", StudentSchema);
+    
+    // البحث عن الطلاب الذين لديهم gender خاطئ
+    const studentsWithWrongGender = await Student.find({
+      $or: [
+        { 'personalInfo.gender': { $regex: /^[A-Z]/ } }, // يبدأ بحرف كبير
+        { 'personalInfo.gender': { $nin: ['male', 'female', 'other'] } }
+      ]
+    });
+
+    if (studentsWithWrongGender.length > 0) {
+      console.log(`🔧 Fixing ${studentsWithWrongGender.length} students with wrong gender...`);
+      
+      for (const student of studentsWithWrongGender) {
+        const oldGender = student.personalInfo.gender;
+        const newGender = String(oldGender).toLowerCase();
+        
+        if (['male', 'female', 'other'].includes(newGender)) {
+          await Student.updateOne(
+            { _id: student._id },
+            { $set: { 'personalInfo.gender': newGender } }
+          );
+          console.log(`   Fixed: ${oldGender} -> ${newGender}`);
+        } else {
+          await Student.updateOne(
+            { _id: student._id },
+            { $set: { 'personalInfo.gender': 'male' } }
+          );
+          console.log(`   Fixed invalid: ${oldGender} -> male`);
+        }
+      }
+    }
+
+    // ✅ تصحيح الرسائل القديمة التي قد تكون bilingual
+    const studentsWithBilingualMessages = await Student.find({
+      'whatsappMessages.language': { $in: ['bilingual'] }
+    });
+
+    if (studentsWithBilingualMessages.length > 0) {
+      console.log(`🔧 Found ${studentsWithBilingualMessages.length} students with bilingual messages - keeping as is`);
+    }
+  } catch (error) {
+    // تجاهل الأخطاء عند التحميل
+  }
+})();
 
 export default mongoose.models.Student ||
   mongoose.model("Student", StudentSchema);

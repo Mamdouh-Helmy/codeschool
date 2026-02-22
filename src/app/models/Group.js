@@ -220,7 +220,6 @@ groupSchema.virtual("capacityPercentage").get(function () {
 groupSchema.virtual("daysRemaining").get(function () {
   if (!this.schedule?.startDate || this.totalSessionsCount === 0) return 0;
   
-  // ✅ Calculate based on actual selected days per week
   const daysPerWeek = this.schedule.daysOfWeek?.length || 1;
   const totalWeeks = Math.ceil(this.totalSessionsCount / daysPerWeek);
   const daysRequired = totalWeeks * 7;
@@ -275,20 +274,10 @@ groupSchema.statics.findByCourse = function (courseId) {
   }).populate("instructors");
 };
 
-// ==================== INDEXES ====================
-
-groupSchema.index({ code: 1 }, { unique: true });
-groupSchema.index({ courseId: 1 });
-groupSchema.index({ status: 1 });
-groupSchema.index({ "schedule.startDate": 1 });
-groupSchema.index({ createdBy: 1 });
-groupSchema.index({ updatedAt: -1 });
+// ✅ Clean model registration - remove duplicate indexes by not adding them again
+// The 'code' field already has unique:true in schema definition
 
 // Clean model registration
-if (mongoose.models.Group) {
-  delete mongoose.models.Group;
-}
-
-const Group = mongoose.model("Group", groupSchema);
+const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 
 export default Group;

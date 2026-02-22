@@ -209,12 +209,15 @@ export async function GET(request) {
     const totalInstructors = await User.countDocuments(query);
 
     const instructors = await User.find(query)
-      .select("_id name email username image profile isActive createdAt")
+      .select("_id name email username image gender profile isActive createdAt")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
 
     console.log("✅ Instructors fetched:", instructors.length);
+    if (instructors.length > 0) {
+      console.log("📊 Sample instructor data:", instructors[0]);
+    }
 
     return NextResponse.json({
       success: true,
@@ -239,7 +242,7 @@ export async function GET(request) {
         message: "Failed to fetch instructors",
         error: errorMessage,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -250,15 +253,16 @@ export async function POST(request) {
     console.log("🚀 ============ INSTRUCTOR CREATION STARTED ============");
 
     const body = await request.json();
-    const { name, email, password, username, phone, image } = body;
+    const { name, email, password, username, phone, image, gender } = body;
 
     console.log("📝 Instructor data received:", {
-      name: name ? "✓" : "✗",
-      email: email ? "✓" : "✗",
-      password: password ? "***" : "✗",
+      name: name || "missing",
+      email: email || "missing",
+      password: password ? "***" : "missing",
       username: username || "auto-generate",
       phone: phone || "not provided",
       image: image || "default",
+      gender: gender || "not specified",
     });
 
     // التحقق من البيانات
@@ -271,7 +275,7 @@ export async function POST(request) {
           message: "Validation failed",
           errors,
         },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -282,7 +286,7 @@ export async function POST(request) {
     // التحقق من البريد الإلكتروني الموجود
     console.log(
       "🔎 Checking for existing user with email:",
-      email.toLowerCase(),
+      email.toLowerCase()
     );
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
@@ -292,7 +296,7 @@ export async function POST(request) {
           success: false,
           message: "Email already registered",
         },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
@@ -308,7 +312,7 @@ export async function POST(request) {
             message: "Username is already taken",
             errors: { username: "This username is already registered" },
           },
-          { status: 409 },
+          { status: 409 }
         );
       }
     }
@@ -355,29 +359,57 @@ export async function POST(request) {
 
     // إنشاء المدرس
     console.log("👨‍🏫 Creating instructor in database...");
-    const newInstructor = new User({
+
+    // تجهيز البيانات الأساسية
+    const instructorData = {
       name: name.trim(),
-      email: email.toLowerCase(),
+      email: email.toLowerCase().trim(),
       username: finalUsername,
       password: hashedPassword,
       role: "instructor",
-      image: image || "/images/default-avatar.jpg",
-      qrCode: qrCodeImage,
-      qrCodeData: portfolioUrl,
       emailVerified: true,
       isActive: true,
-      profile: {
-        phone: phone || "",
-        bio: "",
-        jobTitle: "Instructor",
-        company: "",
-        website: "",
-        location: "",
-      },
+    };
+
+    // إضافة الحقول الاختيارية فقط إذا كانت موجودة ولها قيم صحيحة
+    if (image && image.trim()) {
+      instructorData.image = image.trim();
+    }
+
+    if (gender && (gender === "male" || gender === "female")) {
+      instructorData.gender = gender;
+    }
+
+    if (qrCodeImage) {
+      instructorData.qrCode = qrCodeImage;
+      instructorData.qrCodeData = portfolioUrl;
+    }
+
+    // إنشاء profile object
+    instructorData.profile = {
+      bio: "",
+      jobTitle: "Instructor",
+      company: "",
+      website: "",
+      location: "",
+      phone: phone && phone.trim() ? phone.trim() : "",
+    };
+
+    console.log("📦 Instructor data to save:", {
+      ...instructorData,
+      password: "***",
+      profile: instructorData.profile,
     });
 
+    const newInstructor = new User(instructorData);
     await newInstructor.save();
+
     console.log("🎉 Instructor created successfully:", newInstructor._id);
+    console.log("📋 Saved data verification:", {
+      gender: newInstructor.gender,
+      image: newInstructor.image,
+      phone: newInstructor.profile?.phone,
+    });
 
     // إنشاء بورتفليو افتراضي تلقائياً
     try {
@@ -385,31 +417,41 @@ export async function POST(request) {
       await createDefaultPortfolio(
         newInstructor._id,
         newInstructor.name,
-        newInstructor.username,
+        newInstructor.username
       );
       console.log("✅ Default portfolio created");
     } catch (portfolioError) {
       console.error("⚠️ Could not create default portfolio:", portfolioError);
     }
 
+    // إعادة جلب المدرس للتأكد من جميع البيانات
+    const savedInstructor = await User.findById(newInstructor._id)
+      .select(
+        "_id name email username image gender profile isActive createdAt qrCode"
+      )
+      .lean();
+
+    console.log("📋 Saved instructor from DB:", savedInstructor);
+
     // إعداد رد النجاح
     const instructorResponse = {
-      id: newInstructor._id,
-      name: newInstructor.name,
-      email: newInstructor.email,
-      username: newInstructor.username,
-      role: newInstructor.role,
-      image: newInstructor.image,
-      qrCode: newInstructor.qrCode,
+      id: savedInstructor._id,
+      name: savedInstructor.name,
+      email: savedInstructor.email,
+      username: savedInstructor.username,
+      role: "instructor",
+      image: savedInstructor.image,
+      gender: savedInstructor.gender,
+      qrCode: savedInstructor.qrCode,
       portfolioUrl: portfolioUrl,
-      profileUrl: `/portfolio/${newInstructor.username}`,
-      profile: newInstructor.profile,
-      isActive: newInstructor.isActive,
-      createdAt: newInstructor.createdAt,
+      profileUrl: `/portfolio/${savedInstructor.username}`,
+      profile: savedInstructor.profile,
+      isActive: savedInstructor.isActive,
+      createdAt: savedInstructor.createdAt,
     };
 
     console.log("✅ ============ INSTRUCTOR CREATION COMPLETED ============");
-    console.log("📋 Instructor created successfully");
+    console.log("📋 Final response data:", instructorResponse);
 
     return NextResponse.json(
       {
@@ -417,12 +459,13 @@ export async function POST(request) {
         message: "Instructor created successfully with default portfolio",
         data: instructorResponse,
       },
-      { status: 201 },
+      { status: 201 }
     );
   } catch (error) {
     console.error("💥 ============ INSTRUCTOR CREATION ERROR ============");
     console.error("Error name:", error.name);
     console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
 
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
@@ -439,7 +482,7 @@ export async function POST(request) {
           message,
           errors: { [field]: message },
         },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
@@ -449,7 +492,7 @@ export async function POST(request) {
         message: "Internal server error",
         error: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

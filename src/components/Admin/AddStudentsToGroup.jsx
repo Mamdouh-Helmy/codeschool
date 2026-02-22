@@ -1,175 +1,24 @@
+// components/AddStudentsToGroup.jsx - COMPLETE REWRITE
+// ✅ الإصلاحات:
+// 1. عرض كل المدرسين مش بس الأول
+// 2. إضافة {firstMeetingLink} متغير في التمبليتس
+// 3. بناء أسماء المدرسين حسب اللغة (و / &)
+// 4. استخدام group.firstMeetingLink من الـ API
 "use client";
 
-import { useState, useEffect } from "react";
-import { UserPlus, Search, X, CheckCircle, AlertCircle, Users, Loader2, MessageCircle, Info, Copy, Phone, User } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  UserPlus, Search, X, CheckCircle, AlertCircle, Users, Loader2,
+  MessageCircle, Eye, Zap
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
 
-// Helper function to generate default welcome message template
-const getDefaultWelcomeMessage = async (language, group, studentName = "{studentName}") => {
-  // دالة ذكية لجلب رابط الاجتماع المناسب - فقط أول سيشن (Session 1) في أول موديول (Module 0)
-  const getFirstSessionLink = async () => {
-    if (!group || !group._id) {
-      console.log("❌ No group or group._id found");
-      return null;
-    }
-
-    console.log(`🔍 Looking for FIRST SESSION (Session 1) in group: ${group.name} (${group._id})`);
-
-    try {
-      // جلب جميع جلسات المجموعة
-      const response = await fetch(`/api/groups/${group._id}/sessions`, {
-        method: 'GET',
-        cache: 'no-store'
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`📊 Total sessions found: ${result.data?.length || 0}`);
-
-        if (result.success && result.data && result.data.length > 0) {
-          // البحث عن أول سيشن (Session 1) في أول موديول (Module 0)
-          const firstSession = result.data.find(session =>
-            session.moduleIndex === 0 && session.sessionNumber === 1
-          );
-
-          if (firstSession) {
-            console.log(`✅ FOUND FIRST SESSION!`);
-            console.log(`   Title: ${firstSession.title}`);
-            console.log(`   Module: ${firstSession.moduleIndex}, Session: ${firstSession.sessionNumber}`);
-            console.log(`   Scheduled Date: ${firstSession.scheduledDate}`);
-            console.log(`   Has meetingLink: ${!!firstSession.meetingLink}`);
-            console.log(`   Has meetingLinkId: ${!!firstSession.meetingLinkId}`);
-
-            // إذا كان هناك meetingLink مباشر في السيشن
-            if (firstSession.meetingLink) {
-              console.log(`✅ Using direct meeting link from session: ${firstSession.meetingLink}`);
-              return firstSession.meetingLink;
-            }
-
-            // إذا لم يكن هناك meetingLink مباشر، جربه من MeetingLink collection
-            if (firstSession.meetingLinkId) {
-              try {
-                const meetingLinkResponse = await fetch(`/api/meeting-links/${firstSession.meetingLinkId}`, {
-                  method: 'GET',
-                  cache: 'no-store'
-                });
-
-                if (meetingLinkResponse.ok) {
-                  const meetingLinkData = await meetingLinkResponse.json();
-                  if (meetingLinkData.success && meetingLinkData.data && meetingLinkData.data.link) {
-                    console.log(`✅ Found meeting link from collection: ${meetingLinkData.data.link}`);
-                    return meetingLinkData.data.link;
-                  }
-                }
-              } catch (meetingError) {
-                console.error("❌ Error fetching meeting link from collection:", meetingError);
-              }
-            }
-
-            console.log("⚠️ First session found but NO meeting link available");
-            return null;
-          } else {
-            console.log("❌ First session (Module 0, Session 1) NOT FOUND!");
-
-            // بحث عن أي سيشن 1 في أي موديول
-            const anySession1 = result.data.find(session => session.sessionNumber === 1);
-            if (anySession1) {
-              console.log(`ℹ️ Found Session 1 in Module ${anySession1.moduleIndex}`);
-              if (anySession1.meetingLink) {
-                console.log(`✅ Using meeting link from Session 1 in Module ${anySession1.moduleIndex}: ${anySession1.meetingLink}`);
-                return anySession1.meetingLink;
-              }
-            }
-
-            return null;
-          }
-        } else {
-          console.log("📭 No sessions exist for this group yet");
-          return null;
-        }
-      } else {
-        console.error("❌ Failed to fetch sessions from API");
-        return null;
-      }
-    } catch (error) {
-      console.error("❌ Error fetching sessions:", error);
-      return null;
-    }
-
-    // إذا لم نجد أي شيء
-    return null;
-  };
-
-  // جلب رابط الاجتماع الأول
-  const firstSessionLink = await getFirstSessionLink();
-
-  console.log(`🎯 Final decision: ${firstSessionLink ? `✅ Found link` : `❌ No link`}`);
-
-  const template = language === "ar"
-    ? `🎉 مرحباً بك في Code School!
-
-{studentName}،
-يسرنا إعلامك بأنه تم تسجيلك/تسجيل طفلك بنجاح في البرنامج التالي في Code School:
-📘 البرنامج: {courseName}
-👥 المجموعة: {groupName}
-📅 تاريخ البدء: {startDate}
-⏰ الموعد: {timeFrom} – {timeTo}
-👨‍🏫 المدرب: {instructor}
-
-${firstSessionLink ? `📌 رابط الاجتماع للجلسة الأولى:
-${firstSessionLink}
-
-` : ''}متحمسون لبدء رحلتنا معاً!`
-    : `🎉 Welcome to Code School!
-
-{studentName},
-We are pleased to confirm that you/your child has been successfully enrolled in the following program at Code School:
-📘 Program: {courseName}
-👥 Group: {groupName}
-📅 Start Date: {startDate}
-⏰ Schedule: {timeFrom} – {timeTo}
-👨‍🏫 Instructor: {instructor}
-
-${firstSessionLink ? `📌 First Session Meeting Link:
-${firstSessionLink}
-
-` : ''}Excited to Start Our Journey Together!`;
-
-  if (!group) return template;
-
-  // استبدال المتغيرات
-  return template
-    .replace(/\{studentName\}/g, studentName)
-    .replace(/\{courseName\}/g, group.courseSnapshot?.title || group.course?.title || "{courseName}")
-    .replace(/\{groupName\}/g, group.name || "{groupName}")
-    .replace(
-      /\{startDate\}/g,
-      group.schedule?.startDate
-        ? new Date(group.schedule.startDate).toLocaleDateString(language === "ar" ? "ar-EG" : "en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
-        : "{startDate}"
-    )
-    .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "{timeFrom}")
-    .replace(/\{timeTo\}/g, group.schedule?.timeTo || "{timeTo}")
-    .replace(
-      /\{instructor\}/g,
-      group.instructors?.[0]?.name
-        ? language === "ar"
-          ? `👨‍🏫 المدرب: ${group.instructors[0].name}`
-          : `👨‍🏫 Instructor: ${group.instructors[0].name}`
-        : ""
-    );
-};
-
 export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded }) {
   const { locale } = useLocale();
-  const { t, language } = useI18n();
+  const { t } = useI18n();
+
   const [students, setStudents] = useState([]);
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -177,318 +26,441 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const [search, setSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
 
-  const [customMessage, setCustomMessage] = useState("");
-  const [previewMessage, setPreviewMessage] = useState("");
+  const [studentMessage, setStudentMessage] = useState("");
+  const [guardianMessage, setGuardianMessage] = useState("");
+  const [studentPreview, setStudentPreview] = useState("");
+  const [guardianPreview, setGuardianPreview] = useState("");
+  const [showStudentHints, setShowStudentHints] = useState(false);
+  const [showGuardianHints, setShowGuardianHints] = useState(false);
+  const [selectedHintIndex, setSelectedHintIndex] = useState(0);
+  const [studentCursor, setStudentCursor] = useState(0);
+  const [guardianCursor, setGuardianCursor] = useState(0);
+
+  const [templates, setTemplates] = useState({
+    studentAr: "",
+    studentEn: "",
+    guardianAr: "",
+    guardianEn: "",
+  });
+
+  const saveTimer = useRef(null);
+  const templateId = useRef(null);
+  const studentTextareaRef = useRef(null);
+  const guardianTextareaRef = useRef(null);
+  const studentHintsRef = useRef(null);
+  const guardianHintsRef = useRef(null);
 
   const isRTL = locale === "ar";
 
-  // رسالة افتراضية احتياطية
-  const getFallbackMessage = (isRTL, group, studentName = "{studentName}") => {
-    const fallbackTemplate = isRTL
-      ? `🎉 مرحباً بك في Code School!
-
-{studentName}،
-يسرنا إعلامك بأنه تم تسجيلك/تسجيل طفلك بنجاح في البرنامج التالي في Code School:
-📘 البرنامج: {courseName}
-👥 المجموعة: {groupName}
-📅 تاريخ البدء: {startDate}
-⏰ الموعد: {timeFrom} – {timeTo}
-👨‍🏫 المدرب: {instructor}
-
-هذا البرنامج مصمم لبناء التفكير المنطقي ومهارات حل المشكلات والإبداع لدى طفلك من خلال التعليم البرمجي المنظم والمناسب للعمر.
-
-متحمسون لبدء رحلتنا معاً!`
-      : `🎉 Welcome to Code School!
-
-{studentName},
-We are pleased to confirm that you/your child has been successfully enrolled in the following program at Code School:
-📘 Program: {courseName}
-👥 Group: {groupName}
-📅 Start Date: {startDate}
-⏰ Schedule: {timeFrom} – {timeTo}
-👨‍🏫 Instructor: {instructor}
-
-This program is designed to build your child's logical thinking, problem-solving skills, and creativity through structured, age-appropriate programming education.
-
-Excited to Start Our Journey Together!`;
-
-    if (!group) return fallbackTemplate;
-
-    return fallbackTemplate
-      .replace(/\{studentName\}/g, studentName)
-      .replace(/\{courseName\}/g, group.courseSnapshot?.title || group.course?.title || "{courseName}")
-      .replace(/\{groupName\}/g, group.name || "{groupName}")
-      .replace(
-        /\{startDate\}/g,
-        group.schedule?.startDate
-          ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? "ar-EG" : "en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })
-          : "{startDate}"
-      )
-      .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "{timeFrom}")
-      .replace(/\{timeTo\}/g, group.schedule?.timeTo || "{timeTo}")
-      .replace(
-        /\{instructor\}/g,
-        group.instructors?.[0]?.name
-          ? isRTL
-            ? `👨‍🏫 المدرب: ${group.instructors[0].name}`
-            : `👨‍🏫 Instructor: ${group.instructors[0].name}`
-          : ""
-      );
-  };
-
-  // Default welcome message based on group and language
-  useEffect(() => {
-    if (group) {
-      const loadDefaultMessage = async () => {
-        try {
-          const defaultMessage = await getDefaultWelcomeMessage(
-            isRTL ? "ar" : "en",
-            group,
-            "{studentName}"
-          );
-          setCustomMessage(defaultMessage);
-        } catch (error) {
-          console.error("❌ Error loading default message:", error);
-          // استخدم رسالة افتراضية في حالة الخطأ
-          const fallbackMessage = getFallbackMessage(isRTL, group, "{studentName}");
-          setCustomMessage(fallbackMessage);
-        }
-      };
-      loadDefaultMessage();
-    }
-  }, [group, isRTL]);
-
-  useEffect(() => {
-    if (groupId) {
-      loadData();
-    }
-  }, [groupId]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      console.log(`🔍 Loading data for group: ${groupId}`);
-
-      const groupRes = await fetch(`/api/groups/${groupId}`, {
-        cache: 'no-store'
-      });
-
-      if (!groupRes.ok) {
-        throw new Error(t("addStudents.errors.loadGroup"));
-      }
-
-      const groupData = await groupRes.json();
-
-      if (!groupData.success) {
-        throw new Error(groupData.error || t("addStudents.errors.loadGroup"));
-      }
-
-      setGroup(groupData.data);
-
-      const studentsRes = await fetch('/api/allStudents?status=Active', {
-        cache: 'no-store'
-      });
-
-      if (!studentsRes.ok) {
-        throw new Error(t("addStudents.errors.loadStudents"));
-      }
-
-      const studentsData = await studentsRes.json();
-
-      if (!studentsData.success) {
-        throw new Error(studentsData.error || t("addStudents.errors.loadStudents"));
-      }
-
-      const groupStudentIds = (groupData.data.students || []).map(s => {
-        const id = s._id || s.id || s;
-        return typeof id === 'object' ? id.toString() : String(id);
-      });
-
-      const availableStudents = studentsData.data.filter(student => {
-        const studentId = (student._id || student.id).toString();
-        return !groupStudentIds.includes(studentId);
-      });
-
-      setStudents(availableStudents);
-
-    } catch (error) {
-      console.error("❌ Error loading data:", error);
-      toast.error(error.message || t("addStudents.errors.loadFailed"));
-    } finally {
-      setLoading(false);
+  // ============================================================
+  // ✅ HELPER: بناء أسماء المدرسين حسب اللغة
+  // ============================================================
+  const buildInstructorsNames = (instructors, language = "ar") => {
+    if (!instructors || instructors.length === 0) return "";
+    const names = instructors.map((i) => i.name).filter(Boolean);
+    if (names.length === 0) return "";
+    if (names.length === 1) return names[0];
+    if (language === "ar") {
+      if (names.length === 2) return `${names[0]} و ${names[1]}`;
+      // 3 أو أكثر
+      return names.slice(0, -1).join(" / ") + " / " + names[names.length - 1];
+    } else {
+      if (names.length === 2) return `${names[0]} & ${names[1]}`;
+      // 3 أو أكثر
+      return names.slice(0, -1).join(", ") + " & " + names[names.length - 1];
     }
   };
 
-  const generatePreview = (message) => {
-    if (!selectedStudent || !group || !message) return "";
+  // ============================================================
+  // استخراج اللغة المفضلة للطالب المختار
+  // ============================================================
+  const getStudentLang = () =>
+    selectedStudent?.communicationPreferences?.preferredLanguage || "ar";
 
-    const studentName = selectedStudent.personalInfo?.fullName || t("addStudents.preview.defaults.studentName");
-    const guardianName = selectedStudent.guardianInfo?.name || t("addStudents.preview.defaults.guardianName");
-    const groupName = group.name;
-    const courseName = group.courseSnapshot?.title || group.course?.title || t("addStudents.preview.defaults.courseName");
+  // ============================================================
+  // استخراج بيانات الطالب للعرض
+  // ============================================================
+  const getStudentInfo = () => {
+    if (!selectedStudent) return null;
+    const lang = getStudentLang();
+    const gender = selectedStudent.personalInfo?.gender || "male";
+    const relationship = selectedStudent.guardianInfo?.relationship || "father";
 
-    const startDate = group.schedule?.startDate
-      ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? 'ar-EG' : 'en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })
-      : t("addStudents.preview.defaults.startDate");
+    const studentNickname =
+      lang === "ar"
+        ? selectedStudent.personalInfo?.nickname?.ar || selectedStudent.personalInfo?.fullName?.split(" ")[0]
+        : selectedStudent.personalInfo?.nickname?.en || selectedStudent.personalInfo?.fullName?.split(" ")[0];
 
-    const timeFrom = group.schedule?.timeFrom || t("addStudents.preview.defaults.timeFrom");
-    const timeTo = group.schedule?.timeTo || t("addStudents.preview.defaults.timeTo");
+    const guardianNickname =
+      lang === "ar"
+        ? selectedStudent.guardianInfo?.nickname?.ar || selectedStudent.guardianInfo?.name?.split(" ")[0]
+        : selectedStudent.guardianInfo?.nickname?.en || selectedStudent.guardianInfo?.name?.split(" ")[0];
 
-    // إضافة المدرس
-    const instructor = group.instructors?.[0]?.name;
-    const instructorText = instructor
-      ? (isRTL ? `👨‍🏫 المدرب: ${instructor}` : `👨‍🏫 Instructor: ${instructor}`)
+    let studentSalutation = "";
+    if (lang === "ar") {
+      studentSalutation = gender === "female" ? `عزيزتي ${studentNickname}` : `عزيزي ${studentNickname}`;
+    } else {
+      studentSalutation = `Dear ${studentNickname}`;
+    }
+
+    let guardianSalutation = "";
+    if (lang === "ar") {
+      if (relationship === "mother") guardianSalutation = `عزيزتي السيدة ${guardianNickname}`;
+      else if (relationship === "father") guardianSalutation = `عزيزي الأستاذ ${guardianNickname}`;
+      else guardianSalutation = `عزيزي/عزيزتي ${guardianNickname}`;
+    } else {
+      if (relationship === "mother") guardianSalutation = `Dear Mrs. ${guardianNickname}`;
+      else if (relationship === "father") guardianSalutation = `Dear Mr. ${guardianNickname}`;
+      else guardianSalutation = `Dear ${guardianNickname}`;
+    }
+
+    const childTitle =
+      lang === "ar"
+        ? gender === "female" ? "ابنتك" : "ابنك"
+        : gender === "female" ? "your daughter" : "your son";
+
+    return { lang, gender, relationship, studentNickname, guardianNickname, studentSalutation, guardianSalutation, childTitle };
+  };
+
+  // ============================================================
+  // ✅ FIXED: المتغيرات المتاحة للطالب - مع {firstMeetingLink} وكل المدرسين
+  // ============================================================
+  const getStudentVariables = () => {
+    const info = getStudentInfo();
+    const lang = info?.lang || "ar";
+    const startDate = group?.schedule?.startDate
+      ? new Date(group.schedule.startDate).toLocaleDateString(
+          lang === "ar" ? "ar-EG" : "en-US",
+          { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+        )
       : "";
 
-    let preview = message
-      .replace(/\{studentName\}/g, studentName)
-      .replace(/\{guardianName\}/g, guardianName)
-      .replace(/\{groupName\}/g, groupName)
-      .replace(/\{courseName\}/g, courseName)
-      .replace(/\{startDate\}/g, startDate)
-      .replace(/\{timeFrom\}/g, timeFrom)
-      .replace(/\{timeTo\}/g, timeTo)
-      .replace(/\{instructor\}/g, instructorText);
+    // ✅ بناء أسماء كل المدرسين
+    const instructorNames = buildInstructorsNames(group?.instructors, lang);
+    // ✅ جلب رابط أول ميتنج
+    const firstMeetingLink = group?.firstMeetingLink || "";
 
-    return preview;
+    return [
+      { key: "{salutation}", label: lang === "ar" ? "التحية" : "Salutation", icon: "👋", example: info?.studentSalutation || (lang === "ar" ? "عزيزي أحمد" : "Dear Ahmed") },
+      { key: "{studentName}", label: lang === "ar" ? "اسم الطالب" : "Student Name", icon: "👤", example: info?.studentNickname || "أحمد" },
+      { key: "{groupName}", label: lang === "ar" ? "اسم المجموعة" : "Group Name", icon: "👥", example: group?.name || "" },
+      { key: "{courseName}", label: lang === "ar" ? "اسم الكورس" : "Course Name", icon: "📚", example: group?.courseSnapshot?.title || "" },
+      { key: "{startDate}", label: lang === "ar" ? "تاريخ البدء" : "Start Date", icon: "📅", example: startDate },
+      { key: "{timeFrom}", label: lang === "ar" ? "وقت البداية" : "Time From", icon: "⏰", example: group?.schedule?.timeFrom || "" },
+      { key: "{timeTo}", label: lang === "ar" ? "وقت النهاية" : "Time To", icon: "⏰", example: group?.schedule?.timeTo || "" },
+      { key: "{instructor}", label: lang === "ar" ? "المدرب/المدربين" : "Instructor(s)", icon: "👨‍🏫", example: instructorNames },
+      { key: "{firstMeetingLink}", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", icon: "🔗", example: firstMeetingLink || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") }, // ✅ NEW
+    ];
+  };
+
+  // ============================================================
+  // ✅ FIXED: المتغيرات المتاحة لولي الأمر - مع {firstMeetingLink} وكل المدرسين
+  // ============================================================
+  const getGuardianVariables = () => {
+    const info = getStudentInfo();
+    const lang = info?.lang || "ar";
+    const startDate = group?.schedule?.startDate
+      ? new Date(group.schedule.startDate).toLocaleDateString(
+          lang === "ar" ? "ar-EG" : "en-US",
+          { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+        )
+      : "";
+
+    // ✅ بناء أسماء كل المدرسين
+    const instructorNames = buildInstructorsNames(group?.instructors, lang);
+    // ✅ جلب رابط أول ميتنج
+    const firstMeetingLink = group?.firstMeetingLink || "";
+
+    return [
+      { key: "{salutation}", label: lang === "ar" ? "التحية" : "Salutation", icon: "👋", example: info?.guardianSalutation || (lang === "ar" ? "عزيزي الأستاذ محمد" : "Dear Mr. Mohamed") },
+      { key: "{guardianName}", label: lang === "ar" ? "اسم ولي الأمر" : "Guardian Name", icon: "👤", example: info?.guardianNickname || "محمد" },
+      { key: "{studentName}", label: lang === "ar" ? "اسم الطالب" : "Student Name", icon: "👶", example: info?.studentNickname || "أحمد" },
+      { key: "{childTitle}", label: lang === "ar" ? "ابنك/ابنتك" : "Son/Daughter", icon: "👨‍👦", example: info?.childTitle || "ابنك" },
+      { key: "{groupName}", label: lang === "ar" ? "اسم المجموعة" : "Group Name", icon: "👥", example: group?.name || "" },
+      { key: "{courseName}", label: lang === "ar" ? "اسم الكورس" : "Course Name", icon: "📚", example: group?.courseSnapshot?.title || "" },
+      { key: "{startDate}", label: lang === "ar" ? "تاريخ البدء" : "Start Date", icon: "📅", example: startDate },
+      { key: "{timeFrom}", label: lang === "ar" ? "وقت البداية" : "Time From", icon: "⏰", example: group?.schedule?.timeFrom || "" },
+      { key: "{timeTo}", label: lang === "ar" ? "وقت النهاية" : "Time To", icon: "⏰", example: group?.schedule?.timeTo || "" },
+      { key: "{instructor}", label: lang === "ar" ? "المدرب/المدربين" : "Instructor(s)", icon: "👨‍🏫", example: instructorNames },
+      { key: "{firstMeetingLink}", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", icon: "🔗", example: firstMeetingLink || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") }, // ✅ NEW
+    ];
+  };
+
+  // ============================================================
+  // جلب البيانات
+  // ============================================================
+  useEffect(() => {
+    if (!groupId) return;
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [groupRes, studentsRes, templateRes] = await Promise.all([
+          fetch(`/api/groups/${groupId}`),
+          fetch("/api/allStudents?status=Active"),
+          fetch(`/api/whatsapp/group-templates?default=true&groupId=${groupId}`),
+        ]);
+
+        const groupData = await groupRes.json();
+        if (groupData.success) {
+          setGroup(groupData.data);
+          // ✅ Log للتحقق
+          console.log("✅ Group loaded:", groupData.data?.name);
+          console.log("📋 Instructors:", groupData.data?.instructors?.length);
+          groupData.data?.instructors?.forEach((inst, i) => {
+            console.log(`   Instructor ${i + 1}:`, { name: inst.name, gender: inst.gender, phone: inst.phone });
+          });
+          console.log("🔗 First Meeting Link:", groupData.data?.firstMeetingLink);
+        }
+
+        const studentsData = await studentsRes.json();
+        if (studentsData.success) {
+          const groupStudentIds = (groupData.data?.students || []).map(s =>
+            String(s._id || s.id || s)
+          );
+          const available = studentsData.data.filter(
+            s => !groupStudentIds.includes(String(s._id || s.id))
+          );
+          setStudents(available);
+        }
+
+        if (templateRes.ok) {
+          const templateData = await templateRes.json();
+          if (templateData.success && templateData.data) {
+            templateId.current = templateData.data._id;
+            setTemplates({
+              studentAr: templateData.data.studentContentAr || templateData.data.content || "",
+              studentEn: templateData.data.studentContentEn || "",
+              guardianAr: templateData.data.guardianContentAr || templateData.data.content || "",
+              guardianEn: templateData.data.guardianContentEn || "",
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error loading:", error);
+        toast.error("فشل تحميل البيانات");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [groupId]);
+
+  // تحميل القالب حسب لغة الطالب
+  useEffect(() => {
+    if (!selectedStudent || !templates.studentAr) return;
+    const lang = getStudentLang();
+    setStudentMessage(lang === "ar" ? templates.studentAr : templates.studentEn);
+    setGuardianMessage(lang === "ar" ? templates.guardianAr : templates.guardianEn);
+  }, [selectedStudent, templates]);
+
+  // ============================================================
+  // ✅ FIXED: استبدال المتغيرات - مع كل المدرسين و firstMeetingLink
+  // ============================================================
+  const replaceVars = (msg, type) => {
+    if (!msg || !selectedStudent || !group) return "";
+    const info = getStudentInfo();
+    if (!info) return msg;
+
+    const { lang, studentNickname, guardianNickname, studentSalutation, guardianSalutation, childTitle } = info;
+    const salutation = type === "student" ? studentSalutation : guardianSalutation;
+
+    const startDate = group.schedule?.startDate
+      ? new Date(group.schedule.startDate).toLocaleDateString(
+          lang === "ar" ? "ar-EG" : "en-US",
+          { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+        )
+      : "";
+
+    // ✅ بناء أسماء كل المدرسين
+    const instructorNames = buildInstructorsNames(group.instructors, lang);
+
+    // ✅ رابط أول ميتنج من الـ group data
+    const firstMeetingLink = group.firstMeetingLink || "";
+
+    return msg
+      .replace(/\{salutation\}/g, salutation)
+      .replace(/\{studentName\}/g, studentNickname)
+      .replace(/\{guardianName\}/g, guardianNickname)
+      .replace(/\{childTitle\}/g, childTitle)
+      .replace(/\{groupName\}/g, group.name || "")
+      .replace(/\{courseName\}/g, group.courseSnapshot?.title || "")
+      .replace(/\{startDate\}/g, startDate)
+      .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "")
+      .replace(/\{timeTo\}/g, group.schedule?.timeTo || "")
+      .replace(/\{instructor\}/g, instructorNames)
+      .replace(/\{firstMeetingLink\}/g, firstMeetingLink); // ✅ NEW
+  };
+
+  // تحديث المعاينة
+  useEffect(() => {
+    if (selectedStudent && group) {
+      setStudentPreview(replaceVars(studentMessage, "student"));
+      setGuardianPreview(replaceVars(guardianMessage, "guardian"));
+    }
+  }, [studentMessage, guardianMessage, selectedStudent, group]);
+
+  // حفظ تلقائي
+  const autoSave = (type, content) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      if (!templateId.current) return;
+      const lang = getStudentLang();
+      const fieldMap = {
+        student: lang === "ar" ? "studentContentAr" : "studentContentEn",
+        guardian: lang === "ar" ? "guardianContentAr" : "guardianContentEn",
+      };
+      try {
+        await fetch("/api/whatsapp/group-templates", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: templateId.current,
+            [fieldMap[type]]: content,
+            setAsDefault: true,
+          }),
+        });
+      } catch (error) {
+        console.error("Save error:", error);
+      }
+    }, 3000);
+  };
+
+  const handleStudentMessageChange = (e) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    setStudentMessage(value);
+    setStudentCursor(cursorPos);
+    autoSave("student", value);
+    const textBefore = value.substring(0, cursorPos);
+    const lastAt = textBefore.lastIndexOf("@");
+    if (lastAt !== -1 && lastAt === cursorPos - 1) {
+      setShowStudentHints(true);
+      setSelectedHintIndex(0);
+    } else if (lastAt === -1) {
+      setShowStudentHints(false);
+    }
+  };
+
+  const handleGuardianMessageChange = (e) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    setGuardianMessage(value);
+    setGuardianCursor(cursorPos);
+    autoSave("guardian", value);
+    const textBefore = value.substring(0, cursorPos);
+    const lastAt = textBefore.lastIndexOf("@");
+    if (lastAt !== -1 && lastAt === cursorPos - 1) {
+      setShowGuardianHints(true);
+      setSelectedHintIndex(0);
+    } else if (lastAt === -1) {
+      setShowGuardianHints(false);
+    }
+  };
+
+  const insertVariable = (variable, type) => {
+    const textarea = type === "student" ? studentTextareaRef.current : guardianTextareaRef.current;
+    const currentValue = type === "student" ? studentMessage : guardianMessage;
+    const cursorPos = type === "student" ? studentCursor : guardianCursor;
+    const textBefore = currentValue.substring(0, cursorPos);
+    const lastAt = textBefore.lastIndexOf("@");
+
+    let newValue, newCursorPos;
+    if (lastAt !== -1) {
+      newValue = currentValue.substring(0, lastAt) + variable.key + currentValue.substring(cursorPos);
+      newCursorPos = lastAt + variable.key.length;
+    } else {
+      newValue = currentValue.substring(0, cursorPos) + variable.key + currentValue.substring(cursorPos);
+      newCursorPos = cursorPos + variable.key.length;
+    }
+
+    if (type === "student") {
+      setStudentMessage(newValue);
+      setShowStudentHints(false);
+      setStudentCursor(newCursorPos);
+    } else {
+      setGuardianMessage(newValue);
+      setShowGuardianHints(false);
+      setGuardianCursor(newCursorPos);
+    }
+    autoSave(type, newValue);
+    setTimeout(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
+  const handleKeyDown = (e, type) => {
+    const variables = type === "student" ? getStudentVariables() : getGuardianVariables();
+    const show = type === "student" ? showStudentHints : showGuardianHints;
+    if (!show) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedHintIndex(p => (p + 1) % variables.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedHintIndex(p => (p - 1 + variables.length) % variables.length);
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      insertVariable(variables[selectedHintIndex], type);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      if (type === "student") setShowStudentHints(false);
+      else setShowGuardianHints(false);
+    }
   };
 
   useEffect(() => {
-    if (selectedStudent && customMessage) {
-      const preview = generatePreview(customMessage);
-      setPreviewMessage(preview);
-    }
-  }, [customMessage, selectedStudent, group, isRTL]);
+    const handler = (e) => {
+      if (studentHintsRef.current && !studentHintsRef.current.contains(e.target)) setShowStudentHints(false);
+      if (guardianHintsRef.current && !guardianHintsRef.current.contains(e.target)) setShowGuardianHints(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
-  const handleAddStudent = async () => {
+  // إضافة الطالب
+  const handleAdd = async () => {
     if (!selectedStudent) {
-      toast.error(t("addStudents.errors.selectStudent"));
+      toast.error("اختر طالباً أولاً");
       return;
     }
-
-    const studentId = selectedStudent._id || selectedStudent.id;
-
-    if (!studentId) {
-      toast.error(t("addStudents.errors.invalidStudent"));
-      return;
-    }
-
     setAdding(true);
-    const loadingToast = toast.loading(t("addStudents.messages.adding"));
-
+    const loadingToast = toast.loading("جاري الإضافة...");
     try {
-      // ✅ إرسال الرسالة كما هي (سيعالجها الـ automation service)
-      const payload = {
-        studentId: studentId.toString(),
-        customMessage: customMessage, // ✅ الرسالة كما هي مع المتغيرات
-        sendWhatsApp: true
-      };
-
       const res = await fetch(`/api/groups/${groupId}/add-student`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(payload)
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: String(selectedStudent._id || selectedStudent.id),
+          studentMessage,
+          guardianMessage,
+          sendWhatsApp: true,
+        }),
       });
-
       const result = await res.json();
-
       if (res.ok && result.success) {
-        toast.success(t("addStudents.messages.success"), { id: loadingToast });
-
-        // عرض نتائج إرسال الرسائل
-        if (result.automation?.messagesSent) {
-          const { student, guardian } = result.automation.messagesSent;
-          const studentName = result.data.student.name;
-          
-          if (student && guardian) {
-            toast.success(`${t("addStudents.messages.sentBoth")} ${studentName}`, {
-              duration: 5000,
-              icon: '✅'
-            });
-          } else if (student) {
-            toast.success(`${t("addStudents.messages.sentStudent")} ${studentName}`, {
-              duration: 5000,
-              icon: '✅'
-            });
-          } else if (guardian) {
-            toast.success(`${t("addStudents.messages.sentGuardian")} ${studentName}`, {
-              duration: 5000,
-              icon: '✅'
-            });
-          } else {
-            toast.error(t("addStudents.messages.sendFailed"), { id: loadingToast });
-          }
-        }
-
-        setStudents(prev => prev.filter(s => {
-          const sid = s._id || s.id;
-          return sid.toString() !== studentId.toString();
-        }));
-
+        toast.success("تم إضافة الطالب بنجاح", { id: loadingToast });
+        setStudents(prev =>
+          prev.filter(s => String(s._id || s.id) !== String(selectedStudent._id || selectedStudent.id))
+        );
         setSelectedStudent(null);
-
-        // إعادة تعيين الرسالة إلى القيمة الافتراضية
-        try {
-          const newMessage = await getDefaultWelcomeMessage(isRTL ? "ar" : "en", group, "{studentName}");
-          setCustomMessage(newMessage);
-        } catch (error) {
-          console.error("❌ Error resetting message:", error);
-          const fallbackMessage = getFallbackMessage(isRTL, group, "{studentName}");
-          setCustomMessage(fallbackMessage);
-        }
-
-        setPreviewMessage("");
-
-        if (onStudentAdded) {
-          onStudentAdded();
-        }
-
-        setTimeout(() => loadData(), 1000);
-
+        if (onStudentAdded) onStudentAdded();
       } else {
-        const errorMessage = result.error || result.message || t("addStudents.errors.addFailed");
-        toast.error(errorMessage, { id: loadingToast });
+        toast.error(result?.error || "فشلت الإضافة", { id: loadingToast });
       }
-
     } catch (error) {
-      console.error("❌ Error adding student:", error);
-      toast.error(error.message || t("addStudents.errors.addFailed"), { id: loadingToast });
+      console.error("Error:", error);
+      toast.error("فشلت الإضافة", { id: loadingToast });
     } finally {
       setAdding(false);
     }
   };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(customMessage);
-    toast.success(t("addStudents.messages.copied"));
-  };
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-  const filteredStudents = students.filter(student => {
-    const fullName = student.personalInfo?.fullName?.toLowerCase() || "";
-    const email = student.personalInfo?.email?.toLowerCase() || "";
-    const enrollmentNumber = student.enrollmentNumber?.toLowerCase() || "";
-    const searchLower = search.toLowerCase();
-
-    return (
-      fullName.includes(searchLower) ||
-      email.includes(searchLower) ||
-      enrollmentNumber.includes(searchLower)
-    );
-  });
-
+  // ============================================================
+  // LOADING STATE
+  // ============================================================
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -501,153 +473,123 @@ Excited to Start Our Journey Together!`;
     return (
       <div className="text-center p-8">
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <p className="text-gray-600 dark:text-gray-400">{t("addStudents.errors.groupNotFound")}</p>
+        <p>المجموعة غير موجودة</p>
       </div>
     );
   }
 
   const currentCount = group.currentStudentsCount || group.students?.length || 0;
   const maxStudents = group.maxStudents || 0;
-  const availableSeats = maxStudents - currentCount;
-  const isFull = availableSeats <= 0;
+  const isFull = currentCount >= maxStudents;
+  const filteredStudents = students.filter(s => {
+    const name = s.personalInfo?.fullName?.toLowerCase() || "";
+    const email = s.personalInfo?.email?.toLowerCase() || "";
+    return name.includes(search.toLowerCase()) || email.includes(search.toLowerCase());
+  });
+
+  const info = getStudentInfo();
+  const lang = info?.lang || "ar";
+  const studentVars = getStudentVariables();
+  const guardianVars = getGuardianVariables();
+
+  // ✅ بناء أسماء المدرسين للعرض في الـ UI
+  const instructorNamesDisplay = buildInstructorsNames(group.instructors, locale === "ar" ? "ar" : "en");
 
   return (
-    <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       {/* Group Info */}
       <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-6 rounded-lg border border-primary/20">
-        <h3 className="text-xl font-bold mb-2">{group.name}</h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          {group.course?.title || group.courseSnapshot?.title} - {group.code}
+        <h3 className="text-xl font-bold mb-1">{group.name}</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+          {group.courseSnapshot?.title} - {group.code}
         </p>
-
-        <div className="grid grid-cols-3 gap-4">
-          <div className="text-center">
-            <Users className="w-5 h-5 mx-auto mb-1 text-primary" />
-            <div className="text-2xl font-bold">{currentCount}</div>
-            <div className="text-xs text-gray-500">{t("addStudents.stats.current")}</div>
+        {/* ✅ عرض كل المدرسين */}
+        {group.instructors && group.instructors.length > 0 && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+            <span className="font-medium">👨‍🏫 {group.instructors.length > 1 ? "المدربون" : "المدرب"}:</span>{" "}
+            <span className="text-primary font-medium">{instructorNamesDisplay}</span>
+          </p>
+        )}
+        {/* ✅ عرض رابط أول ميتنج */}
+        {group.firstMeetingLink && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+            <span className="font-medium">🔗 رابط الجلسة الأولى:</span>{" "}
+            <a href={group.firstMeetingLink} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline truncate inline-block max-w-xs align-bottom">
+              {group.firstMeetingLink}
+            </a>
+          </p>
+        )}
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-2xl font-bold text-primary">{currentCount}</div>
+            <div className="text-xs text-gray-500">الحالي</div>
           </div>
-          <div className="text-center">
-            <Users className="w-5 h-5 mx-auto mb-1 text-gray-400" />
-            <div className="text-2xl font-bold">{maxStudents}</div>
-            <div className="text-xs text-gray-500">{t("addStudents.stats.maximum")}</div>
+          <div>
+            <div className="text-2xl font-bold text-gray-600">{maxStudents}</div>
+            <div className="text-xs text-gray-500">الأقصى</div>
           </div>
-          <div className="text-center">
-            <Users className="w-5 h-5 mx-auto mb-1 text-green-500" />
-            <div className="text-2xl font-bold">{availableSeats}</div>
-            <div className="text-xs text-gray-500">{t("addStudents.stats.available")}</div>
+          <div>
+            <div className="text-2xl font-bold text-green-600">{maxStudents - currentCount}</div>
+            <div className="text-xs text-gray-500">المتاح</div>
           </div>
         </div>
       </div>
 
-      {/* Full Warning */}
-      {isFull && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-semibold text-red-900 dark:text-red-100 mb-1">
-                {t("addStudents.warnings.fullGroup")}
-              </h4>
-              <p className="text-sm text-red-700 dark:text-red-300">
-                {t("addStudents.warnings.fullGroupDesc")}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Search */}
       <div className="relative">
-        <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400`} />
+        <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400`} />
         <input
           type="text"
-          placeholder={t("addStudents.search.placeholder")}
+          placeholder="ابحث عن طالب..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className={`w-full ${isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-3 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white`}
+          onChange={e => setSearch(e.target.value)}
+          className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white`}
         />
       </div>
 
       {/* Students List */}
-      <div className="max-h-96 overflow-y-auto space-y-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg p-4">
+      <div className="max-h-72 overflow-y-auto space-y-2 border border-gray-300 dark:border-gray-600 rounded-lg p-3">
         {filteredStudents.length === 0 ? (
-          <div className="text-center py-12">
-            <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 dark:text-gray-400">
-              {search ? t("addStudents.search.noResults") : t("addStudents.search.noAvailable")}
-            </p>
+          <div className="text-center py-8">
+            <Users className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+            <p className="text-gray-500 text-sm">لا يوجد طلاب متاحين</p>
           </div>
         ) : (
-          filteredStudents.map((student) => {
-            const studentId = student._id || student.id;
-            const isSelected = selectedStudent && (
-              (selectedStudent._id || selectedStudent.id)?.toString() === studentId?.toString()
-            );
-
-            const hasStudentWhatsapp = !!student.personalInfo?.whatsappNumber;
-            const hasGuardianWhatsapp = !!student.guardianInfo?.whatsappNumber;
+          filteredStudents.map(student => {
+            const sid = String(student._id || student.id);
+            const isSelected = selectedStudent && String(selectedStudent._id || selectedStudent.id) === sid;
+            const sLang = student.communicationPreferences?.preferredLanguage || "ar";
+            const sGender = student.personalInfo?.gender || "male";
+            const sRelationship = student.guardianInfo?.relationship || "father";
 
             return (
               <div
-                key={studentId}
+                key={sid}
                 onClick={() => !isFull && setSelectedStudent(student)}
-                className={`p-4 border rounded-lg cursor-pointer transition-all ${isSelected
-                  ? "border-primary bg-primary/5"
-                  : "border-PowderBlueBorder dark:border-dark_border hover:border-primary/50"
-                  } ${isFull ? "opacity-50 cursor-not-allowed" : ""}`}
+                className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                  isSelected
+                    ? "border-primary bg-primary/5 dark:bg-primary/10"
+                    : "border-gray-200 dark:border-gray-700 hover:border-primary/50"
+                } ${isFull ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-semibold">
-                        {student.personalInfo?.fullName}
-                      </h4>
-                      {isSelected && (
-                        <CheckCircle className="w-5 h-5 text-primary flex-shrink-0" />
-                      )}
+                      <h4 className="font-semibold text-sm">{student.personalInfo?.fullName}</h4>
+                      {isSelected && <CheckCircle className="w-4 h-4 text-primary" />}
                     </div>
-
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      {student.personalInfo?.email}
-                    </p>
-
-                    <div className="flex flex-wrap gap-2 text-xs mb-2">
-                      <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">
-                        {t("addStudents.labels.enrollment")}: {student.enrollmentNumber}
+                    <p className="text-xs text-gray-500">{student.personalInfo?.email}</p>
+                    <div className="flex gap-2 mt-1 flex-wrap">
+                      <span className={`text-xs px-2 py-0.5 rounded ${sLang === "ar" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"}`}>
+                        {sLang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
                       </span>
-                      
-                      {/* WhatsApp Indicators */}
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 rounded flex items-center gap-1 ${hasStudentWhatsapp
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
-                          <User className="w-3 h-3" />
-                          {hasStudentWhatsapp ? '📱' : '❌'}
-                        </span>
-                        
-                        <span className={`px-2 py-1 rounded flex items-center gap-1 ${hasGuardianWhatsapp
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
-                          <Phone className="w-3 h-3" />
-                          {hasGuardianWhatsapp ? '👨‍👦' : '❌'}
-                        </span>
-                      </div>
-                      
-                      <span className={`px-2 py-1 rounded ${student.communicationPreferences?.preferredLanguage === 'ar'
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                        : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-                        }`}>
-                        🌐 {student.communicationPreferences?.preferredLanguage === 'ar' ? 'العربية' : 'English'}
+                      <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
+                        {sGender === "female" ? "👧 أنثى" : "👦 ذكر"}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
+                        {sRelationship === "mother" ? "👩 أم" : sRelationship === "father" ? "👨 أب" : "👤 ولي أمر"}
                       </span>
                     </div>
-
-                    {/* Guardian Info Preview */}
-                    {student.guardianInfo?.name && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        👨‍👦 {t("addStudents.labels.guardian")}: {student.guardianInfo.name}
-                        {student.guardianInfo.relationship && ` (${student.guardianInfo.relationship})`}
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -656,190 +598,238 @@ Excited to Start Our Journey Together!`;
         )}
       </div>
 
-      {/* Guardian Information */}
-      {selectedStudent && selectedStudent.guardianInfo && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
-                {t("addStudents.guardian.title")}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="font-medium text-gray-600 dark:text-gray-400">
-                    {t("addStudents.guardian.name")}:
-                  </span>
-                  <p className="text-gray-800 dark:text-gray-200">
-                    {selectedStudent.guardianInfo?.name || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600 dark:text-gray-400">
-                    {t("addStudents.guardian.relationship")}:
-                  </span>
-                  <p className="text-gray-800 dark:text-gray-200">
-                    {selectedStudent.guardianInfo?.relationship || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600 dark:text-gray-400">
-                    {t("addStudents.guardian.phone")}:
-                  </span>
-                  <p className="text-gray-800 dark:text-gray-200">
-                    {selectedStudent.guardianInfo?.phone || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600 dark:text-gray-400">
-                    {t("addStudents.guardian.whatsapp")}:
-                  </span>
-                  <p className="text-gray-800 dark:text-gray-200">
-                    {selectedStudent.guardianInfo?.whatsappNumber ? (
-                      <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                        📱 {selectedStudent.guardianInfo.whatsappNumber}
-                        <span className="text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-1.5 py-0.5 rounded">
-                          {t("addStudents.guardian.willReceive")}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-red-500 dark:text-red-400">
-                        ❌ {t("addStudents.guardian.noWhatsapp")}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-3">
-                ⓘ {t("addStudents.guardian.note")}
+      {/* Messages Section - يظهر فقط لو اختار طالب */}
+      {selectedStudent && (
+        <div className="space-y-4">
+          {/* معلومات الطالب المختار */}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-sm">{selectedStudent.personalInfo?.fullName}</span>
+              <span className={`text-xs px-2 py-0.5 rounded font-medium ${lang === "ar" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
+                {lang === "ar" ? "🇸🇦 الرسائل بالعربية" : "🇬🇧 Messages in English"}
+              </span>
+              <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
+                {info?.gender === "female" ? "👧 أنثى" : "👦 ذكر"}
+              </span>
+              <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
+                {info?.relationship === "mother" ? "👩 أم" : "👨 أب"}
+              </span>
+            </div>
+            <div className="mt-2 text-xs text-gray-500 space-y-1">
+              <p>
+                <span className="font-medium">تحية الطالب: </span>
+                <span className="text-primary">{info?.studentSalutation}</span>
               </p>
+              <p>
+                <span className="font-medium">تحية ولي الأمر: </span>
+                <span className="text-primary">{info?.guardianSalutation}</span>
+              </p>
+              {/* ✅ عرض أسماء كل المدرسين */}
+              {group.instructors && group.instructors.length > 0 && (
+                <p>
+                  <span className="font-medium">
+                    {group.instructors.length > 1 ? "المدربون: " : "المدرب: "}
+                  </span>
+                  <span className="text-primary">{buildInstructorsNames(group.instructors, lang)}</span>
+                </p>
+              )}
+              {/* ✅ عرض رابط أول ميتنج */}
+              {group.firstMeetingLink && (
+                <p>
+                  <span className="font-medium">رابط الجلسة الأولى: </span>
+                  <span className="text-blue-500 text-xs break-all">{group.firstMeetingLink}</span>
+                </p>
+              )}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Message Customization */}
-      {selectedStudent && (
-        <div className="space-y-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <MessageCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">
-                {t("addStudents.message.title")}
+          {/* ✅ رسالة الطالب */}
+          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-6 h-6 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center justify-center">1</span>
+              <h4 className="text-sm font-bold text-purple-700 dark:text-purple-300">
+                {lang === "ar" ? "رسالة الطالب 👦" : "Student Message 👦"}
               </h4>
+              <span className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded">
+                {info?.gender === "female"
+                  ? (lang === "ar" ? "عزيزتي" : "Dear")
+                  : (lang === "ar" ? "عزيزي" : "Dear")}
+              </span>
+            </div>
 
-              {/* Available Variables */}
-              <div className="bg-white dark:bg-dark_input rounded p-3 mb-3 border border-blue-200 dark:border-blue-800">
-                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  📌 {t("addStudents.message.variablesTitle")}
-                </p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{studentName}`} → {selectedStudent.personalInfo?.fullName}
-                  </div>
-                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{guardianName}`} → {selectedStudent.guardianInfo?.name || "N/A"}
-                  </div>
-                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{groupName}`} → {group.name}
-                  </div>
-                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{courseName}`} → {group.courseSnapshot?.title || group.course?.title}
-                  </div>
-                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{startDate}`} → {group.schedule?.startDate
-                      ? new Date(group.schedule.startDate).toLocaleDateString(isRTL ? 'ar-EG' : 'en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })
-                      : t("addStudents.preview.defaults.startDate")
-                    }
-                  </div>
-                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{timeFrom}`} → {group.schedule?.timeFrom || t("addStudents.preview.defaults.timeFrom")}
-                  </div>
-                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{timeTo}`} → {group.schedule?.timeTo || t("addStudents.preview.defaults.timeTo")}
-                  </div>
-                  <div className="font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                    {`{instructor}`} → {group.instructors?.[0]?.name || "No instructor"}
-                  </div>
-                </div>
-              </div>
+            <div className="relative">
+              <textarea
+                ref={studentTextareaRef}
+                value={studentMessage}
+                onChange={handleStudentMessageChange}
+                onKeyDown={e => handleKeyDown(e, "student")}
+                className="w-full px-4 py-3 border-2 border-purple-200 dark:border-purple-800 rounded-xl focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white resize-none h-40 text-sm"
+                dir={lang === "ar" ? "rtl" : "ltr"}
+                placeholder={lang === "ar" ? "اكتب @ لإظهار المتغيرات..." : "Type @ to show variables..."}
+              />
 
-              {/* Message Input */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t("addStudents.message.writeMessage")}
-                  </label>
-                  <button
-                    onClick={copyToClipboard}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1"
-                  >
-                    <Copy className="w-3 h-3" />
-                    {t("addStudents.message.copyTemplate")}
-                  </button>
-                </div>
-
-                <textarea
-                  value={customMessage}
-                  onChange={(e) => setCustomMessage(e.target.value)}
-                  placeholder="Loading welcome message..."
-                  className="w-full px-3 py-2.5 border border-blue-300 dark:border-blue-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white resize-none h-32 font-mono text-sm"
-                  dir={isRTL ? 'rtl' : 'ltr'}
-                />
-
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {customMessage.length} {t("addStudents.message.characters")}
-                </div>
-              </div>
-
-              {/* Live Preview */}
-              {previewMessage && (
-                <div className="bg-white dark:bg-dark_input rounded p-3 border border-blue-200 dark:border-blue-800">
-                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    📋 {t("addStudents.message.previewTitle")}
-                  </p>
-                  <div
-                    className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 max-h-40 overflow-y-auto"
-                    dir={isRTL ? 'rtl' : 'ltr'}
-                  >
-                    {previewMessage}
+              {showStudentHints && (
+                <div
+                  ref={studentHintsRef}
+                  className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-700 rounded-lg shadow-xl max-h-56 overflow-y-auto"
+                >
+                  <div className="p-2 bg-purple-50 dark:bg-purple-900/30 border-b dark:border-purple-800">
+                    <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      {lang === "ar" ? "المتغيرات المتاحة" : "Available Variables"}
+                    </p>
+                  </div>
+                  {studentVars.map((v, i) => (
+                    <button
+                      key={v.key}
+                      type="button"
+                      onClick={() => insertVariable(v, "student")}
+                      className={`w-full px-3 py-2 ${lang === "ar" ? "text-right" : "text-left"} hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-start gap-2 ${i === selectedHintIndex ? "bg-purple-100 dark:bg-purple-900/40" : ""}`}
+                    >
+                      <span>{v.icon}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-mono text-purple-600 dark:text-purple-400">{v.key}</span>
+                          <span className="text-xs text-gray-500">{v.label}</span>
+                        </div>
+                        {v.example && (
+                          <p className="text-xs text-purple-700 dark:text-purple-300 mt-0.5 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded inline-block">
+                            {v.example}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                  <div className="p-2 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700 text-xs text-gray-500">
+                    ↑ ↓ {lang === "ar" ? "للتنقل • Enter للإدراج • Esc للإغلاق" : "navigate • Enter insert • Esc close"}
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* معاينة الطالب */}
+            <div className="mt-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Eye className="w-3.5 h-3.5 text-purple-600" />
+                <span className="text-xs text-purple-600 font-medium">
+                  {lang === "ar" ? "معاينة الرسالة" : "Message Preview"}
+                </span>
+              </div>
+              <div
+                className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-purple-100 dark:border-purple-900 text-sm whitespace-pre-line max-h-32 overflow-y-auto"
+                dir={lang === "ar" ? "rtl" : "ltr"}
+              >
+                {studentPreview || (lang === "ar" ? "لا توجد معاينة" : "No preview")}
+              </div>
+            </div>
+          </div>
+
+          {/* ✅ رسالة ولي الأمر */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">2</span>
+              <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                {lang === "ar" ? "رسالة ولي الأمر 👨‍👦" : "Guardian Message 👨‍👦"}
+              </h4>
+              <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded">
+                {info?.relationship === "mother"
+                  ? (lang === "ar" ? "عزيزتي السيدة" : "Dear Mrs.")
+                  : (lang === "ar" ? "عزيزي الأستاذ" : "Dear Mr.")}
+              </span>
+            </div>
+
+            <div className="relative">
+              <textarea
+                ref={guardianTextareaRef}
+                value={guardianMessage}
+                onChange={handleGuardianMessageChange}
+                onKeyDown={e => handleKeyDown(e, "guardian")}
+                className="w-full px-4 py-3 border-2 border-blue-200 dark:border-blue-800 rounded-xl focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none h-40 text-sm"
+                dir={lang === "ar" ? "rtl" : "ltr"}
+                placeholder={lang === "ar" ? "اكتب @ لإظهار المتغيرات..." : "Type @ to show variables..."}
+              />
+
+              {showGuardianHints && (
+                <div
+                  ref={guardianHintsRef}
+                  className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border-2 border-blue-300 dark:border-blue-700 rounded-lg shadow-xl max-h-56 overflow-y-auto"
+                >
+                  <div className="p-2 bg-blue-50 dark:bg-blue-900/30 border-b dark:border-blue-800">
+                    <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      {lang === "ar" ? "المتغيرات المتاحة" : "Available Variables"}
+                    </p>
+                  </div>
+                  {guardianVars.map((v, i) => (
+                    <button
+                      key={v.key}
+                      type="button"
+                      onClick={() => insertVariable(v, "guardian")}
+                      className={`w-full px-3 py-2 ${lang === "ar" ? "text-right" : "text-left"} hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-start gap-2 ${i === selectedHintIndex ? "bg-blue-100 dark:bg-blue-900/40" : ""}`}
+                    >
+                      <span>{v.icon}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-mono text-blue-600 dark:text-blue-400">{v.key}</span>
+                          <span className="text-xs text-gray-500">{v.label}</span>
+                        </div>
+                        {v.example && (
+                          <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded inline-block">
+                            {v.example}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                  <div className="p-2 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700 text-xs text-gray-500">
+                    ↑ ↓ {lang === "ar" ? "للتنقل • Enter للإدراج • Esc للإغلاق" : "navigate • Enter insert • Esc close"}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* معاينة ولي الأمر */}
+            <div className="mt-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Eye className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-xs text-blue-600 font-medium">
+                  {lang === "ar" ? "معاينة الرسالة" : "Message Preview"}
+                </span>
+              </div>
+              <div
+                className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-blue-100 dark:border-blue-900 text-sm whitespace-pre-line max-h-32 overflow-y-auto"
+                dir={lang === "ar" ? "rtl" : "ltr"}
+              >
+                {guardianPreview || (lang === "ar" ? "لا توجد معاينة" : "No preview")}
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* Actions */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
+      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
         <button
           onClick={onClose}
           disabled={adding}
-          className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition disabled:opacity-50"
         >
-          {t("addStudents.buttons.cancel")}
+          إلغاء
         </button>
-
         <button
-          onClick={handleAddStudent}
-          disabled={!selectedStudent || !customMessage || !customMessage.trim() || isFull || adding}
-          className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          onClick={handleAdd}
+          disabled={!selectedStudent || !studentMessage.trim() || !guardianMessage.trim() || isFull || adding}
+          className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2"
         >
           {adding ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {t("addStudents.buttons.adding")}
+              جاري الإضافة...
             </>
           ) : (
             <>
               <UserPlus className="w-4 h-4" />
-              {t("addStudents.buttons.addStudent")}
+              إضافة الطالب
             </>
           )}
         </button>

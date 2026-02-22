@@ -1,4 +1,4 @@
-// app/api/instructors/[id]/route.ts
+// app/api/instructor/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import User from "../../../models/User";
@@ -12,13 +12,14 @@ export async function GET(
   try {
     await connectDB();
 
-    // ✅ Next.js 15: await params before using
     const { id } = await params;
 
     const instructor = await User.findOne({
       _id: id,
       role: "instructor",
-    }).select("_id name email username image profile isActive createdAt");
+    }).select(
+      "_id name email username image gender profile isActive createdAt"
+    );
 
     if (!instructor) {
       return NextResponse.json(
@@ -26,6 +27,8 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    console.log("✅ Instructor fetched:", instructor);
 
     return NextResponse.json({
       success: true,
@@ -53,11 +56,20 @@ export async function PUT(
   try {
     await connectDB();
 
-    // ✅ Next.js 15: await params before using
     const { id } = await params;
 
     const body = await request.json();
-    const { name, phone, image, password, username } = body;
+    const { name, phone, image, password, username, gender } = body;
+
+    console.log("📝 Update data received:", {
+      id,
+      name: name || "no change",
+      phone: phone !== undefined ? phone : "no change",
+      image: image !== undefined ? image : "no change",
+      gender: gender !== undefined ? gender : "no change",
+      username: username || "no change",
+      password: password ? "***" : "no change",
+    });
 
     // التحقق من وجود المدرس
     const instructor = await User.findOne({
@@ -75,11 +87,14 @@ export async function PUT(
     // تحديث البيانات الأساسية
     const updateData: any = {};
 
-    if (name) updateData.name = name.trim();
-    if (username) {
+    if (name && name.trim()) {
+      updateData.name = name.trim();
+    }
+
+    if (username && username.trim()) {
       // التحقق من أن username فريد
       const existingUser = await User.findOne({
-        username: username.toLowerCase(),
+        username: username.toLowerCase().trim(),
         _id: { $ne: id },
       });
 
@@ -90,16 +105,37 @@ export async function PUT(
         );
       }
 
-      updateData.username = username.toLowerCase();
+      updateData.username = username.toLowerCase().trim();
     }
-    if (image) updateData.image = image;
-    if (phone) updateData["profile.phone"] = phone;
+
+    // تحديث الصورة
+    if (image !== undefined) {
+      updateData.image =
+        image && image.trim() ? image.trim() : "/images/default-avatar.jpg";
+    }
+
+    // تحديث رقم الهاتف
+    if (phone !== undefined) {
+      updateData["profile.phone"] = phone && phone.trim() ? phone.trim() : "";
+    }
+
+    // تحديث النوع
+    if (gender !== undefined) {
+      if (gender === null || gender === "") {
+        updateData.gender = undefined;
+      } else if (gender === "male" || gender === "female") {
+        updateData.gender = gender;
+      }
+    }
 
     // تحديث كلمة المرور إذا تم إدخالها
     if (password && password.trim()) {
       if (password.length < 6) {
         return NextResponse.json(
-          { success: false, message: "Password must be at least 6 characters" },
+          {
+            success: false,
+            message: "Password must be at least 6 characters",
+          },
           { status: 400 }
         );
       }
@@ -108,14 +144,21 @@ export async function PUT(
       updateData.password = hashedPassword;
     }
 
+    console.log("📦 Update data to apply:", updateData);
+
     // تنفيذ التحديث
     const updatedInstructor = await User.findByIdAndUpdate(
       id,
       { $set: updateData },
       { new: true, runValidators: true }
-    ).select("_id name email username image profile isActive");
+    ).select("_id name email username image gender profile isActive");
 
-    console.log("✅ Instructor updated:", updatedInstructor._id);
+    console.log("✅ Instructor updated successfully:", updatedInstructor);
+    console.log("📋 Updated data verification:", {
+      gender: updatedInstructor.gender,
+      image: updatedInstructor.image,
+      phone: updatedInstructor.profile?.phone,
+    });
 
     return NextResponse.json({
       success: true,
@@ -136,7 +179,7 @@ export async function PUT(
   }
 }
 
-// DELETE - حذف المدرس (اختياري)
+// DELETE - حذف المدرس
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -144,7 +187,6 @@ export async function DELETE(
   try {
     await connectDB();
 
-    // ✅ Next.js 15: await params before using
     const { id } = await params;
 
     const instructor = await User.findOneAndDelete({

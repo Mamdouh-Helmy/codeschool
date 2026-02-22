@@ -1,10 +1,10 @@
-"use strict";
-
+// /src/app/services/groupAutomation.js
 import mongoose from "mongoose";
 import Group from "../models/Group";
 import Student from "../models/Student";
 import Session from "../models/Session";
 import User from "../models/User";
+import MessageTemplate from "../models/MessageTemplate";
 import { wapilotService } from "./wapilot-service";
 
 /**
@@ -43,7 +43,7 @@ export async function onGroupActivated(groupId, userId) {
       `   Time: ${group.schedule.timeFrom} - ${group.schedule.timeTo}`,
     );
 
-    // ✅ UPDATED: التحقق من أن هناك 1-3 أيام مختارة (بدلاً من 3 فقط)
+    // ✅ UPDATED: التحقق من أن هناك 1-3 أيام مختارة
     if (
       !group.schedule.daysOfWeek ||
       group.schedule.daysOfWeek.length === 0 ||
@@ -111,7 +111,7 @@ export async function onGroupActivated(groupId, userId) {
       });
     }
 
-    // ✅ Generate Sessions using the updated generateSessionsForGroup
+    // ✅ Generate Sessions
     console.log("📅 Generating new sessions...");
 
     const { generateSessionsForGroup } =
@@ -259,9 +259,871 @@ export async function onGroupActivated(groupId, userId) {
   }
 }
 
+async function getMessageTemplate(templateType, language = 'ar', recipientType = 'guardian') {
+  const validLanguage = ['ar', 'en'].includes(language) ? language : 'ar';
+
+  try {
+    // البحث عن القالب الافتراضي النشط
+    const template = await MessageTemplate.findOne({
+      templateType,
+      recipientType, // ✅ مهم: نحدد هل القالب للطالب أم ولي الأمر
+      isActive: true,
+      isDefault: true,
+    }).lean();
+
+    if (template) {
+      return {
+        content: validLanguage === 'ar' ? template.contentAr : template.contentEn,
+        templateId: template._id,
+        templateName: template.name,
+        recipientType: template.recipientType,
+        isCustom: false,
+        isDefault: true,
+      };
+    }
+
+    // لو مفيش قالب في DB، نستخدم القالب الاحتياطي
+    return {
+      content: getFallbackTemplate(templateType, validLanguage, recipientType),
+      isCustom: false,
+      isFallback: true,
+      recipientType,
+    };
+  } catch (error) {
+    console.error(`❌ Error fetching template [${templateType}]:`, error);
+    return {
+      content: getFallbackTemplate(templateType, validLanguage, recipientType),
+      isCustom: false,
+      isFallback: true,
+      recipientType,
+      error: error.message,
+    };
+  }
+}
+
+// ✅ دالة لجلب قوالب الغياب المناسبة
+export async function getAttendanceTemplates(attendanceStatus, student) {
+  try {
+    const language = student.communicationPreferences?.preferredLanguage || 'ar';
+    
+    // تحديد نوع القالب حسب حالة الغياب
+    let guardianTemplateType = '';
+    
+    switch (attendanceStatus) {
+      case 'absent':
+        guardianTemplateType = 'absence_notification';
+        break;
+      case 'late':
+        guardianTemplateType = 'late_notification';
+        break;
+      case 'excused':
+        guardianTemplateType = 'excused_notification';
+        break;
+      default:
+        throw new Error(`Unknown attendance status: ${attendanceStatus}`);
+    }
+
+    // جلب القالب لولي الأمر فقط
+    const guardianTemplate = await getMessageTemplate(guardianTemplateType, language, 'guardian');
+
+    console.log(`✅ Attendance template fetched:`, {
+      status: attendanceStatus,
+      language,
+      templateType: guardianTemplateType,
+      hasContent: !!guardianTemplate?.content
+    });
+
+    return {
+      guardian: guardianTemplate,
+      metadata: {
+        language,
+        gender: student.personalInfo?.gender || 'male',
+        relationship: student.guardianInfo?.relationship || 'father',
+        studentName: student.personalInfo?.fullName?.split(' ')[0] || 'الطالب',
+        guardianName: student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر',
+      }
+    };
+  } catch (error) {
+    console.error('❌ Error in getAttendanceTemplates:', error);
+    throw error;
+  }
+}
+
+// ✅ دالة لجلب قوالب الغياب للفرونت إند
+export async function getAttendanceTemplatesForFrontend(attendanceStatus, studentId, extraData = {}) {
+  try {
+    const student = await Student.findById(studentId).lean();
+    if (!student) {
+      throw new Error('Student not found');
+    }
+
+    console.log(`📋 Fetching attendance template for student ${studentId}, status: ${attendanceStatus}`);
+    
+    const templates = await getAttendanceTemplates(attendanceStatus, student);
+    
+    console.log(`✅ Templates ready:`, {
+      hasGuardian: !!templates.guardian,
+      guardianContentLength: templates.guardian?.content?.length
+    });
+    
+    return templates;
+  } catch (error) {
+    console.error('❌ Error in getAttendanceTemplatesForFrontend:', error);
+    throw error;
+  }
+}
+
+/**
+ * ✅ القوالب الاحتياطية - لو مفيش template في DB
+ */
+function getFallbackTemplate(templateType, language = 'ar', recipientType = 'guardian') {
+  const templates = {
+    // ========== قوالب الطالب ==========
+    reminder_24h_student: {
+      ar: `{studentSalutation}،
+
+هذا تذكير قبل 24 ساعة لجلستك القادمة:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+🔗 رابط الاجتماع: {meetingLink}
+
+استعد لجلسة رائعة! 🚀
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+This is a 24-hour reminder for your upcoming session:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+⏰ Time: {time}
+🔗 Meeting Link: {meetingLink}
+
+Get ready for an amazing session! 🚀
+Code School Team 💻`,
+    },
+    reminder_1h_student: {
+      ar: `⏰ تذكير عاجل - بعد ساعة
+
+{studentSalutation}،
+
+جلستك ستبدأ بعد ساعة:
+
+📘 الجلسة: {sessionName}
+⏰ الوقت: {time}
+🔗 رابط الاجتماع: {meetingLink}
+
+يرجى الاستعداد الآن! 🚀
+فريق Code School 💻`,
+      en: `⏰ Urgent Reminder - In 1 Hour
+
+{studentSalutation},
+
+Your session starts in 1 hour:
+
+📘 Session: {sessionName}
+⏰ Time: {time}
+🔗 Meeting Link: {meetingLink}
+
+Please get ready now! 🚀
+Code School Team 💻`,
+    },
+    student_welcome: {
+      ar: `{studentSalutation}،
+
+يسرنا إعلامك بأنه تم تسجيلك بنجاح في Code School! 🎉
+
+📘 البرنامج: {courseName}
+👥 المجموعة: {groupName} ({groupCode})
+
+رحلتك التعليمية ستبدأ قريباً! 🚀
+
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+We are pleased to confirm your enrollment at Code School! 🎉
+
+📘 Program: {courseName}
+👥 Group: {groupName} ({groupCode})
+
+Your learning journey starts soon! 🚀
+
+Code School Team 💻`,
+    },
+    session_cancelled_student: {
+      ar: `{studentSalutation}،
+
+نود إعلامك بأنه تم إلغاء جلستك:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+📌 ملاحظات هامة:
+- هذه الجلسة لن تحسب من باقتك.
+- سيتم إعلامك بموعد الجلسة التعويضية قريباً.
+
+نعتذر عن أي إزعاج،
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+We would like to inform you that your session has been cancelled:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+⏰ Time: {time}
+
+📌 Important Notes:
+- This session will not be counted from your package.
+- We will inform you about the makeup session soon.
+
+We apologize for any inconvenience,
+Code School Team 💻`,
+    },
+    session_postponed_student: {
+      ar: `{studentSalutation}،
+
+نود إعلامك بأنه تم تأجيل جلستك:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ الأصلي: {date}
+⏰ الوقت الأصلي: {time}
+
+📌 الموعد الجديد:
+📅 {newDate}
+⏰ {newTime}
+🔗 رابط الاجتماع: {meetingLink}
+
+شكراً لتفهمك،
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+We would like to inform you that your session has been postponed:
+
+📘 Session: {sessionName}
+📅 Original Date: {date}
+⏰ Original Time: {time}
+
+📌 New Schedule:
+📅 {newDate}
+⏰ {newTime}
+🔗 Meeting Link: {meetingLink}
+
+Thank you for your understanding,
+Code School Team 💻`,
+    },
+    group_completion_student: {
+      ar: `{studentSalutation}،
+
+مبروك على إتمام دورة **{courseName}** بنجاح! 🎓🎉
+
+نحن فخورون بإنجازك وتفانيك طوال الرحلة التعليمية.
+
+📚 المجموعة: {groupName} ({groupCode})
+
+نتمنى لك التوفيق في مسيرتك! 🚀
+
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+Congratulations on successfully completing **{courseName}**! 🎓🎉
+
+We are proud of your achievement and dedication.
+
+📚 Group: {groupName} ({groupCode})
+
+We wish you success in your journey! 🚀
+
+Code School Team 💻`,
+    },
+
+    // ========== قوالب ولي الأمر ==========
+    reminder_24h_guardian: {
+      ar: `{guardianSalutation}،
+
+هذا تذكير قبل 24 ساعة لجلسة {childTitle} **{studentName}** القادمة:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+🔗 رابط الاجتماع: {meetingLink}
+
+نتطلع لرؤيتكم،
+فريق Code School 💻`,
+      en: `{guardianSalutation},
+
+This is a 24-hour reminder for {childTitle} **{studentName}**'s upcoming session:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+⏰ Time: {time}
+🔗 Meeting Link: {meetingLink}
+
+We look forward to seeing you,
+Code School Team 💻`,
+    },
+    reminder_1h_guardian: {
+      ar: `⏰ تذكير عاجل - بعد ساعة
+
+{guardianSalutation}،
+
+جلسة {childTitle} **{studentName}** ستبدأ بعد ساعة:
+
+📘 الجلسة: {sessionName}
+⏰ الوقت: {time}
+🔗 رابط الاجتماع: {meetingLink}
+
+يرجى الاستعداد الآن! 🚀
+فريق Code School 💻`,
+      en: `⏰ Urgent Reminder - In 1 Hour
+
+{guardianSalutation},
+
+{childTitle} **{studentName}**'s session starts in 1 hour:
+
+📘 Session: {sessionName}
+⏰ Time: {time}
+🔗 Meeting Link: {meetingLink}
+
+Please get ready now! 🚀
+Code School Team 💻`,
+    },
+    guardian_notification: {
+      ar: `{guardianSalutation}،
+
+يسرنا إعلامكم بأنه تم تسجيل {childTitle} **{studentName}** بنجاح في Code School! 🎉
+
+📘 البرنامج: {courseName}
+👥 المجموعة: {groupName} ({groupCode})
+
+نتطلع لرؤية تقدم {studentName} معنا! 🚀
+
+فريق Code School 💻`,
+      en: `{guardianSalutation},
+
+We are pleased to inform you that {childTitle} **{studentName}** has been successfully enrolled at Code School! 🎉
+
+📘 Program: {courseName}
+👥 Group: {groupName} ({groupCode})
+
+We look forward to seeing {studentName}'s progress! 🚀
+
+Code School Team 💻`,
+    },
+    session_cancelled_guardian: {
+      ar: `{guardianSalutation}،
+
+نود إعلامكم بأنه تم إلغاء جلسة {childTitle} **{studentName}**:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+📌 ملاحظات هامة:
+- هذه الجلسة لن تحسب من الباقة.
+- سيتم إعلامكم بموعد الجلسة التعويضية قريباً.
+
+نعتذر عن أي إزعاج،
+فريق Code School 💻`,
+      en: `{guardianSalutation},
+
+We would like to inform you that {childTitle} **{studentName}**'s session has been cancelled:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+⏰ Time: {time}
+
+📌 Important Notes:
+- This session will not be counted from your package.
+- We will inform you about the makeup session soon.
+
+We apologize for any inconvenience,
+Code School Team 💻`,
+    },
+    session_postponed_guardian: {
+      ar: `{guardianSalutation}،
+
+نود إعلامكم بأنه تم تأجيل جلسة {childTitle} **{studentName}**:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ الأصلي: {date}
+⏰ الوقت الأصلي: {time}
+
+📌 الموعد الجديد:
+📅 {newDate}
+⏰ {newTime}
+🔗 رابط الاجتماع: {meetingLink}
+
+شكراً لتفهمكم،
+فريق Code School 💻`,
+      en: `{guardianSalutation},
+
+We would like to inform you that {childTitle} **{studentName}**'s session has been postponed:
+
+📘 Session: {sessionName}
+📅 Original Date: {date}
+⏰ Original Time: {time}
+
+📌 New Schedule:
+📅 {newDate}
+⏰ {newTime}
+🔗 Meeting Link: {meetingLink}
+
+Thank you for your understanding,
+Code School Team 💻`,
+    },
+
+    // ========== قوالب الغياب (بدون suffix) ==========
+    absence_notification: {
+      ar: `{guardianSalutation}،
+
+نود إعلامكم بأن {childTitle} **{studentName}** كان غائباً عن الجلسة:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+يرجى التواصل معنا في حال وجود أي استفسار.
+فريق Code School 💻`,
+      en: `{guardianSalutation},
+
+We noticed that {childTitle} **{studentName}** was absent from the session:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+⏰ Time: {time}
+
+Please contact us if you have any questions.
+Code School Team 💻`,
+    },
+    late_notification: {
+      ar: `{guardianSalutation}،
+
+نود إعلامكم بأن {childTitle} **{studentName}** وصل متأخراً للجلسة:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ: {date}
+
+يرجى الحرص على المواعيد في المرات القادمة.
+فريق Code School 💻`,
+      en: `{guardianSalutation},
+
+{childTitle} **{studentName}** arrived late to the session:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+
+Please ensure punctuality in future sessions.
+Code School Team 💻`,
+    },
+    excused_notification: {
+      ar: `{guardianSalutation}،
+
+تم تسجيل غياب {childTitle} **{studentName}** بعذر عن الجلسة:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ: {date}
+
+فريق Code School 💻`,
+      en: `{guardianSalutation},
+
+{childTitle} **{studentName}**'s absence has been recorded as excused:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+
+Code School Team 💻`,
+    },
+    group_completion_guardian: {
+      ar: `{guardianSalutation}،
+
+يسرنا إعلامكم بأن {childTitle} **{studentName}** قد أتم بنجاح دورة **{courseName}**! 🎓🎉
+
+نحن فخورون بإنجازه وتفانيه طوال الرحلة التعليمية.
+
+📚 المجموعة: {groupName} ({groupCode})
+
+نتطلع لرؤية المزيد من النجاحات! 🚀
+
+فريق Code School 💻`,
+      en: `{guardianSalutation},
+
+We are pleased to inform you that {childTitle} **{studentName}** has successfully completed **{courseName}**! 🎓🎉
+
+We are proud of their achievement and dedication.
+
+📚 Group: {groupName} ({groupCode})
+
+We look forward to seeing more successes! 🚀
+
+Code School Team 💻`,
+    },
+  };
+
+  // ✅ الأنواع التي ليس لها _student أو _guardian suffix
+  const noSuffixTypes = [
+    'absence_notification',
+    'late_notification',
+    'excused_notification',
+    'guardian_notification',
+    'student_welcome',
+  ];
+
+  let templateKey;
+
+  if (noSuffixTypes.includes(templateType)) {
+    // استخدم المفتاح كما هو
+    templateKey = templateType;
+  } else {
+    // أزل الـ suffix الموجود وأضف الصحيح
+    const baseKey = templateType
+      .replace(/_guardian$/, '')
+      .replace(/_student$/, '');
+
+    templateKey = recipientType === 'student'
+      ? `${baseKey}_student`
+      : `${baseKey}_guardian`;
+  }
+
+  return templates[templateKey]?.[language] || templates[templateKey]?.ar || '';
+}
+
+async function prepareStudentVariables(student, group, session = null, extra = {}) {
+  const language = student.communicationPreferences?.preferredLanguage || 'ar';
+  const gender = (student.personalInfo?.gender || 'male').toLowerCase().trim();
+  const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase().trim();
+
+  const studentFullName = student.personalInfo?.fullName || (language === 'ar' ? 'الطالب' : 'Student');
+  const guardianFullName = student.guardianInfo?.name || (language === 'ar' ? 'ولي الأمر' : 'Guardian');
+
+  // ✅ اسم الطالب المختصر حسب اللغة
+  const studentFirstName = language === 'ar'
+    ? (student.personalInfo?.nickname?.ar?.trim() || studentFullName.split(' ')[0] || 'الطالب')
+    : (student.personalInfo?.nickname?.en?.trim() || studentFullName.split(' ')[0] || 'Student');
+
+  // ✅ اسم ولي الأمر المختصر حسب اللغة
+  const guardianFirstName = language === 'ar'
+    ? (student.guardianInfo?.nickname?.ar?.trim() || guardianFullName.split(' ')[0] || 'ولي الأمر')
+    : (student.guardianInfo?.nickname?.en?.trim() || guardianFullName.split(' ')[0] || 'Guardian');
+
+  // ✅ تحية الطالب حسب الجنس واللغة
+  let studentSalutation = '';
+  if (language === 'ar') {
+    if (gender === 'female') {
+      studentSalutation = `عزيزتي ${studentFirstName}`;
+    } else {
+      // male أو أي قيمة أخرى
+      studentSalutation = `عزيزي ${studentFirstName}`;
+    }
+  } else {
+    // الإنجليزية: Dear بدون Mr/Ms للطالب (عادةً أطفال)
+    studentSalutation = `Dear ${studentFirstName}`;
+  }
+
+  // ✅ تحية ولي الأمر حسب العلاقة واللغة
+  let guardianSalutation = '';
+  if (language === 'ar') {
+    if (relationship === 'mother') {
+      guardianSalutation = `عزيزتي السيدة ${guardianFirstName}`;
+    } else if (relationship === 'father') {
+      guardianSalutation = `عزيزي الأستاذ ${guardianFirstName}`;
+    } else {
+      // guardian أو other
+      guardianSalutation = `عزيزي/عزيزتي ${guardianFirstName}`;
+    }
+  } else {
+    if (relationship === 'mother') {
+      guardianSalutation = `Dear Mrs. ${guardianFirstName}`;
+    } else if (relationship === 'father') {
+      guardianSalutation = `Dear Mr. ${guardianFirstName}`;
+    } else {
+      guardianSalutation = `Dear ${guardianFirstName}`;
+    }
+  }
+
+  // ✅ childTitle حسب الجنس واللغة
+  const childTitle = language === 'ar'
+    ? (gender === 'female' ? 'ابنتك' : 'ابنك')
+    : (gender === 'female' ? 'your daughter' : 'your son');
+
+  // ✅ وصف جنس الطالب
+  const studentGender = language === 'ar'
+    ? (gender === 'female' ? 'الابنة' : 'الابن')
+    : (gender === 'female' ? 'daughter' : 'son');
+
+  // ✅ تاريخ البداية
+  const startDate = group?.schedule?.startDate
+    ? new Date(group.schedule.startDate).toLocaleDateString(
+        language === 'ar' ? 'ar-EG' : 'en-US',
+        { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+      )
+    : '';
+
+  // ✅ أسماء المدرسين
+  const instructorNames = buildInstructorsNames(group?.instructors, language);
+
+  // ✅ رابط أول جلسة
+  const firstMeetingLink = await getFirstSessionMeetingLink(group?._id);
+
+  const variables = {
+    // تحيات
+    studentSalutation,
+    guardianSalutation,
+    // للتوافق مع القوالب القديمة التي تستخدم {salutation}
+    salutation: guardianSalutation,
+    // أسماء
+    studentName: studentFirstName,
+    studentFullName,
+    guardianName: guardianFirstName,
+    guardianFullName,
+    // أوصاف
+    childTitle,
+    studentGender,
+    // المجموعة
+    groupName: group?.name || '',
+    groupCode: group?.code || '',
+    courseName: group?.courseSnapshot?.title || group?.courseId?.title || '',
+    // الجدول
+    startDate,
+    timeFrom: group?.schedule?.timeFrom || '',
+    timeTo: group?.schedule?.timeTo || '',
+    // المدرب/المدربين
+    instructor: instructorNames,
+    // رابط أول جلسة
+    firstMeetingLink: firstMeetingLink || '',
+    // الطالب
+    enrollmentNumber: student.enrollmentNumber || '',
+  };
+
+  // ✅ بيانات الجلسة لو وجدت
+  if (session) {
+    const sessionDate = session.scheduledDate
+      ? new Date(session.scheduledDate).toLocaleDateString(
+          language === 'ar' ? 'ar-EG' : 'en-US',
+          { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+        )
+      : (language === 'ar' ? 'التاريخ' : 'Date');
+
+    Object.assign(variables, {
+      sessionName: session.title || '',
+      sessionNumber: session.sessionNumber || '',
+      date: sessionDate,
+      time: `${session.startTime || ''} - ${session.endTime || ''}`,
+      meetingLink: session.meetingLink || firstMeetingLink || '',
+    });
+  }
+
+  // ✅ متغيرات إضافية
+  if (extra.newDate) {
+    variables.newDate = new Date(extra.newDate).toLocaleDateString(
+      language === 'ar' ? 'ar-EG' : 'en-US',
+      { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+    );
+  }
+  if (extra.newTime) variables.newTime = extra.newTime;
+  if (extra.attendanceStatus) variables.status = extra.attendanceStatus;
+  if (extra.attendanceNotes) variables.notes = extra.attendanceNotes;
+  if (extra.feedbackLink) variables.feedbackLink = extra.feedbackLink;
+
+  return { variables, language, gender, relationship };
+}
+
+/**
+ * ✅ استبدال المتغيرات في الرسالة
+ */
+function replaceVariables(message, variables) {
+  if (!message) return message;
+  let result = message;
+  Object.entries(variables).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      const regex = new RegExp(`\\{${key}\\}`, 'g');
+      result = result.replace(regex, String(value));
+    }
+  });
+  return result;
+}
+/**
+ * ✅ دالة رئيسية لجلب القوالب المناسبة لحدث معين
+ */
+export async function getTemplatesForEvent(eventType, student, extraData = {}) {
+  try {
+    const language = student.communicationPreferences?.preferredLanguage || 'ar';
+    const gender = student.personalInfo?.gender || 'male';
+    const relationship = student.guardianInfo?.relationship || 'father';
+
+    // تحديد أنواع القوالب المطلوبة حسب الحدث
+    let studentTemplateType = '';
+    let guardianTemplateType = '';
+
+    switch (eventType) {
+      case 'session_cancelled':
+        studentTemplateType = 'session_cancelled_student';
+        guardianTemplateType = 'session_cancelled_guardian';
+        break;
+      case 'session_postponed':
+        studentTemplateType = 'session_postponed_student';
+        guardianTemplateType = 'session_postponed_guardian';
+        break;
+      case 'reminder_24h':
+        studentTemplateType = 'reminder_24h_student';
+        guardianTemplateType = 'reminder_24h_guardian';
+        break;
+      case 'reminder_1h':
+        studentTemplateType = 'reminder_1h_student';
+        guardianTemplateType = 'reminder_1h_guardian';
+        break;
+      case 'student_welcome':
+        studentTemplateType = 'student_welcome';
+        guardianTemplateType = 'guardian_notification';
+        break;
+      case 'group_completion':
+        studentTemplateType = 'group_completion_student';
+        guardianTemplateType = 'group_completion_guardian';
+        break;
+      case 'absence':
+        studentTemplateType = null; // لا نرسل للطالب
+        guardianTemplateType = 'absence_notification';
+        break;
+      case 'late':
+        studentTemplateType = null; // لا نرسل للطالب
+        guardianTemplateType = 'late_notification';
+        break;
+      case 'excused':
+        studentTemplateType = null; // لا نرسل للطالب
+        guardianTemplateType = 'excused_notification';
+        break;
+      default:
+        throw new Error(`Unknown event type: ${eventType}`);
+    }
+
+    // جلب القوالب
+    const [studentTemplate, guardianTemplate] = await Promise.all([
+      studentTemplateType ? getMessageTemplate(studentTemplateType, language, 'student') : Promise.resolve(null),
+      guardianTemplateType ? getMessageTemplate(guardianTemplateType, language, 'guardian') : Promise.resolve(null)
+    ]);
+
+    return {
+      student: studentTemplate,
+      guardian: guardianTemplate,
+      metadata: {
+        language,
+        gender,
+        relationship,
+        studentName: student.personalInfo?.fullName?.split(' ')[0] || 'الطالب',
+        guardianName: student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر',
+      }
+    };
+  } catch (error) {
+    console.error('❌ Error in getTemplatesForEvent:', error);
+    throw error;
+  }
+}
+
+/**
+ * ✅ دالة لجلب القوالب لعرضها في الفرونت إند
+ */
+export async function getTemplatesForFrontend(eventType, studentId, extraData = {}) {
+  try {
+    const student = await Student.findById(studentId).lean();
+    if (!student) {
+      throw new Error('Student not found');
+    }
+
+    return await getTemplatesForEvent(eventType, student, extraData);
+  } catch (error) {
+    console.error('❌ Error in getTemplatesForFrontend:', error);
+    throw error;
+  }
+}
 /**
  * ✅ EVENT: Send Instructor Welcome Messages
- * EXISTING - NO CHANGES
+ */
+
+export function replaceInstructorVariables(
+  message,
+  instructor,
+  group,
+) {
+  console.log("\n🔄 [REPLACE_INSTRUCTOR_VARS] Starting variable replacement...");
+  console.log("   Instructor:", instructor.name);
+  console.log("   Gender:", instructor.gender || "NOT SET");
+  console.log("   Group:", group.name);
+
+  // ✅ Get instructor name
+  const instructorName = instructor.name?.split(" ")[0] || instructor.name || "";
+  
+  // ✅ CRITICAL: استخدام gender من الباك إند (male/female)
+  // القيمة الافتراضية: male إذا لم يُحدد
+  const gender = instructor.gender || "male";
+  
+  console.log("   Instructor Name:", instructorName);
+  console.log("   Gender (final):", gender);
+
+  // ✅ التحية بناءً على النوع من الباك إند
+  let salutation = "";
+  
+  if (gender === "male") {
+    salutation = `عزيزي ${instructorName}`;
+  } else if (gender === "female") {
+    salutation = `عزيزتي ${instructorName}`;
+  } else {
+    // احتياطي في حالة وجود قيمة غير متوقعة
+    salutation = `عزيزي/عزيزتي ${instructorName}`;
+  }
+
+  console.log("   ✅ Salutation:", salutation);
+
+  // ✅ Group and course info
+  const groupName = group.name || "{groupName}";
+  const courseName = group.courseSnapshot?.title || group.courseId?.title || "{courseName}";
+
+  // ✅ Date formatting
+  const startDate = group.schedule?.startDate
+    ? new Date(group.schedule.startDate).toLocaleDateString("ar-EG", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "{startDate}";
+
+  const timeFrom = group.schedule?.timeFrom || "{timeFrom}";
+  const timeTo = group.schedule?.timeTo || "{timeTo}";
+
+  // ✅ Student count
+  const studentCount = group.currentStudentsCount || group.students?.length || 0;
+
+  console.log("\n📝 [VARIABLES] Summary:");
+  console.log("   {salutation} →", salutation);
+  console.log("   {instructorName} →", instructorName);
+  console.log("   {groupName} →", groupName);
+  console.log("   {courseName} →", courseName);
+  console.log("   {startDate} →", startDate);
+  console.log("   {timeFrom} →", timeFrom);
+  console.log("   {timeTo} →", timeTo);
+  console.log("   {studentCount} →", studentCount);
+
+  // ✅ Replace all variables
+  const result = message
+    .replace(/\{salutation\}/g, salutation)
+    .replace(/\{instructorName\}/g, instructorName)
+    .replace(/\{groupName\}/g, groupName)
+    .replace(/\{courseName\}/g, courseName)
+    .replace(/\{startDate\}/g, startDate)
+    .replace(/\{timeFrom\}/g, timeFrom)
+    .replace(/\{timeTo\}/g, timeTo)
+    .replace(/\{studentCount\}/g, studentCount.toString());
+
+  console.log("\n✅ [RESULT] Message after replacement (first 200 chars):");
+  console.log(result.substring(0, 200) + "...");
+
+  return result;
+}
+
+/**
+ * ✅ EVENT: Send Instructor Welcome Messages - UPDATED VERSION
+ * ✅ يعمل مع gender من User Schema الموجود
  */
 export async function sendInstructorWelcomeMessages(
   groupId,
@@ -270,13 +1132,13 @@ export async function sendInstructorWelcomeMessages(
   try {
     console.log(`\n🎯 EVENT: Send Instructor Welcome Messages ==========`);
     console.log(`👥 Group: ${groupId}`);
-    console.log(
-      `📝 Custom Messages Provided: ${Object.keys(instructorMessages).length}`,
-    );
+    console.log(`📝 Custom Messages Provided: ${Object.keys(instructorMessages).length}`);
 
+    // ✅ FIX: استخدام lean() عشان يرجع plain objects بدل Mongoose documents
     const group = await Group.findById(groupId)
       .populate("courseId", "title level")
-      .populate("instructors", "name email profile");
+      .populate("instructors", "name email gender profile")
+      .lean();
 
     if (!group) {
       throw new Error("Group not found");
@@ -294,6 +1156,17 @@ export async function sendInstructorWelcomeMessages(
 
     console.log(`📧 Found ${group.instructors.length} instructors`);
 
+    // ✅ Log تفصيلي بعد lean()
+    group.instructors.forEach((inst, index) => {
+      console.log(`\n👤 Instructor #${index + 1}:`);
+      console.log(`   Name: ${inst.name}`);
+      console.log(`   Email: ${inst.email}`);
+      console.log(`   Gender: ${inst.gender ?? "NOT SET IN DB"}`);
+      console.log(`   Profile:`, JSON.stringify(inst.profile));
+      console.log(`   Phone (raw): "${inst.profile?.phone}"`);
+      console.log(`   Phone (trimmed): "${inst.profile?.phone?.trim()}"`);
+    });
+
     if (!group.automation?.whatsappEnabled) {
       console.log("⚠️ WhatsApp notifications disabled for this group");
       return {
@@ -308,16 +1181,16 @@ export async function sendInstructorWelcomeMessages(
     let failCount = 0;
     const notificationResults = [];
 
-    // معالجة كل مدرس
     for (const instructor of group.instructors) {
       const instructorId = instructor._id.toString();
 
-      // ✅ استخدام profile.phone فقط
-      const instructorPhone = instructor.profile?.phone;
+      // ✅ FIX: بعد lean() الـ profile plain object وبيشتغل صح
+      const instructorPhone = instructor.profile?.phone?.trim() || null;
 
       console.log(`\n📱 Processing instructor: ${instructor.name}`);
       console.log(`   Email: ${instructor.email}`);
-      console.log(`   Phone: ${instructorPhone || "Not found"}`);
+      console.log(`   Gender: ${instructor.gender ?? "NOT SET IN DB (will use default: male)"}`);
+      console.log(`   Phone (after trim): ${instructorPhone || "NOT SET"}`);
 
       if (!instructorPhone) {
         failCount++;
@@ -325,6 +1198,7 @@ export async function sendInstructorWelcomeMessages(
           instructorId,
           instructorName: instructor.name,
           instructorEmail: instructor.email,
+          instructorGender: instructor.gender,
           status: "failed",
           reason: "No phone number registered",
           suggestion: "Please add phone number to instructor profile",
@@ -333,33 +1207,49 @@ export async function sendInstructorWelcomeMessages(
         continue;
       }
 
-      // الحصول على الرسالة المخصصة أو استخدام الرسالة الافتراضية
       let messageContent;
 
       if (instructorMessages && instructorMessages[instructorId]) {
-        // استخدام الرسالة المخصصة من الإدارة
         messageContent = instructorMessages[instructorId];
-        console.log(`📝 Using custom message from admin`);
+        console.log(`📝 Using custom message from admin (already processed)`);
       } else {
-        // استخدام الرسالة الافتراضية
-        messageContent = prepareInstructorWelcomeMessage(
-          instructor.name,
-          group,
-          "ar", // يمكن تحديد اللغة من instructor metadata لو موجودة
-        );
-        console.log(`📝 Using default message`);
+        console.log(`📝 Using default template`);
+
+        const defaultTemplate = `{salutation}،
+
+يسرنا إعلامك بأن مجموعة جديدة قد تم تعيينها وتفعيلها بنجاح تحت إشرافك بالتفاصيل التالية:
+
+📘 البرنامج: {courseName}
+👥 المجموعة: {groupName}
+📅 تاريخ الحصة الأولى: {startDate}
+⏰ الموعد: {timeFrom} – {timeTo}
+👦👧 عدد الطلاب: {studentCount}
+
+📌 يرجى التأكد من التالي:
+- مراجعة المنهج وخطة الجلسة قبل الحصة الأولى
+- فتح رابط الاجتماع قبل ١٠-١٥ دقيقة على الأقل
+- التأكد من جاهزية جميع الأدوات والمواد المطلوبة
+- تسجيل الحضور وتقييم الجلسة بعد كل حصة
+
+نقدر التزامك واحترافيتك ونتمنى لك رحلة تعليمية ناجحة ومؤثرة مع طلابك 🚀
+
+مع أطيب التحيات،
+إدارة Code School 💻`;
+
+        messageContent = replaceInstructorVariables(defaultTemplate, instructor, group);
+        console.log(`✅ Variables replaced successfully`);
       }
 
-      console.log(`📤 Message preview: ${messageContent.substring(0, 50)}...`);
+      console.log(`📤 Message preview: ${messageContent.substring(0, 100)}...`);
 
       try {
-        // ✅ إرسال الرسالة عبر WhatsApp
-        console.log(`📲 Sending WhatsApp to ${instructorPhone}...`);
+        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
 
-        const sendResult = await wapilotService.sendTextMessage(
-          wapilotService.preparePhoneNumber(instructorPhone),
-          messageContent,
-        );
+        if (!preparedPhone) {
+          throw new Error(`Invalid phone number format: ${instructorPhone}`);
+        }
+
+        const sendResult = await wapilotService.sendTextMessage(preparedPhone, messageContent);
 
         successCount++;
         notificationResults.push({
@@ -367,16 +1257,16 @@ export async function sendInstructorWelcomeMessages(
           instructorName: instructor.name,
           instructorEmail: instructor.email,
           instructorPhone,
+          instructorGender: instructor.gender || "male (default)",
           status: "sent",
           customMessage: !!instructorMessages?.[instructorId],
-          messagePreview: messageContent.substring(0, 50) + "...",
+          messagePreview: messageContent.substring(0, 100) + "...",
           sentAt: new Date(),
           wapilotResponse: sendResult,
         });
 
         console.log(`✅ Message sent successfully to ${instructor.name}`);
 
-        // ✅ تحديث سجل المدرس
         try {
           await User.findByIdAndUpdate(instructor._id, {
             $set: {
@@ -386,10 +1276,7 @@ export async function sendInstructorWelcomeMessages(
           });
           console.log(`📊 Updated instructor metadata`);
         } catch (updateError) {
-          console.warn(
-            `⚠️ Could not update instructor metadata:`,
-            updateError.message,
-          );
+          console.warn(`⚠️ Could not update instructor metadata:`, updateError.message);
         }
       } catch (error) {
         failCount++;
@@ -398,6 +1285,7 @@ export async function sendInstructorWelcomeMessages(
           instructorName: instructor.name,
           instructorEmail: instructor.email,
           instructorPhone,
+          instructorGender: instructor.gender,
           status: "failed",
           reason: error.message,
           error: error.toString(),
@@ -406,7 +1294,6 @@ export async function sendInstructorWelcomeMessages(
       }
     }
 
-    // ✅ تحديث سجل الجروب
     try {
       await Group.findByIdAndUpdate(groupId, {
         $set: {
@@ -447,226 +1334,397 @@ export async function sendInstructorWelcomeMessages(
 
 /**
  * ✅ Helper: Send message to student with auto-logging
- * EXISTING - NO CHANGES
  */
-async function sendToStudentWithLogging({
-  studentId,
-  student,
-  messageContent,
-  messageType,
-  language,
-  metadata,
-}) {
+async function sendToStudentWithLogging({ studentId, student, studentMessage, guardianMessage, messageType, metadata = {} }) {
   try {
-    const whatsappNumber = student.personalInfo?.whatsappNumber;
+    const studentWhatsApp = student.personalInfo?.whatsappNumber;
+    const guardianWhatsApp = student.guardianInfo?.whatsappNumber;
+    const language = student.communicationPreferences?.preferredLanguage || 'ar';
 
-    if (!whatsappNumber) {
-      console.log(`⚠️ No WhatsApp for ${student.personalInfo?.fullName}`);
-      return {
-        success: false,
-        reason: "No WhatsApp number",
-        studentId,
-        studentName: student.personalInfo?.fullName,
-      };
+    const results = {
+      guardian: false,
+      student: false,
+      guardianError: null,
+      studentError: null,
+    };
+
+    // إرسال لولي الأمر
+    if (guardianWhatsApp && guardianMessage) {
+      try {
+        await wapilotService.sendAndLogMessage({
+          studentId,
+          phoneNumber: guardianWhatsApp,
+          messageContent: guardianMessage,
+          messageType,
+          language,
+          metadata: { ...metadata, recipientType: 'guardian', guardianName: student.guardianInfo?.name },
+        });
+        results.guardian = true;
+        console.log(`✅ Guardian message sent to ${student.personalInfo?.fullName}`);
+      } catch (error) {
+        results.guardianError = error.message;
+        console.error(`❌ Failed to send guardian message:`, error);
+      }
     }
 
-    await wapilotService.sendAndLogMessage({
-      studentId,
-      phoneNumber: whatsappNumber,
-      messageContent,
-      messageType,
-      language,
-      metadata,
-    });
+    // إرسال للطالب
+    if (studentWhatsApp && studentMessage) {
+      try {
+        await wapilotService.sendAndLogMessage({
+          studentId,
+          phoneNumber: studentWhatsApp,
+          messageContent: studentMessage,
+          messageType,
+          language,
+          metadata: { ...metadata, recipientType: 'student' },
+        });
+        results.student = true;
+        console.log(`✅ Student message sent to ${student.personalInfo?.fullName}`);
+      } catch (error) {
+        results.studentError = error.message;
+        console.error(`❌ Failed to send student message:`, error);
+      }
+    }
 
     return {
-      success: true,
+      success: results.guardian || results.student,
       studentId,
       studentName: student.personalInfo?.fullName,
-      whatsappNumber,
+      sentTo: { guardian: results.guardian, student: results.student },
+      errors: { guardian: results.guardianError, student: results.studentError },
     };
   } catch (error) {
-    console.error(
-      `❌ Failed to send to ${student.personalInfo?.fullName}:`,
-      error,
-    );
-    return {
-      success: false,
-      error: error.message,
-      studentId,
-      studentName: student.personalInfo?.fullName,
-    };
+    console.error(`❌ Critical error in sendToStudentWithLogging:`, error);
+    return { success: false, error: error.message, studentId };
   }
 }
 
 /**
- * EVENT 2: Student Added to Group
- * ✅ UPDATED: Send to both student AND parent
+ * ✅ Helper: Prepare group welcome message for student
  */
+function prepareGroupWelcomeMessage(studentName, group, language = "ar") {
+  const replaceVariables = (template) => {
+    return template
+      .replace(/\{studentName\}/g, studentName)
+      .replace(/\{groupName\}/g, group.name)
+      .replace(/\{groupCode\}/g, group.code)
+      .replace(
+        /\{courseName\}/g,
+        group.courseSnapshot?.title || group.courseId?.title || "",
+      )
+      .replace(
+        /\{startDate\}/g,
+        new Date(group.schedule?.startDate).toLocaleDateString(
+          language === "en" ? "en-US" : "ar-EG",
+          {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          },
+        ),
+      )
+      .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "")
+      .replace(/\{timeTo\}/g, group.schedule?.timeTo || "")
+      .replace(/\{instructor\}/g, group.instructors?.[0]?.name || "");
+  };
+
+  if (language === "en") {
+    const defaultTemplate = `🎉 Welcome to ${group.name}!
+
+Dear ${studentName},
+
+You have been enrolled in:
+📚 Course: ${group.courseSnapshot?.title || group.courseId?.title}
+👥 Group: ${group.code}
+📅 Start Date: ${new Date(group.schedule?.startDate).toLocaleDateString(
+      "en-US",
+      {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      },
+    )}
+⏰ Time: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
+${
+  group.instructors?.[0]?.name
+    ? `👨‍🏫 Instructor: ${group.instructors[0].name}`
+    : ""
+}
+
+Your learning journey starts soon! 🚀
+
+Best regards,
+Code School Team 💻`;
+
+    return replaceVariables(defaultTemplate);
+  } else {
+    const defaultTemplate = `🎉 مرحباً بك في ${group.name}!
+
+عزيزي/عزيزتي ${studentName},
+
+تم تسجيلك في:
+📚 الكورس: ${group.courseSnapshot?.title || group.courseId?.title}
+👥 المجموعة: ${group.code}
+📅 تاريخ البدء: ${new Date(group.schedule?.startDate).toLocaleDateString(
+      "ar-EG",
+      {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      },
+    )}
+⏰ الوقت: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
+${group.instructors?.[0]?.name ? `👨‍🏫 المدرب: ${group.instructors[0].name}` : ""}
+
+رحلتك التعليمية ستبدأ قريباً! 🚀
+
+مع أطيب التحيات،
+فريق Code School 💻`;
+
+    return replaceVariables(defaultTemplate);
+  }
+}
+
 /**
- * EVENT 2: Student Added to Group
- * ✅ UPDATED: Send to both student AND parent with correct messageType
+ * ✅ Get default guardian message template
  */
+export function getDefaultGuardianMessage(language = "ar") {
+  if (language === "ar") {
+    return `{salutation}،
+
+يسرنا إعلامكم بأنه تم تسجيل {childTitle} {studentName} بنجاح في Code School! 🎉
+
+📘 البرنامج: {courseName}
+👥 المجموعة: {groupName}
+📅 تاريخ البدء: {startDate}
+⏰ الموعد: {timeFrom} – {timeTo}
+{instructor}
+
+📌 ملاحظات هامة:
+• يرجى التأكد من حضور {studentName} في الموعد المحدد
+• تجهيز الجهاز (لابتوب/تابلت) مع شحن كامل
+• الحضور المنتظم ضروري لتحقيق أفضل النتائج
+
+نتطلع لرؤية تقدم {studentName} معنا! 🚀
+
+في حالة وجود أي استفسار، نحن في الخدمة دائماً.
+
+مع أطيب التحيات،
+فريق Code School 💻`;
+  } else {
+    return `{salutation},
+
+We are pleased to inform you that {childTitle} {studentName} has been successfully enrolled at Code School! 🎉
+
+📘 Program: {courseName}
+👥 Group: {groupName}
+📅 Start Date: {startDate}
+⏰ Schedule: {timeFrom} – {timeTo}
+{instructor}
+
+📌 Important Notes:
+• Please ensure {studentName} attends on time
+• Prepare the device (laptop/tablet) with full charge
+• Regular attendance is essential for best results
+
+We look forward to seeing {studentName}'s progress! 🚀
+
+If you have any questions, we're always here to help.
+
+Best regards,
+Code School Team 💻`;
+  }
+}
+
+/**
+ * ✅ Get default student message template
+ */
+export function getDefaultStudentMessage(language = "ar") {
+  if (language === "ar") {
+    return `{salutation}،
+
+يسرنا إعلامك بأنه تم تسجيلك بنجاح في Code School! 🎉
+
+📘 البرنامج: {courseName}
+👥 المجموعة: {groupName}
+📅 تاريخ البدء: {startDate}
+⏰ الموعد: {timeFrom} – {timeTo}
+{instructor}
+
+متحمسون لبدء رحلتك التعليمية معنا! 🚀
+
+في حالة وجود أي استفسار، لا تتردد في التواصل معنا.
+
+مع أطيب التحيات،
+فريق Code School 💻`;
+  } else {
+    return `{salutation},
+
+We are pleased to confirm that you have been successfully enrolled at Code School! 🎉
+
+📘 Program: {courseName}
+👥 Group: {groupName}
+📅 Start Date: {startDate}
+⏰ Schedule: {timeFrom} – {timeTo}
+{instructor}
+
+Excited to start your learning journey with us! 🚀
+
+If you have any questions, feel free to contact us.
+
+Best regards,
+Code School Team 💻`;
+  }
+}
+
+/**
+ * ✅ EVENT 2: Student Added to Group
+ */
+function buildInstructorsNames(instructors, language = "ar") {
+  if (!instructors || instructors.length === 0) return "";
+  const names = instructors.map((i) => i.name).filter(Boolean);
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  if (language === "ar") {
+    if (names.length === 2) return `${names[0]} و ${names[1]}`;
+    return names.slice(0, -1).join(" / ") + " / " + names[names.length - 1];
+  } else {
+    if (names.length === 2) return `${names[0]} & ${names[1]}`;
+    return names.slice(0, -1).join(", ") + " & " + names[names.length - 1];
+  }
+}
+
+async function getFirstSessionMeetingLink(groupId) {
+  try {
+    const firstSession = await Session.findOne({
+      groupId: groupId,
+      isDeleted: false,
+      status: { $in: ["scheduled", "completed"] },
+      meetingLink: { $exists: true, $ne: null, $ne: "" },
+    })
+      .sort({ scheduledDate: 1 })
+      .select("meetingLink")
+      .lean();
+    return firstSession?.meetingLink || "";
+  } catch (error) {
+    console.error("❌ Error fetching first session meeting link:", error);
+    return "";
+  }
+}
+
 export async function onStudentAddedToGroup(
   studentId,
   groupId,
-  customMessage = null,
+  customMessages = { student: null, guardian: null },
   sendWhatsApp = true,
 ) {
   try {
     console.log(`\n🎯 EVENT: Student Added to Group ==========`);
-    console.log(`👤 Student: ${studentId}`);
-    console.log(`👥 Group: ${groupId}`);
-    console.log(`📝 Custom Message: ${customMessage ? "Yes" : "No"}`);
-    console.log(`📱 Send WhatsApp: ${sendWhatsApp}`);
 
     const [student, group] = await Promise.all([
       Student.findById(studentId),
-      Group.findById(groupId).populate("courseId"),
+      Group.findById(groupId)
+        .populate("courseId")
+        .populate({ path: "instructors", select: "name email gender profile" }),
     ]);
 
-    if (!student || !group) {
-      throw new Error("Student or Group not found");
-    }
+    if (!student || !group) throw new Error("Student or Group not found");
 
     await Student.findByIdAndUpdate(
       studentId,
       {
         $addToSet: { "academicInfo.groupIds": groupId },
-        $set: {
-          "metadata.updatedAt": new Date(),
-          "metadata.lastGroupAdded": new Date(),
-        },
+        $set: { "metadata.updatedAt": new Date() },
       },
-      { new: true },
+      { new: true }
     );
 
-    console.log(
-      `✅ Student ${student.personalInfo.fullName} added to group ${group.code}`,
-    );
+    console.log(`✅ Student ${student.personalInfo.fullName} added to group ${group.code}`);
 
     let studentMessageSent = false;
     let guardianMessageSent = false;
-    let studentMessageContent = "";
-    let guardianMessageContent = "";
 
-    if (
-      sendWhatsApp &&
-      group.automation?.whatsappEnabled &&
-      group.automation?.welcomeMessage
-    ) {
+    if (sendWhatsApp && group.automation?.whatsappEnabled && group.automation?.welcomeMessage) {
       console.log("📱 Sending WhatsApp welcome messages...");
 
-      const language =
-        student.communicationPreferences?.preferredLanguage || "ar";
+      // ✅ FIXED: prepareStudentVariables دلوقتي async
+      const { variables, language } = await prepareStudentVariables(student, group);
 
-      // ✅ الحصول على الرسالة النهائية
-      let finalMessage;
-      if (customMessage) {
-        // ✅ التصحيح: استبدال المتغيرات في الرسالة المخصصة
-        finalMessage = replaceStudentVariables(customMessage, student, group);
-        console.log("📝 Using custom message from admin (variables replaced)");
-      } else {
-        // ✅ استخدام الرسالة الافتراضية مع اسم الطالب
-        finalMessage = prepareGroupWelcomeMessage(
-          student.personalInfo.fullName,
-          group,
-          language,
-        );
-        console.log("📝 Using default group welcome message");
-      }
+      console.log(`   Language: ${language} | Gender: ${student.personalInfo?.gender} | Relationship: ${student.guardianInfo?.relationship}`);
+      console.log(`   Student Salutation: ${variables.studentSalutation}`);
+      console.log(`   Guardian Salutation: ${variables.guardianSalutation}`);
+      console.log(`   Instructor: ${variables.instructor}`);
+      console.log(`   Start Date: ${variables.startDate}`);
+      console.log(`   First Meeting Link: ${variables.firstMeetingLink}`);
 
-      studentMessageContent = finalMessage;
-      guardianMessageContent = finalMessage;
+      // ✅ رسالة الطالب - salutation = studentSalutation
+      if (student.personalInfo?.whatsappNumber) {
+        const template = await getMessageTemplate('student_welcome', language, 'student');
 
-      // ✅ إرسال الرسالة للطالب
-      const studentWhatsapp = student.personalInfo?.whatsappNumber;
-      if (studentWhatsapp) {
-        console.log(`📲 Sending to student: ${student.personalInfo.fullName}`);
-
-        const studentResult = await sendToStudentWithLogging({
-          studentId,
-          student,
-          messageContent: finalMessage,
-          messageType: "group_welcome", // ✅ هذا صحيح
-          language,
-          metadata: {
-            groupId: group._id,
-            groupName: group.name,
-            groupCode: group.code,
-            isCustomMessage: !!customMessage,
-            automationType: "group_enrollment",
-            recipientType: "student",
-          },
-        });
-
-        if (studentResult.success) {
-          studentMessageSent = true;
-          console.log(
-            `✅ Student message sent to ${studentResult.studentName}`,
-          );
-        } else {
-          console.log(
-            `⚠️ Student: ${studentResult.reason || studentResult.error}`,
-          );
-        }
-      } else {
-        console.log(
-          `⚠️ No student WhatsApp number for ${student.personalInfo.fullName}`,
-        );
-      }
-
-      // ✅ إرسال الرسالة لولي الأمر
-      const guardianWhatsapp = student.guardianInfo?.whatsappNumber;
-      if (guardianWhatsapp) {
-        console.log(
-          `📲 Sending to guardian: ${student.guardianInfo?.name || "Guardian"}`,
-        );
-
-        // ✅ تحضير رسالة خاصة لولي الأمر
-        let guardianMessage = finalMessage;
-
-        // يمكن إضافة مخصصات لرسالة ولي الأمر إذا لزم الأمر
-        if (language === "ar") {
-          guardianMessage =
-            `عزيزي/عزيزتي ${student.guardianInfo?.name || "ولي الأمر"}،\n\n` +
-            finalMessage;
-        } else {
-          guardianMessage =
-            `Dear ${student.guardianInfo?.name || "Guardian"},\n\n` +
-            finalMessage;
-        }
+        // ✅ salutation للطالب = studentSalutation
+        const studentVars = { ...variables, salutation: variables.studentSalutation };
+        const finalStudentMessage = customMessages.student
+          ? replaceVariables(customMessages.student, studentVars)
+          : replaceVariables(template.content, studentVars);
 
         try {
-          // ✅ استخدام messageType صحيح من Enum
           await wapilotService.sendAndLogMessage({
             studentId,
-            phoneNumber: guardianWhatsapp,
-            messageContent: guardianMessage,
-            messageType: "group_welcome", // ✅ استخدام نفس النوع أو يمكن استخدام "custom"
+            phoneNumber: student.personalInfo.whatsappNumber,
+            messageContent: finalStudentMessage,
+            messageType: "group_welcome_student",
             language,
             metadata: {
               groupId: group._id,
               groupName: group.name,
               groupCode: group.code,
-              isCustomMessage: !!customMessage,
+              isCustomMessage: !!customMessages.student,
+              automationType: "group_enrollment",
+              recipientType: "student",
+            },
+          });
+          studentMessageSent = true;
+          console.log(`✅ Student message sent`);
+        } catch (err) {
+          console.error(`❌ Student message failed:`, err.message);
+        }
+      }
+
+      // ✅ رسالة ولي الأمر - salutation = guardianSalutation
+      if (student.guardianInfo?.whatsappNumber) {
+        const template = await getMessageTemplate('guardian_notification', language, 'guardian');
+
+        // ✅ salutation لولي الأمر = guardianSalutation
+        const guardianVars = { ...variables, salutation: variables.guardianSalutation };
+        const finalGuardianMessage = customMessages.guardian
+          ? replaceVariables(customMessages.guardian, guardianVars)
+          : replaceVariables(template.content, guardianVars);
+
+        try {
+          await wapilotService.sendAndLogMessage({
+            studentId,
+            phoneNumber: student.guardianInfo.whatsappNumber,
+            messageContent: finalGuardianMessage,
+            messageType: "group_welcome_guardian",
+            language,
+            metadata: {
+              groupId: group._id,
+              groupName: group.name,
+              groupCode: group.code,
+              isCustomMessage: !!customMessages.guardian,
               automationType: "group_enrollment",
               recipientType: "guardian",
               guardianName: student.guardianInfo?.name,
             },
           });
-
           guardianMessageSent = true;
-          console.log(
-            `✅ Guardian message sent to ${student.guardianInfo?.name || "Guardian"}`,
-          );
-        } catch (guardianError) {
-          console.error(`❌ Guardian message failed:`, guardianError.message);
+          console.log(`✅ Guardian message sent`);
+        } catch (err) {
+          console.error(`❌ Guardian message failed:`, err.message);
         }
-      } else {
-        console.log(
-          `⚠️ No guardian WhatsApp number for ${student.personalInfo.fullName}`,
-        );
       }
     }
 
@@ -676,20 +1734,7 @@ export async function onStudentAddedToGroup(
       groupId,
       groupCode: group.code,
       studentName: student.personalInfo.fullName,
-      studentWhatsappNumber: student.personalInfo?.whatsappNumber,
-      guardianWhatsappNumber: student.guardianInfo?.whatsappNumber,
-      guardianName: student.guardianInfo?.name,
-      messagesSent: {
-        student: studentMessageSent,
-        guardian: guardianMessageSent,
-      },
-      customMessageUsed: !!customMessage,
-      studentMessagePreview: studentMessageContent
-        ? studentMessageContent.substring(0, 50) + "..."
-        : null,
-      guardianMessagePreview: guardianMessageContent
-        ? guardianMessageContent.substring(0, 50) + "..."
-        : null,
+      messagesSent: { student: studentMessageSent, guardian: guardianMessageSent },
       timestamp: new Date(),
     };
   } catch (error) {
@@ -699,80 +1744,242 @@ export async function onStudentAddedToGroup(
 }
 
 /**
- * ✅ دالة مساعدة لاستبدال متغيرات الطالب في الرسالة
+ * ✅ Replace student variables in message
  */
-function replaceStudentVariables(message, student, group) {
-  const studentName = student.personalInfo?.fullName || "{studentName}";
+export function replaceStudentVariables(
+  message,
+  student,
+  group,
+  language = "ar",
+  recipientType = "student",
+) {
+  console.log("\n🔄 [REPLACE_VARS] Starting variable replacement...");
+  console.log("   Recipient Type:", recipientType);
+  console.log("   Language:", language);
+  console.log("   Student:", student.personalInfo?.fullName);
+  console.log("   Group:", group.name);
+
+  // ✅ Get student nickname
+  const studentNickname =
+    language === "ar"
+      ? student.personalInfo?.nickname?.ar ||
+        student.personalInfo?.fullName?.split(" ")[0]
+      : student.personalInfo?.nickname?.en ||
+        student.personalInfo?.fullName?.split(" ")[0];
+
+  // ✅ Get guardian nickname
+  const guardianNickname =
+    language === "ar"
+      ? student.guardianInfo?.nickname?.ar ||
+        student.guardianInfo?.name?.split(" ")[0]
+      : student.guardianInfo?.nickname?.en ||
+        student.guardianInfo?.name?.split(" ")[0];
+
+  const gender = student.personalInfo?.gender || "Male";
+  const relationship = student.guardianInfo?.relationship || "father";
+
+  console.log("   Student Nickname:", studentNickname);
+  console.log("   Guardian Nickname:", guardianNickname);
+  console.log("   Gender:", gender);
+  console.log("   Relationship:", relationship);
+
+  // ✅ IMPROVED: Better salutation logic
+  let salutation = "";
+
+  if (recipientType === "student") {
+    // For students: use gender-appropriate greeting
+    if (language === "ar") {
+      salutation =
+        gender === "Male"
+          ? `عزيزي ${studentNickname}`
+          : `عزيزتي ${studentNickname}`;
+    } else {
+      salutation = `Dear ${studentNickname}`;
+    }
+  } else {
+    // ✅ For guardian: use relationship-appropriate greeting
+    if (language === "ar") {
+      if (relationship === "father") {
+        salutation = `عزيزي الأستاذ ${guardianNickname}`;
+      } else if (relationship === "mother") {
+        salutation = `عزيزتي السيدة ${guardianNickname}`;
+      } else {
+        salutation = `عزيزي/عزيزتي ${guardianNickname}`;
+      }
+    } else {
+      if (relationship === "father") {
+        salutation = `Dear Mr. ${guardianNickname}`;
+      } else if (relationship === "mother") {
+        salutation = `Dear Mrs. ${guardianNickname}`;
+      } else {
+        salutation = `Dear ${guardianNickname}`;
+      }
+    }
+  }
+
+  console.log("   Salutation:", salutation);
+
+  // ✅ Child title (ابنك/ابنتك based on gender)
+  const childTitle =
+    language === "ar"
+      ? gender === "Male"
+        ? "ابنك"
+        : "ابنتك"
+      : gender === "Male"
+        ? "your son"
+        : "your daughter";
+
+  // ✅ Group and course info
   const groupName = group.name || "{groupName}";
   const groupCode = group.code || "{groupCode}";
   const courseName =
     group.courseSnapshot?.title || group.courseId?.title || "{courseName}";
 
+  // ✅ Date formatting
   const startDate = group.schedule?.startDate
-    ? new Date(group.schedule.startDate).toLocaleDateString("ar-EG", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
+    ? new Date(group.schedule.startDate).toLocaleDateString(
+        language === "ar" ? "ar-EG" : "en-US",
+        {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        },
+      )
     : "{startDate}";
 
   const timeFrom = group.schedule?.timeFrom || "{timeFrom}";
   const timeTo = group.schedule?.timeTo || "{timeTo}";
 
-  const instructor = group.instructors?.[0]?.name;
-  const instructorText = instructor
-    ? `👨‍🏫 المدرب: ${instructor}`
-    : "{instructor}";
+  // ✅ CRITICAL FIX: اسم المدرب مع معالجة شاملة
+  let instructorName = "";
 
-  return message
-    .replace(/\{studentName\}/g, studentName)
+  try {
+    console.log("\n🔍 [INSTRUCTOR] Extracting instructor name...");
+    console.log("   Group.instructors exists?", !!group.instructors);
+    console.log("   Group.instructors type:", typeof group.instructors);
+    console.log(
+      "   Group.instructors is array?",
+      Array.isArray(group.instructors),
+    );
+    console.log("   Group.instructors length:", group.instructors?.length || 0);
+
+    if (group.instructors && group.instructors.length > 0) {
+      console.log(
+        "   First instructor object:",
+        JSON.stringify(group.instructors[0], null, 2),
+      );
+    }
+
+    // محاولة 1: من المصفوفة مباشرة
+    if (
+      group.instructors &&
+      Array.isArray(group.instructors) &&
+      group.instructors.length > 0
+    ) {
+      const instructor = group.instructors[0];
+
+      // جرّب خصائص مختلفة
+      instructorName =
+        instructor.name ||
+        instructor.profile?.name ||
+        instructor.fullName ||
+        instructor.personalInfo?.fullName ||
+        (typeof instructor === "string" ? instructor : "");
+
+      console.log("   ✅ Method 1 (instructors array):", instructorName);
+    }
+
+    // محاولة 2: من courseSnapshot
+    if (!instructorName && group.courseSnapshot?.instructor) {
+      instructorName = group.courseSnapshot.instructor;
+      console.log("   ✅ Method 2 (courseSnapshot):", instructorName);
+    }
+
+    // محاولة 3: من metadata
+    if (!instructorName && group.metadata?.primaryInstructor) {
+      instructorName = group.metadata.primaryInstructor;
+      console.log("   ✅ Method 3 (metadata):", instructorName);
+    }
+
+    // محاولة 4: من createdBy
+    if (!instructorName && group.createdBy?.name) {
+      instructorName = group.createdBy.name;
+      console.log("   ✅ Method 4 (createdBy):", instructorName);
+    }
+
+    // تنظيف الاسم
+    if (instructorName) {
+      instructorName = instructorName.trim();
+      console.log("   ✅ Final instructor name (cleaned):", instructorName);
+    } else {
+      console.warn("   ⚠️ No instructor name found!");
+    }
+  } catch (error) {
+    console.error("   ❌ Error extracting instructor name:", error);
+  }
+
+  // افتراضي إذا لم يوجد
+  if (!instructorName) {
+    instructorName = "";
+    console.log("   ℹ️ Using empty string for instructor");
+  }
+
+  console.log("\n📝 [VARIABLES] Summary:");
+  console.log("   {salutation} →", salutation);
+  console.log("   {studentName} →", studentNickname);
+  console.log("   {guardianName} →", guardianNickname);
+  console.log("   {childTitle} →", childTitle);
+  console.log("   {groupName} →", groupName);
+  console.log("   {courseName} →", courseName);
+  console.log("   {startDate} →", startDate);
+  console.log("   {timeFrom} →", timeFrom);
+  console.log("   {timeTo} →", timeTo);
+  console.log("   {instructor} →", instructorName || "(empty)");
+
+  // ✅ Replace all variables
+  const result = message
+    .replace(/\{salutation\}/g, salutation)
+    .replace(/\{studentName\}/g, studentNickname)
+    .replace(/\{guardianName\}/g, guardianNickname)
+    .replace(/\{childTitle\}/g, childTitle)
     .replace(/\{groupName\}/g, groupName)
     .replace(/\{groupCode\}/g, groupCode)
     .replace(/\{courseName\}/g, courseName)
     .replace(/\{startDate\}/g, startDate)
     .replace(/\{timeFrom\}/g, timeFrom)
     .replace(/\{timeTo\}/g, timeTo)
-    .replace(/\{instructor\}/g, instructorText);
-}
+    .replace(/\{instructor\}/g, instructorName);
 
+  console.log("\n✅ [RESULT] Message after replacement (first 200 chars):");
+  console.log(result.substring(0, 200) + "...");
+
+  return result;
+}
 /**
- * EVENT 4: Attendance Submitted
- * ✅ FIXED: Variable replacement in custom messages
+ * ✅ EVENT 4: Attendance Submitted
  */
 export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
   try {
     console.log(`\n📋 ATTENDANCE SUBMITTED ==========`);
     console.log(`📋 Session: ${sessionId}`);
-    console.log(`💬 Custom Messages: ${Object.keys(customMessages).length}`);
 
-    const session = await Session.findById(sessionId)
-      .populate({
-        path: "groupId",
-        select: "name code automation",
-      })
-      .lean();
+    const session = await Session.findById(sessionId).populate('groupId').lean();
 
     if (!session || !session.groupId) {
-      return { success: false, error: "Session or group not found" };
+      return { success: false, error: 'Session or group not found' };
     }
 
     const group = session.groupId;
 
-    if (!group.automation?.notifyGuardianOnAbsence) {
-      console.log(`ℹ️ Guardian notifications disabled for this group`);
-      return { success: true, message: "Notifications disabled" };
-    }
-
-    // Get students who need guardian notification
-    const studentsToNotify = session.attendance.filter((record) =>
-      ["absent", "late", "excused"].includes(record.status),
+    const studentsToNotify = (session.attendance || []).filter(record =>
+      ['absent', 'late', 'excused'].includes(record.status)
     );
 
     console.log(`👨‍🎓 Students needing notification: ${studentsToNotify.length}`);
 
     if (studentsToNotify.length === 0) {
-      return { success: true, message: "No notifications needed" };
+      return { success: true, message: 'No notifications needed' };
     }
 
     let successCount = 0;
@@ -781,131 +1988,61 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
 
     for (const record of studentsToNotify) {
       try {
-        const student = await Student.findById(record.studentId)
-          .select(
-            "personalInfo.fullName guardianInfo communicationPreferences enrollmentNumber",
-          )
-          .lean();
+        const student = await Student.findById(record.studentId).lean();
+        if (!student) { failCount++; continue; }
 
-        if (!student) {
-          failCount++;
-          continue;
-        }
+        const templateType = record.status === 'late' ? 'late_notification'
+          : record.status === 'excused' ? 'excused_notification'
+          : 'absence_notification';
 
-        const guardianWhatsApp = student.guardianInfo?.whatsappNumber;
+        // ✅ FIX: await
+        const { variables, language } = await prepareStudentVariables(student, group, session, {
+          attendanceStatus: record.status,
+          attendanceNotes: record.notes || '',
+        });
 
-        if (!guardianWhatsApp) {
-          failCount++;
-          notificationResults.push({
-            studentId: student._id,
-            studentName: student.personalInfo?.fullName,
-            status: "failed",
-            reason: "No guardian WhatsApp number",
-          });
-          continue;
-        }
+        console.log(`📤 ${student.personalInfo?.fullName} | ${record.status} | ${language}`);
+        console.log(`   Guardian Salutation: ${variables.guardianSalutation}`);
 
-        // ✅ Get custom message or use default
-        let message = customMessages[student._id.toString()];
+        const studentIdStr = student._id.toString();
 
-        if (message) {
-          // ✅ Replace ALL variables in custom message
-          const sessionDate = new Date(session.scheduledDate);
-          const formattedDate = sessionDate.toLocaleDateString("ar-EG", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          });
+        const template = await getMessageTemplate(templateType, language, 'guardian');
 
-          const variables = {
-            guardianName: student.guardianInfo?.name || "ولي الأمر",
-            studentName: student.personalInfo?.fullName || "الطالب",
-            enrollmentNumber: student.enrollmentNumber || "N/A",
-            sessionName: session.title || "الجلسة",
-            sessionNumber: `الجلسة ${session.sessionNumber || "N/A"}`,
-            date: formattedDate,
-            time: `${session.startTime} - ${session.endTime}`,
-            module: `الوحدة ${(session.moduleIndex || 0) + 1}`,
-            groupCode: group.code || "N/A",
-            groupName: group.name || "N/A",
-          };
+        const finalGuardianMessage = customMessages[studentIdStr]
+          ? replaceVariables(customMessages[studentIdStr], variables)
+          : replaceVariables(template.content, variables);
 
-          // Replace all variables
-          Object.entries(variables).forEach(([key, value]) => {
-            const regex = new RegExp(`\\{${key}\\}`, "g");
-            message = message.replace(regex, value);
-          });
-
-          console.log(
-            `✅ Variables replaced in custom message for ${student.personalInfo?.fullName}`,
-          );
-        } else {
-          // Use default message
-          const statusAr = {
-            absent: "غائب",
-            late: "متأخر",
-            excused: "معذور",
-          };
-
-          message = `عزيزي ولي الأمر ${student.guardianInfo?.name || ""},
-
-نود إعلامكم بأن الطالب ${student.personalInfo?.fullName} كان ${
-            statusAr[record.status]
-          } في حصة ${session.title}.
-
-📅 التاريخ: ${new Date(session.scheduledDate).toLocaleDateString("ar-EG")}
-⏰ الوقت: ${session.startTime}
-
-${record.notes ? `\n📝 ملاحظات: ${record.notes}` : ""}
-
-للاستفسار، يرجى التواصل معنا.
-
-مع التحية،
-فريق Code School`;
-        }
-
-        const result = await wapilotService.sendAndLogMessage({
+        const result = await sendToStudentWithLogging({
           studentId: student._id,
-          phoneNumber: guardianWhatsApp,
-          messageContent: message,
-          messageType: "absence_notification",
-          language: student.communicationPreferences?.preferredLanguage || "ar",
+          student,
+          studentMessage: null,
+          guardianMessage: finalGuardianMessage,
+          messageType: templateType,
           metadata: {
-            sessionId: session._id,
+            sessionId,
             sessionTitle: session.title,
             attendanceStatus: record.status,
-            recipientType: "guardian",
-            guardianName: student.guardianInfo?.name,
-            isCustomMessage: !!customMessages[student._id.toString()],
+            isCustomMessage: !!customMessages[studentIdStr],
+            recipientType: 'guardian'
           },
         });
 
         if (result.success) {
           successCount++;
           notificationResults.push({
-            studentId: student._id,
-            studentName: student.personalInfo?.fullName,
-            status: "sent",
+            ...result,
+            language,
+            guardianSalutation: variables.guardianSalutation,
+            attendanceStatus: record.status
           });
         } else {
           failCount++;
-          notificationResults.push({
-            studentId: student._id,
-            studentName: student.personalInfo?.fullName,
-            status: "failed",
-            reason: result.error,
-          });
         }
       } catch (error) {
-        console.error(`Error notifying guardian:`, error);
+        console.error(`Error processing student:`, error);
         failCount++;
       }
     }
-
-    console.log(
-      `✅ Guardian notifications: ${successCount}/${studentsToNotify.length}`,
-    );
 
     return {
       success: successCount > 0,
@@ -916,182 +2053,89 @@ ${record.notes ? `\n📝 ملاحظات: ${record.notes}` : ""}
     };
   } catch (error) {
     console.error(`❌ Error in onAttendanceSubmitted:`, error);
-    return {
-      success: false,
-      error: error.message,
-    };
+    return { success: false, error: error.message };
   }
 }
 
+
 /**
- * EVENT 5: Session Status Changed
- * ✅ FIXED: Variable replacement for guardian/student names
+ * ✅ EVENT 5: Session Status Changed
  */
 export async function onSessionStatusChanged(
   sessionId,
   newStatus,
   customMessage = null,
+  newDate = null,
+  newTime = null,
+  metadata = {}
 ) {
   try {
     console.log(`\n🔄 SESSION STATUS CHANGE ==========`);
-    console.log(`📋 Session: ${sessionId}`);
-    console.log(`📊 New Status: ${newStatus}`);
-    console.log(`💬 Custom Message: ${customMessage ? "Yes" : "No"}`);
+    console.log(`📋 Session: ${sessionId} | Status: ${newStatus}`);
+    console.log(`📝 Student Msg: ${metadata?.studentMessage ? 'Yes' : 'No'} | Guardian Msg: ${metadata?.guardianMessage ? 'Yes' : 'No'}`);
 
-    if (newStatus !== "cancelled" && newStatus !== "postponed") {
-      console.log(`ℹ️ Status ${newStatus} does not trigger notifications`);
-      return { success: true, message: "No notifications needed" };
+    if (newStatus !== 'cancelled' && newStatus !== 'postponed') {
+      return { success: true, message: 'No notifications needed' };
     }
 
-    // Fetch session with group details
-    const session = await Session.findById(sessionId)
-      .populate({
-        path: "groupId",
-        populate: {
-          path: "students",
-          select:
-            "personalInfo.fullName personalInfo.whatsappNumber guardianInfo communicationPreferences enrollmentNumber",
-          match: { isDeleted: false },
-        },
-      })
-      .lean();
-
-    if (!session) {
-      console.log(`❌ Session not found`);
-      return { success: false, error: "Session not found" };
-    }
+    const session = await Session.findById(sessionId).populate('groupId').lean();
+    if (!session) return { success: false, error: 'Session not found' };
 
     const group = session.groupId;
 
-    // ✅ Get students from both sources
-    let students = group?.students || [];
-
-    if (students.length === 0 && group?._id) {
-      students = await Student.find({
-        "academicInfo.groupIds": group._id,
-        isDeleted: false,
-      })
-        .select(
-          "personalInfo.fullName personalInfo.whatsappNumber guardianInfo communicationPreferences enrollmentNumber",
-        )
-        .lean();
-    }
+    const students = await Student.find({
+      'academicInfo.groupIds': group._id,
+      isDeleted: false,
+    }).lean();
 
     console.log(`👨‍🎓 Total students: ${students.length}`);
 
-    if (students.length === 0) {
-      console.log(`⚠️ No students to notify`);
-      return { success: false, error: "No students in group" };
-    }
-
-    // Send notifications to all students/guardians
     let successCount = 0;
     let failCount = 0;
     const notificationResults = [];
 
+    const studentTemplateType = newStatus === 'cancelled' ? 'session_cancelled_student' : 'session_postponed_student';
+    const guardianTemplateType = newStatus === 'cancelled' ? 'session_cancelled_guardian' : 'session_postponed_guardian';
+
     for (const student of students) {
       try {
-        const studentName = student.personalInfo?.fullName || "الطالب";
-        const guardianName = student.guardianInfo?.name || "ولي الأمر";
-        const guardianWhatsApp = student.guardianInfo?.whatsappNumber;
-        const studentWhatsApp = student.personalInfo?.whatsappNumber;
-        const enrollmentNumber = student.enrollmentNumber || "N/A";
+        // ✅ FIX: await
+        const { variables, language } = await prepareStudentVariables(student, group, session, { newDate, newTime });
 
-        console.log(`\n📱 Processing: ${studentName}`);
-        console.log(`   Guardian: ${guardianName}`);
-        console.log(`   Guardian WhatsApp: ${guardianWhatsApp || "NOT SET"}`);
-        console.log(`   Student WhatsApp: ${studentWhatsApp || "NOT SET"}`);
+        console.log(`📤 ${student.personalInfo?.fullName} | ${language} | ${student.personalInfo?.gender} | ${student.guardianInfo?.relationship}`);
+        console.log(`   Student: ${variables.studentSalutation} | Guardian: ${variables.guardianSalutation}`);
 
-        // ✅ Determine recipient (prefer guardian for cancellation/postponement)
-        const recipientWhatsApp = guardianWhatsApp || studentWhatsApp;
-        const recipientType = guardianWhatsApp ? "guardian" : "student";
-        const recipientName = guardianWhatsApp ? guardianName : studentName;
-
-        if (!recipientWhatsApp) {
-          failCount++;
-          notificationResults.push({
-            studentId: student._id,
-            studentName,
-            guardianName,
-            status: "failed",
-            reason: "No WhatsApp number available",
-          });
-          continue;
-        }
-
-        // ✅ Prepare message with all variables
-        let finalMessage = customMessage;
-
-        if (!finalMessage) {
-          // Use default template
-          const language =
-            student.communicationPreferences?.preferredLanguage || "ar";
-          finalMessage = prepareSessionUpdateMessage(
-            recipientName,
-            session,
-            group,
-            newStatus,
-            language,
-            guardianName,
-            studentName,
-            enrollmentNumber,
-          );
+        let finalStudentMessage = '';
+        if (metadata?.studentMessage) {
+          finalStudentMessage = replaceVariables(metadata.studentMessage, variables);
         } else {
-          // ✅ Replace ALL variables in custom message
-          const sessionDate = new Date(session.scheduledDate);
-          const formattedDate = sessionDate.toLocaleDateString("ar-EG", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          });
-
-          const variables = {
-            guardianName,
-            studentName,
-            enrollmentNumber,
-            sessionName: session.title || "الجلسة",
-            sessionNumber: `الجلسة ${session.sessionNumber || "N/A"}`,
-            date: formattedDate,
-            time: `${session.startTime} - ${session.endTime}`,
-            module: `الوحدة ${(session.moduleIndex || 0) + 1}`,
-            groupCode: group.code || "N/A",
-            groupName: group.name || "N/A",
-            courseName:
-              group.courseId?.title || group.courseSnapshot?.title || "الكورس",
-            newDate: "{newDate}", // Placeholder
-            newTime: "{newTime}", // Placeholder
-          };
-
-          // Replace all variables
-          Object.entries(variables).forEach(([key, value]) => {
-            const regex = new RegExp(`\\{${key}\\}`, "g");
-            finalMessage = finalMessage.replace(regex, value);
-          });
-
-          console.log(`✅ Variables replaced in custom message`);
+          const template = await getMessageTemplate(studentTemplateType, language, 'student');
+          finalStudentMessage = replaceVariables(template.content, variables);
         }
 
-        console.log(`📤 Sending to ${recipientType}: ${recipientName}`);
-        console.log(`   Message preview: ${finalMessage.substring(0, 100)}...`);
+        let finalGuardianMessage = '';
+        if (metadata?.guardianMessage) {
+          finalGuardianMessage = replaceVariables(metadata.guardianMessage, variables);
+        } else {
+          const template = await getMessageTemplate(guardianTemplateType, language, 'guardian');
+          finalGuardianMessage = replaceVariables(template.content, variables);
+        }
 
-        const result = await wapilotService.sendAndLogMessage({
+        const result = await sendToStudentWithLogging({
           studentId: student._id,
-          phoneNumber: recipientWhatsApp,
-          messageContent: finalMessage,
-          messageType: "session_" + newStatus,
-          language: student.communicationPreferences?.preferredLanguage || "ar",
+          student,
+          studentMessage: finalStudentMessage,
+          guardianMessage: finalGuardianMessage,
+          messageType: guardianTemplateType,
           metadata: {
-            sessionId: session._id,
+            sessionId,
             sessionTitle: session.title,
             groupId: group._id,
             oldStatus: session.status,
             newStatus,
-            isCustomMessage: !!customMessage,
-            recipientType,
-            guardianName,
-            studentName,
-            enrollmentNumber,
+            newDate,
+            newTime,
+            isCustomMessage: !!(metadata?.studentMessage || metadata?.guardianMessage),
           },
         });
 
@@ -1099,39 +2143,23 @@ export async function onSessionStatusChanged(
           successCount++;
           notificationResults.push({
             studentId: student._id,
-            studentName,
-            guardianName,
-            recipientType,
-            recipientName,
-            whatsappNumber: recipientWhatsApp,
-            status: "sent",
-            sentAt: new Date(),
+            studentName: student.personalInfo?.fullName,
+            status: 'sent',
+            sentTo: result.sentTo,
+            language,
+            guardianSalutation: variables.guardianSalutation,
+            studentSalutation: variables.studentSalutation,
           });
-          console.log(`✅ Message sent successfully`);
         } else {
           failCount++;
-          notificationResults.push({
-            studentId: student._id,
-            studentName,
-            guardianName,
-            status: "failed",
-            reason: result.error,
-          });
-          console.log(`❌ Failed: ${result.error}`);
         }
       } catch (error) {
-        console.error(`Error notifying student:`, error);
+        console.error(`Error processing student:`, error);
         failCount++;
-        notificationResults.push({
-          studentId: student._id,
-          studentName: student.personalInfo?.fullName || "Unknown",
-          status: "failed",
-          error: error.message,
-        });
       }
     }
 
-    console.log(`✅ Notifications sent: ${successCount}/${students.length}`);
+    console.log(`\n✅ Notifications sent: ${successCount}/${students.length}`);
 
     return {
       success: successCount > 0,
@@ -1139,18 +2167,17 @@ export async function onSessionStatusChanged(
       successCount,
       failCount,
       notificationResults,
+      customMessageUsed: !!(metadata?.studentMessage || metadata?.guardianMessage),
     };
   } catch (error) {
     console.error(`❌ Error in onSessionStatusChanged:`, error);
-    return {
-      success: false,
-      error: error.message,
-    };
+    return { success: false, error: error.message };
   }
 }
 
+
 /**
- * ✅ NEW: Prepare reminder messages for both guardian and student
+ * ✅ Prepare reminder messages for both guardian and student
  */
 export function prepareReminderMessages(
   studentName,
@@ -1167,15 +2194,11 @@ export function prepareReminderMessages(
     { weekday: "long", year: "numeric", month: "long", day: "numeric" },
   );
 
-  // الرسالة لولي الأمر
   const guardianMessage = {};
-
-  // الرسالة للطالب
   const studentMessage = {};
 
   if (language === "en") {
     if (reminderType === "1hour") {
-      // رسالة ولي الأمر (ساعة واحدة)
       guardianMessage.content = `⏰ Session Reminder – Code School
 
 Dear ${guardianName},
@@ -1199,7 +2222,6 @@ We look forward to seeing ${studentName} in the session.
 Best regards,
 Code School Team 💻`;
 
-      // رسالة الطالب (ساعة واحدة)
       studentMessage.content = `⏰ Session Reminder – Code School
 
 Hello ${studentName},
@@ -1221,7 +2243,6 @@ ${session.meetingLink ? `🔗 Meeting Link: ${session.meetingLink}\n` : ""}
 See you in class! 🚀
 Code School Team 💻`;
     } else if (reminderType === "24hours") {
-      // رسالة ولي الأمر (24 ساعة)
       guardianMessage.content = `📅 Session Reminder – Code School
 
 Dear ${guardianName},
@@ -1243,7 +2264,6 @@ Thank you for your cooperation.
 Best regards,
 Code School Team 💻`;
 
-      // رسالة الطالب (24 ساعة)
       studentMessage.content = `📅 Session Reminder – Code School
 
 Hello ${studentName},
@@ -1266,9 +2286,7 @@ Get ready for an amazing learning session! 🎯
 Code School Team 💻`;
     }
   } else {
-    // اللغة العربية
     if (reminderType === "1hour") {
-      // رسالة ولي الأمر (ساعة واحدة)
       guardianMessage.content = `⏰ تذكير الجلسة – Code School
 
 عزيزي/عزيزتي ${guardianName}،
@@ -1292,7 +2310,6 @@ ${session.meetingLink ? `🔗 رابط الاجتماع: ${session.meetingLink}\
 أطيب التحيات،
 فريق Code School 💻`;
 
-      // رسالة الطالب (ساعة واحدة)
       studentMessage.content = `⏰ تذكير الجلسة – Code School
 
 مرحباً ${studentName}،
@@ -1314,7 +2331,6 @@ ${session.meetingLink ? `🔗 رابط الاجتماع: ${session.meetingLink}\
 نراكم في الفصل! 🚀
 فريق Code School 💻`;
     } else if (reminderType === "24hours") {
-      // رسالة ولي الأمر (24 ساعة)
       guardianMessage.content = `📅 تذكير الجلسة – Code School
 
 عزيزي/عزيزتي ${guardianName}،
@@ -1336,7 +2352,6 @@ ${session.meetingLink ? `🔗 رابط الاجتماع: ${session.meetingLink}\
 أطيب التحيات،
 فريق Code School 💻`;
 
-      // رسالة الطالب (24 ساعة)
       studentMessage.content = `📅 تذكير الجلسة – Code School
 
 مرحباً ${studentName}،
@@ -1367,8 +2382,7 @@ ${session.meetingLink ? `🔗 رابط الاجتماع: ${session.meetingLink}\
 }
 
 /**
- * ✅ FIX: Export the function that route.js expects
- * هذا هو الحل الرئيسي للمشكلة
+ * ✅ Prepare reminder message (for backward compatibility)
  */
 export function prepareReminderMessage(
   studentName,
@@ -1377,680 +2391,264 @@ export function prepareReminderMessage(
   reminderType,
   language = "ar",
 ) {
-  // Use existing function
   const messages = prepareReminderMessages(
     studentName,
     session,
     group,
     reminderType,
     language,
-    "ولي الأمر", // default guardian
-    "", // default enrollment
+    "ولي الأمر",
+    "",
   );
 
-  // Return student message by default
   return messages.studentMessage.content;
 }
 
 /**
- * ✅ NEW: Send manual session reminder to both guardian and student
+ * ✅ Send manual session reminder to both guardian and student
  */
-export async function sendManualSessionReminder(sessionId, reminderType) {
+export async function sendManualSessionReminder(sessionId, reminderType, customMessage = null, metadata = {}) {
   try {
-    console.log(`\n🎯 EVENT: Manual Session Reminder ==========`);
-    console.log(`📋 Session: ${sessionId}`);
-    console.log(`⏰ Type: ${reminderType}`);
+    console.log(`\n🎯 Manual Session Reminder ==========`);
+    console.log(`📋 Session: ${sessionId} | Type: ${reminderType}`);
+    console.log(`📝 Student Msg: ${metadata?.studentMessage ? 'Yes' : 'No'} | Guardian Msg: ${metadata?.guardianMessage ? 'Yes' : 'No'}`);
 
-    // ✅ استيراد Session هنا فقط
-    const Session = (await import("../models/Session")).default;
-
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .populate("courseId");
-
-    if (!session) {
-      throw new Error("Session not found");
-    }
+    const session = await Session.findById(sessionId).populate('groupId').lean();
+    if (!session) throw new Error('Session not found');
 
     const group = session.groupId;
 
-    if (!group.automation?.whatsappEnabled) {
-      return {
-        success: false,
-        reason: "WhatsApp notifications disabled",
-        group: group.name,
-      };
-    }
-
-    // ✅ استيراد Student هنا فقط
-    const Student = (await import("../models/Student")).default;
-
-    // ✅ Get students who need this reminder
     const students = await Student.find({
-      "academicInfo.groupIds": group._id,
+      'academicInfo.groupIds': group._id,
       isDeleted: false,
-    })
-      .select(
-        "personalInfo.fullName personalInfo.whatsappNumber communicationPreferences guardianInfo enrollmentNumber",
-      )
-      .lean();
+    }).lean();
 
-    console.log(`👥 Found ${students.length} students to notify`);
+    console.log(`👥 Found ${students.length} students`);
+    if (students.length === 0) return { success: false, reason: 'No students found' };
 
-    if (students.length === 0) {
-      return {
-        success: false,
-        reason: "No students found in group",
-        group: group.name,
-        totalStudents: group.students?.length || 0,
-      };
-    }
-
-    let guardianSuccessCount = 0;
-    let guardianFailCount = 0;
-    let studentSuccessCount = 0;
-    let studentFailCount = 0;
-    const notificationResults = [];
-
-    for (const student of students) {
-      try {
-        const language =
-          student.communicationPreferences?.preferredLanguage || "ar";
-        const studentName = student.personalInfo?.fullName || "Student";
-        const enrollmentNumber = student.enrollmentNumber || "";
-
-        // ✅ الحصول على معلومات ولي الأمر
-        const guardianName = student.guardianInfo?.name || "Guardian";
-        const guardianWhatsapp = student.guardianInfo?.whatsappNumber || null;
-        const studentWhatsapp = student.personalInfo?.whatsappNumber;
-
-        // ✅ تحضير رسالتي التذكير
-        const messages = prepareReminderMessages(
-          studentName,
-          session,
-          group,
-          reminderType,
-          language,
-          guardianName,
-          enrollmentNumber,
-        );
-
-        console.log(`\n📱 Processing: ${studentName}`);
-        console.log(`   📞 Student WhatsApp: ${studentWhatsapp || "NOT SET"}`);
-        console.log(
-          `   👨‍👦 Guardian WhatsApp: ${guardianWhatsapp || "NOT SET"}`,
-        );
-
-        // ✅ إرسال الرسالة لولي الأمر (إذا كان رقم WhatsApp متوفر)
-        if (guardianWhatsapp) {
-          try {
-            await wapilotService.sendAndLogMessage({
-              studentId: student._id,
-              phoneNumber: guardianWhatsapp,
-              messageContent: messages.guardianMessage.content,
-              messageType: "session_reminder_guardian",
-              language,
-              metadata: {
-                sessionId: session._id,
-                sessionTitle: session.title,
-                groupId: group._id,
-                groupName: group.name,
-                reminderType,
-                automationType: "session_reminder",
-                recipientType: "guardian",
-                guardianName,
-              },
-            });
-
-            guardianSuccessCount++;
-            notificationResults.push({
-              studentId: student._id,
-              studentName,
-              recipientType: "guardian",
-              whatsappNumber: guardianWhatsapp,
-              status: "sent",
-              language,
-              sentAt: new Date(),
-            });
-
-            console.log(`   ✅ Guardian message sent successfully`);
-          } catch (guardianError) {
-            guardianFailCount++;
-            notificationResults.push({
-              studentId: student._id,
-              studentName,
-              recipientType: "guardian",
-              status: "failed",
-              error: guardianError.message,
-            });
-            console.log(
-              `   ❌ Guardian message failed: ${guardianError.message}`,
-            );
-          }
-        } else {
-          guardianFailCount++;
-          notificationResults.push({
-            studentId: student._id,
-            studentName,
-            recipientType: "guardian",
-            status: "skipped",
-            reason: "No guardian WhatsApp number",
-          });
-          console.log(`   ⚠️ Guardian message skipped (no WhatsApp number)`);
-        }
-
-        // ✅ إرسال الرسالة للطالب (إذا كان رقم WhatsApp متوفر)
-        if (studentWhatsapp) {
-          try {
-            await wapilotService.sendAndLogMessage({
-              studentId: student._id,
-              phoneNumber: studentWhatsapp,
-              messageContent: messages.studentMessage.content,
-              messageType: "session_reminder_student",
-              language,
-              metadata: {
-                sessionId: session._id,
-                sessionTitle: session.title,
-                groupId: group._id,
-                groupName: group.name,
-                reminderType,
-                automationType: "session_reminder",
-                recipientType: "student",
-              },
-            });
-
-            studentSuccessCount++;
-            notificationResults.push({
-              studentId: student._id,
-              studentName,
-              recipientType: "student",
-              whatsappNumber: studentWhatsapp,
-              status: "sent",
-              language,
-              sentAt: new Date(),
-            });
-
-            console.log(`   ✅ Student message sent successfully`);
-          } catch (studentError) {
-            studentFailCount++;
-            notificationResults.push({
-              studentId: student._id,
-              studentName,
-              recipientType: "student",
-              status: "failed",
-              error: studentError.message,
-            });
-            console.log(
-              `   ❌ Student message failed: ${studentError.message}`,
-            );
-          }
-        } else {
-          studentFailCount++;
-          notificationResults.push({
-            studentId: student._id,
-            studentName,
-            recipientType: "student",
-            status: "skipped",
-            reason: "No student WhatsApp number",
-          });
-          console.log(`   ⚠️ Student message skipped (no WhatsApp number)`);
-        }
-      } catch (studentError) {
-        console.error(`   ❌ Error processing student:`, studentError);
-        guardianFailCount++;
-        studentFailCount++;
-        notificationResults.push({
-          studentId: student._id,
-          studentName: student.personalInfo?.fullName || "Unknown",
-          status: "failed",
-          error: studentError.message,
-        });
-      }
-    }
-
-    console.log(`\n📊 Manual reminder summary:`);
-    console.log(
-      `   📞 Guardian messages: ${guardianSuccessCount} sent, ${guardianFailCount} failed/skipped`,
-    );
-    console.log(
-      `   👨‍🎓 Student messages: ${studentSuccessCount} sent, ${studentFailCount} failed/skipped`,
-    );
-
-    return {
-      success: guardianSuccessCount > 0 || studentSuccessCount > 0,
-      totalStudents: students.length,
-      guardian: {
-        successCount: guardianSuccessCount,
-        failCount: guardianFailCount,
-      },
-      student: {
-        successCount: studentSuccessCount,
-        failCount: studentFailCount,
-      },
-      reminderType,
-      sessionTitle: session.title,
-      group: group.name,
-      notificationResults,
-    };
-  } catch (error) {
-    console.error("❌ Error in sendManualSessionReminder:", error);
-    throw error;
-  }
-}
-
-/**
- * ✅ NEW EVENT 6: Group Completed
- * Triggered when the last session is completed and group status changes to 'completed'
- */
-export async function onGroupCompleted(
-  groupId,
-  customMessage = null,
-  feedbackLink = null,
-) {
-  try {
-    console.log(`\n🎯 EVENT: Group Completed ==========`);
-    console.log(`👥 Group: ${groupId}`);
-    console.log(`📝 Custom Message: ${customMessage ? "Yes" : "No"}`);
-    console.log(`📋 Feedback Link: ${feedbackLink || "Not provided"}`);
-
-    // ✅ Fetch group with proper populate
-    const group = await Group.findById(groupId)
-      .populate("courseId", "title level")
-      .populate({
-        path: "students",
-        select:
-          "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo",
-        match: { isDeleted: false },
-      })
-      .lean();
-
-    if (!group) {
-      console.log(`❌ Group not found: ${groupId}`);
-      return {
-        success: false,
-        error: "Group not found",
-        totalStudents: 0,
-        successCount: 0,
-        failCount: 0,
-        notificationResults: [],
-      };
-    }
-
-    console.log(`✅ Group found: ${group.name} (${group.code})`);
-    console.log(`📚 Course: ${group.courseId?.title}`);
-
-    // ✅ Get students from BOTH sources
-    let students = group.students || [];
-    console.log(`👥 Students from populate: ${students.length}`);
-
-    // ✅ Fallback: If no students from populate, fetch from Student collection
-    if (students.length === 0) {
-      console.log(
-        `⚠️ No students from populate, fetching from Student.academicInfo.groupIds...`,
-      );
-
-      students = await Student.find({
-        "academicInfo.groupIds": new mongoose.Types.ObjectId(groupId),
-        isDeleted: false,
-      })
-        .select(
-          "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber communicationPreferences guardianInfo",
-        )
-        .lean();
-
-      console.log(`👥 Students from academicInfo.groupIds: ${students.length}`);
-    }
-
-    console.log(`👨‍🎓 Total students: ${students.length}`);
-
-    if (students.length === 0) {
-      console.log(`⚠️ No students in group - skipping notifications`);
-
-      // Still update group metadata
-      await Group.findByIdAndUpdate(groupId, {
-        $set: {
-          "metadata.completionMessagesSent": true,
-          "metadata.completionMessagesSentAt": new Date(),
-          "metadata.completionMessagesSummary": {
-            total: 0,
-            succeeded: 0,
-            failed: 0,
-            customMessageUsed: !!customMessage,
-            feedbackLinkProvided: !!feedbackLink,
-            timestamp: new Date(),
-          },
-        },
-      });
-
-      return {
-        success: false,
-        error: "No students in group",
-        totalStudents: 0,
-        successCount: 0,
-        failCount: 0,
-        customMessageUsed: !!customMessage,
-        feedbackLinkProvided: !!feedbackLink,
-        successRate: "0%",
-        notificationResults: [],
-      };
-    }
-
-    console.log(
-      `📤 Sending completion messages to ${students.length} students...`,
-    );
-
-    // ✅ Send messages to all students
-    const notificationResults = [];
     let successCount = 0;
     let failCount = 0;
+    const notificationResults = [];
+
+    const guardianTemplateType = reminderType === '24hours' ? 'reminder_24h_guardian' : 'reminder_1h_guardian';
+    const studentTemplateType = reminderType === '24hours' ? 'reminder_24h_student' : 'reminder_1h_student';
 
     for (const student of students) {
       try {
-        const studentName =
-          student.personalInfo?.fullName ||
-          student.enrollmentNumber ||
-          "Student";
-        const whatsappNumber = student.personalInfo?.whatsappNumber;
+        const { variables, language } = await prepareStudentVariables(student, group, session);
 
-        console.log(`\n📱 Processing: ${studentName}`);
-        console.log(`   WhatsApp: ${whatsappNumber || "NOT SET"}`);
+        console.log(`📤 ${student.personalInfo?.fullName} | ${language}`);
+        console.log(`   Student: ${variables.studentSalutation} | Guardian: ${variables.guardianSalutation}`);
 
-        if (!whatsappNumber) {
-          console.log(`   ⚠️ Skipping - no WhatsApp number`);
-          failCount++;
-          notificationResults.push({
-            studentId: student._id,
-            studentName,
-            whatsappNumber: null,
-            status: "failed",
-            reason: "No WhatsApp number",
-            customMessage: !!customMessage,
-            hasFeedbackLink: !!feedbackLink,
-          });
-          continue;
+        // ✅ FIX: جلب القوالب المناسبة لكل طالب حسب لغته
+        let finalStudentMessage = '';
+        let finalGuardianMessage = '';
+
+        if (metadata?.studentMessage) {
+          // إذا كان القالب من المودال، نستخدم rawContent (القالب الخام) ثم نستبدل المتغيرات
+          const studentRawTemplate = metadata.studentMessage;
+          
+          if (language === 'ar') {
+            // ✅ للطلاب العرب: القالب من المودال عادة عربي، نستخدمه مباشرة
+            finalStudentMessage = replaceVariables(studentRawTemplate, variables);
+          } else {
+            // ✅ للطلاب الإنجليز: نجلب القالب الإنجليزي الافتراضي
+            const template = await getMessageTemplate(studentTemplateType, 'en', 'student');
+            finalStudentMessage = replaceVariables(template.content, variables);
+          }
+        } else {
+          // إذا مفيش قالب من المودال، نجيب الافتراضي
+          const template = await getMessageTemplate(studentTemplateType, language, 'student');
+          finalStudentMessage = replaceVariables(template.content, variables);
         }
 
-        // ✅ Prepare message with variable replacement
-        let finalMessage =
-          customMessage ||
-          getDefaultCompletionMessage(
-            student.communicationPreferences?.preferredLanguage || "ar",
-          );
-
-        // Replace variables
-        const variables = {
-          studentName,
-          courseName: group.courseId?.title || "the course",
-          groupCode: group.code,
-          groupName: group.name,
-        };
-
-        Object.entries(variables).forEach(([key, value]) => {
-          const regex = new RegExp(`\\{${key}\\}`, "g");
-          finalMessage = finalMessage.replace(regex, value);
-        });
-
-        // Add feedback link if provided
-        if (feedbackLink) {
-          finalMessage += `\n\n📋 نرجو منك تقييم الدورة:\n${feedbackLink}`;
+        if (metadata?.guardianMessage) {
+          const guardianRawTemplate = metadata.guardianMessage;
+          
+          if (language === 'ar') {
+            // ✅ للطلاب العرب: قالب ولي الأمر من المودال عربي
+            finalGuardianMessage = replaceVariables(guardianRawTemplate, variables);
+          } else {
+            // ✅ للطلاب الإنجليز: نجيب القالب الإنجليزي
+            const template = await getMessageTemplate(guardianTemplateType, 'en', 'guardian');
+            finalGuardianMessage = replaceVariables(template.content, variables);
+          }
+        } else {
+          const template = await getMessageTemplate(guardianTemplateType, language, 'guardian');
+          finalGuardianMessage = replaceVariables(template.content, variables);
         }
 
-        console.log(`   📤 Sending message (${finalMessage.length} chars)`);
-
-        // ✅ FIXED: Use wapilotService instead of sendWhatsAppMessage
-        const result = await wapilotService.sendAndLogMessage({
+        const result = await sendToStudentWithLogging({
           studentId: student._id,
-          phoneNumber: whatsappNumber,
-          messageContent: finalMessage,
-          messageType: "custom",
-          language: student.communicationPreferences?.preferredLanguage || "ar",
+          student,
+          studentMessage: finalStudentMessage,
+          guardianMessage: finalGuardianMessage,
+          messageType: guardianTemplateType,
           metadata: {
+            sessionId,
+            sessionTitle: session.title,
             groupId: group._id,
-            groupName: group.name,
-            groupCode: group.code,
-            isCustomMessage: !!customMessage,
-            hasFeedbackLink: !!feedbackLink,
-            automationType: "group_completion",
-            recipientType: "student",
+            reminderType,
+            isCustomMessage: !!(metadata?.studentMessage || metadata?.guardianMessage),
           },
         });
 
         if (result.success) {
-          console.log(`   ✅ Message sent successfully`);
           successCount++;
           notificationResults.push({
-            studentId: student._id,
-            studentName,
-            whatsappNumber,
-            status: "sent",
-            customMessage: !!customMessage,
-            hasFeedbackLink: !!feedbackLink,
-            messagePreview: finalMessage.substring(0, 100) + "...",
-            sentAt: new Date(),
+            ...result,
+            language,
+            guardianSalutation: variables.guardianSalutation,
+            studentSalutation: variables.studentSalutation,
           });
         } else {
-          console.log(`   ❌ Failed: ${result.error}`);
           failCount++;
-          notificationResults.push({
-            studentId: student._id,
-            studentName,
-            whatsappNumber,
-            status: "failed",
-            reason: result.error,
-            error: result.error,
-            customMessage: !!customMessage,
-            hasFeedbackLink: !!feedbackLink,
-          });
         }
       } catch (error) {
-        console.error(`   ❌ Error processing student:`, error);
+        console.error(`Error:`, error);
         failCount++;
-        notificationResults.push({
-          studentId: student._id,
-          studentName: student.personalInfo?.fullName || "Unknown",
-          status: "failed",
-          error: error.message,
-        });
       }
     }
-
-    console.log(`\n📊 Updated group metadata`);
-
-    // ✅ Update group metadata with results
-    await Group.findByIdAndUpdate(groupId, {
-      $set: {
-        "metadata.completionMessagesSent": true,
-        "metadata.completionMessagesSentAt": new Date(),
-        "metadata.completionMessagesResults": notificationResults,
-        "metadata.completionMessagesSummary": {
-          total: students.length,
-          succeeded: successCount,
-          failed: failCount,
-          customMessageUsed: !!customMessage,
-          feedbackLinkProvided: !!feedbackLink,
-          timestamp: new Date(),
-        },
-      },
-    });
-
-    const successRate =
-      students.length > 0
-        ? `${Math.round((successCount / students.length) * 100)}%`
-        : "0%";
-
-    console.log(`\n✅ Completion messages complete:`);
-    console.log(`   Sent: ${successCount}/${students.length}`);
-    console.log(`   Failed: ${failCount}`);
 
     return {
       success: successCount > 0,
       totalStudents: students.length,
       successCount,
       failCount,
-      customMessageUsed: !!customMessage,
-      feedbackLinkProvided: !!feedbackLink,
-      successRate,
+      reminderType,
       notificationResults,
+      customMessageUsed: !!(metadata?.studentMessage || metadata?.guardianMessage),
     };
   } catch (error) {
-    console.error(`\n❌ Error in onGroupCompleted:`, error);
+    console.error('❌ Error in sendManualSessionReminder:', error);
+    throw error;
+  }
+}
+
+export async function onGroupCompleted(groupId, customMessage = null, feedbackLink = null, customMessages = {}) {
+  try {
+    console.log(`\n🎯 Group Completed ==========`);
+    console.log(`👥 Group: ${groupId}`);
+    console.log(`📝 Per-student messages: ${Object.keys(customMessages).length}`);
+
+    const group = await Group.findById(groupId).populate("courseId", "title level").lean();
+    if (!group) return { success: false, error: "Group not found" };
+
+    const students = await Student.find({
+      "academicInfo.groupIds": new mongoose.Types.ObjectId(groupId),
+      isDeleted: false,
+    })
+      .select("personalInfo guardianInfo communicationPreferences enrollmentNumber")
+      .lean();
+
+    console.log(`👨‍🎓 Total students: ${students.length}`);
+    if (students.length === 0) return { success: false, error: "No students in group" };
+
+    let successCount = 0;
+    let failCount = 0;
+    const notificationResults = [];
+
+    for (const student of students) {
+      try {
+        const { variables, language } = await prepareStudentVariables(student, group, null, {
+          feedbackLink: feedbackLink || '',
+        });
+
+        const studentIdStr = student._id.toString();
+        const perStudentMsgs = customMessages[studentIdStr];
+
+        // ✅ رسالة الطالب
+        let finalStudentMessage = '';
+        if (perStudentMsgs?.student?.trim()) {
+          finalStudentMessage = perStudentMsgs.student;
+          console.log(`📝 Using pre-rendered student message for ${student.personalInfo?.fullName}`);
+        } else if (customMessage) {
+          finalStudentMessage = replaceVariables(customMessage, variables);
+        } else {
+          const template = await getMessageTemplate('group_completion_student', language, 'student');
+          finalStudentMessage = replaceVariables(template.content, variables);
+        }
+
+        // ✅ رسالة ولي الأمر
+        let finalGuardianMessage = '';
+        if (perStudentMsgs?.guardian?.trim()) {
+          finalGuardianMessage = perStudentMsgs.guardian;
+          console.log(`📝 Using pre-rendered guardian message for ${student.personalInfo?.fullName}`);
+        } else if (customMessage) {
+          finalGuardianMessage = replaceVariables(customMessage, variables);
+        } else {
+          const template = await getMessageTemplate('group_completion_guardian', language, 'guardian');
+          finalGuardianMessage = replaceVariables(template.content, variables);
+        }
+
+        // ✅ إضافة رابط التقييم لو موجود ومش موجود في الرسالة أصلاً
+        if (feedbackLink) {
+          const feedbackSuffix = language === 'ar'
+            ? `\n\n📋 نرجو منك تقييم الدورة:\n${feedbackLink}`
+            : `\n\n📋 Please rate the course:\n${feedbackLink}`;
+
+          if (!finalStudentMessage.includes(feedbackLink)) {
+            finalStudentMessage += feedbackSuffix;
+          }
+          if (!finalGuardianMessage.includes(feedbackLink)) {
+            finalGuardianMessage += feedbackSuffix;
+          }
+        }
+
+        const result = await sendToStudentWithLogging({
+          studentId: student._id,
+          student,
+          studentMessage: finalStudentMessage,
+          guardianMessage: finalGuardianMessage,
+          messageType: 'group_completion',
+          metadata: {
+            groupId: group._id,
+            groupName: group.name,
+            groupCode: group.code,
+            isCustomMessage: !!(perStudentMsgs || customMessage),
+            hasFeedbackLink: !!feedbackLink,
+          },
+        });
+
+        if (result.success) {
+          successCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName: student.personalInfo?.fullName,
+            status: 'sent',
+            sentTo: result.sentTo,
+            language,
+            guardianSalutation: variables.guardianSalutation,
+            usedCustomMessage: !!perStudentMsgs,
+          });
+        } else {
+          failCount++;
+        }
+      } catch (error) {
+        console.error(`Error processing student:`, error);
+        failCount++;
+      }
+    }
+
     return {
-      success: false,
-      error: error.message,
-      totalStudents: 0,
-      successCount: 0,
-      failCount: 0,
-      notificationResults: [],
+      success: successCount > 0,
+      totalStudents: students.length,
+      successCount,
+      failCount,
+      successRate: ((successCount / students.length) * 100).toFixed(1),
+      notificationResults,
+      customMessageUsed: !!(customMessage || Object.keys(customMessages).length > 0),
+      feedbackLinkProvided: !!feedbackLink,
     };
+  } catch (error) {
+    console.error(`❌ Error in onGroupCompleted:`, error);
+    return { success: false, error: error.message };
   }
 }
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-/**
- * ✅ تحضير رسالة الترحيب بالمجموعة مع دعم المتغيرات
- */
-function prepareGroupWelcomeMessage(studentName, group, language) {
-  const replaceVariables = (template) => {
-    return template
-      .replace(/\{studentName\}/g, studentName)
-      .replace(/\{groupName\}/g, group.name)
-      .replace(/\{groupCode\}/g, group.code)
-      .replace(
-        /\{courseName\}/g,
-        group.courseSnapshot?.title || group.courseId?.title || "",
-      )
-      .replace(
-        /\{startDate\}/g,
-        new Date(group.schedule?.startDate).toLocaleDateString(
-          language === "en" ? "en-US" : "ar-EG",
-        ),
-      )
-      .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "")
-      .replace(/\{timeTo\}/g, group.schedule?.timeTo || "")
-      .replace(/\{instructor\}/g, group.instructors?.[0]?.name || "");
-  };
-
-  if (language === "en") {
-    const defaultTemplate = `🎉 Welcome to ${group.name}!
-
-Dear ${studentName},
-
-You have been enrolled in:
-📚 Course: ${group.courseSnapshot?.title || group.courseId?.title}
-👥 Group: ${group.code}
-📅 Start Date: ${new Date(group.schedule?.startDate).toLocaleDateString(
-      "en-US",
-    )}
-⏰ Time: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
-${
-  group.instructors?.[0]?.name
-    ? `👨‍🏫 Instructor: ${group.instructors[0].name}`
-    : ""
-}
-
-Your learning journey starts soon! 🚀
-
-Best regards,
-Code School Team 💻`;
-
-    return replaceVariables(defaultTemplate);
-  } else {
-    const defaultTemplate = `🎉 مرحباً بك في ${group.name}!
-
-عزيزي/عزيزتي ${studentName},
-
-تم تسجيلك في:
-📚 الكورس: ${group.courseSnapshot?.title || group.courseId?.title}
-👥 المجموعة: ${group.code}
-📅 تاريخ البدء: ${new Date(group.schedule?.startDate).toLocaleDateString(
-      "ar-EG",
-    )}
-⏰ الوقت: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
-${group.instructors?.[0]?.name ? `👨‍🏫 المدرب: ${group.instructors[0].name}` : ""}
-
-رحلتك التعليمية ستبدأ قريباً! 🚀
-
-مع أطيب التحيات،
-فريق Code School 💻`;
-
-    return replaceVariables(defaultTemplate);
-  }
-}
-
-/**
- * ✅ تحضير رسالة الترحيب الافتراضية للمدرس
- */
-function prepareInstructorWelcomeMessage(
-  instructorName,
-  group,
-  language = "ar",
-) {
-  const startDate = new Date(group.schedule?.startDate).toLocaleDateString(
-    language === "en" ? "en-US" : "ar-EG",
-    {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    },
-  );
-
-  const studentCount = group.currentStudentsCount || 0;
-
-  if (language === "en") {
-    return `🎉 Welcome to Your New Group!
-
-Hello ${instructorName},
-
-Your group has been activated successfully! Here's what you need to know:
-
-📚 Course: ${group.courseSnapshot?.title || group.courseId?.title || "Course"}
-👥 Group: ${group.code}
-👨‍🎓 Students Enrolled: ${studentCount}
-
-🎬 First Session Details:
-📅 Date: ${startDate}
-⏰ Time: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
-📍 Total Sessions: ${group.totalSessionsCount || "N/A"}
-
-Your students are ready and waiting! Let's make this an amazing learning experience. 🚀
-
-Questions? Feel free to reach out to the admin team.
-
-Best regards,
-Code School Team 💻`;
-  } else {
-    return `🎉 مرحباً بك في المجموعة الجديدة!
-
-مرحباً ${instructorName},
-
-تم تفعيل مجموعتك بنجاح! إليك المعلومات الأساسية:
-
-📚 الكورس: ${group.courseSnapshot?.title || group.courseId?.title || "كورس"}
-👥 المجموعة: ${group.code}
-👨‍🎓 عدد الطلاب: ${studentCount}
-
-🎬 تفاصيل أول حصة:
-📅 التاريخ: ${startDate}
-⏰ الوقت: ${group.schedule?.timeFrom} - ${group.schedule?.timeTo}
-📍 إجمالي الحصص: ${group.totalSessionsCount || "N/A"}
-
-طلابك جاهزين في الانتظار! دعنا نجعل هذه تجربة تعليمية رائعة. 🚀
-
-إذا كان لديك أي أسئلة، لا تتردد في التواصل مع فريق الإدارة.
-
-مع أطيب التحيات،
-فريق Code School 💻`;
-  }
-}
-
 /**
  * ✅ Process custom message with variables
  */
-function processCustomMessage(message, student, session, group, status) {
+export function processCustomMessage(message, student, session, group, status) {
   const guardianName = student.guardianInfo?.name || "Guardian";
   const studentName = student.personalInfo?.fullName || "Student";
 
@@ -2086,7 +2684,12 @@ function processCustomMessage(message, student, session, group, status) {
 /**
  * ✅ Process completion message with variables
  */
-function processCompletionMessage(message, student, group, feedbackLink) {
+export function processCompletionMessage(
+  message,
+  student,
+  group,
+  feedbackLink,
+) {
   const studentName = student.personalInfo?.fullName || "Student";
   const courseName =
     group.courseId?.title || group.courseSnapshot?.title || "Course";
@@ -2112,7 +2715,7 @@ function processCompletionMessage(message, student, group, feedbackLink) {
 /**
  * ✅ Prepare default completion message
  */
-function prepareCompletionMessage(
+export function prepareCompletionMessage(
   studentName,
   group,
   feedbackLink,
@@ -2171,7 +2774,7 @@ ${
 /**
  * ✅ Prepare absence notification message
  */
-function prepareAbsenceNotificationMessage(
+export function prepareAbsenceNotificationMessage(
   guardianName,
   studentName,
   session,
@@ -2279,9 +2882,9 @@ ${studentName} كان/ت غائب/ة بعذر عن محاضرة اليوم:
 }
 
 /**
- * ✅ Prepare session update message with ALL variables
+ * ✅ Prepare session update message
  */
-function prepareSessionUpdateMessage(
+export function prepareSessionUpdateMessage(
   recipientName,
   session,
   group,
@@ -2301,15 +2904,6 @@ function prepareSessionUpdateMessage(
       day: "numeric",
     },
   );
-
-  const statusText =
-    language === "en"
-      ? status === "cancelled"
-        ? "CANCELLED"
-        : "POSTPONED"
-      : status === "cancelled"
-        ? "ملغاة"
-        : "مؤجلة";
 
   if (language === "en") {
     if (status === "cancelled") {
@@ -2356,7 +2950,6 @@ Best regards,
 Code School Team 💻`;
     }
   } else {
-    // Arabic messages
     if (status === "cancelled") {
       return `ℹ️ إشعار إلغاء الجلسة – Code School
 
@@ -2403,7 +2996,10 @@ Code School Team 💻`;
   }
 }
 
-function getDefaultCompletionMessage(language = "ar") {
+/**
+ * ✅ Get default completion message
+ */
+export function getDefaultCompletionMessage(language = "ar") {
   if (language === "ar") {
     return `🎓 مبروك {studentName}!
 

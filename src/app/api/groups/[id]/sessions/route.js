@@ -17,7 +17,7 @@ export async function GET(req, { params }) {
 
     await connectDB();
 
-    const { id } = await params; // ✅ await params
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -31,7 +31,10 @@ export async function GET(req, { params }) {
     const upcoming = searchParams.get('upcoming') === 'true';
     const past = searchParams.get('past') === 'true';
 
-    const group = await Group.findOne({ _id: id, isDeleted: false });
+    // ✅ ضيف populate للـ courseId عشان نجيب title لو courseSnapshot مش موجود
+    const group = await Group.findOne({ _id: id, isDeleted: false })
+      .populate('courseId', 'title level')
+      .lean();
 
     if (!group) {
       return NextResponse.json(
@@ -90,14 +93,25 @@ export async function GET(req, { params }) {
       past: sessions.filter(s => new Date(s.scheduledDate) < now).length
     };
 
+    // ✅ بناء courseSnapshot من الداتا الموجودة
+    const courseSnapshot = group.courseSnapshot || {
+      title: group.courseId?.title || '',
+      level: group.courseId?.level || '',
+    };
+
     return NextResponse.json({
       success: true,
       data: formattedSessions,
       stats,
       group: {
         id: group._id,
+        _id: group._id,                    // ✅ ضيف _id
         code: group.code,
-        name: group.name
+        name: group.name,
+        courseSnapshot,                    // ✅ ضيف courseSnapshot
+        courseId: group.courseId || null,  // ✅ ضيف courseId كـ fallback
+        schedule: group.schedule || {},    // ✅ ضيف schedule لو محتاج
+        automation: group.automation || {},
       }
     });
 
