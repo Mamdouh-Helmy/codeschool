@@ -1,4 +1,3 @@
-// /src/components/sessions/ReminderModal.jsx
 "use client";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import toast from "react-hot-toast";
@@ -676,17 +675,17 @@ export default function ReminderModal({ session, groupStudents, reminderType, on
                     const rel = (student.guardianInfo?.relationship || 'father').toLowerCase().trim();
                     const isEdited = editedStudentTemplates[student._id] || editedGuardianTemplates[student._id];
                     
+                    // ✅ FIX: Build a plain text string without any HTML elements
+                    const langIcon = lang === 'ar' ? '🇸🇦 عربي' : '🇬🇧 English';
+                    const genderIcon = gender === 'female' ? '👧' : '👦';
+                    const relIcon = rel === 'mother' ? '👩 أم' : rel === 'father' ? '👨 أب' : '👤';
+                    const editIcon = isEdited ? ' ✏️' : '';
+                    
+                    const optionText = `${student.personalInfo?.fullName} · ${langIcon} · ${genderIcon} · ${relIcon}${editIcon}`;
+                    
                     return (
                       <option key={student._id} value={student._id}>
-                        {student.personalInfo?.fullName}
-                        {' · '}
-                        <span className="inline-flex items-center gap-1">
-                          <Globe className="w-3 h-3" />
-                          {lang === 'ar' ? '🇸🇦 عربي' : '🇬🇧 English'}
-                        </span>
-                        {' · '}{gender === 'female' ? '👧' : '👦'}
-                        {' · '}{rel === 'mother' ? '👩 أم' : rel === 'father' ? '👨 أب' : '👤'}
-                        {isEdited && ' ✏️'}
+                        {optionText}
                       </option>
                     );
                   })}

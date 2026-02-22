@@ -14,6 +14,7 @@ import {
   Link2,
   CheckCircle,
   Send,
+  Globe
 } from "lucide-react";
 
 export default function GroupCompletionModal({
@@ -29,9 +30,19 @@ export default function GroupCompletionModal({
 
   const [formData, setFormData] = useState({
     feedbackLink: "",
-    studentMessage: "",
-    guardianMessage: "",
   });
+
+  // ✅ State للقوالب الخام لكل طالب
+  const [studentTemplates, setStudentTemplates] = useState({});
+  const [guardianTemplates, setGuardianTemplates] = useState({});
+  
+  // ✅ State للقوالب المعدلة يدوياً لكل طالب
+  const [editedStudentTemplates, setEditedStudentTemplates] = useState({});
+  const [editedGuardianTemplates, setEditedGuardianTemplates] = useState({});
+  
+  // ✅ State للقالب المعروض حالياً في المحرر (للمعاينة فقط)
+  const [currentStudentMessage, setCurrentStudentMessage] = useState('');
+  const [currentGuardianMessage, setCurrentGuardianMessage] = useState('');
 
   const [previewStudentMessage, setPreviewStudentMessage] = useState("");
   const [previewGuardianMessage, setPreviewGuardianMessage] = useState("");
@@ -69,78 +80,115 @@ export default function GroupCompletionModal({
     }
   }, [groupStudents]);
 
-  // جلب القوالب من الباك إند
+  // ✅ FIX: جلب القوالب لجميع الطلاب مرة واحدة
   useEffect(() => {
-    const fetchTemplatesDirectly = async () => {
-      try {
-        const lang = selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar";
-        const [stuRes, guaRes] = await Promise.all([
-          fetch(`/api/message-templates?type=group_completion_student&recipient=student&default=true`),
-          fetch(`/api/message-templates?type=group_completion_guardian&recipient=guardian&default=true`),
-        ]);
-        const [stuJson, guaJson] = await Promise.all([stuRes.json(), guaRes.json()]);
-
-        // ✅ نخزن الـ raw content (بالمتغيرات) مش الـ rendered
-        if (!manuallyEdited.student && stuJson.success && stuJson.data?.length > 0) {
-          const raw = lang === "ar" ? stuJson.data[0].contentAr : stuJson.data[0].contentEn;
-          setFormData((prev) => ({ ...prev, studentMessage: raw }));
-        }
-        if (!manuallyEdited.guardian && guaJson.success && guaJson.data?.length > 0) {
-          const raw = lang === "ar" ? guaJson.data[0].contentAr : guaJson.data[0].contentEn;
-          setFormData((prev) => ({ ...prev, guardianMessage: raw }));
-        }
-      } catch (e) {
-        console.error("fetchTemplatesDirectly error", e);
-      }
-    };
-
-    const fetchTemplates = async () => {
-      if (!selectedStudentForPreview) return;
-      if (manuallyEdited.student && manuallyEdited.guardian) return;
-
+    const fetchAllTemplates = async () => {
+      if (!resolvedGroupId || groupStudents.length === 0) return;
+      
       setLoadingTemplates(true);
       try {
+        // جلب أول session عشان نستخدمها في جلب القوالب
         const sessionsRes = await fetch(`/api/groups/${resolvedGroupId}/sessions`);
         const sessionsJson = await sessionsRes.json();
         const sessions = sessionsJson.data || [];
         const firstSession = sessions[0];
-
+        
         if (!firstSession) {
-          await fetchTemplatesDirectly();
+          // لو مفيش sessions، نجيب القوالب الافتراضية مباشرة
+          await fetchDefaultTemplates();
           return;
         }
 
-        const res = await fetch(`/api/sessions/${firstSession.id}/templates`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            eventType: "group_completion",
-            studentId: selectedStudentForPreview._id,
-            extraData: { feedbackLink: formData.feedbackLink },
-          }),
+        // جلب القوالب لكل طالب
+        const templatesPromises = groupStudents.map(async (student) => {
+          const res = await fetch(`/api/sessions/${firstSession.id}/templates`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              eventType: "group_completion",
+              studentId: student._id,
+              extraData: { feedbackLink: formData.feedbackLink },
+            }),
+          });
+          const json = await res.json();
+          
+          if (json.success) {
+            return {
+              studentId: student._id,
+              studentTemplate: json.data.student?.rawContent || json.data.student?.content || '',
+              guardianTemplate: json.data.guardian?.rawContent || json.data.guardian?.content || ''
+            };
+          }
+          return null;
         });
 
-        const json = await res.json();
-        if (json.success) {
-          const { student, guardian } = json.data;
-          // ✅ نخزن rawContent (بالمتغيرات) عشان كل طالب يتبدل صح في الـ loop
-          if (!manuallyEdited.student && student) {
-            setFormData((prev) => ({ ...prev, studentMessage: student.rawContent || student.content }));
+        const results = await Promise.all(templatesPromises);
+        
+        const newStudentTemplates = {};
+        const newGuardianTemplates = {};
+        
+        results.forEach(result => {
+          if (result) {
+            newStudentTemplates[result.studentId] = result.studentTemplate;
+            newGuardianTemplates[result.studentId] = result.guardianTemplate;
           }
-          if (!manuallyEdited.guardian && guardian) {
-            setFormData((prev) => ({ ...prev, guardianMessage: guardian.rawContent || guardian.content }));
-          }
+        });
+
+        setStudentTemplates(newStudentTemplates);
+        setGuardianTemplates(newGuardianTemplates);
+
+        // عرض قالب أول طالب
+        if (groupStudents[0]) {
+          setCurrentStudentMessage(newStudentTemplates[groupStudents[0]._id] || '');
+          setCurrentGuardianMessage(newGuardianTemplates[groupStudents[0]._id] || '');
         }
+
       } catch (error) {
         console.error("Error fetching templates:", error);
-        await fetchTemplatesDirectly();
+        // لو فشل، نجيب القوالب الافتراضية
+        await fetchDefaultTemplates();
       } finally {
         setLoadingTemplates(false);
       }
     };
 
-    fetchTemplates();
-  }, [selectedStudentForPreview?._id]);
+    const fetchDefaultTemplates = async () => {
+      try {
+        const newStudentTemplates = {};
+        const newGuardianTemplates = {};
+        
+        for (const student of groupStudents) {
+          const lang = student.communicationPreferences?.preferredLanguage || "ar";
+          
+          // جلب قالب الطالب الافتراضي
+          const stuRes = await fetch(`/api/message-templates?type=group_completion_student&recipient=student&default=true`);
+          const stuJson = await stuRes.json();
+          if (stuJson.success && stuJson.data?.length > 0) {
+            newStudentTemplates[student._id] = lang === "ar" ? stuJson.data[0].contentAr : stuJson.data[0].contentEn;
+          }
+          
+          // جلب قالب ولي الأمر الافتراضي
+          const guaRes = await fetch(`/api/message-templates?type=group_completion_guardian&recipient=guardian&default=true`);
+          const guaJson = await guaRes.json();
+          if (guaJson.success && guaJson.data?.length > 0) {
+            newGuardianTemplates[student._id] = lang === "ar" ? guaJson.data[0].contentAr : guaJson.data[0].contentEn;
+          }
+        }
+        
+        setStudentTemplates(newStudentTemplates);
+        setGuardianTemplates(newGuardianTemplates);
+        
+        if (groupStudents[0]) {
+          setCurrentStudentMessage(newStudentTemplates[groupStudents[0]._id] || '');
+          setCurrentGuardianMessage(newGuardianTemplates[groupStudents[0]._id] || '');
+        }
+      } catch (e) {
+        console.error("fetchDefaultTemplates error", e);
+      }
+    };
+
+    fetchAllTemplates();
+  }, [resolvedGroupId, groupStudents, formData.feedbackLink]);
 
   // بناء المتغيرات لكل طالب
   const buildVariables = useCallback(
@@ -217,9 +265,9 @@ export default function GroupCompletionModal({
   // ✅ المعاينة تستخدم replaceVarsInContent على الـ raw content
   useEffect(() => {
     if (!selectedStudentForPreview) return;
-    setPreviewStudentMessage(replaceVarsInContent(formData.studentMessage, selectedStudentForPreview));
-    setPreviewGuardianMessage(replaceVarsInContent(formData.guardianMessage, selectedStudentForPreview));
-  }, [formData.studentMessage, formData.guardianMessage, selectedStudentForPreview, replaceVarsInContent]);
+    setPreviewStudentMessage(replaceVarsInContent(currentStudentMessage, selectedStudentForPreview));
+    setPreviewGuardianMessage(replaceVarsInContent(currentGuardianMessage, selectedStudentForPreview));
+  }, [currentStudentMessage, currentGuardianMessage, selectedStudentForPreview, replaceVarsInContent]);
 
   // المتغيرات المتاحة للـ hints
   const availableVariables = useMemo(
@@ -248,91 +296,102 @@ export default function GroupCompletionModal({
 
   // تغيير الطالب المختار للمعاينة
   const handleStudentPreviewChange = useCallback(
-    async (studentId) => {
+    (studentId) => {
       const student = groupStudents.find((s) => s._id === studentId);
       if (!student) return;
+      
       setSelectedStudentForPreview(student);
-
-      if (!manuallyEdited.student || !manuallyEdited.guardian) {
-        setLoadingTemplates(true);
-        try {
-          const sessionsRes = await fetch(`/api/groups/${resolvedGroupId}/sessions`);
-          const sessionsJson = await sessionsRes.json();
-          const sessions = sessionsJson.data || [];
-          const firstSession = sessions[0];
-          if (!firstSession) return;
-
-          const res = await fetch(`/api/sessions/${firstSession.id}/templates`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ eventType: "group_completion", studentId: student._id }),
-          });
-          const json = await res.json();
-          if (json.success) {
-            const { student: st, guardian: gt } = json.data;
-            // ✅ rawContent دايمًا
-            if (!manuallyEdited.student && st)
-              setFormData((prev) => ({ ...prev, studentMessage: st.rawContent || st.content }));
-            if (!manuallyEdited.guardian && gt)
-              setFormData((prev) => ({ ...prev, guardianMessage: gt.rawContent || gt.content }));
-          }
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setLoadingTemplates(false);
-        }
-      }
+      
+      // ✅ استخدام القالب المعدل يدوياً إذا موجود، وإلا استخدم القالب الافتراضي
+      const studentTemplate = editedStudentTemplates[studentId] || studentTemplates[studentId] || '';
+      const guardianTemplate = editedGuardianTemplates[studentId] || guardianTemplates[studentId] || '';
+      
+      setCurrentStudentMessage(studentTemplate);
+      setCurrentGuardianMessage(guardianTemplate);
+      
+      // تحديث حالة manual edit
+      setManuallyEdited({
+        student: !!editedStudentTemplates[studentId],
+        guardian: !!editedGuardianTemplates[studentId]
+      });
     },
-    [groupStudents, manuallyEdited, resolvedGroupId]
+    [groupStudents, studentTemplates, guardianTemplates, editedStudentTemplates, editedGuardianTemplates]
   );
 
   // إعادة تعيين القوالب
   const resetToDefault = useCallback(async () => {
     if (!selectedStudentForPreview) return;
+    
     setLoadingTemplates(true);
     try {
-      const sessionsRes = await fetch(`/api/groups/${resolvedGroupId}/sessions`);
-      const sessionsJson = await sessionsRes.json();
-      const firstSession = (sessionsJson.data || [])[0];
-      if (!firstSession) return;
-
-      const res = await fetch(`/api/sessions/${firstSession.id}/templates`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventType: "group_completion",
-          studentId: selectedStudentForPreview._id,
-          extraData: { feedbackLink: formData.feedbackLink },
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        const { student, guardian } = json.data;
-        // ✅ rawContent دايمًا
-        setFormData((prev) => ({
-          ...prev,
-          studentMessage: student?.rawContent || student?.content || "",
-          guardianMessage: guardian?.rawContent || guardian?.content || "",
-        }));
-        setManuallyEdited({ student: false, guardian: false });
-        toast.success(isRTL ? "تم استعادة القوالب الافتراضية" : "Default templates restored");
+      const studentId = selectedStudentForPreview._id;
+      const lang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
+      
+      // جلب القوالب الافتراضية
+      const [stuRes, guaRes] = await Promise.all([
+        fetch(`/api/message-templates?type=group_completion_student&recipient=student&default=true`),
+        fetch(`/api/message-templates?type=group_completion_guardian&recipient=guardian&default=true`),
+      ]);
+      
+      const [stuJson, guaJson] = await Promise.all([stuRes.json(), guaRes.json()]);
+      
+      let studentTemplate = '';
+      let guardianTemplate = '';
+      
+      if (stuJson.success && stuJson.data?.length > 0) {
+        studentTemplate = lang === "ar" ? stuJson.data[0].contentAr : stuJson.data[0].contentEn;
       }
+      
+      if (guaJson.success && guaJson.data?.length > 0) {
+        guardianTemplate = lang === "ar" ? guaJson.data[0].contentAr : guaJson.data[0].contentEn;
+      }
+
+      // تحديث القوالب الافتراضية
+      setStudentTemplates(prev => ({
+        ...prev,
+        [studentId]: studentTemplate
+      }));
+      setGuardianTemplates(prev => ({
+        ...prev,
+        [studentId]: guardianTemplate
+      }));
+
+      // إزالة أي تعديلات يدوية
+      setEditedStudentTemplates(prev => {
+        const newState = { ...prev };
+        delete newState[studentId];
+        return newState;
+      });
+      setEditedGuardianTemplates(prev => {
+        const newState = { ...prev };
+        delete newState[studentId];
+        return newState;
+      });
+
+      // عرض القوالب الافتراضية
+      setCurrentStudentMessage(studentTemplate);
+      setCurrentGuardianMessage(guardianTemplate);
+      setManuallyEdited({ student: false, guardian: false });
+      
+      toast.success(isRTL ? "تم استعادة القوالب الافتراضية" : "Default templates restored");
     } catch (e) {
+      console.error("resetToDefault error:", e);
       toast.error(isRTL ? "فشل استعادة القوالب" : "Failed to reset templates");
     } finally {
       setLoadingTemplates(false);
     }
-  }, [selectedStudentForPreview, resolvedGroupId, formData.feedbackLink, isRTL]);
+  }, [selectedStudentForPreview, isRTL]);
 
   // حفظ القالب في DB
   const saveTemplateToDatabase = useCallback(
     async (type, content) => {
-      if (!content?.trim()) return;
+      if (!content?.trim() || !selectedStudentForPreview) return;
+      
       setSavingTemplate((prev) => ({ ...prev, [type]: true }));
       try {
         const templateType = type === "student" ? "group_completion_student" : "group_completion_guardian";
         const recipientType = type === "student" ? "student" : "guardian";
-        const lang = selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar";
+        const lang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
         const templateName = type === "student" ? "Group Completion - Student" : "Group Completion - Guardian";
 
         const searchRes = await fetch(`/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`);
@@ -340,7 +399,13 @@ export default function GroupCompletionModal({
 
         if (searchJson.success && searchJson.data.length > 0) {
           const templateId = searchJson.data[0]._id;
-          const updateData = { id: templateId, name: templateName, isDefault: true };
+          const updateData = { 
+            id: templateId, 
+            name: templateName, 
+            isDefault: true,
+            updatedAt: new Date()
+          };
+          
           if (lang === "ar") {
             updateData.contentAr = content;
             if (!searchJson.data[0].contentEn) updateData.contentEn = content;
@@ -348,6 +413,7 @@ export default function GroupCompletionModal({
             updateData.contentEn = content;
             if (!searchJson.data[0].contentAr) updateData.contentAr = content;
           }
+          
           const res = await fetch(`/api/message-templates`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -376,8 +442,14 @@ export default function GroupCompletionModal({
               { key: "feedbackLink", label: "Feedback Link", example: "https://forms.google.com/..." },
             ],
           };
-          if (lang === "ar") { newTemplate.contentAr = content; newTemplate.contentEn = content; }
-          else { newTemplate.contentEn = content; newTemplate.contentAr = content; }
+          
+          if (lang === "ar") { 
+            newTemplate.contentAr = content; 
+            newTemplate.contentEn = content; 
+          } else { 
+            newTemplate.contentEn = content; 
+            newTemplate.contentAr = content; 
+          }
 
           const res = await fetch(`/api/message-templates`, {
             method: "POST",
@@ -388,7 +460,22 @@ export default function GroupCompletionModal({
           if (json.success) toast.success(isRTL ? "تم حفظ القالب" : "Template saved");
           else throw new Error(json.error);
         }
+        
+        // ✅ تحديث القوالب الافتراضية بعد الحفظ
+        if (type === "student") {
+          setStudentTemplates(prev => ({
+            ...prev,
+            [selectedStudentForPreview._id]: content
+          }));
+        } else {
+          setGuardianTemplates(prev => ({
+            ...prev,
+            [selectedStudentForPreview._id]: content
+          }));
+        }
+        
       } catch (error) {
+        console.error("saveTemplate error:", error);
         toast.error(isRTL ? "فشل حفظ القالب: " + error.message : "Failed to save template: " + error.message);
       } finally {
         setSavingTemplate((prev) => ({ ...prev, [type]: false }));
@@ -404,8 +491,7 @@ export default function GroupCompletionModal({
       const textarea = ref.current;
       if (!textarea) return;
 
-      const field = type === "student" ? "studentMessage" : "guardianMessage";
-      const currentValue = formData[field] || "";
+      const currentValue = type === "student" ? currentStudentMessage : currentGuardianMessage;
       const cursorPos = cursorPosition[type];
       const beforeCursor = currentValue.substring(0, cursorPos);
       const lastAt = beforeCursor.lastIndexOf("@");
@@ -419,7 +505,24 @@ export default function GroupCompletionModal({
         newCursorPos = cursorPos + variable.key.length;
       }
 
-      setFormData((prev) => ({ ...prev, [field]: newValue }));
+      if (type === "student") {
+        setCurrentStudentMessage(newValue);
+        if (selectedStudentForPreview) {
+          setEditedStudentTemplates(prev => ({
+            ...prev,
+            [selectedStudentForPreview._id]: newValue
+          }));
+        }
+      } else {
+        setCurrentGuardianMessage(newValue);
+        if (selectedStudentForPreview) {
+          setEditedGuardianTemplates(prev => ({
+            ...prev,
+            [selectedStudentForPreview._id]: newValue
+          }));
+        }
+      }
+      
       setManuallyEdited((prev) => ({ ...prev, [type]: true }));
       setShowHints((prev) => ({ ...prev, [type]: false }));
 
@@ -428,16 +531,34 @@ export default function GroupCompletionModal({
         textarea.setSelectionRange(newCursorPos, newCursorPos);
       }, 0);
     },
-    [formData, cursorPosition]
+    [currentStudentMessage, currentGuardianMessage, cursorPosition, selectedStudentForPreview]
   );
 
   const handleInput = useCallback((type) => (e) => {
     const value = e.target.value;
     const cursorPos = e.target.selectionStart;
-    const field = type === "student" ? "studentMessage" : "guardianMessage";
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    
+    if (type === "student") {
+      setCurrentStudentMessage(value);
+      if (selectedStudentForPreview) {
+        setEditedStudentTemplates(prev => ({
+          ...prev,
+          [selectedStudentForPreview._id]: value
+        }));
+      }
+    } else {
+      setCurrentGuardianMessage(value);
+      if (selectedStudentForPreview) {
+        setEditedGuardianTemplates(prev => ({
+          ...prev,
+          [selectedStudentForPreview._id]: value
+        }));
+      }
+    }
+    
     setManuallyEdited((prev) => ({ ...prev, [type]: true }));
     setCursorPosition((prev) => ({ ...prev, [type]: cursorPos }));
+    
     const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
     if (lastAt !== -1 && lastAt === cursorPos - 1) {
       setShowHints((prev) => ({ ...prev, [type]: true }));
@@ -445,7 +566,7 @@ export default function GroupCompletionModal({
     } else {
       setShowHints((prev) => ({ ...prev, [type]: false }));
     }
-  }, []);
+  }, [selectedStudentForPreview]);
 
   const handleKeyDown = useCallback((type) => (e) => {
     if (!showHints[type]) return;
@@ -463,9 +584,9 @@ export default function GroupCompletionModal({
     }
   }, [showHints, selectedHintIndex, availableVariables, insertVariable]);
 
-  // ✅ إرسال الرسائل - كل طالب لوحده
+  // ✅ إرسال الرسائل - كل طالب بقالبه المناسب
   const handleSend = useCallback(async () => {
-    if (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim()) {
+    if (!currentStudentMessage?.trim() || !currentGuardianMessage?.trim()) {
       toast.error(isRTL ? "الرجاء كتابة الرسالتين" : "Please write both messages");
       return;
     }
@@ -494,16 +615,21 @@ export default function GroupCompletionModal({
 
       toast.success(isRTL ? "✅ تم إتمام المجموعة، جاري الإرسال..." : "✅ Group completed, sending messages...");
 
-      // ── الخطوة 2: إرسال لكل طالب لوحده بعد استبدال متغيراته ──
+      // ── الخطوة 2: إرسال لكل طالب بقالبه المناسب ──
       let successCount = 0;
       let failCount = 0;
 
       for (let i = 0; i < groupStudents.length; i++) {
         const student = groupStudents[i];
+        const studentId = student._id;
+
+        // ✅ استخدام القالب المناسب لكل طالب
+        const studentRaw = editedStudentTemplates[studentId] || studentTemplates[studentId] || '';
+        const guardianRaw = editedGuardianTemplates[studentId] || guardianTemplates[studentId] || '';
 
         // ✅ استبدال المتغيرات لكل طالب بناءً على بياناته هو
-        const studentMsg = replaceVarsInContent(formData.studentMessage, student);
-        const guardianMsg = replaceVarsInContent(formData.guardianMessage, student);
+        const studentMsg = replaceVarsInContent(studentRaw, student);
+        const guardianMsg = replaceVarsInContent(guardianRaw, student);
 
         try {
           const res = await fetch(`/api/groups/${resolvedGroupId}/complete`, {
@@ -561,7 +687,7 @@ export default function GroupCompletionModal({
     } finally {
       setSending(false);
     }
-  }, [formData, resolvedGroupId, groupStudents, replaceVarsInContent, isRTL, onClose, onRefresh]);
+  }, [currentStudentMessage, currentGuardianMessage, resolvedGroupId, groupStudents, studentTemplates, guardianTemplates, editedStudentTemplates, editedGuardianTemplates, replaceVarsInContent, formData.feedbackLink, isRTL, onClose, onRefresh]);
 
   // Hints Dropdown component
   const HintsDropdown = ({ type, borderColor, bgColor, textColor }) => (
@@ -679,12 +805,19 @@ export default function GroupCompletionModal({
                     const lang = student.communicationPreferences?.preferredLanguage || "ar";
                     const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
                     const rel = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
+                    const isEdited = editedStudentTemplates[student._id] || editedGuardianTemplates[student._id];
+                    
                     return (
                       <option key={student._id} value={student._id}>
                         {student.personalInfo?.fullName}
-                        {" · "}{lang === "ar" ? "🇸🇦" : "🇬🇧"}
+                        {" · "}
+                        <span className="inline-flex items-center gap-1">
+                          <Globe className="w-3 h-3" />
+                          {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
+                        </span>
                         {" · "}{gender === "female" ? "👧" : "👦"}
                         {" · "}{rel === "mother" ? "👩 أم" : rel === "father" ? "👨 أب" : "👤"}
+                        {isEdited && " ✏️"}
                       </option>
                     );
                   })}
@@ -705,9 +838,16 @@ export default function GroupCompletionModal({
                       </span>
                       <span className="text-gray-800 dark:text-gray-200 font-semibold">{salutationPreview.guardian}</span>
                     </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Globe className="w-3 h-3" />
+                      <span>
+                        {isRTL ? 'لغة الطالب: ' : 'Student language: '}
+                        {selectedStudentForPreview.communicationPreferences?.preferredLanguage === 'ar' ? '🇸🇦 العربية' : '🇬🇧 English'}
+                      </span>
+                    </div>
                     {(manuallyEdited.student || manuallyEdited.guardian) && (
                       <p className="text-orange-500 dark:text-orange-400 flex items-center gap-1 mt-1">
-                        ✏️ {isRTL ? "الرسائل معدلة يدوياً" : "Messages manually edited"}
+                        ✏️ {isRTL ? "هذا الطالب لديه رسائل معدلة يدوياً" : "This student has manually edited messages"}
                       </p>
                     )}
                   </div>
@@ -730,7 +870,7 @@ export default function GroupCompletionModal({
               <div className="relative">
                 <textarea
                   ref={studentTextareaRef}
-                  value={formData.studentMessage}
+                  value={currentStudentMessage}
                   onChange={handleInput("student")}
                   onKeyDown={handleKeyDown("student")}
                   onSelect={(e) => setCursorPosition((prev) => ({ ...prev, student: e.target.selectionStart }))}
@@ -756,13 +896,14 @@ export default function GroupCompletionModal({
                     <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
                       📋 {isRTL ? "معاينة للطالب" : "Student Preview"}
                     </span>
-                    <span className="text-xs text-amber-500">
-                      {selectedStudentForPreview.communicationPreferences?.preferredLanguage === "ar" ? "🇸🇦" : "🇬🇧"}
+                    <span className="text-xs text-amber-500 flex items-center gap-1">
+                      <Globe className="w-3 h-3" />
+                      {selectedStudentForPreview.communicationPreferences?.preferredLanguage === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
                       {" · "}
                       {(selectedStudentForPreview.personalInfo?.gender || "").toLowerCase() === "female" ? "👧" : "👦"}
                     </span>
                   </div>
-                  <div className="p-3 text-sm whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                  <div className="p-3 text-sm whitespace-pre-wrap break-words max-h-48 overflow-y-auto" dir={selectedStudentForPreview.communicationPreferences?.preferredLanguage === 'ar' ? 'rtl' : 'ltr'}>
                     {previewStudentMessage}
                   </div>
                 </div>
@@ -783,7 +924,7 @@ export default function GroupCompletionModal({
               <div className="relative">
                 <textarea
                   ref={guardianTextareaRef}
-                  value={formData.guardianMessage}
+                  value={currentGuardianMessage}
                   onChange={handleInput("guardian")}
                   onKeyDown={handleKeyDown("guardian")}
                   onSelect={(e) => setCursorPosition((prev) => ({ ...prev, guardian: e.target.selectionStart }))}
@@ -809,14 +950,17 @@ export default function GroupCompletionModal({
                     <span className="text-xs font-medium text-orange-700 dark:text-orange-300">
                       📋 {isRTL ? "معاينة لولي الأمر" : "Guardian Preview"}
                     </span>
-                    <span className="text-xs text-orange-500">
+                    <span className="text-xs text-orange-500 flex items-center gap-1">
+                      <Globe className="w-3 h-3" />
+                      {selectedStudentForPreview.communicationPreferences?.preferredLanguage === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
+                      {" · "}
                       {(() => {
                         const rel = (selectedStudentForPreview.guardianInfo?.relationship || "").toLowerCase();
                         return rel === "mother" ? "👩 أم" : rel === "father" ? "👨 أب" : "👤";
                       })()}
                     </span>
                   </div>
-                  <div className="p-3 text-sm whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                  <div className="p-3 text-sm whitespace-pre-wrap break-words max-h-48 overflow-y-auto" dir={selectedStudentForPreview.communicationPreferences?.preferredLanguage === 'ar' ? 'rtl' : 'ltr'}>
                     {previewGuardianMessage}
                   </div>
                 </div>
@@ -826,8 +970,8 @@ export default function GroupCompletionModal({
             {/* Save Template Buttons */}
             <div className="flex justify-end gap-2 pt-2 border-t border-amber-200 dark:border-amber-800">
               <button
-                onClick={() => saveTemplateToDatabase("student", formData.studentMessage)}
-                disabled={!formData.studentMessage || savingTemplate.student || loadingTemplates}
+                onClick={() => saveTemplateToDatabase("student", currentStudentMessage)}
+                disabled={!currentStudentMessage || savingTemplate.student || loadingTemplates}
                 className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
               >
                 <Save className="w-3 h-3" />
@@ -838,8 +982,8 @@ export default function GroupCompletionModal({
                 )}
               </button>
               <button
-                onClick={() => saveTemplateToDatabase("guardian", formData.guardianMessage)}
-                disabled={!formData.guardianMessage || savingTemplate.guardian || loadingTemplates}
+                onClick={() => saveTemplateToDatabase("guardian", currentGuardianMessage)}
+                disabled={!currentGuardianMessage || savingTemplate.guardian || loadingTemplates}
                 className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
               >
                 <Save className="w-3 h-3" />
@@ -865,6 +1009,14 @@ export default function GroupCompletionModal({
 
         {/* Footer */}
         <div className="p-6 border-t border-PowderBlueBorder dark:border-dark_border flex items-center justify-end gap-3">
+          <div className="flex-1">
+            <p className="text-xs text-gray-500">
+              <Globe className="w-3 h-3 inline mr-1" />
+              {isRTL 
+                ? 'سيتم إرسال القالب المناسب لكل طالب حسب لغته' 
+                : 'Each student will receive the message in their preferred language'}
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-gray-50 dark:hover:bg-dark_input"
@@ -876,8 +1028,8 @@ export default function GroupCompletionModal({
             disabled={
               sending ||
               loadingTemplates ||
-              !formData.studentMessage?.trim() ||
-              !formData.guardianMessage?.trim()
+              !currentStudentMessage?.trim() ||
+              !currentGuardianMessage?.trim()
             }
             className="px-5 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-semibold shadow-sm"
           >
