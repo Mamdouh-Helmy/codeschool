@@ -1,6 +1,10 @@
 // /src/models/Student.js
 import mongoose from "mongoose";
 
+// =============================================
+// ✅ SUB-SCHEMAS
+// =============================================
+
 const addressSchema = new mongoose.Schema({
   street: { type: String, default: "" },
   city: { type: String, default: "" },
@@ -23,39 +27,13 @@ const notificationChannelsSchema = new mongoose.Schema({
 
 const sessionReminderSchema = new mongoose.Schema(
   {
-    sessionId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Session",
-      required: true,
-    },
-    groupId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Group",
-      required: true,
-    },
-    reminderType: {
-      type: String,
-      enum: ["24hours", "1hour"],
-      required: true,
-    },
-    message: {
-      type: String,
-      required: true,
-    },
-    language: {
-      type: String,
-      enum: ["ar", "en", "bilingual"],
-      default: "ar",
-    },
-    sentAt: {
-      type: Date,
-      default: Date.now,
-    },
-    status: {
-      type: String,
-      enum: ["sent", "failed", "pending"],
-      default: "sent",
-    },
+    sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session", required: true },
+    groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group", required: true },
+    reminderType: { type: String, enum: ["24hours", "1hour"], required: true },
+    message: { type: String, required: true },
+    language: { type: String, enum: ["ar", "en", "bilingual"], default: "ar" },
+    sentAt: { type: Date, default: Date.now },
+    status: { type: String, enum: ["sent", "failed", "pending"], default: "sent" },
     error: { type: String },
     sessionDetails: {
       title: String,
@@ -66,7 +44,7 @@ const sessionReminderSchema = new mongoose.Schema(
       sessionNumber: Number,
     },
   },
-  { _id: true, timestamps: true },
+  { _id: true, timestamps: true }
 );
 
 const whatsappMessageSchema = new mongoose.Schema(
@@ -74,67 +52,27 @@ const whatsappMessageSchema = new mongoose.Schema(
     messageType: {
       type: String,
       enum: [
-        "welcome",
-        "language_selection",
-        "language_confirmation",
-        "group_welcome",
-        "group_welcome_guardian",
-        "group_welcome_student",
-        "session_reminder",
-        "session_reminder_guardian",
-        "session_reminder_student",
-        "absence_notification",
-        "late_notification",
-        "excused_notification",
-        "session_cancelled",
-        "session_postponed",
-        "group_completion",
-        "custom",
-        "other",
-        "session_cancelled_student",
-        "session_postponed_student",
-        "reminder_24h_student",
-        "reminder_1h_student",
-        "group_completion_student",
-        "session_cancelled_guardian",
-        "session_postponed_guardian",
-        "reminder_24h_guardian",
-        "reminder_1h_guardian",
-        "group_completion_guardian",
-        "bilingual_language_selection",
-        "bilingual_guardian_notification",
-        "bilingual_language_confirmation",
-        "bilingual_language_confirmation_guardian",
+        "welcome", "language_selection", "language_confirmation",
+        "group_welcome", "group_welcome_guardian", "group_welcome_student",
+        "session_reminder", "session_reminder_guardian", "session_reminder_student",
+        "absence_notification", "late_notification", "excused_notification",
+        "session_cancelled", "session_postponed", "group_completion",
+        "custom", "other",
+        "session_cancelled_student", "session_postponed_student",
+        "reminder_24h_student", "reminder_1h_student", "group_completion_student",
+        "session_cancelled_guardian", "session_postponed_guardian",
+        "reminder_24h_guardian", "reminder_1h_guardian", "group_completion_guardian",
+        "bilingual_language_selection", "bilingual_guardian_notification",
+        "bilingual_language_confirmation", "bilingual_language_confirmation_guardian",
       ],
       required: true,
     },
-    messageContent: {
-      type: String,
-      required: true,
-    },
-    language: {
-      type: String,
-      enum: ["ar", "en", "bilingual"],
-      default: "ar",
-    },
-    status: {
-      type: String,
-      enum: ["sent", "failed", "pending"],
-      default: "sent",
-      required: true,
-    },
-    recipientNumber: {
-      type: String,
-      required: true,
-    },
-    wapilotMessageId: {
-      type: String,
-    },
-    sentAt: {
-      type: Date,
-      default: Date.now,
-      required: true,
-    },
+    messageContent: { type: String, required: true },
+    language: { type: String, enum: ["ar", "en", "bilingual"], default: "ar" },
+    status: { type: String, enum: ["sent", "failed", "pending"], default: "sent", required: true },
+    recipientNumber: { type: String, required: true },
+    wapilotMessageId: { type: String },
+    sentAt: { type: Date, default: Date.now, required: true },
     metadata: {
       groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group" },
       groupName: String,
@@ -143,11 +81,7 @@ const whatsappMessageSchema = new mongoose.Schema(
       sessionTitle: String,
       attendanceStatus: String,
       isCustomMessage: { type: Boolean, default: false },
-      recipientType: {
-        type: String,
-        enum: ["student", "guardian"],
-        default: "student",
-      },
+      recipientType: { type: String, enum: ["student", "guardian"], default: "student" },
       guardianName: String,
       automationType: String,
       interactive: { type: Boolean, default: false },
@@ -165,17 +99,15 @@ const whatsappMessageSchema = new mongoose.Schema(
       guardianNicknameEn: String,
       relationship: String,
     },
-    error: {
-      type: String,
-    },
-    errorDetails: {
-      stack: String,
-      code: String,
-      message: String,
-    },
+    error: { type: String },
+    errorDetails: { stack: String, code: String, message: String },
   },
-  { _id: true, timestamps: true },
+  { _id: true, timestamps: true }
 );
+
+// =============================================
+// ✅ MAIN SCHEMA - بدون أي setter أو getter أو middleware
+// =============================================
 
 const StudentSchema = new mongoose.Schema(
   {
@@ -202,7 +134,7 @@ const StudentSchema = new mongoose.Schema(
       phone: { type: String },
       whatsappNumber: { type: String },
       dateOfBirth: { type: Date },
-      // ✅ FIXED: بدون setter أو getter - نعتمد على normalizeGender في route و pre-save فقط
+      // ✅ بدون setter أو getter - البيانات بتتنظف في route.js
       gender: {
         type: String,
         enum: ["male", "female", "other"],
@@ -253,17 +185,12 @@ const StudentSchema = new mongoose.Schema(
     },
 
     communicationPreferences: {
-      preferredLanguage: {
-        type: String,
-        enum: ["ar", "en"],
-        default: "ar",
-      },
+      preferredLanguage: { type: String, enum: ["ar", "en"], default: "ar" },
       notificationChannels: notificationChannelsSchema,
       marketingOptIn: { type: Boolean, default: true },
     },
 
     sessionReminders: [sessionReminderSchema],
-
     whatsappMessages: [whatsappMessageSchema],
 
     metadata: {
@@ -271,7 +198,6 @@ const StudentSchema = new mongoose.Schema(
       updatedAt: { type: Date, default: Date.now },
       createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-
       whatsappWelcomeSent: { type: Boolean, default: false },
       whatsappInteractiveSent: { type: Boolean, default: false },
       whatsappButtons: [{ id: String, title: String }],
@@ -291,7 +217,6 @@ const StudentSchema = new mongoose.Schema(
         default: "simulation",
       },
       whatsappMessagesCount: { type: Number, default: 0 },
-
       whatsappLanguageSelected: { type: Boolean, default: false },
       whatsappLanguageSelection: {
         type: String,
@@ -304,18 +229,15 @@ const StudentSchema = new mongoose.Schema(
       whatsappResponseReceived: { type: Boolean, default: false },
       whatsappResponse: { type: String },
       whatsappResponseAt: { type: Date },
-
       whatsappLanguageConfirmed: { type: Boolean, default: false },
       whatsappLanguageConfirmationAt: { type: Date },
       whatsappConfirmationSent: { type: Boolean, default: false },
       whatsappConfirmationSentAt: { type: Date },
       whatsappConfirmationError: { type: String },
       whatsappConfirmationErrorAt: { type: Date },
-
       whatsappTotalMessages: { type: Number, default: 0 },
       whatsappLastInteraction: { type: Date },
       whatsappConversationId: { type: String },
-
       lastSessionReminder24h: { type: Date },
       lastSessionReminder1h: { type: Date },
       totalSessionReminders: { type: Number, default: 0 },
@@ -326,86 +248,25 @@ const StudentSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    // ✅ strict: true بس - بدون toJSON أو toObject أو أي options تانية
     strict: true,
-    // ✅ FIXED: أزلنا toJSON/toObject مع getters - كانت تسبب "a is not a function"
   }
 );
 
-// ✅ Pre-validate middleware - يشتغل قبل الـ validation ويصحح gender
-StudentSchema.pre("validate", function (next) {
-  // تصحيح gender
-  if (this.personalInfo) {
-    const g = this.personalInfo.gender;
-    if (g) {
-      const lower = String(g).toLowerCase().trim();
-      this.personalInfo.gender = ["male", "female", "other"].includes(lower) ? lower : "male";
-    } else {
-      this.personalInfo.gender = "male";
-    }
-  }
-  next();
-});
+// =============================================
+// ✅ INSTANCE METHODS
+// =============================================
 
-// ✅ Pre-save middleware
-StudentSchema.pre("save", function (next) {
-  console.log("🔧 [PRE-SAVE] Executing pre-save middleware...");
-
-  try {
-    // ✅ تصحيح whatsappMessages
-    if (this.whatsappMessages && Array.isArray(this.whatsappMessages)) {
-      this.whatsappMessages = this.whatsappMessages.filter(
-        (msg) => msg && typeof msg === "object"
-      );
-      this.whatsappMessages.forEach((msg) => {
-        if (msg.language && !["ar", "en", "bilingual"].includes(msg.language)) {
-          msg.language = "ar";
-        }
-      });
-    }
-
-    // ✅ تحديث metadata
-    if (!this.metadata) {
-      this.metadata = {
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        whatsappTotalMessages: 0,
-        whatsappMessagesCount: 0,
-        totalSessionReminders: 0,
-      };
-    } else {
-      this.metadata.updatedAt = new Date();
-    }
-
-    if (this.isNew && !this.metadata.createdAt) {
-      this.metadata.createdAt = new Date();
-    }
-
-    console.log("✅ [PRE-SAVE] Middleware completed successfully");
-  } catch (error) {
-    console.error("❌ Error in pre-save middleware:", error);
-  }
-
-  next();
-});
-
-// ✅ Method to log WhatsApp message
 StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
   try {
-    console.log(`\n📝 [LOG_METHOD] Logging WhatsApp message`);
-    console.log(`   Type: ${messageData.messageType}`);
-    console.log(`   Status: ${messageData.status}`);
-    console.log(`   Language: ${messageData.language}`);
-
     if (!this.whatsappMessages) {
       this.whatsappMessages = [];
     }
 
-    // ✅ تصحيح اللغة
-    let language = messageData.language || "ar";
     const validLanguages = ["ar", "en", "bilingual"];
-    if (!validLanguages.includes(language)) {
-      language = "ar";
-    }
+    const language = validLanguages.includes(messageData.language)
+      ? messageData.language
+      : "ar";
 
     const messageToLog = {
       messageType: messageData.messageType,
@@ -447,88 +308,51 @@ StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
 
     this.whatsappMessages.push(messageToLog);
 
-    if (!this.metadata) {
-      this.metadata = {};
-    }
-
-    this.metadata.whatsappTotalMessages =
-      (this.metadata.whatsappTotalMessages || 0) + 1;
+    if (!this.metadata) this.metadata = {};
+    this.metadata.whatsappTotalMessages = (this.metadata.whatsappTotalMessages || 0) + 1;
     this.metadata.whatsappLastInteraction = new Date();
+    this.metadata.updatedAt = new Date();
 
-    try {
-      const savedDoc = await this.save();
-      console.log(`✅ Document saved successfully`);
-      return savedDoc;
-    } catch (saveError) {
-      console.error(`❌ Save failed, trying updateOne fallback...`);
+    // ✅ استخدم updateOne مباشرة بدلاً من this.save() لتجنب أي middleware
+    await mongoose.model("Student").updateOne(
+      { _id: this._id },
+      {
+        $push: { whatsappMessages: messageToLog },
+        $set: {
+          "metadata.whatsappTotalMessages": this.metadata.whatsappTotalMessages,
+          "metadata.whatsappLastInteraction": new Date(),
+          "metadata.updatedAt": new Date(),
+        },
+      }
+    );
 
-      await mongoose.model("Student").updateOne(
-        { _id: this._id },
-        {
-          $set: {
-            whatsappMessages: this.whatsappMessages,
-            "metadata.whatsappTotalMessages": this.metadata.whatsappTotalMessages,
-            "metadata.whatsappLastInteraction": new Date(),
-          },
-        }
-      );
-
-      console.log(`✅ Saved using updateOne fallback`);
-      return this;
-    }
+    return this;
   } catch (error) {
-    console.error(`\n❌ [LOG_METHOD] Error in logWhatsAppMessage:`, error.message);
-    if (error.name === "ValidationError") {
-      console.error(`   Validation Errors:`);
-      Object.entries(error.errors).forEach(([field, err]) => {
-        console.error(`   - ${field}: ${err.message}`);
-      });
-    }
+    console.error("❌ [logWhatsAppMessage] Error:", error.message);
     return null;
   }
 };
 
-// ✅ Method to get all WhatsApp messages
 StudentSchema.methods.getWhatsAppMessages = function (filters = {}) {
-  if (!this.whatsappMessages || this.whatsappMessages.length === 0) {
-    return [];
-  }
+  if (!this.whatsappMessages || this.whatsappMessages.length === 0) return [];
 
   let messages = [...this.whatsappMessages];
 
-  if (filters.messageType) {
-    messages = messages.filter((msg) => msg.messageType === filters.messageType);
-  }
-  if (filters.status) {
-    messages = messages.filter((msg) => msg.status === filters.status);
-  }
-  if (filters.language) {
-    messages = messages.filter((msg) => msg.language === filters.language);
-  }
-  if (filters.startDate) {
-    messages = messages.filter((msg) => msg.sentAt >= new Date(filters.startDate));
-  }
-  if (filters.endDate) {
-    messages = messages.filter((msg) => msg.sentAt <= new Date(filters.endDate));
-  }
+  if (filters.messageType) messages = messages.filter((m) => m.messageType === filters.messageType);
+  if (filters.status) messages = messages.filter((m) => m.status === filters.status);
+  if (filters.language) messages = messages.filter((m) => m.language === filters.language);
+  if (filters.startDate) messages = messages.filter((m) => m.sentAt >= new Date(filters.startDate));
+  if (filters.endDate) messages = messages.filter((m) => m.sentAt <= new Date(filters.endDate));
 
   return messages.sort((a, b) => b.sentAt - a.sentAt);
 };
 
-// ✅ Method to get message statistics
 StudentSchema.methods.getWhatsAppStats = function () {
   if (!this.whatsappMessages || this.whatsappMessages.length === 0) {
     return { total: 0, sent: 0, failed: 0, pending: 0, byType: {}, byLanguage: {} };
   }
 
-  const stats = {
-    total: this.whatsappMessages.length,
-    sent: 0,
-    failed: 0,
-    pending: 0,
-    byType: {},
-    byLanguage: {},
-  };
+  const stats = { total: this.whatsappMessages.length, sent: 0, failed: 0, pending: 0, byType: {}, byLanguage: {} };
 
   this.whatsappMessages.forEach((msg) => {
     if (msg.status === "sent") stats.sent++;
@@ -541,45 +365,35 @@ StudentSchema.methods.getWhatsAppStats = function () {
   return stats;
 };
 
-// ✅ Session Reminder Methods
 StudentSchema.methods.addSessionReminder = function (reminderData) {
   if (!this.sessionReminders) this.sessionReminders = [];
-
   this.sessionReminders.push(reminderData);
-
   if (!this.metadata) this.metadata = {};
-
-  if (reminderData.reminderType === "24hours") {
-    this.metadata.lastSessionReminder24h = new Date();
-  } else if (reminderData.reminderType === "1hour") {
-    this.metadata.lastSessionReminder1h = new Date();
-  }
-
+  if (reminderData.reminderType === "24hours") this.metadata.lastSessionReminder24h = new Date();
+  else if (reminderData.reminderType === "1hour") this.metadata.lastSessionReminder1h = new Date();
   this.metadata.totalSessionReminders = (this.metadata.totalSessionReminders || 0) + 1;
   this.metadata.whatsappTotalMessages = (this.metadata.whatsappTotalMessages || 0) + 1;
   this.metadata.whatsappLastInteraction = new Date();
-
   return this.save();
 };
 
 StudentSchema.methods.hasReceivedReminder = function (sessionId, reminderType) {
   if (!this.sessionReminders || this.sessionReminders.length === 0) return false;
-
   return this.sessionReminders.some(
-    (reminder) =>
-      reminder.sessionId.toString() === sessionId.toString() &&
-      reminder.reminderType === reminderType &&
-      reminder.status === "sent"
+    (r) => r.sessionId.toString() === sessionId.toString() &&
+            r.reminderType === reminderType &&
+            r.status === "sent"
   );
 };
 
 StudentSchema.methods.getSessionReminders = function (sessionId) {
   if (!this.sessionReminders) return [];
-
-  return this.sessionReminders.filter(
-    (reminder) => reminder.sessionId.toString() === sessionId.toString()
-  );
+  return this.sessionReminders.filter((r) => r.sessionId.toString() === sessionId.toString());
 };
+
+// =============================================
+// ✅ STATIC METHODS
+// =============================================
 
 StudentSchema.statics.getStudentsForReminder = async function (groupId, sessionId, reminderType) {
   const students = await this.find({
@@ -588,10 +402,7 @@ StudentSchema.statics.getStudentsForReminder = async function (groupId, sessionI
     "personalInfo.whatsappNumber": { $exists: true, $ne: null, $ne: "" },
     isDeleted: false,
   });
-
-  return students.filter(
-    (student) => !student.hasReceivedReminder(sessionId, reminderType)
-  );
+  return students.filter((s) => !s.hasReceivedReminder(sessionId, reminderType));
 };
 
 export default mongoose.models.Student || mongoose.model("Student", StudentSchema);

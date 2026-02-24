@@ -14,6 +14,13 @@ const nextConfig = {
       config.externals.push({
         'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
       });
+
+      // ✅ منع Webpack من تصغير أسماء الـ functions في Mongoose models
+      // بيحل مشكلة "TypeError: a is not a function" في production
+      config.optimization = {
+        ...config.optimization,
+        minimize: false,
+      };
     }
 
     config.resolve.fallback = {
@@ -49,11 +56,10 @@ const nextConfig = {
   },
 
   env: {
-    MAX_FILE_SIZE: "15728640", // 15 MB (15 * 1024 * 1024)
+    MAX_FILE_SIZE: "15728640",
     ALLOWED_IMAGE_TYPES: "image/jpeg,image/jpg,image/png,image/webp,image/gif",
   },
 
-  // إضافة إعدادات الـ body parser للـ API routes
   experimental: {
     serverActions: {
       bodySizeLimit: '15mb',
