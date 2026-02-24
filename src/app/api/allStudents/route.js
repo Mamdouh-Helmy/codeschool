@@ -6,6 +6,14 @@ import { generateEnrollmentNumber } from "@/utils/enrollmentGenerator";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
+// ✅ دالة مساعدة لتحويل gender إلى lowercase بأمان
+function normalizeGender(gender) {
+  if (!gender) return "male";
+  const lower = String(gender).toLowerCase().trim();
+  if (lower === "male" || lower === "female" || lower === "other") return lower;
+  return "male";
+}
+
 export async function POST(req) {
   try {
     console.log("🚀 Starting student creation process...");
@@ -34,9 +42,7 @@ export async function POST(req) {
     console.log("📝 Custom WhatsApp messages captured:", {
       firstMessageLength: customMessages.firstMessage.length,
       secondMessageLength: customMessages.secondMessage.length,
-      hasCustomMessages: !!(
-        customMessages.firstMessage || customMessages.secondMessage
-      ),
+      hasCustomMessages: !!(customMessages.firstMessage || customMessages.secondMessage),
     });
 
     const cleanData = {
@@ -47,17 +53,19 @@ export async function POST(req) {
           : null,
       personalInfo: {
         ...studentData.personalInfo,
+        // ✅ FIXED: تحويل gender إلى lowercase قبل الحفظ
+        gender: normalizeGender(studentData.personalInfo?.gender),
         nickname: {
           ar: studentData.personalInfo?.nickname?.ar || "",
-          en: studentData.personalInfo?.nickname?.en || ""
-        }
+          en: studentData.personalInfo?.nickname?.en || "",
+        },
       },
       guardianInfo: {
         ...studentData.guardianInfo,
         nickname: {
           ar: studentData.guardianInfo?.nickname?.ar || "",
-          en: studentData.guardianInfo?.nickname?.en || ""
-        }
+          en: studentData.guardianInfo?.nickname?.en || "",
+        },
       },
       enrollmentInfo: {
         ...studentData.enrollmentInfo,
@@ -75,11 +83,8 @@ export async function POST(req) {
       if (!userExists) {
         console.log("❌ User not found:", cleanData.authUserId);
         return NextResponse.json(
-          {
-            success: false,
-            message: "User not found with provided authUserId",
-          },
-          { status: 404 },
+          { success: false, message: "User not found with provided authUserId" },
+          { status: 404 }
         );
       }
       console.log("✅ User found:", userExists.email);
@@ -96,7 +101,7 @@ export async function POST(req) {
             message: "User already has a student profile",
             existingStudentId: existingStudent._id,
           },
-          { status: 409 },
+          { status: 409 }
         );
       }
     }
@@ -105,9 +110,7 @@ export async function POST(req) {
     const enrollmentNumber = await generateEnrollmentNumber();
     console.log("✅ Enrollment number generated:", enrollmentNumber);
 
-    const whatsappMode = process.env.WHATSAPP_API_TOKEN
-      ? "production"
-      : "simulation";
+    const whatsappMode = process.env.WHATSAPP_API_TOKEN ? "production" : "simulation";
 
     const whatsappButtons = [
       { id: "arabic_btn", title: "العربية 🇸🇦" },
@@ -135,9 +138,7 @@ export async function POST(req) {
         whatsappResponseReceived: false,
         whatsappLanguageConfirmed: false,
         whatsappConfirmationSent: false,
-        whatsappConversationId: `conv_${Date.now()}_${Math.random()
-          .toString(36)
-          .substr(2, 9)}`,
+        whatsappConversationId: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         whatsappGuardianNotified: false,
         whatsappGuardianPhone: null,
         whatsappGuardianNotificationSent: false,
@@ -154,14 +155,15 @@ export async function POST(req) {
         id: savedStudent._id,
         enrollmentNumber: savedStudent.enrollmentNumber,
         name: savedStudent.personalInfo.fullName,
+        gender: savedStudent.personalInfo.gender,
         nickname: {
           ar: savedStudent.personalInfo.nickname?.ar || "N/A",
-          en: savedStudent.personalInfo.nickname?.en || "N/A"
+          en: savedStudent.personalInfo.nickname?.en || "N/A",
         },
         guardianName: savedStudent.guardianInfo.name,
         guardianNickname: {
           ar: savedStudent.guardianInfo.nickname?.ar || "N/A",
-          en: savedStudent.guardianInfo.nickname?.en || "N/A"
+          en: savedStudent.guardianInfo.nickname?.en || "N/A",
         },
         guardianRelationship: savedStudent.guardianInfo.relationship,
       });
@@ -177,7 +179,7 @@ export async function POST(req) {
             field: field,
             value: saveError.keyValue[field],
           },
-          { status: 409 },
+          { status: 409 }
         );
       }
 
@@ -194,7 +196,7 @@ export async function POST(req) {
             error: "Validation failed",
             errors: errors,
           },
-          { status: 400 },
+          { status: 400 }
         );
       }
 
@@ -203,7 +205,6 @@ export async function POST(req) {
 
     console.log("📱 Triggering WhatsApp automation...");
 
-    // ✅ الحصول على رقم ولي الأمر
     const guardianPhone =
       savedStudent.guardianInfo?.whatsappNumber ||
       savedStudent.guardianInfo?.phone ||
@@ -211,22 +212,19 @@ export async function POST(req) {
 
     console.log("📞 Guardian WhatsApp number:", guardianPhone);
 
-    // ✅ استخدام customMessages مع رقم ولي الأمر
     setTimeout(async () => {
       try {
         console.log("🔄 Starting WhatsApp automation in background...");
 
-        const { wapilotService } =
-          await import("../../services/wapilot-service");
+        const { wapilotService } = await import("../../services/wapilot-service");
 
-        // ✅ تمرير رقم ولي الأمر مع الطالب
         const whatsappResult = await wapilotService.sendWelcomeMessages(
           savedStudent._id,
           savedStudent.personalInfo.fullName,
           savedStudent.personalInfo.whatsappNumber,
           guardianPhone,
           customMessages.firstMessage,
-          customMessages.secondMessage,
+          customMessages.secondMessage
         );
 
         console.log("📦 WhatsApp automation result:", whatsappResult);
@@ -241,34 +239,26 @@ export async function POST(req) {
               "metadata.whatsappSentAt": new Date(),
               "metadata.whatsappStatus": "sent",
               "metadata.whatsappMode": whatsappResult.mode,
-              "metadata.whatsappMessagesCount":
-                whatsappResult.totalMessages || 2,
-              "metadata.whatsappTotalMessages":
-                whatsappResult.totalMessages || 2,
+              "metadata.whatsappMessagesCount": whatsappResult.totalMessages || 2,
+              "metadata.whatsappTotalMessages": whatsappResult.totalMessages || 2,
               "metadata.updatedAt": new Date(),
               "metadata.whatsappGuardianNotified": !!guardianPhone,
               "metadata.whatsappGuardianPhone": guardianPhone,
-              "metadata.whatsappGuardianNotificationSent":
-                !!whatsappResult.results?.guardian?.success,
+              "metadata.whatsappGuardianNotificationSent": !!whatsappResult.results?.guardian?.success,
               "metadata.whatsappGuardianNotificationAt": new Date(),
             };
 
             if (whatsappResult.results?.student?.messageId) {
-              updateData["metadata.whatsappMessageId"] =
-                whatsappResult.results.student.messageId;
+              updateData["metadata.whatsappMessageId"] = whatsappResult.results.student.messageId;
             }
 
-            await Student.findByIdAndUpdate(savedStudent._id, {
-              $set: updateData,
-            });
-
+            await Student.findByIdAndUpdate(savedStudent._id, { $set: updateData });
             console.log("✅ Student record updated with WhatsApp info");
           } catch (updateError) {
             console.error("❌ Error updating student record:", updateError);
           }
         } else if (whatsappResult.skipped) {
           console.log("⚠️ WhatsApp automation skipped:", whatsappResult.reason);
-
           try {
             await Student.findByIdAndUpdate(savedStudent._id, {
               $set: {
@@ -284,15 +274,13 @@ export async function POST(req) {
           }
         } else {
           console.warn("⚠️ WhatsApp automation failed:", whatsappResult);
-
           try {
             await Student.findByIdAndUpdate(savedStudent._id, {
               $set: {
                 "metadata.whatsappWelcomeSent": false,
                 "metadata.whatsappInteractiveSent": false,
                 "metadata.whatsappStatus": "failed",
-                "metadata.whatsappError":
-                  whatsappResult.reason || "Unknown error",
+                "metadata.whatsappError": whatsappResult.reason || "Unknown error",
                 "metadata.updatedAt": new Date(),
               },
             });
@@ -302,7 +290,6 @@ export async function POST(req) {
         }
       } catch (automationError) {
         console.error("❌ WhatsApp automation failed:", automationError);
-
         try {
           await Student.findByIdAndUpdate(savedStudent._id, {
             $set: {
@@ -333,7 +320,7 @@ export async function POST(req) {
             fullName: savedStudent.personalInfo.fullName,
             nickname: {
               ar: savedStudent.personalInfo.nickname?.ar || null,
-              en: savedStudent.personalInfo.nickname?.en || null
+              en: savedStudent.personalInfo.nickname?.en || null,
             },
             email: savedStudent.personalInfo.email,
             status: savedStudent.enrollmentInfo.status,
@@ -343,9 +330,9 @@ export async function POST(req) {
               name: savedStudent.guardianInfo.name,
               nickname: {
                 ar: savedStudent.guardianInfo.nickname?.ar || null,
-                en: savedStudent.guardianInfo.nickname?.en || null
+                en: savedStudent.guardianInfo.nickname?.en || null,
               },
-              relationship: savedStudent.guardianInfo.relationship
+              relationship: savedStudent.guardianInfo.relationship,
             },
             hasUserAccount: !!cleanData.authUserId,
             language: savedStudent.communicationPreferences.preferredLanguage,
@@ -373,9 +360,7 @@ export async function POST(req) {
                 step: 1,
                 type: "language_selection",
                 recipient: "student",
-                content:
-                  customMessages.secondMessage ||
-                  "Language selection with interactive buttons",
+                content: customMessages.secondMessage || "Language selection with interactive buttons",
                 interactive: true,
                 status: "pending",
               },
@@ -414,7 +399,7 @@ export async function POST(req) {
           },
         },
       },
-      { status: 201 },
+      { status: 201 }
     );
   } catch (error) {
     console.error("❌ Error creating student:", error);
@@ -429,7 +414,7 @@ export async function POST(req) {
           field: field,
           value: error.keyValue?.[field],
         },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
@@ -438,11 +423,9 @@ export async function POST(req) {
         success: false,
         message: error.message || "فشل في إنشاء الطالب",
         error: error.message || "Failed to create student",
-        ...(process.env.NODE_ENV === "development" && {
-          stack: error.stack,
-        }),
+        ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -475,8 +458,7 @@ export async function GET(req) {
     if (level) query["academicInfo.level"] = level;
     if (source) query["enrollmentInfo.source"] = source;
     if (whatsappStatus) query["metadata.whatsappStatus"] = whatsappStatus;
-    if (language)
-      query["communicationPreferences.preferredLanguage"] = language;
+    if (language) query["communicationPreferences.preferredLanguage"] = language;
     if (guardianNotified === "true") {
       query["metadata.whatsappGuardianNotificationSent"] = true;
     } else if (guardianNotified === "false") {
@@ -513,10 +495,7 @@ export async function GET(req) {
     const students = await Student.find(query)
       .populate("authUserId", "name email role")
       .populate("metadata.createdBy", "name email")
-      .populate(
-        "enrollmentInfo.referredBy",
-        "personalInfo.fullName enrollmentNumber",
-      )
+      .populate("enrollmentInfo.referredBy", "personalInfo.fullName enrollmentNumber")
       .sort({ "metadata.createdAt": -1 })
       .skip(skip)
       .limit(limit)
@@ -529,14 +508,14 @@ export async function GET(req) {
         ...student.personalInfo,
         nickname: {
           ar: student.personalInfo?.nickname?.ar || null,
-          en: student.personalInfo?.nickname?.en || null
+          en: student.personalInfo?.nickname?.en || null,
         },
       },
       guardianInfo: {
         ...student.guardianInfo,
         nickname: {
           ar: student.guardianInfo?.nickname?.ar || null,
-          en: student.guardianInfo?.nickname?.en || null
+          en: student.guardianInfo?.nickname?.en || null,
         },
         relationship: student.guardianInfo?.relationship || null,
       },
@@ -548,29 +527,22 @@ export async function GET(req) {
       createdBy: student.metadata.createdBy,
       authUserId: student.authUserId,
       whatsappStatus: student.metadata?.whatsappStatus || "pending",
-      whatsappInteractiveSent:
-        student.metadata?.whatsappInteractiveSent || false,
+      whatsappInteractiveSent: student.metadata?.whatsappInteractiveSent || false,
       whatsappButtons: student.metadata?.whatsappButtons || [],
       whatsappSentAt: student.metadata?.whatsappSentAt,
       whatsappMessageId: student.metadata?.whatsappMessageId,
       whatsappMode: student.metadata?.whatsappMode || "simulation",
-      whatsappLanguageSelected:
-        student.metadata?.whatsappLanguageSelected || false,
+      whatsappLanguageSelected: student.metadata?.whatsappLanguageSelected || false,
       whatsappLanguageSelection: student.metadata?.whatsappLanguageSelection,
       whatsappButtonSelected: student.metadata?.whatsappButtonSelected,
-      whatsappResponseReceived:
-        student.metadata?.whatsappResponseReceived || false,
+      whatsappResponseReceived: student.metadata?.whatsappResponseReceived || false,
       whatsappResponse: student.metadata?.whatsappResponse,
-      whatsappConfirmationSent:
-        student.metadata?.whatsappConfirmationSent || false,
+      whatsappConfirmationSent: student.metadata?.whatsappConfirmationSent || false,
       whatsappMessagesCount: student.metadata?.whatsappMessagesCount || 0,
-      whatsappGuardianNotified:
-        student.metadata?.whatsappGuardianNotified || false,
+      whatsappGuardianNotified: student.metadata?.whatsappGuardianNotified || false,
       whatsappGuardianPhone: student.metadata?.whatsappGuardianPhone || null,
-      whatsappGuardianNotificationSent:
-        student.metadata?.whatsappGuardianNotificationSent || false,
-      whatsappGuardianNotificationAt:
-        student.metadata?.whatsappGuardianNotificationAt || null,
+      whatsappGuardianNotificationSent: student.metadata?.whatsappGuardianNotificationSent || false,
+      whatsappGuardianNotificationAt: student.metadata?.whatsappGuardianNotificationAt || null,
       language: student.communicationPreferences?.preferredLanguage || "ar",
       conversationId: student.metadata?.whatsappConversationId,
       whatsappMessages: student.whatsappMessages || [],
@@ -578,41 +550,17 @@ export async function GET(req) {
 
     const whatsappStats = {
       total: totalStudents,
-      sent: await Student.countDocuments({
-        ...query,
-        "metadata.whatsappStatus": "sent",
-      }),
-      pending: await Student.countDocuments({
-        ...query,
-        "metadata.whatsappStatus": "pending",
-      }),
-      failed: await Student.countDocuments({
-        ...query,
-        "metadata.whatsappStatus": "failed",
-      }),
-      error: await Student.countDocuments({
-        ...query,
-        "metadata.whatsappStatus": "error",
-      }),
-      interactiveSent: await Student.countDocuments({
-        ...query,
-        "metadata.whatsappInteractiveSent": true,
-      }),
-      responseReceived: await Student.countDocuments({
-        ...query,
-        "metadata.whatsappResponseReceived": true,
-      }),
+      sent: await Student.countDocuments({ ...query, "metadata.whatsappStatus": "sent" }),
+      pending: await Student.countDocuments({ ...query, "metadata.whatsappStatus": "pending" }),
+      failed: await Student.countDocuments({ ...query, "metadata.whatsappStatus": "failed" }),
+      error: await Student.countDocuments({ ...query, "metadata.whatsappStatus": "error" }),
+      interactiveSent: await Student.countDocuments({ ...query, "metadata.whatsappInteractiveSent": true }),
+      responseReceived: await Student.countDocuments({ ...query, "metadata.whatsappResponseReceived": true }),
       guardianStats: {
         totalWithGuardianWhatsapp: await Student.countDocuments({
           ...query,
           $or: [
-            {
-              "guardianInfo.whatsappNumber": {
-                $exists: true,
-                $ne: null,
-                $ne: "",
-              },
-            },
+            { "guardianInfo.whatsappNumber": { $exists: true, $ne: null, $ne: "" } },
             { "guardianInfo.phone": { $exists: true, $ne: null, $ne: "" } },
           ],
         }),
@@ -650,15 +598,11 @@ export async function GET(req) {
       buttonStats: {
         arabicSelected: await Student.countDocuments({
           ...query,
-          "metadata.whatsappButtonSelected": {
-            $in: ["1", "arabic_btn", "arabic_lang"],
-          },
+          "metadata.whatsappButtonSelected": { $in: ["1", "arabic_btn", "arabic_lang"] },
         }),
         englishSelected: await Student.countDocuments({
           ...query,
-          "metadata.whatsappButtonSelected": {
-            $in: ["2", "english_btn", "english_lang"],
-          },
+          "metadata.whatsappButtonSelected": { $in: ["2", "english_btn", "english_lang"] },
         }),
       },
     };
@@ -677,17 +621,13 @@ export async function GET(req) {
           hasPrevPage: page > 1,
         },
       },
-      { status: 200 },
+      { status: 200 }
     );
   } catch (error) {
     console.error("Error fetching students:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "Failed to fetch students",
-        error: error.message,
-      },
-      { status: 500 },
+      { success: false, message: "Failed to fetch students", error: error.message },
+      { status: 500 }
     );
   }
 }
@@ -713,29 +653,21 @@ export async function PUT(req, context) {
 
     const updateData = await req.json();
 
-    console.log(
-      "📥 Update data received:",
-      JSON.stringify(updateData, null, 2),
-    );
-
     if (!mongoose.Types.ObjectId.isValid(id)) {
       console.log(`❌ Invalid student ID format: ${id}`);
       return NextResponse.json(
         { success: false, message: "Invalid student ID format" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    const existingStudent = await Student.findOne({
-      _id: id,
-      isDeleted: false,
-    });
+    const existingStudent = await Student.findOne({ _id: id, isDeleted: false });
 
     if (!existingStudent) {
       console.log(`❌ Student not found or deleted: ${id}`);
       return NextResponse.json(
         { success: false, message: "Student not found or has been deleted" },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
@@ -745,20 +677,26 @@ export async function PUT(req, context) {
         updateData.authUserId && updateData.authUserId.trim() !== ""
           ? updateData.authUserId
           : null,
-      personalInfo: updateData.personalInfo ? {
-        ...updateData.personalInfo,
-        nickname: {
-          ar: updateData.personalInfo?.nickname?.ar || "",
-          en: updateData.personalInfo?.nickname?.en || ""
-        }
-      } : undefined,
-      guardianInfo: updateData.guardianInfo ? {
-        ...updateData.guardianInfo,
-        nickname: {
-          ar: updateData.guardianInfo?.nickname?.ar || "",
-          en: updateData.guardianInfo?.nickname?.en || ""
-        }
-      } : undefined,
+      personalInfo: updateData.personalInfo
+        ? {
+            ...updateData.personalInfo,
+            // ✅ FIXED: تحويل gender في التحديث أيضاً
+            gender: normalizeGender(updateData.personalInfo?.gender),
+            nickname: {
+              ar: updateData.personalInfo?.nickname?.ar || "",
+              en: updateData.personalInfo?.nickname?.en || "",
+            },
+          }
+        : undefined,
+      guardianInfo: updateData.guardianInfo
+        ? {
+            ...updateData.guardianInfo,
+            nickname: {
+              ar: updateData.guardianInfo?.nickname?.ar || "",
+              en: updateData.guardianInfo?.nickname?.en || "",
+            },
+          }
+        : undefined,
       enrollmentInfo: updateData.enrollmentInfo
         ? {
             ...updateData.enrollmentInfo,
@@ -782,11 +720,7 @@ export async function PUT(req, context) {
     const updatedStudent = await Student.findOneAndUpdate(
       { _id: id, isDeleted: false },
       { $set: updatePayload },
-      {
-        new: true,
-        runValidators: true,
-        context: "query",
-      },
+      { new: true, runValidators: true, context: "query" }
     )
       .populate("metadata.lastModifiedBy", "name email")
       .populate("authUserId", "name email");
@@ -795,13 +729,11 @@ export async function PUT(req, context) {
       console.log(`❌ Student update failed for ID: ${id}`);
       return NextResponse.json(
         { success: false, message: "Failed to update student" },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
-    console.log(
-      `✅ Student updated successfully: ${updatedStudent.enrollmentNumber}`,
-    );
+    console.log(`✅ Student updated successfully: ${updatedStudent.enrollmentNumber}`);
 
     return NextResponse.json(
       {
@@ -813,13 +745,13 @@ export async function PUT(req, context) {
           fullName: updatedStudent.personalInfo.fullName,
           nickname: {
             ar: updatedStudent.personalInfo.nickname?.ar || null,
-            en: updatedStudent.personalInfo.nickname?.en || null
+            en: updatedStudent.personalInfo.nickname?.en || null,
           },
           guardianInfo: {
             name: updatedStudent.guardianInfo.name,
             nickname: {
               ar: updatedStudent.guardianInfo.nickname?.ar || null,
-              en: updatedStudent.guardianInfo.nickname?.en || null
+              en: updatedStudent.guardianInfo.nickname?.en || null,
             },
             relationship: updatedStudent.guardianInfo.relationship,
           },
@@ -830,14 +762,13 @@ export async function PUT(req, context) {
           },
         },
       },
-      { status: 200 },
+      { status: 200 }
     );
   } catch (error) {
     console.error(`❌ Error updating student:`, error);
 
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
-      console.error(`❌ Duplicate field error: ${field}`, error.keyValue);
       return NextResponse.json(
         {
           success: false,
@@ -846,7 +777,7 @@ export async function PUT(req, context) {
           value: error.keyValue[field],
           suggestion: "Use a unique value for this field",
         },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
@@ -856,15 +787,9 @@ export async function PUT(req, context) {
         message: err.message,
       }));
 
-      console.error("❌ Validation errors:", errors);
-
       return NextResponse.json(
-        {
-          success: false,
-          message: "Validation failed",
-          errors: errors,
-        },
-        { status: 400 },
+        { success: false, message: "Validation failed", errors: errors },
+        { status: 400 }
       );
     }
 
@@ -875,7 +800,7 @@ export async function PUT(req, context) {
         error: error.message,
         ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -900,27 +825,22 @@ export async function DELETE(req, context) {
     await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      console.log(`❌ Invalid student ID format: ${id}`);
       return NextResponse.json(
         { success: false, message: "Invalid student ID format" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    const existingStudent = await Student.findOne({
-      _id: id,
-      isDeleted: false,
-    });
+    const existingStudent = await Student.findOne({ _id: id, isDeleted: false });
 
     if (!existingStudent) {
-      console.log(`❌ Student not found or already deleted: ${id}`);
       return NextResponse.json(
         {
           success: false,
           message: "Student not found or has already been deleted",
           suggestion: "Check student status or restore from trash if needed",
         },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
@@ -935,23 +855,17 @@ export async function DELETE(req, context) {
           "metadata.updatedAt": new Date(),
         },
       },
-      {
-        new: true,
-        runValidators: true,
-      },
+      { new: true, runValidators: true }
     );
 
     if (!deletedStudent) {
-      console.log(`❌ Soft delete failed for student: ${id}`);
       return NextResponse.json(
         { success: false, message: "Failed to delete student" },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
-    console.log(
-      `✅ Student soft deleted successfully: ${deletedStudent.enrollmentNumber}`,
-    );
+    console.log(`✅ Student soft deleted successfully: ${deletedStudent.enrollmentNumber}`);
 
     return NextResponse.json(
       {
@@ -963,13 +877,13 @@ export async function DELETE(req, context) {
           fullName: deletedStudent.personalInfo.fullName,
           nickname: {
             ar: deletedStudent.personalInfo.nickname?.ar || null,
-            en: deletedStudent.personalInfo.nickname?.en || null
+            en: deletedStudent.personalInfo.nickname?.en || null,
           },
           guardianInfo: {
             name: deletedStudent.guardianInfo.name,
             nickname: {
               ar: deletedStudent.guardianInfo.nickname?.ar || null,
-              en: deletedStudent.guardianInfo.nickname?.en || null
+              en: deletedStudent.guardianInfo.nickname?.en || null,
             },
           },
           deletedAt: deletedStudent.deletedAt,
@@ -978,7 +892,7 @@ export async function DELETE(req, context) {
           restorationNote: "Student can be restored within 30 days",
         },
       },
-      { status: 200 },
+      { status: 200 }
     );
   } catch (error) {
     console.error(`❌ Error deleting student:`, error);
@@ -989,7 +903,7 @@ export async function DELETE(req, context) {
         error: error.message,
         ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -1013,7 +927,7 @@ export async function PATCH(req, context) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid student ID format" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -1021,14 +935,12 @@ export async function PATCH(req, context) {
     if (!student) {
       return NextResponse.json(
         { success: false, message: "Student not found" },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
     const guardianPhone =
-      student.guardianInfo?.whatsappNumber ||
-      student.guardianInfo?.phone ||
-      null;
+      student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone || null;
 
     console.log("📞 Guardian WhatsApp number for resend:", guardianPhone);
 
@@ -1044,8 +956,7 @@ export async function PATCH(req, context) {
       try {
         console.log("🔄 Starting WhatsApp resend in background...");
 
-        const { wapilotService } =
-          await import("../../services/wapilot-service");
+        const { wapilotService } = await import("../../services/wapilot-service");
 
         const whatsappResult = await wapilotService.sendWelcomeMessages(
           student._id,
@@ -1053,7 +964,7 @@ export async function PATCH(req, context) {
           student.personalInfo.whatsappNumber,
           guardianPhone,
           "",
-          "",
+          ""
         );
 
         if (whatsappResult.success) {
@@ -1064,18 +975,14 @@ export async function PATCH(req, context) {
               "metadata.whatsappWelcomeSent": true,
               "metadata.whatsappInteractiveSent": true,
               "metadata.whatsappSentAt": new Date(),
-              "metadata.whatsappMessageId":
-                whatsappResult.results?.student?.messageId,
+              "metadata.whatsappMessageId": whatsappResult.results?.student?.messageId,
               "metadata.whatsappStatus": "sent",
               "metadata.whatsappMode": whatsappResult.mode,
-              "metadata.whatsappMessagesCount":
-                whatsappResult.totalMessages || 2,
-              "metadata.whatsappTotalMessages":
-                whatsappResult.totalMessages || 2,
+              "metadata.whatsappMessagesCount": whatsappResult.totalMessages || 2,
+              "metadata.whatsappTotalMessages": whatsappResult.totalMessages || 2,
               "metadata.whatsappGuardianNotified": !!guardianPhone,
               "metadata.whatsappGuardianPhone": guardianPhone,
-              "metadata.whatsappGuardianNotificationSent":
-                !!whatsappResult.results?.guardian?.success,
+              "metadata.whatsappGuardianNotificationSent": !!whatsappResult.results?.guardian?.success,
               "metadata.whatsappGuardianNotificationAt": new Date(),
               "metadata.updatedAt": new Date(),
             },
@@ -1086,8 +993,7 @@ export async function PATCH(req, context) {
           await Student.findByIdAndUpdate(id, {
             $set: {
               "metadata.whatsappStatus": "failed",
-              "metadata.whatsappError":
-                whatsappResult.reason || "Unknown error",
+              "metadata.whatsappError": whatsappResult.reason || "Unknown error",
               "metadata.updatedAt": new Date(),
             },
           });
@@ -1114,12 +1020,12 @@ export async function PATCH(req, context) {
         studentName: student.personalInfo.fullName,
         studentNickname: {
           ar: student.personalInfo.nickname?.ar || null,
-          en: student.personalInfo.nickname?.en || null
+          en: student.personalInfo.nickname?.en || null,
         },
         guardianName: student.guardianInfo.name,
         guardianNickname: {
           ar: student.guardianInfo.nickname?.ar || null,
-          en: student.guardianInfo.nickname?.en || null
+          en: student.guardianInfo.nickname?.en || null,
         },
         guardianRelationship: student.guardianInfo.relationship,
         whatsappNumbers: {
@@ -1141,7 +1047,7 @@ export async function PATCH(req, context) {
         message: "Failed to resend WhatsApp message",
         error: error.message,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

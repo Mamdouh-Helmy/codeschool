@@ -807,17 +807,16 @@ export default function GroupCompletionModal({
                     const rel = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
                     const isEdited = editedStudentTemplates[student._id] || editedGuardianTemplates[student._id];
                     
+                    // بناء نص الخيار مع الرموز التعبيرية كنص وليس كعناصر
+                    let optionText = student.personalInfo?.fullName || "";
+                    optionText += ` · ${lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}`;
+                    optionText += ` · ${gender === "female" ? "👧" : "👦"}`;
+                    optionText += ` · ${rel === "mother" ? "👩 أم" : rel === "father" ? "👨 أب" : "👤"}`;
+                    if (isEdited) optionText += " ✏️";
+                    
                     return (
                       <option key={student._id} value={student._id}>
-                        {student.personalInfo?.fullName}
-                        {" · "}
-                        <span className="inline-flex items-center gap-1">
-                          <Globe className="w-3 h-3" />
-                          {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
-                        </span>
-                        {" · "}{gender === "female" ? "👧" : "👦"}
-                        {" · "}{rel === "mother" ? "👩 أم" : rel === "father" ? "👨 أب" : "👤"}
-                        {isEdited && " ✏️"}
+                        {optionText}
                       </option>
                     );
                   })}
