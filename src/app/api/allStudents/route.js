@@ -844,19 +844,8 @@ export async function DELETE(req, context) {
       );
     }
 
-    const deletedStudent = await Student.findOneAndUpdate(
-      { _id: id, isDeleted: false },
-      {
-        $set: {
-          isDeleted: true,
-          deletedAt: new Date(),
-          "enrollmentInfo.status": "Dropped",
-          "metadata.lastModifiedBy": adminUser.id,
-          "metadata.updatedAt": new Date(),
-        },
-      },
-      { new: true, runValidators: true }
-    );
+    // ✅ حذف نهائي من قاعدة البيانات
+    const deletedStudent = await Student.findOneAndDelete({ _id: id, isDeleted: false });
 
     if (!deletedStudent) {
       return NextResponse.json(
@@ -865,12 +854,12 @@ export async function DELETE(req, context) {
       );
     }
 
-    console.log(`✅ Student soft deleted successfully: ${deletedStudent.enrollmentNumber}`);
+    console.log(`✅ Student permanently deleted: ${deletedStudent.enrollmentNumber}`);
 
     return NextResponse.json(
       {
         success: true,
-        message: "Student deleted successfully (soft delete)",
+        message: "Student permanently deleted from database",
         data: {
           id: deletedStudent._id,
           enrollmentNumber: deletedStudent.enrollmentNumber,
@@ -886,10 +875,6 @@ export async function DELETE(req, context) {
               en: deletedStudent.guardianInfo.nickname?.en || null,
             },
           },
-          deletedAt: deletedStudent.deletedAt,
-          status: deletedStudent.enrollmentInfo.status,
-          canBeRestored: true,
-          restorationNote: "Student can be restored within 30 days",
         },
       },
       { status: 200 }

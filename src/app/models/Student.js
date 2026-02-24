@@ -202,21 +202,11 @@ const StudentSchema = new mongoose.Schema(
       phone: { type: String },
       whatsappNumber: { type: String },
       dateOfBirth: { type: Date },
-      // ✅ FIXED: أزلنا getter تماماً - نعتمد على setter و pre-save فقط
+      // ✅ FIXED: بدون setter أو getter - نعتمد على normalizeGender في route و pre-save فقط
       gender: {
         type: String,
         enum: ["male", "female", "other"],
         default: "male",
-        set: function (v) {
-          if (!v) return "male";
-          if (typeof v === "string") {
-            const lower = v.toLowerCase().trim();
-            if (lower === "male" || lower === "female" || lower === "other") {
-              return lower;
-            }
-          }
-          return "male";
-        },
       },
       nationalId: { type: String, unique: true, sparse: true },
       address: addressSchema,
@@ -341,38 +331,33 @@ const StudentSchema = new mongoose.Schema(
   }
 );
 
+// ✅ Pre-validate middleware - يشتغل قبل الـ validation ويصحح gender
+StudentSchema.pre("validate", function (next) {
+  // تصحيح gender
+  if (this.personalInfo) {
+    const g = this.personalInfo.gender;
+    if (g) {
+      const lower = String(g).toLowerCase().trim();
+      this.personalInfo.gender = ["male", "female", "other"].includes(lower) ? lower : "male";
+    } else {
+      this.personalInfo.gender = "male";
+    }
+  }
+  next();
+});
+
 // ✅ Pre-save middleware
-StudentSchema.pre("save", async function (next) {
+StudentSchema.pre("save", function (next) {
   console.log("🔧 [PRE-SAVE] Executing pre-save middleware...");
 
   try {
-    // ✅ تصحيح gender
-    if (this.personalInfo) {
-      if (this.personalInfo.gender) {
-        const originalGender = this.personalInfo.gender;
-        const lowerGender = String(this.personalInfo.gender).toLowerCase().trim();
-        if (lowerGender === "male" || lowerGender === "female" || lowerGender === "other") {
-          this.personalInfo.gender = lowerGender;
-        } else {
-          this.personalInfo.gender = "male";
-        }
-        if (originalGender !== this.personalInfo.gender) {
-          console.log(`✅ Fixed gender: ${originalGender} -> ${this.personalInfo.gender}`);
-        }
-      } else {
-        this.personalInfo.gender = "male";
-      }
-    }
-
     // ✅ تصحيح whatsappMessages
     if (this.whatsappMessages && Array.isArray(this.whatsappMessages)) {
       this.whatsappMessages = this.whatsappMessages.filter(
         (msg) => msg && typeof msg === "object"
       );
-
       this.whatsappMessages.forEach((msg) => {
         if (msg.language && !["ar", "en", "bilingual"].includes(msg.language)) {
-          console.log(`✅ Fixed message language: ${msg.language} -> ar`);
           msg.language = "ar";
         }
       });
@@ -380,7 +365,6 @@ StudentSchema.pre("save", async function (next) {
 
     // ✅ تحديث metadata
     if (!this.metadata) {
-      console.log("📝 Initializing metadata object");
       this.metadata = {
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -421,17 +405,6 @@ StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
     const validLanguages = ["ar", "en", "bilingual"];
     if (!validLanguages.includes(language)) {
       language = "ar";
-      console.log(`⚠️ Invalid language value, defaulting to 'ar'`);
-    }
-
-    // ✅ تصحيح gender قبل الحفظ
-    if (this.personalInfo && this.personalInfo.gender) {
-      const lowerGender = String(this.personalInfo.gender).toLowerCase().trim();
-      if (["male", "female", "other"].includes(lowerGender)) {
-        this.personalInfo.gender = lowerGender;
-      } else {
-        this.personalInfo.gender = "male";
-      }
     }
 
     const messageToLog = {
@@ -493,7 +466,6 @@ StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
         { _id: this._id },
         {
           $set: {
-            "personalInfo.gender": this.personalInfo?.gender || "male",
             whatsappMessages: this.whatsappMessages,
             "metadata.whatsappTotalMessages": this.metadata.whatsappTotalMessages,
             "metadata.whatsappLastInteraction": new Date(),
