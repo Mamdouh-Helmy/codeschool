@@ -1,4 +1,3 @@
-// app/api/groups/[id]/sessions/route.js
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../../../models/Group';
@@ -31,7 +30,7 @@ export async function GET(req, { params }) {
     const upcoming = searchParams.get('upcoming') === 'true';
     const past = searchParams.get('past') === 'true';
 
-    // ✅ ضيف populate للـ courseId عشان نجيب title لو courseSnapshot مش موجود
+    // ✅ جلب المجموعة مع بيانات الكورس
     const group = await Group.findOne({ _id: id, isDeleted: false })
       .populate('courseId', 'title level')
       .lean();
@@ -63,6 +62,7 @@ export async function GET(req, { params }) {
 
     const formattedSessions = sessions.map(session => ({
       id: session._id,
+      _id: session._id,
       title: session.title,
       description: session.description,
       moduleIndex: session.moduleIndex,
@@ -105,12 +105,12 @@ export async function GET(req, { params }) {
       stats,
       group: {
         id: group._id,
-        _id: group._id,                    // ✅ ضيف _id
+        _id: group._id,
         code: group.code,
         name: group.name,
-        courseSnapshot,                    // ✅ ضيف courseSnapshot
-        courseId: group.courseId || null,  // ✅ ضيف courseId كـ fallback
-        schedule: group.schedule || {},    // ✅ ضيف schedule لو محتاج
+        courseSnapshot,
+        courseId: group.courseId || null,
+        schedule: group.schedule || {},
         automation: group.automation || {},
       }
     });

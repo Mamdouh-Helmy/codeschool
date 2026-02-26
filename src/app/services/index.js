@@ -30,4 +30,10 @@ export {
   prepareGroupWelcomeMessage,
   getAttendanceTemplates,
   getAttendanceTemplatesForFrontend,
+  getMessageTemplate,
+  replaceVariables,
+  prepareStudentVariables,
+  buildInstructorsNames,
+  getFirstSessionMeetingLink,
+  sendToStudentWithLogging,
 } from "./groupAutomation";

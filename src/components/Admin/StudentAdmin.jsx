@@ -34,10 +34,16 @@ import {
   Info,
   MoreHorizontal,
   FileText,
-  UserPlus
+  UserPlus,
+  Package,
+  Zap,
+  Snowflake,
+  Ban,
+  Award
 } from "lucide-react";
 import Modal from "./Modal";
 import StudentForm from "./StudentForm";
+import CreditHoursManager from "./CreditHoursManager";
 import { useI18n } from "@/i18n/I18nProvider";
 
 export default function StudentAdmin() {
@@ -46,11 +52,14 @@ export default function StudentAdmin() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
+  const [showCreditManager, setShowCreditManager] = useState(false);
+  const [selectedStudentForCredit, setSelectedStudentForCredit] = useState(null);
   const [filters, setFilters] = useState({
     search: "",
     status: "",
     level: "",
     source: "",
+    creditStatus: "",
     page: 1,
     limit: 10
   });
@@ -59,6 +68,16 @@ export default function StudentAdmin() {
     limit: 10,
     totalStudents: 0,
     totalPages: 1
+  });
+
+  // Credit Stats Summary
+  const [creditStats, setCreditStats] = useState({
+    totalWithPackage: 0,
+    totalActive: 0,
+    totalFrozen: 0,
+    totalExpired: 0,
+    totalNoPackage: 0,
+    lowBalance: 0
   });
 
   // دالة لتنسيق التاريخ
@@ -76,6 +95,71 @@ export default function StudentAdmin() {
     }
   };
 
+  // Get Credit Status Info
+  const getCreditStatusInfo = (student) => {
+    const creditSystem = student.creditSystem || {};
+    const currentPackage = creditSystem.currentPackage;
+    const status = creditSystem.status || "no_package";
+
+    // ✅ استخدم remainingHours فقط (الاستثناءات مضافة بالفعل)
+    const remainingHours = currentPackage?.remainingHours || 0;
+
+    const hasActiveFreeze = creditSystem.exceptions?.some(
+      e => e.type === "freeze" && e.status === "active"
+    );
+
+    let icon = Package;
+    let color = "gray";
+    let bgColor = "bg-gray-100 dark:bg-gray-800";
+    let textColor = "text-gray-600 dark:text-gray-400";
+    let label = t("credit.status.no_package");
+
+    if (hasActiveFreeze) {
+      icon = Snowflake;
+      color = "blue";
+      bgColor = "bg-blue-100 dark:bg-blue-900/30";
+      textColor = "text-blue-600 dark:text-blue-400";
+      label = t("credit.status.frozen");
+    } else if (status === "active" || remainingHours > 0) {
+      if (remainingHours <= 5 && remainingHours > 0) {
+        icon = AlertCircle;
+        color = "red";
+        bgColor = "bg-red-100 dark:bg-red-900/30";
+        textColor = "text-red-600 dark:text-red-400";
+        label = t("credit.status.low");
+      } else {
+        icon = Zap;
+        color = "green";
+        bgColor = "bg-green-100 dark:bg-green-900/30";
+        textColor = "text-green-600 dark:text-green-400";
+        label = t("credit.status.active");
+      }
+    } else if (status === "expired") {
+      icon = Ban;
+      color = "red";
+      bgColor = "bg-red-100 dark:bg-red-900/30";
+      textColor = "text-red-600 dark:text-red-400";
+      label = t("credit.status.expired");
+    } else if (status === "completed") {
+      icon = Award;
+      color = "purple";
+      bgColor = "bg-purple-100 dark:bg-purple-900/30";
+      textColor = "text-purple-600 dark:text-purple-400";
+      label = t("credit.status.completed");
+    }
+
+    return {
+      icon,
+      color,
+      bgColor,
+      textColor,
+      label,
+      remainingHours, // ✅ الآن ترجع 26 بدلاً من 28
+      hasPackage: !!currentPackage,
+      status
+    };
+  };
+
   // تحميل الطلاب مع الفلاتر
   const loadStudents = async () => {
     setLoading(true);
@@ -86,7 +170,8 @@ export default function StudentAdmin() {
         ...(filters.search && { search: filters.search }),
         ...(filters.status && { status: filters.status }),
         ...(filters.level && { level: filters.level }),
-        ...(filters.source && { source: filters.source })
+        ...(filters.source && { source: filters.source }),
+        ...(filters.creditStatus && { creditStatus: filters.creditStatus })
       });
 
       const res = await fetch(`/api/allStudents?${queryParams}`, {
@@ -101,6 +186,37 @@ export default function StudentAdmin() {
 
       if (json.success) {
         setStudents(json.data || []);
+
+        // Calculate credit stats
+        const stats = {
+          totalWithPackage: 0,
+          totalActive: 0,
+          totalFrozen: 0,
+          totalExpired: 0,
+          totalNoPackage: 0,
+          lowBalance: 0
+        };
+
+        json.data?.forEach(student => {
+          const creditSystem = student.creditSystem || {};
+          const currentPackage = creditSystem.currentPackage;
+          const status = creditSystem.status || "no_package";
+          const remainingHours = currentPackage?.remainingHours || 0;
+          const hasActiveFreeze = creditSystem.exceptions?.some(
+            e => e.type === "freeze" && e.status === "active"
+          );
+
+          if (currentPackage) stats.totalWithPackage++;
+          if (hasActiveFreeze) stats.totalFrozen++;
+          else if (status === "active") {
+            stats.totalActive++;
+            if (remainingHours <= 5) stats.lowBalance++;
+          }
+          else if (status === "expired") stats.totalExpired++;
+          else if (status === "no_package") stats.totalNoPackage++;
+        });
+
+        setCreditStats(stats);
 
         if (json.pagination) {
           setPagination({
@@ -128,7 +244,7 @@ export default function StudentAdmin() {
 
   useEffect(() => {
     loadStudents();
-  }, [filters.page, filters.status, filters.level, filters.source]);
+  }, [filters.page, filters.status, filters.level, filters.source, filters.creditStatus]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value, page: 1 }));
@@ -250,6 +366,51 @@ export default function StudentAdmin() {
     return Math.round(totalCourses / students.length);
   };
 
+  // ✅ دالة لتحديث طالب واحد في القائمة
+  const updateStudentInList = (updatedStudent) => {
+    setStudents(prevStudents =>
+      prevStudents.map(s =>
+        (s._id === updatedStudent._id) ? updatedStudent : s
+      )
+    );
+
+    // تحديث الإحصائيات
+    setCreditStats(prev => {
+      const newStats = { ...prev };
+
+      // إعادة حساب الإحصائيات
+      const stats = {
+        totalWithPackage: 0,
+        totalActive: 0,
+        totalFrozen: 0,
+        totalExpired: 0,
+        totalNoPackage: 0,
+        lowBalance: 0
+      };
+
+      students.forEach(s => {
+        const creditSystem = s.creditSystem || {};
+        const currentPackage = creditSystem.currentPackage;
+        const status = creditSystem.status || "no_package";
+        const remainingHours = currentPackage?.remainingHours || 0;
+        const hasActiveFreeze = creditSystem.exceptions?.some(
+          e => e.type === "freeze" && e.status === "active"
+        );
+
+        if (currentPackage) stats.totalWithPackage++;
+        if (hasActiveFreeze) stats.totalFrozen++;
+        else if (status === "active") {
+          stats.totalActive++;
+          if (remainingHours <= 5) stats.lowBalance++;
+        }
+        else if (status === "expired") stats.totalExpired++;
+        else if (status === "no_package") stats.totalNoPackage++;
+      });
+
+      return stats;
+    });
+  };
+
   if (loading && students.length === 0) {
     return (
       <div className="flex justify-center items-center p-12">
@@ -291,8 +452,8 @@ export default function StudentAdmin() {
         </div>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      {/* Stats Overview - مع إحصائيات الساعات */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
         <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -356,6 +517,26 @@ export default function StudentAdmin() {
             </div>
           </div>
         </div>
+
+        {/* Credit Stats Card */}
+        <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
+                {t("credit.withPackage")}
+              </p>
+              <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
+                {creditStats.totalWithPackage}
+              </p>
+              <p className="text-[8px] md:text-[10px] text-SlateBlueText dark:text-darktext mt-0.5">
+                ⚠️ {creditStats.lowBalance} {t("credit.lowBalance")}
+              </p>
+            </div>
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+              <Package className="w-4 h-4 md:w-5 md:h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filters Section */}
@@ -399,6 +580,21 @@ export default function StudentAdmin() {
               <option value="Beginner">{t("students.level.beginner")}</option>
               <option value="Intermediate">{t("students.level.intermediate")}</option>
               <option value="Advanced">{t("students.level.advanced")}</option>
+            </select>
+
+            {/* Credit Status Filter */}
+            <select
+              value={filters.creditStatus}
+              onChange={(e) => handleFilterChange('creditStatus', e.target.value)}
+              className="px-3 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
+            >
+              <option value="">{t("credit.allStatuses")}</option>
+              <option value="active">{t("credit.status.active")}</option>
+              <option value="frozen">{t("credit.status.frozen")}</option>
+              <option value="expired">{t("credit.status.expired")}</option>
+              <option value="completed">{t("credit.status.completed")}</option>
+              <option value="no_package">{t("credit.status.no_package")}</option>
+              <option value="low">{t("credit.status.low")}</option>
             </select>
 
             <button
@@ -445,6 +641,12 @@ export default function StudentAdmin() {
                   </th>
                   <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
                     <div className="flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5" />
+                      {t("credit.hours")}
+                    </div>
+                  </th>
+                  <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5">
                       <Phone className="w-3.5 h-3.5" />
                       {t("students.table.contact")}
                     </div>
@@ -464,102 +666,136 @@ export default function StudentAdmin() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-PowderBlueBorder dark:divide-dark_border">
-                {students.map((student) => (
-                  <tr key={student.id || student._id} className="hover:bg-gray-50 dark:hover:bg-dark_input transition-colors">
-                    <td className="py-2.5 px-3 md:px-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <User className="w-3.5 h-3.5 text-primary" />
+                {students.map((student) => {
+                  const creditInfo = getCreditStatusInfo(student);
+                  const CreditIcon = creditInfo.icon;
+
+                  return (
+                    <tr key={student.id || student._id} className="hover:bg-gray-50 dark:hover:bg-dark_input transition-colors">
+                      <td className="py-2.5 px-3 md:px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <User className="w-3.5 h-3.5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm text-MidnightNavyText dark:text-white truncate max-w-[120px] md:max-w-none">
+                              {student.personalInfo?.fullName || 'N/A'}
+                            </p>
+                            <p className="text-xs text-SlateBlueText dark:text-darktext truncate max-w-[120px] md:max-w-none">
+                              {student.personalInfo?.email || t("students.table.noEmail")}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm text-MidnightNavyText dark:text-white truncate max-w-[120px] md:max-w-none">
-                            {student.personalInfo?.fullName || 'N/A'}
-                          </p>
-                          <p className="text-xs text-SlateBlueText dark:text-darktext truncate max-w-[120px] md:max-w-none">
-                            {student.personalInfo?.email || t("students.table.noEmail")}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3 md:px-4">
-                      <div className="flex items-center gap-1.5">
-                        <Hash className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                        <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded truncate max-w-[80px] md:max-w-none">
-                          {student.enrollmentNumber || t("students.table.enrollmentNumber")}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3 md:px-4">
-                      <div className="flex items-center gap-1.5">
-                        <div className={`w-2 h-2 rounded-full ${
-                          student.enrollmentInfo?.status === 'Active' ? 'bg-green-500' :
-                          student.enrollmentInfo?.status === 'Suspended' ? 'bg-yellow-500' :
-                          student.enrollmentInfo?.status === 'Graduated' ? 'bg-blue-500' :
-                          student.enrollmentInfo?.status === 'Dropped' ? 'bg-red-500' : 'bg-gray-500'
-                        }`} />
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium ${getStatusColor(student.enrollmentInfo?.status)}`}>
-                          {student.enrollmentInfo?.status?.charAt(0) || 'U'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3 md:px-4">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium ${getLevelColor(student.academicInfo?.level)}`}>
-                        {student.academicInfo?.level?.charAt(0) || 'U'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 md:px-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1 text-xs">
-                          <Phone className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate max-w-[80px] md:max-w-none">
-                            {student.personalInfo?.phone || t("students.table.noPhone")}
+                      </td>
+                      <td className="py-2.5 px-3 md:px-4">
+                        <div className="flex items-center gap-1.5">
+                          <Hash className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                          <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded truncate max-w-[80px] md:max-w-none">
+                            {student.enrollmentNumber || t("students.table.enrollmentNumber")}
                           </span>
                         </div>
-                        {student.personalInfo?.whatsappNumber && (
-                          <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                            <span className="text-xs">✓</span>
-                            <span className="hidden md:inline">WhatsApp</span>
-                            <span className="md:hidden">WA</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3 md:px-4">
-                      <div className="flex items-center gap-1.5 text-xs text-SlateBlueText dark:text-darktext">
-                        <Calendar className="w-3 h-3 flex-shrink-0" />
-                        <span>
-                          {student.createdAt ? formatDate(student.createdAt) :
-                            student.metadata?.createdAt ? formatDate(student.metadata.createdAt) : 'N/A'}
+                      </td>
+                      <td className="py-2.5 px-3 md:px-4">
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-2 h-2 rounded-full ${student.enrollmentInfo?.status === 'Active' ? 'bg-green-500' :
+                            student.enrollmentInfo?.status === 'Suspended' ? 'bg-yellow-500' :
+                              student.enrollmentInfo?.status === 'Graduated' ? 'bg-blue-500' :
+                                student.enrollmentInfo?.status === 'Dropped' ? 'bg-red-500' : 'bg-gray-500'
+                            }`} />
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium ${getStatusColor(student.enrollmentInfo?.status)}`}>
+                            {student.enrollmentInfo?.status?.charAt(0) || 'U'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 md:px-4">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium ${getLevelColor(student.academicInfo?.level)}`}>
+                          {student.academicInfo?.level?.charAt(0) || 'U'}
                         </span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3 md:px-4">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => onView(student.id || student._id)}
-                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                          title={t("common.view")}
-                        >
-                          <Eye className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        </button>
-                        <button
-                          onClick={() => onEdit(student)}
-                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                          title={t("common.edit")}
-                        >
-                          <Edit className="w-3.5 h-3.5 text-primary" />
-                        </button>
-                        <button
-                          onClick={() => onDelete(student.id || student._id, student.personalInfo?.fullName || t("common.student"))}
-                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                          title={t("common.delete")}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-2.5 px-3 md:px-4">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-lg ${creditInfo.bgColor} flex items-center justify-center`}>
+                            <CreditIcon className={`w-3 h-3 ${creditInfo.textColor}`} />
+                          </div>
+                          <div>
+                            <p className={`text-xs font-medium ${creditInfo.textColor}`}>
+                              {creditInfo.label}
+                            </p>
+                            {creditInfo.hasPackage && (
+                              <p className="text-[10px] text-SlateBlueText dark:text-darktext">
+                                {creditInfo.remainingHours} {t("credit.hours")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 md:px-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-xs">
+                            <Phone className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate max-w-[80px] md:max-w-none">
+                              {student.personalInfo?.phone || t("students.table.noPhone")}
+                            </span>
+                          </div>
+                          {student.personalInfo?.whatsappNumber && (
+                            <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                              <span className="text-xs">✓</span>
+                              <span className="hidden md:inline">WhatsApp</span>
+                              <span className="md:hidden">WA</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 md:px-4">
+                        <div className="flex items-center gap-1.5 text-xs text-SlateBlueText dark:text-darktext">
+                          <Calendar className="w-3 h-3 flex-shrink-0" />
+                          <span>
+                            {student.createdAt ? formatDate(student.createdAt) :
+                              student.metadata?.createdAt ? formatDate(student.metadata.createdAt) : 'N/A'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 md:px-4">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => onView(student.id || student._id)}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                            title={t("common.view")}
+                          >
+                            <Eye className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          </button>
+                          <button
+                            onClick={() => onEdit(student)}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                            title={t("common.edit")}
+                          >
+                            <Edit className="w-3.5 h-3.5 text-primary" />
+                          </button>
+                          {/* Credit Hours Button */}
+                          <button
+                            onClick={() => {
+                              console.log("Selected student for credit:", student);
+                              console.log("Student ID:", student._id || student.id);
+                              setSelectedStudentForCredit(student);
+                              setShowCreditManager(true);
+                            }}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                            title={t("credit.manage")}
+                          >
+                            <Package className="w-3.5 h-3.5 text-amber-500" />
+                          </button>
+                          <button
+                            onClick={() => onDelete(student.id || student._id, student.personalInfo?.fullName || t("common.student"))}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                            title={t("common.delete")}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -575,11 +811,11 @@ export default function StudentAdmin() {
               {t("students.noStudents")}
             </h3>
             <p className="text-xs md:text-sm text-SlateBlueText dark:text-darktext mb-4 md:mb-6 max-w-md mx-auto">
-              {filters.search || filters.status || filters.level || filters.source
+              {filters.search || filters.status || filters.level || filters.source || filters.creditStatus
                 ? t("students.noMatchingResults")
                 : t("students.noStudentsDescription")}
             </p>
-            {!filters.search && !filters.status && !filters.level && !filters.source && (
+            {!filters.search && !filters.status && !filters.level && !filters.source && !filters.creditStatus && (
               <button
                 onClick={() => setModalOpen(true)}
                 className="bg-primary hover:bg-primary/90 text-white px-6 py-2.5 md:px-8 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
@@ -644,7 +880,7 @@ export default function StudentAdmin() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Modal - Student Form */}
       <Modal
         open={modalOpen}
         title={editingStudent ? t("studentForm.updateStudent") : t("studentForm.createStudent")}
@@ -663,6 +899,29 @@ export default function StudentAdmin() {
           onSaved={onSaved}
         />
       </Modal>
+
+      {/* Credit Hours Manager Modal */}
+      {showCreditManager && selectedStudentForCredit && (
+        <CreditHoursManager
+          student={selectedStudentForCredit}
+          onClose={() => {
+            setShowCreditManager(false);
+            setSelectedStudentForCredit(null);
+          }}
+          onUpdate={(updatedStudent) => {
+            if (updatedStudent) {
+              // تحديث الطالب في القائمة مباشرة
+              updateStudentInList(updatedStudent);
+
+              // تحديث الطالب المحدد أيضاً
+              setSelectedStudentForCredit(updatedStudent);
+            } else {
+              // إعادة تحميل كل الطلاب
+              loadStudents();
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

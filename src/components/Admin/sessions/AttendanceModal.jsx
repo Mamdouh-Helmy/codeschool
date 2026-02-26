@@ -1,4 +1,3 @@
-// /src/components/Admin/sessions/AttendanceModal.jsx - النسخة المصححة
 "use client";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import toast from "react-hot-toast";
@@ -11,7 +10,10 @@ import {
   Users,
   Zap,
   RefreshCw,
-  Eye
+  Eye,
+  Clock,
+  AlertTriangle,
+  Ban
 } from "lucide-react";
 
 export default function AttendanceModal({
@@ -36,11 +38,24 @@ export default function AttendanceModal({
   const [manuallyEdited, setManuallyEdited] = useState({});
   const [savingTemplate, setSavingTemplate] = useState({});
   const [templatesFetched, setTemplatesFetched] = useState(false);
-
+  
   const textareaRefs = useRef({});
   const hintsRefs = useRef({});
   const initialLoadDone = useRef(false);
   const fetchQueue = useRef(new Set());
+
+  // ✅ للتشخيص - عرض بيانات الطلاب
+  useEffect(() => {
+    console.log("📊 groupStudents data:", groupStudents);
+    groupStudents.forEach(student => {
+      console.log(`Student ${student._id}:`, {
+        name: student.personalInfo?.fullName,
+        creditSystem: student.creditSystem,
+        remainingHours: student.creditSystem?.currentPackage?.remainingHours,
+        hasPackage: !!student.creditSystem?.currentPackage
+      });
+    });
+  }, [groupStudents]);
 
   // ========== الدوال الأساسية ==========
 
@@ -58,27 +73,55 @@ export default function AttendanceModal({
     return record?.notes || '';
   }, [attendance]);
 
+  // ✅ دالة للتحقق من رصيد الطالب (معدلة - بدون إضافة الاستثناءات)
+  const checkStudentBalance = useCallback((student) => {
+    if (!student) {
+      return { hasBalance: false, remainingHours: 0, isBlocked: true };
+    }
+    
+    if (!student.creditSystem) {
+      console.log("⚠️ No creditSystem for student:", student._id);
+      return { hasBalance: false, remainingHours: 0, isBlocked: true };
+    }
+    
+    // ✅ الرصيد الفعلي = رصيد الحزمة فقط (لأن الاستثناءات مضافة بالفعل)
+    const remainingHours = student.creditSystem.currentPackage?.remainingHours || 0;
+    
+    // التحقق من وجود تجميد نشط
+    const hasActiveFreeze = student.creditSystem.exceptions?.some(
+      e => e.type === 'freeze' && 
+           e.status === 'active' && 
+           (!e.endDate || new Date() <= new Date(e.endDate))
+    );
+    
+    const isBlocked = hasActiveFreeze || remainingHours <= 0;
+    
+    console.log(`✅ Student ${student._id} balance: ${remainingHours}h, blocked: ${isBlocked}`);
+    
+    return {
+      hasBalance: remainingHours > 0,
+      remainingHours: remainingHours,
+      isBlocked
+    };
+  }, []);
+
   // ✅ دالة بناء المتغيرات المُصلحة
   const buildVariables = useCallback((student, status) => {
     if (!student) return {};
 
     const lang = student.communicationPreferences?.preferredLanguage || 'ar';
 
-    // ✅ تطبيع الجنس والعلاقة (lowercase دائماً)
     const gender = (student.personalInfo?.gender || 'male').toLowerCase().trim();
     const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase().trim();
 
-    // ✅ اسم الطالب المختصر حسب اللغة: nickname أولاً، وإلا أول كلمة
     const studentFirstName = lang === 'ar'
       ? (student.personalInfo?.nickname?.ar?.trim() || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب')
       : (student.personalInfo?.nickname?.en?.trim() || student.personalInfo?.fullName?.split(' ')[0] || 'Student');
 
-    // ✅ اسم ولي الأمر المختصر حسب اللغة: nickname أولاً، وإلا أول كلمة
     const guardianFirstName = lang === 'ar'
       ? (student.guardianInfo?.nickname?.ar?.trim() || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر')
       : (student.guardianInfo?.nickname?.en?.trim() || student.guardianInfo?.name?.split(' ')[0] || 'Guardian');
 
-    // ✅ تحية ولي الأمر حسب العلاقة واللغة
     let guardianSalutation = '';
     if (lang === 'ar') {
       if (relationship === 'mother') {
@@ -98,7 +141,6 @@ export default function AttendanceModal({
       }
     }
 
-    // ✅ تحية الطالب حسب الجنس واللغة
     let studentSalutation = '';
     if (lang === 'ar') {
       studentSalutation = gender === 'female'
@@ -108,7 +150,6 @@ export default function AttendanceModal({
       studentSalutation = `Dear ${studentFirstName}`;
     }
 
-    // ✅ childTitle حسب جنس الطالب واللغة
     const childTitle = lang === 'ar'
       ? (gender === 'female' ? 'ابنتك' : 'ابنك')
       : (gender === 'female' ? 'your daughter' : 'your son');
@@ -117,7 +158,9 @@ export default function AttendanceModal({
       ? (lang === 'ar' ? 'غائب' : 'absent')
       : status === 'late'
         ? (lang === 'ar' ? 'متأخر' : 'late')
-        : (lang === 'ar' ? 'معتذر' : 'excused');
+        : status === 'excused'
+          ? (lang === 'ar' ? 'معتذر' : 'excused')
+          : (lang === 'ar' ? 'حاضر' : 'present');
 
     const sessionDate = session?.scheduledDate
       ? new Date(session.scheduledDate).toLocaleDateString(
@@ -129,7 +172,6 @@ export default function AttendanceModal({
     return {
       guardianSalutation,
       studentSalutation,
-      // للتوافق مع القوالب التي تستخدم {salutation}
       salutation: guardianSalutation,
       guardianName: guardianFirstName,
       guardianFullName: student.guardianInfo?.name || '',
@@ -203,6 +245,7 @@ export default function AttendanceModal({
     }
   }, [session.id, getStudentStatus, isRTL]);
 
+  // ✅ دالة حفظ القالب
   const saveTemplateToDatabase = useCallback(async (studentId, content) => {
     if (!studentId || !content?.trim()) return;
 
@@ -300,6 +343,19 @@ export default function AttendanceModal({
   // ========== دوال تحديث البيانات ==========
 
   const updateAttendanceStatus = useCallback((studentId, status) => {
+    // ✅ التحقق من رصيد الطالب قبل تغيير الحالة
+    const student = groupStudents.find(s => s._id === studentId);
+    const { isBlocked, remainingHours } = checkStudentBalance(student);
+
+    if (isBlocked && (status === 'present' || status === 'late')) {
+      toast.error(
+        isRTL 
+          ? `لا يمكن تسجيل حضور للطالب - الرصيد صفر (${remainingHours} ساعة)` 
+          : `Cannot mark attendance - Zero balance (${remainingHours} hours)`
+      );
+      return;
+    }
+
     setAttendance(prev => {
       const existingIndex = prev.findIndex(
         a => (a.studentId?._id || a.studentId?.id || a.studentId)?.toString() === studentId?.toString()
@@ -333,7 +389,7 @@ export default function AttendanceModal({
         return newEdited;
       });
     }
-  }, [fetchTemplateForStudent, manuallyEdited]);
+  }, [fetchTemplateForStudent, manuallyEdited, groupStudents, checkStudentBalance, isRTL]);
 
   const updateStudentNotes = useCallback((studentId, notes) => {
     setAttendance(prev => {
@@ -564,7 +620,11 @@ export default function AttendanceModal({
     present: attendance.filter(a => a.status === 'present').length,
     absent: attendance.filter(a => a.status === 'absent').length,
     late: attendance.filter(a => a.status === 'late').length,
-    excused: attendance.filter(a => a.status === 'excused').length
+    excused: attendance.filter(a => a.status === 'excused').length,
+    blocked: groupStudents.filter(s => {
+      const { isBlocked } = checkStudentBalance(s);
+      return isBlocked;
+    }).length
   };
 
   return (
@@ -590,13 +650,14 @@ export default function AttendanceModal({
 
         {/* Stats */}
         <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border bg-gray-50 dark:bg-dark_input">
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-6 gap-4">
             {[
               { label: isRTL ? 'الإجمالي' : 'Total', value: stats.total, color: 'text-gray-800 dark:text-white' },
               { label: isRTL ? 'حاضر' : 'Present', value: stats.present, color: 'text-green-600' },
               { label: isRTL ? 'غائب' : 'Absent', value: stats.absent, color: 'text-red-600' },
               { label: isRTL ? 'متأخر' : 'Late', value: stats.late, color: 'text-yellow-600' },
               { label: isRTL ? 'معتذر' : 'Excused', value: stats.excused, color: 'text-blue-600' },
+              { label: isRTL ? 'محظور' : 'Blocked', value: stats.blocked, color: 'text-gray-500' },
             ].map(({ label, value, color }) => (
               <div key={label} className="text-center">
                 <p className={`text-2xl font-bold ${color}`}>{value}</p>
@@ -616,34 +677,45 @@ export default function AttendanceModal({
               const needsMessage = ['absent', 'late', 'excused'].includes(status);
               const studentLang = student.communicationPreferences?.preferredLanguage || 'ar';
               
-              // ✅ تطبيع البيانات للعرض
+              const { hasBalance, remainingHours, isBlocked } = checkStudentBalance(student);
+
               const gender = (student.personalInfo?.gender || 'male').toLowerCase().trim();
               const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase().trim();
 
-              // ✅ حساب التحيات للعرض في الـ preview داخل البطاقة
               const currentVars = buildVariables(student, status);
 
               return (
-                <div key={studentId} className="border border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden">
-                  {/* Student Info & Status */}
-                  <div className="flex items-center justify-between p-4 bg-white dark:bg-darkmode">
+                <div key={studentId} className={`border rounded-lg overflow-hidden ${
+                  isBlocked ? 'border-gray-300 dark:border-gray-700 opacity-75' : 'border-PowderBlueBorder dark:border-dark_border'
+                }`}>
+                  <div className={`flex items-center justify-between p-4 ${
+                    isBlocked ? 'bg-gray-100 dark:bg-gray-800' : 'bg-white dark:bg-darkmode'
+                  }`}>
                     <div className="flex-1">
-                      <p className="font-medium text-MidnightNavyText dark:text-white">
-                        {student.personalInfo?.fullName}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-MidnightNavyText dark:text-white">
+                          {student.personalInfo?.fullName}
+                        </p>
+                        {isBlocked && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs">
+                            <Ban className="w-3 h-3" />
+                            {isRTL ? 'محظور' : 'Blocked'}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-500">{isRTL ? 'رقم' : 'ID'}: {student.enrollmentNumber}</p>
+                      
                       <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
-                        {/* اللغة */}
                         <span className="text-blue-600 dark:text-blue-400" title={isRTL ? 'اللغة المفضلة' : 'Preferred language'}>
                           {studentLang === 'ar' ? '🇸🇦 عربي' : '🇬🇧 English'}
                         </span>
-                        {/* الجنس */}
+                        
                         <span className="text-purple-600 dark:text-purple-400">
                           {gender === 'female'
                             ? (isRTL ? '👧 أنثى' : '👧 Female')
                             : (isRTL ? '👦 ذكر' : '👦 Male')}
                         </span>
-                        {/* العلاقة */}
+                        
                         <span className="text-green-600 dark:text-green-400">
                           {relationship === 'mother'
                             ? (isRTL ? '👩 أم' : '👩 Mother')
@@ -651,29 +723,58 @@ export default function AttendanceModal({
                               ? (isRTL ? '👨 أب' : '👨 Father')
                               : (isRTL ? '👤 ولي أمر' : '👤 Guardian')}
                         </span>
+                        
+                        {student.creditSystem?.currentPackage && (
+                          <span 
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${
+                              remainingHours <= 0
+                                ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                : remainingHours <= 2
+                                  ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                                  : remainingHours <= 5
+                                    ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                    : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+                            }`}
+                            title={isRTL ? 'الساعات المتبقية' : 'Remaining hours'}
+                          >
+                            <Clock className="w-3 h-3" />
+                            <span>{remainingHours}h</span>
+                          </span>
+                        )}
                       </div>
+
+                      {!isBlocked && remainingHours <= 2 && remainingHours > 0 && (
+                        <p className="flex items-center gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
+                          <AlertTriangle className="w-3 h-3" />
+                          {isRTL 
+                            ? `تحذير: الرصيد على وشك النفاذ (${remainingHours} ساعات)` 
+                            : `Warning: Low balance (${remainingHours} hours)`}
+                        </p>
+                      )}
                     </div>
+                    
                     <div className="flex items-center gap-3">
                       <select
                         value={status}
                         onChange={(e) => updateAttendanceStatus(studentId, e.target.value)}
-                        className="px-3 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                        disabled={isBlocked}
+                        className={`px-3 py-2 text-sm border rounded-lg dark:bg-dark_input dark:text-white ${
+                          isBlocked ? 'border-gray-300 dark:border-gray-700 opacity-50 cursor-not-allowed' : 'border-PowderBlueBorder dark:border-dark_border'
+                        }`}
                       >
-                        <option value="present">{isRTL ? 'حاضر' : 'Present'}</option>
+                        <option value="present" disabled={isBlocked}>{isRTL ? 'حاضر' : 'Present'}</option>
                         <option value="absent">{isRTL ? 'غائب' : 'Absent'}</option>
-                        <option value="late">{isRTL ? 'متأخر' : 'Late'}</option>
+                        <option value="late" disabled={isBlocked}>{isRTL ? 'متأخر' : 'Late'}</option>
                         <option value="excused">{isRTL ? 'معتذر' : 'Excused'}</option>
                       </select>
                     </div>
                   </div>
 
-                  {/* Message Editor */}
-                  {needsMessage && (
+                  {!isBlocked && needsMessage && (
                     <div className="bg-purple-50 dark:bg-purple-900/20 border-t border-purple-200 dark:border-purple-800 p-4">
                       <div className="flex items-start gap-3">
                         <MessageCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
                         <div className="flex-1 space-y-3">
-                          {/* Header */}
                           <div className="flex items-center justify-between">
                             <h4 className="font-semibold text-purple-900 dark:text-purple-100 text-sm">
                               📨 {isRTL ? 'رسالة لولي الأمر' : 'Message for Guardian'}
@@ -689,7 +790,6 @@ export default function AttendanceModal({
                             </button>
                           </div>
 
-                          {/* ✅ عرض التحيات الفعلية */}
                           <div className="p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700 text-xs space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="text-purple-600 dark:text-purple-400 font-medium">
@@ -724,7 +824,6 @@ export default function AttendanceModal({
                             )}
                           </div>
 
-                          {/* Textarea with Hints */}
                           <div className="space-y-2 relative">
                             <div className="flex justify-between items-center">
                               <label className="text-xs text-gray-600 dark:text-gray-400">
@@ -745,7 +844,6 @@ export default function AttendanceModal({
                               dir={studentLang === 'ar' ? 'rtl' : 'ltr'}
                             />
 
-                            {/* Hints Dropdown */}
                             {showHints[studentId] && (
                               <div
                                 ref={el => hintsRefs.current[studentId] = el}
@@ -780,7 +878,6 @@ export default function AttendanceModal({
                             )}
                           </div>
 
-                          {/* Notes */}
                           <div>
                             <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
                               {isRTL ? 'ملاحظات إضافية (اختياري)' : 'Additional Notes (optional)'}
@@ -794,7 +891,6 @@ export default function AttendanceModal({
                             />
                           </div>
 
-                          {/* Live Preview */}
                           {previewMessages[studentId] && (
                             <div className="bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 overflow-hidden">
                               <div className="bg-purple-50 dark:bg-purple-900/30 px-3 py-2 border-b flex items-center justify-between">
@@ -813,7 +909,6 @@ export default function AttendanceModal({
                             </div>
                           )}
 
-                          {/* Save Template */}
                           <div className="flex justify-end pt-2 border-t border-purple-200 dark:border-purple-800">
                             <button
                               onClick={() => saveTemplateToDatabase(studentId, customMessages[studentId])}
@@ -832,6 +927,17 @@ export default function AttendanceModal({
                       </div>
                     </div>
                   )}
+
+                  {isBlocked && needsMessage && (
+                    <div className="bg-gray-100 dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 p-4 text-center">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
+                        <Ban className="w-4 h-4" />
+                        {isRTL 
+                          ? 'تم تعطيل الإشعارات لهذا الطالب بسبب نفاد الرصيد' 
+                          : 'Notifications disabled for this student due to zero balance'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -847,7 +953,6 @@ export default function AttendanceModal({
           )}
         </div>
 
-        {/* Footer */}
         <div className="p-6 border-t border-PowderBlueBorder dark:border-dark_border flex items-center justify-end gap-3">
           <button
             onClick={onClose}

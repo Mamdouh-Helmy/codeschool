@@ -1,4 +1,3 @@
-// /src/app/api/groups/[id]/students/route.js
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../../../models/Group';
@@ -37,42 +36,53 @@ export async function GET(req, { params }) {
       );
     }
 
-    // ✅ طريقة 1: من خلال reference مباشر - مع جلب كل البيانات المطلوبة
+    // ✅ جلب كل الطلاب في المجموعة مع كل البيانات المطلوبة
     let students = await Student.find({
       'academicInfo.groupIds': new mongoose.Types.ObjectId(id),
       isDeleted: false
     })
-    .select('personalInfo enrollmentNumber guardianInfo communicationPreferences academicInfo.groupIds')
+    .select('personalInfo enrollmentNumber guardianInfo communicationPreferences creditSystem')
     .sort({ 'personalInfo.fullName': 1 })
     .lean();
 
-    console.log(`📊 Found ${students.length} students in group ${group.name} (method 1)`);
+    console.log(`📊 Found ${students.length} students in group ${group.name}`);
 
-    // طريقة 2: من خلال المجموعة نفسها (إذا كان هناك reference)
-    if (students.length === 0) {
-      const groupWithRefs = await Group.findById(id)
-        .populate({
-          path: 'students',
-          select: 'personalInfo enrollmentNumber guardianInfo communicationPreferences',
-          match: { isDeleted: false }
-        })
-        .lean();
-
-      if (groupWithRefs?.students) {
-        students = groupWithRefs.students;
-        console.log(`📊 Found ${students.length} students (method 2)`);
+    // ✅ التأكد من أن كل طالب عنده creditSystem حتى لو null
+    const formattedStudents = students.map(student => {
+      if (!student.creditSystem) {
+        student.creditSystem = {
+          currentPackage: null,
+          status: 'no_package',
+          stats: {
+            totalHoursPurchased: 0,
+            totalHoursUsed: 0,
+            totalHoursRemaining: 0,
+            totalSessionsAttended: 0
+          }
+        };
       }
-    }
+      
+      if (!student.creditSystem.currentPackage) {
+        student.creditSystem.currentPackage = {
+          remainingHours: 0,
+          totalHours: 0,
+          packageType: null,
+          startDate: null,
+          endDate: null,
+          status: 'inactive'
+        };
+      }
 
-    // ✅ إرجاع البيانات كاملة بما فيها gender و relationship و nickname و communicationPreferences
-    const formattedStudents = students.map(student => ({
-      id: student._id,
-      _id: student._id,
-      enrollmentNumber: student.enrollmentNumber || 'N/A',
-      personalInfo: student.personalInfo || {},
-      guardianInfo: student.guardianInfo || {},
-      communicationPreferences: student.communicationPreferences || { preferredLanguage: 'ar' }
-    }));
+      return {
+        id: student._id,
+        _id: student._id,
+        enrollmentNumber: student.enrollmentNumber || 'N/A',
+        personalInfo: student.personalInfo || {},
+        guardianInfo: student.guardianInfo || {},
+        communicationPreferences: student.communicationPreferences || { preferredLanguage: 'ar' },
+        creditSystem: student.creditSystem
+      };
+    });
 
     return NextResponse.json({
       success: true,

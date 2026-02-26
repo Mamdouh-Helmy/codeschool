@@ -119,11 +119,11 @@ export default function SessionsAdmin() {
       if (json.success) {
         const loadedSessions = json.data || [];
         setSessions(loadedSessions);
-        
+
         // ✅ التأكد من أن الـ group object يحتوي على _id
         const groupData = json.group || {};
         console.log('📦 Group data from API:', groupData);
-        
+
         // تحويل group data للتأكد من وجود _id
         setGroup({
           ...groupData,
@@ -530,7 +530,7 @@ export default function SessionsAdmin() {
         <AttendanceModal
           session={selectedSession}
           attendanceData={attendanceData}
-          groupStudents={groupStudents}
+          groupStudents={attendanceData?.students || groupStudents}
           loading={loadingAttendance}
           onClose={() => setAttendanceModalOpen(false)}
           onRefresh={loadSessions}
@@ -538,6 +538,8 @@ export default function SessionsAdmin() {
           t={t}
         />
       )}
+
+      {attendanceData && console.log('📦 Attendance data students:', attendanceData.students)}
 
       {editModalOpen && selectedSession && (
         <EditSessionModal
@@ -587,7 +589,7 @@ export default function SessionsAdmin() {
       {/* ✅ Group Completion Modal - مع تمرير groupId بشكل صريح */}
       {completionModalOpen && (
         <GroupCompletionModal
-          group={group || { 
+          group={group || {
             _id: groupId,
             name: group?.name || '',
             code: group?.code || '',

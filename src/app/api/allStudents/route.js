@@ -451,6 +451,7 @@ export async function GET(req) {
     const language = searchParams.get("language");
     const hasWhatsappResponse = searchParams.get("hasWhatsappResponse");
     const guardianNotified = searchParams.get("guardianNotified");
+    const creditStatus = searchParams.get("creditStatus"); // ✅ NEW: فلتر حالة الساعات
 
     const query = { isDeleted: false };
 
@@ -469,6 +470,37 @@ export async function GET(req) {
       query["metadata.whatsappResponseReceived"] = true;
     } else if (hasWhatsappResponse === "false") {
       query["metadata.whatsappResponseReceived"] = false;
+    }
+
+    // ✅ NEW: فلتر حسب حالة الساعات
+    if (creditStatus) {
+      switch (creditStatus) {
+        case "active":
+          query["creditSystem.status"] = "active";
+          query["creditSystem.currentPackage.remainingHours"] = { $gt: 5 };
+          break;
+        case "frozen":
+          query["creditSystem.exceptions"] = {
+            $elemMatch: {
+              type: "freeze",
+              status: "active"
+            }
+          };
+          break;
+        case "expired":
+          query["creditSystem.status"] = "expired";
+          break;
+        case "completed":
+          query["creditSystem.status"] = "completed";
+          break;
+        case "no_package":
+          query["creditSystem.currentPackage"] = null;
+          break;
+        case "low":
+          query["creditSystem.status"] = "active";
+          query["creditSystem.currentPackage.remainingHours"] = { $lte: 5, $gt: 0 };
+          break;
+      }
     }
 
     if (search) {
@@ -501,53 +533,164 @@ export async function GET(req) {
       .limit(limit)
       .lean();
 
-    const formattedStudents = students.map((student) => ({
-      id: student._id,
-      enrollmentNumber: student.enrollmentNumber,
-      personalInfo: {
-        ...student.personalInfo,
-        nickname: {
-          ar: student.personalInfo?.nickname?.ar || null,
-          en: student.personalInfo?.nickname?.en || null,
+    // ✅ تنسيق البيانات مع تضمين نظام الساعات بالكامل
+    const formattedStudents = students.map((student) => {
+      // حساب إحصائيات الساعات
+      const creditSystem = student.creditSystem || {
+        currentPackage: null,
+        packagesHistory: [],
+        exceptions: [],
+        usageHistory: [],
+        stats: {
+          totalHoursPurchased: 0,
+          totalHoursUsed: 0,
+          totalHoursRemaining: 0,
+          totalSessionsAttended: 0,
+          totalExceptions: 0,
+          activeExceptions: 0
         },
-      },
-      guardianInfo: {
-        ...student.guardianInfo,
-        nickname: {
-          ar: student.guardianInfo?.nickname?.ar || null,
-          en: student.guardianInfo?.nickname?.en || null,
-        },
-        relationship: student.guardianInfo?.relationship || null,
-      },
-      enrollmentInfo: student.enrollmentInfo,
-      academicInfo: student.academicInfo,
-      communicationPreferences: student.communicationPreferences,
-      metadata: student.metadata,
-      createdAt: student.metadata.createdAt,
-      createdBy: student.metadata.createdBy,
-      authUserId: student.authUserId,
-      whatsappStatus: student.metadata?.whatsappStatus || "pending",
-      whatsappInteractiveSent: student.metadata?.whatsappInteractiveSent || false,
-      whatsappButtons: student.metadata?.whatsappButtons || [],
-      whatsappSentAt: student.metadata?.whatsappSentAt,
-      whatsappMessageId: student.metadata?.whatsappMessageId,
-      whatsappMode: student.metadata?.whatsappMode || "simulation",
-      whatsappLanguageSelected: student.metadata?.whatsappLanguageSelected || false,
-      whatsappLanguageSelection: student.metadata?.whatsappLanguageSelection,
-      whatsappButtonSelected: student.metadata?.whatsappButtonSelected,
-      whatsappResponseReceived: student.metadata?.whatsappResponseReceived || false,
-      whatsappResponse: student.metadata?.whatsappResponse,
-      whatsappConfirmationSent: student.metadata?.whatsappConfirmationSent || false,
-      whatsappMessagesCount: student.metadata?.whatsappMessagesCount || 0,
-      whatsappGuardianNotified: student.metadata?.whatsappGuardianNotified || false,
-      whatsappGuardianPhone: student.metadata?.whatsappGuardianPhone || null,
-      whatsappGuardianNotificationSent: student.metadata?.whatsappGuardianNotificationSent || false,
-      whatsappGuardianNotificationAt: student.metadata?.whatsappGuardianNotificationAt || null,
-      language: student.communicationPreferences?.preferredLanguage || "ar",
-      conversationId: student.metadata?.whatsappConversationId,
-      whatsappMessages: student.whatsappMessages || [],
-    }));
+        status: "no_package"
+      };
 
+      // التأكد من وجود currentPackage
+      const currentPackage = creditSystem.currentPackage || null;
+      
+      // حساب الاستثناءات النشطة
+      const activeExceptions = creditSystem.exceptions?.filter(
+        e => e.status === "active"
+      ) || [];
+
+      return {
+        id: student._id,
+        _id: student._id,
+        enrollmentNumber: student.enrollmentNumber,
+        personalInfo: {
+          ...student.personalInfo,
+          nickname: {
+            ar: student.personalInfo?.nickname?.ar || null,
+            en: student.personalInfo?.nickname?.en || null,
+          },
+        },
+        guardianInfo: {
+          ...student.guardianInfo,
+          nickname: {
+            ar: student.guardianInfo?.nickname?.ar || null,
+            en: student.guardianInfo?.nickname?.en || null,
+          },
+          relationship: student.guardianInfo?.relationship || null,
+        },
+        enrollmentInfo: student.enrollmentInfo,
+        academicInfo: student.academicInfo,
+        communicationPreferences: student.communicationPreferences,
+        
+        // ✅ نظام الساعات كامل
+        creditSystem: {
+          currentPackage: currentPackage ? {
+            ...currentPackage,
+            packageType: currentPackage.packageType,
+            totalHours: currentPackage.totalHours || 0,
+            remainingHours: currentPackage.remainingHours || 0,
+            startDate: currentPackage.startDate,
+            endDate: currentPackage.endDate,
+            price: currentPackage.price || 0,
+            status: currentPackage.status || "active"
+          } : null,
+          packagesHistory: creditSystem.packagesHistory || [],
+          exceptions: creditSystem.exceptions || [],
+          usageHistory: creditSystem.usageHistory || [],
+          stats: {
+            totalHoursPurchased: creditSystem.stats?.totalHoursPurchased || 0,
+            totalHoursUsed: creditSystem.stats?.totalHoursUsed || 0,
+            totalHoursRemaining: creditSystem.stats?.totalHoursRemaining || 0,
+            totalSessionsAttended: creditSystem.stats?.totalSessionsAttended || 0,
+            totalExceptions: creditSystem.stats?.totalExceptions || 0,
+            activeExceptions: creditSystem.stats?.activeExceptions || 0,
+            lastPackagePurchase: creditSystem.stats?.lastPackagePurchase,
+            lastUsageDate: creditSystem.stats?.lastUsageDate
+          },
+          status: creditSystem.status || "no_package"
+        },
+
+        // ✅ إضافة حقول مساعدة للعرض السريع
+        creditInfo: {
+          hasPackage: !!currentPackage,
+          packageType: currentPackage?.packageType,
+          totalHours: currentPackage?.totalHours || 0,
+          usedHours: creditSystem.stats?.totalHoursUsed || 0,
+          remainingHours: currentPackage?.remainingHours || 0,
+          status: creditSystem.status || "no_package",
+          hasActiveFreeze: activeExceptions.some(e => e.type === "freeze"),
+          activeExceptionsCount: activeExceptions.length,
+          packageEndDate: currentPackage?.endDate,
+          usagePercentage: currentPackage?.totalHours 
+            ? Math.round(((creditSystem.stats?.totalHoursUsed || 0) / currentPackage.totalHours) * 100)
+            : 0
+        },
+
+        metadata: student.metadata,
+        createdAt: student.metadata.createdAt,
+        createdBy: student.metadata.createdBy,
+        authUserId: student.authUserId,
+        
+        // WhatsApp data
+        whatsappStatus: student.metadata?.whatsappStatus || "pending",
+        whatsappInteractiveSent: student.metadata?.whatsappInteractiveSent || false,
+        whatsappButtons: student.metadata?.whatsappButtons || [],
+        whatsappSentAt: student.metadata?.whatsappSentAt,
+        whatsappMessageId: student.metadata?.whatsappMessageId,
+        whatsappMode: student.metadata?.whatsappMode || "simulation",
+        whatsappLanguageSelected: student.metadata?.whatsappLanguageSelected || false,
+        whatsappLanguageSelection: student.metadata?.whatsappLanguageSelection,
+        whatsappButtonSelected: student.metadata?.whatsappButtonSelected,
+        whatsappResponseReceived: student.metadata?.whatsappResponseReceived || false,
+        whatsappResponse: student.metadata?.whatsappResponse,
+        whatsappConfirmationSent: student.metadata?.whatsappConfirmationSent || false,
+        whatsappMessagesCount: student.metadata?.whatsappMessagesCount || 0,
+        whatsappGuardianNotified: student.metadata?.whatsappGuardianNotified || false,
+        whatsappGuardianPhone: student.metadata?.whatsappGuardianPhone || null,
+        whatsappGuardianNotificationSent: student.metadata?.whatsappGuardianNotificationSent || false,
+        whatsappGuardianNotificationAt: student.metadata?.whatsappGuardianNotificationAt || null,
+        language: student.communicationPreferences?.preferredLanguage || "ar",
+        conversationId: student.metadata?.whatsappConversationId,
+        whatsappMessages: student.whatsappMessages || [],
+      };
+    });
+
+    // ✅ حساب إحصائيات الساعات
+    const creditStats = {
+      totalWithPackage: await Student.countDocuments({
+        ...query,
+        "creditSystem.currentPackage": { $ne: null }
+      }),
+      totalActive: await Student.countDocuments({
+        ...query,
+        "creditSystem.status": "active"
+      }),
+      totalFrozen: await Student.countDocuments({
+        ...query,
+        "creditSystem.exceptions": {
+          $elemMatch: {
+            type: "freeze",
+            status: "active"
+          }
+        }
+      }),
+      totalExpired: await Student.countDocuments({
+        ...query,
+        "creditSystem.status": "expired"
+      }),
+      totalNoPackage: await Student.countDocuments({
+        ...query,
+        "creditSystem.currentPackage": null
+      }),
+      lowBalance: await Student.countDocuments({
+        ...query,
+        "creditSystem.status": "active",
+        "creditSystem.currentPackage.remainingHours": { $lte: 5, $gt: 0 }
+      })
+    };
+
+    // ✅ إحصائيات WhatsApp (كما هي)
     const whatsappStats = {
       total: totalStudents,
       sent: await Student.countDocuments({ ...query, "metadata.whatsappStatus": "sent" }),
@@ -612,6 +755,7 @@ export async function GET(req) {
         success: true,
         data: formattedStudents,
         whatsappStats,
+        creditStats, // ✅ إضافة إحصائيات الساعات
         pagination: {
           page,
           limit,

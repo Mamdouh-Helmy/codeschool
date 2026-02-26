@@ -1,4 +1,4 @@
-// app/api/groups/[id]/activate/route.js - UPDATED WITH FLEXIBLE DAY VALIDATION
+// app/api/groups/[id]/activate/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../../models/Group";
@@ -23,7 +23,6 @@ export async function POST(req, { params }) {
 
     const adminUser = authCheck.user;
 
-    // ✅ استقبال رسائل المدرسين المخصصة
     const body = await req.json();
     const { instructorMessages = {} } = body;
 
@@ -52,7 +51,7 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ FIXED: التحقق مما إذا كانت المجموعة لها حصص مسبقاً
+    // Check existing sessions
     const existingSessionsCount = await Session.countDocuments({
       groupId: id,
       isDeleted: false,
@@ -60,7 +59,6 @@ export async function POST(req, { params }) {
 
     console.log(`📊 Existing sessions: ${existingSessionsCount}`);
 
-    // ✅ FIXED: السماح بإعادة التفعيل حتى لو كانت المجموعة مفعلة مسبقاً
     let isReactivation = false;
     
     if (group.status === "active") {
@@ -89,7 +87,7 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ UPDATED: Validate 1-3 days (instead of exactly 3)
+    // Validate schedule
     if (
       !group.schedule ||
       !group.schedule.startDate ||
@@ -106,9 +104,22 @@ export async function POST(req, { params }) {
       );
     }
 
-    console.log(`✅ Schedule validated: ${group.schedule.daysOfWeek.length} day(s) selected - ${group.schedule.daysOfWeek.join(', ')}`);
+    // Validate module selection
+    const moduleSelection = group.moduleSelection || { mode: 'all', selectedModules: [] };
+    if (moduleSelection.mode === 'specific' && moduleSelection.selectedModules.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Cannot activate group: No modules selected for session generation",
+        },
+        { status: 400 }
+      );
+    }
 
-    // ✅ تحديث الـ status إلى active (إذا لم يكن active مسبقاً)
+    console.log(`✅ Schedule validated: ${group.schedule.daysOfWeek.length} day(s) selected - ${group.schedule.daysOfWeek.join(', ')}`);
+    console.log(`✅ Module selection: ${moduleSelection.mode} ${moduleSelection.mode === 'specific' ? `- Modules: ${moduleSelection.selectedModules.map(i => i + 1).join(', ')}` : ''}`);
+
+    // Update group status
     const updateData = {
       $set: {
         "metadata.lastModifiedBy": adminUser.id,
@@ -131,9 +142,8 @@ export async function POST(req, { params }) {
       .populate("instructors", "name email profile");
 
     console.log(`✅ Group ${updatedGroup.code} ready for session generation`);
-    console.log(`📅 Schedule: ${updatedGroup.schedule.daysOfWeek.length} day(s) - ${updatedGroup.schedule.daysOfWeek.join(', ')}`);
 
-    // محاولة إصلاح الفهارس
+    // Sync indexes
     try {
       console.log("🛠️  Attempting to fix database indexes...");
       await Session.syncIndexes();
@@ -142,15 +152,15 @@ export async function POST(req, { params }) {
       console.warn("⚠️  Could not sync indexes:", indexError.message);
     }
 
-    // Trigger automation (session generation + instructor notifications)
+    // Trigger automation
     try {
       console.log("🔄 Starting automation for activated group...");
       
-      // 1️⃣ توليد الحصص أولاً
+      // Generate sessions with module selection
       const automationResult = await onGroupActivated(id, adminUser.id);
       console.log("✅ Sessions generated:", automationResult);
 
-      // 2️⃣ إرسال الرسائل للمدرسين
+      // Send instructor notifications
       let instructorNotificationResult = null;
 
       if (updatedGroup.instructors && updatedGroup.instructors.length > 0) {
@@ -161,7 +171,7 @@ export async function POST(req, { params }) {
         try {
           instructorNotificationResult = await sendInstructorWelcomeMessages(
             id,
-            instructorMessages // الرسائل المخصصة من الـ Modal
+            instructorMessages
           );
 
           console.log(
@@ -208,6 +218,7 @@ export async function POST(req, { params }) {
             selectedDays: updatedGroup.schedule.daysOfWeek,
             startDate: updatedGroup.schedule.startDate,
           },
+          moduleSelection: updatedGroup.moduleSelection || { mode: 'all', selectedModules: [] },
         },
         automation: {
           sessions: {
@@ -246,7 +257,7 @@ export async function POST(req, { params }) {
           success: false,
           error: `Automation failed: ${automationError.message}`,
           suggestion:
-            "Group status reverted to draft. Please check the schedule and try again.",
+            "Group status reverted to draft. Please check the schedule and module selection and try again.",
         },
         { status: 500 }
       );

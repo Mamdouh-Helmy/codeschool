@@ -1,3 +1,4 @@
+// utils/sessionGenerator.js
 import mongoose from "mongoose";
 import MeetingLink from "../app/models/MeetingLink.js";
 
@@ -23,33 +24,42 @@ const dayMapReverse = {
 };
 
 /**
- * ✅ Calculate total sessions from course curriculum
+ * ✅ Calculate total sessions from course curriculum based on module selection
  */
-export function calculateTotalSessions(curriculum) {
+export function calculateTotalSessions(curriculum, moduleSelection = { mode: 'all', selectedModules: [] }) {
   if (!curriculum || !Array.isArray(curriculum) || curriculum.length === 0) {
     console.log("⚠️ No curriculum provided or empty array");
     return 0;
   }
 
   let total = 0;
-  curriculum.forEach((module) => {
-    if (
-      module.lessons &&
-      Array.isArray(module.lessons) &&
-      module.lessons.length > 0
-    ) {
-      total += module.totalSessions || 3;
-    }
-  });
+  
+  if (moduleSelection.mode === 'all') {
+    // All modules
+    curriculum.forEach((module) => {
+      if (module.lessons && Array.isArray(module.lessons) && module.lessons.length > 0) {
+        total += module.totalSessions || 3;
+      }
+    });
+    console.log(`📊 All modules: ${curriculum.length} modules, ${total} total sessions`);
+  } else {
+    // Specific modules
+    moduleSelection.selectedModules.forEach((moduleIndex) => {
+      const module = curriculum[moduleIndex];
+      if (module && module.lessons && Array.isArray(module.lessons) && module.lessons.length > 0) {
+        total += module.totalSessions || 3;
+      }
+    });
+    console.log(`📊 Selected modules: ${moduleSelection.selectedModules.length} modules, ${total} total sessions`);
+  }
 
-  console.log(`📊 Calculated total sessions: ${total}`);
   return total;
 }
 
 /**
  * ✅ Get session distribution summary
  */
-export function getSessionDistributionSummary(curriculum) {
+export function getSessionDistributionSummary(curriculum, moduleSelection = { mode: 'all', selectedModules: [] }) {
   if (!curriculum || !Array.isArray(curriculum)) {
     return {
       totalModules: 0,
@@ -64,6 +74,7 @@ export function getSessionDistributionSummary(curriculum) {
     totalLessons: 0,
     totalSessions: 0,
     modules: [],
+    selectedModules: moduleSelection,
   };
 
   curriculum.forEach((module, idx) => {
@@ -71,13 +82,18 @@ export function getSessionDistributionSummary(curriculum) {
     const sessionsCount = module.totalSessions || 3;
 
     summary.totalLessons += lessonsCount;
-    summary.totalSessions += sessionsCount;
+    
+    // Only add sessions if module is selected
+    if (moduleSelection.mode === 'all' || moduleSelection.selectedModules.includes(idx)) {
+      summary.totalSessions += sessionsCount;
+    }
 
     summary.modules.push({
       index: idx,
       title: module.title,
       lessonsCount,
       sessionsCount,
+      isSelected: moduleSelection.mode === 'all' || moduleSelection.selectedModules.includes(idx),
       distribution: "Lessons 1-2→S1, 3-4→S2, 5-6→S3",
     });
   });
@@ -104,8 +120,7 @@ function calculateDayDifference(startDay, targetDay) {
 }
 
 /**
- * ✅ NEW: Create weekly schedule for 1-3 days (FLEXIBLE)
- * This function distributes sessions across selected days cyclically
+ * ✅ Create weekly schedule for 1-3 days (FLEXIBLE)
  */
 function createFlexibleWeeklySchedule(baseDate, scheduleDays, totalSessions) {
   const schedule = [];
@@ -115,7 +130,7 @@ function createFlexibleWeeklySchedule(baseDate, scheduleDays, totalSessions) {
     .map((day) => dayMap[day])
     .sort((a, b) => a - b);
 
-  const daysPerWeek = dayNumbers.length; // ✅ 1, 2, or 3 days
+  const daysPerWeek = dayNumbers.length;
 
   console.log(`📅 Creating flexible schedule:`);
   console.log(`  Total sessions needed: ${totalSessions}`);
@@ -139,9 +154,9 @@ function createFlexibleWeeklySchedule(baseDate, scheduleDays, totalSessions) {
   console.log(`  Original start date: ${startDate.toISOString().split("T")[0]} (${getDayName(startDate.getDay())})`);
   console.log(`  Adjusted start date: ${adjustedStartDate.toISOString().split("T")[0]} (${getDayName(adjustedStartDate.getDay())})`);
 
-  // ✅ Generate dates for all sessions cyclically
+  // Generate dates for all sessions cyclically
   for (let sessionIndex = 0; sessionIndex < totalSessions; sessionIndex++) {
-    // Which day in the cycle? (0, 1, or 2 for 3 days; 0 or 1 for 2 days; always 0 for 1 day)
+    // Which day in the cycle?
     const dayInCycle = sessionIndex % daysPerWeek;
     
     // How many complete weeks have passed?
@@ -161,7 +176,7 @@ function createFlexibleWeeklySchedule(baseDate, scheduleDays, totalSessions) {
     
     schedule.push(sessionDate);
 
-    if (sessionIndex < 10 || sessionIndex >= totalSessions - 5) { // Log first 10 and last 5
+    if (sessionIndex < 10 || sessionIndex >= totalSessions - 5) {
       console.log(
         `  Session ${sessionIndex + 1}: ${sessionDate.toISOString().split("T")[0]} (${getDayName(sessionDate.getDay())})`
       );
@@ -286,12 +301,12 @@ async function assignMeetingLinkToSession(sessionData, userId) {
 }
 
 /**
- * ✅ NEW: Generate all sessions for a group with FLEXIBLE day selection (1-3 days)
+ * ✅ Generate sessions based on module selection
  */
 export async function generateSessionsForGroup(groupId, group, userId) {
   try {
     console.log(
-      `\n🔄 ========== GENERATING SESSIONS (FLEXIBLE 1-3 DAYS) ==========`
+      `\n🔄 ========== GENERATING SESSIONS (WITH MODULE SELECTION) ==========`
     );
     console.log(`Group ID: ${groupId}`);
     console.log(`Group Name: ${group.name}`);
@@ -319,12 +334,29 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       throw new Error("Course curriculum not found");
     }
 
-    console.log("📚 Course curriculum loaded:", {
-      courseId: course._id,
-      courseName: course.title,
-      modulesCount: course.curriculum.length,
-      totalSessions: course.curriculum.length * 3,
-    });
+    // Get module selection
+    const moduleSelection = group.moduleSelection || { mode: 'all', selectedModules: [] };
+    console.log(`📋 Module Selection Mode: ${moduleSelection.mode}`);
+    
+    if (moduleSelection.mode === 'specific') {
+      console.log(`  Selected Modules: ${moduleSelection.selectedModules.map(i => i + 1).join(', ')}`);
+    }
+
+    // Filter curriculum based on selection
+    let modulesToGenerate = [];
+    if (moduleSelection.mode === 'all') {
+      modulesToGenerate = course.curriculum;
+      console.log(`📚 Generating sessions for ALL ${modulesToGenerate.length} modules`);
+    } else {
+      modulesToGenerate = moduleSelection.selectedModules
+        .map(idx => course.curriculum[idx])
+        .filter(module => module !== undefined);
+      console.log(`📚 Generating sessions for ${modulesToGenerate.length} specific modules`);
+    }
+
+    if (modulesToGenerate.length === 0) {
+      throw new Error("No modules selected for session generation");
+    }
 
     const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
 
@@ -342,7 +374,7 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       timeTo: timeTo,
     });
 
-    // ✅ Validate schedule days
+    // Validate schedule days
     const scheduleValidation = validateScheduleDays(startDate, daysOfWeek);
     if (!scheduleValidation.valid) {
       throw new Error(scheduleValidation.error);
@@ -352,10 +384,15 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       `✅ Schedule validated. Start day: ${scheduleValidation.startDayName}, Days per week: ${scheduleValidation.daysCount}`
     );
 
-    // Calculate total sessions needed
-    const totalSessions = course.curriculum.length * 3; // 3 sessions per module
+    // Calculate total sessions needed (only for selected modules)
+    let totalSessions = 0;
+    modulesToGenerate.forEach((module) => {
+      totalSessions += module.totalSessions || 3;
+    });
 
-    // ✅ Create flexible weekly schedule
+    console.log(`📊 Total sessions to generate: ${totalSessions}`);
+
+    // Create flexible weekly schedule
     const sessionDates = createFlexibleWeeklySchedule(
       startDate,
       daysOfWeek,
@@ -368,22 +405,22 @@ export async function generateSessionsForGroup(groupId, group, userId) {
 
     console.log(`\n📊 Generated ${sessionDates.length} session dates`);
 
-    // ✅ Generate sessions
+    // Generate sessions
     const sessions = [];
     let sessionIndex = 0;
 
-    for (
-      let moduleIdx = 0;
-      moduleIdx < course.curriculum.length;
-      moduleIdx++
-    ) {
-      const module = course.curriculum[moduleIdx];
+    for (let moduleIdx = 0; moduleIdx < modulesToGenerate.length; moduleIdx++) {
+      const originalModuleIndex = moduleSelection.mode === 'all' 
+        ? moduleIdx 
+        : moduleSelection.selectedModules[moduleIdx];
+      
+      const module = modulesToGenerate[moduleIdx];
 
-      console.log(`\n📖 Processing Module ${moduleIdx + 1}: ${module.title}`);
+      console.log(`\n📖 Processing Module ${originalModuleIndex + 1}: ${module.title}`);
 
       if (!module.lessons || module.lessons.length !== 6) {
         console.warn(
-          `⚠️ Module ${moduleIdx + 1} must have exactly 6 lessons (has ${module.lessons?.length || 0})`
+          `⚠️ Module ${originalModuleIndex + 1} must have exactly 6 lessons (has ${module.lessons?.length || 0})`
         );
         continue;
       }
@@ -423,7 +460,7 @@ export async function generateSessionsForGroup(groupId, group, userId) {
           _id: new mongoose.Types.ObjectId(),
           groupId: group._id,
           courseId: course._id,
-          moduleIndex: moduleIdx,
+          moduleIndex: originalModuleIndex,
           sessionNumber: sessionGroup.sessionNumber,
           lessonIndexes: sessionGroup.lessonIndexes,
           title: sessionTitle,
@@ -462,18 +499,20 @@ export async function generateSessionsForGroup(groupId, group, userId) {
         console.log(`    📚 ${lessonTitles}`);
       }
 
-      console.log(`  📊 Created 3 sessions for module ${moduleIdx + 1}`);
+      console.log(`  📊 Created 3 sessions for module ${originalModuleIndex + 1}`);
     }
 
     console.log(`\n📊 Generation Summary:`);
-    console.log(`  Total Modules: ${course.curriculum.length}`);
+    console.log(`  Total Modules Processed: ${modulesToGenerate.length}`);
     console.log(`  Total Sessions Generated: ${sessions.length}`);
-    console.log(`  Expected Sessions: ${course.curriculum.length * 3}`);
-    console.log(`  Sessions per Module: 3`);
     console.log(`  Days per Week: ${daysOfWeek.length}`);
     console.log(`  Selected Days: ${daysOfWeek.join(', ')}`);
+    console.log(`  Module Selection Mode: ${moduleSelection.mode}`);
+    if (moduleSelection.mode === 'specific') {
+      console.log(`  Selected Module Numbers: ${moduleSelection.selectedModules.map(i => i + 1).join(', ')}`);
+    }
 
-    // ✅ Assign meeting links to sessions
+    // Assign meeting links to sessions
     console.log(`\n🔗 Assigning meeting links to sessions...`);
 
     const sessionsWithLinks = [];
@@ -547,6 +586,11 @@ export async function generateSessionsForGroup(groupId, group, userId) {
         startDate: new Date(startDate),
         timeFrom: timeFrom,
         timeTo: timeTo,
+      },
+      moduleSelection: {
+        mode: moduleSelection.mode,
+        selectedModules: moduleSelection.selectedModules,
+        modulesProcessed: modulesToGenerate.length,
       },
       meetingLinks: {
         assigned: linksAssigned,
@@ -906,4 +950,51 @@ export async function manuallyAssignMeetingLink(
       error: error.message,
     };
   }
+}
+
+/**
+ * ✅ Get module selection summary
+ */
+export function getModuleSelectionSummary(group) {
+  if (!group || !group.courseId || !group.courseId.curriculum) {
+    return {
+      hasSelection: false,
+      mode: 'all',
+      selectedModules: [],
+      totalModules: 0,
+      selectedCount: 0,
+      totalSessions: 0,
+      selectedSessions: 0,
+    };
+  }
+
+  const moduleSelection = group.moduleSelection || { mode: 'all', selectedModules: [] };
+  const curriculum = group.courseId.curriculum;
+  
+  const totalModules = curriculum.length;
+  const totalSessions = curriculum.reduce((sum, m) => sum + (m.totalSessions || 3), 0);
+  
+  let selectedCount = 0;
+  let selectedSessions = 0;
+  
+  if (moduleSelection.mode === 'all') {
+    selectedCount = totalModules;
+    selectedSessions = totalSessions;
+  } else {
+    selectedCount = moduleSelection.selectedModules.length;
+    selectedSessions = moduleSelection.selectedModules.reduce((sum, idx) => 
+      sum + (curriculum[idx]?.totalSessions || 3), 0
+    );
+  }
+
+  return {
+    hasSelection: true,
+    mode: moduleSelection.mode,
+    selectedModules: moduleSelection.selectedModules,
+    totalModules,
+    selectedCount,
+    totalSessions,
+    selectedSessions,
+    selectedModuleNumbers: moduleSelection.selectedModules.map(i => i + 1),
+  };
 }

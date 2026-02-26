@@ -1,4 +1,4 @@
-// models/Group.js - UPDATED WITH FLEXIBLE DAY SELECTION
+// models/Group.js
 import mongoose from "mongoose";
 
 const groupSchema = new mongoose.Schema(
@@ -31,6 +31,19 @@ const groupSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Module Selection for Sessions
+    moduleSelection: {
+      mode: {
+        type: String,
+        enum: ["all", "specific"],
+        default: "all",
+      },
+      selectedModules: {
+        type: [Number],
+        default: [],
+      },
+    },
+
     // People
     instructors: [
       {
@@ -57,7 +70,7 @@ const groupSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // Schedule - ✅ UPDATED: 1-3 days allowed
+    // Schedule - 1-3 days allowed
     schedule: {
       startDate: {
         type: Date,
@@ -93,11 +106,10 @@ const groupSchema = new mongoose.Schema(
       },
     },
 
-    // Pricing
+    // Pricing (optional - kept for backward compatibility)
     pricing: {
       price: {
         type: Number,
-        required: true,
         min: 0,
         default: 0,
       },
@@ -219,19 +231,19 @@ groupSchema.virtual("capacityPercentage").get(function () {
 
 groupSchema.virtual("daysRemaining").get(function () {
   if (!this.schedule?.startDate || this.totalSessionsCount === 0) return 0;
-  
+
   const daysPerWeek = this.schedule.daysOfWeek?.length || 1;
   const totalWeeks = Math.ceil(this.totalSessionsCount / daysPerWeek);
   const daysRequired = totalWeeks * 7;
-  
+
   const startDate = new Date(this.schedule.startDate);
   const endDate = new Date(startDate);
   endDate.setDate(startDate.getDate() + daysRequired);
-  
+
   const today = new Date();
   const diffTime = endDate.getTime() - today.getTime();
   const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
+
   return Math.max(0, daysRemaining);
 });
 
@@ -261,23 +273,19 @@ groupSchema.methods.isFull = function () {
 // ==================== STATIC METHODS ====================
 
 groupSchema.statics.findActive = function () {
-  return this.find({ 
-    status: "active", 
-    isDeleted: false 
+  return this.find({
+    status: "active",
+    isDeleted: false,
   }).populate("courseId instructors");
 };
 
 groupSchema.statics.findByCourse = function (courseId) {
-  return this.find({ 
-    courseId, 
-    isDeleted: false 
+  return this.find({
+    courseId,
+    isDeleted: false,
   }).populate("instructors");
 };
 
-// ✅ Clean model registration - remove duplicate indexes by not adding them again
-// The 'code' field already has unique:true in schema definition
-
-// Clean model registration
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);
 
 export default Group;
