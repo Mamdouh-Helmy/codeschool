@@ -3736,6 +3736,7 @@ const en = {
   "groups.form.selectedInstructors": "Selected instructors",
   "groups.form.selected": "Selected",
   "dashboard.whatsappTemplates": "WhatsApp Templates",
+  "group.instructor.lastInstructorWarning" : "Warning: This is the last remaining instructor",
 };
 
 export default en;

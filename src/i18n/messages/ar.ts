@@ -3865,6 +3865,7 @@ const ar = {
   "groups.form.selectedInstructors": "المدرسون المختارون",
   "groups.form.selected": "محدد",
   "dashboard.whatsappTemplates": "قوالب واتساب",
+  "group.instructor.lastInstructorWarning" : "تحذير: هذا هو آخر مدرس متبقٍ",
 };
 
 export default ar;
