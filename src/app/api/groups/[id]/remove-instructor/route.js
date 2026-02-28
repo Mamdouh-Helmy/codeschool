@@ -22,17 +22,12 @@ export async function POST(req, { params }) {
     }
 
     const body = await req.json();
-    const { instructorId } = body;
-
-    // ✅ DEBUG: شوف إيه اللي جاي من الفرونت
-    console.log("🔍 REQUEST BODY:", JSON.stringify(body));
-    console.log("🔍 instructorId received:", instructorId);
-    console.log("🔍 instructorId type:", typeof instructorId);
-    console.log("🔍 isValid ObjectId:", mongoose.Types.ObjectId.isValid(instructorId));
+    // ✅ forceRemove = true لما الأدمن يأكد إنه عايز يحذف آخر مدرب
+    const { instructorId, forceRemove = false } = body;
 
     if (!instructorId || !mongoose.Types.ObjectId.isValid(instructorId)) {
       return NextResponse.json(
-        { success: false, error: `Invalid instructor ID: "${instructorId}"` },
+        { success: false, error: "Invalid instructor ID" },
         { status: 400 },
       );
     }
@@ -46,39 +41,27 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ DEBUG: شوف إيه اللي في الـ DB فعلاً
-    console.log("🔍 group.instructors from DB:", JSON.stringify(group.instructors));
-    console.log("🔍 instructors count:", group.instructors.length);
-
-    group.instructors.forEach((entry, i) => {
-      console.log(`  [${i}] userId: ${entry.userId?.toString()} | countTime: ${entry.countTime}`);
-      console.log(`       match with instructorId? ${entry.userId?.toString() === instructorId}`);
-    });
-
     const instructorExists = group.instructors.some(
       (entry) => entry.userId?.toString() === instructorId,
     );
 
-    console.log("🔍 instructorExists:", instructorExists);
-
     if (!instructorExists) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Instructor is not in this group",
-          debug: {
-            instructorIdReceived: instructorId,
-            instructorsInGroup: group.instructors.map(e => e.userId?.toString()),
-          }
-        },
+        { success: false, error: "Instructor is not in this group" },
         { status: 400 },
       );
     }
 
-    if (group.status === "active" && group.instructors.length === 1) {
+    // ✅ لو آخر مدرب في مجموعة active → نرجع warning مش error
+    // الفرونت يسأل تأكيد ثاني ويبعت forceRemove: true
+    if (group.status === "active" && group.instructors.length === 1 && !forceRemove) {
       return NextResponse.json(
-        { success: false, error: "Cannot remove the last instructor from an active group" },
-        { status: 400 },
+        {
+          success: false,
+          requiresConfirmation: true,   // ← الفرونت بيشوف الفلاج ده
+          error: "This is the last instructor in an active group. Are you sure you want to remove them?",
+        },
+        { status: 200 },  // ← 200 مش 400 عشان مش error حقيقي
       );
     }
 
@@ -87,11 +70,12 @@ export async function POST(req, { params }) {
       $set:  { updatedAt: new Date() },
     });
 
-    // ✅ DEBUG: تأكد إن الحذف اتعمل
-    const afterGroup = await Group.findById(id);
-    console.log("🔍 instructors AFTER delete:", afterGroup.instructors.length);
+    console.log(`✅ Instructor ${instructorId} removed from group ${id}`);
 
-    return NextResponse.json({ success: true, message: "Instructor removed successfully" });
+    return NextResponse.json({
+      success: true,
+      message: "Instructor removed successfully",
+    });
 
   } catch (error) {
     console.error("❌ Error removing instructor:", error);

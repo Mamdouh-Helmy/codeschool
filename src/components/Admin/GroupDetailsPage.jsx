@@ -307,18 +307,67 @@ export default function GroupDetailsPage({ groupId, onClose }) {
     } catch { toast.error(t("common.error"), {id:tid}); }
   }
 
-  async function removeInstructor(instructorId, name) {
+ async function removeInstructor(instructorId, name) {
     if (!confirm(t("group.instructor.removeConfirm", { name }))) return;
+
     const tid = toast.loading(t("common.removing"));
+
     try {
+      // المحاولة الأولى بدون forceRemove
       const r = await fetch(`/api/groups/${groupId}/remove-instructor`, {
-        method:"POST", headers:{"Content-Type":"application/json"},
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instructorId }),
       });
+
       const j = await r.json();
-      if (r.ok && j.success) { toast.success(t("common.removed"), {id:tid}); load(); }
-      else toast.error(j.error || t("common.error"), {id:tid});
-    } catch { toast.error(t("common.error"), {id:tid}); }
+
+      // ✅ لو الـ API رجع requiresConfirmation → اسأل تأكيد ثاني
+      if (j.requiresConfirmation) {
+        toast.dismiss(tid);
+
+        const confirmed = confirm(
+          t("group.instructor.lastInstructorWarning", {
+            name,
+            fallback: `"${name}" هو آخر مدرب في هذه المجموعة النشطة. هل أنت متأكد من الحذف؟`
+          })
+        );
+
+        if (!confirmed) {
+          toast.error(t("common.cancelled", { fallback: "تم الإلغاء" }));
+          return;
+        }
+
+        // المحاولة الثانية مع forceRemove: true
+        const r2 = await fetch(`/api/groups/${groupId}/remove-instructor`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instructorId, forceRemove: true }),
+        });
+
+        const j2 = await r2.json();
+
+        if (r2.ok && j2.success) {
+          toast.success(t("common.removed"));
+          load();
+        } else {
+          toast.error(j2.error || t("common.error"));
+        }
+
+        return;
+      }
+
+      // ✅ الحالة العادية
+      if (r.ok && j.success) {
+        toast.success(t("common.removed"), { id: tid });
+        load();
+      } else {
+        toast.error(j.error || t("common.error"), { id: tid });
+      }
+
+    } catch {
+      toast.error(t("common.error"), { id: tid });
+    }
   }
 
   // ── loading ──────────────────────────────────────────────────────────────────
