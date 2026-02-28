@@ -14,28 +14,34 @@ export async function GET(req, { params }) {
     if (!authCheck.authorized) return authCheck.response;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return NextResponse.json({ success: false, error: "Invalid group ID" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid group ID" },
+        { status: 400 },
+      );
     }
 
     await connectDB();
 
     // ══════════════════════════════════════════════
     // 1. جلب بيانات المجموعة
+    // ✅ FIX: populate على instructors.userId مش instructors مباشرة
     // ══════════════════════════════════════════════
     const group = await Group.findOne({ _id: groupId, isDeleted: false })
-      .populate({ path: "instructors", select: "name email gender profile" })
-      .populate({ path: "students",    select: "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber" })
-      .populate({ path: "courseId",    select: "title level" })
+      .populate({ path: "instructors.userId", select: "name email gender profile" })
+      .populate({ path: "students",           select: "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber" })
+      .populate({ path: "courseId",           select: "title level" })
       .lean();
 
     if (!group) {
-      return NextResponse.json({ success: false, error: "Group not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Group not found" },
+        { status: 404 },
+      );
     }
 
     // ══════════════════════════════════════════════
     // 2. جلب كل الحصص مع الحضور الكامل
     // ══════════════════════════════════════════════
-    // attendance في الـ Session Model هو array من { studentId: ObjectId, status: String }
     const sessions = await Session.find({
       groupId: new mongoose.Types.ObjectId(groupId),
       isDeleted: false,
@@ -51,21 +57,20 @@ export async function GET(req, { params }) {
     // 3. إحصائيات الحصص
     // ══════════════════════════════════════════════
     const total     = sessions.length;
-    const completed = sessions.filter(s => s.status === "completed").length;
-    const scheduled = sessions.filter(s => s.status === "scheduled").length;
-    const cancelled = sessions.filter(s => s.status === "cancelled").length;
-    const postponed = sessions.filter(s => s.status === "postponed").length;
+    const completed = sessions.filter((s) => s.status === "completed").length;
+    const scheduled = sessions.filter((s) => s.status === "scheduled").length;
+    const cancelled = sessions.filter((s) => s.status === "cancelled").length;
+    const postponed = sessions.filter((s) => s.status === "postponed").length;
     const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-    // متوسط حضور المجموعة (من الحصص المكتملة التي رُصد فيها الحضور)
     const sessionsWithAtt = sessions.filter(
-      s => s.status === "completed" && s.attendanceTaken && s.attendance?.length > 0
+      (s) => s.status === "completed" && s.attendanceTaken && s.attendance?.length > 0,
     );
     let avgAttPct = 0;
     if (sessionsWithAtt.length > 0) {
       const total_att_sum = sessionsWithAtt.reduce((acc, s) => {
         const presentCount = s.attendance.filter(
-          a => a.status === "present" || a.status === "late"
+          (a) => a.status === "present" || a.status === "late",
         ).length;
         return acc + (s.attendance.length > 0 ? (presentCount / s.attendance.length) * 100 : 0);
       }, 0);
@@ -73,9 +78,9 @@ export async function GET(req, { params }) {
     }
 
     // ══════════════════════════════════════════════
-    // 4. بناء قائمة الحصص بشكل مناسب للعرض
+    // 4. بناء قائمة الحصص
     // ══════════════════════════════════════════════
-    const sessionsList = sessions.map(s => {
+    const sessionsList = sessions.map((s) => {
       const d   = new Date(s.scheduledDate);
       const att = s.attendance || [];
       return {
@@ -89,17 +94,16 @@ export async function GET(req, { params }) {
         endTime:       s.endTime   || "",
         status:        s.status,
         attendanceTaken: !!s.attendanceTaken,
-        meetingLink:   s.meetingLink  || null,
+        meetingLink:   s.meetingLink   || null,
         recordingLink: s.recordingLink || null,
         summary: {
           total:   att.length,
-          present: att.filter(a => a.status === "present").length,
-          absent:  att.filter(a => a.status === "absent").length,
-          late:    att.filter(a => a.status === "late").length,
-          excused: att.filter(a => a.status === "excused").length,
+          present: att.filter((a) => a.status === "present").length,
+          absent:  att.filter((a) => a.status === "absent").length,
+          late:    att.filter((a) => a.status === "late").length,
+          excused: att.filter((a) => a.status === "excused").length,
         },
-        // كل سجل حضور بيشمل studentId كـ string
-        attendanceRecords: att.map(a => ({
+        attendanceRecords: att.map((a) => ({
           studentId: (a.studentId?._id || a.studentId || "").toString(),
           status:    a.status,
           notes:     a.notes || "",
@@ -108,35 +112,27 @@ export async function GET(req, { params }) {
     });
 
     // ══════════════════════════════════════════════
-    // 5. إحصائيات كل طالب بشكل دقيق
+    // 5. إحصائيات كل طالب
     // ══════════════════════════════════════════════
-    // الحصص المكتملة التي رُصد فيها الحضور فعلاً
     const doneSessions = sessionsList.filter(
-      s => s.status === "completed" && s.attendanceTaken
+      (s) => s.status === "completed" && s.attendanceTaken,
     );
 
-    const studentsData = (group.students || []).map(student => {
-      const sid     = student._id.toString();
-      let present   = 0;
-      let absent    = 0;
-      let late      = 0;
-      let excused   = 0;
+    const studentsData = (group.students || []).map((student) => {
+      const sid   = student._id.toString();
+      let present = 0;
+      let absent  = 0;
+      let late    = 0;
+      let excused = 0;
+      const log   = [];
 
-      // سجل كل حصة للطالب
-      const log = [];
-
-      // ─ الحصص المكتملة (رُصد فيها الحضور)
-      doneSessions.forEach(sess => {
-        // ابحث عن سجل الطالب في هذه الحصة
-        const record = sess.attendanceRecords.find(r => r.studentId === sid);
-        // لو مفيش سجل = غائب تلقائياً
+      doneSessions.forEach((sess) => {
+        const record = sess.attendanceRecords.find((r) => r.studentId === sid);
         const status = record ? record.status : "absent";
-
         if      (status === "present") present++;
         else if (status === "absent")  absent++;
         else if (status === "late")    late++;
         else if (status === "excused") excused++;
-
         log.push({
           sessionId:     sess.id,
           title:         sess.title,
@@ -145,15 +141,14 @@ export async function GET(req, { params }) {
           date:          sess.date,
           dayName:       sess.dayName,
           startTime:     sess.startTime,
-          status,                      // حالة الطالب في الحصة
-          sessionStatus: sess.status,  // حالة الحصة نفسها
+          status,
+          sessionStatus: sess.status,
         });
       });
 
-      // ─ الحصص الملغية والمؤجلة (بدون حضور)
       sessionsList
-        .filter(s => s.status === "cancelled" || s.status === "postponed")
-        .forEach(sess => {
+        .filter((s) => s.status === "cancelled" || s.status === "postponed")
+        .forEach((sess) => {
           log.push({
             sessionId:     sess.id,
             title:         sess.title,
@@ -162,15 +157,14 @@ export async function GET(req, { params }) {
             date:          sess.date,
             dayName:       sess.dayName,
             startTime:     sess.startTime,
-            status:        sess.status,  // "cancelled" أو "postponed"
+            status:        sess.status,
             sessionStatus: sess.status,
           });
         });
 
-      // ─ الحصص القادمة
       sessionsList
-        .filter(s => s.status === "scheduled")
-        .forEach(sess => {
+        .filter((s) => s.status === "scheduled")
+        .forEach((sess) => {
           log.push({
             sessionId:     sess.id,
             title:         sess.title,
@@ -184,17 +178,16 @@ export async function GET(req, { params }) {
           });
         });
 
-      // ترتيب بالتاريخ
       log.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
-      const totalDone    = present + absent + late + excused;
-      const attended     = present + late; // متأخر = حضر
+      const totalDone     = present + absent + late + excused;
+      const attended      = present + late;
       const attendancePct = totalDone > 0 ? Math.round((attended / totalDone) * 100) : 0;
 
       return {
         id:         sid,
-        name:       student.personalInfo?.fullName   || "بدون اسم",
-        enrollment: student.enrollmentNumber          || "—",
+        name:       student.personalInfo?.fullName       || "بدون اسم",
+        enrollment: student.enrollmentNumber              || "—",
         whatsapp:   student.personalInfo?.whatsappNumber || null,
         attendance: { present, absent, late, excused, totalDone, attended, attendancePct },
         log,
@@ -203,7 +196,25 @@ export async function GET(req, { params }) {
 
     // ══════════════════════════════════════════════
     // 6. الرد
+    // ✅ FIX: id = userId._id.toString()
+    //   السبب: الـ Schema عندها _id:false للـ subdocument
+    //   فـ entry._id دايماً undefined
+    //   والـ id الصح هو entry.userId._id
+    //   وده اللي بيتبعت للـ remove-instructor API
     // ══════════════════════════════════════════════
+    const normalizedInstructors = (group.instructors || []).map((entry) => {
+      const inst   = entry.userId || {};
+      const userId = inst._id ? inst._id.toString() : "";
+      return {
+        id:        userId,              // ← userId._id كـ string (للحذف)
+        name:      inst.name   || "",
+        email:     inst.email  || "",
+        gender:    inst.gender || "male",
+        phone:     inst.profile?.phone || null,
+        countTime: entry.countTime || 0,
+      };
+    });
+
     return NextResponse.json({
       success: true,
       data: {
@@ -215,8 +226,8 @@ export async function GET(req, { params }) {
           maxStudents: group.maxStudents,
           currentStudentsCount: group.currentStudentsCount || 0,
           course: {
-            title:         group.courseId?.title         || group.courseSnapshot?.title         || "—",
-            level:         group.courseId?.level         || group.courseSnapshot?.level         || "—",
+            title:         group.courseId?.title                        || group.courseSnapshot?.title         || "—",
+            level:         group.courseId?.level                        || group.courseSnapshot?.level         || "—",
             modulesCount:  group.courseSnapshot?.curriculumModulesCount || 0,
             totalLessons:  group.courseSnapshot?.totalLessons           || 0,
             totalSessions: group.courseSnapshot?.totalSessions          || 0,
@@ -227,17 +238,11 @@ export async function GET(req, { params }) {
             timeFrom:   group.schedule?.timeFrom   || "",
             timeTo:     group.schedule?.timeTo     || "",
           },
-          instructors: (group.instructors || []).map(i => ({
-            id:     i._id.toString(),
-            name:   i.name,
-            email:  i.email  || "",
-            gender: i.gender || "male",
-            phone:  i.profile?.phone || null,
-          })),
+          instructors: normalizedInstructors,
         },
 
         stats: {
-          sessions: { total, completed, scheduled, cancelled, postponed, progressPct },
+          sessions:   { total, completed, scheduled, cancelled, postponed, progressPct },
           attendance: { avgPct: avgAttPct, sessionsWithAttendance: sessionsWithAtt.length },
           students:   { total: group.students?.length || 0, maxSlots: group.maxStudents },
         },
@@ -246,12 +251,11 @@ export async function GET(req, { params }) {
         students: studentsData,
       },
     });
-
   } catch (error) {
     console.error("❌ /api/groups/[id]/details error:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
