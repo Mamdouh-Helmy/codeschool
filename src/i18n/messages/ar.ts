@@ -3864,6 +3864,7 @@ const ar = {
   "groups.form.step.automation.desc": "...",
   "groups.form.selectedInstructors": "المدرسون المختارون",
   "groups.form.selected": "محدد",
+  "dashboard.whatsappTemplates": "قوالب واتساب",
 };
 
 export default ar;

@@ -384,105 +384,158 @@ export default function GroupCompletionModal({
 
   // حفظ القالب في DB
   const saveTemplateToDatabase = useCallback(
-    async (type, content) => {
-      if (!content?.trim() || !selectedStudentForPreview) return;
-      
-      setSavingTemplate((prev) => ({ ...prev, [type]: true }));
-      try {
-        const templateType = type === "student" ? "group_completion_student" : "group_completion_guardian";
-        const recipientType = type === "student" ? "student" : "guardian";
-        const lang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
-        const templateName = type === "student" ? "Group Completion - Student" : "Group Completion - Guardian";
+  async (type, content) => {
+    if (!content?.trim() || !selectedStudentForPreview) return;
+    
+    setSavingTemplate((prev) => ({ ...prev, [type]: true }));
+    try {
+      const templateType = type === "student" ? "group_completion_student" : "group_completion_guardian";
+      const recipientType = type === "student" ? "student" : "guardian";
+      const lang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
+      const templateName = type === "student" ? "Group Completion - Student" : "Group Completion - Guardian";
 
-        const searchRes = await fetch(`/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`);
-        const searchJson = await searchRes.json();
+      const searchRes = await fetch(`/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`);
+      const searchJson = await searchRes.json();
 
-        if (searchJson.success && searchJson.data.length > 0) {
-          const templateId = searchJson.data[0]._id;
-          const updateData = { 
-            id: templateId, 
-            name: templateName, 
-            isDefault: true,
-            updatedAt: new Date()
-          };
+      if (searchJson.success && searchJson.data.length > 0) {
+        const templateId = searchJson.data[0]._id;
+        const existingTemplate = searchJson.data[0];
+        
+        const updateData = { 
+          id: templateId, 
+          name: templateName, 
+          isDefault: true,
+          updatedAt: new Date()
+        };
+
+        console.log(`📝 Existing template found:`, {
+          templateId,
+          existingContentAr: existingTemplate.contentAr?.substring(0, 50) + '...',
+          existingContentEn: existingTemplate.contentEn?.substring(0, 50) + '...',
+          lang
+        });
+        
+        // ✅ نحدث اللغة الحالية فقط، ونحتفظ باللغة الأخرى كما هي
+        if (lang === "ar") {
+          updateData.contentAr = content;
+          updateData.contentEn = existingTemplate.contentEn || '';
+          console.log(`📝 Updating Arabic content only, keeping English:`, {
+            newContentAr: updateData.contentAr?.substring(0, 50) + '...',
+            keptContentEn: updateData.contentEn?.substring(0, 50) + '...'
+          });
+        } else {
+          updateData.contentEn = content;
+          updateData.contentAr = existingTemplate.contentAr || '';
+          console.log(`📝 Updating English content only, keeping Arabic:`, {
+            keptContentAr: updateData.contentAr?.substring(0, 50) + '...',
+            newContentEn: updateData.contentEn?.substring(0, 50) + '...'
+          });
+        }
+        
+        const res = await fetch(`/api/message-templates`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updateData),
+        });
+        const json = await res.json();
+        if (json.success) {
+          toast.success(
+            isRTL 
+              ? `تم تحديث القالب (${lang === 'ar' ? 'عربي' : 'إنجليزي'})` 
+              : `Template (${lang === 'ar' ? 'Arabic' : 'English'}) updated`
+          );
           
-          if (lang === "ar") {
-            updateData.contentAr = content;
-            if (!searchJson.data[0].contentEn) updateData.contentEn = content;
+          // تحديث القوالب الافتراضية بعد الحفظ
+          if (type === "student") {
+            setStudentTemplates(prev => ({
+              ...prev,
+              [selectedStudentForPreview._id]: content
+            }));
           } else {
-            updateData.contentEn = content;
-            if (!searchJson.data[0].contentAr) updateData.contentAr = content;
+            setGuardianTemplates(prev => ({
+              ...prev,
+              [selectedStudentForPreview._id]: content
+            }));
           }
-          
-          const res = await fetch(`/api/message-templates`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updateData),
+        } else throw new Error(json.error);
+      } else {
+        // إنشاء قالب جديد - نضع المحتوى في اللغة المناسبة فقط
+        console.log(`📝 No existing template found, creating new one for language: ${lang}`);
+        
+        const newTemplate = {
+          templateType,
+          recipientType,
+          name: templateName,
+          description: `Group completion notification for ${recipientType}`,
+          isDefault: true,
+          isActive: true,
+          variables: [
+            { key: "studentSalutation", label: "Student Salutation", example: "عزيزي أحمد" },
+            { key: "guardianSalutation", label: "Guardian Salutation", example: "عزيزي الأستاذ محمد" },
+            { key: "studentName", label: "Student Name", example: "أحمد" },
+            { key: "guardianName", label: "Guardian Name", example: "محمد" },
+            { key: "childTitle", label: "Son/Daughter", example: "ابنك" },
+            { key: "groupName", label: "Group Name", example: "المجموعة أ" },
+            { key: "groupCode", label: "Group Code", example: "GRP-001" },
+            { key: "courseName", label: "Course Name", example: "Python" },
+            { key: "feedbackLink", label: "Feedback Link", example: "https://forms.google.com/..." },
+          ],
+        };
+        
+        // ✅ نخزن المحتوى في اللغة المناسبة فقط
+        if (lang === "ar") { 
+          newTemplate.contentAr = content; 
+          newTemplate.contentEn = ''; 
+          console.log(`📝 Created new Arabic template:`, {
+            contentAr: newTemplate.contentAr?.substring(0, 50) + '...',
+            contentEn: '(empty)'
           });
-          const json = await res.json();
-          if (json.success) toast.success(isRTL ? "تم تحديث القالب" : "Template updated");
-          else throw new Error(json.error);
-        } else {
-          const newTemplate = {
-            templateType,
-            recipientType,
-            name: templateName,
-            description: `Group completion notification for ${recipientType}`,
-            isDefault: true,
-            isActive: true,
-            variables: [
-              { key: "studentSalutation", label: "Student Salutation", example: "عزيزي أحمد" },
-              { key: "guardianSalutation", label: "Guardian Salutation", example: "عزيزي الأستاذ محمد" },
-              { key: "studentName", label: "Student Name", example: "أحمد" },
-              { key: "guardianName", label: "Guardian Name", example: "محمد" },
-              { key: "childTitle", label: "Son/Daughter", example: "ابنك" },
-              { key: "groupName", label: "Group Name", example: "المجموعة أ" },
-              { key: "groupCode", label: "Group Code", example: "GRP-001" },
-              { key: "courseName", label: "Course Name", example: "Python" },
-              { key: "feedbackLink", label: "Feedback Link", example: "https://forms.google.com/..." },
-            ],
-          };
-          
-          if (lang === "ar") { 
-            newTemplate.contentAr = content; 
-            newTemplate.contentEn = content; 
-          } else { 
-            newTemplate.contentEn = content; 
-            newTemplate.contentAr = content; 
-          }
+        } else { 
+          newTemplate.contentEn = content; 
+          newTemplate.contentAr = ''; 
+          console.log(`📝 Created new English template:`, {
+            contentAr: '(empty)',
+            contentEn: newTemplate.contentEn?.substring(0, 50) + '...'
+          });
+        }
 
-          const res = await fetch(`/api/message-templates`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newTemplate),
-          });
-          const json = await res.json();
-          if (json.success) toast.success(isRTL ? "تم حفظ القالب" : "Template saved");
-          else throw new Error(json.error);
-        }
-        
-        // ✅ تحديث القوالب الافتراضية بعد الحفظ
-        if (type === "student") {
-          setStudentTemplates(prev => ({
-            ...prev,
-            [selectedStudentForPreview._id]: content
-          }));
-        } else {
-          setGuardianTemplates(prev => ({
-            ...prev,
-            [selectedStudentForPreview._id]: content
-          }));
-        }
-        
-      } catch (error) {
-        console.error("saveTemplate error:", error);
-        toast.error(isRTL ? "فشل حفظ القالب: " + error.message : "Failed to save template: " + error.message);
-      } finally {
-        setSavingTemplate((prev) => ({ ...prev, [type]: false }));
+        const res = await fetch(`/api/message-templates`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newTemplate),
+        });
+        const json = await res.json();
+        if (json.success) {
+          toast.success(
+            isRTL 
+              ? `تم حفظ القالب (${lang === 'ar' ? 'عربي' : 'إنجليزي'})` 
+              : `Template (${lang === 'ar' ? 'Arabic' : 'English'}) saved`
+          );
+          
+          // تحديث القوالب الافتراضية بعد الحفظ
+          if (type === "student") {
+            setStudentTemplates(prev => ({
+              ...prev,
+              [selectedStudentForPreview._id]: content
+            }));
+          } else {
+            setGuardianTemplates(prev => ({
+              ...prev,
+              [selectedStudentForPreview._id]: content
+            }));
+          }
+        } else throw new Error(json.error);
       }
-    },
-    [selectedStudentForPreview, isRTL]
-  );
+      
+    } catch (error) {
+      console.error("saveTemplate error:", error);
+      toast.error(isRTL ? "فشل حفظ القالب: " + error.message : "Failed to save template: " + error.message);
+    } finally {
+      setSavingTemplate((prev) => ({ ...prev, [type]: false }));
+    }
+  },
+  [selectedStudentForPreview, isRTL, setStudentTemplates, setGuardianTemplates]
+);
 
   // دوال الـ hints
   const insertVariable = useCallback(

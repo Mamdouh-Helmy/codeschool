@@ -1,3 +1,4 @@
+// api/meeting-links/[id]/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import MeetingLink from "../../../models/MeetingLink";

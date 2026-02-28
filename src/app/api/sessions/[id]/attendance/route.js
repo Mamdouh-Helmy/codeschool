@@ -1,15 +1,29 @@
+// /api/sessions/[id]/attendance/route.js
+// ✅ منطق الخصم:
+// - حاضر / متأخر  → خصم ساعتين (مرة واحدة فقط للسيشن)
+// - غائب / معتذر  → مفيش خصم
+// - لو رجع من حاضر → متأخر: مفيش خصم تاني
+// - لو رجع من حاضر → غائب: إرجاع الساعتين
+// - لو رجع من غايب → حاضر: خصم ساعتين
+
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Session from '../../../../models/Session';
 import Student from '../../../../models/Student';
 import Group from '../../../../models/Group';
 import { requireAdmin } from '@/utils/authMiddleware';
-import { 
+import {
   onAttendanceSubmitted,
   sendLowBalanceAlerts,
-  disableZeroBalanceNotifications 
+  disableZeroBalanceNotifications
 } from '../../../../services/groupAutomation';
 import mongoose from 'mongoose';
+
+// ✅ Helper: هل الحالة "يخصم" ساعات؟
+const isDeductibleStatus = (status) => ['present', 'late'].includes(status);
+
+// ✅ Helper: هل الحالة "ما تخصمش" ساعات؟
+const isNonDeductibleStatus = (status) => ['absent', 'excused'].includes(status);
 
 export async function POST(req, { params }) {
   try {
@@ -27,7 +41,6 @@ export async function POST(req, { params }) {
 
     const { attendance, customMessages } = await req.json();
     console.log(`📊 Attendance Records: ${attendance?.length || 0}`);
-    console.log(`💬 Custom Messages: ${customMessages ? Object.keys(customMessages).length : 0}`);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -48,169 +61,200 @@ export async function POST(req, { params }) {
 
     const group = session.groupId;
 
-    // ✅ التحقق من وجود attendance سابق لهذه الجلسة
-    const previousAttendance = session.attendance || [];
-    
-    // ✅ إنشاء Map للحضور السابق للوصول السريع
+    // ✅ بناء Map للحضور السابق (الموجود في DB قبل هذه العملية)
     const previousAttendanceMap = new Map();
-    previousAttendance.forEach(record => {
+    (session.attendance || []).forEach(record => {
       previousAttendanceMap.set(
-        record.studentId.toString(), 
+        record.studentId.toString(),
         record.status
       );
     });
 
-    // ✅ معالجة الساعات للطلاب
     const creditDeductions = [];
     const lowBalanceStudents = [];
     const zeroBalanceStudents = [];
 
     for (const record of attendance) {
-      const studentId = record.studentId;
+      const studentId = record.studentId?.toString();
       const newStatus = record.status;
-      const previousStatus = previousAttendanceMap.get(studentId);
+      const previousStatus = previousAttendanceMap.get(studentId) || null;
 
-      // ✅ التحقق من وجود تغيير في الحالة
-      if (previousStatus && previousStatus === newStatus) {
-        console.log(`⏭️ No change for student ${studentId}: ${previousStatus} -> ${newStatus}`);
+      console.log(`\n👤 Student: ${studentId}`);
+      console.log(`   Previous: ${previousStatus || 'none (first time)'} → New: ${newStatus}`);
+
+      // ✅ لو الحالة ماتغيرتش خالص، skip
+      if (previousStatus === newStatus) {
+        console.log(`   ⏭️ No change, skipping`);
         continue;
       }
 
-      console.log(`🔄 Status change for student ${studentId}: ${previousStatus || 'new'} -> ${newStatus}`);
+      // ✅ تحديد نوع التغيير المطلوب في الساعات
+      let hoursChange = 0; // موجب = إضافة، سالب = خصم
 
-      // ✅ جلب الطالب من قاعدة البيانات
+      if (!previousStatus) {
+        // ===== أول مرة تتسجل للسيشن دي =====
+        if (isDeductibleStatus(newStatus)) {
+          hoursChange = -2; // خصم ساعتين
+        }
+        // لو غايب أو معتذر من أول وهلة → مفيش خصم
+      } else if (isNonDeductibleStatus(previousStatus) && isDeductibleStatus(newStatus)) {
+        // ===== من (غايب/معتذر) → (حاضر/متأخر) =====
+        // = بدأ يحضر بعد ما كان غايب → خصم ساعتين
+        hoursChange = -2;
+      } else if (isDeductibleStatus(previousStatus) && isNonDeductibleStatus(newStatus)) {
+        // ===== من (حاضر/متأخر) → (غايب/معتذر) =====
+        // = كان بيحضر والآن بقى غايب → رجّع الساعتين
+        hoursChange = +2;
+      } else if (isDeductibleStatus(previousStatus) && isDeductibleStatus(newStatus)) {
+        // ===== من (حاضر → متأخر) أو (متأخر → حاضر) =====
+        // = الاتنين بيخصموا → مفيش خصم إضافي
+        hoursChange = 0;
+        console.log(`   ✅ Both statuses deductible (present↔late), no extra charge`);
+      } else if (isNonDeductibleStatus(previousStatus) && isNonDeductibleStatus(newStatus)) {
+        // ===== من (غايب → معتذر) أو (معتذر → غايب) =====
+        // = الاتنين ماتخصموش → مفيش تغيير
+        hoursChange = 0;
+        console.log(`   ✅ Both statuses non-deductible, no change`);
+      }
+
+      console.log(`   💰 Hours change: ${hoursChange > 0 ? '+' : ''}${hoursChange}`);
+
+      if (hoursChange === 0) continue;
+
+      // ✅ جيب الطالب من DB
       const student = await Student.findById(studentId);
       if (!student) {
-        console.log(`❌ Student not found: ${studentId}`);
+        console.log(`   ❌ Student not found`);
         continue;
       }
 
-      // ✅ التحقق من وجود حزمة ساعات نشطة
       if (!student.creditSystem?.currentPackage) {
-        console.log(`⚠️ Student ${studentId} has no active package`);
+        console.log(`   ⚠️ No active package for student`);
         continue;
       }
 
-      // ✅ حساب الرصيد الفعلي قبل التغيير
-      const effectiveRemaining = student.getEffectiveRemainingHours();
-      console.log(`💰 Student ${studentId} effective balance before change: ${effectiveRemaining}h`);
+      if (hoursChange < 0) {
+        // ===== خصم ساعتين =====
+        const hoursToDeduct = Math.abs(hoursChange);
+        const effectiveRemaining = student.getEffectiveRemainingHours();
 
-      // ✅ حساب التغيير في الساعات
-      let hoursChange = 0;
+        console.log(`   📊 Effective remaining: ${effectiveRemaining}h`);
 
-      // الحالات التي تخصم ساعات (حاضر، متأخر)
-      if (newStatus === 'present' || newStatus === 'late') {
-        // إذا كان الطالب غائب سابقاً والآن حاضر، نخصم ساعتين
-        if (previousStatus === 'absent' || previousStatus === 'excused') {
-          hoursChange = -2;
+        if (effectiveRemaining < hoursToDeduct) {
+          console.log(`   ⚠️ Insufficient hours (${effectiveRemaining}h < ${hoursToDeduct}h) - proceeding anyway with zero`);
         }
-        // إذا كان جديد (مافيش حالة سابقة)
-        else if (!previousStatus) {
-          hoursChange = -2;
-        }
-      }
-      
-      // الحالات التي لا تخصم ساعات (غائب، معذور)
-      else if (newStatus === 'absent' || newStatus === 'excused') {
-        // إذا كان الطالب حاضر سابقاً والآن غائب، نرجع الساعات
-        if (previousStatus === 'present' || previousStatus === 'late') {
-          hoursChange = 2;
-        }
-        // إذا كان جديد - مافيش خصم
-        else if (!previousStatus) {
-          hoursChange = 0;
-        }
-      }
 
-      // ✅ تطبيق التغيير على الساعات
-      if (hoursChange !== 0) {
-        console.log(`💰 Hours change for ${studentId}: ${hoursChange > 0 ? '+' : ''}${hoursChange}`);
+        const deductionResult = await student.deductCreditHours({
+          hours: hoursToDeduct,
+          sessionId: session._id,
+          groupId: group._id,
+          sessionTitle: session.title,
+          groupName: group.name,
+          attendanceStatus: newStatus,
+          notes: `Attendance: ${previousStatus || 'first_time'} → ${newStatus}`
+        });
 
-        if (hoursChange < 0) {
-          // خصم ساعات
-          const deductionResult = await student.deductCreditHours({
-            hours: Math.abs(hoursChange),
-            sessionId: session._id,
-            groupId: group._id,
-            sessionTitle: session.title,
-            groupName: group.name,
-            attendanceStatus: newStatus,
-            notes: `Attendance changed from ${previousStatus || 'new'} to ${newStatus}`
-          });
-
-          if (deductionResult.success) {
-            creditDeductions.push({
-              studentId,
-              hoursDeducted: Math.abs(hoursChange),
-              remainingHours: deductionResult.remainingHours
-            });
-
-            // ✅ بعد الخصم، نتحقق من الرصيد الجديد
-            const newRemaining = deductionResult.remainingHours;
-            
-            // ✅ تحذير للرصيد المنخفض (أقل من أو يساوي 5 ساعات)
-            if (newRemaining <= 5 && newRemaining > 0) {
-              lowBalanceStudents.push({
-                studentId,
-                student,
-                remainingHours: newRemaining
-              });
-            }
-            
-            // ✅ تعطيل الإشعارات للرصيد صفر
-            if (newRemaining === 0) {
-              zeroBalanceStudents.push({
-                studentId,
-                student,
-                remainingHours: 0
-              });
-            }
-          }
-        } else {
-          // إضافة ساعات (استرجاع)
-          const currentPackage = student.creditSystem.currentPackage;
-          currentPackage.remainingHours += hoursChange;
-          student.creditSystem.stats.totalHoursRemaining += hoursChange;
-          student.creditSystem.stats.totalHoursUsed -= hoursChange;
-          student.creditSystem.stats.totalSessionsAttended -= 1;
-          await student.save();
-
+        if (deductionResult.success) {
+          const newRemaining = deductionResult.remainingHours;
           creditDeductions.push({
             studentId,
-            hoursAdded: hoursChange,
-            remainingHours: currentPackage.remainingHours
+            action: 'deduct',
+            hoursDeducted: hoursToDeduct,
+            remainingHours: newRemaining,
+            reason: `${previousStatus || 'new'} → ${newStatus}`
           });
+
+          console.log(`   ✅ Deducted ${hoursToDeduct}h → remaining: ${newRemaining}h`);
+
+          // ✅ تحذير رصيد منخفض
+          if (newRemaining <= 5 && newRemaining > 0) {
+            lowBalanceStudents.push({ studentId, student, remainingHours: newRemaining });
+          }
+
+          // ✅ تعطيل الإشعارات لو الرصيد صفر
+          if (newRemaining <= 0) {
+            zeroBalanceStudents.push({ studentId, student, remainingHours: 0 });
+          }
+        } else {
+          console.log(`   ❌ Deduction failed: ${deductionResult.error}`);
         }
 
+      } else {
+        // ===== إرجاع ساعتين (كان حاضر والآن غايب) =====
+        const hoursToReturn = hoursChange;
+        const currentPkg = student.creditSystem.currentPackage;
+
+        currentPkg.remainingHours += hoursToReturn;
+        student.creditSystem.stats.totalHoursRemaining = student.getEffectiveRemainingHours();
+        student.creditSystem.stats.totalHoursUsed = Math.max(
+          0,
+          (student.creditSystem.stats.totalHoursUsed || 0) - hoursToReturn
+        );
+        student.creditSystem.stats.totalSessionsAttended = Math.max(
+          0,
+          (student.creditSystem.stats.totalSessionsAttended || 0) - 1
+        );
+
+        // ✅ لو الرصيد عاد للحياة، فعّل الإشعارات
+        if (currentPkg.remainingHours > 0 &&
+          student.communicationPreferences?.notificationChannels) {
+          student.communicationPreferences.notificationChannels.whatsapp = true;
+          if (currentPkg.status === 'completed') {
+            currentPkg.status = 'active';
+            student.creditSystem.status = 'active';
+          }
+        }
+
+        // ✅ سجّل في usageHistory
+        if (!student.creditSystem.usageHistory) student.creditSystem.usageHistory = [];
+        student.creditSystem.usageHistory.push({
+          sessionId: session._id,
+          groupId: group._id,
+          date: new Date(),
+          hoursDeducted: -hoursToReturn, // سالب = إرجاع
+          sessionTitle: session.title,
+          groupName: group.name,
+          attendanceStatus: 'refund',
+          notes: `Refund: ${previousStatus} → ${newStatus}`,
+          deductedFromExceptions: 0,
+          deductedFromPackage: hoursToReturn
+        });
+
         await student.save();
+
+        creditDeductions.push({
+          studentId,
+          action: 'refund',
+          hoursReturned: hoursToReturn,
+          remainingHours: currentPkg.remainingHours,
+          reason: `${previousStatus} → ${newStatus}`
+        });
+
+        console.log(`   ✅ Returned ${hoursToReturn}h → remaining: ${currentPkg.remainingHours}h`);
       }
     }
 
-    // ✅ إرسال إشعارات للطلاب ذوي الرصيد المنخفض (أقل من أو يساوي 5 ساعات)
+    // ✅ تنبيهات رصيد منخفض
     if (lowBalanceStudents.length > 0) {
-      console.log(`⚠️ Triggering low balance alerts for ${lowBalanceStudents.length} students via automation`);
-      
+      console.log(`\n⚠️ Sending low balance alerts for ${lowBalanceStudents.length} students`);
       try {
-        const alertResult = await sendLowBalanceAlerts(lowBalanceStudents);
-        console.log(`✅ Low balance alerts completed: ${alertResult.sentCount} sent, ${alertResult.failCount} failed`);
-      } catch (alertError) {
-        console.error(`❌ Error sending low balance alerts:`, alertError);
+        await sendLowBalanceAlerts(lowBalanceStudents);
+      } catch (err) {
+        console.error(`❌ Low balance alerts error:`, err);
       }
     }
 
-    // ✅ تعطيل الإشعارات للطلاب ذوي الرصيد صفر
+    // ✅ تعطيل إشعارات الرصيد صفر
     if (zeroBalanceStudents.length > 0) {
-      console.log(`🔕 Disabling notifications for ${zeroBalanceStudents.length} students via automation`);
-      
+      console.log(`\n🔕 Disabling notifications for ${zeroBalanceStudents.length} students`);
       try {
-        const disableResult = await disableZeroBalanceNotifications(zeroBalanceStudents);
-        console.log(`✅ Notifications disabled for ${disableResult.disabledCount} students`);
-      } catch (disableError) {
-        console.error(`❌ Error disabling notifications:`, disableError);
+        await disableZeroBalanceNotifications(zeroBalanceStudents);
+      } catch (err) {
+        console.error(`❌ Disable notifications error:`, err);
       }
     }
 
-    // حفظ الغياب
+    // ✅ حفظ الغياب في DB
     const attendanceRecords = attendance.map(record => ({
       studentId: record.studentId,
       status: record.status,
@@ -232,26 +276,20 @@ export async function POST(req, { params }) {
       { new: true }
     );
 
-    console.log(`✅ Attendance saved successfully`);
+    console.log(`\n✅ Attendance saved successfully`);
 
-    // إرسال الإشعارات
-    let automationResult = {
-      successCount: 0,
-      failCount: 0
-    };
-
-    const studentsNeedingMessages = attendance.filter(record => 
-      ['absent', 'late', 'excused'].includes(record.status)
+    // ✅ إرسال إشعارات الغياب
+    let automationResult = { successCount: 0, failCount: 0 };
+    const studentsNeedingMessages = attendance.filter(r =>
+      ['absent', 'late', 'excused'].includes(r.status)
     );
 
     if (studentsNeedingMessages.length > 0) {
-      console.log(`📤 Triggering automation for ${studentsNeedingMessages.length} notifications...`);
-      
+      console.log(`📤 Triggering notifications for ${studentsNeedingMessages.length} students...`);
       try {
         automationResult = await onAttendanceSubmitted(id, customMessages || {});
-        console.log(`✅ Automation completed: ${automationResult.successCount} sent`);
-      } catch (automationError) {
-        console.error(`❌ Automation error:`, automationError);
+      } catch (err) {
+        console.error(`❌ Automation error:`, err);
       }
     }
 
@@ -304,7 +342,6 @@ export async function GET(req, { params }) {
 
     const { id } = await params;
 
-    // ✅ جلب الجلسة مع البيانات الأساسية
     const session = await Session.findOne({ _id: id, isDeleted: false })
       .populate('groupId', 'name code')
       .lean();
@@ -316,25 +353,18 @@ export async function GET(req, { params }) {
       );
     }
 
-    // ✅ جلب كل طلاب المجموعة من قاعدة البيانات مباشرة
+    // ✅ الطلاب من المجموعة مع الرصيد
     const groupStudents = await Student.find({
       'academicInfo.groupIds': session.groupId._id,
       isDeleted: false
     })
-    .select('personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem')
-    .lean();
-
-    console.log(`📊 Found ${groupStudents.length} students in group`);
-
-    // ✅ جلب بيانات الحضور المسجلة مسبقاً (لو موجودة)
-    const fullSession = await Session.findOne({ _id: id, isDeleted: false })
-      .populate({
-        path: 'attendance.studentId',
-        select: '_id'
-      })
+      .select('personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem')
       .lean();
 
-    // ✅ إنشاء Map للحضور المسجل
+    const fullSession = await Session.findOne({ _id: id, isDeleted: false })
+      .populate({ path: 'attendance.studentId', select: '_id' })
+      .lean();
+
     const attendanceMap = new Map();
     if (fullSession?.attendance) {
       fullSession.attendance.forEach(record => {
@@ -347,32 +377,22 @@ export async function GET(req, { params }) {
       });
     }
 
-    // ✅ إنشاء قائمة students كاملة مع بيانات الحضور والرصيد
     const students = groupStudents.map(student => {
       const attendanceRecord = attendanceMap.get(student._id.toString());
-      
-      // ✅ التأكد من وجود creditSystem
+
       if (!student.creditSystem) {
         student.creditSystem = {
           currentPackage: null,
           status: 'no_package',
-          stats: {
-            totalHoursPurchased: 0,
-            totalHoursUsed: 0,
-            totalHoursRemaining: 0,
-            totalSessionsAttended: 0
-          }
+          stats: { totalHoursPurchased: 0, totalHoursUsed: 0, totalHoursRemaining: 0 }
         };
       }
-      
-      // ✅ التأكد من وجود currentPackage
+
       if (!student.creditSystem.currentPackage) {
         student.creditSystem.currentPackage = {
           remainingHours: 0,
           totalHours: 0,
           packageType: null,
-          startDate: null,
-          endDate: null,
           status: 'inactive'
         };
       }
@@ -390,7 +410,6 @@ export async function GET(req, { params }) {
       };
     });
 
-    // ✅ بناء قائمة attendance من البيانات المسجلة فقط
     const attendance = [];
     if (fullSession?.attendance) {
       fullSession.attendance.forEach(record => {
@@ -422,7 +441,7 @@ export async function GET(req, { params }) {
         scheduledDate: session.scheduledDate,
         attendanceTaken: session.attendanceTaken || false,
         attendance,
-        students, // ✅ كل طلاب المجموعة مع الرصيد
+        students,
         stats,
         group: session.groupId
       }

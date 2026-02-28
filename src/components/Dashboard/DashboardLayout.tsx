@@ -133,6 +133,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           badge: createBadge(t('common.new') || "New"),
         },
         {
+          label: t('dashboard.whatsappTemplates') || "WhatsApp Templates",
+          href: "/admin/whatsapp-templates",
+          icon: "ion:chatbubble-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
+        {
           label: t('nav.schedules') || "Schedules",
           href: "/admin/schedules",
           icon: "ion:time-outline",

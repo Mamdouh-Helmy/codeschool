@@ -44,13 +44,22 @@ const groupSchema = new mongoose.Schema(
       },
     },
 
-    // People
+    // ✅ People - instructors مع countTime
     instructors: [
       {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        _id: false, // ✅ مش محتاجين _id زيادة
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        countTime: {
+          type: Number,
+          default: 0, // ✅ عدد الساعات المُضافة للمدرب من السيشنات المكتملة
+        },
       },
     ],
+
     students: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -106,7 +115,13 @@ const groupSchema = new mongoose.Schema(
       },
     },
 
-    // Pricing (optional - kept for backward compatibility)
+    // First meeting link
+    firstMeetingLink: {
+      type: String,
+      default: "",
+    },
+
+    // Pricing
     pricing: {
       price: {
         type: Number,
@@ -206,6 +221,20 @@ const groupSchema = new mongoose.Schema(
     },
 
     // Metadata
+    metadata: {
+      updatedAt: Date,
+      sessionsGeneratedAt: Date,
+      lastSessionGeneration: {
+        date: Date,
+        sessionsCount: Number,
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      },
+      instructorNotificationsSent: Boolean,
+      instructorNotificationsSentAt: Date,
+      instructorNotificationResults: Array,
+      instructorNotificationsSummary: Object,
+    },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -270,20 +299,53 @@ groupSchema.methods.isFull = function () {
   return this.currentStudentsCount >= this.maxStudents;
 };
 
+/**
+ * ✅ إضافة ساعتين لكل مدرب في الجروب
+ * يُستدعى فقط لما السيشن تبقى completed
+ */
+groupSchema.methods.addInstructorHours = async function (hoursToAdd = 2) {
+  if (!this.instructors || this.instructors.length === 0) {
+    console.log("⚠️ No instructors in group to add hours to");
+    return { success: false, reason: "no_instructors" };
+  }
+
+  for (const instructor of this.instructors) {
+    instructor.countTime = (instructor.countTime || 0) + hoursToAdd;
+    console.log(
+      `✅ Added ${hoursToAdd}h to instructor ${instructor.userId} → total: ${instructor.countTime}h`
+    );
+  }
+
+  await this.save();
+  return {
+    success: true,
+    instructorsUpdated: this.instructors.length,
+    hoursAdded: hoursToAdd,
+  };
+};
+
+// ✅ الحصول على عدد ساعات مدرب معين
+groupSchema.methods.getInstructorHours = function (userId) {
+  const instructor = this.instructors.find(
+    (i) => i.userId.toString() === userId.toString()
+  );
+  return instructor?.countTime || 0;
+};
+
 // ==================== STATIC METHODS ====================
 
 groupSchema.statics.findActive = function () {
   return this.find({
     status: "active",
     isDeleted: false,
-  }).populate("courseId instructors");
+  }).populate("courseId").populate("instructors.userId", "name email gender profile");
 };
 
 groupSchema.statics.findByCourse = function (courseId) {
   return this.find({
     courseId,
     isDeleted: false,
-  }).populate("instructors");
+  }).populate("instructors.userId", "name email");
 };
 
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);

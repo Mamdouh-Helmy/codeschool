@@ -1,8 +1,5 @@
-// app/api/groups/[id]/route.js - FIXED VERSION
-// ✅ الإصلاحات:
-// 1. جلب الـ instructors بـ User.find() منفصل مع toObject({ getters: true })
-// 2. إضافة firstMeetingLink من أول session
-// 3. إصلاح الـ duplicate index warnings في User.js
+// app/api/groups/[id]/route.js
+// ✅ متوافق مع هيكل instructors الجديد: [{userId: ObjectId, countTime: Number}]
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
@@ -16,30 +13,39 @@ import mongoose from "mongoose";
 // ============================================================
 // ✅ HELPER: جلب بيانات المدرسين صح مع gender وphone
 // ============================================================
-async function getInstructorsData(instructorIds) {
-  if (!instructorIds || instructorIds.length === 0) return [];
+async function getInstructorsData(instructorsArray) {
+  if (!instructorsArray || instructorsArray.length === 0) return [];
 
   try {
-    // ✅ استخدام User.find() بدون lean() عشان الـ getters تشتغل
-    const instructors = await User.find({
+    // ✅ استخرج الـ userId من الهيكل الجديد [{userId, countTime}]
+    const instructorIds = instructorsArray.map((i) => {
+      // لو object جديد → خد userId، لو string/ObjectId قديم → خده مباشرة
+      return i?.userId || i;
+    }).filter(Boolean);
+
+    if (instructorIds.length === 0) return [];
+
+    const users = await User.find({
       _id: { $in: instructorIds },
     }).select("name email gender profile");
 
     // ✅ استخدام toObject({ getters: true }) لضمان تطبيق الـ getters
-    return instructors.map((inst) => {
-      const obj = inst.toObject({ getters: true });
-      
-      const gender = obj.gender 
+    return users.map((user) => {
+      const obj = user.toObject({ getters: true });
+
+      const gender = obj.gender
         ? String(obj.gender).toLowerCase().trim()
         : null;
-        
+
       const phone = obj.profile?.phone
         ? String(obj.profile.phone).trim() || null
         : null;
 
-      console.log(`   ✅ Instructor loaded: ${obj.name}`);
-      console.log(`      gender raw: "${obj.gender}" → normalized: "${gender}"`);
-      console.log(`      phone raw: "${obj.profile?.phone}" → normalized: "${phone}"`);
+      // ✅ أضف countTime من الـ instructorsArray
+      const entry = instructorsArray.find(
+        (i) => (i?.userId?.toString() || i?.toString()) === obj._id.toString()
+      );
+      const countTime = entry?.countTime || 0;
 
       return {
         _id: obj._id,
@@ -47,6 +53,7 @@ async function getInstructorsData(instructorIds) {
         email: obj.email,
         gender: gender,
         phone: phone,
+        countTime: countTime,
       };
     });
   } catch (error) {
@@ -97,7 +104,7 @@ export async function GET(req, { params }) {
       .populate("courseId", "title level curriculum")
       .populate("students", "personalInfo.fullName enrollmentNumber")
       .populate("createdBy", "name email")
-      .lean(); // ✅ lean() كويس هنا للباقي
+      .lean();
 
     if (!group) {
       return NextResponse.json(
@@ -106,10 +113,10 @@ export async function GET(req, { params }) {
       );
     }
 
-    // ✅ Step 2: جلب الـ instructors منفصل مع الـ getters
-    const instructorIds = group.instructors || [];
-    console.log(`📋 Fetching ${instructorIds.length} instructors separately...`);
-    const instructorsData = await getInstructorsData(instructorIds);
+    // ✅ Step 2: جلب الـ instructors منفصل - مع تمرير الـ array كاملة
+    const instructorsArray = group.instructors || [];
+    console.log(`📋 Fetching ${instructorsArray.length} instructors separately...`);
+    const instructorsData = await getInstructorsData(instructorsArray);
 
     // ✅ Step 3: جلب رابط أول session
     console.log(`🔗 Fetching first session meeting link...`);
@@ -127,12 +134,11 @@ export async function GET(req, { params }) {
     instructorsData.forEach((inst, i) => {
       console.log(`   Instructor ${i + 1}:`, {
         name: inst.name,
-        email: inst.email,
-        gender: inst.gender || "NOT SET IN DB",
-        phone: inst.phone || "NOT SET IN DB",
+        gender: inst.gender || "NOT SET",
+        phone: inst.phone || "NOT SET",
+        countTime: inst.countTime,
       });
     });
-    console.log(`🔗 First Meeting Link: ${firstMeetingLink || "NONE"}`);
 
     return NextResponse.json({
       success: true,
@@ -178,6 +184,14 @@ export async function PUT(req, { params }) {
       );
     }
 
+    // ✅ normalize instructors لو جايين من الفرونت كـ strings
+    if (updateData.instructors) {
+      updateData.instructors = updateData.instructors.map((i) => ({
+        userId: i?.userId || i,
+        countTime: i?.countTime || 0,
+      }));
+    }
+
     const metadata = existingGroup.metadata || {};
     const updatePayload = {
       ...updateData,
@@ -197,8 +211,9 @@ export async function PUT(req, { params }) {
       { new: true, runValidators: true }
     )
       .populate("courseId", "title level")
-      .populate("instructors", "name email gender profile")
-      .populate("students", "personalInfo.fullName enrollmentNumber");
+      .populate("instructors.userId", "name email gender profile") // ✅ هيكل جديد
+      .populate("students", "personalInfo.fullName enrollmentNumber")
+      .lean();
 
     if (!updatedGroup) {
       return NextResponse.json(
@@ -207,11 +222,23 @@ export async function PUT(req, { params }) {
       );
     }
 
+    // ✅ normalize للرد
+    const responseData = {
+      ...updatedGroup,
+      instructors: (updatedGroup.instructors || []).map((i) => ({
+        _id: i.userId?._id || i.userId,
+        name: i.userId?.name || "",
+        email: i.userId?.email || "",
+        gender: i.userId?.gender || null,
+        countTime: i.countTime || 0,
+      })),
+    };
+
     console.log(`✅ Group updated: ${updatedGroup.code}`);
     return NextResponse.json({
       success: true,
       message: "Group updated successfully",
-      data: updatedGroup,
+      data: responseData,
     });
   } catch (error) {
     console.error("❌ Error updating group:", error);

@@ -117,120 +117,157 @@ export default function EditSessionModal({ session, groupStudents, onClose, onRe
   }, [formData.status, selectedStudentForPreview?._id, formData.newDate, formData.newTime]);
 
   // ✅ حفظ القالب في قاعدة البيانات
-  const saveTemplateToDatabase = useCallback(async (type, content) => {
-    if (!selectedStudentForPreview || !content?.trim()) return;
-    
-    setSavingTemplate(prev => ({ ...prev, [type]: true }));
-    
-    try {
-      let templateType = '';
-      if (formData.status === 'cancelled') {
-        templateType = type === 'student' ? 'session_cancelled_student' : 'session_cancelled_guardian';
-      } else if (formData.status === 'postponed') {
-        templateType = type === 'student' ? 'session_postponed_student' : 'session_postponed_guardian';
-      } else {
-        return;
-      }
-      
-      const recipientType = type === 'student' ? 'student' : 'guardian';
-      const studentLang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || 'ar';
-      
-      const templateName = formData.status === 'cancelled' 
-        ? (type === 'student' ? 'Session Cancelled - Student' : 'Session Cancelled - Guardian')
-        : (type === 'student' ? 'Session Postponed - Student' : 'Session Postponed - Guardian');
-      
-      const searchRes = await fetch(`/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`);
-      const searchJson = await searchRes.json();
-      
-      if (searchJson.success && searchJson.data.length > 0) {
-        const templateId = searchJson.data[0]._id;
-        
-        const updateData = {
-          id: templateId,
-          name: templateName,
-          isDefault: true,
-          updatedAt: new Date()
-        };
-        
-        if (studentLang === 'ar') {
-          updateData.contentAr = content;
-          if (!searchJson.data[0].contentEn) updateData.contentEn = content;
-        } else {
-          updateData.contentEn = content;
-          if (!searchJson.data[0].contentAr) updateData.contentAr = content;
-        }
-        
-        const updateRes = await fetch(`/api/message-templates`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updateData)
-        });
-        
-        const updateJson = await updateRes.json();
-        
-        if (updateJson.success) {
-          toast.success(isRTL ? 'تم تحديث القالب في قاعدة البيانات' : 'Template updated in database');
-        } else {
-          throw new Error(updateJson.error || 'Update failed');
-        }
-      } else {
-        const newTemplate = {
-          templateType,
-          recipientType,
-          name: templateName,
-          description: `${formData.status === 'cancelled' ? 'Session cancelled' : 'Session postponed'} notification for ${recipientType}`,
-          isDefault: true,
-          isActive: true,
-          variables: [
-            { key: 'guardianSalutation', label: 'Guardian Salutation', description: 'تحية ولي الأمر', example: 'عزيزي الأستاذ محمد' },
-            { key: 'studentSalutation', label: 'Student Salutation', description: 'تحية الطالب', example: 'عزيزي أحمد' },
-            { key: 'studentName', label: 'Student Name', description: 'اسم الطالب', example: 'أحمد' },
-            { key: 'guardianName', label: 'Guardian Name', description: 'اسم ولي الأمر', example: 'محمد' },
-            { key: 'childTitle', label: 'Son/Daughter', description: 'ابنك/ابنتك', example: 'ابنك' },
-            { key: 'sessionName', label: 'Session Name', description: 'اسم الجلسة', example: 'الجلسة الأولى' },
-            { key: 'date', label: 'Date', description: 'التاريخ', example: 'الاثنين ١ يناير ٢٠٢٥' },
-            { key: 'time', label: 'Time', description: 'الوقت', example: '٥:٠٠ م - ٧:٠٠ م' },
-            { key: 'meetingLink', label: 'Meeting Link', description: 'رابط الاجتماع', example: 'https://meet.google.com/xxx' },
-            { key: 'enrollmentNumber', label: 'Enrollment Number', description: 'الرقم التعريفي', example: 'STU001' }
-          ]
-        };
-        
-        if (studentLang === 'ar') {
-          newTemplate.contentAr = content;
-          newTemplate.contentEn = content;
-        } else {
-          newTemplate.contentEn = content;
-          newTemplate.contentAr = content;
-        }
-        
-        if (formData.status === 'postponed') {
-          newTemplate.variables.push(
-            { key: 'newDate', label: 'New Date', description: 'التاريخ الجديد', example: 'الثلاثاء ٢ يناير ٢٠٢٥' },
-            { key: 'newTime', label: 'New Time', description: 'الوقت الجديد', example: '٦:٠٠ م - ٨:٠٠ م' }
-          );
-        }
-        
-        const createRes = await fetch(`/api/message-templates`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newTemplate)
-        });
-        
-        const createJson = await createRes.json();
-        
-        if (createJson.success) {
-          toast.success(isRTL ? 'تم حفظ القالب في قاعدة البيانات' : 'Template saved to database');
-        } else {
-          throw new Error(createJson.error || 'Creation failed');
-        }
-      }
-    } catch (error) {
-      console.error('Error saving template:', error);
-      toast.error(isRTL ? 'فشل حفظ القالب: ' + error.message : 'Failed to save template: ' + error.message);
-    } finally {
-      setSavingTemplate(prev => ({ ...prev, [type]: false }));
+ const saveTemplateToDatabase = useCallback(async (type, content) => {
+  if (!selectedStudentForPreview || !content?.trim()) return;
+  
+  setSavingTemplate(prev => ({ ...prev, [type]: true }));
+  
+  try {
+    let templateType = '';
+    if (formData.status === 'cancelled') {
+      templateType = type === 'student' ? 'session_cancelled_student' : 'session_cancelled_guardian';
+    } else if (formData.status === 'postponed') {
+      templateType = type === 'student' ? 'session_postponed_student' : 'session_postponed_guardian';
+    } else {
+      return;
     }
-  }, [formData.status, selectedStudentForPreview, isRTL]);
+    
+    const recipientType = type === 'student' ? 'student' : 'guardian';
+    const studentLang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || 'ar';
+    
+    const templateName = formData.status === 'cancelled' 
+      ? (type === 'student' ? 'Session Cancelled - Student' : 'Session Cancelled - Guardian')
+      : (type === 'student' ? 'Session Postponed - Student' : 'Session Postponed - Guardian');
+    
+    const searchRes = await fetch(`/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`);
+    const searchJson = await searchRes.json();
+    
+    if (searchJson.success && searchJson.data.length > 0) {
+      const templateId = searchJson.data[0]._id;
+      const existingTemplate = searchJson.data[0];
+      
+      const updateData = {
+        id: templateId,
+        name: templateName,
+        isDefault: true,
+        updatedAt: new Date()
+      };
+
+      console.log(`📝 Existing template found:`, {
+        templateId,
+        existingContentAr: existingTemplate.contentAr?.substring(0, 50) + '...',
+        existingContentEn: existingTemplate.contentEn?.substring(0, 50) + '...',
+        studentLang
+      });
+
+      // ✅ نحدث اللغة الحالية فقط، ونحتفظ باللغة الأخرى كما هي
+      if (studentLang === 'ar') {
+        updateData.contentAr = content;
+        updateData.contentEn = existingTemplate.contentEn || ''; // نحتفظ بالإنجليزي القديم
+        console.log(`📝 Updating Arabic content only, keeping English:`, {
+          newContentAr: updateData.contentAr?.substring(0, 50) + '...',
+          keptContentEn: updateData.contentEn?.substring(0, 50) + '...'
+        });
+      } else {
+        updateData.contentEn = content;
+        updateData.contentAr = existingTemplate.contentAr || ''; // نحتفظ بالعربي القديم
+        console.log(`📝 Updating English content only, keeping Arabic:`, {
+          keptContentAr: updateData.contentAr?.substring(0, 50) + '...',
+          newContentEn: updateData.contentEn?.substring(0, 50) + '...'
+        });
+      }
+      
+      const updateRes = await fetch(`/api/message-templates`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+      
+      const updateJson = await updateRes.json();
+      
+      if (updateJson.success) {
+        toast.success(
+          isRTL 
+            ? `تم تحديث القالب (${studentLang === 'ar' ? 'عربي' : 'إنجليزي'}) في قاعدة البيانات` 
+            : `Template (${studentLang === 'ar' ? 'Arabic' : 'English'}) updated in database`
+        );
+      } else {
+        throw new Error(updateJson.error || 'Update failed');
+      }
+    } else {
+      // إنشاء قالب جديد - نضع المحتوى في اللغة المناسبة فقط
+      console.log(`📝 No existing template found, creating new one for language: ${studentLang}`);
+      
+      const newTemplate = {
+        templateType,
+        recipientType,
+        name: templateName,
+        description: `${formData.status === 'cancelled' ? 'Session cancelled' : 'Session postponed'} notification for ${recipientType}`,
+        isDefault: true,
+        isActive: true,
+        variables: [
+          { key: 'guardianSalutation', label: 'Guardian Salutation', description: 'تحية ولي الأمر', example: 'عزيزي الأستاذ محمد' },
+          { key: 'studentSalutation', label: 'Student Salutation', description: 'تحية الطالب', example: 'عزيزي أحمد' },
+          { key: 'studentName', label: 'Student Name', description: 'اسم الطالب', example: 'أحمد' },
+          { key: 'guardianName', label: 'Guardian Name', description: 'اسم ولي الأمر', example: 'محمد' },
+          { key: 'childTitle', label: 'Son/Daughter', description: 'ابنك/ابنتك', example: 'ابنك' },
+          { key: 'sessionName', label: 'Session Name', description: 'اسم الجلسة', example: 'الجلسة الأولى' },
+          { key: 'date', label: 'Date', description: 'التاريخ', example: 'الاثنين ١ يناير ٢٠٢٥' },
+          { key: 'time', label: 'Time', description: 'الوقت', example: '٥:٠٠ م - ٧:٠٠ م' },
+          { key: 'meetingLink', label: 'Meeting Link', description: 'رابط الاجتماع', example: 'https://meet.google.com/xxx' },
+          { key: 'enrollmentNumber', label: 'Enrollment Number', description: 'الرقم التعريفي', example: 'STU001' }
+        ]
+      };
+      
+      // ✅ نخزن المحتوى في اللغة المناسبة فقط
+      if (studentLang === 'ar') {
+        newTemplate.contentAr = content;
+        newTemplate.contentEn = '';
+        console.log(`📝 Created new Arabic template:`, {
+          contentAr: newTemplate.contentAr?.substring(0, 50) + '...',
+          contentEn: '(empty)'
+        });
+      } else {
+        newTemplate.contentEn = content;
+        newTemplate.contentAr = '';
+        console.log(`📝 Created new English template:`, {
+          contentAr: '(empty)',
+          contentEn: newTemplate.contentEn?.substring(0, 50) + '...'
+        });
+      }
+      
+      if (formData.status === 'postponed') {
+        newTemplate.variables.push(
+          { key: 'newDate', label: 'New Date', description: 'التاريخ الجديد', example: 'الثلاثاء ٢ يناير ٢٠٢٥' },
+          { key: 'newTime', label: 'New Time', description: 'الوقت الجديد', example: '٦:٠٠ م - ٨:٠٠ م' }
+        );
+      }
+      
+      const createRes = await fetch(`/api/message-templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTemplate)
+      });
+      
+      const createJson = await createRes.json();
+      
+      if (createJson.success) {
+        toast.success(
+          isRTL 
+            ? `تم حفظ القالب (${studentLang === 'ar' ? 'عربي' : 'إنجليزي'}) في قاعدة البيانات` 
+            : `Template (${studentLang === 'ar' ? 'Arabic' : 'English'}) saved to database`
+        );
+      } else {
+        throw new Error(createJson.error || 'Creation failed');
+      }
+    }
+  } catch (error) {
+    console.error('Error saving template:', error);
+    toast.error(isRTL ? 'فشل حفظ القالب: ' + error.message : 'Failed to save template: ' + error.message);
+  } finally {
+    setSavingTemplate(prev => ({ ...prev, [type]: false }));
+  }
+}, [formData.status, selectedStudentForPreview, isRTL]);
 
   // ✅ بناء المتغيرات مع تطبيع gender و relationship
   const buildVariables = useCallback((student) => {

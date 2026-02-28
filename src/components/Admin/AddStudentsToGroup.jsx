@@ -4,6 +4,7 @@
 // 2. إضافة {firstMeetingLink} متغير في التمبليتس
 // 3. بناء أسماء المدرسين حسب اللغة (و / &)
 // 4. استخدام group.firstMeetingLink من الـ API
+// 5. ✅ FIX: gender.toLowerCase() لحل مشكلة "Female" vs "female"
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -62,11 +63,9 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     if (names.length === 1) return names[0];
     if (language === "ar") {
       if (names.length === 2) return `${names[0]} و ${names[1]}`;
-      // 3 أو أكثر
       return names.slice(0, -1).join(" / ") + " / " + names[names.length - 1];
     } else {
       if (names.length === 2) return `${names[0]} & ${names[1]}`;
-      // 3 أو أكثر
       return names.slice(0, -1).join(", ") + " & " + names[names.length - 1];
     }
   };
@@ -78,13 +77,15 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     selectedStudent?.communicationPreferences?.preferredLanguage || "ar";
 
   // ============================================================
-  // استخراج بيانات الطالب للعرض
+  // ✅ FIX: استخراج بيانات الطالب للعرض - مع toLowerCase للـ gender والـ relationship
   // ============================================================
   const getStudentInfo = () => {
     if (!selectedStudent) return null;
     const lang = getStudentLang();
-    const gender = selectedStudent.personalInfo?.gender || "male";
-    const relationship = selectedStudent.guardianInfo?.relationship || "father";
+
+    // ✅ FIX: toLowerCase() لضمان التوافق مع "Male"/"Female"/"male"/"female"
+    const gender = (selectedStudent.personalInfo?.gender || "male").toLowerCase();
+    const relationship = (selectedStudent.guardianInfo?.relationship || "father").toLowerCase();
 
     const studentNickname =
       lang === "ar"
@@ -96,6 +97,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         ? selectedStudent.guardianInfo?.nickname?.ar || selectedStudent.guardianInfo?.name?.split(" ")[0]
         : selectedStudent.guardianInfo?.nickname?.en || selectedStudent.guardianInfo?.name?.split(" ")[0];
 
+    // ✅ FIX: المقارنة دلوقتي بـ lowercase دايمًا
     let studentSalutation = "";
     if (lang === "ar") {
       studentSalutation = gender === "female" ? `عزيزتي ${studentNickname}` : `عزيزي ${studentNickname}`;
@@ -114,6 +116,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       else guardianSalutation = `Dear ${guardianNickname}`;
     }
 
+    // ✅ FIX: childTitle بـ lowercase comparison
     const childTitle =
       lang === "ar"
         ? gender === "female" ? "ابنتك" : "ابنك"
@@ -123,7 +126,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   };
 
   // ============================================================
-  // ✅ FIXED: المتغيرات المتاحة للطالب - مع {firstMeetingLink} وكل المدرسين
+  // ✅ المتغيرات المتاحة للطالب - مع {firstMeetingLink} وكل المدرسين
   // ============================================================
   const getStudentVariables = () => {
     const info = getStudentInfo();
@@ -135,9 +138,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         )
       : "";
 
-    // ✅ بناء أسماء كل المدرسين
     const instructorNames = buildInstructorsNames(group?.instructors, lang);
-    // ✅ جلب رابط أول ميتنج
     const firstMeetingLink = group?.firstMeetingLink || "";
 
     return [
@@ -149,12 +150,12 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       { key: "{timeFrom}", label: lang === "ar" ? "وقت البداية" : "Time From", icon: "⏰", example: group?.schedule?.timeFrom || "" },
       { key: "{timeTo}", label: lang === "ar" ? "وقت النهاية" : "Time To", icon: "⏰", example: group?.schedule?.timeTo || "" },
       { key: "{instructor}", label: lang === "ar" ? "المدرب/المدربين" : "Instructor(s)", icon: "👨‍🏫", example: instructorNames },
-      { key: "{firstMeetingLink}", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", icon: "🔗", example: firstMeetingLink || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") }, // ✅ NEW
+      { key: "{firstMeetingLink}", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", icon: "🔗", example: firstMeetingLink || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") },
     ];
   };
 
   // ============================================================
-  // ✅ FIXED: المتغيرات المتاحة لولي الأمر - مع {firstMeetingLink} وكل المدرسين
+  // ✅ المتغيرات المتاحة لولي الأمر - مع {firstMeetingLink} وكل المدرسين
   // ============================================================
   const getGuardianVariables = () => {
     const info = getStudentInfo();
@@ -166,9 +167,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         )
       : "";
 
-    // ✅ بناء أسماء كل المدرسين
     const instructorNames = buildInstructorsNames(group?.instructors, lang);
-    // ✅ جلب رابط أول ميتنج
     const firstMeetingLink = group?.firstMeetingLink || "";
 
     return [
@@ -182,7 +181,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       { key: "{timeFrom}", label: lang === "ar" ? "وقت البداية" : "Time From", icon: "⏰", example: group?.schedule?.timeFrom || "" },
       { key: "{timeTo}", label: lang === "ar" ? "وقت النهاية" : "Time To", icon: "⏰", example: group?.schedule?.timeTo || "" },
       { key: "{instructor}", label: lang === "ar" ? "المدرب/المدربين" : "Instructor(s)", icon: "👨‍🏫", example: instructorNames },
-      { key: "{firstMeetingLink}", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", icon: "🔗", example: firstMeetingLink || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") }, // ✅ NEW
+      { key: "{firstMeetingLink}", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", icon: "🔗", example: firstMeetingLink || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") },
     ];
   };
 
@@ -203,12 +202,8 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         const groupData = await groupRes.json();
         if (groupData.success) {
           setGroup(groupData.data);
-          // ✅ Log للتحقق
           console.log("✅ Group loaded:", groupData.data?.name);
           console.log("📋 Instructors:", groupData.data?.instructors?.length);
-          groupData.data?.instructors?.forEach((inst, i) => {
-            console.log(`   Instructor ${i + 1}:`, { name: inst.name, gender: inst.gender, phone: inst.phone });
-          });
           console.log("🔗 First Meeting Link:", groupData.data?.firstMeetingLink);
         }
 
@@ -254,7 +249,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   }, [selectedStudent, templates]);
 
   // ============================================================
-  // ✅ FIXED: استبدال المتغيرات - مع كل المدرسين و firstMeetingLink
+  // ✅ استبدال المتغيرات - مع كل المدرسين و firstMeetingLink
   // ============================================================
   const replaceVars = (msg, type) => {
     if (!msg || !selectedStudent || !group) return "";
@@ -271,10 +266,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         )
       : "";
 
-    // ✅ بناء أسماء كل المدرسين
     const instructorNames = buildInstructorsNames(group.instructors, lang);
-
-    // ✅ رابط أول ميتنج من الـ group data
     const firstMeetingLink = group.firstMeetingLink || "";
 
     return msg
@@ -288,7 +280,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       .replace(/\{timeFrom\}/g, group.schedule?.timeFrom || "")
       .replace(/\{timeTo\}/g, group.schedule?.timeTo || "")
       .replace(/\{instructor\}/g, instructorNames)
-      .replace(/\{firstMeetingLink\}/g, firstMeetingLink); // ✅ NEW
+      .replace(/\{firstMeetingLink\}/g, firstMeetingLink);
   };
 
   // تحديث المعاينة
@@ -492,7 +484,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const studentVars = getStudentVariables();
   const guardianVars = getGuardianVariables();
 
-  // ✅ بناء أسماء المدرسين للعرض في الـ UI
   const instructorNamesDisplay = buildInstructorsNames(group.instructors, locale === "ar" ? "ar" : "en");
 
   return (
@@ -503,14 +494,12 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
           {group.courseSnapshot?.title} - {group.code}
         </p>
-        {/* ✅ عرض كل المدرسين */}
         {group.instructors && group.instructors.length > 0 && (
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
             <span className="font-medium">👨‍🏫 {group.instructors.length > 1 ? "المدربون" : "المدرب"}:</span>{" "}
             <span className="text-primary font-medium">{instructorNamesDisplay}</span>
           </p>
         )}
-        {/* ✅ عرض رابط أول ميتنج */}
         {group.firstMeetingLink && (
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
             <span className="font-medium">🔗 رابط الجلسة الأولى:</span>{" "}
@@ -558,9 +547,11 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           filteredStudents.map(student => {
             const sid = String(student._id || student.id);
             const isSelected = selectedStudent && String(selectedStudent._id || selectedStudent.id) === sid;
+
+            // ✅ FIX: toLowerCase() في العرض كمان
             const sLang = student.communicationPreferences?.preferredLanguage || "ar";
-            const sGender = student.personalInfo?.gender || "male";
-            const sRelationship = student.guardianInfo?.relationship || "father";
+            const sGender = (student.personalInfo?.gender || "male").toLowerCase();
+            const sRelationship = (student.guardianInfo?.relationship || "father").toLowerCase();
 
             return (
               <div
@@ -583,6 +574,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                       <span className={`text-xs px-2 py-0.5 rounded ${sLang === "ar" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"}`}>
                         {sLang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
                       </span>
+                      {/* ✅ FIX: عرض الجنس بشكل صحيح بعد toLowerCase */}
                       <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
                         {sGender === "female" ? "👧 أنثى" : "👦 ذكر"}
                       </span>
@@ -608,6 +600,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
               <span className={`text-xs px-2 py-0.5 rounded font-medium ${lang === "ar" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
                 {lang === "ar" ? "🇸🇦 الرسائل بالعربية" : "🇬🇧 Messages in English"}
               </span>
+              {/* ✅ FIX: استخدام info?.gender اللي هو بالفعل lowercase */}
               <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
                 {info?.gender === "female" ? "👧 أنثى" : "👦 ذكر"}
               </span>
@@ -624,7 +617,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 <span className="font-medium">تحية ولي الأمر: </span>
                 <span className="text-primary">{info?.guardianSalutation}</span>
               </p>
-              {/* ✅ عرض أسماء كل المدرسين */}
               {group.instructors && group.instructors.length > 0 && (
                 <p>
                   <span className="font-medium">
@@ -633,7 +625,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                   <span className="text-primary">{buildInstructorsNames(group.instructors, lang)}</span>
                 </p>
               )}
-              {/* ✅ عرض رابط أول ميتنج */}
               {group.firstMeetingLink && (
                 <p>
                   <span className="font-medium">رابط الجلسة الأولى: </span>
@@ -643,13 +634,14 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             </div>
           </div>
 
-          {/* ✅ رسالة الطالب */}
+          {/* رسالة الطالب */}
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
             <div className="flex items-center gap-2 mb-3">
               <span className="w-6 h-6 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center justify-center">1</span>
               <h4 className="text-sm font-bold text-purple-700 dark:text-purple-300">
                 {lang === "ar" ? "رسالة الطالب 👦" : "Student Message 👦"}
               </h4>
+              {/* ✅ FIX: عرض التحية الصحيحة حسب الجنس */}
               <span className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded">
                 {info?.gender === "female"
                   ? (lang === "ar" ? "عزيزتي" : "Dear")
@@ -724,13 +716,14 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             </div>
           </div>
 
-          {/* ✅ رسالة ولي الأمر */}
+          {/* رسالة ولي الأمر */}
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
             <div className="flex items-center gap-2 mb-3">
               <span className="w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">2</span>
               <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300">
                 {lang === "ar" ? "رسالة ولي الأمر 👨‍👦" : "Guardian Message 👨‍👦"}
               </h4>
+              {/* ✅ FIX: عرض التحية الصحيحة للولي حسب العلاقة */}
               <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded">
                 {info?.relationship === "mother"
                   ? (lang === "ar" ? "عزيزتي السيدة" : "Dear Mrs.")

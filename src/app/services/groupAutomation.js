@@ -320,15 +320,43 @@ async function getMessageTemplate(
     // البحث عن القالب الافتراضي النشط
     const template = await MessageTemplate.findOne({
       templateType,
-      recipientType, // ✅ مهم: نحدد هل القالب للطالب أم ولي الأمر
+      recipientType,
       isActive: true,
       isDefault: true,
     }).lean();
 
     if (template) {
+      // ✅ اختيار المحتوى حسب اللغة المطلوبة
+      let content;
+      
+      if (validLanguage === "ar") {
+        content = template.contentAr;
+        console.log(`📋 Using Arabic content for ${templateType}`);
+      } else {
+        content = template.contentEn;
+        console.log(`📋 Using English content for ${templateType}`);
+      }
+      
+      // ✅ إذا كانت اللغة المطلوبة غير موجودة أو فارغة، نستخدم القالب الاحتياطي
+      if (!content || content.trim() === '') {
+        console.log(`⚠️ ${validLanguage} content empty, using fallback template`);
+        
+        // استخدام القالب الاحتياطي باللغة المطلوبة
+        const fallbackContent = getFallbackTemplate(templateType, validLanguage, recipientType);
+        
+        return {
+          content: fallbackContent,
+          templateId: template._id,
+          templateName: template.name,
+          recipientType: template.recipientType,
+          isCustom: false,
+          isDefault: true,
+          isFallback: true, // للإشارة أن هذا قالب احتياطي
+        };
+      }
+
       return {
-        content:
-          validLanguage === "ar" ? template.contentAr : template.contentEn,
+        content: content || '',
         templateId: template._id,
         templateName: template.name,
         recipientType: template.recipientType,
@@ -338,6 +366,7 @@ async function getMessageTemplate(
     }
 
     // لو مفيش قالب في DB، نستخدم القالب الاحتياطي
+    console.log(`⚠️ No template found in DB for ${templateType}, using fallback`);
     return {
       content: getFallbackTemplate(templateType, validLanguage, recipientType),
       isCustom: false,
@@ -379,10 +408,16 @@ export async function getAttendanceTemplates(attendanceStatus, student) {
         throw new Error(`Unknown attendance status: ${attendanceStatus}`);
     }
 
-    // جلب القالب لولي الأمر فقط
+    console.log(`🔍 Fetching template for student ${student._id}:`, {
+      status: attendanceStatus,
+      preferredLanguage: language,
+      templateType: guardianTemplateType
+    });
+
+    // جلب القالب لولي الأمر
     const guardianTemplate = await getMessageTemplate(
       guardianTemplateType,
-      language,
+      language, // ✅ هذا هو المهم - نمرر اللغة المفضلة للطالب
       "guardian",
     );
 
@@ -391,6 +426,7 @@ export async function getAttendanceTemplates(attendanceStatus, student) {
       language,
       templateType: guardianTemplateType,
       hasContent: !!guardianTemplate?.content,
+      contentPreview: guardianTemplate?.content?.substring(0, 100) + '...'
     });
 
     return {
@@ -424,12 +460,14 @@ export async function getAttendanceTemplatesForFrontend(
     console.log(
       `📋 Fetching attendance template for student ${studentId}, status: ${attendanceStatus}`,
     );
+    console.log(`   Student preferred language: ${student.communicationPreferences?.preferredLanguage || 'ar'}`);
 
     const templates = await getAttendanceTemplates(attendanceStatus, student);
 
     console.log(`✅ Templates ready:`, {
       hasGuardian: !!templates.guardian,
-      guardianContentLength: templates.guardian?.content?.length,
+      guardianContentLanguage: student.communicationPreferences?.preferredLanguage || 'ar',
+      guardianContentPreview: templates.guardian?.content?.substring(0, 100) + '...',
     });
 
     return templates;
@@ -689,7 +727,7 @@ export async function sendAbsenceNotifications(
 /**
  * ✅ القوالب الاحتياطية - لو مفيش template في DB
  */
-function getFallbackTemplate(
+   function getFallbackTemplate(
   templateType,
   language = "ar",
   recipientType = "guardian",
@@ -1104,7 +1142,15 @@ Code School Team 💻`,
         : `${baseKey}_guardian`;
   }
 
-  return templates[templateKey]?.[language] || templates[templateKey]?.ar || "";
+  // ✅ التأكد من وجود القالب في اللغة المطلوبة، وإلا استخدام العربية كاحتياطي
+  const template = templates[templateKey];
+  if (!template) {
+    console.log(`⚠️ No fallback template found for key: ${templateKey}`);
+    return "";
+  }
+
+  // ✅ إرجاع المحتوى باللغة المطلوبة، أو العربية إذا لم توجد
+  return template[language] || template.ar || "";
 }
 
 async function prepareStudentVariables(
@@ -1800,10 +1846,10 @@ export async function sendInstructorWelcomeMessages(
       `📝 Custom Messages Provided: ${Object.keys(instructorMessages).length}`,
     );
 
-    // ✅ FIX: استخدام lean() عشان يرجع plain objects بدل Mongoose documents
+    // ✅ FIX: populate الصح للهيكل الجديد {userId, countTime}
     const group = await Group.findById(groupId)
       .populate("courseId", "title level")
-      .populate("instructors", "name email gender profile")
+      .populate("instructors.userId", "name email gender profile")
       .lean();
 
     if (!group) {
@@ -1822,15 +1868,17 @@ export async function sendInstructorWelcomeMessages(
 
     console.log(`📧 Found ${group.instructors.length} instructors`);
 
-    // ✅ Log تفصيلي بعد lean()
-    group.instructors.forEach((inst, index) => {
+    // ✅ FIX: Log تفصيلي - نسحب البيانات من entry.userId
+    group.instructors.forEach((entry, index) => {
+      const inst = entry.userId;
       console.log(`\n👤 Instructor #${index + 1}:`);
-      console.log(`   Name: ${inst.name}`);
-      console.log(`   Email: ${inst.email}`);
-      console.log(`   Gender: ${inst.gender ?? "NOT SET IN DB"}`);
-      console.log(`   Profile:`, JSON.stringify(inst.profile));
-      console.log(`   Phone (raw): "${inst.profile?.phone}"`);
-      console.log(`   Phone (trimmed): "${inst.profile?.phone?.trim()}"`);
+      console.log(`   Name: ${inst?.name}`);
+      console.log(`   Email: ${inst?.email}`);
+      console.log(`   Gender: ${inst?.gender ?? "NOT SET IN DB"}`);
+      console.log(`   Profile:`, JSON.stringify(inst?.profile));
+      console.log(`   Phone (raw): "${inst?.profile?.phone}"`);
+      console.log(`   Phone (trimmed): "${inst?.profile?.phone?.trim()}"`);
+      console.log(`   countTime: ${entry.countTime}`);
     });
 
     if (!group.automation?.whatsappEnabled) {
@@ -1847,7 +1895,21 @@ export async function sendInstructorWelcomeMessages(
     let failCount = 0;
     const notificationResults = [];
 
-    for (const instructor of group.instructors) {
+    // ✅ FIX: الـ loop يستخدم entry.userId
+    for (const instructorEntry of group.instructors) {
+      // ✅ استخراج بيانات المدرب من الهيكل الجديد
+      const instructor = instructorEntry.userId;
+
+      if (!instructor || !instructor._id) {
+        console.log("⚠️ Skipping instructor entry - userId not populated");
+        failCount++;
+        notificationResults.push({
+          status: "failed",
+          reason: "Instructor userId not populated",
+        });
+        continue;
+      }
+
       const instructorId = instructor._id.toString();
 
       // ✅ FIX: بعد lean() الـ profile plain object وبيشتغل صح
@@ -1906,7 +1968,7 @@ export async function sendInstructorWelcomeMessages(
 
         messageContent = replaceInstructorVariables(
           defaultTemplate,
-          instructor,
+          instructor,  // ✅ instructor هنا هو الـ User object مباشرة
           group,
         );
         console.log(`✅ Variables replaced successfully`);
@@ -2283,9 +2345,15 @@ Code School Team 💻`;
  */
 function buildInstructorsNames(instructors, language = "ar") {
   if (!instructors || instructors.length === 0) return "";
-  const names = instructors.map((i) => i.name).filter(Boolean);
+
+  // ✅ FIX: دعم الهيكل الجديد {userId: {...}, countTime: N} والقديم مباشرة
+  const names = instructors
+    .map((i) => i.userId?.name || i.name)
+    .filter(Boolean);
+
   if (names.length === 0) return "";
   if (names.length === 1) return names[0];
+
   if (language === "ar") {
     if (names.length === 2) return `${names[0]} و ${names[1]}`;
     return names.slice(0, -1).join(" / ") + " / " + names[names.length - 1];
@@ -2326,7 +2394,8 @@ export async function onStudentAddedToGroup(
       Student.findById(studentId),
       Group.findById(groupId)
         .populate("courseId")
-        .populate({ path: "instructors", select: "name email gender profile" }),
+        // ✅ FIX: populate الصح للهيكل الجديد
+        .populate("instructors.userId", "name email gender profile"),
     ]);
 
     if (!student || !group) throw new Error("Student or Group not found");
@@ -2354,7 +2423,6 @@ export async function onStudentAddedToGroup(
     ) {
       console.log("📱 Sending WhatsApp welcome messages...");
 
-      // ✅ FIXED: prepareStudentVariables دلوقتي async
       const { variables, language } = await prepareStudentVariables(
         student,
         group,
@@ -2369,7 +2437,7 @@ export async function onStudentAddedToGroup(
       console.log(`   Start Date: ${variables.startDate}`);
       console.log(`   First Meeting Link: ${variables.firstMeetingLink}`);
 
-      // ✅ رسالة الطالب - salutation = studentSalutation
+      // رسالة الطالب
       if (student.personalInfo?.whatsappNumber) {
         const template = await getMessageTemplate(
           "student_welcome",
@@ -2377,7 +2445,6 @@ export async function onStudentAddedToGroup(
           "student",
         );
 
-        // ✅ salutation للطالب = studentSalutation
         const studentVars = {
           ...variables,
           salutation: variables.studentSalutation,
@@ -2409,7 +2476,7 @@ export async function onStudentAddedToGroup(
         }
       }
 
-      // ✅ رسالة ولي الأمر - salutation = guardianSalutation
+      // رسالة ولي الأمر
       if (student.guardianInfo?.whatsappNumber) {
         const template = await getMessageTemplate(
           "guardian_notification",
@@ -2417,7 +2484,6 @@ export async function onStudentAddedToGroup(
           "guardian",
         );
 
-        // ✅ salutation لولي الأمر = guardianSalutation
         const guardianVars = {
           ...variables,
           salutation: variables.guardianSalutation,
@@ -2468,6 +2534,7 @@ export async function onStudentAddedToGroup(
     throw error;
   }
 }
+
 
 /**
  * ✅ Replace student variables in message

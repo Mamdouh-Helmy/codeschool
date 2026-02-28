@@ -29,6 +29,7 @@ import Modal from "./Modal";
 import GroupForm from "./GroupForm";
 import AddStudentsToGroup from "./AddStudentsToGroup";
 import InstructorNotificationModal from "./InstructorNotificationModal";
+import MeetingLinksCheckModal from "./MeetingLinksCheckModal";
 import GroupDetailsPage from "./GroupDetailsPage";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -42,7 +43,6 @@ export default function GroupsAdmin() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState(null);
     
-    // ✅ Group Details Modal State
     const [viewDetailsModal, setViewDetailsModal] = useState({
         open: false,
         groupId: null
@@ -52,6 +52,16 @@ export default function GroupsAdmin() {
         open: false,
         groupData: null,
         instructors: []
+    });
+
+    const [meetingLinksModal, setMeetingLinksModal] = useState({
+        open: false,
+        groupId: null
+    });
+
+    const [pendingActivation, setPendingActivation] = useState({
+        forceActivate: false,
+        releaseReserved: false
     });
 
     const [addStudentsModalOpen, setAddStudentsModalOpen] = useState(false);
@@ -80,7 +90,6 @@ export default function GroupsAdmin() {
         cancelled: 0
     });
 
-    // Load groups
     const loadGroups = async () => {
         setLoading(true);
         try {
@@ -104,11 +113,11 @@ export default function GroupsAdmin() {
                 if (json.pagination) setPagination(json.pagination);
                 if (json.stats) setStats(json.stats);
             } else {
-                toast.error(json.error || t("groups.load.failed"));
+                toast.error(json.error || t("groups.load.failed"), { position: 'top-center' });
             }
         } catch (err) {
             console.error("Error loading groups:", err);
-            toast.error(t("groups.load.failed"));
+            toast.error(t("groups.load.failed"), { position: 'top-center' });
         } finally {
             setLoading(false);
         }
@@ -124,7 +133,7 @@ export default function GroupsAdmin() {
 
     const onSaved = async () => {
         await loadGroups();
-        toast.success(t("groups.saved.success"));
+        toast.success(t("groups.saved.success"), { position: 'top-center' });
     };
 
     const onEdit = (group) => {
@@ -132,7 +141,6 @@ export default function GroupsAdmin() {
         setModalOpen(true);
     };
 
-    // ✅ View Details Function
     const onViewDetails = (groupId) => {
         console.log(`📋 Opening details for group: ${groupId}`);
         setViewDetailsModal({
@@ -152,7 +160,7 @@ export default function GroupsAdmin() {
             }
         } catch (err) {
             console.error("Error viewing group:", err);
-            toast.error(t("groups.view.failed"));
+            toast.error(t("groups.view.failed"), { position: 'top-center' });
         }
     };
 
@@ -199,7 +207,7 @@ export default function GroupsAdmin() {
         };
 
         document.getElementById('confirmDelete').onclick = async () => {
-            const loadingToast = toast.loading(t("groups.delete.loading"));
+            const loadingToast = toast.loading(t("groups.delete.loading"), { position: 'top-center' });
             
             try {
                 const res = await fetch(`/api/groups/${id}`, {
@@ -208,14 +216,14 @@ export default function GroupsAdmin() {
 
                 if (res.ok) {
                     await loadGroups();
-                    toast.success(t("groups.delete.success"), { id: loadingToast });
+                    toast.success(t("groups.delete.success"), { id: loadingToast, position: 'top-center' });
                 } else {
                     const error = await res.json();
-                    toast.error(error.error || t("groups.delete.failed"), { id: loadingToast });
+                    toast.error(error.error || t("groups.delete.failed"), { id: loadingToast, position: 'top-center' });
                 }
             } catch (err) {
                 console.error("Error deleting group:", err);
-                toast.error(t("groups.delete.failed"), { id: loadingToast });
+                toast.error(t("groups.delete.failed"), { id: loadingToast, position: 'top-center' });
             } finally {
                 document.body.removeChild(confirmationModal);
             }
@@ -229,12 +237,21 @@ export default function GroupsAdmin() {
     };
 
     const onActivateWithNotification = async (groupId) => {
-        console.log(`📂 Loading group data for: ${groupId}`);
+        console.log(`📂 Starting activation flow for group: ${groupId}`);
 
         if (!groupId) {
-            toast.error(t("groups.activate.invalidId"));
+            toast.error(t("groups.activate.invalidId"), { position: 'top-center' });
             return;
         }
+
+        setMeetingLinksModal({ open: true, groupId });
+    };
+
+    const onMeetingLinksCheckConfirmed = async (forceActivate, releaseReserved) => {
+        const groupId = meetingLinksModal.groupId;
+        
+        setMeetingLinksModal({ open: false, groupId: null });
+        setPendingActivation({ forceActivate, releaseReserved });
 
         try {
             const res = await fetch(`/api/groups/${groupId}`, {
@@ -259,7 +276,7 @@ export default function GroupsAdmin() {
             }
         } catch (err) {
             console.error("❌ Error loading group:", err);
-            toast.error(err.message || t("groups.activate.loadError"));
+            toast.error(err.message || t("groups.activate.loadError"), { position: 'top-center' });
         }
     };
 
@@ -267,31 +284,36 @@ export default function GroupsAdmin() {
         const groupId = instructorNotificationModal?.groupData?._id || instructorNotificationModal?.groupData?.id;
 
         if (!groupId) {
-            toast.error(t("groups.activate.invalidId"));
+            toast.error(t("groups.activate.invalidId"), { position: 'top-center' });
             return;
         }
 
-        const loadingToast = toast.loading(t("groups.activate.loading"));
+        const loadingToast = toast.loading(t("groups.activate.loading"), { position: 'top-center' });
 
         try {
             const res = await fetch(`/api/groups/${groupId}/activate`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ instructorMessages })
+                body: JSON.stringify({
+                    instructorMessages,
+                    forceActivate: pendingActivation.forceActivate,
+                    releaseReserved: pendingActivation.releaseReserved,
+                })
             });
 
             const result = await res.json();
 
             if (res.ok && result.success) {
                 await loadGroups();
-                toast.success(t("groups.activate.success"), { id: loadingToast });
+                toast.success(t("groups.activate.success"), { id: loadingToast, position: 'top-center' });
                 setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
+                setPendingActivation({ forceActivate: false, releaseReserved: false });
             } else {
-                toast.error(result.error || t("groups.activate.failed"), { id: loadingToast });
+                toast.error(result.error || t("groups.activate.failed"), { id: loadingToast, position: 'top-center' });
             }
         } catch (err) {
             console.error("❌ Network Error:", err);
-            toast.error(t("groups.activate.failed"), { id: loadingToast });
+            toast.error(t("groups.activate.failed"), { id: loadingToast, position: 'top-center' });
         }
     };
 
@@ -559,7 +581,6 @@ export default function GroupsAdmin() {
                                     </td>
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-1">
-                                            {/* ✅ View Details Button */}
                                             <button
                                                 onClick={() => onViewDetails(group.id)}
                                                 className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
@@ -709,7 +730,7 @@ export default function GroupsAdmin() {
                 />
             </Modal>
 
-            {/* ✅ Group Details Modal - Full Screen */}
+            {/* Group Details Modal */}
             <Modal
                 open={viewDetailsModal.open}
                 title="" 
@@ -720,7 +741,7 @@ export default function GroupsAdmin() {
                     groupId={viewDetailsModal.groupId}
                     onClose={() => {
                         setViewDetailsModal({ open: false, groupId: null });
-                        loadGroups(); // Refresh groups after closing details
+                        loadGroups();
                     }}
                 />
             </Modal>
@@ -745,10 +766,21 @@ export default function GroupsAdmin() {
                 />
             </Modal>
 
+            {/* Meeting Links Check Modal */}
+            <MeetingLinksCheckModal
+                isOpen={meetingLinksModal.open}
+                groupId={meetingLinksModal.groupId}
+                onClose={() => setMeetingLinksModal({ open: false, groupId: null })}
+                onConfirm={onMeetingLinksCheckConfirmed}
+            />
+
             {/* Instructor Notification Modal */}
             <InstructorNotificationModal
                 isOpen={instructorNotificationModal.open}
-                onClose={() => setInstructorNotificationModal({ open: false, groupData: null, instructors: [] })}
+                onClose={() => {
+                    setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
+                    setPendingActivation({ forceActivate: false, releaseReserved: false });
+                }}
                 instructors={instructorNotificationModal.instructors}
                 groupData={instructorNotificationModal.groupData}
                 onSendNotifications={handleActivateAndNotify}

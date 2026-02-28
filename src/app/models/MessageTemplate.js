@@ -1,4 +1,5 @@
-// /src/models/MessageTemplate.js
+// في /src/models/MessageTemplate.js
+
 import mongoose from "mongoose";
 
 const MessageTemplateSchema = new mongoose.Schema(
@@ -39,12 +40,14 @@ const MessageTemplateSchema = new mongoose.Schema(
 
     contentAr: {
       type: String,
-      required: true,
+      required: false, // ✅ تغيير من true إلى false
+      default: "",     // ✅ إضافة قيمة افتراضية
     },
 
     contentEn: {
       type: String,
-      required: true,
+      required: false, // ✅ تغيير من true إلى false
+      default: "",     // ✅ إضافة قيمة افتراضية
     },
 
     description: {

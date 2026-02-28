@@ -1,15 +1,16 @@
-// /src/app/api/message-templates/route.js
+// /src/app/api/whatsapp/message-templates/route.js
 import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
+import { connectDB } from "@/lib/mongodb"; // ✅ connectDB وليس dbConnect
 import MessageTemplate from "../../../models/MessageTemplate";
 import { requireAdmin } from "@/utils/authMiddleware";
 
+// ✅ GET: جلب القوالب
 export async function GET(request) {
   try {
-    await dbConnect();
+    await connectDB(); // ✅ إصلاح: كانت dbConnect()
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type');
-    const isDefault = searchParams.get('default') === 'true';
+    const type = searchParams.get("type");
+    const isDefault = searchParams.get("default") === "true";
 
     const query = { isActive: true };
     if (type) query.templateType = type;
@@ -19,41 +20,45 @@ export async function GET(request) {
 
     return NextResponse.json({ success: true, data: templates });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("❌ GET message-templates error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
-// PUT - تحديث قالب موجود
+// ✅ PUT: تحديث قالب موجود
 export async function PUT(request) {
   try {
-    await dbConnect();
+    await connectDB(); // ✅ إصلاح
     const body = await request.json();
     const { templateType, contentAr, contentEn, _id } = body;
 
     let template;
 
     if (_id) {
-      // تحديث قالب موجود بالـ ID
+      // تحديث بالـ ID
       template = await MessageTemplate.findByIdAndUpdate(
         _id,
         {
           $set: {
             contentAr,
             contentEn,
-            'metadata.updatedAt': new Date(),
+            updatedAt: new Date(),
           },
         },
         { new: true }
       );
     } else {
-      // تحديث القالب الافتراضي من النوع ده
+      // تحديث القالب الافتراضي من هذا النوع
       template = await MessageTemplate.findOneAndUpdate(
         { templateType, isDefault: true },
         {
           $set: {
             contentAr,
             contentEn,
-            'metadata.updatedAt': new Date(),
+            updatedAt: new Date(),
           },
         },
         { new: true, upsert: false }
@@ -62,26 +67,29 @@ export async function PUT(request) {
 
     if (!template) {
       return NextResponse.json(
-        { success: false, error: 'Template not found' },
+        { success: false, error: "Template not found" },
         { status: 404 }
       );
     }
 
     return NextResponse.json({ success: true, data: template });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("❌ PUT message-templates error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
+// ✅ POST: إنشاء قالب جديد
 export async function POST(req) {
   try {
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      return authCheck.response;
-    }
+    if (!authCheck.authorized) return authCheck.response;
 
     const adminUser = authCheck.user;
-    await connectDB();
+    await connectDB(); // ✅ إصلاح
 
     const body = await req.json();
 
@@ -108,7 +116,7 @@ export async function POST(req) {
       data: template,
     });
   } catch (error) {
-    console.error("❌ Error creating template:", error);
+    console.error("❌ POST message-templates error:", error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
@@ -120,11 +128,9 @@ export async function POST(req) {
 export async function DELETE(req) {
   try {
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      return authCheck.response;
-    }
+    if (!authCheck.authorized) return authCheck.response;
 
-    await connectDB();
+    await connectDB(); // ✅ إصلاح
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
@@ -136,7 +142,6 @@ export async function DELETE(req) {
       );
     }
 
-    // التحقق من وجود القالب
     const template = await MessageTemplate.findById(id);
     if (!template) {
       return NextResponse.json(
@@ -145,12 +150,11 @@ export async function DELETE(req) {
       );
     }
 
-    // لا تسمح بحذف القالب الافتراضي
     if (template.isDefault) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: "Cannot delete default template. Set another template as default first." 
+        {
+          success: false,
+          error: "Cannot delete default template. Set another template as default first.",
         },
         { status: 400 }
       );
@@ -163,7 +167,7 @@ export async function DELETE(req) {
       message: "Template deleted successfully",
     });
   } catch (error) {
-    console.error("❌ Error deleting template:", error);
+    console.error("❌ DELETE message-templates error:", error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

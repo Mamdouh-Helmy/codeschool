@@ -1,4 +1,5 @@
-// /src/app/api/sessions/[id]/attendance-templates/route.js
+// في /src/app/api/sessions/[id]/attendance-templates/route.js
+
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { getAttendanceTemplatesForFrontend } from '../../../../services/groupAutomation';
@@ -13,7 +14,6 @@ export async function POST(req, { params }) {
 
     const { id } = await params;
 
-    // ✅ FIX: استخدام req.text() بدل req.json() عشان نتحكم في الـ parse بأمان
     let body = {};
     try {
       const text = await req.text();
@@ -50,9 +50,11 @@ export async function POST(req, { params }) {
 
     console.log(`✅ Templates fetched:`, {
       hasGuardian: !!templates.guardian,
-      guardianContent: templates.guardian?.content
+      guardianContentLanguage: templates.metadata?.language || 'unknown',
+      guardianContentPreview: templates.guardian?.content
         ? templates.guardian.content.substring(0, 50) + '...'
-        : null
+        : null,
+      isFallback: templates.guardian?.isFallback || false
     });
 
     return NextResponse.json({

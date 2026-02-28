@@ -1,4 +1,4 @@
-// /src/app/api/message-templates/[id]/route.js
+// /src/app/api/whatsapp/message-templates/[id]/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import MessageTemplate from "../../../../models/MessageTemplate";

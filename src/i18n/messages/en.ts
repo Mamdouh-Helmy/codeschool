@@ -3735,6 +3735,7 @@ const en = {
   "groups.form.step.automation.desc": "...",
   "groups.form.selectedInstructors": "Selected instructors",
   "groups.form.selected": "Selected",
+  "dashboard.whatsappTemplates": "WhatsApp Templates",
 };
 
 export default en;
