@@ -126,6 +126,7 @@ const config: Config = {
         darktext: "#7F8487",
         dark_border: "#224767",
         dark_input: "#1B2430",
+        
       },
       fontSize: {
         58: [

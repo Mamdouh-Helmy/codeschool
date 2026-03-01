@@ -52,6 +52,9 @@ export async function GET(req) {
           stats: {
             totalSessions: 0,
             attendedSessions: 0,
+            lateSessions: 0,
+            excusedSessions: 0,
+            absentSessions: 0,
             attendanceRate: 0,
             totalGroups: 0,
             activeGroups: 0,
@@ -82,27 +85,36 @@ export async function GET(req) {
     const studentId = student._id;
     const groupIds = student.academicInfo?.groupIds || [];
 
-    // ✅ حساب إحصائيات الحضور
+    // ✅ حساب إحصائيات الحضور من جميع الجلسات
     console.log("📈 [Dashboard API] Calculating attendance stats...");
 
-    const completedSessionsWithAttendance = await Session.find({
+    // جلب جميع الجلسات (المكتملة والمجدولة) لحساب إجمالي الجلسات
+    const allSessions = await Session.find({
       groupId: { $in: groupIds },
       isDeleted: false,
-      status: "completed",
-      attendanceTaken: true
     })
-      .select("attendance attendanceTaken")
+      .select("attendance attendanceTaken status")
       .lean();
 
-    console.log(`📊 Found ${completedSessionsWithAttendance.length} completed sessions with attendance`);
+    console.log(`📊 Found ${allSessions.length} total sessions`);
 
+    // تقسيم الجلسات إلى مكتملة ومجدولة
+    const completedSessions = allSessions.filter(s => s.status === "completed");
+    const scheduledSessions = allSessions.filter(s => s.status === "scheduled");
+    
+    const totalSessionsCount = allSessions.length;
+    const completedSessionsCount = completedSessions.length;
+    const remainingSessionsCount = scheduledSessions.length;
+
+    console.log(`📊 Sessions breakdown: Total=${totalSessionsCount}, Completed=${completedSessionsCount}, Remaining=${remainingSessionsCount}`);
+
+    // حساب إحصائيات الحضور للجلسات المكتملة فقط
     let attendedSessions = 0;
     let absentSessions = 0;
     let lateSessions = 0;
     let excusedSessions = 0;
-    let totalSessionsWithAttendance = completedSessionsWithAttendance.length;
 
-    completedSessionsWithAttendance.forEach((session) => {
+    completedSessions.forEach((session) => {
       const attendanceRecord = session.attendance?.find(
         (a) => a.studentId.toString() === studentId.toString()
       );
@@ -125,20 +137,34 @@ export async function GET(req) {
             absentSessions++;
         }
       } else {
+        // لو مفيش سجل حضور للطالب في الجلسة، يعتبر غائب
         absentSessions++;
       }
     });
 
-    const attendanceRate = totalSessionsWithAttendance > 0
-      ? Math.round(((attendedSessions + lateSessions + excusedSessions) / totalSessionsWithAttendance) * 100)
+    // ✅ الجلسات المكتملة = الحضور + المتأخر + المعذور
+    const completedWithAttendance = attendedSessions + lateSessions + excusedSessions;
+    
+    // ✅ نسبة التقدم = (الجلسات المكتملة / إجمالي الجلسات) × 100
+    const progressPercentage = totalSessionsCount > 0
+      ? Math.round((completedSessionsCount / totalSessionsCount) * 100)
+      : 0;
+
+    // ✅ نسبة الحضور = (الحاضر + متأخر + معذور) / الجلسات المكتملة × 100
+    const attendanceRate = completedSessionsCount > 0
+      ? Math.round(((attendedSessions + lateSessions + excusedSessions) / completedSessionsCount) * 100)
       : 0;
 
     console.log("📊 Attendance breakdown:", {
-      totalSessionsWithAttendance,
+      totalSessions: totalSessionsCount,
+      completedSessions: completedSessionsCount,
+      remainingSessions: remainingSessionsCount,
       attended: attendedSessions,
       absent: absentSessions,
       late: lateSessions,
       excused: excusedSessions,
+      completedWithAttendance,
+      progressPercentage: `${progressPercentage}%`,
       attendanceRate: `${attendanceRate}%`,
     });
 
@@ -165,25 +191,29 @@ export async function GET(req) {
         .map(async (group) => {
           const courseId = group.courseId?._id || group.courseId;
 
+          // إجمالي جلسات الكورس
           const totalCourseSessions = await Session.countDocuments({
             groupId: group._id,
             isDeleted: false,
           });
 
+          // الجلسات المكتملة في الكورس
           const completedCourseSessions = await Session.countDocuments({
             groupId: group._id,
             isDeleted: false,
             status: "completed",
           });
 
+          // نسبة التقدم
           const progressPercentage = totalCourseSessions > 0
             ? Math.round((completedCourseSessions / totalCourseSessions) * 100)
             : 0;
 
+          // الساعات المتبقية (كل جلسة = ساعتين)
           const remainingSessions = totalCourseSessions - completedCourseSessions;
-          const estimatedHoursPerSession = 1.5;
-          const hoursLeft = Math.ceil(remainingSessions * estimatedHoursPerSession);
+          const hoursLeft = remainingSessions * 2;
 
+          // حساب إجمالي الدروس في الكورس
           let totalLessons = 0;
           if (group.courseId?.curriculum) {
             totalLessons = group.courseId.curriculum.reduce((sum, module) =>
@@ -191,6 +221,7 @@ export async function GET(req) {
             );
           }
 
+          // تحديد الألوان والأيقونات حسب نوع الكورس
           const courseTitle = (group.courseId?.title || group.name).toLowerCase();
           let gradient, icon;
 
@@ -232,33 +263,18 @@ export async function GET(req) {
         })
     );
 
-    // ✅ حساب إحصائيات التقدم الشاملة
-    const totalAllSessions = await Session.countDocuments({
-      groupId: { $in: groupIds },
-      isDeleted: false
-    });
-
-    const completedAllSessions = await Session.countDocuments({
-      groupId: { $in: groupIds },
-      isDeleted: false,
-      status: "completed"
-    });
-
-    const totalLessonsAcrossGroups = currentCourses.reduce((sum, course) =>
-      sum + (course.totalLessons || 0), 0
-    );
-
-    const completedLessons = Math.floor((completedAllSessions / (totalAllSessions || 1)) * totalLessonsAcrossGroups) || 0;
-    const totalHoursLearned = Math.round(completedAllSessions * 1.5);
-
+    // ✅ الإنجازات بناءً على الجلسات المكتملة
     const achievements = [];
     if (attendanceRate >= 90) achievements.push("Perfect Attendance");
-    if (completedAllSessions >= 10) achievements.push("10 Sessions Milestone");
-    if (completedAllSessions >= 25) achievements.push("Quarter Century");
-    if (completedAllSessions >= 50) achievements.push("Half Century");
-    if (totalHoursLearned >= 50) achievements.push("50 Hours Badge");
+    if (completedSessionsCount >= 10) achievements.push("10 Sessions Milestone");
+    if (completedSessionsCount >= 25) achievements.push("25 Sessions Milestone");
+    if (completedSessionsCount >= 50) achievements.push("50 Sessions Milestone");
+    if (completedSessionsCount >= 100) achievements.push("100 Sessions Milestone");
 
-    // ✅ [مُعدَّل] جلب الجلسة التالية – تعطي الأولوية لجلسة اليوم
+    // ✅ ساعات التعلم = الجلسات المكتملة × 2
+    const hoursLearned = completedSessionsCount * 2;
+
+    // ✅ [مُعدَّل] جلب الجلسة التالية
     console.log("📅 [Dashboard API] Fetching next session...");
     const now = new Date();
 
@@ -314,17 +330,26 @@ export async function GET(req) {
       .lean();
 
     // ✅ تحويل الجلسات لأحداث في Calendar
-    const upcomingEvents = upcomingSessions.slice(0, 5).map(session => ({
-      _id: session._id,
-      title: session.title,
-      date: session.scheduledDate,
-      startTime: session.startTime,
-      endTime: session.endTime,
-      type: "session",
-      groupName: session.groupId?.name || "مجموعة",
-      color: "green",
-      icon: "Calendar"
-    }));
+    const upcomingEvents = upcomingSessions.slice(0, 5).map(session => {
+      const sessionDate = new Date(session.scheduledDate);
+      const formattedDate = sessionDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+
+      return {
+        _id: session._id,
+        title: session.title,
+        date: session.scheduledDate,
+        formattedDate: formattedDate,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        type: "session",
+        groupName: session.groupId?.name || "مجموعة",
+        color: "green",
+        icon: "Calendar"
+      };
+    });
 
     // ✅ جلب الإشعارات
     console.log("🔔 [Dashboard API] Fetching notifications...");
@@ -354,7 +379,7 @@ export async function GET(req) {
       ? Math.round((allCompletedSessions / allSessionsCount) * 100)
       : 87;
 
-    // ✅ تنسيق البيانات
+    // ✅ تنسيق البيانات مع القيم المصححة
     const response = {
       success: true,
       data: {
@@ -365,12 +390,15 @@ export async function GET(req) {
           role: user.role || "student",
         },
         stats: {
-          totalSessions: totalSessionsWithAttendance,
+          totalSessions: totalSessionsCount,
+          completedSessions: completedSessionsCount,
+          remainingSessions: remainingSessionsCount,
           attendedSessions: attendedSessions,
           absentSessions: absentSessions,
           lateSessions: lateSessions,
           excusedSessions: excusedSessions,
           attendanceRate,
+          progressPercentage,
           totalGroups: groupIds.length,
           activeGroups: groups.filter((g) => g.status === "active").length,
           pendingAssignments: 0,
@@ -386,13 +414,15 @@ export async function GET(req) {
           absent: absentSessions,
           late: lateSessions,
           excused: excusedSessions,
-          total: totalSessionsWithAttendance,
+          completed: completedSessionsCount,
+          total: totalSessionsCount,
         },
         progressData: {
           stages: [
             {
               id: "start",
               label: "Start",
+              labelAr: "البداية",
               percentage: 100,
               status: "completed",
               icon: "Play",
@@ -402,18 +432,21 @@ export async function GET(req) {
             {
               id: "current",
               label: "Current Level",
-              percentage: attendanceRate,
-              status: "in_progress",
+              labelAr: "المستوى الحالي",
+              percentage: progressPercentage, // ✅ النسبة الصحيحة للتقدم
+              status: progressPercentage >= 100 ? "completed" : 
+                      progressPercentage >= 80 ? "almost_there" : "active",
               icon: "BookOpen",
               color: "blue",
               gradient: "from-blue-400 to-cyan-500",
-              isActive: true
+              isActive: progressPercentage < 100
             },
             {
               id: "target",
               label: "Next Target",
-              percentage: Math.min(attendanceRate + 20, 100),
-              status: "almost_there",
+              labelAr: "الهدف التالي",
+              percentage: Math.min(progressPercentage + 25, 100),
+              status: progressPercentage >= 75 ? "almost_there" : "pending",
               icon: "Award",
               color: "purple",
               gradient: "from-purple-400 to-pink-500"
@@ -421,8 +454,9 @@ export async function GET(req) {
             {
               id: "completion",
               label: "Completion",
-              percentage: groups.filter(g => g.status === "completed").length > 0 ? 100 : 0,
-              status: groups.filter(g => g.status === "completed").length > 0 ? "completed" : "pending",
+              labelAr: "الإكمال",
+              percentage: progressPercentage >= 100 ? 100 : 0,
+              status: progressPercentage >= 100 ? "completed" : "pending",
               icon: "CheckCircle",
               color: "gray",
               gradient: "from-gray-400 to-slate-400"
@@ -430,9 +464,42 @@ export async function GET(req) {
           ],
           statsCards: [
             {
-              id: "completed_lessons",
-              title: "Completed Lessons",
-              value: completedLessons,
+              id: "attended_sessions",
+              title: "Attended",
+              titleAr: "حضور",
+              value: attendedSessions,
+              icon: "CheckCircle",
+              iconColor: "text-green-600 dark:text-green-400",
+              bgColor: "bg-green-50 dark:bg-green-900/10",
+              borderColor: "border-green-100 dark:border-green-900/30"
+            },
+            {
+              id: "absent_sessions",
+              title: "Absent",
+              titleAr: "غياب",
+              value: absentSessions,
+              icon: "X",
+              iconColor: "text-red-600 dark:text-red-400",
+              bgColor: "bg-red-50 dark:bg-red-900/10",
+              borderColor: "border-red-100 dark:border-red-900/30"
+            },
+            {
+              id: "late_sessions",
+              title: "Late",
+              titleAr: "متأخر",
+              value: lateSessions,
+              icon: "Clock",
+              iconColor: "text-yellow-600 dark:text-yellow-400",
+              bgColor: "bg-yellow-50 dark:bg-yellow-900/10",
+              borderColor: "border-yellow-100 dark:border-yellow-900/30"
+            }
+          ],
+          summaryCards: [
+            {
+              id: "completed_sessions",
+              title: "Completed Sessions",
+              titleAr: "الجلسات المكتملة",
+              value: completedSessionsCount,
               icon: "CheckCircle",
               iconColor: "text-green-600 dark:text-green-400",
               bgColor: "bg-green-50 dark:bg-green-900/10",
@@ -441,7 +508,8 @@ export async function GET(req) {
             {
               id: "hours_learned",
               title: "Hours Learned",
-              value: totalHoursLearned,
+              titleAr: "ساعات التعلم",
+              value: hoursLearned,
               icon: "Clock",
               iconColor: "text-blue-600 dark:text-blue-400",
               bgColor: "bg-blue-50 dark:bg-blue-900/10",
@@ -450,6 +518,7 @@ export async function GET(req) {
             {
               id: "achievements",
               title: "Achievements",
+              titleAr: "الإنجازات",
               value: achievements.length,
               icon: "Award",
               iconColor: "text-purple-600 dark:text-purple-400",
@@ -471,6 +540,14 @@ export async function GET(req) {
     };
 
     console.log("✅ [Dashboard API] Response ready");
+    console.log("📊 Final Stats:", {
+      totalSessions: totalSessionsCount,
+      completedSessions: completedSessionsCount,
+      progress: `${progressPercentage}%`,
+      attended: attendedSessions,
+      absent: absentSessions,
+      late: lateSessions,
+    });
 
     return NextResponse.json(response);
   } catch (error) {
@@ -501,21 +578,19 @@ function formatTime(timeStr) {
 }
 
 /**
- * ✅ [مُعدَّل] تنسيق بيانات الجلسة مع إضافة date, time, isToday
+ * ✅ [مُعدَّل] تنسيق بيانات الجلسة
  */
 function formatSession(session) {
   const today = new Date();
   const sessionDate = new Date(session.scheduledDate);
   const sessionEndDateTime = new Date(`${sessionDate.toDateString()} ${session.endTime}`);
 
-  // تاريخ مفهوم: "Feb 11, 2026"
   const formattedDate = sessionDate.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
 
-  // وقت مفهوم: "10:00 AM - 11:30 AM"
   const formattedTime = `${formatTime(session.startTime)} - ${formatTime(session.endTime)}`;
 
   return {
@@ -582,8 +657,10 @@ async function fetchNotifications(studentId) {
             id: msg._id,
             type: "whatsapp",
             title: getWhatsAppMessageTitle(msg.messageType),
+            titleAr: getWhatsAppMessageTitleAr(msg.messageType),
             message: msg.messageContent.substring(0, 100) + "...",
             date: msg.sentAt,
+            time: formatRelativeTime(msg.sentAt),
             icon: "MessageSquare",
           });
         });
@@ -597,9 +674,11 @@ async function fetchNotifications(studentId) {
           notifications.push({
             id: reminder._id,
             type: "reminder",
-            title: "تذكير جلسة",
+            title: "Session Reminder",
+            titleAr: "تذكير جلسة",
             message: reminder.message,
             date: reminder.sentAt,
+            time: formatRelativeTime(reminder.sentAt),
             icon: "Bell",
           });
         });
@@ -612,7 +691,33 @@ async function fetchNotifications(studentId) {
   }
 }
 
+function formatRelativeTime(date) {
+  const now = new Date();
+  const diffMs = now - new Date(date);
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hour ago`;
+  if (diffDays < 7) return `${diffDays} day ago`;
+  return new Date(date).toLocaleDateString();
+}
+
 function getWhatsAppMessageTitle(messageType) {
+  const titles = {
+    welcome: "Welcome Message",
+    session_reminder: "Session Reminder",
+    absence_notification: "Absence Alert",
+    session_cancelled: "Session Cancelled",
+    session_postponed: "Session Postponed",
+    group_welcome: "Group Welcome",
+  };
+  return titles[messageType] || "WhatsApp Message";
+}
+
+function getWhatsAppMessageTitleAr(messageType) {
   const titles = {
     welcome: "رسالة ترحيب",
     session_reminder: "تذكير جلسة",

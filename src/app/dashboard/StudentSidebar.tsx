@@ -14,7 +14,9 @@ import {
   ChevronLeft,
   GraduationCap,
   LogOut,
+  Home, // أضفنا أيقونة Home
 } from "lucide-react";
+import { useI18n } from "@/i18n/I18nProvider";
 
 interface User {
   _id?: string;
@@ -39,49 +41,56 @@ interface StudentSidebarProps {
   onLogout?: () => void;
 }
 
-// ============ Component ============
-export default function StudentSidebar({ 
-  user = null, 
-  onLogout = () => {} 
+export default function StudentSidebar({
+  user = null,
+  onLogout = () => {},
 }: StudentSidebarProps): React.JSX.Element {
+  const { t } = useI18n();
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
 
   const navigationItems: NavigationItem[] = [
     {
+      name: "Home", // زر الصفحة الرئيسية
+      nameAr: "الرئيسية",
+      href: "/",
+      icon: Home,
+      gradient: "from-blue-500 to-cyan-500", // لون مميز للـ Home
+    },
+    {
       name: "Dashboard",
       nameAr: "لوحة التحكم",
-      href: "/dashboard/student",
+      href: "/dashboard",
       icon: LayoutDashboard,
-      gradient: "from-blue-500 to-cyan-500",
+      gradient: "from-primary to-purple-600",
     },
     {
       name: "Courses",
       nameAr: "الدورات",
       href: "/dashboard/courses",
       icon: BookOpen,
-      gradient: "from-purple-400 to-pink-400",
+      gradient: "from-purple-500 to-pink-500",
     },
     {
       name: "Schedule",
       nameAr: "الجدول",
       href: "/dashboard/schedule",
       icon: Calendar,
-      gradient: "from-pink-400 to-rose-400",
+      gradient: "from-pink-500 to-rose-500",
     },
     {
       name: "Documents",
       nameAr: "المستندات",
       href: "/dashboard/documents",
       icon: FileText,
-      gradient: "from-green-400 to-emerald-400",
+      gradient: "from-emerald-500 to-teal-500",
     },
     {
       name: "Messages",
       nameAr: "الرسائل",
       href: "/dashboard/messages",
       icon: MessageSquare,
-      gradient: "from-blue-400 to-indigo-400",
+      gradient: "from-primary to-cyan-500",
       badge: 3,
     },
     {
@@ -89,56 +98,61 @@ export default function StudentSidebar({
       nameAr: "الإعدادات",
       href: "/dashboard/settings",
       icon: Settings,
-      gradient: "from-gray-400 to-slate-400",
+      gradient: "from-slate-500 to-gray-600",
     },
   ];
 
-  const isActive = (href: string): boolean => pathname === href;
+  const isActive = (href: string): boolean => {
+    // نتحقق من الـ active link بناءً على الـ pathname الحالي
+    if (href === "/") {
+      return pathname === "/"; // فقط للصفحة الرئيسية
+    }
+    return pathname === href || pathname.startsWith(href + "/");
+  };
 
   const getUserInitial = (): string => {
-    if (user?.name && typeof user.name === 'string' && user.name.length > 0) {
+    if (user?.name && typeof user.name === "string" && user.name.length > 0) {
       return user.name.charAt(0).toUpperCase();
     }
     return "S";
   };
 
   const getUserName = (): string => {
-    if (user?.name && typeof user.name === 'string') {
-      return user.name;
-    }
+    if (user?.name && typeof user.name === "string") return user.name;
     return "Student";
   };
 
   const getUserEmail = (): string => {
-    if (user?.email && typeof user.email === 'string') {
-      return user.email;
-    }
+    if (user?.email && typeof user.email === "string") return user.email;
     return "student@example.com";
   };
 
   return (
     <aside
       className={`
-        h-full bg-white dark:bg-secondary
-        border-l border-gray-200 dark:border-dark_border
+        h-full flex flex-col flex-shrink-0 sticky top-0
         transition-all duration-300 ease-in-out
         ${isCollapsed ? "w-20" : "w-64"}
-        flex flex-col flex-shrink-0
-        sticky top-0
+
+        /* ── Light ── */
+        bg-white border-l border-gray-200
+
+        /* ── GitHub Dark ── */
+        dark:bg-[#161b22] dark:border-[#30363d]
       `}
     >
-      {/* Logo Section */}
-      <div className="p-6 border-b border-gray-200 dark:border-dark_border">
+      {/* ── Logo ── */}
+      <div className="p-6 border-b border-gray-200 dark:border-[#30363d]">
         <Link href="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/30">
             <GraduationCap className="w-6 h-6 text-white" />
           </div>
           {!isCollapsed && (
             <div className="flex flex-col">
-              <span className="text-lg font-bold text-gray-900 dark:text-white">
+              <span className="text-lg font-bold text-gray-900 dark:text-[#e6edf3]">
                 Code School
               </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="text-xs text-gray-500 dark:text-[#8b949e]">
                 Learning Platform
               </span>
             </div>
@@ -146,7 +160,7 @@ export default function StudentSidebar({
         </Link>
       </div>
 
-      {/* Navigation Items */}
+      {/* ── Nav ── */}
       <nav className="flex-1 overflow-y-auto py-6 px-3">
         <div className="space-y-1">
           {navigationItems.map((item: NavigationItem) => {
@@ -160,78 +174,73 @@ export default function StudentSidebar({
                 className={`
                   group relative flex items-center gap-3 px-3 py-3 rounded-xl
                   transition-all duration-200
+                  ${isCollapsed ? "justify-center" : ""}
                   ${
                     active
                       ? `bg-gradient-to-r ${item.gradient} text-white shadow-lg`
-                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darklight"
+                      : `text-gray-600 dark:text-[#8b949e]
+                         hover:bg-gray-100 dark:hover:bg-[#21262d]
+                         hover:text-gray-900 dark:hover:text-[#e6edf3]`
                   }
-                  ${isCollapsed ? "justify-center" : ""}
                 `}
+                aria-current={active ? "page" : undefined}
               >
-                {/* Icon Container */}
+                {/* Icon */}
                 <div
                   className={`
-                  w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
-                  transition-all duration-200
-                  ${
-                    active
-                      ? "bg-white/20"
-                      : "bg-gray-100 dark:bg-darklight group-hover:scale-110"
-                  }
-                `}
+                    w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
+                    transition-all duration-200
+                    ${
+                      active
+                        ? "bg-white/20"
+                        : "bg-gray-100 dark:bg-[#21262d] group-hover:scale-110"
+                    }
+                  `}
                 >
                   <Icon
-                    className={`
-                    w-5 h-5 transition-colors duration-200
-                    ${active ? "text-white" : "text-gray-600 dark:text-gray-300"}
-                  `}
+                    className={`w-5 h-5 transition-colors duration-200 ${
+                      active ? "text-white" : "text-gray-600 dark:text-[#8b949e]"
+                    }`}
                   />
                 </div>
 
-                {/* Text & Badge */}
+                {/* Label + Badge */}
                 {!isCollapsed && (
                   <>
                     <div className="flex-1 flex items-center justify-between">
                       <span className="font-medium text-sm">{item.name}</span>
                       {item.badge !== undefined && item.badge > 0 && (
                         <span
-                          className={`
-                          px-2 py-0.5 text-xs font-bold rounded-full
-                          ${
+                          className={`px-2 py-0.5 text-xs font-bold rounded-full ${
                             active
                               ? "bg-white/30 text-white"
                               : "bg-primary text-white"
-                          }
-                        `}
+                          }`}
                         >
                           {item.badge}
                         </span>
                       )}
                     </div>
-
-                    {/* Arrow for active state */}
                     {active && (
                       <ChevronLeft className="w-4 h-4 text-white animate-pulse" />
                     )}
                   </>
                 )}
 
-                {/* Tooltip for collapsed state */}
+                {/* Collapsed tooltip */}
                 {isCollapsed && (
-                  <>
-                    <div
-                      className="
-                      absolute right-full ml-2 px-3 py-2 bg-gray-900 dark:bg-darklight
-                      text-white dark:text-gray-200 text-sm rounded-lg
+                  <div
+                    className="
+                      absolute right-full mr-2 px-3 py-2
+                      bg-[#161b22] border border-[#30363d]
+                      text-[#e6edf3] text-sm rounded-lg
                       opacity-0 invisible group-hover:opacity-100 group-hover:visible
-                      transition-all duration-200 whitespace-nowrap
-                      shadow-xl z-50
+                      transition-all duration-200 whitespace-nowrap shadow-xl z-50
                     "
-                    >
-                      {item.name}
-                      <div className="absolute left-full top-1/2 -translate-y-1/2 border-8 border-transparent border-l-gray-900 dark:border-l-darklight"></div>
-                    </div>
-                  </>
+                  >
+                    {item.name}
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 border-8 border-transparent border-l-[#30363d]" />
+                  </div>
                 )}
               </Link>
             );
@@ -239,41 +248,39 @@ export default function StudentSidebar({
         </div>
       </nav>
 
-      {/* User Profile Section */}
-      <div className="border-t border-gray-200 dark:border-dark_border p-4">
+      {/* ── User Profile ── */}
+      <div className="border-t border-gray-200 dark:border-[#30363d] p-4">
         <div
           className={`
-          flex items-center gap-3 p-3 rounded-xl
-          bg-gradient-to-br from-gray-50 to-gray-100 
-          dark:from-darklight dark:to-dark_input
-          ${isCollapsed ? "justify-center" : ""}
-        `}
+            flex items-center gap-3 p-3 rounded-xl
+            bg-gray-50 dark:bg-[#1c2128]
+            border border-transparent dark:border-[#30363d]
+            ${isCollapsed ? "justify-center" : ""}
+          `}
         >
           {/* Avatar */}
           <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-white dark:ring-secondary shadow-lg">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-white dark:ring-[#161b22] shadow-lg">
               {getUserInitial()}
             </div>
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-secondary"></div>
+            <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white dark:border-[#161b22]" />
           </div>
 
-          {/* User Info */}
           {!isCollapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+              <p className="text-sm font-semibold text-gray-900 dark:text-[#e6edf3] truncate">
                 {getUserName()}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+              <p className="text-xs text-gray-500 dark:text-[#8b949e] truncate">
                 {getUserEmail()}
               </p>
             </div>
           )}
 
-          {/* Logout Button */}
           {!isCollapsed && (
             <button
               onClick={onLogout}
-              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-400 dark:text-[#8b949e] hover:text-red-500 dark:hover:text-red-400 transition-colors"
               title="Logout"
               aria-label="Logout"
             >
@@ -287,10 +294,11 @@ export default function StudentSidebar({
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="
             mt-3 w-full p-2 rounded-lg
-            bg-gray-100 dark:bg-darklight
-            hover:bg-gray-200 dark:hover:bg-dark_input
-            text-gray-600 dark:text-gray-400
+            bg-gray-100 dark:bg-[#21262d]
+            hover:bg-gray-200 dark:hover:bg-[#30363d]
+            text-gray-600 dark:text-[#8b949e]
             transition-colors flex items-center justify-center gap-2
+            border border-transparent dark:border-[#30363d]
           "
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
