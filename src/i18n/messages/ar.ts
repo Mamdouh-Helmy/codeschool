@@ -3865,7 +3865,7 @@ const ar = {
   "groups.form.selectedInstructors": "المدرسون المختارون",
   "groups.form.selected": "محدد",
   "dashboard.whatsappTemplates": "قوالب واتساب",
-  "group.instructor.lastInstructorWarning" : "تحذير: هذا هو آخر مدرس متبقٍ",
+  "group.instructor.lastInstructorWarning": "تحذير: هذا هو آخر مدرس متبقٍ",
 
   // Common
   "common.goodMorning": "صباح الخير",
@@ -3873,10 +3873,11 @@ const ar = {
   "common.goodEvening": "مساء الخير",
   "common.tryAgain": "حاول مرة أخرى",
   "common.refreshing": "جاري التحديث...",
-  
+
   // Dashboard
   "dashboard.continueJourney": "واصل رحلتك التعليمية",
-  "dashboard.progressMessage": "أنت تحرز تقدماً رائعاً! حافظ على هذه الوتيرة وحقق أهدافك.",
+  "dashboard.progressMessage":
+    "أنت تحرز تقدماً رائعاً! حافظ على هذه الوتيرة وحقق أهدافك.",
   "dashboard.browseCourses": "تصفح الدورات",
   "dashboard.quickStart": "بداية سريعة",
   "dashboard.attended": "حضور",
@@ -3920,7 +3921,6 @@ const ar = {
   "sidebar.documents": "المستندات",
   "sidebar.messages": "الرسائل",
   "sidebar.settings": "الإعدادات",
-  
 };
 
 export default ar;

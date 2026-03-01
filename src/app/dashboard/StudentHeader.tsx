@@ -26,7 +26,6 @@ import {
     ChevronRight,
 } from "lucide-react";
 
-
 interface StudentUser {
     _id: string;
     name: string;
@@ -118,9 +117,9 @@ export default function StudentHeader({
     };
 
     const getUserInitial = () =>
-        user?.name?.length > 0 ? user.name.charAt(0).toUpperCase() : "S";
+        user?.name?.length > 0 ? user.name.charAt(0).toUpperCase() : (isArabic ? "ط" : "S");
     
-    const getUserName = () => user?.name || "Student";
+    const getUserName = () => user?.name || (isArabic ? "طالب" : "Student");
     
     const getFirstName = () => getUserName().split(" ")[0];
 
@@ -152,6 +151,7 @@ export default function StudentHeader({
 
     return (
         <header
+            dir={isArabic ? "rtl" : "ltr"}
             className={`sticky top-0 z-40 transition-all duration-300 ${
                 isScrolled
                     ? "bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md shadow-lg dark:shadow-black/40"
@@ -167,7 +167,7 @@ export default function StudentHeader({
                         <button
                             onClick={onMenuClick}
                             className="lg:hidden relative w-10 h-10 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all duration-200 group"
-                            aria-label="Toggle sidebar"
+                            aria-label={isArabic ? "فتح القائمة" : "Toggle sidebar"}
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
                             {sidebarOpen ? (
@@ -179,32 +179,6 @@ export default function StudentHeader({
 
                         {/* Desktop greeting with enhanced design */}
                         <div className="hidden lg:block">
-                            {/* <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
-                                    {getGreeting()}
-                                </span>
-                                {onRefresh && (
-                                    <button
-                                        onClick={onRefresh}
-                                        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all duration-200 group"
-                                        aria-label="Refresh"
-                                    >
-                                        <svg
-                                            className="w-4 h-4 text-gray-500 dark:text-[#8b949e] group-hover:rotate-180 transition-transform duration-500"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                            />
-                                        </svg>
-                                    </button>
-                                )}
-                            </div> */}
                             <h1 className="text-2xl lg:text-3xl font-bold flex items-center gap-2">
                                 <span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
                                     {isArabic
@@ -237,9 +211,8 @@ export default function StudentHeader({
                         </h1>
                     </div>
 
-                    {/* ── Action buttons with improved design ── */}
-                    <div className={`flex items-center gap-2 lg:gap-3 order-3 `}>
-
+                    {/* ── Action buttons in same level ── */}
+                    <div className={`flex items-center gap-2 lg:gap-3 order-3`}>
                         {/* Desktop search with animation */}
                         <div className="relative hidden lg:block group">
                             <form onSubmit={handleSearchSubmit}>
@@ -275,30 +248,53 @@ export default function StudentHeader({
                         <button
                             onClick={() => setShowMobileSearch(!showMobileSearch)}
                             className="lg:hidden relative w-10 h-10 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all duration-200 group"
+                            aria-label={isArabic ? "بحث" : "Search"}
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
                             <Search className="relative z-10 w-5 h-5 mx-auto text-gray-600 dark:text-[#8b949e] group-hover:scale-110 transition-transform" />
                         </button>
 
+                        {/* Refresh button (optional) */}
+                        {onRefresh && (
+                            <button
+                                onClick={onRefresh}
+                                className="relative w-10 h-10 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all duration-200 group"
+                                aria-label={isArabic ? "تحديث" : "Refresh"}
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
+                                <svg
+                                    className="relative z-10 w-5 h-5 mx-auto text-gray-600 dark:text-[#8b949e] group-hover:rotate-180 transition-transform duration-500"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                    />
+                                </svg>
+                            </button>
+                        )}
+
                         {/* Language toggle with improved design */}
                         <button
                             onClick={toggleLocale}
-                            className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 dark:border-[#30363d] bg-transparent hover:bg-gray-100 dark:hover:bg-[#21262d] text-gray-700 dark:text-[#8b949e] transition-all duration-200 hover:scale-105 group relative overflow-hidden"
+                            className="relative w-10 h-10 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all duration-200 group"
+                            aria-label={isArabic ? "English" : "العربية"}
                         >
-                            <span className="relative z-10 flex items-center gap-1">
-                                <span className="w-5 h-5 flex items-center justify-center">
-                                    {isArabic ? "🇺🇸" : "🇸🇦"}
-                                </span>
+                            <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
+                            <span className="relative z-10 flex items-center justify-center w-full h-full text-sm font-medium text-gray-700 dark:text-[#8b949e]">
                                 {isArabic ? "EN" : "عربي"}
                             </span>
-                            <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/5 group-hover:to-purple-600/5 transition-all duration-300" />
                         </button>
 
                         {/* Theme toggle with animation */}
                         <button
                             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                             className="relative w-10 h-10 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all duration-200 group"
-                            aria-label="Toggle theme"
+                            aria-label={isArabic ? "تغيير المظهر" : "Toggle theme"}
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
                             {theme === "dark" ? (
@@ -308,11 +304,12 @@ export default function StudentHeader({
                             )}
                         </button>
 
-                        {/* ── Notifications with improved design ── */}
+                        {/* ── Notifications ── */}
                         <div className="relative" ref={notificationsRef}>
                             <button
                                 onClick={() => setShowNotifications(!showNotifications)}
                                 className="relative w-10 h-10 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all duration-200 group"
+                                aria-label={isArabic ? "الإشعارات" : "Notifications"}
                             >
                                 <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
                                 <Bell className="relative z-10 w-5 h-5 mx-auto text-gray-600 dark:text-[#8b949e] group-hover:scale-110 transition-transform" />
@@ -409,11 +406,12 @@ export default function StudentHeader({
                             )}
                         </div>
 
-                        {/* ── User Menu with improved design ── */}
+                        {/* ── User Menu ── */}
                         <div className="relative" ref={userMenuRef}>
                             <button
                                 onClick={() => setShowUserMenu(!showUserMenu)}
                                 className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all duration-200 group"
+                                aria-label={isArabic ? "قائمة المستخدم" : "User menu"}
                             >
                                 <div className="relative">
                                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-white dark:ring-[#161b22] shadow-lg group-hover:scale-105 transition-transform">
