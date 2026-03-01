@@ -3,28 +3,38 @@ import { ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@iconify/react";
 
+type ModalSize = "sm" | "md" | "lg" | "xl" | "full";
+
 type ModalProps = {
   open: boolean;
   title?: string;
   children?: ReactNode;
   onClose: () => void;
+  size?: ModalSize;
 };
 
-export default function Modal({ open, title, children, onClose }: ModalProps) {
+const sizeClasses: Record<ModalSize, string> = {
+  sm: "max-w-sm",
+  md: "max-w-md",
+  lg: "max-w-lg",
+  xl: "max-w-3xl",
+  full: "max-w-6xl",
+};
+
+export default function Modal({ open, title, children, onClose, size = "xl" }: ModalProps) {
   const [mounted, setMounted] = useState(false);
 
-  // نتاكد ان الكومبوننت اشتغل في المتصفح (مش SSR)
   useEffect(() => setMounted(true), []);
 
   if (!open || !mounted) return null;
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-darkmode rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden border border-PowderBlueBorder dark:border-dark_border"
+        className={`bg-white dark:bg-darkmode rounded-2xl shadow-2xl w-full ${sizeClasses[size]} max-h-[85vh] overflow-hidden border border-PowderBlueBorder dark:border-dark_border`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

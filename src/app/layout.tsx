@@ -47,12 +47,14 @@ export default async function RootLayout({
                     <NextTopLoader />
 
                     <SiteWrapper>
+                      {/* ✅ zIndex: 99999 عشان يظهر فوق أي Modal */}
                       <Toaster
-                        containerStyle={{ zIndex: 9999 }}
+                        position="top-center"
+                        containerStyle={{ zIndex: 99999 }}
                         toastOptions={{
                           className:
                             "bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none p-3 max-w-404",
-                          style: { maxWidth: "25rem" },
+                          style: { maxWidth: "25rem", zIndex: 99999 },
                           success: {
                             className:
                               "bg-primary text-white rounded-14 shadow-sm p-3 max-w-404",
