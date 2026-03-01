@@ -3913,6 +3913,13 @@ const ar = {
   "dashboard.notifications": "الإشعارات",
   "dashboard.new": "جديد",
   "dashboard.viewAllNotifications": "عرض كل الإشعارات",
+  "sidebar.home": "الرئيسية",
+  "sidebar.dashboard": "لوحة التحكم",
+  "sidebar.courses": "الدورات",
+  "sidebar.schedule": "الجدول",
+  "sidebar.documents": "المستندات",
+  "sidebar.messages": "الرسائل",
+  "sidebar.settings": "الإعدادات",
   
 };
 

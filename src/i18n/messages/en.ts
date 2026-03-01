@@ -3785,6 +3785,14 @@ const en = {
   "dashboard.notifications": "Notifications",
   "dashboard.new": "new",
   "dashboard.viewAllNotifications": "View All Notifications",
+  "sidebar.home": "Home",
+  "sidebar.dashboard": "Dashboard",
+  "sidebar.courses": "Courses",
+  "sidebar.schedule": "Schedule",
+  "sidebar.documents": "Documents",
+  "sidebar.messages": "Messages",
+  "sidebar.settings": "Settings",
+
 };
 
 export default en;
