@@ -1,4 +1,3 @@
-// /src/models/WhatsAppTemplateInstructor.js
 import mongoose from "mongoose";
 
 const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
@@ -15,7 +14,6 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
       trim: true,
       default: "قالب تفعيل المجموعة للمدرب",
     },
-
     // ✅ محتوى عربي وإنجليزي منفصلين
     contentAr: {
       type: String,
@@ -25,12 +23,10 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-
     // ✅ للتوافق مع الكود القديم - سيُحدَّث تلقائياً
     content: {
       type: String,
     },
-
     description: {
       type: String,
       default: "رسالة إخطار المدرب عند تفعيل مجموعة جديدة",
@@ -68,11 +64,11 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
 WhatsAppTemplateInstructorSchema.index({ templateType: 1, isActive: 1 });
 WhatsAppTemplateInstructorSchema.index({ isDefault: 1 });
 
-WhatsAppTemplateInstructorSchema.pre("save", function (next) {
+// ✅ الحل: async بدل next callback
+WhatsAppTemplateInstructorSchema.pre("save", async function () {
   this.metadata.updatedAt = new Date();
   // ✅ sync content مع العربي كـ default
   this.content = this.contentAr;
-  next();
 });
 
 WhatsAppTemplateInstructorSchema.methods.incrementUsage = async function () {
@@ -81,5 +77,13 @@ WhatsAppTemplateInstructorSchema.methods.incrementUsage = async function () {
   await this.save();
 };
 
-export default mongoose.models.WhatsAppTemplateInstructor ||
-  mongoose.model("WhatsAppTemplateInstructor", WhatsAppTemplateInstructorSchema);
+// ✅ الحل: try/catch بدل || للتحقق من الـ model
+const WhatsAppTemplateInstructor = (() => {
+  try {
+    return mongoose.model("WhatsAppTemplateInstructor");
+  } catch {
+    return mongoose.model("WhatsAppTemplateInstructor", WhatsAppTemplateInstructorSchema);
+  }
+})();
+
+export default WhatsAppTemplateInstructor;

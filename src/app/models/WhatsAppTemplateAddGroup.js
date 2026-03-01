@@ -1,4 +1,3 @@
-// /src/models/WhatsAppTemplateAddGroup.js
 import mongoose from "mongoose";
 
 const WhatsAppTemplateAddGroupSchema = new mongoose.Schema(
@@ -13,9 +12,6 @@ const WhatsAppTemplateAddGroupSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-
-    // ✅ قالبان منفصلان - للطالب وولي الأمر
-    // كل منهم بعربي وإنجليزي
     studentContentAr: {
       type: String,
       default: "",
@@ -32,13 +28,11 @@ const WhatsAppTemplateAddGroupSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-
     // ✅ للتوافق مع الكود القديم
     content: {
       type: String,
       default: "",
     },
-
     description: {
       type: String,
       default: "",
@@ -76,11 +70,11 @@ const WhatsAppTemplateAddGroupSchema = new mongoose.Schema(
 WhatsAppTemplateAddGroupSchema.index({ templateType: 1, isActive: 1 });
 WhatsAppTemplateAddGroupSchema.index({ isDefault: 1 });
 
-WhatsAppTemplateAddGroupSchema.pre("save", function (next) {
+// ✅ الحل: async بدل next callback
+WhatsAppTemplateAddGroupSchema.pre("save", async function () {
   this.metadata.updatedAt = new Date();
   // sync content مع رسالة الطالب العربي كـ default للتوافق
   if (this.studentContentAr) this.content = this.studentContentAr;
-  next();
 });
 
 WhatsAppTemplateAddGroupSchema.methods.incrementUsage = async function () {
@@ -89,5 +83,13 @@ WhatsAppTemplateAddGroupSchema.methods.incrementUsage = async function () {
   await this.save();
 };
 
-export default mongoose.models.WhatsAppTemplateAddGroup ||
-  mongoose.model("WhatsAppTemplateAddGroup", WhatsAppTemplateAddGroupSchema);
+// ✅ الحل: try/catch بدل || للتحقق من الـ model
+const WhatsAppTemplateAddGroup = (() => {
+  try {
+    return mongoose.model("WhatsAppTemplateAddGroup");
+  } catch {
+    return mongoose.model("WhatsAppTemplateAddGroup", WhatsAppTemplateAddGroupSchema);
+  }
+})();
+
+export default WhatsAppTemplateAddGroup;
