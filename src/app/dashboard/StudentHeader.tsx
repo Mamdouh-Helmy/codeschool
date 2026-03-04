@@ -227,7 +227,7 @@ export default function StudentHeader({
                     </div>
 
                     {/* ── Action buttons in same level ── */}
-                    <div className={`flex items-center gap-1 sm:gap-2 lg:gap-3 ${isArabic ? "order-1" : "order-3"} flex-shrink-0`}>
+                    <div className={`flex items-center gap-1 sm:gap-2 lg:gap-3 order-3 flex-shrink-0`}>
                         {/* Desktop search with animation - hidden on mobile/tablet */}
                         <div className="relative hidden xl:block group">
                             <form onSubmit={handleSearchSubmit}>
