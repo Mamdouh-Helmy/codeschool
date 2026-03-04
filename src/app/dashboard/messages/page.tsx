@@ -14,9 +14,6 @@ import {
   Trash2, X, Check,
 } from "lucide-react";
 
-// تعريف نوع للـ Timeout
-type Timeout = ReturnType<typeof setTimeout>;
-
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface MsgMeta {
   groupName?: string | null;
@@ -120,13 +117,19 @@ function groupByDate(msgs: Msg[], ar: boolean) {
 
 // ─── Message Card ────────────────────────────────────────────────────────────
 const MsgCard = React.memo(({ msg, isRTL, onDelete, deleting, idx }: {
-  msg: Msg; isRTL: boolean; onDelete:(id:string)=>void; deleting:boolean; idx:number;
+  msg: Msg; 
+  isRTL: boolean; 
+  onDelete: (id:string)=>void; 
+  deleting: boolean; 
+  idx: number;
 }) => {
   const [expanded,    setExpanded]    = useState(false);
   const [confirmDel,  setConfirmDel]  = useState(false);
   const [hovered,     setHovered]     = useState(false);
-  // ✅ التصحيح هنا: استخدام ReturnType<typeof setTimeout>
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  
+  // ✅ التصحيح: في المتصفح setTimeout يعيد number
+  const timerRef = useRef<number>();
+  
   const p = PALETTE[msg.color] || PALETTE.gray;
   const icon = ICON_EL[msg.icon] || ICON_EL.bell;
   const label = isRTL ? msg.label.ar : msg.label.en;
@@ -142,7 +145,8 @@ const MsgCard = React.memo(({ msg, isRTL, onDelete, deleting, idx }: {
     }
     else { 
       setConfirmDel(true); 
-      timerRef.current = setTimeout(() => setConfirmDel(false), 3000); 
+      // ✅ استخدام window.setTimeout صراحة
+      timerRef.current = window.setTimeout(() => setConfirmDel(false), 3000); 
     }
   };
 
@@ -356,8 +360,9 @@ export default function MessagesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [page, setPage]               = useState(1);
+  
   // ✅ التصحيح هنا أيضاً
-  const debRef = useRef<ReturnType<typeof setTimeout>>();
+  const debRef = useRef<number>();
   const PAGE_SIZE = 25;
 
   // ── Fetch ──
@@ -383,7 +388,8 @@ export default function MessagesPage() {
   const onSearchInput = (v: string) => {
     setSearchInput(v);
     clearTimeout(debRef.current);
-    debRef.current = setTimeout(() => { setSearch(v); setPage(1); }, 220);
+    // ✅ استخدام window.setTimeout
+    debRef.current = window.setTimeout(() => { setSearch(v); setPage(1); }, 220);
   };
   const clearSearch = () => { setSearchInput(""); setSearch(""); setPage(1); };
 
@@ -421,7 +427,9 @@ export default function MessagesPage() {
         body: JSON.stringify({ action: "delete", id }),
       });
     } catch (e) { console.error(e); }
-    setTimeout(() => {
+    
+    // ✅ استخدام window.setTimeout
+    window.setTimeout(() => {
       setAllMsgs(prev => prev.filter(m => m._id !== id));
       setStats(prev => prev ? { ...prev, all: Math.max(0, prev.all-1) } : prev);
       setDeletingIds(prev => { const s = new Set(prev); s.delete(id); return s; });

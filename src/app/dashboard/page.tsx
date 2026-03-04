@@ -1394,7 +1394,7 @@ export default function StudentDashboard() {
                     </div>
 
                     <Link
-                      href="/dashboard/notifications"
+                      href="/dashboard/messages"
                       className="mt-4 block text-center text-sm bg-gradient-to-r from-primary to-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 transform hover:scale-105"
                     >
                       {t("dashboard.viewAllNotifications")}
