@@ -137,7 +137,7 @@ const SessionCard = ({ session, isRTL }: { session: SessionItem; isRTL: boolean 
 
   return (
     <div
-      className={`group relative bg-white dark:bg-[#161b22] rounded-2xl border overflow-hidden transition-all duration-300 hover:shadow-xl dark:hover:border-[#3d444d] cursor-pointer ${
+      className={`group relative scrollbar-hide bg-white dark:bg-[#161b22] rounded-2xl border overflow-hidden transition-all duration-300 hover:shadow-xl dark:hover:border-[#3d444d] cursor-pointer ${
         session.isToday
           ? "border-primary shadow-lg shadow-primary/10 dark:border-primary/50"
           : "border-gray-100 dark:border-[#30363d] hover:shadow-md"
@@ -743,7 +743,7 @@ export default function SchedulePage() {
                     </p>
                   </div>
 
-                  <div className="p-3 space-y-2 max-h-96 overflow-y-auto">
+                  <div className="p-3 space-y-2 max-h-96 overflow-y-auto scrollbar-hide">
                     {listSessions.length > 0 ? (
                       listSessions.map(s => <SessionCard key={s._id} session={s} isRTL={isRTL} />)
                     ) : (

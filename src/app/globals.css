@@ -18,6 +18,8 @@ body {
   padding: 0;
 }
 
+
+
 @layer components {
   section {
     @apply md:py-20 py-10;
@@ -481,3 +483,13 @@ body {
             opacity: 0.8;
           }
         }
+
+
+        .scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
