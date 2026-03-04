@@ -128,7 +128,7 @@ const MsgCard = React.memo(({ msg, isRTL, onDelete, deleting, idx }: {
   const [hovered,     setHovered]     = useState(false);
   
   // ✅ التصحيح: في المتصفح setTimeout يعيد number
-  const timerRef = useRef<number>();
+  const timerRef = useRef<number>(undefined);
   
   const p = PALETTE[msg.color] || PALETTE.gray;
   const icon = ICON_EL[msg.icon] || ICON_EL.bell;
@@ -362,7 +362,7 @@ export default function MessagesPage() {
   const [page, setPage]               = useState(1);
   
   // ✅ التصحيح هنا أيضاً
-  const debRef = useRef<number>();
+  const debRef = useRef<number>(undefined);
   const PAGE_SIZE = 25;
 
   // ── Fetch ──
