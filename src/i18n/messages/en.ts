@@ -3792,7 +3792,307 @@ const en = {
   "sidebar.documents": "Documents",
   "sidebar.messages": "Messages",
   "sidebar.settings": "Settings",
+  "sidebar.sessions": "Sessions",
+  "sidebar.groups": "Groups",
 
+  // Page title and header
+  "groups.myGroups": "My Groups",
+  "groups.myGroupsTitle": "My Study Groups",
+  "groups.educationalJourney": "Your Educational Journey 🎓",
+  "groups.trackProgress": "Track your progress across all your study groups",
+  "groups.group": "Group",
+  "groups.groups": "Groups",
+
+  // Stats cards
+  "groups.totalGroups": "Total Groups",
+  "groups.total": "Total",
+  "groups.activeGroups": "Active Groups",
+  "groups.active": "Active",
+  "groups.completedGroups": "Completed Groups",
+  "groups.completed": "Completed",
+  "groups.learningHours": "Learning Hours",
+  "groups.hours": "Hours",
+  "groups.hoursShort": "h",
+
+  // Progress stats
+  "groups.overallProgress": "Overall Progress",
+  "groups.overallAttendance": "Average Attendance",
+  "groups.completedSessions": "Completed Sessions",
+  "groups.totalSessions": "Total Sessions",
+  "groups.progress": "Progress",
+  "groups.attendance": "Attendance",
+
+  // Group card
+  "groups.sessions": "sessions",
+  "groups.completed.lower": "completed",
+  "groups.remaining": "remaining",
+  "groups.nextSession": "Next Session",
+  "groups.nextSessionOn": "Next session:",
+  "groups.instructors": "Instructors",
+  "groups.noInstructors": "No instructors",
+
+  // Filter buttons
+  "groups.all": "All",
+  "groups.activeFilter": "Active",
+  "groups.completedFilter": "Completed",
+  "groups.draft": "Draft",
+  "groups.cancelled": "Cancelled",
+
+  // Levels
+  "levels.beginner": "Beginner",
+  "levels.intermediate": "Intermediate",
+  "levels.advanced": "Advanced",
+
+  // Days
+  "days.sunday": "Sun",
+  "days.monday": "Mon",
+  "days.tuesday": "Tue",
+  "days.wednesday": "Wed",
+  "days.thursday": "Thu",
+  "days.friday": "Fri",
+  "days.saturday": "Sat",
+
+  // Empty state
+  "groups.noGroups": "No Groups Found",
+  "groups.noGroupsMessage":
+    "You haven't joined any study groups yet. Contact administration to enroll.",
+  "groups.clickToViewDetails": "Click on any group to view its details",
+
+  // Loading and error
+  "groups.loading": "Loading...",
+  "groups.error": "Error",
+  "groups.errorMessage": "Failed to connect to server",
+  "groups.retry": "Retry",
+
+  // Status badges
+  "status.active": "Active",
+  "status.completed": "Completed",
+  "status.draft": "Draft",
+  "status.cancelled": "Cancelled",
+
+  // Additional
+  "groups.viewDetails": "View Details",
+  "groups.refresh": "Refresh",
+  "groups.lastUpdated": "Last updated",
+
+  // Page header
+  "groupDetails.backToHome": "Back to Home",
+  "groupDetails.groupDetails": "Group Details",
+  "groupDetails.yourProgress": "Your Progress",
+  "groupDetails.sessions": "sessions",
+  "groupDetails.of": "of",
+
+  // Status badges
+  "groupDetails.status.active": "Active",
+  "groupDetails.status.completed": "Completed",
+  "groupDetails.status.draft": "Draft",
+  "groupDetails.status.cancelled": "Cancelled",
+  "groupDetails.status.inProgress": "In progress ●",
+  "groupDetails.status.completedBadge": "✓ Completed",
+  "groupDetails.status.upcoming": "Upcoming",
+
+  // Tabs
+  "groupDetails.tabs.overview": "Overview",
+  "groupDetails.tabs.curriculum": "Curriculum",
+  "groupDetails.tabs.team": "Team",
+
+  // Stats cards
+  "groupDetails.stats.completedSessions": "Completed Sessions",
+  "groupDetails.stats.remainingSessions": "Remaining Sessions",
+  "groupDetails.stats.attendanceRate": "Attendance Rate",
+  "groupDetails.stats.learningHours": "Learning Hours",
+  "groupDetails.stats.hoursShort": "h",
+
+  // Next session
+  "groupDetails.nextSession": "Next Session",
+  "groupDetails.viewSessions": "View Sessions",
+
+  // Attendance details
+  "groupDetails.attendanceDetails": "Attendance Details",
+  "groupDetails.attendance.present": "Present",
+  "groupDetails.attendance.late": "Late",
+  "groupDetails.attendance.excused": "Excused",
+  "groupDetails.attendance.absent": "Absent",
+
+  // Curriculum
+  "groupDetails.curriculum.completed": "Completed",
+  "groupDetails.curriculum.inProgress": "In Progress",
+  "groupDetails.curriculum.modulesCompleted": "modules completed",
+  "groupDetails.curriculum.noSessions": "No sessions defined",
+  "groupDetails.curriculum.session": "Session",
+
+  // Team
+  "groupDetails.team.instructor": "Instructor",
+  "groupDetails.team.noInstructors": "No instructors assigned",
+
+  // Schedule
+  "groupDetails.schedule.title": "Schedule",
+  "groupDetails.schedule.days": "Session Days",
+  "groupDetails.schedule.time": "Time",
+  "groupDetails.schedule.startDate": "Start Date",
+
+  // Course info
+  "groupDetails.courseInfo.title": "Course Information",
+  "groupDetails.courseInfo.modules": "Total Modules",
+  "groupDetails.courseInfo.sessions": "Total Sessions",
+  "groupDetails.courseInfo.level": "Level",
+  "groupDetails.courseInfo.grade": "Grade",
+  "groupDetails.courseInfo.subject": "Subject",
+  "groupDetails.courseInfo.unit": "unit",
+
+  // Students
+  "groupDetails.students.title": "Students",
+  "groupDetails.students.seatsAvailable": "seats available",
+  "groupDetails.students.seats": "seats",
+
+  // View all sessions
+  "groupDetails.viewAllSessions": "View All Sessions",
+  "groupDetails.completed": "completed",
+  "groupDetails.remaining": "remaining",
+
+  // Loading and error
+  "groupDetails.loading": "Loading...",
+  "groupDetails.error": "Error",
+  "groupDetails.errorMessage": "Failed to load group data",
+  "groupDetails.retry": "Retry",
+
+  // Page header
+  "sessions.pageTitle": "Group Sessions",
+  "sessions.locked": "Locked",
+  "sessions.progress": "Progress",
+
+  // Filter tabs
+  "sessions.filters.all": "All",
+  "sessions.filters.locked": "Locked",
+
+  // Next session banner
+  "sessions.nextAvailable": "Next Available Session",
+  "sessions.joinNow": "Join Now",
+  "sessions.today": "Today",
+
+  // Session card
+  "sessions.session": "Session",
+  "sessions.duration": "2 hours",
+  "sessions.durationMinutes": "120 minutes",
+  "sessions.join": "Join",
+  "sessions.recording": "Recording",
+  "sessions.lockedTooltip": "Complete previous session to access this one",
+
+  // Session detail modal
+  "sessions.modal.title": "Session Details",
+  "sessions.modal.module": "Module",
+  "sessions.modal.session": "Session",
+  "sessions.modal.joinMeeting": "Join Meeting Now",
+  "sessions.modal.watchRecording": "Watch Session Recording",
+  "sessions.modal.lockedTitle": "Session Locked",
+  "sessions.modal.lockedMessage":
+    "Complete the previous session to access this one",
+  "sessions.modal.lessonsCovered": "Lessons Covered",
+  "sessions.modal.totalDuration": "Total Session Duration",
+  "sessions.modal.materials": "Learning Materials",
+  "sessions.modal.file": "File",
+  "sessions.modal.instructorNotes": "Instructor Notes",
+  "sessions.modal.description": "Description",
+
+  // Attendance status
+  "sessions.attendance.present": "Present",
+  "sessions.attendance.late": "Late",
+  "sessions.attendance.excused": "Excused",
+  "sessions.attendance.absent": "Absent",
+
+  // Platforms
+  "sessions.platform.zoom": "Zoom",
+  "sessions.platform.googleMeet": "Meet",
+  "sessions.platform.microsoftTeams": "Teams",
+  "sessions.platform.other": "Link",
+  "sessions.platform.link": "Link",
+
+  // Empty states
+  "sessions.noSessions": "No sessions in this category",
+  "sessions.noSessionsInModule": "No sessions in this module",
+
+  // Module group
+  "sessions.module.completed": "completed",
+
+  // Loading and error
+  "sessions.loading": "Loading...",
+  "sessions.error": "Error",
+  "sessions.errorMessage": "Failed to load session data",
+  "sessions.retry": "Retry",
+
+  // View toggle
+  "sessions.view.group": "Group view",
+  "sessions.view.list": "List view",
+
+  // Page title
+  "allSessions.pageTitle": "My Sessions",
+  "allSessions.completed": "Completed",
+  "allSessions.scheduled": "Scheduled",
+  "allSessions.total": "Total",
+  "allSessions.locked": "Locked",
+  "allSessions.today": "Today",
+
+  // Filter tabs
+  "allSessions.filters.all": "All",
+  "allSessions.filters.upcoming": "Upcoming",
+  "allSessions.filters.completed": "Completed",
+  "allSessions.filters.locked": "Locked",
+  "allSessions.filters.today": "Today",
+
+  // Search
+  "allSessions.search": "Search...",
+  "allSessions.searchPlaceholder": "Search sessions...",
+
+  // View toggle
+  "allSessions.view.byDate": "By date",
+  "allSessions.view.list": "List view",
+
+  // Join now banner
+  "allSessions.activeNow": "Active session now!",
+  "allSessions.joinNow": "Join Now",
+
+  // Session card
+  "allSessions.session": "Session",
+  "allSessions.duration": "2 hours",
+  "allSessions.join": "Join",
+  "allSessions.recording": "Recording",
+
+  // Session detail modal
+  "allSessions.modal.joinMeeting": "Join Meeting Now",
+  "allSessions.modal.watchRecording": "Watch Session Recording",
+  "allSessions.modal.lessonsCovered": "Lessons Covered",
+  "allSessions.modal.totalDuration": "Total Session Duration",
+  "allSessions.modal.materials": "Learning Materials",
+  "allSessions.modal.file": "File",
+  "allSessions.modal.instructorNotes": "Instructor Notes",
+  "allSessions.modal.duration": "120 minutes = 2 hours",
+
+  // Attendance status
+  "allSessions.attendance.present": "Present",
+  "allSessions.attendance.late": "Late",
+  "allSessions.attendance.excused": "Excused",
+  "allSessions.attendance.absent": "Absent",
+
+  // Platforms
+  "allSessions.platform.zoom": "Zoom",
+  "allSessions.platform.googleMeet": "Meet",
+  "allSessions.platform.microsoftTeams": "Teams",
+  "allSessions.platform.other": "Link",
+
+  // Date header
+  "allSessions.date.today": "Today",
+  "allSessions.date.sessions": "session",
+  "allSessions.date.sessions_plural": "sessions",
+
+  // Empty states
+  "allSessions.noSessions": "No sessions in this category",
+  "allSessions.noSessionsFound": "No sessions found",
+
+  // Loading and error
+  "allSessions.loading": "Loading...",
+  "allSessions.error": "Error",
+  "allSessions.errorMessage": "Failed to load session data",
+  "allSessions.retry": "Retry",
 };
 
 export default en;

@@ -36,6 +36,7 @@ interface NavigationItem {
   icon: React.ElementType;
   gradient: string;
   badge?: number;
+  exact?: boolean; // ⭐ NEW
 }
 
 interface StudentSidebarProps {
@@ -60,6 +61,7 @@ export default function StudentSidebar({
       href: "/",
       icon: Home,
       gradient: "from-blue-500 to-cyan-500",
+      exact: true, // ⭐ مهم
     },
     {
       name: t("sidebar.dashboard"),
@@ -67,14 +69,23 @@ export default function StudentSidebar({
       href: "/dashboard",
       icon: LayoutDashboard,
       gradient: "from-primary to-purple-600",
+      exact: true, // ⭐ مهم
     },
     {
-      name: t("sidebar.courses"),
-      nameAr: "الدورات",
-      href: "/dashboard/courses",
-      icon: BookOpen,
+      name: t("sidebar.groups"),
+      nameAr: "مجموعاتي",
+      href: "/dashboard/groups",
+      icon: Users,
       gradient: "from-purple-500 to-pink-500",
     },
+    {
+      name: t("sidebar.sessions"),
+      nameAr: "جلساتي",
+      href: "/dashboard/sessions",
+      icon: Calendar,
+      gradient: "from-purple-500 to-pink-500",
+    },
+
     {
       name: t("sidebar.schedule"),
       nameAr: "الجدول",
@@ -82,35 +93,30 @@ export default function StudentSidebar({
       icon: Calendar,
       gradient: "from-pink-500 to-rose-500",
     },
-    {
-      name: t("sidebar.documents"),
-      nameAr: "المستندات",
-      href: "/dashboard/documents",
-      icon: FileText,
-      gradient: "from-emerald-500 to-teal-500",
-    },
+   
     {
       name: t("sidebar.messages"),
       nameAr: "الرسائل",
       href: "/dashboard/messages",
       icon: MessageSquare,
       gradient: "from-primary to-cyan-500",
-      badge: 3,
+      
     },
-    {
-      name: t("sidebar.settings"),
-      nameAr: "الإعدادات",
-      href: "/dashboard/settings",
-      icon: Settings,
-      gradient: "from-slate-500 to-gray-600",
-    },
+   
   ];
 
-  const isActive = (href: string): boolean => {
-    if (href === "/") {
-      return pathname === "/";
+  // ✅ SMART ACTIVE DETECTION (FIXED)
+  const isActive = (item: NavigationItem): boolean => {
+    // exact pages (home & dashboard)
+    if (item.exact) {
+      return pathname === item.href;
     }
-    return pathname === href || pathname.startsWith(href + "/");
+
+    // nested routes support
+    return (
+      pathname === item.href ||
+      pathname.startsWith(item.href + "/")
+    );
   };
 
   const getUserInitial = (): string => {
@@ -130,7 +136,6 @@ export default function StudentSidebar({
     return "student@example.com";
   };
 
-  // Helper function for collapse button text
   const getCollapseButtonText = () => {
     if (isCollapsed) {
       return isRTL ? "توسيع" : "Expand";
@@ -138,7 +143,6 @@ export default function StudentSidebar({
     return isRTL ? "طي" : "Collapse";
   };
 
-  // Helper function for aria-label
   const getCollapseAriaLabel = () => {
     if (isCollapsed) {
       return isRTL ? "توسيع القائمة الجانبية" : "Expand sidebar";
@@ -154,10 +158,7 @@ export default function StudentSidebar({
         transition-all duration-300 ease-in-out
         ${isCollapsed ? "w-20" : "w-64"}
 
-        /* ── Light ── */
         bg-white border-l border-gray-200
-
-        /* ── GitHub Dark ── */
         dark:bg-[#161b22] dark:border-[#30363d]
       `}
     >
@@ -185,7 +186,7 @@ export default function StudentSidebar({
         <div className="space-y-1">
           {navigationItems.map((item: NavigationItem) => {
             const Icon = item.icon;
-            const active = isActive(item.href);
+            const active = isActive(item); // ⭐ FIXED
 
             return (
               <Link
@@ -259,8 +260,8 @@ export default function StudentSidebar({
                 {isCollapsed && (
                   <div
                     className={`
-                      absolute ${isRTL ? 'left-full' : 'right-full'} 
-                      ${isRTL ? 'ml-2' : 'mr-2'} px-3 py-2
+                      absolute ${isRTL ? "left-full" : "right-full"}
+                      ${isRTL ? "ml-2" : "mr-2"} px-3 py-2
                       bg-[#161b22] border border-[#30363d]
                       text-[#e6edf3] text-sm rounded-lg
                       opacity-0 invisible group-hover:opacity-100 group-hover:visible
@@ -268,11 +269,13 @@ export default function StudentSidebar({
                     `}
                   >
                     {isRTL ? item.nameAr : item.name}
-                    <div className={`absolute top-1/2 -translate-y-1/2 ${
-                      isRTL ? 'right-full' : 'left-full'
-                    } border-8 border-transparent ${
-                      isRTL ? 'border-r-[#30363d]' : 'border-l-[#30363d]'
-                    }`} />
+                    <div
+                      className={`absolute top-1/2 -translate-y-1/2 ${
+                        isRTL ? "right-full" : "left-full"
+                      } border-8 border-transparent ${
+                        isRTL ? "border-r-[#30363d]" : "border-l-[#30363d]"
+                      }`}
+                    />
                   </div>
                 )}
               </Link>
@@ -291,7 +294,6 @@ export default function StudentSidebar({
             ${isCollapsed ? "justify-center" : ""}
           `}
         >
-          {/* Avatar */}
           <div className="relative flex-shrink-0">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-white dark:ring-[#161b22] shadow-lg">
               {getUserInitial()}

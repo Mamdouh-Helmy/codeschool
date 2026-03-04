@@ -387,7 +387,7 @@ export default function StudentHeader({
 
                                     {notifications.length > 0 && (
                                         <Link
-                                            href="/dashboard/notifications"
+                                            href="/dashboard/messages"
                                             onClick={() => setShowNotifications(false)}
                                             className="block px-4 py-3 text-center text-sm font-medium text-primary hover:text-primary/80 border-t border-gray-100 dark:border-[#30363d] hover:bg-gray-50 dark:hover:bg-[#1c2128] transition-all duration-200 group relative overflow-hidden"
                                         >
@@ -467,34 +467,7 @@ export default function StudentHeader({
 
                                     {/* Menu items */}
                                     <div className="p-2">
-                                        <Link
-                                            href="/dashboard/profile"
-                                            onClick={() => setShowUserMenu(false)}
-                                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-700 dark:text-[#8b949e] hover:bg-gray-50 dark:hover:bg-[#1c2128] hover:text-primary dark:hover:text-primary transition-all duration-200 group/item"
-                                        >
-                                            <User className="w-4 h-4 group-hover/item:scale-110 transition-transform" />
-                                            <span>{isArabic ? "الملف الشخصي" : "Profile"}</span>
-                                        </Link>
-
-                                        <Link
-                                            href="/dashboard/settings"
-                                            onClick={() => setShowUserMenu(false)}
-                                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-700 dark:text-[#8b949e] hover:bg-gray-50 dark:hover:bg-[#1c2128] hover:text-primary dark:hover:text-primary transition-all duration-200 group/item"
-                                        >
-                                            <Settings className="w-4 h-4 group-hover/item:rotate-90 transition-transform duration-500" />
-                                            <span>{isArabic ? "الإعدادات" : "Settings"}</span>
-                                        </Link>
-
-                                        <Link
-                                            href="/dashboard/help"
-                                            onClick={() => setShowUserMenu(false)}
-                                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-700 dark:text-[#8b949e] hover:bg-gray-50 dark:hover:bg-[#1c2128] hover:text-primary dark:hover:text-primary transition-all duration-200 group/item"
-                                        >
-                                            <HelpCircle className="w-4 h-4 group-hover/item:scale-110 transition-transform" />
-                                            <span>{isArabic ? "المساعدة" : "Help"}</span>
-                                        </Link>
-
-                                        <div className="my-2 border-t border-gray-100 dark:border-[#30363d]" />
+                                        
 
                                         <button
                                             onClick={() => {

@@ -3921,6 +3921,306 @@ const ar = {
   "sidebar.documents": "المستندات",
   "sidebar.messages": "الرسائل",
   "sidebar.settings": "الإعدادات",
+  "sidebar.sessions": "الجلسات",
+  "sidebar.groups": "المجموعات",
+
+  // Page title and header
+  "groups.myGroups": "مجموعاتي الدراسية",
+  "groups.myGroupsTitle": "مجموعاتي الدراسية",
+  "groups.educationalJourney": "رحلتك التعليمية 🎓",
+  "groups.trackProgress": "تابع تقدمك في جميع مجموعاتك الدراسية",
+  "groups.group": "مجموعة",
+  "groups.groups": "المجموعات",
+
+  // Stats cards
+  "groups.totalGroups": "إجمالي المجموعات",
+  "groups.total": "المجموع",
+  "groups.activeGroups": "مجموعات نشطة",
+  "groups.active": "نشط",
+  "groups.completedGroups": "مجموعات مكتملة",
+  "groups.completed": "مكتمل",
+  "groups.learningHours": "ساعات التعلم",
+  "groups.hours": "ساعات",
+  "groups.hoursShort": "س",
+
+  // Progress stats
+  "groups.overallProgress": "التقدم الإجمالي",
+  "groups.overallAttendance": "متوسط الحضور",
+  "groups.completedSessions": "جلسات مكتملة",
+  "groups.totalSessions": "إجمالي الجلسات",
+  "groups.progress": "تقدم",
+  "groups.attendance": "حضور",
+
+  // Group card
+  "groups.sessions": "جلسة",
+  "groups.completed.lower": "مكتملة",
+  "groups.remaining": "متبقية",
+  "groups.nextSession": "الجلسة القادمة",
+  "groups.nextSessionOn": "الجلسة القادمة:",
+  "groups.instructors": "المدربين",
+  "groups.noInstructors": "لا يوجد مدربين",
+
+  // Filter buttons
+  "groups.all": "الكل",
+  "groups.activeFilter": "نشطة",
+  "groups.completedFilter": "مكتملة",
+  "groups.draft": "مسودة",
+  "groups.cancelled": "ملغي",
+
+  // Levels
+  "levels.beginner": "مبتدئ",
+  "levels.intermediate": "متوسط",
+  "levels.advanced": "متقدم",
+
+  // Days
+  "days.sunday": "أحد",
+  "days.monday": "اثنين",
+  "days.tuesday": "ثلاثاء",
+  "days.wednesday": "أربعاء",
+  "days.thursday": "خميس",
+  "days.friday": "جمعة",
+  "days.saturday": "سبت",
+
+  // Empty state
+  "groups.noGroups": "لا توجد مجموعات",
+  "groups.noGroupsMessage":
+    "لم تنضم إلى أي مجموعة دراسية بعد. تواصل مع الإدارة للتسجيل.",
+  "groups.clickToViewDetails": "اضغط على أي مجموعة لعرض تفاصيلها",
+
+  // Loading and error
+  "groups.loading": "جاري التحميل...",
+  "groups.error": "حدث خطأ",
+  "groups.errorMessage": "تعذر الاتصال بالخادم",
+  "groups.retry": "إعادة المحاولة",
+
+  // Status badges
+  "status.active": "نشط",
+  "status.completed": "مكتمل",
+  "status.draft": "مسودة",
+  "status.cancelled": "ملغي",
+
+  // Additional
+  "groups.viewDetails": "عرض التفاصيل",
+  "groups.refresh": "تحديث",
+  "groups.lastUpdated": "آخر تحديث",
+
+  // Page header
+  "groupDetails.backToHome": "العودة للرئيسية",
+  "groupDetails.groupDetails": "تفاصيل المجموعة",
+  "groupDetails.yourProgress": "تقدمك",
+  "groupDetails.sessions": "جلسة",
+  "groupDetails.of": "من",
+
+  // Status badges
+  "groupDetails.status.active": "نشط",
+  "groupDetails.status.completed": "مكتمل",
+  "groupDetails.status.draft": "مسودة",
+  "groupDetails.status.cancelled": "ملغي",
+  "groupDetails.status.inProgress": "جارٍ الآن ●",
+  "groupDetails.status.completedBadge": "✓ مكتمل",
+  "groupDetails.status.upcoming": "قادم",
+
+  // Tabs
+  "groupDetails.tabs.overview": "نظرة عامة",
+  "groupDetails.tabs.curriculum": "المنهج",
+  "groupDetails.tabs.team": "الفريق",
+
+  // Stats cards
+  "groupDetails.stats.completedSessions": "جلسات مكتملة",
+  "groupDetails.stats.remainingSessions": "جلسات متبقية",
+  "groupDetails.stats.attendanceRate": "نسبة الحضور",
+  "groupDetails.stats.learningHours": "ساعات التعلم",
+  "groupDetails.stats.hoursShort": "س",
+
+  // Next session
+  "groupDetails.nextSession": "الجلسة القادمة",
+  "groupDetails.viewSessions": "عرض الجلسات",
+
+  // Attendance details
+  "groupDetails.attendanceDetails": "تفاصيل الحضور",
+  "groupDetails.attendance.present": "حاضر",
+  "groupDetails.attendance.late": "متأخر",
+  "groupDetails.attendance.excused": "معذور",
+  "groupDetails.attendance.absent": "غائب",
+
+  // Curriculum
+  "groupDetails.curriculum.completed": "مكتمل",
+  "groupDetails.curriculum.inProgress": "جارٍ",
+  "groupDetails.curriculum.modulesCompleted": "وحدات مكتملة",
+  "groupDetails.curriculum.noSessions": "لا توجد جلسات محددة",
+  "groupDetails.curriculum.session": "جلسة",
+
+  // Team
+  "groupDetails.team.instructor": "مدرس",
+  "groupDetails.team.noInstructors": "لا يوجد مدرسون محددون",
+
+  // Schedule
+  "groupDetails.schedule.title": "جدول الحضور",
+  "groupDetails.schedule.days": "أيام الجلسات",
+  "groupDetails.schedule.time": "الوقت",
+  "groupDetails.schedule.startDate": "تاريخ البداية",
+
+  // Course info
+  "groupDetails.courseInfo.title": "معلومات الكورس",
+  "groupDetails.courseInfo.modules": "عدد الوحدات",
+  "groupDetails.courseInfo.sessions": "عدد الجلسات",
+  "groupDetails.courseInfo.level": "المستوى",
+  "groupDetails.courseInfo.grade": "الصف",
+  "groupDetails.courseInfo.subject": "المادة",
+  "groupDetails.courseInfo.unit": "وحدة",
+
+  // Students
+  "groupDetails.students.title": "الطلاب",
+  "groupDetails.students.seatsAvailable": "مقعد متاح",
+  "groupDetails.students.seats": "مقعد",
+
+  // View all sessions
+  "groupDetails.viewAllSessions": "عرض جميع الجلسات",
+  "groupDetails.completed": "مكتملة",
+  "groupDetails.remaining": "متبقية",
+
+  // Loading and error
+  "groupDetails.loading": "جاري التحميل...",
+  "groupDetails.error": "حدث خطأ",
+  "groupDetails.errorMessage": "تعذر تحميل بيانات المجموعة",
+  "groupDetails.retry": "إعادة المحاولة",
+
+  // Page header
+  "sessions.pageTitle": "جلسات الجروب",
+  "sessions.locked": "مغلقة",
+  "sessions.progress": "التقدم",
+
+  // Filter tabs
+  "sessions.filters.all": "الكل",
+  "sessions.filters.locked": "المغلقة",
+
+  // Next session banner
+  "sessions.nextAvailable": "الجلسة القادمة المتاحة",
+  "sessions.joinNow": "انضم الآن",
+  "sessions.today": "اليوم",
+
+  // Session card
+  "sessions.session": "جلسة",
+  "sessions.duration": "ساعتان",
+  "sessions.durationMinutes": "120 دقيقة",
+  "sessions.join": "انضم",
+  "sessions.recording": "تسجيل",
+  "sessions.lockedTooltip": "أكمل الجلسة السابقة للوصول إلى هذه الجلسة",
+
+  // Session detail modal
+  "sessions.modal.title": "تفاصيل الجلسة",
+  "sessions.modal.module": "الوحدة",
+  "sessions.modal.session": "الجلسة",
+  "sessions.modal.joinMeeting": "انضم للاجتماع الآن",
+  "sessions.modal.watchRecording": "مشاهدة تسجيل الجلسة",
+  "sessions.modal.lockedTitle": "الجلسة مقفلة",
+  "sessions.modal.lockedMessage": "أكمل الجلسة السابقة للوصول إلى هذه الجلسة",
+  "sessions.modal.lessonsCovered": "الدروس المُغطاة",
+  "sessions.modal.totalDuration": "إجمالي مدة الجلسة",
+  "sessions.modal.materials": "المواد التعليمية",
+  "sessions.modal.file": "ملف",
+  "sessions.modal.instructorNotes": "ملاحظات المدرب",
+  "sessions.modal.description": "الوصف",
+
+  // Attendance status
+  "sessions.attendance.present": "حاضر",
+  "sessions.attendance.late": "متأخر",
+  "sessions.attendance.excused": "معذور",
+  "sessions.attendance.absent": "غائب",
+
+  // Platforms
+  "sessions.platform.zoom": "Zoom",
+  "sessions.platform.googleMeet": "Meet",
+  "sessions.platform.microsoftTeams": "Teams",
+  "sessions.platform.other": "رابط",
+  "sessions.platform.link": "رابط",
+
+  // Empty states
+  "sessions.noSessions": "لا توجد جلسات في هذه الفئة",
+  "sessions.noSessionsInModule": "لا توجد جلسات في هذه الوحدة",
+
+  // Module group
+  "sessions.module.completed": "مكتملة",
+
+  // Loading and error
+  "sessions.loading": "جاري التحميل...",
+  "sessions.error": "حدث خطأ",
+  "sessions.errorMessage": "تعذر تحميل بيانات الجلسات",
+  "sessions.retry": "إعادة المحاولة",
+
+  // View toggle
+  "sessions.view.group": "عرض بالمجموعات",
+  "sessions.view.list": "عرض بالقائمة",
+
+  // Page title
+  "allSessions.pageTitle": "جلساتي",
+  "allSessions.completed": "مكتملة",
+  "allSessions.scheduled": "قادمة",
+  "allSessions.total": "إجمالي",
+  "allSessions.locked": "مغلقة",
+  "allSessions.today": "اليوم",
+  
+  // Filter tabs
+  "allSessions.filters.all": "الكل",
+  "allSessions.filters.upcoming": "القادمة",
+  "allSessions.filters.completed": "المكتملة",
+  "allSessions.filters.locked": "المغلقة",
+  "allSessions.filters.today": "اليوم",
+  
+  // Search
+  "allSessions.search": "بحث...",
+  "allSessions.searchPlaceholder": "ابحث عن جلسة...",
+  
+  // View toggle
+  "allSessions.view.byDate": "عرض بالتاريخ",
+  "allSessions.view.list": "عرض بالقائمة",
+  
+  // Join now banner
+  "allSessions.activeNow": "جلسة نشطة الآن!",
+  "allSessions.joinNow": "انضم الآن",
+  
+  // Session card
+  "allSessions.session": "جلسة",
+  "allSessions.duration": "ساعتان",
+  "allSessions.join": "انضم",
+  "allSessions.recording": "تسجيل",
+  
+  // Session detail modal
+  "allSessions.modal.joinMeeting": "انضم للاجتماع الآن",
+  "allSessions.modal.watchRecording": "مشاهدة تسجيل الجلسة",
+  "allSessions.modal.lessonsCovered": "الدروس المُغطاة",
+  "allSessions.modal.totalDuration": "إجمالي مدة الجلسة",
+  "allSessions.modal.materials": "المواد التعليمية",
+  "allSessions.modal.file": "ملف",
+  "allSessions.modal.instructorNotes": "ملاحظات المدرب",
+  "allSessions.modal.duration": "120 دقيقة = ساعتان",
+  
+  // Attendance status
+  "allSessions.attendance.present": "حاضر",
+  "allSessions.attendance.late": "متأخر",
+  "allSessions.attendance.excused": "معذور",
+  "allSessions.attendance.absent": "غائب",
+  
+  // Platforms
+  "allSessions.platform.zoom": "Zoom",
+  "allSessions.platform.googleMeet": "Meet",
+  "allSessions.platform.microsoftTeams": "Teams",
+  "allSessions.platform.other": "رابط",
+  
+  // Date header
+  "allSessions.date.today": "اليوم",
+  "allSessions.date.sessions": "جلسة",
+  "allSessions.date.sessions_plural": "جلسات",
+  
+  // Empty states
+  "allSessions.noSessions": "لا توجد جلسات في هذه الفئة",
+  "allSessions.noSessionsFound": "لم يتم العثور على جلسات",
+  
+  // Loading and error
+  "allSessions.loading": "جاري التحميل...",
+  "allSessions.error": "حدث خطأ",
+  "allSessions.errorMessage": "تعذر تحميل بيانات الجلسات",
+  "allSessions.retry": "إعادة المحاولة",
 };
 
 export default ar;

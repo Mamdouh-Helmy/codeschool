@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useLocale } from "@/app/context/LocaleContext";
 import StudentSidebar from "./StudentSidebar";
 import StudentHeader from "./StudentHeader";
 import {
@@ -31,6 +30,7 @@ import {
   X,
   GraduationCap,
 } from "lucide-react";
+import { useLocale } from "@/app/context/LocaleContext";
 import { useI18n } from "@/i18n/I18nProvider";
 
 // ============ Type Definitions ============
@@ -667,19 +667,19 @@ export default function StudentDashboard() {
 
                       <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
                         <Link
-                          href="/dashboard/courses"
+                          href="/dashboard/sessions"
                           className="group/btn relative px-6 py-3 bg-white text-primary rounded-xl font-semibold hover:bg-blue-50 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-1 overflow-hidden text-sm"
                         >
                           <span className="relative z-10">{t("dashboard.browseCourses")}</span>
                           <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-white opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300" />
                         </Link>
 
-                        <button className="group/btn relative px-6 py-3 bg-white/10 backdrop-blur-sm text-white rounded-xl font-semibold hover:bg-white/20 transition-all duration-300 border border-white/20 overflow-hidden shadow-sm hover:shadow-md text-sm">
+                        {/* <button className="group/btn relative px-6 py-3 bg-white/10 backdrop-blur-sm text-white rounded-xl font-semibold hover:bg-white/20 transition-all duration-300 border border-white/20 overflow-hidden shadow-sm hover:shadow-md text-sm">
                           <span className="relative z-10 flex items-center gap-2">
                             <Zap className="w-4 h-4" />
                             {t("dashboard.quickStart")}
                           </span>
-                        </button>
+                        </button> */}
                       </div>
                     </div>
 
@@ -805,7 +805,7 @@ export default function StudentDashboard() {
                         {t("dashboard.trackJourney")}
                       </p>
                     </div>
-                    <Link
+                    {/* <Link
                       href="/dashboard/progress"
                       className="group/link text-primary hover:text-primary/80 text-sm font-medium flex items-center gap-1 px-4 py-2 rounded-lg hover:bg-primary/5 transition-all"
                     >
@@ -815,7 +815,7 @@ export default function StudentDashboard() {
                       ) : (
                         <ChevronRight className="w-4 h-4 group-hover/link:translate-x-1 transition-transform" />
                       )}
-                    </Link>
+                    </Link> */}
                   </div>
 
                   {/* Progress Timeline */}
@@ -1056,7 +1056,7 @@ export default function StudentDashboard() {
                     </p>
                   </div>
                   <Link
-                    href="/dashboard/courses"
+                    href="/dashboard/groups"
                     className="group/link text-primary hover:text-primary/80 text-sm font-medium flex items-center gap-1 px-4 py-2 rounded-lg hover:bg-primary/5 transition-all"
                   >
                     {t("dashboard.viewAll")}

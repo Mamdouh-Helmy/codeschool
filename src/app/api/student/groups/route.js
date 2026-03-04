@@ -1,173 +1,230 @@
+// app/api/student/groups/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getUserFromRequest } from "@/lib/auth";
 import Student from "../../../models/Student";
-import Group from "../../../models/Group";
 import Session from "../../../models/Session";
+import Group from "../../../models/Group";
 
 export async function GET(req) {
   try {
-    await connectDB();
-
-    const { searchParams } = new URL(req.url);
-    const status = searchParams.get("status");
-    const search = searchParams.get("search");
-
-    // الحصول على المستخدم من التوكن
     const user = await getUserFromRequest(req);
-    
     if (!user) {
       return NextResponse.json(
-        { 
-          success: false, 
-          message: "غير مصرح بالوصول",
-          code: "UNAUTHORIZED"
-        },
+        { success: false, message: "غير مصرح بالوصول", code: "UNAUTHORIZED" },
         { status: 401 }
       );
     }
 
-    // الحصول على بيانات الطالب المرتبطة بـ User
+    await connectDB();
+
     const student = await Student.findOne({ authUserId: user.id })
       .select("_id academicInfo.groupIds personalInfo.fullName")
       .lean();
 
     if (!student) {
-      return NextResponse.json({
-        success: true,
-        data: [],
-        count: 0,
-        stats: {
-          total: 0,
-          active: 0,
-          completed: 0,
-        },
-      });
+      return NextResponse.json(
+        { success: false, message: "لم يتم العثور على بيانات الطالب" },
+        { status: 404 }
+      );
     }
 
-    const studentId = student._id;
     const groupIds = student.academicInfo?.groupIds || [];
 
     if (groupIds.length === 0) {
       return NextResponse.json({
         success: true,
-        data: [],
-        count: 0,
-        stats: {
-          total: 0,
-          active: 0,
-          completed: 0,
+        data: {
+          groups: [],
+          stats: {
+            total: 0,
+            active: 0,
+            completed: 0,
+            totalHours: 0,
+            totalSessions: 0,
+            completedSessions: 0,
+            overallProgress: 0,
+            overallAttendance: 0,
+          },
         },
       });
     }
 
-    // بناء الاستعلام
-    let query = {
+    // ── جلب الجروبات مع الكورس والمدرسين ─────────────────────────────────────
+    const groups = await Group.find({
       _id: { $in: groupIds },
       isDeleted: false,
-    };
-
-    if (status && status !== "all") {
-      query.status = status;
-    }
-
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { code: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    // جلب المجموعات
-    const groups = await Group.find(query)
-      .populate("courseId", "title level")
-      .populate("instructors", "name email")
-      .sort({ "schedule.startDate": -1 })
+    })
+      .populate({
+        path: "courseId",
+        select: "title description level thumbnail grade subject curriculum",
+      })
+      .populate({
+        path: "instructors.userId",
+        select: "name",
+      })
+      .select(
+        "name code status schedule maxStudents currentStudentsCount courseId instructors sessionsGenerated totalSessionsCount"
+      )
+      .sort({ status: 1, createdAt: -1 })
       .lean();
 
-    // حساب الإحصائيات
-    const totalGroups = groupIds.length;
-    const activeGroups = groups.filter(g => g.status === "active").length;
-    const completedGroups = groups.filter(g => g.status === "completed").length;
-
-    // حساب عدد الجلسات لكل مجموعة
-    const groupsWithSessions = await Promise.all(
+    // ── لكل جروب، احسب الإحصائيات ────────────────────────────────────────────
+    const enrichedGroups = await Promise.all(
       groups.map(async (group) => {
-        const sessionsCount = await Session.countDocuments({
-          groupId: group._id,
-          isDeleted: false,
-        });
-
-        const completedSessions = await Session.countDocuments({
-          groupId: group._id,
-          status: "completed",
-          isDeleted: false,
-        });
-
-        // حساب نسبة الحضور لهذه المجموعة
-        const groupSessions = await Session.find({
+        const allSessions = await Session.find({
           groupId: group._id,
           isDeleted: false,
         })
-          .select("attendance")
+          .select("status attendance attendanceTaken scheduledDate startTime endTime title moduleIndex sessionNumber")
           .lean();
 
-        let attendedSessions = 0;
-        groupSessions.forEach((session) => {
-          if (session.attendance) {
-            const attendanceRecord = session.attendance.find(
-              (a) => a.studentId.toString() === studentId.toString()
-            );
-            if (attendanceRecord?.status === "present") {
-              attendedSessions++;
-            }
+        const totalSessions = allSessions.length;
+        const completedSessions = allSessions.filter((s) => s.status === "completed");
+        const completedCount = completedSessions.length;
+        const remainingCount = allSessions.filter((s) => s.status === "scheduled").length;
+        const progressPercentage =
+          totalSessions > 0 ? Math.round((completedCount / totalSessions) * 100) : 0;
+
+        // حضور الطالب (حاضر + متأخر + معذور)
+        let attendedCount = 0;
+        let absentCount = 0;
+        let lateCount = 0;
+        let excusedCount = 0;
+
+        completedSessions.forEach((session) => {
+          const record = session.attendance?.find(
+            (a) => a.studentId?.toString() === student._id.toString()
+          );
+          if (record) {
+            if (record.status === "present") attendedCount++;
+            else if (record.status === "absent") absentCount++;
+            else if (record.status === "late") lateCount++;
+            else if (record.status === "excused") excusedCount++;
+          } else {
+            absentCount++;
           }
         });
 
-        const groupAttendanceRate = groupSessions.length > 0
-          ? Math.round((attendedSessions / groupSessions.length) * 100)
-          : 0;
+        const attendanceRate =
+          completedCount > 0
+            ? Math.round(
+                ((attendedCount + lateCount + excusedCount) / completedCount) * 100
+              )
+            : 0;
+
+        // ✅ عدد السيشنات في الكورس (من curriculum)
+        const courseCurriculum = group.courseId?.curriculum || [];
+        const totalCourseSessions = courseCurriculum.reduce(
+          (sum, mod) => sum + (mod.totalSessions || 3),
+          0
+        );
+
+        // الجلسة القادمة
+        const now = new Date();
+        const nextSession = allSessions
+          .filter(
+            (s) => s.status === "scheduled" && new Date(s.scheduledDate) >= now
+          )
+          .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate))[0];
+
+        // المدرسون
+        const instructors = (group.instructors || []).map((inst) => ({
+          name: inst.userId?.name || "مدرب",
+          avatar: (inst.userId?.name || "م").charAt(0).toUpperCase(),
+          countTime: inst.countTime || 0,
+        }));
 
         return {
           _id: group._id,
           name: group.name,
           code: group.code,
           status: group.status,
-          course: {
-            title: group.courseId?.title || "غير محدد",
-            level: group.courseId?.level || "غير محدد",
-          },
-          instructors: group.instructors || [],
-          currentStudentsCount: group.currentStudentsCount || 0,
-          maxStudents: group.maxStudents || 0,
           schedule: group.schedule,
-          pricing: group.pricing,
-          automation: group.automation,
-          sessionsGenerated: group.sessionsGenerated || false,
-          totalSessions: sessionsCount,
-          completedSessions: completedSessions,
-          attendanceRate: groupAttendanceRate,
-          metadata: group.metadata || {},
+          maxStudents: group.maxStudents,
+          currentStudentsCount: group.currentStudentsCount || 0,
+          course: group.courseId
+            ? {
+                _id: group.courseId._id,
+                title: group.courseId.title,
+                description: group.courseId.description,
+                level: group.courseId.level,
+                thumbnail: group.courseId.thumbnail,
+                grade: group.courseId.grade,
+                subject: group.courseId.subject,
+                // ✅ عدد السيشنات بدل عدد الدروس
+                totalSessions: totalCourseSessions,
+              }
+            : null,
+          instructors,
+          stats: {
+            // إجمالي الجلسات الفعلية في الداتابيز
+            totalSessions,
+            completedSessions: completedCount,
+            remainingSessions: remainingCount,
+            progressPercentage,
+            // الحضور
+            attendedSessions: attendedCount,
+            absentSessions: absentCount,
+            lateSessions: lateCount,
+            excusedSessions: excusedCount,
+            attendanceRate,
+            // الساعات (كل سيشن = ساعتين)
+            hoursCompleted: completedCount * 2,
+            hoursRemaining: remainingCount * 2,
+            totalHours: totalSessions * 2,
+          },
+          nextSession: nextSession
+            ? {
+                scheduledDate: nextSession.scheduledDate,
+                title: nextSession.title,
+                startTime: nextSession.startTime,
+                endTime: nextSession.endTime,
+              }
+            : null,
         };
       })
     );
 
+    const activeGroups = enrichedGroups.filter((g) => g.status === "active");
+    const completedGroups = enrichedGroups.filter((g) => g.status === "completed");
+
+    // ✅ إجمالي الإحصائيات لكل الجروبات
+    const totalAllSessions = enrichedGroups.reduce((s, g) => s + g.stats.totalSessions, 0);
+    const completedAllSessions = enrichedGroups.reduce((s, g) => s + g.stats.completedSessions, 0);
+    const overallProgress = totalAllSessions > 0
+      ? Math.round((completedAllSessions / totalAllSessions) * 100)
+      : 0;
+
+    const avgAttendance = enrichedGroups.length > 0
+      ? Math.round(
+          enrichedGroups.reduce((s, g) => s + g.stats.attendanceRate, 0) /
+            enrichedGroups.length
+        )
+      : 0;
+
     return NextResponse.json({
       success: true,
-      data: groupsWithSessions,
-      count: groupsWithSessions.length,
-      stats: {
-        total: totalGroups,
-        active: activeGroups,
-        completed: completedGroups,
+      data: {
+        groups: enrichedGroups,
+        stats: {
+          total: enrichedGroups.length,
+          active: activeGroups.length,
+          completed: completedGroups.length,
+          totalHours: enrichedGroups.reduce((s, g) => s + g.stats.hoursCompleted, 0),
+          totalSessions: totalAllSessions,
+          completedSessions: completedAllSessions,
+          overallProgress,
+          overallAttendance: avgAttendance,
+        },
       },
     });
   } catch (error) {
-    console.error("Error fetching student groups:", error);
+    console.error("❌ [Groups List API] Error:", error);
     return NextResponse.json(
       {
         success: false,
-        message: "فشل في جلب مجموعات الطالب",
+        message: "فشل في تحميل المجموعات",
         error: error.message,
       },
       { status: 500 }
