@@ -482,18 +482,6 @@ function SessionModal({ session, onClose, isAr }) {
               </div>
             </div>
           )}
-
-          {/* Quick actions footer */}
-          <div className="flex gap-2 pt-2">
-            <Link href={`/instructor/attendance?session=${session._id}`}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-gray-100 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d] transition-all">
-              <ClipboardList className="w-4 h-4" />{t("الحضور", "Attendance")}
-            </Link>
-            <Link href={`/instructor/groups/${session.group?._id}`}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-gray-100 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d] transition-all">
-              <Users className="w-4 h-4" />{t("المجموعة", "Group")}
-            </Link>
-          </div>
         </div>
       </div>
     </div>
