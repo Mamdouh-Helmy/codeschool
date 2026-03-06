@@ -1,4 +1,4 @@
-// app/api/admin/[id]/route.ts
+// app/api/admin/[id]/route.ts - نسخة محسنة بالكامل
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import User from "../../../models/User";
@@ -115,14 +115,15 @@ export async function PUT(
       { new: true, runValidators: true },
     ).select("_id name email username image profile isActive");
 
-    // ✅ التحقق من أن التحديث تم بنجاح
+    // ✅ التحقق من أن التحديث تم بنجاح - هذا هو الجزء المهم
     if (!updatedAdmin) {
       return NextResponse.json(
-        { success: false, message: "Failed to update admin" },
+        { success: false, message: "Failed to update admin - document not found after update" },
         { status: 404 },
       );
     }
 
+    // ✅ هنا نحن متأكدون أن updatedAdmin ليست null
     console.log("✅ Admin updated:", updatedAdmin._id);
 
     return NextResponse.json({
