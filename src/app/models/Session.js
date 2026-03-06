@@ -290,7 +290,7 @@ SessionSchema.pre("find", function () {
 });
 
 SessionSchema.pre("findOne", function () {
-  this.where({ isDelisted: false });
+  this.where({ isDeleted: false });
 });
 
 // ✅ Automatically release meeting link when session is deleted or cancelled
