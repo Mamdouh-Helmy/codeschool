@@ -1,14 +1,11 @@
-// app/api/admin/[id]/route.ts - نسخة محسنة بالكامل
+// app/api/admin/[id]/route.js
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import User from "../../../models/User";
 import bcrypt from "bcryptjs";
 
 // GET - جلب مسؤول واحد
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(request, { params }) {
   try {
     await connectDB();
 
@@ -46,10 +43,7 @@ export async function GET(
 }
 
 // PUT - تحديث بيانات المسؤول
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PUT(request, { params }) {
   try {
     await connectDB();
 
@@ -73,7 +67,7 @@ export async function PUT(
     }
 
     // تحديث البيانات الأساسية
-    const updateData: any = {};
+    const updateData = {};
 
     if (name) updateData.name = name.trim();
     if (username) {
@@ -146,10 +140,7 @@ export async function PUT(
 }
 
 // DELETE - حذف المسؤول
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(request, { params }) {
   try {
     await connectDB();
 
