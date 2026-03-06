@@ -43,7 +43,6 @@ const UserSchema = new mongoose.Schema(
         message: "{VALUE} is not a valid gender",
       },
       default: undefined,
-      
     },
     role: {
       type: String,
@@ -53,7 +52,6 @@ const UserSchema = new mongoose.Schema(
     image: {
       type: String,
       default: "/images/default-avatar.jpg",
-     
     },
     qrCode: {
       type: String,
@@ -87,7 +85,6 @@ const UserSchema = new mongoose.Schema(
       phone: {
         type: String,
         default: "",
-       
       },
     },
     emailVerified: {
@@ -98,6 +95,48 @@ const UserSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    // ✅ سجل إشعارات المدرب
+    notificationHistory: [
+      {
+        groupId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Group",
+          default: null,
+        },
+        groupName: { type: String, default: "" },
+        courseName: { type: String, default: "" },
+        messageContent: { type: String, default: "" },
+        language: {
+          type: String,
+          enum: ["ar", "en"],
+          default: "ar",
+        },
+        sentAt: {
+          type: Date,
+          default: Date.now,
+        },
+        status: {
+          type: String,
+          enum: ["sent", "failed"],
+          default: "sent",
+        },
+        failureReason: {
+          type: String,
+          default: "",
+        },
+      },
+    ],
+
+    // ✅ metadata
+    metadata: {
+      lastGroupNotificationSent: { type: Date, default: null },
+      lastNotificationGroupId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Group",
+        default: null,
+      },
+    },
   },
   {
     timestamps: true,
@@ -106,7 +145,7 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// إنشاء indexes
+// ✅ إنشاء indexes
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ username: 1 }, { unique: true, sparse: true });
 UserSchema.index({ gender: 1 }, { sparse: true });
@@ -124,4 +163,9 @@ UserSchema.virtual("genderAr").get(function () {
 
 console.log("✅ User Schema loaded successfully (FIXED VERSION)");
 
-export default mongoose.models.User || mongoose.model("User", UserSchema);
+// ✅ إجبار إعادة تحميل الـ model عند كل تشغيل لتجنب الـ cache القديم
+if (mongoose.models.User) {
+  delete mongoose.models.User;
+}
+
+export default mongoose.model("User", UserSchema);

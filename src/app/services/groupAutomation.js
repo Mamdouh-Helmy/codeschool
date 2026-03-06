@@ -1846,15 +1846,12 @@ export async function sendInstructorWelcomeMessages(
       `📝 Custom Messages Provided: ${Object.keys(instructorMessages).length}`,
     );
 
-    // ✅ FIX: populate الصح للهيكل الجديد {userId, countTime}
     const group = await Group.findById(groupId)
       .populate("courseId", "title level")
       .populate("instructors.userId", "name email gender profile")
       .lean();
 
-    if (!group) {
-      throw new Error("Group not found");
-    }
+    if (!group) throw new Error("Group not found");
 
     if (!group.instructors || group.instructors.length === 0) {
       console.log("⚠️ No instructors assigned to this group");
@@ -1868,16 +1865,13 @@ export async function sendInstructorWelcomeMessages(
 
     console.log(`📧 Found ${group.instructors.length} instructors`);
 
-    // ✅ FIX: Log تفصيلي - نسحب البيانات من entry.userId
     group.instructors.forEach((entry, index) => {
       const inst = entry.userId;
       console.log(`\n👤 Instructor #${index + 1}:`);
       console.log(`   Name: ${inst?.name}`);
       console.log(`   Email: ${inst?.email}`);
       console.log(`   Gender: ${inst?.gender ?? "NOT SET IN DB"}`);
-      console.log(`   Profile:`, JSON.stringify(inst?.profile));
       console.log(`   Phone (raw): "${inst?.profile?.phone}"`);
-      console.log(`   Phone (trimmed): "${inst?.profile?.phone?.trim()}"`);
       console.log(`   countTime: ${entry.countTime}`);
     });
 
@@ -1895,9 +1889,7 @@ export async function sendInstructorWelcomeMessages(
     let failCount = 0;
     const notificationResults = [];
 
-    // ✅ FIX: الـ loop يستخدم entry.userId
     for (const instructorEntry of group.instructors) {
-      // ✅ استخراج بيانات المدرب من الهيكل الجديد
       const instructor = instructorEntry.userId;
 
       if (!instructor || !instructor._id) {
@@ -1911,16 +1903,10 @@ export async function sendInstructorWelcomeMessages(
       }
 
       const instructorId = instructor._id.toString();
-
-      // ✅ FIX: بعد lean() الـ profile plain object وبيشتغل صح
       const instructorPhone = instructor.profile?.phone?.trim() || null;
 
       console.log(`\n📱 Processing instructor: ${instructor.name}`);
-      console.log(`   Email: ${instructor.email}`);
-      console.log(
-        `   Gender: ${instructor.gender ?? "NOT SET IN DB (will use default: male)"}`,
-      );
-      console.log(`   Phone (after trim): ${instructorPhone || "NOT SET"}`);
+      console.log(`   Phone: ${instructorPhone || "NOT SET"}`);
 
       if (!instructorPhone) {
         failCount++;
@@ -1928,22 +1914,59 @@ export async function sendInstructorWelcomeMessages(
           instructorId,
           instructorName: instructor.name,
           instructorEmail: instructor.email,
-          instructorGender: instructor.gender,
           status: "failed",
           reason: "No phone number registered",
-          suggestion: "Please add phone number to instructor profile",
         });
+
+        // ✅ حفظ الفشل في سجل المدرب
+        try {
+          await User.findByIdAndUpdate(instructor._id, {
+            $push: {
+              notificationHistory: {
+                groupId: group._id,
+                groupName: group.name,
+                courseName:
+                  group.courseSnapshot?.title ||
+                  group.courseId?.title ||
+                  "",
+                messageContent: "",
+                language: "ar",
+                sentAt: new Date(),
+                status: "failed",
+                failureReason: "No phone number registered",
+              },
+            },
+          });
+        } catch (logError) {
+          console.warn(`⚠️ Could not log failed notification:`, logError.message);
+        }
+
         console.log(`⚠️ No phone number for ${instructor.name}`);
         continue;
       }
 
+      // ✅ تحديد محتوى الرسالة واللغة
       let messageContent;
+      let messageLang = "ar"; // الافتراضي عربي
 
-      if (instructorMessages && instructorMessages[instructorId]) {
-        messageContent = instructorMessages[instructorId];
-        console.log(`📝 Using custom message from admin (already processed)`);
+      // ✅ الرسالة من الفرونت ممكن تكون object فيه { message, language } أو string مباشرة
+      const frontendMsg = instructorMessages[instructorId];
+
+      if (frontendMsg) {
+        if (typeof frontendMsg === "object" && frontendMsg.message) {
+          // ✅ الفرونت بعت { message, language }
+          messageContent = frontendMsg.message;
+          messageLang = frontendMsg.language || "ar";
+          console.log(`📝 Using custom message from admin | lang: ${messageLang}`);
+        } else if (typeof frontendMsg === "string") {
+          // ✅ الفرونت بعت string مباشرة
+          messageContent = frontendMsg;
+          messageLang = "ar";
+          console.log(`📝 Using custom message string from admin`);
+        }
       } else {
-        console.log(`📝 Using default template`);
+        console.log(`📝 Using default Arabic template`);
+        messageLang = "ar";
 
         const defaultTemplate = `{salutation}،
 
@@ -1968,17 +1991,15 @@ export async function sendInstructorWelcomeMessages(
 
         messageContent = replaceInstructorVariables(
           defaultTemplate,
-          instructor,  // ✅ instructor هنا هو الـ User object مباشرة
+          instructor,
           group,
         );
-        console.log(`✅ Variables replaced successfully`);
       }
 
       console.log(`📤 Message preview: ${messageContent.substring(0, 100)}...`);
 
       try {
-        const preparedPhone =
-          wapilotService.preparePhoneNumber(instructorPhone);
+        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
 
         if (!preparedPhone) {
           throw new Error(`Invalid phone number format: ${instructorPhone}`);
@@ -1997,28 +2018,45 @@ export async function sendInstructorWelcomeMessages(
           instructorPhone,
           instructorGender: instructor.gender || "male (default)",
           status: "sent",
-          customMessage: !!instructorMessages?.[instructorId],
+          language: messageLang,
+          customMessage: !!frontendMsg,
           messagePreview: messageContent.substring(0, 100) + "...",
           sentAt: new Date(),
           wapilotResponse: sendResult,
         });
 
-        console.log(`✅ Message sent successfully to ${instructor.name}`);
-
+        // ✅ حفظ النجاح في سجل المدرب
         try {
           await User.findByIdAndUpdate(instructor._id, {
             $set: {
               "metadata.lastGroupNotificationSent": new Date(),
-              "metadata.lastNotificationGroupId": groupId,
+              "metadata.lastNotificationGroupId": group._id,
+            },
+            $push: {
+              notificationHistory: {
+                groupId: group._id,
+                groupName: group.name,
+                courseName:
+                  group.courseSnapshot?.title ||
+                  group.courseId?.title ||
+                  "",
+                messageContent: messageContent,
+                language: messageLang,
+                sentAt: new Date(),
+                status: "sent",
+                failureReason: "",
+              },
             },
           });
-          console.log(`📊 Updated instructor metadata`);
+          console.log(`📊 Saved notification to instructor history`);
         } catch (updateError) {
           console.warn(
             `⚠️ Could not update instructor metadata:`,
             updateError.message,
           );
         }
+
+        console.log(`✅ Message sent successfully to ${instructor.name}`);
       } catch (error) {
         failCount++;
         notificationResults.push({
@@ -2026,15 +2064,38 @@ export async function sendInstructorWelcomeMessages(
           instructorName: instructor.name,
           instructorEmail: instructor.email,
           instructorPhone,
-          instructorGender: instructor.gender,
           status: "failed",
           reason: error.message,
-          error: error.toString(),
         });
+
+        // ✅ حفظ الفشل في سجل المدرب
+        try {
+          await User.findByIdAndUpdate(instructor._id, {
+            $push: {
+              notificationHistory: {
+                groupId: group._id,
+                groupName: group.name,
+                courseName:
+                  group.courseSnapshot?.title ||
+                  group.courseId?.title ||
+                  "",
+                messageContent: messageContent || "",
+                language: messageLang,
+                sentAt: new Date(),
+                status: "failed",
+                failureReason: error.message,
+              },
+            },
+          });
+        } catch (logError) {
+          console.warn(`⚠️ Could not log failed notification:`, logError.message);
+        }
+
         console.error(`❌ Failed to send to ${instructor.name}:`, error);
       }
     }
 
+    // ✅ تحديث metadata الجروب
     try {
       await Group.findByIdAndUpdate(groupId, {
         $set: {

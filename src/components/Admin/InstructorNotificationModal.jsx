@@ -309,33 +309,38 @@ export default function InstructorNotificationModal({
     };
 
     const handleSend = async () => {
-        if (selectedInstructors.length === 0) {
-            toast.error("اختر مدرباً واحداً على الأقل");
-            return;
-        }
+  if (selectedInstructors.length === 0) {
+    toast.error("اختر مدرباً واحداً على الأقل");
+    return;
+  }
 
-        setSending(true);
-        const toastId = toast.loading("جاري الإرسال...");
+  setSending(true);
+  const toastId = toast.loading("جاري الإرسال...");
 
-        try {
-            const instructorMessages = {};
-            selectedInstructors.forEach((instructorId) => {
-                const instructor = instructors.find((i) => (i._id || i.id) === instructorId);
-                if (instructor) {
-                    const lang = instructorLanguages[instructorId] || "ar";
-                    instructorMessages[instructorId] = replaceVariables(messages[instructorId], instructor, lang);
-                }
-            });
+  try {
+    const instructorMessages = {};
 
-            await onSendNotifications(instructorMessages);
-            toast.success("تم الإرسال بنجاح!", { id: toastId });
-            onClose();
-        } catch (error) {
-            toast.error(error.message || "فشل الإرسال", { id: toastId });
-        } finally {
-            setSending(false);
-        }
-    };
+    selectedInstructors.forEach((instructorId) => {
+      const instructor = instructors.find((i) => (i._id || i.id) === instructorId);
+      if (instructor) {
+        const lang = instructorLanguages[instructorId] || "ar";
+        // ✅ بعت object فيه الرسالة المعالجة + اللغة
+        instructorMessages[instructorId] = {
+          message: replaceVariables(messages[instructorId], instructor, lang),
+          language: lang,
+        };
+      }
+    });
+
+    await onSendNotifications(instructorMessages);
+    toast.success("تم الإرسال بنجاح!", { id: toastId });
+    onClose();
+  } catch (error) {
+    toast.error(error.message || "فشل الإرسال", { id: toastId });
+  } finally {
+    setSending(false);
+  }
+};
 
     if (!isOpen || !instructors || instructors.length === 0) return null;
     if (loading) {

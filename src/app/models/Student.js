@@ -27,13 +27,25 @@ const notificationChannelsSchema = new mongoose.Schema({
 
 const sessionReminderSchema = new mongoose.Schema(
   {
-    sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session", required: true },
-    groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group", required: true },
+    sessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Session",
+      required: true,
+    },
+    groupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Group",
+      required: true,
+    },
     reminderType: { type: String, enum: ["24hours", "1hour"], required: true },
     message: { type: String, required: true },
     language: { type: String, enum: ["ar", "en", "bilingual"], default: "ar" },
     sentAt: { type: Date, default: Date.now },
-    status: { type: String, enum: ["sent", "failed", "pending"], default: "sent" },
+    status: {
+      type: String,
+      enum: ["sent", "failed", "pending"],
+      default: "sent",
+    },
     error: { type: String },
     sessionDetails: {
       title: String,
@@ -44,7 +56,7 @@ const sessionReminderSchema = new mongoose.Schema(
       sessionNumber: Number,
     },
   },
-  { _id: true, timestamps: true }
+  { _id: true, timestamps: true },
 );
 
 const whatsappMessageSchema = new mongoose.Schema(
@@ -52,26 +64,59 @@ const whatsappMessageSchema = new mongoose.Schema(
     messageType: {
       type: String,
       enum: [
-         "welcome", "language_selection", "language_confirmation",
-        "group_welcome", "group_welcome_guardian", "group_welcome_student",
-        "session_reminder", "session_reminder_guardian", "session_reminder_student",
-        "absence_notification", "late_notification", "excused_notification",
-        "session_cancelled", "session_postponed", "group_completion",
-        "custom", "other",
-        "session_cancelled_student", "session_postponed_student",
-        "reminder_24h_student", "reminder_1h_student", "group_completion_student",
-        "session_cancelled_guardian", "session_postponed_guardian",
-        "reminder_24h_guardian", "reminder_1h_guardian", "group_completion_guardian",
-        "bilingual_language_selection", "bilingual_guardian_notification",
-        "bilingual_language_confirmation", "bilingual_language_confirmation_guardian",
-        "credit_alert", "credit_exhausted",
-        "absence_notification", "late_notification", "excused_notification"
+        "welcome",
+        "language_selection",
+        "language_confirmation",
+        "group_welcome",
+        "group_welcome_guardian",
+        "group_welcome_student",
+        "session_reminder",
+        "session_reminder_guardian",
+        "session_reminder_student",
+        "absence_notification",
+        "late_notification",
+        "excused_notification",
+        "session_cancelled",
+        "session_postponed",
+        "group_completion",
+        "custom",
+        "other",
+        "session_cancelled_student",
+        "session_postponed_student",
+        "reminder_24h_student",
+        "reminder_1h_student",
+        "group_completion_student",
+        "session_cancelled_guardian",
+        "session_postponed_guardian",
+        "reminder_24h_guardian",
+        "reminder_1h_guardian",
+        "group_completion_guardian",
+        "bilingual_language_selection",
+        "bilingual_guardian_notification",
+        "bilingual_language_confirmation",
+        "bilingual_language_confirmation_guardian",
+        "credit_alert",
+        "credit_exhausted",
+        "absence_notification",
+        "late_notification",
+        "excused_notification",
+        "student_welcome",
+        "guardian_welcome",
+        "evaluation_pass",
+        "evaluation_review",
+        "evaluation_repeat",
+        "session_recording"
       ],
       required: true,
     },
     messageContent: { type: String, required: true },
     language: { type: String, enum: ["ar", "en", "bilingual"], default: "ar" },
-    status: { type: String, enum: ["sent", "failed", "pending"], default: "sent", required: true },
+    status: {
+      type: String,
+      enum: ["sent", "failed", "pending"],
+      default: "sent",
+      required: true,
+    },
     recipientNumber: { type: String, required: true },
     wapilotMessageId: { type: String },
     sentAt: { type: Date, default: Date.now, required: true },
@@ -83,7 +128,11 @@ const whatsappMessageSchema = new mongoose.Schema(
       sessionTitle: String,
       attendanceStatus: String,
       isCustomMessage: { type: Boolean, default: false },
-      recipientType: { type: String, enum: ["student", "guardian"], default: "student" },
+      recipientType: {
+        type: String,
+        enum: ["student", "guardian"],
+        default: "student",
+      },
       guardianName: String,
       automationType: String,
       interactive: { type: Boolean, default: false },
@@ -106,7 +155,7 @@ const whatsappMessageSchema = new mongoose.Schema(
     error: { type: String },
     errorDetails: { stack: String, code: String, message: String },
   },
-  { _id: true, timestamps: true }
+  { _id: true, timestamps: true },
 );
 
 // ✅ Credit Hours Package Schema
@@ -114,7 +163,7 @@ const creditPackageSchema = new mongoose.Schema({
   packageType: {
     type: String,
     enum: ["3months", "6months", "9months", "12months"],
-    required: true
+    required: true,
   },
   totalHours: { type: Number, required: true },
   remainingHours: { type: Number, required: true },
@@ -125,8 +174,8 @@ const creditPackageSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ["active", "expired", "completed", "suspended"],
-    default: "active"
-  }
+    default: "active",
+  },
 });
 
 // ✅ Credit Hours Exception Schema
@@ -134,7 +183,7 @@ const creditExceptionSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: ["deduction", "addition", "freeze"],
-    required: true
+    required: true,
   },
   hours: { type: Number },
   reason: { type: String, required: true },
@@ -145,13 +194,13 @@ const creditExceptionSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ["active", "completed", "cancelled"],
-    default: "active"
+    default: "active",
   },
   isFrozen: { type: Boolean, default: false },
   frozenUntil: { type: Date },
   appliedToSessions: [{ type: mongoose.Schema.Types.ObjectId, ref: "Session" }],
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
 });
 
 // ✅ Credit Usage History Schema
@@ -165,12 +214,15 @@ const creditUsageSchema = new mongoose.Schema({
   attendanceStatus: {
     type: String,
     enum: ["present", "absent", "late", "excused", "refund"],
-    default: "present"
+    default: "present",
   },
-  exceptionId: { type: mongoose.Schema.Types.ObjectId, ref: "Student.creditExceptions" },
+  exceptionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Student.creditExceptions",
+  },
   notes: String,
   deductedFromExceptions: { type: Number, default: 0 },
-  deductedFromPackage: { type: Number, default: 0 }
+  deductedFromPackage: { type: Number, default: 0 },
 });
 
 // =============================================
@@ -286,9 +338,9 @@ const StudentSchema = new mongoose.Schema(
       status: {
         type: String,
         enum: ["active", "frozen", "expired", "no_package"],
-        default: "no_package"
+        default: "no_package",
       },
-      notes: String
+      notes: String,
     },
 
     sessionReminders: [sessionReminderSchema],
@@ -350,7 +402,7 @@ const StudentSchema = new mongoose.Schema(
   {
     timestamps: true,
     strict: true,
-  }
+  },
 );
 
 // =============================================
@@ -360,69 +412,74 @@ const StudentSchema = new mongoose.Schema(
 /**
  * ✅ دالة مساعدة لحساب الرصيد الفعلي (package فقط - لأن الاستثناءات مضافة بالفعل)
  */
-StudentSchema.methods.getEffectiveRemainingHours = function() {
+StudentSchema.methods.getEffectiveRemainingHours = function () {
   let total = 0;
-  
+
   // رصيد الحزمة الحالية فقط (لأن استثناءات addition مضافة بالفعل إلى remainingHours)
   if (this.creditSystem?.currentPackage) {
     total += this.creditSystem.currentPackage.remainingHours || 0;
   }
-  
+
   // ❌ لا نضيف الاستثناءات هنا لأنها مضافة بالفعل إلى remainingHours
-  
+
   return total;
 };
 
 /**
  * ✅ التحقق من صلاحية الطالب لاستقبال الرسائل (محدثة)
  */
-StudentSchema.methods.canReceiveMessages = function() {
+StudentSchema.methods.canReceiveMessages = function () {
   // حساب الرصيد الفعلي
   const effectiveRemaining = this.getEffectiveRemainingHours();
-  
+
   // التحقق من الرصيد
   if (effectiveRemaining <= 0) {
-    return { 
-      canReceive: false, 
+    return {
+      canReceive: false,
       reason: "zero_balance",
       message: "Zero balance - notifications disabled",
-      remainingHours: 0
+      remainingHours: 0,
     };
   }
 
   // التحقق من إعدادات الإشعارات
-  const whatsappEnabled = this.communicationPreferences?.notificationChannels?.whatsapp;
+  const whatsappEnabled =
+    this.communicationPreferences?.notificationChannels?.whatsapp;
   if (!whatsappEnabled) {
-    return { 
-      canReceive: false, 
+    return {
+      canReceive: false,
       reason: "whatsapp_disabled",
-      message: "WhatsApp notifications are disabled" 
+      message: "WhatsApp notifications are disabled",
     };
   }
 
   // التحقق من وجود رقم واتساب صالح
-  if (!this.personalInfo?.whatsappNumber && !this.guardianInfo?.whatsappNumber && !this.guardianInfo?.phone) {
-    return { 
-      canReceive: false, 
+  if (
+    !this.personalInfo?.whatsappNumber &&
+    !this.guardianInfo?.whatsappNumber &&
+    !this.guardianInfo?.phone
+  ) {
+    return {
+      canReceive: false,
       reason: "no_whatsapp_number",
-      message: "No WhatsApp number available" 
+      message: "No WhatsApp number available",
     };
   }
 
-  return { 
-    canReceive: true, 
+  return {
+    canReceive: true,
     remainingHours: effectiveRemaining,
-    preferredLanguage: this.communicationPreferences?.preferredLanguage || 'ar'
+    preferredLanguage: this.communicationPreferences?.preferredLanguage || "ar",
   };
 };
 
 /**
  * ✅ الحصول على حالة الرصيد (محدثة)
  */
-StudentSchema.methods.getBalanceStatus = function() {
+StudentSchema.methods.getBalanceStatus = function () {
   const effectiveRemaining = this.getEffectiveRemainingHours();
   const hasPackage = !!this.creditSystem?.currentPackage;
-  
+
   let level = "good";
   let canAttend = true;
   let canReceiveMessages = true;
@@ -452,20 +509,25 @@ StudentSchema.methods.getBalanceStatus = function() {
     level,
     canAttend,
     canReceiveMessages,
-    percentageUsed: this.creditSystem?.currentPackage?.totalHours > 0 
-      ? Math.round(((this.creditSystem?.stats?.totalHoursUsed || 0) / this.creditSystem.currentPackage.totalHours) * 100)
-      : 0
+    percentageUsed:
+      this.creditSystem?.currentPackage?.totalHours > 0
+        ? Math.round(
+            ((this.creditSystem?.stats?.totalHoursUsed || 0) /
+              this.creditSystem.currentPackage.totalHours) *
+              100,
+          )
+        : 0,
   };
 };
 
 // ✅ إضافة حزمة ساعات جديدة
-StudentSchema.methods.addCreditPackage = async function(packageData) {
+StudentSchema.methods.addCreditPackage = async function (packageData) {
   try {
     const packageTypes = {
       "3months": 24,
       "6months": 48,
       "9months": 72,
-      "12months": 96
+      "12months": 96,
     };
 
     const totalHours = packageTypes[packageData.packageType];
@@ -475,14 +537,15 @@ StudentSchema.methods.addCreditPackage = async function(packageData) {
 
     const startDate = packageData.startDate || new Date();
     const endDate = new Date(startDate);
-    
-    const months = {
-      "3months": 3,
-      "6months": 6,
-      "9months": 9,
-      "12months": 12
-    }[packageData.packageType] || 0;
-    
+
+    const months =
+      {
+        "3months": 3,
+        "6months": 6,
+        "9months": 9,
+        "12months": 12,
+      }[packageData.packageType] || 0;
+
     endDate.setMonth(endDate.getMonth() + months);
 
     const newPackage = {
@@ -493,7 +556,7 @@ StudentSchema.methods.addCreditPackage = async function(packageData) {
       endDate: endDate,
       price: packageData.price || 0,
       isActive: true,
-      status: "active"
+      status: "active",
     };
 
     // إذا كان هناك package حالي، انقله للتاريخ
@@ -504,7 +567,7 @@ StudentSchema.methods.addCreditPackage = async function(packageData) {
       this.creditSystem.packagesHistory.push({
         ...this.creditSystem.currentPackage.toObject(),
         isActive: false,
-        status: "expired"
+        status: "expired",
       });
     }
 
@@ -522,9 +585,9 @@ StudentSchema.methods.addCreditPackage = async function(packageData) {
           totalSessionsAttended: 0,
           totalExceptions: 0,
           activeExceptions: 0,
-          lowBalanceAlertsSent: 0
+          lowBalanceAlertsSent: 0,
         },
-        status: "no_package"
+        status: "no_package",
       };
     }
 
@@ -548,10 +611,10 @@ StudentSchema.methods.addCreditPackage = async function(packageData) {
 };
 
 // ✅ إضافة استثناء (معدلة - بدون مضاعفة)
-StudentSchema.methods.addCreditException = async function(exceptionData) {
+StudentSchema.methods.addCreditException = async function (exceptionData) {
   try {
     console.log("🔄 addCreditException called with:", exceptionData);
-    
+
     if (!this.creditSystem) {
       this.creditSystem = {
         exceptions: [],
@@ -559,9 +622,9 @@ StudentSchema.methods.addCreditException = async function(exceptionData) {
         stats: {
           totalExceptions: 0,
           activeExceptions: 0,
-          lowBalanceAlertsSent: 0
+          lowBalanceAlertsSent: 0,
         },
-        status: "no_package"
+        status: "no_package",
       };
     }
 
@@ -572,13 +635,14 @@ StudentSchema.methods.addCreditException = async function(exceptionData) {
     // التحقق من وجود استثناء مكرر
     const today = new Date(exceptionData.startDate).toDateString();
     const existingException = this.creditSystem.exceptions.find(
-      e => e.type === exceptionData.type && 
-           e.hours === exceptionData.hours &&
-           e.reason === exceptionData.reason &&
-           new Date(e.startDate).toDateString() === today &&
-           e.status === "active"
+      (e) =>
+        e.type === exceptionData.type &&
+        e.hours === exceptionData.hours &&
+        e.reason === exceptionData.reason &&
+        new Date(e.startDate).toDateString() === today &&
+        e.status === "active",
     );
-    
+
     if (existingException) {
       console.log("⚠️ Duplicate exception detected, skipping...");
       return { success: true, data: existingException, skipped: true };
@@ -594,17 +658,20 @@ StudentSchema.methods.addCreditException = async function(exceptionData) {
       createdBy: exceptionData.createdBy,
       status: "active",
       isFrozen: exceptionData.type === "freeze",
-      frozenUntil: exceptionData.type === "freeze" ? exceptionData.endDate : null,
+      frozenUntil:
+        exceptionData.type === "freeze" ? exceptionData.endDate : null,
       appliedToSessions: [],
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
 
     this.creditSystem.exceptions.push(newException);
-    
+
     // تحديث الإحصائيات
-    this.creditSystem.stats.totalExceptions = (this.creditSystem.stats.totalExceptions || 0) + 1;
-    this.creditSystem.stats.activeExceptions = (this.creditSystem.stats.activeExceptions || 0) + 1;
+    this.creditSystem.stats.totalExceptions =
+      (this.creditSystem.stats.totalExceptions || 0) + 1;
+    this.creditSystem.stats.activeExceptions =
+      (this.creditSystem.stats.activeExceptions || 0) + 1;
 
     // إذا كان استثناء من نوع freeze، غير حالة النظام
     if (exceptionData.type === "freeze") {
@@ -616,9 +683,9 @@ StudentSchema.methods.addCreditException = async function(exceptionData) {
       const deductionResult = await this.deductCreditHours({
         hours: exceptionData.hours,
         reason: `Exception: ${exceptionData.reason}`,
-        exceptionId: newException._id
+        exceptionId: newException._id,
       });
-      
+
       if (!deductionResult.success) {
         console.warn("⚠️ Deduction failed:", deductionResult.error);
       }
@@ -628,18 +695,22 @@ StudentSchema.methods.addCreditException = async function(exceptionData) {
     if (exceptionData.type === "addition" && exceptionData.hours) {
       if (this.creditSystem.currentPackage) {
         console.log(`➕ Adding ${exceptionData.hours} hours to package`);
-        console.log(`   Before: ${this.creditSystem.currentPackage.remainingHours}`);
-        
+        console.log(
+          `   Before: ${this.creditSystem.currentPackage.remainingHours}`,
+        );
+
         // أضف الساعات إلى remainingHours (مرة واحدة فقط)
         this.creditSystem.currentPackage.remainingHours += exceptionData.hours;
-        
-        console.log(`   After: ${this.creditSystem.currentPackage.remainingHours}`);
-        
+
+        console.log(
+          `   After: ${this.creditSystem.currentPackage.remainingHours}`,
+        );
+
         // سجل العملية في history
         if (!this.creditSystem.usageHistory) {
           this.creditSystem.usageHistory = [];
         }
-        
+
         this.creditSystem.usageHistory.push({
           date: new Date(),
           hoursDeducted: -exceptionData.hours,
@@ -648,7 +719,7 @@ StudentSchema.methods.addCreditException = async function(exceptionData) {
           sessionTitle: "إضافة رصيد",
           attendanceStatus: "refund",
           deductedFromExceptions: exceptionData.hours,
-          deductedFromPackage: 0
+          deductedFromPackage: 0,
         });
 
         // ✅ إعادة تفعيل الإشعارات إذا كان الرصيد أكبر من صفر
@@ -659,14 +730,17 @@ StudentSchema.methods.addCreditException = async function(exceptionData) {
         }
 
         // ✅ تحديث totalHoursRemaining بقيمة الحزمة فقط (لأن الاستثناء مضاف فيها)
-        this.creditSystem.stats.totalHoursRemaining = this.creditSystem.currentPackage.remainingHours;
+        this.creditSystem.stats.totalHoursRemaining =
+          this.creditSystem.currentPackage.remainingHours;
       }
     }
 
     await this.save();
     console.log("✅ Exception added successfully");
-    console.log(`📊 Final totalHoursRemaining: ${this.creditSystem.stats.totalHoursRemaining}`);
-    
+    console.log(
+      `📊 Final totalHoursRemaining: ${this.creditSystem.stats.totalHoursRemaining}`,
+    );
+
     return { success: true, data: newException };
   } catch (error) {
     console.error("❌ Error adding credit exception:", error);
@@ -675,7 +749,7 @@ StudentSchema.methods.addCreditException = async function(exceptionData) {
 };
 
 // ✅ إنهاء استثناء
-StudentSchema.methods.endCreditException = async function(exceptionId) {
+StudentSchema.methods.endCreditException = async function (exceptionId) {
   try {
     const exception = this.creditSystem?.exceptions?.id(exceptionId);
     if (!exception) {
@@ -694,11 +768,13 @@ StudentSchema.methods.endCreditException = async function(exceptionId) {
     // إذا كان استثناء freeze وكان هو الوحيد النشط، رجع الحالة لـ active
     if (exception.type === "freeze") {
       const hasActiveFreeze = this.creditSystem.exceptions.some(
-        e => e.type === "freeze" && e.status === "active"
+        (e) => e.type === "freeze" && e.status === "active",
       );
-      
+
       if (!hasActiveFreeze) {
-        this.creditSystem.status = this.creditSystem.currentPackage ? "active" : "no_package";
+        this.creditSystem.status = this.creditSystem.currentPackage
+          ? "active"
+          : "no_package";
       }
     }
 
@@ -711,16 +787,16 @@ StudentSchema.methods.endCreditException = async function(exceptionId) {
 };
 
 // ✅ خصم ساعات من الرصيد
-StudentSchema.methods.deductCreditHours = async function(deductionData) {
+StudentSchema.methods.deductCreditHours = async function (deductionData) {
   try {
     const effectiveRemaining = this.getEffectiveRemainingHours();
-    
+
     if (effectiveRemaining < deductionData.hours) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: `Insufficient hours. Remaining: ${effectiveRemaining}`,
         remainingHours: effectiveRemaining,
-        canProceed: false 
+        canProceed: false,
       };
     }
 
@@ -729,25 +805,35 @@ StudentSchema.methods.deductCreditHours = async function(deductionData) {
     let deductedFromPackage = 0;
 
     // الخصم من الاستثناءات أولاً
-    if (this.creditSystem.exceptions && this.creditSystem.exceptions.length > 0) {
+    if (
+      this.creditSystem.exceptions &&
+      this.creditSystem.exceptions.length > 0
+    ) {
       const activeAdditions = this.creditSystem.exceptions.filter(
-        e => e.type === 'addition' && 
-             e.status === 'active' && 
-             (!e.endDate || new Date() <= new Date(e.endDate))
+        (e) =>
+          e.type === "addition" &&
+          e.status === "active" &&
+          (!e.endDate || new Date() <= new Date(e.endDate)),
       );
 
       for (const exception of activeAdditions) {
         if (hoursToDeduct <= 0) break;
-        
-        const deductFromException = Math.min(exception.hours || 0, hoursToDeduct);
+
+        const deductFromException = Math.min(
+          exception.hours || 0,
+          hoursToDeduct,
+        );
         exception.hours = (exception.hours || 0) - deductFromException;
         hoursToDeduct -= deductFromException;
         deductedFromExceptions += deductFromException;
-        
+
         if (exception.hours <= 0) {
-          exception.status = 'completed';
+          exception.status = "completed";
           exception.endDate = new Date();
-          this.creditSystem.stats.activeExceptions = Math.max(0, (this.creditSystem.stats.activeExceptions || 0) - 1);
+          this.creditSystem.stats.activeExceptions = Math.max(
+            0,
+            (this.creditSystem.stats.activeExceptions || 0) - 1,
+          );
         }
       }
     }
@@ -755,16 +841,19 @@ StudentSchema.methods.deductCreditHours = async function(deductionData) {
     // الخصم المتبقي من الحزمة
     if (hoursToDeduct > 0 && this.creditSystem.currentPackage) {
       const currentPackage = this.creditSystem.currentPackage;
-      const deductFromPackage = Math.min(currentPackage.remainingHours, hoursToDeduct);
+      const deductFromPackage = Math.min(
+        currentPackage.remainingHours,
+        hoursToDeduct,
+      );
       currentPackage.remainingHours -= deductFromPackage;
       hoursToDeduct -= deductFromPackage;
       deductedFromPackage += deductFromPackage;
-      
+
       if (currentPackage.remainingHours === 0) {
         currentPackage.status = "completed";
         this.creditSystem.status = "expired";
         this.creditSystem.stats.zeroBalanceDate = new Date();
-        
+
         if (this.communicationPreferences?.notificationChannels) {
           this.communicationPreferences.notificationChannels.whatsapp = false;
           this.creditSystem.stats.notificationsDisabledAt = new Date();
@@ -773,11 +862,11 @@ StudentSchema.methods.deductCreditHours = async function(deductionData) {
     }
 
     if (hoursToDeduct > 0) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: `Insufficient hours. Could only deduct ${deductionData.hours - hoursToDeduct} out of ${deductionData.hours}`,
         remainingHours: this.getEffectiveRemainingHours(),
-        canProceed: false 
+        canProceed: false,
       };
     }
 
@@ -796,24 +885,27 @@ StudentSchema.methods.deductCreditHours = async function(deductionData) {
       exceptionId: deductionData.exceptionId,
       notes: deductionData.notes || "",
       deductedFromExceptions,
-      deductedFromPackage
+      deductedFromPackage,
     };
 
     this.creditSystem.usageHistory.push(usageRecord);
 
-    this.creditSystem.stats.totalHoursUsed = (this.creditSystem.stats.totalHoursUsed || 0) + deductionData.hours;
-    this.creditSystem.stats.totalHoursRemaining = this.getEffectiveRemainingHours();
-    this.creditSystem.stats.totalSessionsAttended = (this.creditSystem.stats.totalSessionsAttended || 0) + 1;
+    this.creditSystem.stats.totalHoursUsed =
+      (this.creditSystem.stats.totalHoursUsed || 0) + deductionData.hours;
+    this.creditSystem.stats.totalHoursRemaining =
+      this.getEffectiveRemainingHours();
+    this.creditSystem.stats.totalSessionsAttended =
+      (this.creditSystem.stats.totalSessionsAttended || 0) + 1;
     this.creditSystem.stats.lastUsageDate = new Date();
 
     await this.save();
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       remainingHours: this.getEffectiveRemainingHours(),
       deductedFromExceptions,
       deductedFromPackage,
-      usageRecord 
+      usageRecord,
     };
   } catch (error) {
     console.error("❌ Error deducting credit hours:", error);
@@ -822,13 +914,13 @@ StudentSchema.methods.deductCreditHours = async function(deductionData) {
 };
 
 // ✅ إضافة ساعات للرصيد (استرجاع)
-StudentSchema.methods.addCreditHours = async function(addData) {
+StudentSchema.methods.addCreditHours = async function (addData) {
   try {
     if (!this.creditSystem?.currentPackage) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: "No active credit package",
-        canProceed: false 
+        canProceed: false,
       };
     }
 
@@ -847,16 +939,20 @@ StudentSchema.methods.addCreditHours = async function(addData) {
       sessionTitle: addData.sessionTitle || "Manual Credit Addition",
       groupName: addData.groupName || "System",
       attendanceStatus: addData.attendanceStatus || "refund",
-      notes: addData.notes || `Manual credit addition of ${addData.hours} hours`,
+      notes:
+        addData.notes || `Manual credit addition of ${addData.hours} hours`,
       deductedFromExceptions: 0,
-      deductedFromPackage: addData.hours
+      deductedFromPackage: addData.hours,
     };
 
     this.creditSystem.usageHistory.push(usageRecord);
 
-    this.creditSystem.stats.totalHoursUsed = (this.creditSystem.stats.totalHoursUsed || 0) - addData.hours;
-    this.creditSystem.stats.totalHoursRemaining = this.getEffectiveRemainingHours();
-    this.creditSystem.stats.totalSessionsAttended = (this.creditSystem.stats.totalSessionsAttended || 0) - 1;
+    this.creditSystem.stats.totalHoursUsed =
+      (this.creditSystem.stats.totalHoursUsed || 0) - addData.hours;
+    this.creditSystem.stats.totalHoursRemaining =
+      this.getEffectiveRemainingHours();
+    this.creditSystem.stats.totalSessionsAttended =
+      (this.creditSystem.stats.totalSessionsAttended || 0) - 1;
     this.creditSystem.stats.lastUsageDate = new Date();
 
     if (currentPackage.remainingHours > 0) {
@@ -866,11 +962,11 @@ StudentSchema.methods.addCreditHours = async function(addData) {
     }
 
     await this.save();
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       remainingHours: this.getEffectiveRemainingHours(),
-      usageRecord 
+      usageRecord,
     };
   } catch (error) {
     console.error("❌ Error adding credit hours:", error);
@@ -879,23 +975,24 @@ StudentSchema.methods.addCreditHours = async function(addData) {
 };
 
 // ✅ التحقق من صلاحية الطالب لحضور جلسة
-StudentSchema.methods.canAttendSession = async function() {
+StudentSchema.methods.canAttendSession = async function () {
   try {
     const effectiveRemaining = this.getEffectiveRemainingHours();
-    
+
     if (effectiveRemaining < 2) {
       return {
         canAttend: false,
         reason: "insufficient_hours",
         message: "Insufficient hours for session (need 2 hours)",
-        remainingHours: effectiveRemaining
+        remainingHours: effectiveRemaining,
       };
     }
 
     const activeFreeze = this.creditSystem.exceptions?.find(
-      e => e.type === "freeze" && 
-           e.status === "active" && 
-           (!e.endDate || new Date() <= new Date(e.endDate))
+      (e) =>
+        e.type === "freeze" &&
+        e.status === "active" &&
+        (!e.endDate || new Date() <= new Date(e.endDate)),
     );
 
     if (activeFreeze) {
@@ -903,27 +1000,27 @@ StudentSchema.methods.canAttendSession = async function() {
         canAttend: false,
         reason: "frozen",
         message: `Account frozen: ${activeFreeze.reason}`,
-        exception: activeFreeze
+        exception: activeFreeze,
       };
     }
 
     return {
       canAttend: true,
       remainingHours: effectiveRemaining,
-      packageEndDate: this.creditSystem.currentPackage?.endDate
+      packageEndDate: this.creditSystem.currentPackage?.endDate,
     };
   } catch (error) {
     console.error("❌ Error checking attendance eligibility:", error);
     return {
       canAttend: false,
       reason: "error",
-      message: error.message
+      message: error.message,
     };
   }
 };
 
 // ✅ الحصول على إحصائيات الساعات
-StudentSchema.methods.getCreditStats = function() {
+StudentSchema.methods.getCreditStats = function () {
   if (!this.creditSystem) {
     return {
       hasPackage: false,
@@ -936,7 +1033,7 @@ StudentSchema.methods.getCreditStats = function() {
       activeExceptions: [],
       recentUsage: [],
       canReceiveMessages: false,
-      balanceLevel: "none"
+      balanceLevel: "none",
     };
   }
 
@@ -945,19 +1042,19 @@ StudentSchema.methods.getCreditStats = function() {
   const usedHours = this.creditSystem.stats?.totalHoursUsed || 0;
   const remainingHours = this.getEffectiveRemainingHours();
   const usagePercentage = totalHours > 0 ? (usedHours / totalHours) * 100 : 0;
-  
+
   let balanceLevel = "good";
   if (remainingHours <= 0) balanceLevel = "zero";
   else if (remainingHours <= 2) balanceLevel = "critical";
   else if (remainingHours <= 5) balanceLevel = "low";
 
-  const activeExceptions = this.creditSystem.exceptions?.filter(
-    e => e.status === "active"
-  ) || [];
+  const activeExceptions =
+    this.creditSystem.exceptions?.filter((e) => e.status === "active") || [];
 
-  const recentUsage = this.creditSystem.usageHistory
-    ?.sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 10) || [];
+  const recentUsage =
+    this.creditSystem.usageHistory
+      ?.sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 10) || [];
 
   const canReceive = this.canReceiveMessages();
 
@@ -979,27 +1076,30 @@ StudentSchema.methods.getCreditStats = function() {
     canReceiveMessages: canReceive.canReceive,
     messagesDisabledReason: !canReceive.canReceive ? canReceive.reason : null,
     lowBalanceAlertsSent: this.creditSystem.stats?.lowBalanceAlertsSent || 0,
-    zeroBalanceDate: this.creditSystem.stats?.zeroBalanceDate
+    zeroBalanceDate: this.creditSystem.stats?.zeroBalanceDate,
   };
 };
 
 // ✅ تسجيل إشعار الرصيد المنخفض
-StudentSchema.methods.logLowBalanceAlert = async function() {
+StudentSchema.methods.logLowBalanceAlert = async function () {
   if (!this.creditSystem?.stats) return;
-  
-  this.creditSystem.stats.lowBalanceAlertsSent = (this.creditSystem.stats.lowBalanceAlertsSent || 0) + 1;
+
+  this.creditSystem.stats.lowBalanceAlertsSent =
+    (this.creditSystem.stats.lowBalanceAlertsSent || 0) + 1;
   await this.save();
 };
 
 // ✅ تعطيل إشعارات الطالب يدوياً
-StudentSchema.methods.disableNotifications = async function(reason = "manual") {
+StudentSchema.methods.disableNotifications = async function (
+  reason = "manual",
+) {
   if (this.communicationPreferences?.notificationChannels) {
     this.communicationPreferences.notificationChannels.whatsapp = false;
     this.creditSystem.stats.notificationsDisabledAt = new Date();
-    this.creditSystem.notes = this.creditSystem.notes 
+    this.creditSystem.notes = this.creditSystem.notes
       ? `${this.creditSystem.notes}\nNotifications disabled at ${new Date().toISOString()} - Reason: ${reason}`
       : `Notifications disabled at ${new Date().toISOString()} - Reason: ${reason}`;
-    
+
     await this.save();
     return { success: true };
   }
@@ -1007,13 +1107,13 @@ StudentSchema.methods.disableNotifications = async function(reason = "manual") {
 };
 
 // ✅ تفعيل إشعارات الطالب
-StudentSchema.methods.enableNotifications = async function() {
+StudentSchema.methods.enableNotifications = async function () {
   if (this.communicationPreferences?.notificationChannels) {
     this.communicationPreferences.notificationChannels.whatsapp = true;
-    this.creditSystem.notes = this.creditSystem.notes 
+    this.creditSystem.notes = this.creditSystem.notes
       ? `${this.creditSystem.notes}\nNotifications enabled at ${new Date().toISOString()}`
       : `Notifications enabled at ${new Date().toISOString()}`;
-    
+
     await this.save();
     return { success: true };
   }
@@ -1078,7 +1178,8 @@ StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
     this.whatsappMessages.push(messageToLog);
 
     if (!this.metadata) this.metadata = {};
-    this.metadata.whatsappTotalMessages = (this.metadata.whatsappTotalMessages || 0) + 1;
+    this.metadata.whatsappTotalMessages =
+      (this.metadata.whatsappTotalMessages || 0) + 1;
     this.metadata.whatsappLastInteraction = new Date();
     this.metadata.updatedAt = new Date();
 
@@ -1091,7 +1192,7 @@ StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
           "metadata.whatsappLastInteraction": new Date(),
           "metadata.updatedAt": new Date(),
         },
-      }
+      },
     );
 
     return this;
@@ -1106,21 +1207,40 @@ StudentSchema.methods.getWhatsAppMessages = function (filters = {}) {
 
   let messages = [...this.whatsappMessages];
 
-  if (filters.messageType) messages = messages.filter((m) => m.messageType === filters.messageType);
-  if (filters.status) messages = messages.filter((m) => m.status === filters.status);
-  if (filters.language) messages = messages.filter((m) => m.language === filters.language);
-  if (filters.startDate) messages = messages.filter((m) => m.sentAt >= new Date(filters.startDate));
-  if (filters.endDate) messages = messages.filter((m) => m.sentAt <= new Date(filters.endDate));
+  if (filters.messageType)
+    messages = messages.filter((m) => m.messageType === filters.messageType);
+  if (filters.status)
+    messages = messages.filter((m) => m.status === filters.status);
+  if (filters.language)
+    messages = messages.filter((m) => m.language === filters.language);
+  if (filters.startDate)
+    messages = messages.filter((m) => m.sentAt >= new Date(filters.startDate));
+  if (filters.endDate)
+    messages = messages.filter((m) => m.sentAt <= new Date(filters.endDate));
 
   return messages.sort((a, b) => b.sentAt - a.sentAt);
 };
 
 StudentSchema.methods.getWhatsAppStats = function () {
   if (!this.whatsappMessages || this.whatsappMessages.length === 0) {
-    return { total: 0, sent: 0, failed: 0, pending: 0, byType: {}, byLanguage: {} };
+    return {
+      total: 0,
+      sent: 0,
+      failed: 0,
+      pending: 0,
+      byType: {},
+      byLanguage: {},
+    };
   }
 
-  const stats = { total: this.whatsappMessages.length, sent: 0, failed: 0, pending: 0, byType: {}, byLanguage: {} };
+  const stats = {
+    total: this.whatsappMessages.length,
+    sent: 0,
+    failed: 0,
+    pending: 0,
+    byType: {},
+    byLanguage: {},
+  };
 
   this.whatsappMessages.forEach((msg) => {
     if (msg.status === "sent") stats.sent++;
@@ -1141,85 +1261,100 @@ StudentSchema.methods.addSessionReminder = function (reminderData) {
   if (!this.sessionReminders) this.sessionReminders = [];
   this.sessionReminders.push(reminderData);
   if (!this.metadata) this.metadata = {};
-  if (reminderData.reminderType === "24hours") this.metadata.lastSessionReminder24h = new Date();
-  else if (reminderData.reminderType === "1hour") this.metadata.lastSessionReminder1h = new Date();
-  this.metadata.totalSessionReminders = (this.metadata.totalSessionReminders || 0) + 1;
-  this.metadata.whatsappTotalMessages = (this.metadata.whatsappTotalMessages || 0) + 1;
+  if (reminderData.reminderType === "24hours")
+    this.metadata.lastSessionReminder24h = new Date();
+  else if (reminderData.reminderType === "1hour")
+    this.metadata.lastSessionReminder1h = new Date();
+  this.metadata.totalSessionReminders =
+    (this.metadata.totalSessionReminders || 0) + 1;
+  this.metadata.whatsappTotalMessages =
+    (this.metadata.whatsappTotalMessages || 0) + 1;
   this.metadata.whatsappLastInteraction = new Date();
   return this.save();
 };
 
 StudentSchema.methods.hasReceivedReminder = function (sessionId, reminderType) {
-  if (!this.sessionReminders || this.sessionReminders.length === 0) return false;
+  if (!this.sessionReminders || this.sessionReminders.length === 0)
+    return false;
   return this.sessionReminders.some(
-    (r) => r.sessionId.toString() === sessionId.toString() &&
-            r.reminderType === reminderType &&
-            r.status === "sent"
+    (r) =>
+      r.sessionId.toString() === sessionId.toString() &&
+      r.reminderType === reminderType &&
+      r.status === "sent",
   );
 };
 
 StudentSchema.methods.getSessionReminders = function (sessionId) {
   if (!this.sessionReminders) return [];
-  return this.sessionReminders.filter((r) => r.sessionId.toString() === sessionId.toString());
+  return this.sessionReminders.filter(
+    (r) => r.sessionId.toString() === sessionId.toString(),
+  );
 };
 
 // =============================================
 // ✅ STATIC METHODS
 // =============================================
 
-StudentSchema.statics.getStudentsForReminder = async function (groupId, sessionId, reminderType) {
+StudentSchema.statics.getStudentsForReminder = async function (
+  groupId,
+  sessionId,
+  reminderType,
+) {
   const students = await this.find({
     "academicInfo.groupIds": groupId,
     "enrollmentInfo.status": "Active",
     "personalInfo.whatsappNumber": { $exists: true, $ne: null, $ne: "" },
     isDeleted: false,
   });
-  
+
   const eligibleStudents = [];
   for (const student of students) {
     const canReceive = student.canReceiveMessages();
-    if (canReceive.canReceive && !student.hasReceivedReminder(sessionId, reminderType)) {
+    if (
+      canReceive.canReceive &&
+      !student.hasReceivedReminder(sessionId, reminderType)
+    ) {
       eligibleStudents.push(student);
     }
   }
-  
+
   return eligibleStudents;
 };
 
-StudentSchema.statics.getExpiredPackages = async function() {
+StudentSchema.statics.getExpiredPackages = async function () {
   const now = new Date();
   return await this.find({
     "creditSystem.currentPackage.endDate": { $lt: now },
     "creditSystem.currentPackage.status": "active",
-    isDeleted: false
+    isDeleted: false,
   });
 };
 
-StudentSchema.statics.getLowBalanceStudents = async function(threshold = 5) {
+StudentSchema.statics.getLowBalanceStudents = async function (threshold = 5) {
   const students = await this.find({
-    isDeleted: false
+    isDeleted: false,
   });
-  
-  return students.filter(student => {
+
+  return students.filter((student) => {
     const effectiveRemaining = student.getEffectiveRemainingHours();
     return effectiveRemaining <= threshold && effectiveRemaining > 0;
   });
 };
 
-StudentSchema.statics.getZeroBalanceStudents = async function() {
+StudentSchema.statics.getZeroBalanceStudents = async function () {
   const students = await this.find({
-    isDeleted: false
+    isDeleted: false,
   });
-  
-  return students.filter(student => {
+
+  return students.filter((student) => {
     return student.getEffectiveRemainingHours() <= 0;
   });
 };
 
-StudentSchema.statics.getStudentsWithDisabledNotifications = async function() {
+StudentSchema.statics.getStudentsWithDisabledNotifications = async function () {
   return await this.find({
     "communicationPreferences.notificationChannels.whatsapp": false,
-    isDeleted: false
+    isDeleted: false,
   });
 };
 
@@ -1261,4 +1396,5 @@ StudentSchema.index({ "creditSystem.currentPackage.remainingHours": 1 });
 // ✅ EXPORT
 // =============================================
 
-export default mongoose.models.Student || mongoose.model("Student", StudentSchema);
+export default mongoose.models.Student ||
+  mongoose.model("Student", StudentSchema);
