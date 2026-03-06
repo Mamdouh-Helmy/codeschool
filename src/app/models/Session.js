@@ -277,6 +277,9 @@ SessionSchema.index(
 // ==================== MIDDLEWARE ====================
 
 // Update timestamp
+// ==================== MIDDLEWARE ====================
+
+// Update timestamp
 SessionSchema.pre("save", async function () {
   this.metadata.updatedAt = new Date();
 });
@@ -287,23 +290,20 @@ SessionSchema.pre("find", function () {
 });
 
 SessionSchema.pre("findOne", function () {
-  this.where({ isDeleted: false });
+  this.where({ isDelisted: false });
 });
 
-// ✅ Automatically release meeting link when session is deleted
-SessionSchema.pre("save", async function (next) {
+// ✅ Automatically release meeting link when session is deleted or cancelled
+SessionSchema.pre("save", async function () {
   if (this.isModified("isDeleted") && this.isDeleted && this.meetingLinkId) {
     try {
-      // Import the releaseMeetingLink function
       const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
       await releaseMeetingLink(this._id);
     } catch (error) {
       console.error("❌ Error releasing meeting link on delete:", error);
-      // Don't stop the save operation
     }
   }
-  
-  // ✅ Automatically release meeting link when session is cancelled
+
   if (this.isModified("status") && this.status === "cancelled" && this.meetingLinkId) {
     try {
       const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
@@ -312,32 +312,25 @@ SessionSchema.pre("save", async function (next) {
       console.error("❌ Error releasing meeting link on cancellation:", error);
     }
   }
-  
-  next();
 });
 
 // ✅ Prevent duplicate sessions on save
-SessionSchema.pre("save", async function (next) {
-  try {
-    if (this.isNew) {
-      const existingSession = await mongoose.models.Session.findOne({
-        groupId: this.groupId,
-        moduleIndex: this.moduleIndex,
-        sessionNumber: this.sessionNumber,
-        isDeleted: false,
-      });
+SessionSchema.pre("save", async function () {
+  if (this.isNew) {
+    const existingSession = await mongoose.models.Session.findOne({
+      groupId: this.groupId,
+      moduleIndex: this.moduleIndex,
+      sessionNumber: this.sessionNumber,
+      isDeleted: false,
+    });
 
-      if (existingSession) {
-        const error = new Error(
-          `Session already exists for group ${this.groupId}, module ${this.moduleIndex}, session ${this.sessionNumber}`
-        );
-        error.code = "DUPLICATE_SESSION";
-        return next(error);
-      }
+    if (existingSession) {
+      const error = new Error(
+        `Session already exists for group ${this.groupId}, module ${this.moduleIndex}, session ${this.sessionNumber}`
+      );
+      error.code = "DUPLICATE_SESSION";
+      throw error;
     }
-    next();
-  } catch (error) {
-    next(error);
   }
 });
 
