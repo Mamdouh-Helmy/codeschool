@@ -91,13 +91,13 @@ export default function InstructorSidebar({
       icon: BarChart3,
       gradient: "from-teal-500 to-emerald-500",
     },
-    {
-      name: "Messages",
-      nameAr: "الرسائل",
-      href: "/instructor/messages",
-      icon: MessageSquare,
-      gradient: "from-primary to-cyan-500",
-    },
+    // {
+    //   name: "Messages",
+    //   nameAr: "الرسائل",
+    //   href: "/instructor/messages",
+    //   icon: MessageSquare,
+    //   gradient: "from-primary to-cyan-500",
+    // },
   ];
 
   const isActive = (item: NavigationItem): boolean => {

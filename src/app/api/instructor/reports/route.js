@@ -5,6 +5,7 @@ import { getUserFromRequest } from "@/lib/auth";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
 import Student from "../../../models/Student";
+import Course from "../../../models/Course";
 
 export async function GET(req) {
   try {
