@@ -424,12 +424,7 @@ export default function InstructorDashboard() {
                           <span className="relative z-10">{isRTL ? "الجلسات" : "My Sessions"}</span>
                           <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-white opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300" />
                         </Link>
-                        <Link
-                          href="/instructor/attendance"
-                          className="px-6 py-3 bg-white/10 backdrop-blur-sm text-white rounded-xl font-semibold hover:bg-white/20 transition-all duration-300 border border-white/20 text-sm"
-                        >
-                          {isRTL ? "تسجيل الحضور" : "Take Attendance"}
-                        </Link>
+                        
                       </div>
                     </div>
 
@@ -694,7 +689,7 @@ export default function InstructorDashboard() {
                       {isRTL ? "المجموعات النشطة الخاصة بك" : "Your active teaching groups"}
                     </p>
                   </div>
-                  <Link
+                  {/* <Link
                     href="/instructor/groups"
                     className="group/link text-primary hover:text-primary/80 text-sm font-medium flex items-center gap-1 px-4 py-2 rounded-lg hover:bg-primary/5 transition-all"
                   >
@@ -704,7 +699,7 @@ export default function InstructorDashboard() {
                     ) : (
                       <ChevronRight className="w-4 h-4 group-hover/link:translate-x-1 transition-transform" />
                     )}
-                  </Link>
+                  </Link> */}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
@@ -801,9 +796,9 @@ export default function InstructorDashboard() {
                       <ClipboardList className="w-5 h-5 text-primary" />
                       {isRTL ? "الجلسات الأخيرة" : "Recent Sessions"}
                     </h3>
-                    <Link href="/instructor/sessions" className="text-primary text-sm hover:underline">
+                    {/* <Link href="/instructor/sessions" className="text-primary text-sm hover:underline">
                       {isRTL ? "عرض الكل" : "View all"}
-                    </Link>
+                    </Link> */}
                   </div>
                   <div className="space-y-3">
                     {recentSessions.map((session) => (

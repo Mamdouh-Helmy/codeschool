@@ -115,6 +115,14 @@ export async function PUT(
       { new: true, runValidators: true },
     ).select("_id name email username image profile isActive");
 
+    // ✅ التحقق من أن التحديث تم بنجاح
+    if (!updatedAdmin) {
+      return NextResponse.json(
+        { success: false, message: "Failed to update admin" },
+        { status: 404 },
+      );
+    }
+
     console.log("✅ Admin updated:", updatedAdmin._id);
 
     return NextResponse.json({
