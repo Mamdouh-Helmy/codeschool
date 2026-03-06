@@ -115,7 +115,9 @@ export async function PUT(
       { new: true, runValidators: true }
     ).select("_id name email username image profile isActive");
 
-    console.log("✅ Marketing user updated:", updatedMarketing._id);
+    if (updatedMarketing) {
+      console.log("✅ Marketing user updated:", updatedMarketing._id);
+    }
 
     return NextResponse.json({
       success: true,

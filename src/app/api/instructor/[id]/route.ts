@@ -154,11 +154,14 @@ export async function PUT(
     ).select("_id name email username image gender profile isActive");
 
     console.log("✅ Instructor updated successfully:", updatedInstructor);
-    console.log("📋 Updated data verification:", {
-      gender: updatedInstructor.gender,
-      image: updatedInstructor.image,
-      phone: updatedInstructor.profile?.phone,
-    });
+
+    if (updatedInstructor) {
+      console.log("📋 Updated data verification:", {
+        gender: updatedInstructor.gender,
+        image: updatedInstructor.image,
+        phone: updatedInstructor.profile?.phone,
+      });
+    }
 
     return NextResponse.json({
       success: true,
