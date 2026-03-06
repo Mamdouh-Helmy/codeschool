@@ -277,9 +277,8 @@ SessionSchema.index(
 // ==================== MIDDLEWARE ====================
 
 // Update timestamp
-SessionSchema.pre("save", function (next) {
+SessionSchema.pre("save", async function () {
   this.metadata.updatedAt = new Date();
-  next();
 });
 
 // Prevent deletion queries from returning deleted sessions
