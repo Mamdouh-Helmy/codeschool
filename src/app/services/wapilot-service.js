@@ -4,9 +4,8 @@ import { connectDB } from "@/lib/mongodb";
 
 const FORCE_PRODUCTION = true;
 
-// ✅ دالة مساعدة مركزية لتوحيد قيمة الجنس
 const isMaleGender = (gender) => {
-  if (!gender) return true; // default male
+  if (!gender) return true;
   return String(gender).toLowerCase().trim() === "male";
 };
 
@@ -36,92 +35,49 @@ class WapilotService {
     });
   }
 
-  /**
-   * ✅ الحصول على صيغة المخاطبة المناسبة للطالب حسب الجنس واللغة
-   */
   getStudentSalutation(gender, language = "ar", arabicName = "", englishName = "") {
-    // ✅ FIX: استخدام isMaleGender بدلاً من المقارنة المباشرة
     const male = isMaleGender(gender);
-
     if (language === "ar") {
       const displayName = arabicName ? ` ${arabicName}` : "";
-      return male
-        ? `عزيزي الطالب${displayName}`
-        : `عزيزتي الطالبة${displayName}`;
+      return male ? `عزيزي الطالب${displayName}` : `عزيزتي الطالبة${displayName}`;
     } else {
       const displayName = englishName ? ` ${englishName}` : "";
       return `Dear student${displayName}`;
     }
   }
 
-  /**
-   * ✅ الحصول على صيغة المخاطبة المناسبة لولي الأمر حسب العلاقة
-   */
   getGuardianSalutation(guardianName, relationship, guardianNickname = null, language = "ar") {
     if (language === "ar") {
-      const displayName =
-        guardianNickname?.ar ||
-        guardianName?.split(" ")[0] ||
-        guardianName ||
-        "";
-
+      const displayName = guardianNickname?.ar || guardianName?.split(" ")[0] || guardianName || "";
       switch (relationship) {
-        case "father":
-          return `عزيزي الأستاذ ${displayName}`;
-        case "mother":
-          return `عزيزتي السيدة ${displayName}`;
-        case "guardian":
-          return `عزيزي السيد ${displayName}`;
-        default:
-          return `عزيزي/عزيزتي ${displayName}`;
+        case "father": return `عزيزي الأستاذ ${displayName}`;
+        case "mother": return `عزيزتي السيدة ${displayName}`;
+        case "guardian": return `عزيزي السيد ${displayName}`;
+        default: return `عزيزي/عزيزتي ${displayName}`;
       }
     } else {
-      const displayName =
-        guardianNickname?.en ||
-        guardianName?.split(" ")[0] ||
-        guardianName ||
-        "";
-
+      const displayName = guardianNickname?.en || guardianName?.split(" ")[0] || guardianName || "";
       switch (relationship) {
-        case "father":
-          return `Dear Mr. ${displayName}`;
-        case "mother":
-          return `Dear Mrs. ${displayName}`;
-        case "guardian":
-          return `Dear Mr./Mrs. ${displayName}`;
-        default:
-          return `Dear ${displayName}`;
+        case "father": return `Dear Mr. ${displayName}`;
+        case "mother": return `Dear Mrs. ${displayName}`;
+        case "guardian": return `Dear Mr./Mrs. ${displayName}`;
+        default: return `Dear ${displayName}`;
       }
     }
   }
 
-  /**
-   * ✅ الحصول على صيغة "ابن / ابنة" حسب الجنس
-   */
   getStudentChildTitle(gender, language = "ar") {
-    // ✅ FIX: استخدام isMaleGender
     const male = isMaleGender(gender);
-    if (language === "ar") {
-      return male ? "الابن" : "الابنة";
-    } else {
-      return male ? "son" : "daughter";
-    }
+    if (language === "ar") return male ? "الابن" : "الابنة";
+    else return male ? "son" : "daughter";
   }
 
-  /**
-   * ✅ رسالة اختيار اللغة - ثنائية اللغة
-   */
   prepareBilingualLanguageSelectionMessage(studentName, gender, nickname = null) {
-    // ✅ FIX: استخدام isMaleGender
     const male = isMaleGender(gender);
-
     const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
     const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
-
     const studentSalutationAr = this.getStudentSalutation(gender, "ar", arabicName, englishName);
     const studentSalutationEn = this.getStudentSalutation(gender, "en", arabicName, englishName);
-
-    // ✅ FIX: استخدام male بدلاً من gender === "Male"
     const welcomeAr = male ? "أهلاً بك" : "أهلاً بكِ";
 
     return `
@@ -150,23 +106,16 @@ The Code School Team 💻
 🌍 Thank you for trusting Code School`;
   }
 
-  /**
-   * ✅ رسالة إشعار ولي الأمر - ثنائية اللغة
-   */
   prepareBilingualGuardianNotificationMessage(
     guardianName, studentName, studentGender, relationship,
     guardianNickname = null, studentNickname = null,
   ) {
     const guardianSalutationAr = this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar");
     const guardianSalutationEn = this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en");
-
     const displayStudentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
     const displayStudentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
-
     const studentTitleAr = this.getStudentChildTitle(studentGender, "ar");
     const studentTitleEn = this.getStudentChildTitle(studentGender, "en");
-
-    // ✅ FIX: استخدام isMaleGender
     const enrolledVerb = isMaleGender(studentGender) ? "انضم" : "انضمت";
 
     return `${guardianSalutationAr}
@@ -191,13 +140,9 @@ The Code School Team 💻
 🌍 Thank you for trusting Code School`;
   }
 
-  /**
-   * ✅ رسالة تأكيد اللغة - ثنائي اللغة
-   */
   prepareBilingualLanguageConfirmationMessage(studentName, gender, selectedLanguage, nickname = null) {
     const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
     const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
-
     const studentSalutationAr = this.getStudentSalutation(gender, "ar", arabicName, englishName);
     const studentSalutationEn = this.getStudentSalutation(gender, "en", arabicName, englishName);
 
@@ -210,9 +155,9 @@ ${studentSalutationEn},
 Thank you for choosing your preferred language. Your communication language has been successfully set to **English**.
 
 📌 **What happens next?**
-• All future messages and notifications will be sent to you in English
-• Your course materials and support will be provided in English
-• You can change this preference anytime through your profile
+- All future messages and notifications will be sent to you in English
+- Your course materials and support will be provided in English
+- You can change this preference anytime through your profile
 
 We're excited to have you on board and can't wait to see you grow with us!
 
@@ -232,9 +177,9 @@ ${studentSalutationEn}،
 شكراً لاختيارك لغتك المفضلة. تم تعيين اللغة العربية كلغة التواصل الرسمية معك.
 
 📌 **ماذا يحدث الآن؟**
-• جميع الرسائل والإشعارات القادمة ستكون باللغة العربية
-• المحتوى التعليمي والدعم الفني سيكون متاحاً بالعربية
-• يمكنك تغيير هذا التفضيل في أي وقت من خلال ملفك الشخصي
+- جميع الرسائل والإشعارات القادمة ستكون باللغة العربية
+- المحتوى التعليمي والدعم الفني سيكون متاحاً بالعربية
+- يمكنك تغيير هذا التفضيل في أي وقت من خلال ملفك الشخصي
 
 نحن متحمسون لوجودك معنا، ونتطلع لرؤية تطورك وإبداعك!
 
@@ -356,7 +301,6 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
       });
 
       const result = await response.json();
-      console.log('📦 sendListMessage API response:', JSON.stringify(result, null, 2));
 
       if (!response.ok) {
         throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
@@ -365,6 +309,7 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
       return {
         success: true,
         messageId: result.message_id || result.id || result.messageId || result.data?.id,
+        chatId: messagePayload.chat_id,
         data: result,
         sentVia: "wapilot",
         simulated: false,
@@ -421,6 +366,7 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
       return {
         success: true,
         messageId: result.message_id || result.id || result.messageId || result.data?.id,
+        chatId: messagePayload.chat_id,
         data: result,
         sentVia: "wapilot",
         simulated: false,
@@ -448,15 +394,13 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
       success: true,
       simulated: true,
       messageId: `sim-${Date.now()}`,
+      chatId: phoneNumber.replace("+", ""),
       sentVia: "simulation",
       interactive: isInteractive,
       timestamp: new Date(),
     };
   }
 
-  /**
-   * ✅ إرسال رسائل الترحيب
-   */
   async sendWelcomeMessages(
     studentId, studentName, studentPhone, guardianPhone,
     customFirstMessage, customSecondMessage,
@@ -469,9 +413,8 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
         return { success: false, skipped: true, reason: "Student not found" };
       }
 
-      // ✅ FIX: جلب الـ gender من الـ DB مباشرة وتوحيده
       const rawGender = student.personalInfo?.gender || "male";
-      const gender = rawGender; // الـ model بيرجعه lowercase بسبب getter
+      const gender = rawGender;
       const male = isMaleGender(gender);
 
       console.log(`👤 Student gender from DB: "${rawGender}" → isMale: ${male}`);
@@ -494,7 +437,6 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
           let languageMessage;
 
           if (customSecondMessage) {
-            // ✅ FIX: استخدام isMaleGender في كل استبدالات المتغيرات
             languageMessage = customSecondMessage
               .replace(/{name_ar}/g, studentNickname?.ar || studentName.split(" ")[0] || studentName)
               .replace(/{name_en}/g, studentNickname?.en || studentName.split(" ")[0] || studentName)
@@ -512,7 +454,6 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
             );
           }
 
-          // ✅ FIX: استخدام male بدلاً من gender === "Male"
           const listTitle = male
             ? "🌍 مرحباً بك في Code School | 🌍 Welcome to Code School"
             : "🌍 مرحباً بكِ في Code School | 🌍 Welcome to Code School";
@@ -558,6 +499,15 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
                 languages: ["ar", "en"],
               },
             });
+
+            // ✅ احفظ الـ chatId في الـ DB عشان نقدر ندور بيه في الـ webhook
+            if (results.student.chatId) {
+              await Student.updateOne(
+                { _id: studentId },
+                { $set: { 'metadata.whatsappChatId': results.student.chatId } }
+              );
+              console.log(`💾 Saved chatId: ${results.student.chatId}`);
+            }
           }
         }
       }
@@ -569,7 +519,6 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
           let guardianMessage;
 
           if (customFirstMessage) {
-            // ✅ FIX: استخدام isMaleGender في كل استبدالات المتغيرات
             guardianMessage = customFirstMessage
               .replace(/{guardianName_ar}/g, guardianNickname?.ar || guardianName.split(" ")[0] || guardianName)
               .replace(/{guardianName_en}/g, guardianNickname?.en || guardianName.split(" ")[0] || guardianName)
@@ -578,7 +527,6 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
               .replace(/{fullStudentName}/g, studentName)
               .replace(/{relationship_ar}/g, relationship === "father" ? "الأب" : relationship === "mother" ? "الأم" : relationship === "guardian" ? "الوصي" : "ولي الأمر")
               .replace(/{relationship_en}/g, relationship === "father" ? "father" : relationship === "mother" ? "mother" : "guardian")
-              // ✅ FIX: استخدام male بدلاً من gender === "Male"
               .replace(/{studentGender_ar}/g, male ? "الابن" : "الابنة")
               .replace(/{studentGender_en}/g, male ? "son" : "daughter")
               .replace(/{guardianSalutation_ar}/g, this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar"))
@@ -645,9 +593,6 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
     }
   }
 
-  /**
-   * ✅ إرسال تأكيد اللغة
-   */
   async sendLanguageConfirmationMessage(
     studentId, studentPhone, guardianPhone, studentName, selectedLanguage,
   ) {
@@ -700,10 +645,8 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
         if (preparedGuardianNumber) {
           const displayStudentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
           const displayStudentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
-
           const studentTitleAr = this.getStudentChildTitle(gender, "ar");
           const studentTitleEn = this.getStudentChildTitle(gender, "en");
-
           const guardianSalutationAr = this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar");
           const guardianSalutationEn = this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en");
 
@@ -721,8 +664,8 @@ ${
 }
 
 📌 **ماذا يعني هذا؟ | What this means:**
-• جميع الرسائل القادمة ستكون باللغة ${selectedLanguage === "en" ? "الإنجليزية" : "العربية"}
-• All future messages will be sent in ${selectedLanguage === "en" ? "English" : "Arabic"}
+- جميع الرسائل القادمة ستكون باللغة ${selectedLanguage === "en" ? "الإنجليزية" : "العربية"}
+- All future messages will be sent in ${selectedLanguage === "en" ? "English" : "Arabic"}
 
 شكراً لثقتكم المستمرة في Code School.
 Thank you for your continued trust in Code School.

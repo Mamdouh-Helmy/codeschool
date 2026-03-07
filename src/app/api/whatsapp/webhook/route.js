@@ -81,9 +81,10 @@ async function processIncomingMessage(msg) {
 
   console.log(`🌍 Language: ${selectedLanguage} | Phone: ${phoneRaw}`);
 
+  let student = null;
+
   // ✅ طريقة 1: ابحث بالـ stanzaID في whatsappMessages
   const originalMessageId = msg.listResponse?.stanzaID || msg.replyToId || msg.replyTo?.id || null;
-  let student = null;
 
   if (originalMessageId) {
     console.log(`🔍 Searching by messageId: ${originalMessageId}`);
@@ -94,11 +95,25 @@ async function processIncomingMessage(msg) {
     if (student) {
       console.log(`✅ Found by messageId: ${originalMessageId}`);
     } else {
-      console.log(`⚠️ Not found by messageId, trying phones...`);
+      console.log(`⚠️ Not found by messageId`);
     }
   }
 
-  // ✅ طريقة 2: fallback - ابحث بكل الأرقام المتاحة في الـ payload
+  // ✅ طريقة 2: ابحث بالـ chatId المحفوظ في الـ DB
+  if (!student && phoneRaw) {
+    console.log(`🔍 Searching by chatId: ${phoneRaw}`);
+    student = await Student.findOne({
+      'metadata.whatsappChatId': phoneRaw,
+      isDeleted: false,
+    });
+    if (student) {
+      console.log(`✅ Found by chatId: ${phoneRaw}`);
+    } else {
+      console.log(`⚠️ Not found by chatId`);
+    }
+  }
+
+  // ✅ طريقة 3: ابحث بكل الأرقام المتاحة في الـ payload
   if (!student) {
     const phonesToTry = [
       phoneRaw,
@@ -125,7 +140,7 @@ async function processIncomingMessage(msg) {
 
   console.log(`👤 Found: ${student.personalInfo?.fullName} (${student._id})`);
 
-  // ✅ تحديث اللغة في DB
+  // ✅ تحديث اللغة في DB + حفظ الـ chatId للمرات الجاية
   await Student.updateOne(
     { _id: student._id },
     {
@@ -135,12 +150,13 @@ async function processIncomingMessage(msg) {
         'metadata.whatsappLanguageSelectedAt': new Date(),
         'metadata.whatsappLanguageConfirmed': true,
         'metadata.whatsappLanguageConfirmationAt': new Date(),
+        'metadata.whatsappChatId': phoneRaw,
         'metadata.updatedAt': new Date(),
       }
     }
   );
 
-  console.log(`✅ DB updated: preferredLanguage = "${selectedLanguage}"`);
+  console.log(`✅ DB updated: preferredLanguage = "${selectedLanguage}" | chatId = "${phoneRaw}"`);
 
   // ✅ إرسال رسالة التأكيد
   const confirmResult = await sendConfirmationMessage(student, selectedLanguage);
