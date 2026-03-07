@@ -59,11 +59,12 @@ async function processIncomingMessage(msg) {
   // استخراج رقم الهاتف والنص من الرسالة
   const phoneRaw = msg.from || msg.chat_id || msg.sender || msg.phone || '';
   const textRaw  = (
+    msg.list_response?.id ||
+    msg.interactive?.list_reply?.id ||
+    msg.interactive?.button_reply?.id ||
     msg.text ||
     msg.body ||
     msg.message ||
-    msg.interactive?.list_reply?.id ||
-    msg.interactive?.button_reply?.id ||
     ''
   ).toString().trim().toLowerCase();
 
