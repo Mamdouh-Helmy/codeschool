@@ -13,7 +13,6 @@ export async function POST(req) {
     const body = await req.json();
     console.log('📩 Webhook received:', JSON.stringify(body, null, 2));
 
-    // ✅ wapilot بيبعت: { instance, event, payload: {...} }
     let msg = null;
 
     if (body.payload && !body.payload.fromMe) {
@@ -29,7 +28,6 @@ export async function POST(req) {
       return NextResponse.json({ success: true, message: 'No incoming message' });
     }
 
-    // ✅ تجاهل لو مش list_response أو text
     const isListResponse = msg.mediaType === 'list_response' || !!msg.listResponse;
     const isTextMessage  = !msg.hasMedia && !!msg.body;
 
@@ -60,10 +58,7 @@ export async function GET(req) {
 
 // ============================================================
 async function processIncomingMessage(msg) {
-  // ✅ الـ selectedRowID من listResponse هو المصدر الحقيقي
   const selectedRowID = msg.listResponse?.selectedRowID || null;
-
-  // ✅ رقم الهاتف - إزالة @lid وأي لاحقة
   const phoneRaw = (msg.from || '').replace(/@.*$/, '').trim();
 
   // ✅ تحديد اللغة
@@ -86,14 +81,45 @@ async function processIncomingMessage(msg) {
 
   console.log(`🌍 Language: ${selectedLanguage} | Phone: ${phoneRaw}`);
 
-  if (!phoneRaw) {
-    return { success: false, reason: 'no_phone' };
+  // ✅ طريقة 1: ابحث بالـ stanzaID في whatsappMessages
+  const originalMessageId = msg.listResponse?.stanzaID || msg.replyToId || null;
+  let student = null;
+
+  if (originalMessageId) {
+    console.log(`🔍 Searching by messageId: ${originalMessageId}`);
+    student = await Student.findOne({
+      'whatsappMessages.wapilotMessageId': originalMessageId,
+      isDeleted: false,
+    });
+    if (student) {
+      console.log(`✅ Found by messageId: ${originalMessageId}`);
+    } else {
+      console.log(`⚠️ Not found by messageId, trying phones...`);
+    }
   }
 
-  // ✅ البحث عن الطالب
-  const student = await findStudentByPhone(phoneRaw);
+  // ✅ طريقة 2: fallback - ابحث بكل الأرقام المتاحة في الـ payload
   if (!student) {
-    console.log(`⚠️ Student not found for: ${phoneRaw}`);
+    const phonesToTry = [
+      phoneRaw,
+      (msg.listResponse?.participant || '').replace(/@.*$/, '').trim(),
+      (msg.replyTo?.participant || '').replace(/@.*$/, '').trim(),
+    ].filter(p => p && p.length > 0);
+
+    console.log(`🔍 Trying phones:`, phonesToTry);
+
+    for (const phone of phonesToTry) {
+      const found = await findStudentByPhone(phone);
+      if (found) {
+        student = found;
+        console.log(`✅ Found by phone: ${phone}`);
+        break;
+      }
+    }
+  }
+
+  if (!student) {
+    console.log(`⚠️ Student not found for phone: ${phoneRaw} | messageId: ${originalMessageId}`);
     return { success: false, reason: 'student_not_found', phone: phoneRaw };
   }
 
@@ -130,6 +156,8 @@ async function processIncomingMessage(msg) {
 
 // ============================================================
 async function findStudentByPhone(phoneRaw) {
+  if (!phoneRaw) return null;
+
   let digits = phoneRaw.replace(/\D/g, '');
 
   if (digits.startsWith('20') && digits.length > 10) {
@@ -137,6 +165,8 @@ async function findStudentByPhone(phoneRaw) {
   }
 
   const variants = [digits, `+20${digits}`, `20${digits}`, `0${digits}`];
+
+  console.log(`🔎 Phone variants to check:`, variants);
 
   for (const variant of variants) {
     const student = await Student.findOne({
@@ -209,8 +239,8 @@ The language has been modified.
 Your preferred language has been set to *English*.
 
 📌 From now on:
-• All messages will be sent to you in English
-• Course updates and reminders will be in English
+- All messages will be sent to you in English
+- Course updates and reminders will be in English
 
 Thank you for being part of Code School! 🚀
 
@@ -233,8 +263,8 @@ ${salutation}،
 تم تعيين اللغة العربية كلغة التواصل الرسمية معك.
 
 📌 من الآن فصاعداً:
-• جميع الرسائل ستصلك باللغة العربية
-• التحديثات والتذكيرات ستكون بالعربية
+- جميع الرسائل ستصلك باللغة العربية
+- التحديثات والتذكيرات ستكون بالعربية
 
 شكراً لكونك جزءاً من Code School! 🚀
 

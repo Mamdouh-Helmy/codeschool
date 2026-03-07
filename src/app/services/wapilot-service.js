@@ -356,6 +356,7 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
       });
 
       const result = await response.json();
+      console.log('📦 sendListMessage API response:', JSON.stringify(result, null, 2));
 
       if (!response.ok) {
         throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
@@ -363,7 +364,7 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
 
       return {
         success: true,
-        messageId: result.id,
+        messageId: result.id || result.messageId || result.data?.id || result.messages?.[0]?.id,
         data: result,
         sentVia: "wapilot",
         simulated: false,
@@ -411,6 +412,7 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
       });
 
       const result = await response.json();
+      console.log('📦 sendListMessage API response:', JSON.stringify(result, null, 2));
 
       if (!response.ok) {
         throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
@@ -418,7 +420,7 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
 
       return {
         success: true,
-        messageId: result.id,
+        messageId: result.id || result.messageId || result.data?.id || result.messages?.[0]?.id,
         data: result,
         sentVia: "wapilot",
         simulated: false,
