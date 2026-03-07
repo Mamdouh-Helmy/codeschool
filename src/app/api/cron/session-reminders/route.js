@@ -1,266 +1,168 @@
-import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import Session from "../../../models/Session";
-import Group from "../../../models/Group";
-import Student from "../../../models/Student";
-import { wapilotService } from "../../../services/wapilot-service";
-import { prepareReminderMessage } from "../../../services/groupAutomation";
+// /src/app/api/cron/session-reminders/route.js
 
-/**
- * ✅ Cron Job: Session Reminders
- * يشتغل تلقائياً كل ساعة (0 * * * *)
- * يرسل تذكيرات 24 ساعة و 1 ساعة قبل المحاضرات
- */
+import { NextResponse } from 'next/server';
+import { connectDB } from '@/lib/mongodb';
+import Session from '../../../models/Session';
+import { sendManualSessionReminder } from '../../../services/groupAutomation';
+
+const CRON_SECRET = process.env.CRON_SECRET || 'your-secret-key-change-this';
+
 export async function GET(req) {
   try {
-    console.log("⏰ Starting session reminder cron job...");
+    const { searchParams } = new URL(req.url);
+    const secret = searchParams.get('secret');
+    const authHeader = req.headers.get('authorization');
 
-    // Security check
-    const authHeader = req.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET;
+    const isAuthorized =
+      secret === CRON_SECRET ||
+      authHeader === `Bearer ${CRON_SECRET}`;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      console.log("❌ Unauthorized cron request");
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
+    if (!isAuthorized) {
+      console.warn('⛔ Unauthorized cron request');
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     await connectDB();
 
     const now = new Date();
-    console.log(`📅 Current time: ${now.toISOString()}`);
-
-    // Find active groups with reminders enabled
-    const activeGroups = await Group.find({
-      status: "active",
-      "automation.whatsappEnabled": true,
-      "automation.reminderEnabled": true,
-      isDeleted: false,
-    }).lean();
-
-    console.log(
-      `📊 Found ${activeGroups.length} groups with reminders enabled`,
-    );
-
-    let stats = {
-      groupsChecked: activeGroups.length,
-      sessionsProcessed: 0,
-      reminders24h: { sent: 0, failed: 0, skipped: 0 },
-      reminders1h: { sent: 0, failed: 0, skipped: 0 },
+    const results = {
+      timestamp: now.toISOString(),
+      reminder24h: { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [] },
+      reminder1h:  { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [] },
     };
 
-    for (const group of activeGroups) {
-      console.log(`\n📁 Processing group: ${group.code}`);
+    // ============================================================
+    // ✅ نجيب sessions في نافذة 2 يوم (اليوم + بكرا) ونفلتر بالوقت
+    // لأن scheduledDate بيتخزن كـ 00:00 بدون وقت
+    // ============================================================
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
 
-      // ✅ Find sessions needing 24-hour reminder
-      const reminder24hTime = new Date(now);
-      reminder24hTime.setHours(reminder24hTime.getHours() + 24);
+    const dayEnd = new Date(now);
+    dayEnd.setDate(dayEnd.getDate() + 2);
+    dayEnd.setHours(23, 59, 59, 999);
 
-      const sessions24h = await Session.find({
-        groupId: group._id,
-        status: "scheduled",
-        scheduledDate: {
-          $gte: new Date(reminder24hTime.getTime() - 30 * 60000), // 30 min before
-          $lte: new Date(reminder24hTime.getTime() + 30 * 60000), // 30 min after
-        },
-        "automationEvents.reminder24hSent": { $ne: true }, // لم يتم إرساله
-        isDeleted: false,
-      });
+    // ============================================================
+    // ✅ 1) تذكير 24 ساعة
+    // ============================================================
+    const sessions24h = await Session.find({
+      status: 'scheduled',
+      isDeleted: false,
+      scheduledDate: { $gte: dayStart, $lte: dayEnd },
+      'automationEvents.reminder24hSent': { $ne: true },
+    }).lean();
 
-      console.log(
-        `📅 Found ${sessions24h.length} sessions needing 24h reminder`,
-      );
+    results.reminder24h.checked = sessions24h.length;
+    console.log(`\n⏰ [24h] Candidates: ${sessions24h.length}`);
 
-      // ✅ Find sessions needing 1-hour reminder
-      const reminder1hTime = new Date(now);
-      reminder1hTime.setHours(reminder1hTime.getHours() + 1);
-
-      const sessions1h = await Session.find({
-        groupId: group._id,
-        status: "scheduled",
-        scheduledDate: {
-          $gte: new Date(reminder1hTime.getTime() - 15 * 60000), // 15 min before
-          $lte: new Date(reminder1hTime.getTime() + 15 * 60000), // 15 min after
-        },
-        "automationEvents.reminder1hSent": { $ne: true }, // لم يتم إرساله
-        isDeleted: false,
-      });
-
-      console.log(`⏰ Found ${sessions1h.length} sessions needing 1h reminder`);
-
-      // ✅ Process 24-hour reminders
-      for (const session of sessions24h) {
-        const result = await sendSessionReminderInternal(
-          session,
-          group,
-          "24hours",
-        );
-        stats.sessionsProcessed++;
-        stats.reminders24h.sent += result.sent;
-        stats.reminders24h.failed += result.failed;
-        stats.reminders24h.skipped += result.skipped;
-
-        // ✅ Update session
-        if (result.sent > 0) {
-          await Session.findByIdAndUpdate(session._id, {
-            $set: {
-              "automationEvents.reminder24hSent": true,
-              "automationEvents.reminder24hSentAt": new Date(),
-              "automationEvents.reminder24hStudentsNotified": result.sent,
-              "automationEvents.reminderStats.total24hSent": result.sent,
-              "automationEvents.reminderStats.total24hFailed": result.failed,
-            },
-          });
-        }
-      }
-
-      // ✅ Process 1-hour reminders
-      for (const session of sessions1h) {
-        const result = await sendSessionReminderInternal(
-          session,
-          group,
-          "1hour",
-        );
-        stats.sessionsProcessed++;
-        stats.reminders1h.sent += result.sent;
-        stats.reminders1h.failed += result.failed;
-        stats.reminders1h.skipped += result.skipped;
-
-        // ✅ Update session
-        if (result.sent > 0) {
-          await Session.findByIdAndUpdate(session._id, {
-            $set: {
-              "automationEvents.reminder1hSent": true,
-              "automationEvents.reminder1hSentAt": new Date(),
-              "automationEvents.reminder1hStudentsNotified": result.sent,
-              "automationEvents.reminderStats.total1hSent": result.sent,
-              "automationEvents.reminderStats.total1hFailed": result.failed,
-            },
-          });
-        }
-      }
-    }
-
-    console.log("\n✅ Cron job completed");
-    console.log("📊 Stats:", stats);
-
-    return NextResponse.json({
-      success: true,
-      message: "Session reminders processed",
-      stats,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error("❌ Error in cron job:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-        timestamp: new Date().toISOString(),
-      },
-      { status: 500 },
-    );
-  }
-}
-
-/**
- * ✅ Internal: Send reminder for a specific session
- */
-async function sendSessionReminderInternal(session, group, reminderType) {
-  console.log(`\n📤 Sending ${reminderType} for: ${session.title}`);
-
-  const result = { sent: 0, failed: 0, skipped: 0 };
-
-  try {
-    const students = await Student.getStudentsForReminder(
-      group._id,
-      session._id,
-      reminderType,
-    );
-
-    console.log(`👥 ${students.length} students to notify`);
-
-    for (const student of students) {
+    for (const session of sessions24h) {
       try {
-        const whatsappNumber = student.personalInfo?.whatsappNumber;
+        const sessionDateTime = buildSessionDateTime(session);
+        const diffHours = (sessionDateTime - now) / (1000 * 60 * 60);
 
-        if (!whatsappNumber) {
-          result.skipped++;
+        console.log(`   Session: ${session.title} | diff: ${diffHours.toFixed(2)}h`);
+
+        if (diffHours < 23 || diffHours > 26) {
+          results.reminder24h.skipped++;
           continue;
         }
 
-        const language =
-          student.communicationPreferences?.preferredLanguage || "ar";
-
-        const message = prepareReminderMessage(
-          student.personalInfo?.fullName,
-          session,
-          group,
-          reminderType,
-          language,
+        const result = await sendManualSessionReminder(
+          session._id.toString(),
+          '24hours',
+          null,
+          { automatedCron: true }
         );
 
-        await wapilotService.sendTextMessage(
-          wapilotService.preparePhoneNumber(whatsappNumber),
-          message,
-        );
-
-        await student.addSessionReminder({
-          sessionId: session._id,
-          groupId: group._id,
-          reminderType,
-          message,
-          language,
-          status: "sent",
-          sessionDetails: {
+        if (result.success) {
+          results.reminder24h.sent++;
+          results.reminder24h.sessions.push({
+            id: session._id,
             title: session.title,
             scheduledDate: session.scheduledDate,
-            startTime: session.startTime,
-            endTime: session.endTime,
-            moduleIndex: session.moduleIndex,
-            sessionNumber: session.sessionNumber,
-          },
-        });
-
-        result.sent++;
-      } catch (studentError) {
-        console.error(`❌ Failed:`, studentError.message);
-
-        try {
-          await student.addSessionReminder({
-            sessionId: session._id,
-            groupId: group._id,
-            reminderType,
-            message: "Failed",
-            language: "ar",
-            status: "failed",
-            error: studentError.message,
-            sessionDetails: {
-              title: session.title,
-              scheduledDate: session.scheduledDate,
-              startTime: session.startTime,
-              endTime: session.endTime,
-              moduleIndex: session.moduleIndex,
-              sessionNumber: session.sessionNumber,
-            },
+            studentsNotified: result.successCount,
           });
-        } catch {}
-
-        result.failed++;
+          console.log(`✅ 24h sent: ${result.successCount} students`);
+        } else {
+          results.reminder24h.failed++;
+        }
+      } catch (err) {
+        results.reminder24h.failed++;
+        console.error(`❌ 24h error for ${session._id}:`, err.message);
       }
     }
-  } catch (error) {
-    console.error(`❌ Error:`, error);
-  }
 
-  console.log(
-    `📊 ${reminderType}: ${result.sent} sent, ${result.failed} failed`,
-  );
-  return result;
+    // ============================================================
+    // ✅ 2) تذكير 1 ساعة
+    // ============================================================
+    const sessions1h = await Session.find({
+      status: 'scheduled',
+      isDeleted: false,
+      scheduledDate: { $gte: dayStart, $lte: dayEnd },
+      'automationEvents.reminder1hSent': { $ne: true },
+    }).lean();
+
+    results.reminder1h.checked = sessions1h.length;
+    console.log(`\n⏰ [1h] Candidates: ${sessions1h.length}`);
+
+    for (const session of sessions1h) {
+      try {
+        const sessionDateTime = buildSessionDateTime(session);
+        const diffMinutes = (sessionDateTime - now) / (1000 * 60);
+
+        console.log(`   Session: ${session.title} | diff: ${diffMinutes.toFixed(1)}min`);
+
+        if (diffMinutes < 30 || diffMinutes > 120) {
+          results.reminder1h.skipped++;
+          continue;
+        }
+
+        const result = await sendManualSessionReminder(
+          session._id.toString(),
+          '1hour',
+          null,
+          { automatedCron: true }
+        );
+
+        if (result.success) {
+          results.reminder1h.sent++;
+          results.reminder1h.sessions.push({
+            id: session._id,
+            title: session.title,
+            scheduledDate: session.scheduledDate,
+            studentsNotified: result.successCount,
+          });
+          console.log(`✅ 1h sent: ${result.successCount} students`);
+        } else {
+          results.reminder1h.failed++;
+        }
+      } catch (err) {
+        results.reminder1h.failed++;
+        console.error(`❌ 1h error for ${session._id}:`, err.message);
+      }
+    }
+
+    console.log('\n📊 Cron Summary:', JSON.stringify(results, null, 2));
+    return NextResponse.json({ success: true, data: results });
+
+  } catch (error) {
+    console.error('❌ Cron job error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
 }
 
-export async function POST(req) {
-  return GET(req);
+function buildSessionDateTime(session) {
+  // scheduledDate محفوظ كـ 00:00 UTC
+  // startTime محفوظ كـ "08:00" بتوقيت القاهرة (UTC+2)
+  // فلازم نطرح 2 ساعة عشان نحوله لـ UTC
+
+  const date = new Date(session.scheduledDate);
+
+  if (session.startTime) {
+    const [hours, minutes] = session.startTime.split(':').map(Number);
+    // Cairo = UTC+2, فنحط الوقت كـ UTC بطرح 2 ساعة
+    date.setUTCHours(hours - 2, minutes, 0, 0);
+  }
+
+  return date;
 }

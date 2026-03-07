@@ -3352,6 +3352,10 @@ export function prepareReminderMessage(
 /**
  * ✅ Send manual session reminder to both guardian and student
  */
+/**
+ * ✅ Send manual session reminder to both guardian and student
+ * ✅ UPDATED: دعم per-student templates من المودال + تعليم الـ DB بعد الإرسال التلقائي
+ */
 export async function sendManualSessionReminder(
   sessionId,
   reminderType,
@@ -3362,7 +3366,13 @@ export async function sendManualSessionReminder(
     console.log(`\n🎯 Manual Session Reminder ==========`);
     console.log(`📋 Session: ${sessionId} | Type: ${reminderType}`);
     console.log(
-      `📝 Student Msg: ${metadata?.studentMessage ? "Yes" : "No"} | Guardian Msg: ${metadata?.guardianMessage ? "Yes" : "No"}`,
+      `📝 Student Msgs (per-student): ${metadata?.studentMessages ? Object.keys(metadata.studentMessages).length : 0}`,
+    );
+    console.log(
+      `📝 Guardian Msgs (per-student): ${metadata?.guardianMessages ? Object.keys(metadata.guardianMessages).length : 0}`,
+    );
+    console.log(
+      `🤖 Automated Cron: ${metadata?.automatedCron ? "Yes" : "No"}`,
     );
 
     const session = await Session.findById(sessionId)
@@ -3402,71 +3412,68 @@ export async function sendManualSessionReminder(
           session,
         );
 
+        const studentIdStr = student._id.toString();
+
         console.log(`📤 ${student.personalInfo?.fullName} | ${language}`);
         console.log(
           `   Student: ${variables.studentSalutation} | Guardian: ${variables.guardianSalutation}`,
         );
 
-        // ✅ FIX: جلب القوالب المناسبة لكل طالب حسب لغته
+        // ============================================================
+        // ✅ رسالة الطالب
+        // الأولوية:
+        // 1. per-student template من المودال (metadata.studentMessages[studentId])
+        // 2. قالب عام من المودال (metadata.studentMessage) - للتوافق مع الكود القديم
+        // 3. قالب افتراضي من DB حسب لغة الطالب
+        // ============================================================
         let finalStudentMessage = "";
-        let finalGuardianMessage = "";
 
-        if (metadata?.studentMessage) {
-          // إذا كان القالب من المودال، نستخدم rawContent (القالب الخام) ثم نستبدل المتغيرات
-          const studentRawTemplate = metadata.studentMessage;
+        const perStudentTemplate = metadata?.studentMessages?.[studentIdStr];
+        const sharedStudentTemplate = metadata?.studentMessage;
 
+        if (perStudentTemplate) {
+          // ✅ استخدام القالب الخاص بهذا الطالب (من المودال الجديد)
+          finalStudentMessage = replaceVariables(perStudentTemplate, variables);
+          console.log(`   📝 Using per-student template for ${student.personalInfo?.fullName}`);
+        } else if (sharedStudentTemplate) {
+          // ✅ استخدام القالب المشترك (من المودال القديم)
           if (language === "ar") {
-            // ✅ للطلاب العرب: القالب من المودال عادة عربي، نستخدمه مباشرة
-            finalStudentMessage = replaceVariables(
-              studentRawTemplate,
-              variables,
-            );
+            finalStudentMessage = replaceVariables(sharedStudentTemplate, variables);
           } else {
-            // ✅ للطلاب الإنجليز: نجلب القالب الإنجليزي الافتراضي
-            const template = await getMessageTemplate(
-              studentTemplateType,
-              "en",
-              "student",
-            );
+            // للطلاب الإنجليز: جلب القالب الإنجليزي الافتراضي
+            const template = await getMessageTemplate(studentTemplateType, "en", "student");
             finalStudentMessage = replaceVariables(template.content, variables);
           }
         } else {
-          // إذا مفيش قالب من المودال، نجيب الافتراضي
-          const template = await getMessageTemplate(
-            studentTemplateType,
-            language,
-            "student",
-          );
+          // ✅ القالب الافتراضي من DB حسب لغة الطالب
+          const template = await getMessageTemplate(studentTemplateType, language, "student");
           finalStudentMessage = replaceVariables(template.content, variables);
         }
 
-        if (metadata?.guardianMessage) {
-          const guardianRawTemplate = metadata.guardianMessage;
+        // ============================================================
+        // ✅ رسالة ولي الأمر
+        // نفس الأولوية
+        // ============================================================
+        let finalGuardianMessage = "";
 
+        const perGuardianTemplate = metadata?.guardianMessages?.[studentIdStr];
+        const sharedGuardianTemplate = metadata?.guardianMessage;
+
+        if (perGuardianTemplate) {
+          // ✅ استخدام القالب الخاص بهذا الطالب (من المودال الجديد)
+          finalGuardianMessage = replaceVariables(perGuardianTemplate, variables);
+          console.log(`   📝 Using per-guardian template for ${student.personalInfo?.fullName}`);
+        } else if (sharedGuardianTemplate) {
+          // ✅ استخدام القالب المشترك (من المودال القديم)
           if (language === "ar") {
-            // ✅ للطلاب العرب: قالب ولي الأمر من المودال عربي
-            finalGuardianMessage = replaceVariables(
-              guardianRawTemplate,
-              variables,
-            );
+            finalGuardianMessage = replaceVariables(sharedGuardianTemplate, variables);
           } else {
-            // ✅ للطلاب الإنجليز: نجيب القالب الإنجليزي
-            const template = await getMessageTemplate(
-              guardianTemplateType,
-              "en",
-              "guardian",
-            );
-            finalGuardianMessage = replaceVariables(
-              template.content,
-              variables,
-            );
+            const template = await getMessageTemplate(guardianTemplateType, "en", "guardian");
+            finalGuardianMessage = replaceVariables(template.content, variables);
           }
         } else {
-          const template = await getMessageTemplate(
-            guardianTemplateType,
-            language,
-            "guardian",
-          );
+          // ✅ القالب الافتراضي من DB حسب لغة الطالب
+          const template = await getMessageTemplate(guardianTemplateType, language, "guardian");
           finalGuardianMessage = replaceVariables(template.content, variables);
         }
 
@@ -3482,7 +3489,10 @@ export async function sendManualSessionReminder(
             groupId: group._id,
             reminderType,
             isCustomMessage: !!(
-              metadata?.studentMessage || metadata?.guardianMessage
+              perStudentTemplate ||
+              perGuardianTemplate ||
+              sharedStudentTemplate ||
+              sharedGuardianTemplate
             ),
           },
         });
@@ -3499,10 +3509,57 @@ export async function sendManualSessionReminder(
           failCount++;
         }
       } catch (error) {
-        console.error(`Error:`, error);
+        console.error(`Error processing student ${student._id}:`, error);
         failCount++;
       }
     }
+
+    // ============================================================
+    // ✅ NEW: تعليم الـ DB بعد إرسال الـ cron التلقائي
+    // هذا يمنع إرسال نفس التذكير مرة ثانية
+    // ============================================================
+    if (metadata?.automatedCron && successCount > 0) {
+      try {
+        const updateField =
+          reminderType === "24hours"
+            ? {
+                "automationEvents.reminder24hSent": true,
+                "automationEvents.reminder24hSentAt": new Date(),
+                "automationEvents.reminder24hStudentsNotified": successCount,
+                "automationEvents.reminderSent": true,
+                "automationEvents.reminderSentAt": new Date(),
+                "automationEvents.reminderStats.total24hSent": successCount,
+                "automationEvents.reminderStats.total24hFailed": failCount,
+              }
+            : {
+                "automationEvents.reminder1hSent": true,
+                "automationEvents.reminder1hSentAt": new Date(),
+                "automationEvents.reminder1hStudentsNotified": successCount,
+                "automationEvents.reminderSent": true,
+                "automationEvents.reminderSentAt": new Date(),
+                "automationEvents.reminderStats.total1hSent": successCount,
+                "automationEvents.reminderStats.total1hFailed": failCount,
+              };
+
+        await Session.findByIdAndUpdate(sessionId, { $set: updateField });
+        console.log(
+          `✅ [CRON] Marked ${reminderType} reminder as sent in DB for session ${sessionId}`,
+        );
+        console.log(
+          `   Students notified: ${successCount} | Failed: ${failCount}`,
+        );
+      } catch (markError) {
+        // مش هنوقف لو فشلت العملية دي - الإرسال نجح وده الأهم
+        console.error(
+          "⚠️ Failed to mark reminder as sent in DB (non-critical):",
+          markError.message,
+        );
+      }
+    }
+
+    console.log(
+      `\n✅ Reminder complete: ${successCount} sent, ${failCount} failed`,
+    );
 
     return {
       success: successCount > 0,
@@ -3512,7 +3569,10 @@ export async function sendManualSessionReminder(
       reminderType,
       notificationResults,
       customMessageUsed: !!(
-        metadata?.studentMessage || metadata?.guardianMessage
+        metadata?.studentMessages ||
+        metadata?.guardianMessages ||
+        metadata?.studentMessage ||
+        metadata?.guardianMessage
       ),
     };
   } catch (error) {
