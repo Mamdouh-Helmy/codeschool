@@ -364,7 +364,7 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
 
       return {
         success: true,
-        messageId: result.id || result.messageId || result.data?.id || result.messages?.[0]?.id,
+        messageId: result.message_id || result.id || result.messageId || result.data?.id,
         data: result,
         sentVia: "wapilot",
         simulated: false,
@@ -420,7 +420,7 @@ P.S. ${arabicName}، رحلتك التعليمية تبدأ من هنا! 🚀
 
       return {
         success: true,
-        messageId: result.id || result.messageId || result.data?.id || result.messages?.[0]?.id,
+        messageId: result.message_id || result.id || result.messageId || result.data?.id,
         data: result,
         sentVia: "wapilot",
         simulated: false,

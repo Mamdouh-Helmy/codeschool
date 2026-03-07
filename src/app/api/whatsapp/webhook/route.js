@@ -82,7 +82,7 @@ async function processIncomingMessage(msg) {
   console.log(`🌍 Language: ${selectedLanguage} | Phone: ${phoneRaw}`);
 
   // ✅ طريقة 1: ابحث بالـ stanzaID في whatsappMessages
-  const originalMessageId = msg.listResponse?.stanzaID || msg.replyToId || null;
+  const originalMessageId = msg.listResponse?.stanzaID || msg.replyToId || msg.replyTo?.id || null;
   let student = null;
 
   if (originalMessageId) {
