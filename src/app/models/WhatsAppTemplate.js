@@ -4,7 +4,7 @@ const WhatsAppTemplateSchema = new mongoose.Schema(
   {
     templateType: {
       type: String,
-      enum: ["student_welcome", "guardian_notification"],
+      enum: ["student_welcome", "guardian_notification", "student_language_confirmation", "guardian_language_confirmation"],
       required: true,
     },
     name: {

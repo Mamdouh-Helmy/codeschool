@@ -1,4 +1,3 @@
-// /src/app/admin/whatsapp-templates/page.js
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import {
@@ -34,7 +33,6 @@ const TEMPLATE_TYPES = [
   { id: "excused_notification",           label: "إشعار غياب بعذر - ولي الأمر", icon: FileText,     color: "blue",    emoji: "📝", category: "attendance", type: "guardian_with_session",  api: "message" },
   { id: "group_completion_student",       label: "إكمال المجموعة - الطالب",     icon: Award,        color: "emerald", emoji: "🎉", category: "completion", type: "student_with_group",     api: "message" },
   { id: "group_completion_guardian",      label: "إكمال المجموعة - ولي الأمر",  icon: Award,        color: "emerald", emoji: "🎉", category: "completion", type: "guardian_with_group",    api: "message" },
-  // ✅ evaluation + recording
   { id: "evaluation_pass",                label: "تقييم: ممتاز",                icon: Star,         color: "emerald", emoji: "✅", category: "evaluation", type: "guardian_with_session",  api: "message" },
   { id: "evaluation_review",              label: "تقييم: يحتاج مراجعة",         icon: FileText,     color: "amber",   emoji: "⚠️", category: "evaluation", type: "guardian_with_session",  api: "message" },
   { id: "evaluation_repeat",              label: "تقييم: يحتاج دعم إضافي",      icon: RotateCcw,    color: "rose",    emoji: "🔄", category: "evaluation", type: "guardian_with_session",  api: "message" },
@@ -49,7 +47,7 @@ const CATEGORIES = {
   session:    { label: "الحصص",     emoji: "📅" },
   attendance: { label: "الحضور",    emoji: "📋" },
   completion: { label: "الإكمال",   emoji: "🎉" },
-  evaluation: { label: "التقييم",   emoji: "⭐" }, // ✅ جديد
+  evaluation: { label: "التقييم",   emoji: "⭐" },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -57,18 +55,23 @@ const CATEGORIES = {
 // ─────────────────────────────────────────────────────────────
 const ALL_VARS = {
   // ── Student basic
-  salutation_ar:         { label: "تحية (عربي)",              labelEn: "Salutation (AR)",          icon: "👋", ar: "عزيزي ممدوح",            en: "عزيزي ممدوح" },
-  salutation_en:         { label: "تحية (إنجليزي)",            labelEn: "Salutation (EN)",          icon: "👋", ar: "Dear Mamdouh",            en: "Dear Mamdouh" },
+  salutation_ar:         { label: "تحية (عربي)",              labelEn: "Salutation (AR)",          icon: "👋", ar: "عزيزي الطالب ممدوح",     en: "عزيزي الطالب ممدوح" },
+  salutation_en:         { label: "تحية (إنجليزي)",            labelEn: "Salutation (EN)",          icon: "👋", ar: "Dear student Mamdouh",    en: "Dear student Mamdouh" },
   name_ar:               { label: "الاسم (عربي)",              labelEn: "Name (AR)",                icon: "👤", ar: "ممدوح",                   en: "ممدوح" },
   name_en:               { label: "الاسم (إنجليزي)",           labelEn: "Name (EN)",                icon: "👤", ar: "Mamdouh",                 en: "Mamdouh" },
   fullName:              { label: "الاسم الكامل",              labelEn: "Full Name",                icon: "📝", ar: "ممدوح أحمد",               en: "Mamdouh Ahmed" },
   you_ar:                { label: "أنت / حضرتك",              labelEn: "You (AR)",                 icon: "🫵", ar: "أنت",                     en: "أنت" },
   welcome_ar:            { label: "أهلاً (عربي)",              labelEn: "Welcome (AR)",             icon: "🌟", ar: "أهلاً بك",                en: "أهلاً بك" },
+  // ── Language confirmation
+  selectedLanguage_ar:   { label: "اللغة المختارة (عربي)",     labelEn: "Selected Language (AR)",   icon: "🌍", ar: "العربية",                 en: "الإنجليزية" },
+  selectedLanguage_en:   { label: "اللغة المختارة (إنجليزي)",  labelEn: "Selected Language (EN)",   icon: "🌍", ar: "Arabic",                  en: "English" },
   // ── Guardian
   guardianSalutation_ar: { label: "تحية ولي الأمر (عربي)",    labelEn: "Guardian Salutation (AR)", icon: "👋", ar: "عزيزي الأستاذ محمد",      en: "عزيزي الأستاذ محمد" },
+  guardianSalutation_en: { label: "تحية ولي الأمر (إنجليزي)", labelEn: "Guardian Salutation (EN)", icon: "👋", ar: "Dear Mr. Mohamed",         en: "Dear Mr. Mohamed" },
   guardianSalutation:    { label: "تحية ولي الأمر",            labelEn: "Guardian Salutation",      icon: "👋", ar: "عزيزي الأستاذ محمد",      en: "Dear Mr. Mohamed" },
   studentSalutation:     { label: "تحية الطالب",               labelEn: "Student Salutation",       icon: "👋", ar: "عزيزي ممدوح",             en: "Dear Mamdouh" },
   studentGender_ar:      { label: "جنس الطالب (عربي)",         labelEn: "Student Gender (AR)",      icon: "⚧",  ar: "الابن",                   en: "الابن" },
+  studentGender_en:      { label: "جنس الطالب (إنجليزي)",      labelEn: "Student Gender (EN)",      icon: "⚧",  ar: "son",                     en: "son" },
   studentName_ar:        { label: "اسم الطالب (عربي)",         labelEn: "Student Name (AR)",        icon: "👤", ar: "ممدوح",                   en: "ممدوح" },
   studentName_en:        { label: "اسم الطالب (إنجليزي)",      labelEn: "Student Name (EN)",        icon: "👤", ar: "Mamdouh",                 en: "Mamdouh" },
   studentName:           { label: "اسم الطالب",                labelEn: "Student Name",             icon: "👤", ar: "ممدوح",                   en: "Mamdouh" },
@@ -98,7 +101,7 @@ const ALL_VARS = {
   newTime:               { label: "الوقت الجديد",              labelEn: "New Time",                 icon: "⏰", ar: "08:00 - 09:30 مساءً",     en: "08:00 - 09:30 PM" },
   // ── Attendance
   status:                { label: "الحالة",                    labelEn: "Status",                   icon: "📌", ar: "غائب",                    en: "Absent" },
-  // ── Evaluation ✅ جديد
+  // ── Evaluation
   decision:              { label: "نتيجة التقييم",             labelEn: "Evaluation Decision",      icon: "🏆", ar: "ممتاز",                    en: "Excellent" },
   recordingLink:         { label: "رابط التسجيل",              labelEn: "Recording Link",           icon: "🎥", ar: "🎥 رابط التسجيل: https://drive.google.com/xxx", en: "🎥 Recording: https://drive.google.com/xxx" },
   // ── Common
@@ -109,10 +112,16 @@ const ALL_VARS = {
 // TEMPLATE VARS MAP
 // ─────────────────────────────────────────────────────────────
 const TEMPLATE_VARS = {
+  // ✅ رسائل الترحيب - bilingual (متغيرات اللغتين معاً)
   student_welcome:               ["salutation_ar","salutation_en","welcome_ar","name_ar","name_en","fullName","you_ar"],
   guardian_notification:         ["guardianSalutation_ar","studentGender_ar","studentName_ar","studentName_en","relationship_ar","fullStudentName"],
-  language_confirmation:         ["salutation_ar","salutation_en","welcome_ar","name_ar","name_en","fullName","you_ar"],
-  guardian_language_notification:["guardianSalutation_ar","studentGender_ar","studentName_ar","studentName_en","relationship_ar","fullStudentName"],
+
+  // ✅ تأكيد اللغة - المتغيرات بتتغير حسب اللغة المختارة
+  // عربي → salutation_ar + selectedLanguage_ar
+  // إنجليزي → salutation_en + selectedLanguage_en
+  language_confirmation:         ["salutation_ar","salutation_en","name_ar","name_en","selectedLanguage_ar","selectedLanguage_en"],
+  guardian_language_notification:["guardianSalutation_ar","guardianSalutation_en","studentGender_ar","studentGender_en","studentName_ar","studentName_en","selectedLanguage_ar","selectedLanguage_en"],
+
   group_student_welcome_student: ["salutation","courseName","groupName","startDate","timeTo","timeFrom","instructor","firstMeetingLink","studentName"],
   group_student_welcome_guardian:["salutation","childTitle","studentName","courseName","groupName","startDate","timeTo","timeFrom","instructor","firstMeetingLink"],
   instructor_group_activation:   ["salutation","courseName","groupName","startDate","timeTo","timeFrom","instructorName","studentCount"],
@@ -129,7 +138,6 @@ const TEMPLATE_VARS = {
   excused_notification:          ["guardianSalutation","guardianName","studentName","childTitle","status","sessionName","date","time","enrollmentNumber"],
   group_completion_student:      ["studentSalutation","guardianSalutation","studentName","guardianName","childTitle","groupName","groupCode","courseName","enrollmentNumber","feedbackLink"],
   group_completion_guardian:     ["studentSalutation","guardianSalutation","studentName","guardianName","childTitle","groupName","groupCode","courseName","enrollmentNumber","feedbackLink"],
-  // ✅ evaluation + recording
   evaluation_pass:               ["guardianSalutation","guardianName","childTitle","studentName","sessionName","date","time","enrollmentNumber","decision","recordingLink"],
   evaluation_review:             ["guardianSalutation","guardianName","childTitle","studentName","sessionName","date","time","enrollmentNumber","decision","recordingLink"],
   evaluation_repeat:             ["guardianSalutation","guardianName","childTitle","studentName","sessionName","date","time","enrollmentNumber","decision","recordingLink"],
@@ -141,6 +149,77 @@ const TEMPLATE_VARS = {
 // يُستخدم لما مفيش record في الداتابيز — يظهر تلقائياً
 // ─────────────────────────────────────────────────────────────
 const FRONTEND_FALLBACKS = {
+
+  // ✅ تأكيد اللغة للطالب
+  // عربي: بيستخدم {salutation_ar} بس
+  // إنجليزي: بيستخدم {salutation_en} بس
+  // الـ webhook هو اللي بيحدد أي متغير يتملى حسب اللغة المختارة
+  language_confirmation: {
+    ar: `✅ تم تأكيد اللغة المفضلة
+
+{salutation_ar}،
+
+تم تعيين *اللغة العربية* كلغة التواصل الرسمية معك.
+
+📌 ماذا يحدث الآن؟
+- جميع الرسائل القادمة ستكون بالعربية
+- المحتوى التعليمي والدعم سيكون متاحاً بالعربية
+
+نحن متحمسون لوجودك معنا! 🚀
+
+مع أطيب التحيات،
+فريق Code School 💻
+
+🌍 شكراً لاختيارك Code School`,
+
+    en: `✅ Language Preference Confirmed
+
+{salutation_en},
+
+Your preferred language has been set to *English*.
+
+📌 What happens next?
+- All future messages will be sent in English
+- Course materials and support will be available in English
+
+We're excited to have you on board! 🚀
+
+Best regards,
+The Code School Team 💻
+
+🌍 Thank you for choosing Code School`,
+  },
+
+  // ✅ تأكيد اللغة لولي الأمر
+  // عربي: بيستخدم {guardianSalutation_ar} + {studentGender_ar} + {studentName_ar}
+  // إنجليزي: بيستخدم {guardianSalutation_en} + {studentGender_en} + {studentName_en}
+  guardian_language_notification: {
+    ar: `{guardianSalutation_ar}،
+
+يسعدنا إبلاغكم بأن {studentGender_ar} **{studentName_ar}** قام/ت باختيار *اللغة العربية* كلغة مفضلة للتواصل بنجاح.
+
+📌 ماذا يعني هذا؟
+- جميع الرسائل القادمة لـ{studentGender_ar} ستكون باللغة العربية
+
+شكراً لثقتكم المستمرة في Code School.
+
+مع أطيب التحيات،
+فريق Code School 💻`,
+
+    en: `{guardianSalutation_en},
+
+We are pleased to inform you that your {studentGender_en} **{studentName_en}** has successfully selected *English* as their preferred communication language.
+
+📌 What this means?
+- All future messages will be sent in English
+
+Thank you for your continued trust in Code School.
+
+Best regards,
+The Code School Team 💻`,
+  },
+
+  // ✅ evaluation + recording (موجودة من قبل)
   evaluation_pass: {
     ar: `{guardianSalutation}،
 
@@ -333,7 +412,31 @@ export default function WhatsAppTemplatesPage() {
       const map = {};
 
       const sd = await sRes.json();
-      if (sd.success && sd.data) sd.data.forEach(t => { map[t.templateType] = t; });
+      if (sd.success && sd.data) {
+        sd.data.forEach(t => {
+          // ✅ قوالب تأكيد اللغة - نحفظ contentAr و contentEn منفصلين
+          // لأن الـ webhook بيبعت نسخة مختلفة لكل لغة
+          if (t.templateType === "student_language_confirmation") {
+            map["language_confirmation"] = {
+              ...t,
+              // contentAr = القالب العربي (بيتبعت لو اختار عربي)
+              // contentEn = القالب الإنجليزي (بيتبعت لو اختار إنجليزي)
+              content:   t.contentAr || t.content || "",
+              contentAr: t.contentAr || t.content || "",
+              contentEn: t.contentEn || t.content || "",
+            };
+          } else if (t.templateType === "guardian_language_confirmation") {
+            map["guardian_language_notification"] = {
+              ...t,
+              content:   t.contentAr || t.content || "",
+              contentAr: t.contentAr || t.content || "",
+              contentEn: t.contentEn || t.content || "",
+            };
+          } else {
+            map[t.templateType] = t;
+          }
+        });
+      }
 
       const id = await iRes.json();
       if (id.success && id.data) {
@@ -362,7 +465,7 @@ export default function WhatsAppTemplatesPage() {
         });
       }
 
-      // ✅ evaluation/recording — لو مش في الداتابيز حط الـ hardcoded fallback
+      // ✅ لو مفيش record في الداتابيز لأي template في FRONTEND_FALLBACKS → حط الـ fallback
       Object.entries(FRONTEND_FALLBACKS).forEach(([typeId, fb]) => {
         if (!map[typeId]) {
           map[typeId] = {
@@ -370,7 +473,8 @@ export default function WhatsAppTemplatesPage() {
             content:            fb.ar,
             contentAr:          fb.ar,
             contentEn:          fb.en,
-            isMessageTemplate:  true,
+            // قوالب تأكيد اللغة مش message templates - بتروح لـ /api/whatsapp/templates
+            isMessageTemplate:  !["language_confirmation", "guardian_language_notification"].includes(typeId),
             isFrontendFallback: true,
             _messageTemplateId: null,
           };
@@ -406,19 +510,59 @@ export default function WhatsAppTemplatesPage() {
     setSaving(true);
     try {
       let endpoint, payload;
+
       if (activeTab === "instructor_group_activation") {
         endpoint = "/api/whatsapp/instructor-templates";
         payload  = { id: cur._id, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn, setAsDefault: true };
+
       } else if (activeTab.startsWith("group_student_welcome")) {
         endpoint = "/api/whatsapp/group-templates";
         const base = templates["group_student_welcome_student"];
         payload = { id: base?._id || cur._id, setAsDefault: true };
         if (activeTab === "group_student_welcome_student") { payload.studentContentAr  = cur.contentAr || cur.content; payload.studentContentEn  = cur.contentEn; }
         else                                               { payload.guardianContentAr = cur.contentAr || cur.content; payload.guardianContentEn = cur.contentEn; }
+
+      } else if (activeTab === "language_confirmation" || activeTab === "guardian_language_notification") {
+        // ✅ قوالب تأكيد اللغة - بتروح لـ /api/whatsapp/templates
+        endpoint = "/api/whatsapp/templates";
+        const dbType = activeTab === "language_confirmation"
+          ? "student_language_confirmation"
+          : "guardian_language_confirmation";
+
+        if (cur.isFrontendFallback || !cur._id) {
+          // مفيش record → POST لإنشاء جديد
+          payload = {
+            templateType: dbType,
+            name:         activeTab === "language_confirmation" ? "تأكيد اللغة للطالب" : "تأكيد اللغة لولي الأمر",
+            content:      cur.contentAr || cur.content,  // الـ DB بيخزن content كـ AR
+            contentAr:    cur.contentAr || cur.content,
+            contentEn:    cur.contentEn || "",
+            description:  activeTab === "language_confirmation"
+              ? "رسالة تأكيد اللغة للطالب - باللغة المختارة فقط"
+              : "رسالة تأكيد اللغة لولي الأمر - باللغة المختارة فقط",
+            isDefault: true,
+            isActive:  true,
+            setAsDefault: true,
+          };
+          const res  = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          const data = await res.json();
+          if (data.success) { await fetchTemplates(); toast.success("✅ تم حفظ القالب"); }
+          else toast.error(data.message || data.error || "فشل الحفظ");
+          return;
+        }
+
+        // يوجد record → PUT للتحديث
+        payload = {
+          id:        cur._id,
+          content:   cur.contentAr || cur.content,
+          contentAr: cur.contentAr || cur.content,
+          contentEn: cur.contentEn || "",
+          setAsDefault: true,
+        };
+
       } else if (cur.isMessageTemplate) {
         endpoint = "/api/whatsapp/message-templates";
         if (cur.isFrontendFallback || !cur._messageTemplateId) {
-          // ✅ مفيش record في الداتابيز — ابعت POST لإنشاء جديد
           payload = {
             templateType: activeTab,
             contentAr:    cur.contentAr || cur.content,
@@ -435,6 +579,7 @@ export default function WhatsAppTemplatesPage() {
           return;
         }
         payload = { _id: cur._messageTemplateId || cur._id, templateType: activeTab, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn };
+
       } else {
         endpoint = "/api/whatsapp/templates";
         payload  = { id: cur._id, content: cur.content, setAsDefault: true };
@@ -533,6 +678,9 @@ export default function WhatsAppTemplatesPage() {
   const filtered    = TEMPLATE_TYPES.filter(t => !searchQ || t.label.includes(searchQ));
   const byCategory  = filtered.reduce((acc, t) => { if (!acc[t.category]) acc[t.category] = []; acc[t.category].push(t); return acc; }, {});
   const textVal     = testLanguage === "ar" ? (curTemplate?.contentAr || curTemplate?.content || "") : (curTemplate?.contentEn || curTemplate?.content || "");
+
+  // ── note for language confirmation templates ───────────────
+  const isLangConfirmation = ["language_confirmation", "guardian_language_notification"].includes(activeTab);
 
   // ── loading ────────────────────────────────────────────────
   if (loading) return (
@@ -650,6 +798,12 @@ export default function WhatsAppTemplatesPage() {
                 {activeType.isNew && <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEW</span>}
                 {curTemplate?.isMessageTemplate && !curTemplate?.isFrontendFallback && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800">MessageTemplate</span>}
                 {curTemplate?.isFrontendFallback && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-800">⚡ Default — لم يُحفظ بعد</span>}
+                {/* ✅ بادج خاص لقوالب تأكيد اللغة */}
+                {isLangConfirmation && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-800">
+                    🌍 باللغة المختارة فقط
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                 {activeType.type.includes("student")    && <span className={`text-[10px] px-2 py-0.5 rounded-full ${C.light} ${C.text} border ${C.border}`}>👤 للطالب</span>}
@@ -658,7 +812,28 @@ export default function WhatsAppTemplatesPage() {
                 {activeType.type.includes("group")      && <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">👥 بيانات المجموعة</span>}
                 {activeType.type.includes("session")    && <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800">📅 بيانات الحصة</span>}
                 <span className="text-[10px] text-slate-400">{allVars.length} متغير</span>
+                {/* ✅ تلميح إضافي لقوالب تأكيد اللغة */}
+                {isLangConfirmation && (
+                  <span className="text-[10px] text-slate-400">
+                    • {testLanguage === "ar" ? "يُعرض لمن اختار العربية" : "يُعرض لمن اختار الإنجليزية"}
+                  </span>
+                )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ تنبيه خاص لقوالب تأكيد اللغة */}
+        {isLangConfirmation && (
+          <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10 mb-4">
+            <Globe className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                🌍 قالب باللغة المختارة فقط
+              </p>
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                هذا القالب بيتبعت <strong>باللغة اللي اختارها الطالب فعلاً</strong>. عدّل النسخة العربية (🇸🇦) ليتبعت لمن اختار عربي، والإنجليزية (🇬🇧) لمن اختار إنجليزي بشكل مستقل.
+              </p>
             </div>
           </div>
         )}
@@ -857,6 +1032,7 @@ export default function WhatsAppTemplatesPage() {
                     <li>• المعاينة تعرض القيم بنفس لغة القالب المحدد</li>
                     <li>• النقطة الخضراء = يوجد محتوى محفوظ للقالب</li>
                     <li>• عدّل العربي والإنجليزي بشكل مستقل</li>
+                    {isLangConfirmation && <li>• 🌍 هذا القالب بيتبعت باللغة المختارة من الطالب فقط</li>}
                   </ul>
                 </div>
               </div>
