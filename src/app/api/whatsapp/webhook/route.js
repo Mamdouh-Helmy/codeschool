@@ -369,7 +369,7 @@ async function sendConfirmationMessages(student, selectedLanguage) {
           automationType: 'language_selection_response',
           recipientType: 'student',
           studentGender: gender,
-          usedDbTemplate: !!templateContent,
+          usedDbTemplate: !!templateObj,
           isBilingual: false, // ✅ مش bilingual - رسالة باللغة المختارة بس
         },
       });
