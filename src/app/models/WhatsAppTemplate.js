@@ -4,7 +4,12 @@ const WhatsAppTemplateSchema = new mongoose.Schema(
   {
     templateType: {
       type: String,
-      enum: ["student_welcome", "guardian_notification", "student_language_confirmation", "guardian_language_confirmation"],
+      enum: [
+        "student_welcome",
+        "guardian_notification",
+        "student_language_confirmation",
+        "guardian_language_confirmation",
+      ],
       required: true,
     },
     name: {
@@ -12,9 +17,20 @@ const WhatsAppTemplateSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    // ✅ content = الـ AR للـ legacy fallback (الـ webhook القديم)
     content: {
       type: String,
       required: true,
+    },
+    // ✅ contentAr و contentEn — مستخدمين في قوالب تأكيد اللغة
+    // الـ webhook الجديد بيختار الـ content المناسب بناءً على selectedLanguage
+    contentAr: {
+      type: String,
+      default: "",
+    },
+    contentEn: {
+      type: String,
+      default: "",
     },
     description: {
       type: String,
@@ -60,9 +76,13 @@ const WhatsAppTemplateSchema = new mongoose.Schema(
 WhatsAppTemplateSchema.index({ templateType: 1, isActive: 1 });
 WhatsAppTemplateSchema.index({ isDefault: 1 });
 
-// ✅ الحل: async بدل next callback
 WhatsAppTemplateSchema.pre("save", async function () {
   this.metadata.updatedAt = new Date();
+
+  // ✅ auto-sync: لو contentAr فارغ يتملى من content
+  if (!this.contentAr && this.content) {
+    this.contentAr = this.content;
+  }
 });
 
 WhatsAppTemplateSchema.methods.incrementUsage = async function () {
@@ -71,7 +91,6 @@ WhatsAppTemplateSchema.methods.incrementUsage = async function () {
   await this.save();
 };
 
-// ✅ الحل: try/catch بدل || للتحقق من الـ model
 const WhatsAppTemplate = (() => {
   try {
     return mongoose.model("WhatsAppTemplate");

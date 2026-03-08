@@ -198,29 +198,22 @@ const TEMPLATE_DEFAULTS = {
     variables: GUARDIAN_VARIABLES,
     hasVariables: (c) => c.includes("{guardianSalutation_ar}") || c.includes("{studentGender_ar}"),
   },
-  // ✅ قالبا التأكيد: كل قالب بيحتوي على اللغتين معاً
-  // الـ webhook هو اللي بيختار يحط إيه في المتغيرات بناءً على selectedLanguage
+  // ✅ قوالب التأكيد: contentAr و contentEn منفصلين
+  // الـ webhook بيختار الـ content المناسب حسب selectedLanguage
   student_language_confirmation: {
     name: "تأكيد اللغة للطالب",
-    // القالب بيحتوي على المتغيرين - الـ webhook بيضع '' في اللغة غير المطلوبة
-    content: `✅ {ar_title}{en_title}
-
-{salutation_ar}{salutation_en}،
-
-{ar_body}{en_body}
-
-{ar_footer}{en_footer}`,
+    content: DEFAULT_STUDENT_LANG_CONFIRMATION_AR, // content = AR (legacy fallback)
+    contentAr: DEFAULT_STUDENT_LANG_CONFIRMATION_AR,
+    contentEn: DEFAULT_STUDENT_LANG_CONFIRMATION_EN,
     description: "رسالة تأكيد اللغة للطالب - باللغة المختارة فقط",
     variables: STUDENT_CONFIRMATION_VARIABLES,
     hasVariables: (c) => c.includes("{salutation_ar}") || c.includes("{salutation_en}"),
   },
   guardian_language_confirmation: {
     name: "تأكيد اللغة لولي الأمر",
-    content: `{guardianSalutation_ar}{guardianSalutation_en}،
-
-{ar_body}{en_body}
-
-{ar_footer}{en_footer}`,
+    content: DEFAULT_GUARDIAN_LANG_CONFIRMATION_AR, // content = AR (legacy fallback)
+    contentAr: DEFAULT_GUARDIAN_LANG_CONFIRMATION_AR,
+    contentEn: DEFAULT_GUARDIAN_LANG_CONFIRMATION_EN,
     description: "إشعار تأكيد اللغة لولي الأمر - باللغة المختارة فقط",
     variables: GUARDIAN_CONFIRMATION_VARIABLES,
     hasVariables: (c) => c.includes("{guardianSalutation_ar}") || c.includes("{guardianSalutation_en}"),
@@ -252,6 +245,8 @@ async function createMissingDefaultTemplates(existingTemplates) {
         templateType: type,
         name: def.name,
         content: def.content,
+        ...(def.contentAr && { contentAr: def.contentAr }),
+        ...(def.contentEn && { contentEn: def.contentEn }),
         description: def.description,
         isDefault: true,
         isActive: true,
@@ -339,14 +334,17 @@ export async function POST(req) {
     const adminUser = authCheck.user;
     await connectDB();
 
-    const { templateType, name, content, description, setAsDefault } = await req.json();
+    const { templateType, name, content, contentAr, contentEn, description, setAsDefault } = await req.json();
 
     if (setAsDefault) {
       await WhatsAppTemplate.updateMany({ templateType, isDefault: true }, { $set: { isDefault: false } });
     }
 
     const template = new WhatsAppTemplate({
-      templateType, name, content,
+      templateType, name,
+      content: contentAr || content, // ✅ content = AR للـ confirmation templates
+      ...(contentAr !== undefined && { contentAr }),
+      ...(contentEn !== undefined && { contentEn }),
       description: description || "",
       isDefault: setAsDefault || false,
       isActive: true,
@@ -373,7 +371,7 @@ export async function PUT(req) {
     const adminUser = authCheck.user;
     await connectDB();
 
-    const { id, name, content, description, isActive, setAsDefault } = await req.json();
+    const { id, name, content, contentAr, contentEn, description, isActive, setAsDefault } = await req.json();
 
     const template = await WhatsAppTemplate.findById(id);
     if (!template) {
@@ -389,9 +387,17 @@ export async function PUT(req) {
     }
 
     if (name) template.name = name;
-    if (content) template.content = content;
     if (description !== undefined) template.description = description;
     if (isActive !== undefined) template.isActive = isActive;
+
+    // ✅ confirmation templates: حفظ contentAr و contentEn منفصلين
+    if (contentAr !== undefined) {
+      template.contentAr = contentAr;
+      template.content   = contentAr; // content = AR دايماً للـ legacy
+    } else if (content) {
+      template.content = content;
+    }
+    if (contentEn !== undefined) template.contentEn = contentEn;
 
     template.metadata.lastModifiedBy = adminUser.id;
     template.metadata.updatedAt = new Date();
@@ -421,7 +427,10 @@ export async function PATCH(req) {
       ALL_TEMPLATE_TYPES.map(async (type) => {
         const def = TEMPLATE_DEFAULTS[type];
         const t = new WhatsAppTemplate({
-          templateType: type, name: def.name, content: def.content,
+          templateType: type, name: def.name,
+          content: def.content,
+          ...(def.contentAr && { contentAr: def.contentAr }),
+          ...(def.contentEn && { contentEn: def.contentEn }),
           description: def.description, isDefault: true, isActive: true, variables: def.variables,
         });
         await t.save();
