@@ -4,66 +4,38 @@ import { connectDB } from '@/lib/mongodb';
 import Student from '../../../models/Student';
 import WhatsAppTemplate from '../../../models/WhatsAppTemplate';
 import wapilotService from '../../../services/wapilot-service';
+import { CONFIRMATION_TEMPLATES } from '../../../services/whatsapp-templates-data';
 
 const ARABIC_TRIGGERS  = ['arabic_lang', 'عربي', 'عربية', 'arabic', '1'];
 const ENGLISH_TRIGGERS = ['english_lang', 'english', 'انجليزي', 'إنجليزي', '2'];
 
 // ============================================================
-// ✅ Fallback: رسالة تأكيد الطالب
+// ✅ Fallback: بيستخدم CONFIRMATION_TEMPLATES من whatsapp-templates-data
 // ============================================================
 function buildFallbackStudentMessage(selectedLanguage, salutationAr, salutationEn, nameAr, nameEn) {
-  if (selectedLanguage === 'en') {
-    return `✅ Language Preference Confirmed
+  const tmpl = selectedLanguage === 'en'
+    ? CONFIRMATION_TEMPLATES.student.en
+    : CONFIRMATION_TEMPLATES.student.ar;
 
-${salutationEn},
-
-Your preferred language has been set to *English*. All future messages will be sent in English.
-
-Best regards,
-The Code School Team 💻
-
-🌍 Thank you for choosing Code School`;
-  }
-
-  return `✅ تم تأكيد اللغة المفضلة
-
-${salutationAr}،
-
-تم تعيين *اللغة العربية* كلغة التواصل الرسمية معك. جميع الرسائل القادمة ستكون بالعربية.
-
-مع أطيب التحيات،
-فريق Code School 💻
-
-🌍 شكراً لاختيارك Code School`;
+  return tmpl
+    .replace('{salutation_ar}', salutationAr)
+    .replace('{salutation_en}', salutationEn)
+    .replace('{name_ar}', nameAr)
+    .replace('{name_en}', nameEn);
 }
 
-// ============================================================
-// ✅ Fallback: رسالة تأكيد ولي الأمر
-// ============================================================
 function buildFallbackGuardianMessage(selectedLanguage, guardianSalAr, guardianSalEn, childTitleAr, childTitleEn, studentNameAr, studentNameEn) {
-  if (selectedLanguage === 'en') {
-    return `${guardianSalEn},
+  const tmpl = selectedLanguage === 'en'
+    ? CONFIRMATION_TEMPLATES.guardian.en
+    : CONFIRMATION_TEMPLATES.guardian.ar;
 
-We are pleased to inform you that your ${childTitleEn} **${studentNameEn}** has successfully selected *English* as their preferred communication language.
-
-All future messages will be sent in English.
-
-Best regards,
-The Code School Team 💻
-
-🌍 Thank you for your continued trust in Code School`;
-  }
-
-  return `${guardianSalAr}،
-
-يسعدنا إبلاغكم بأن ${childTitleAr} **${studentNameAr}** قام/ت باختيار *اللغة العربية* كلغة مفضلة للتواصل بنجاح.
-
-جميع الرسائل القادمة ستكون باللغة العربية.
-
-مع أطيب التحيات،
-فريق Code School 💻
-
-🌍 شكراً لثقتكم المستمرة في Code School`;
+  return tmpl
+    .replace(/{guardianSalutation_ar}/g, guardianSalAr)
+    .replace(/{guardianSalutation_en}/g, guardianSalEn)
+    .replace(/{studentGender_ar}/g, childTitleAr)
+    .replace(/{studentGender_en}/g, childTitleEn)
+    .replace(/{studentName_ar}/g, studentNameAr)
+    .replace(/{studentName_en}/g, studentNameEn);
 }
 
 // ============================================================

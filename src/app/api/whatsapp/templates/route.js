@@ -220,11 +220,7 @@ const TEMPLATE_DEFAULTS = {
   },
 };
 
-// ✅ المحتوى الجاهز للـ fallback (مستخدم في الـ webhook مباشرة)
-export const CONFIRMATION_TEMPLATES = {
-  student: { ar: DEFAULT_STUDENT_LANG_CONFIRMATION_AR, en: DEFAULT_STUDENT_LANG_CONFIRMATION_EN },
-  guardian: { ar: DEFAULT_GUARDIAN_LANG_CONFIRMATION_AR, en: DEFAULT_GUARDIAN_LANG_CONFIRMATION_EN },
-};
+// ✅ للاستخدام الداخلي فقط — الـ webhook بيستورد من whatsapp-templates-data بدل هنا
 
 const ALL_TEMPLATE_TYPES = Object.keys(TEMPLATE_DEFAULTS);
 
