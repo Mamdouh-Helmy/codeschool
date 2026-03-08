@@ -133,6 +133,19 @@ async function processIncomingMessage(msg) {
     if (student) console.log(`✅ Found by phone`);
   }
 
+  // ✅ طريقة 4: ابحث بالطالب اللي بعتناله ومستنياه
+  if (!student) {
+    console.log(`🔍 Searching by pending language selection`);
+    student = await Student.findOne({
+      'metadata.whatsappInteractiveSent': true,
+      'metadata.whatsappLanguageSelected': false,
+      isDeleted: false,
+    }).sort({ 'metadata.whatsappSentAt': -1 });
+    
+    if (student) console.log(`✅ Found by pending status: ${student.personalInfo?.fullName}`);
+    else console.log(`⚠️ Not found by pending status`);
+  }
+
   if (!student) {
     console.log(`⚠️ Student not found`);
     return { success: false, reason: 'student_not_found' };
