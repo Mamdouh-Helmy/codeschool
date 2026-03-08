@@ -1,5 +1,3 @@
-// /src/app/api/whatsapp/webhook/route.js
-
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Student from '../../../models/Student';
@@ -13,35 +11,24 @@ export async function POST(req) {
     const body = await req.json();
     console.log('📩 Webhook received:', JSON.stringify(body, null, 2));
 
-    let msg = null;
-
-    if (body.payload && !body.payload.fromMe) {
-      msg = body.payload;
-    } else if (body.message && !body.message.fromMe) {
-      msg = body.message;
-    } else if (Array.isArray(body.messages)) {
-      msg = body.messages.find(m => !m.fromMe) || null;
-    }
-
-    if (!msg) {
-      console.log('⚠️ No valid incoming message found');
-      return NextResponse.json({ success: true, message: 'No incoming message' });
-    }
-
-    const isListResponse = msg.mediaType === 'list_response' || !!msg.listResponse;
-    const isTextMessage  = !msg.hasMedia && !!msg.body;
-
-    if (!isListResponse && !isTextMessage) {
-      console.log('⚠️ Not a list response or text, skipping');
-      return NextResponse.json({ success: true, message: 'Not a language selection' });
-    }
+    const msg = body.payload;
+    if (!msg) return NextResponse.json({ success: true });
 
     await connectDB();
 
-    const result = await processIncomingMessage(msg);
-    console.log('📊 Processing result:', result);
+    // ✅ لو رسالة بعتناها احنا - نحفظ الـ stanzaID
+    if (msg.fromMe === true) {
+      await handleOutgoingMessage(msg);
+      return NextResponse.json({ success: true });
+    }
 
-    return NextResponse.json({ success: true, result });
+    // ✅ لو رسالة واردة من الطالب
+    if (msg.fromMe === false) {
+      const result = await processIncomingMessage(msg);
+      return NextResponse.json({ success: true, result });
+    }
+
+    return NextResponse.json({ success: true });
 
   } catch (error) {
     console.error('❌ Webhook error:', error.message);
@@ -57,13 +44,48 @@ export async function GET(req) {
 }
 
 // ============================================================
+// ✅ لما بنبعت رسالة - نحفظ الـ stanzaID
+// ============================================================
+async function handleOutgoingMessage(msg) {
+  try {
+    // الـ id بييجي بالشكل ده: "true_201123324153@c.us_3EB0E67C89D1931A52F7F6"
+    const msgId = msg.id || '';
+    const parts = msgId.split('_');
+    const stanzaId = parts[parts.length - 1]; // آخر جزء هو الـ stanzaID
+    const chatId = (msg.to || '').replace(/@.*$/, '').trim();
+
+    console.log(`📤 Outgoing message - stanzaId: ${stanzaId} | chatId: ${chatId}`);
+
+    if (!stanzaId || !chatId) return;
+
+    // ابحث عن الطالب بالـ chatId وحفظ الـ stanzaID
+    const student = await Student.findOne({
+      'metadata.whatsappChatId': chatId,
+      isDeleted: false,
+    });
+
+    if (student) {
+      await Student.updateOne(
+        { _id: student._id },
+        { $set: { 'metadata.whatsappStanzaId': stanzaId } }
+      );
+      console.log(`💾 Saved stanzaId: ${stanzaId} for student: ${student.personalInfo?.fullName}`);
+    } else {
+      console.log(`⚠️ No student found for chatId: ${chatId}`);
+    }
+  } catch (error) {
+    console.error('❌ handleOutgoingMessage error:', error.message);
+  }
+}
+
+// ============================================================
 async function processIncomingMessage(msg) {
   const selectedRowID = msg.listResponse?.selectedRowID || null;
   const phoneRaw = (msg.from || '').replace(/@.*$/, '').trim();
+  const replyToId = msg.replyTo?.id || msg.replyToId || null;
 
   // ✅ تحديد اللغة
   let selectedLanguage = null;
-
   if (selectedRowID) {
     const id = selectedRowID.toLowerCase();
     if (ARABIC_TRIGGERS.includes(id))  selectedLanguage = 'ar';
@@ -75,72 +97,50 @@ async function processIncomingMessage(msg) {
   }
 
   if (!selectedLanguage) {
-    console.log(`⚠️ Not a language selection. rowID: "${selectedRowID}", body: "${msg.body}"`);
+    console.log(`⚠️ Not a language selection`);
     return { success: false, reason: 'not_language_selection' };
   }
 
-  console.log(`🌍 Language: ${selectedLanguage} | Phone: ${phoneRaw}`);
+  console.log(`🌍 Language: ${selectedLanguage} | Phone: ${phoneRaw} | replyToId: ${replyToId}`);
 
   let student = null;
 
-  // ✅ طريقة 1: ابحث بالـ stanzaID في whatsappMessages
-  const originalMessageId = msg.listResponse?.stanzaID || msg.replyToId || msg.replyTo?.id || null;
-
-  if (originalMessageId) {
-    console.log(`🔍 Searching by messageId: ${originalMessageId}`);
+  // ✅ طريقة 1: ابحث بالـ stanzaID المحفوظ
+  if (replyToId) {
+    console.log(`🔍 Searching by stanzaId: ${replyToId}`);
     student = await Student.findOne({
-      'whatsappMessages.wapilotMessageId': originalMessageId,
+      'metadata.whatsappStanzaId': replyToId,
       isDeleted: false,
     });
-    if (student) {
-      console.log(`✅ Found by messageId: ${originalMessageId}`);
-    } else {
-      console.log(`⚠️ Not found by messageId`);
-    }
+    if (student) console.log(`✅ Found by stanzaId`);
+    else console.log(`⚠️ Not found by stanzaId`);
   }
 
-  // ✅ طريقة 2: ابحث بالـ chatId المحفوظ في الـ DB
+  // ✅ طريقة 2: ابحث بالـ chatId
   if (!student && phoneRaw) {
     console.log(`🔍 Searching by chatId: ${phoneRaw}`);
     student = await Student.findOne({
       'metadata.whatsappChatId': phoneRaw,
       isDeleted: false,
     });
-    if (student) {
-      console.log(`✅ Found by chatId: ${phoneRaw}`);
-    } else {
-      console.log(`⚠️ Not found by chatId`);
-    }
+    if (student) console.log(`✅ Found by chatId`);
+    else console.log(`⚠️ Not found by chatId`);
   }
 
-  // ✅ طريقة 3: ابحث بكل الأرقام المتاحة في الـ payload
+  // ✅ طريقة 3: ابحث بالأرقام
   if (!student) {
-    const phonesToTry = [
-      phoneRaw,
-      (msg.listResponse?.participant || '').replace(/@.*$/, '').trim(),
-      (msg.replyTo?.participant || '').replace(/@.*$/, '').trim(),
-    ].filter(p => p && p.length > 0);
-
-    console.log(`🔍 Trying phones:`, phonesToTry);
-
-    for (const phone of phonesToTry) {
-      const found = await findStudentByPhone(phone);
-      if (found) {
-        student = found;
-        console.log(`✅ Found by phone: ${phone}`);
-        break;
-      }
-    }
+    student = await findStudentByPhone(phoneRaw);
+    if (student) console.log(`✅ Found by phone`);
   }
 
   if (!student) {
-    console.log(`⚠️ Student not found for phone: ${phoneRaw} | messageId: ${originalMessageId}`);
-    return { success: false, reason: 'student_not_found', phone: phoneRaw };
+    console.log(`⚠️ Student not found`);
+    return { success: false, reason: 'student_not_found' };
   }
 
-  console.log(`👤 Found: ${student.personalInfo?.fullName} (${student._id})`);
+  console.log(`👤 Found: ${student.personalInfo?.fullName}`);
 
-  // ✅ تحديث اللغة في DB + حفظ الـ chatId للمرات الجاية
+  // ✅ تحديث DB
   await Student.updateOne(
     { _id: student._id },
     {
@@ -156,9 +156,6 @@ async function processIncomingMessage(msg) {
     }
   );
 
-  console.log(`✅ DB updated: preferredLanguage = "${selectedLanguage}" | chatId = "${phoneRaw}"`);
-
-  // ✅ إرسال رسالة التأكيد
   const confirmResult = await sendConfirmationMessage(student, selectedLanguage);
 
   return {
@@ -173,17 +170,9 @@ async function processIncomingMessage(msg) {
 // ============================================================
 async function findStudentByPhone(phoneRaw) {
   if (!phoneRaw) return null;
-
   let digits = phoneRaw.replace(/\D/g, '');
-
-  if (digits.startsWith('20') && digits.length > 10) {
-    digits = digits.substring(2);
-  }
-
+  if (digits.startsWith('20') && digits.length > 10) digits = digits.substring(2);
   const variants = [digits, `+20${digits}`, `20${digits}`, `0${digits}`];
-
-  console.log(`🔎 Phone variants to check:`, variants);
-
   for (const variant of variants) {
     const student = await Student.findOne({
       $or: [
@@ -196,7 +185,6 @@ async function findStudentByPhone(phoneRaw) {
     });
     if (student) return student;
   }
-
   return null;
 }
 
@@ -204,14 +192,11 @@ async function findStudentByPhone(phoneRaw) {
 async function sendConfirmationMessage(student, selectedLanguage) {
   try {
     const studentPhone = student.personalInfo?.whatsappNumber || student.personalInfo?.phone;
-    if (!studentPhone) return { success: false, reason: 'no_phone' };
-
+    if (!studentPhone) return { success: false };
     const preparedNumber = wapilotService.preparePhoneNumber(studentPhone);
-    if (!preparedNumber) return { success: false, reason: 'invalid_phone' };
-
+    if (!preparedNumber) return { success: false };
     const message = buildConfirmationMessage(student, selectedLanguage);
-    const result  = await wapilotService.sendTextMessage(preparedNumber, message);
-
+    const result = await wapilotService.sendTextMessage(preparedNumber, message);
     await wapilotService.logToStudentSchema(student._id.toString(), {
       messageType: 'bilingual_language_confirmation',
       messageContent: message,
@@ -220,74 +205,29 @@ async function sendConfirmationMessage(student, selectedLanguage) {
       recipientNumber: preparedNumber,
       wapilotMessageId: result.messageId || null,
       sentAt: new Date(),
-      metadata: {
-        selectedLanguage,
-        automationType: 'language_selection_response',
-        recipientType: 'student',
-        isBilingual: true,
-      },
+      metadata: { selectedLanguage, automationType: 'language_selection_response', recipientType: 'student', isBilingual: true },
     });
-
     console.log(`📤 Confirmation: ${result.success ? '✅ sent' : '❌ failed'}`);
     return result;
-
   } catch (error) {
     console.error('❌ sendConfirmationMessage error:', error.message);
-    return { success: false, error: error.message };
+    return { success: false };
   }
 }
 
 // ============================================================
 function buildConfirmationMessage(student, selectedLanguage) {
-  const gender   = student.personalInfo?.gender || 'male';
+  const gender = student.personalInfo?.gender || 'male';
   const nickname = student.personalInfo?.nickname || null;
   const fullName = student.personalInfo?.fullName || '';
-  const nameAr   = nickname?.ar || fullName.split(' ')[0] || fullName;
-  const nameEn   = nickname?.en || fullName.split(' ')[0] || fullName;
-  const isMale   = String(gender).toLowerCase() === 'male';
+  const nameAr = nickname?.ar || fullName.split(' ')[0] || fullName;
+  const nameEn = nickname?.en || fullName.split(' ')[0] || fullName;
+  const isMale = String(gender).toLowerCase() === 'male';
 
   if (selectedLanguage === 'en') {
-    return `✅ Language Updated
-
-Dear student ${nameEn},
-
-The language has been modified.
-Your preferred language has been set to *English*.
-
-📌 From now on:
-- All messages will be sent to you in English
-- Course updates and reminders will be in English
-
-Thank you for being part of Code School! 🚀
-
-Best regards,
-The Code School Team 💻
-
-🌍 Thank you for choosing Code School
-🌍 شكراً لاختيارك Code School`;
-
+    return `✅ Language Updated\n\nDear student ${nameEn},\n\nYour preferred language has been set to *English*.\n\nBest regards,\nCode School Team 💻`;
   } else {
-    const salutation = isMale
-      ? `عزيزي الطالب ${nameAr}`
-      : `عزيزتي الطالبة ${nameAr}`;
-
-    return `✅ تم تحديث اللغة
-
-${salutation}،
-
-تم تعديل اللغه.
-تم تعيين اللغة العربية كلغة التواصل الرسمية معك.
-
-📌 من الآن فصاعداً:
-- جميع الرسائل ستصلك باللغة العربية
-- التحديثات والتذكيرات ستكون بالعربية
-
-شكراً لكونك جزءاً من Code School! 🚀
-
-مع أطيب التحيات،
-فريق Code School 💻
-
-🌍 شكراً لاختيارك Code School
-🌍 Thank you for choosing Code School`;
+    const salutation = isMale ? `عزيزي الطالب ${nameAr}` : `عزيزتي الطالبة ${nameAr}`;
+    return `✅ تم تحديث اللغة\n\n${salutation}،\n\nتم تعيين اللغة العربية كلغة التواصل الرسمية معك.\n\nمع أطيب التحيات،\nفريق Code School 💻`;
   }
 }

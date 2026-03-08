@@ -392,6 +392,7 @@ const StudentSchema = new mongoose.Schema(
       whatsappLastInteraction: { type: Date },
       whatsappConversationId: { type: String },
       whatsappChatId: { type: String },
+      whatsappStanzaId: { type: String },
       lastSessionReminder24h: { type: Date },
       lastSessionReminder1h: { type: Date },
       totalSessionReminders: { type: Number, default: 0 },
