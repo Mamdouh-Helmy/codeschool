@@ -16,7 +16,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      heroDescription: heroData?.heroDescription || "",
+      heroDescription: heroData?.heroDescriptionAr || "", // Changed from heroDescription to heroDescriptionAr
     });
   } catch (error: any) {
     console.error("Error fetching hero description:", error);
