@@ -3,358 +3,102 @@ import { connectDB } from "@/lib/mongodb";
 import SectionImageHero from "../../../models/SectionImageHero";
 import mongoose from "mongoose";
 
-// GET - جلب صورة محددة
+function isValidId(id) {
+  return mongoose.Types.ObjectId.isValid(id);
+}
+
+// GET
 export async function GET(request, { params }) {
   try {
     await connectDB();
-
-    // ✅ FIX: Await the params
     const { id } = await params;
+    if (!isValidId(id)) return NextResponse.json({ success: false, message: "معرف غير صالح" }, { status: 400 });
 
-    console.log(`📖 GET /api/section-images-hero/${id}`);
+    const record = await SectionImageHero.findById(id);
+    if (!record) return NextResponse.json({ success: false, message: "السجل غير موجود" }, { status: 404 });
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "معرف الصورة غير صالح",
-        },
-        { status: 400 },
-      );
-    }
-
-    const image = await SectionImageHero.findById(id);
-
-    if (!image) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "لم يتم العثور على الصورة",
-        },
-        { status: 404 },
-      );
-    }
-
-    console.log(`✅ Image fetched: ${id}`);
-    return NextResponse.json({
-      success: true,
-      data: image,
-      timestamp: new Date().toISOString(),
-    });
+    return NextResponse.json({ success: true, data: record, timestamp: new Date().toISOString() });
   } catch (error) {
-    console.error("❌ Error fetching image:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        message: "فشل في جلب الصورة",
-        error: error.message,
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: false, message: "فشل في الجلب", error: error.message }, { status: 500 });
   }
 }
 
-// PUT - تحديث الصورة
+// PUT — تحديث كامل، لا قيود على أي حقل
 export async function PUT(request, { params }) {
   try {
     await connectDB();
-
-    // ✅ FIX: Await the params
     const { id } = await params;
-
-    console.log(`✏️ PUT /api/section-images-hero/${id}`);
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "معرف الصورة غير صالح",
-        },
-        { status: 400 },
-      );
-    }
+    if (!isValidId(id)) return NextResponse.json({ success: false, message: "معرف غير صالح" }, { status: 400 });
 
     const body = await request.json();
-    console.log("📥 Update data received");
 
-    // التحقق من وجود الصورة
-    const existingImage = await SectionImageHero.findById(id);
-    if (!existingImage) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "لم يتم العثور على الصورة",
-        },
-        { status: 404 },
-      );
+    const existing = await SectionImageHero.findById(id);
+    if (!existing) return NextResponse.json({ success: false, message: "السجل غير موجود" }, { status: 404 });
+
+    const clean = (v) => (typeof v === "string" ? v.trim() : v);
+
+    // بناء كائن التحديث — كل الحقول اختيارية
+    const update = {};
+    const fields = [
+      "imageUrl", "secondImageUrl", "imageAlt", "secondImageAlt",
+      "heroTitleAr", "heroDescriptionAr", "instructor1Ar", "instructor1RoleAr", "instructor2Ar", "instructor2RoleAr",
+      "heroTitleEn", "heroDescriptionEn", "instructor1En", "instructor1RoleEn", "instructor2En", "instructor2RoleEn",
+      "welcomeTitleAr", "welcomeSubtitle1Ar", "welcomeSubtitle2Ar",
+      "welcomeFeature1Ar", "welcomeFeature2Ar", "welcomeFeature3Ar",
+      "welcomeFeature4Ar", "welcomeFeature5Ar", "welcomeFeature6Ar",
+      "welcomeTitleEn", "welcomeSubtitle1En", "welcomeSubtitle2En",
+      "welcomeFeature1En", "welcomeFeature2En", "welcomeFeature3En",
+      "welcomeFeature4En", "welcomeFeature5En", "welcomeFeature6En",
+      "discount", "happyParents", "graduates", "isActive", "displayOrder",
+    ];
+
+    for (const f of fields) {
+      if (body[f] !== undefined) update[f] = clean(body[f]);
     }
 
-    // منع تغيير اللغة إذا تم توفيرها في البيانات
-    if (body.language && body.language !== existingImage.language) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "لا يمكن تغيير اللغة عند التعديل. يمكنك حذف وإنشاء جديد.",
-        },
-        { status: 400 },
-      );
-    }
-
-    const updateData = {
-      ...body,
-      updatedAt: new Date(),
-    };
-
-    // تنظيف البيانات (إزالة الحقول الفارغة للسلاسل النصية)
-    if (updateData.imageUrl && typeof updateData.imageUrl === "string") {
-      updateData.imageUrl = updateData.imageUrl.trim();
-    }
-
-    if (
-      updateData.secondImageUrl &&
-      typeof updateData.secondImageUrl === "string"
-    ) {
-      updateData.secondImageUrl = updateData.secondImageUrl.trim();
-    }
-
-    if (updateData.imageAlt && typeof updateData.imageAlt === "string") {
-      updateData.imageAlt = updateData.imageAlt.trim();
-    }
-
-    if (
-      updateData.secondImageAlt &&
-      typeof updateData.secondImageAlt === "string"
-    ) {
-      updateData.secondImageAlt = updateData.secondImageAlt.trim();
-    }
-
-    const updatedImage = await SectionImageHero.findByIdAndUpdate(
+    const updated = await SectionImageHero.findByIdAndUpdate(
       id,
-      { $set: updateData },
-      {
-        new: true,
-        runValidators: true,
-        context: "query",
-      },
+      { $set: update },
+      { new: true, runValidators: true, context: "query" }
     );
 
-    if (!updatedImage) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "فشل في تحديث الصورة",
-        },
-        { status: 500 },
-      );
-    }
-
-    console.log(`✅ Image updated: ${id}`);
     return NextResponse.json({
       success: true,
-      data: updatedImage,
-      message: "تم تحديث الصورة بنجاح",
+      data: updated,
+      message: "تم التحديث بنجاح",
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("❌ Error updating image:", error);
-
-    // معالجة أخطاء التحقق
     if (error.name === "ValidationError") {
       const errors = {};
-      for (const field in error.errors) {
-        errors[field] = error.errors[field].message;
-      }
-
-      return NextResponse.json(
-        {
-          success: false,
-          message: "فشل التحقق من البيانات",
-          errors: errors,
-        },
-        { status: 400 },
-      );
+      for (const f in error.errors) errors[f] = error.errors[f].message;
+      return NextResponse.json({ success: false, message: "بيانات غير صالحة", errors }, { status: 400 });
     }
-
-    // معالجة أخطاء التكرار
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      return NextResponse.json(
-        {
-          success: false,
-          message: `القيمة مكررة للحقل: ${field}`,
-          field: field,
-          value: error.keyValue[field],
-        },
-        { status: 409 },
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        message: "فشل في تحديث الصورة",
-        error: error.message,
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: false, message: "فشل في التحديث", error: error.message }, { status: 500 });
   }
 }
 
-// DELETE - حذف الصورة
+// PATCH — تحديث جزئي (نفس PUT)
+export async function PATCH(request, { params }) {
+  return PUT(request, { params });
+}
+
+// DELETE
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
-
-    // ✅ FIX: Await the params
     const { id } = await params;
+    if (!isValidId(id)) return NextResponse.json({ success: false, message: "معرف غير صالح" }, { status: 400 });
 
-    console.log(`🗑️ DELETE /api/section-images-hero/${id}`);
+    const deleted = await SectionImageHero.findByIdAndDelete(id);
+    if (!deleted) return NextResponse.json({ success: false, message: "السجل غير موجود" }, { status: 404 });
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "معرف الصورة غير صالح",
-        },
-        { status: 400 },
-      );
-    }
-
-    const deletedImage = await SectionImageHero.findByIdAndDelete(id);
-
-    if (!deletedImage) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "لم يتم العثور على الصورة",
-        },
-        { status: 404 },
-      );
-    }
-
-    console.log(`✅ Image deleted: ${id}`);
     return NextResponse.json({
       success: true,
-      message: "تم حذف الصورة بنجاح",
-      data: {
-        id: deletedImage._id,
-        language: deletedImage.language,
-        deletedAt: new Date(),
-      },
+      message: "تم الحذف بنجاح",
+      data: { id: deleted._id, deletedAt: new Date() },
     });
   } catch (error) {
-    console.error("❌ Error deleting image:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        message: "فشل في حذف الصورة",
-        error: error.message,
-      },
-      { status: 500 },
-    );
-  }
-}
-
-// PATCH - تحديث جزئي للصورة
-export async function PATCH(request, { params }) {
-  try {
-    await connectDB();
-
-    // ✅ FIX: Await the params
-    const { id } = await params;
-
-    console.log(`🔄 PATCH /api/section-images-hero/${id}`);
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "معرف الصورة غير صالح",
-        },
-        { status: 400 },
-      );
-    }
-
-    const body = await request.json();
-
-    // التحقق من وجود الصورة
-    const existingImage = await SectionImageHero.findById(id);
-    if (!existingImage) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "لم يتم العثور على الصورة",
-        },
-        { status: 404 },
-      );
-    }
-
-    // منع تغيير اللغة
-    if (body.language && body.language !== existingImage.language) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "لا يمكن تغيير اللغة",
-        },
-        { status: 400 },
-      );
-    }
-
-    const updateData = {
-      ...body,
-      updatedAt: new Date(),
-    };
-
-    const updatedImage = await SectionImageHero.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      {
-        new: true,
-        runValidators: true,
-      },
-    );
-
-    if (!updatedImage) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "فشل في تحديث الصورة",
-        },
-        { status: 500 },
-      );
-    }
-
-    console.log(`✅ Image partially updated: ${id}`);
-    return NextResponse.json({
-      success: true,
-      data: updatedImage,
-      message: "تم تحديث الصورة بنجاح",
-    });
-  } catch (error) {
-    console.error("❌ Error patching image:", error);
-
-    if (error.name === "ValidationError") {
-      const errors = {};
-      for (const field in error.errors) {
-        errors[field] = error.errors[field].message;
-      }
-
-      return NextResponse.json(
-        {
-          success: false,
-          message: "فشل التحقق من البيانات",
-          errors: errors,
-        },
-        { status: 400 },
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        message: "فشل في تحديث الصورة",
-        error: error.message,
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: false, message: "فشل في الحذف", error: error.message }, { status: 500 });
   }
 }

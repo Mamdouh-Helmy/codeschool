@@ -26,7 +26,7 @@ const MessageTemplateSchema = new mongoose.Schema(
         "evaluation_pass",
         "evaluation_review",
         "evaluation_repeat",
-        "session_recording",   // ✅ تم الإضافة
+        "session_recording",
       ],
     },
 
@@ -135,28 +135,34 @@ MessageTemplateSchema.methods.render = function (variables = {}, language = "ar"
 
 MessageTemplateSchema.methods.getExample = function (language = "ar") {
   const examples = {
-    studentSalutation:  language === "ar" ? "عزيزي أحمد"              : "Dear Ahmed",
-    guardianSalutation: language === "ar" ? "عزيزي الأستاذ محمد"      : "Dear Mr. Mohamed",
-    childTitle:         language === "ar" ? "ابنك"                     : "your son",
-    studentName:        language === "ar" ? "أحمد"                     : "Ahmed",
-    guardianName:       language === "ar" ? "محمد"                     : "Mohamed",
-    sessionName:        language === "ar" ? "الجلسة الأولى"            : "Session 1",
-    date:               language === "ar" ? "الاثنين ١ يناير ٢٠٢٥"   : "Monday, January 1, 2025",
-    time:               "5:00 PM - 7:00 PM",
-    meetingLink:        "https://meet.google.com/xxx",
-    groupName:          language === "ar" ? "المجموعة أ"               : "Group A",
-    groupCode:          "GRP-001",
-    courseName:         language === "ar" ? "برمجة بايثون"             : "Python Programming",
-    status:             language === "ar" ? "غائب"                     : "absent",
-    enrollmentNumber:   "STU001",
-    recordingLink:      "https://drive.google.com/xxx",
-    decision:           language === "ar" ? "ممتاز"                    : "Excellent",
+    guardianSalutation:  language === "ar" ? "عزيزي الأستاذ محمد"     : "Dear Mr. Mohamed",
+    childTitle:          language === "ar" ? "ابنك"                    : "your son",
+    studentName:         language === "ar" ? "أحمد"                    : "Ahmed",
+    guardianName:        language === "ar" ? "محمد"                    : "Mohamed",
+    sessionName:         language === "ar" ? "الجلسة الأولى"           : "Session 1",
+    sessionDate:         language === "ar" ? "30/12/2025"              : "12/30/2025",
+    sessionNumber:       "1",
+    attendanceStatus:    language === "ar" ? "حاضر"                    : "Present",
+    starsCommitment:     "⭐⭐⭐⭐⭐",
+    starsUnderstanding:  "⭐⭐⭐⭐",
+    starsTaskExecution:  "⭐⭐⭐⭐",
+    starsParticipation:  "⭐⭐⭐⭐",
+    instructorComment:   language === "ar" ? "أداء ممتاز، استمر هكذا!" : "Excellent performance, keep it up!",
+    completedSessions:   "2",
+    date:                language === "ar" ? "30/12/2025"              : "12/30/2025",
+    time:                "5:00 PM - 7:00 PM",
+    meetingLink:         "https://meet.google.com/xxx",
+    groupName:           language === "ar" ? "المجموعة أ"              : "Group A",
+    groupCode:           "GRP-001",
+    courseName:          language === "ar" ? "برمجة بايثون"            : "Python Programming",
+    enrollmentNumber:    "STU001",
+    recordingLink:       "🎥 رابط التسجيل: https://drive.google.com/xxx",
+    decision:            language === "ar" ? "ممتاز"                   : "Excellent",
   };
   return this.render(examples, language);
 };
 
 // ─── Static: getOrFallback ────────────────────────────────────────────────────
-// لو مفيش template في الداتابيز يرجع الـ default hardcoded
 MessageTemplateSchema.statics.getOrFallback = async function (templateType, language = "ar") {
   const doc = await this.findOne({ templateType, isDefault: true, isActive: true }).lean();
   if (doc) {
@@ -179,113 +185,154 @@ MessageTemplateSchema.statics.getOrFallback = async function (templateType, lang
 };
 
 // ─── Fallback hardcoded templates ────────────────────────────────────────────
-// يُستخدم لما مفيش record في الداتابيز
 function getFallbackTemplates() {
+
+  // ── المتغيرات المشتركة بين templates التقييم الثلاثة ──────────────────────
+  const evalVariables = [
+    { key: "guardianSalutation",  label: "تحية ولي الأمر",          example: "عزيزي الأستاذ محمد" },
+    { key: "childTitle",          label: "صلة القرابة",             example: "ابنك" },
+    { key: "studentName",         label: "اسم الطالب",              example: "أحمد" },
+    { key: "sessionDate",         label: "تاريخ الجلسة",            example: "30/12/2025" },
+    { key: "sessionNumber",       label: "رقم الجلسة",              example: "1" },
+    { key: "attendanceStatus",    label: "حالة الحضور",             example: "حاضر" },
+    { key: "starsCommitment",     label: "نجوم الالتزام والتركيز",  example: "⭐⭐⭐⭐⭐" },
+    { key: "starsUnderstanding",  label: "نجوم مستوى الاستيعاب",   example: "⭐⭐⭐⭐" },
+    { key: "starsTaskExecution",  label: "نجوم تنفيذ المهام",       example: "⭐⭐⭐⭐" },
+    { key: "starsParticipation",  label: "نجوم المشاركة",           example: "⭐⭐⭐⭐" },
+    { key: "instructorComment",   label: "تعليق المدرس",            example: "أداء ممتاز، استمر هكذا!" },
+    { key: "completedSessions",   label: "عدد الحصص المنتهية",      example: "2" },
+    { key: "recordingLink",       label: "رابط التسجيل",            example: "🎥 رابط التسجيل: https://..." },
+  ];
+
   return {
 
     // ── evaluation_pass ──────────────────────────────────────────────────────
     evaluation_pass: {
-      variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر",   example: "عزيزي الأستاذ محمد" },
-        { key: "childTitle",         label: "صلة القرابة",      example: "ابنك" },
-        { key: "studentName",        label: "اسم الطالب",       example: "أحمد" },
-        { key: "sessionName",        label: "اسم الجلسة",       example: "الجلسة الأولى" },
-        { key: "recordingLink",      label: "رابط التسجيل",     example: "🎥 رابط التسجيل: https://..." },
-      ],
-      ar: `{guardianSalutation}،
+      variables: evalVariables,
+      ar:
+`{guardianSalutation}،
 
-نود مشاركتكم ملخص أداء {childTitle} *{studentName}* 📊
-
-✅ *الأداء العام: ممتاز*
-
-{studentName} أبدى فهماً ممتازاً للمحتوى والتزاماً ملحوظاً خلال جلسة "{sessionName}". نحن فخورون بتقدمه!
-
+تقرير الحصة 📃✨
+📆 التاريخ : {sessionDate}
+📑 رقم الحصة : {sessionNumber}
+⏱️ مدة الحصة : ساعتين
+👥 الحضور : {attendanceStatus}
+📊 تقييم الأداء :
+⭐ الالتزام والتركيز : {starsCommitment}
+⭐ مستوى الاستيعاب : {starsUnderstanding}
+⭐ تنفيذ المهام : {starsTaskExecution}
+⭐ المشاركة داخل الحصة : {starsParticipation}
+📝 تعليق المدرس :
+{instructorComment}
+🔢 عدد الحصص المنتهية : {completedSessions}
 {recordingLink}
+🙏 نشكركم على ثقتكم في Code School
+📞 للتواصل : +2 011 40 474 129`,
+      en:
+`{guardianSalutation},
 
-للاستفسار أو المتابعة لا تترددوا في التواصل.
-فريق Code School 💻`,
-      en: `{guardianSalutation},
-
-We'd like to share a performance summary for {childTitle} *{studentName}* 📊
-
-✅ *Overall Performance: Excellent*
-
-{studentName} demonstrated excellent understanding and notable commitment during "{sessionName}". We're proud of their progress!
-
+Session Report 📃✨
+📆 Date : {sessionDate}
+📑 Session No. : {sessionNumber}
+⏱️ Duration : 2 hours
+👥 Attendance : {attendanceStatus}
+📊 Performance Evaluation :
+⭐ Commitment & Focus : {starsCommitment}
+⭐ Understanding Level : {starsUnderstanding}
+⭐ Task Execution : {starsTaskExecution}
+⭐ Class Participation : {starsParticipation}
+📝 Instructor's Comment :
+{instructorComment}
+🔢 Sessions Completed : {completedSessions}
 {recordingLink}
-
-Feel free to contact us for any questions.
-Code School Team 💻`,
+🙏 Thank you for trusting Code School
+📞 Contact : +2 011 40 474 129`,
     },
 
     // ── evaluation_review ────────────────────────────────────────────────────
     evaluation_review: {
-      variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر",   example: "عزيزي الأستاذ محمد" },
-        { key: "childTitle",         label: "صلة القرابة",      example: "ابنك" },
-        { key: "studentName",        label: "اسم الطالب",       example: "أحمد" },
-        { key: "sessionName",        label: "اسم الجلسة",       example: "الجلسة الأولى" },
-        { key: "recordingLink",      label: "رابط التسجيل",     example: "🎥 رابط التسجيل: https://..." },
-      ],
-      ar: `{guardianSalutation}،
+      variables: evalVariables,
+      ar:
+`{guardianSalutation}،
 
-نود مشاركتكم ملخص أداء {childTitle} *{studentName}* 📊
-
-⚠️ *الأداء العام: يحتاج مراجعة*
-
-{studentName} أظهر بعض النقاط التي تحتاج مراجعة وتعزيز خلال جلسة "{sessionName}". ننصح بمراجعة مواد الجلسة ومتابعة التدريبات المنزلية.
-
+تقرير الحصة 📃✨
+📆 التاريخ : {sessionDate}
+📑 رقم الحصة : {sessionNumber}
+⏱️ مدة الحصة : ساعتين
+👥 الحضور : {attendanceStatus}
+📊 تقييم الأداء :
+⭐ الالتزام والتركيز : {starsCommitment}
+⭐ مستوى الاستيعاب : {starsUnderstanding}
+⭐ تنفيذ المهام : {starsTaskExecution}
+⭐ المشاركة داخل الحصة : {starsParticipation}
+📝 تعليق المدرس :
+{instructorComment}
+🔢 عدد الحصص المنتهية : {completedSessions}
 {recordingLink}
+🙏 نشكركم على ثقتكم في Code School
+📞 للتواصل : +2 011 40 474 129`,
+      en:
+`{guardianSalutation},
 
-نحن هنا لدعم {studentName} في أي وقت.
-فريق Code School 💻`,
-      en: `{guardianSalutation},
-
-We'd like to share a performance summary for {childTitle} *{studentName}* 📊
-
-⚠️ *Overall Performance: Needs Review*
-
-{studentName} showed some areas that need reinforcement during "{sessionName}". We recommend reviewing session materials and practicing at home.
-
+Session Report 📃✨
+📆 Date : {sessionDate}
+📑 Session No. : {sessionNumber}
+⏱️ Duration : 2 hours
+👥 Attendance : {attendanceStatus}
+📊 Performance Evaluation :
+⭐ Commitment & Focus : {starsCommitment}
+⭐ Understanding Level : {starsUnderstanding}
+⭐ Task Execution : {starsTaskExecution}
+⭐ Class Participation : {starsParticipation}
+📝 Instructor's Comment :
+{instructorComment}
+🔢 Sessions Completed : {completedSessions}
 {recordingLink}
-
-We're here to support {studentName} anytime.
-Code School Team 💻`,
+🙏 Thank you for trusting Code School
+📞 Contact : +2 011 40 474 129`,
     },
 
     // ── evaluation_repeat ────────────────────────────────────────────────────
     evaluation_repeat: {
-      variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر",   example: "عزيزي الأستاذ محمد" },
-        { key: "childTitle",         label: "صلة القرابة",      example: "ابنك" },
-        { key: "studentName",        label: "اسم الطالب",       example: "أحمد" },
-        { key: "sessionName",        label: "اسم الجلسة",       example: "الجلسة الأولى" },
-        { key: "recordingLink",      label: "رابط التسجيل",     example: "🎥 رابط التسجيل: https://..." },
-      ],
-      ar: `{guardianSalutation}،
+      variables: evalVariables,
+      ar:
+`{guardianSalutation}،
 
-نود مشاركتكم ملخص أداء {childTitle} *{studentName}* 📊
-
-🔄 *الأداء العام: يحتاج دعم إضافي*
-
-بعد متابعة أداء {studentName} في جلسة "{sessionName}"، نرى أن الاستفادة القصوى تتطلب مزيداً من الوقت والتدريب على هذا المحتوى.
-
+تقرير الحصة 📃✨
+📆 التاريخ : {sessionDate}
+📑 رقم الحصة : {sessionNumber}
+⏱️ مدة الحصة : ساعتين
+👥 الحضور : {attendanceStatus}
+📊 تقييم الأداء :
+⭐ الالتزام والتركيز : {starsCommitment}
+⭐ مستوى الاستيعاب : {starsUnderstanding}
+⭐ تنفيذ المهام : {starsTaskExecution}
+⭐ المشاركة داخل الحصة : {starsParticipation}
+📝 تعليق المدرس :
+{instructorComment}
+🔢 عدد الحصص المنتهية : {completedSessions}
 {recordingLink}
+🙏 نشكركم على ثقتكم في Code School
+📞 للتواصل : +2 011 40 474 129`,
+      en:
+`{guardianSalutation},
 
-نقترح مراجعة مواد الجلسة مرة أخرى. يرجى التواصل معنا لمناقشة أفضل الخطوات القادمة.
-فريق Code School 💻`,
-      en: `{guardianSalutation},
-
-We'd like to share a performance summary for {childTitle} *{studentName}* 📊
-
-🔄 *Overall Performance: Needs Additional Support*
-
-After monitoring {studentName}'s performance during "{sessionName}", we believe maximum benefit requires more time and practice on this content.
-
+Session Report 📃✨
+📆 Date : {sessionDate}
+📑 Session No. : {sessionNumber}
+⏱️ Duration : 2 hours
+👥 Attendance : {attendanceStatus}
+📊 Performance Evaluation :
+⭐ Commitment & Focus : {starsCommitment}
+⭐ Understanding Level : {starsUnderstanding}
+⭐ Task Execution : {starsTaskExecution}
+⭐ Class Participation : {starsParticipation}
+📝 Instructor's Comment :
+{instructorComment}
+🔢 Sessions Completed : {completedSessions}
 {recordingLink}
-
-Please contact us to discuss the best next steps.
-Code School Team 💻`,
+🙏 Thank you for trusting Code School
+📞 Contact : +2 011 40 474 129`,
     },
 
     // ── session_recording ────────────────────────────────────────────────────
@@ -297,7 +344,8 @@ Code School Team 💻`,
         { key: "sessionName",        label: "اسم الجلسة",       example: "الجلسة الأولى" },
         { key: "recordingLink",      label: "رابط التسجيل",     example: "https://drive.google.com/xxx" },
       ],
-      ar: `{guardianSalutation}،
+      ar:
+`{guardianSalutation}،
 
 🎥 رابط تسجيل جلسة "{sessionName}" لـ{childTitle} *{studentName}*:
 
@@ -305,7 +353,8 @@ Code School Team 💻`,
 
 يمكن مراجعة التسجيل في أي وقت للمذاكرة والمراجعة.
 فريق Code School 💻`,
-      en: `{guardianSalutation},
+      en:
+`{guardianSalutation},
 
 🎥 Recording for "{sessionName}" — {childTitle} *{studentName}*:
 

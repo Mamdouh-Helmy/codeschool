@@ -101,27 +101,31 @@ const ALL_VARS = {
   newTime:               { label: "الوقت الجديد",              labelEn: "New Time",                 icon: "⏰", ar: "08:00 - 09:30 مساءً",     en: "08:00 - 09:30 PM" },
   // ── Attendance
   status:                { label: "الحالة",                    labelEn: "Status",                   icon: "📌", ar: "غائب",                    en: "Absent" },
-  // ── Evaluation
-  decision:              { label: "نتيجة التقييم",             labelEn: "Evaluation Decision",      icon: "🏆", ar: "ممتاز",                    en: "Excellent" },
+  // ── Evaluation — NEW REPORT FORMAT
+  sessionDate:           { label: "تاريخ الجلسة",              labelEn: "Session Date",             icon: "📆", ar: "30/12/2025",               en: "12/30/2025" },
+  sessionNumber:         { label: "رقم الحصة",                 labelEn: "Session Number",           icon: "📑", ar: "1",                        en: "1" },
+  attendanceStatus:      { label: "الحضور",                    labelEn: "Attendance Status",        icon: "👥", ar: "حاضر",                     en: "Present" },
+  starsCommitment:       { label: "نجوم الالتزام والتركيز",    labelEn: "Stars: Commitment",        icon: "⭐", ar: "⭐⭐⭐⭐⭐",               en: "⭐⭐⭐⭐⭐" },
+  starsUnderstanding:    { label: "نجوم مستوى الاستيعاب",     labelEn: "Stars: Understanding",     icon: "⭐", ar: "⭐⭐⭐⭐",                 en: "⭐⭐⭐⭐" },
+  starsTaskExecution:    { label: "نجوم تنفيذ المهام",         labelEn: "Stars: Task Execution",    icon: "⭐", ar: "⭐⭐⭐⭐",                 en: "⭐⭐⭐⭐" },
+  starsParticipation:    { label: "نجوم المشاركة داخل الحصة", labelEn: "Stars: Participation",     icon: "⭐", ar: "⭐⭐⭐⭐",                 en: "⭐⭐⭐⭐" },
+  instructorComment:     { label: "تعليق المدرس",              labelEn: "Instructor Comment",       icon: "📝", ar: "أداء ممتاز، استمر هكذا!",  en: "Excellent performance, keep it up!" },
+  completedSessions:     { label: "عدد الحصص المنتهية",        labelEn: "Completed Sessions",       icon: "🔢", ar: "2",                        en: "2" },
   recordingLink:         { label: "رابط التسجيل",              labelEn: "Recording Link",           icon: "🎥", ar: "🎥 رابط التسجيل: https://drive.google.com/xxx", en: "🎥 Recording: https://drive.google.com/xxx" },
   // ── Common
   feedbackLink:          { label: "رابط التقييم",              labelEn: "Feedback Link",            icon: "⭐", ar: "https://forms.gle/xyz123", en: "https://forms.gle/xyz123" },
+  decision:              { label: "نتيجة التقييم",             labelEn: "Evaluation Decision",      icon: "🏆", ar: "ممتاز",                    en: "Excellent" },
 };
 
 // ─────────────────────────────────────────────────────────────
 // TEMPLATE VARS MAP
 // ─────────────────────────────────────────────────────────────
 const TEMPLATE_VARS = {
-  // ✅ رسائل الترحيب - bilingual (متغيرات اللغتين معاً)
+  // ✅ رسائل الترحيب - bilingual
   student_welcome:               ["salutation_ar","salutation_en","welcome_ar","name_ar","name_en","fullName","you_ar"],
   guardian_notification:         ["guardianSalutation_ar","studentGender_ar","studentName_ar","studentName_en","relationship_ar","fullStudentName"],
-
-  // ✅ تأكيد اللغة - المتغيرات بتتغير حسب اللغة المختارة
-  // عربي → salutation_ar + selectedLanguage_ar
-  // إنجليزي → salutation_en + selectedLanguage_en
   language_confirmation:         ["salutation_ar","salutation_en","name_ar","name_en","selectedLanguage_ar","selectedLanguage_en"],
   guardian_language_notification:["guardianSalutation_ar","guardianSalutation_en","studentGender_ar","studentGender_en","studentName_ar","studentName_en","selectedLanguage_ar","selectedLanguage_en"],
-
   group_student_welcome_student: ["salutation","courseName","groupName","startDate","timeTo","timeFrom","instructor","firstMeetingLink","studentName"],
   group_student_welcome_guardian:["salutation","childTitle","studentName","courseName","groupName","startDate","timeTo","timeFrom","instructor","firstMeetingLink"],
   instructor_group_activation:   ["salutation","courseName","groupName","startDate","timeTo","timeFrom","instructorName","studentCount"],
@@ -138,22 +142,64 @@ const TEMPLATE_VARS = {
   excused_notification:          ["guardianSalutation","guardianName","studentName","childTitle","status","sessionName","date","time","enrollmentNumber"],
   group_completion_student:      ["studentSalutation","guardianSalutation","studentName","guardianName","childTitle","groupName","groupCode","courseName","enrollmentNumber","feedbackLink"],
   group_completion_guardian:     ["studentSalutation","guardianSalutation","studentName","guardianName","childTitle","groupName","groupCode","courseName","enrollmentNumber","feedbackLink"],
-  evaluation_pass:               ["guardianSalutation","guardianName","childTitle","studentName","sessionName","date","time","enrollmentNumber","decision","recordingLink"],
-  evaluation_review:             ["guardianSalutation","guardianName","childTitle","studentName","sessionName","date","time","enrollmentNumber","decision","recordingLink"],
-  evaluation_repeat:             ["guardianSalutation","guardianName","childTitle","studentName","sessionName","date","time","enrollmentNumber","decision","recordingLink"],
-  session_recording:             ["guardianSalutation","guardianName","childTitle","studentName","sessionName","recordingLink"],
+
+  // ✅ Evaluation — المتغيرات الجديدة بتاعت تقرير الحصة
+  evaluation_pass: [
+    "guardianSalutation",
+    "sessionDate",
+    "sessionNumber",
+    "attendanceStatus",
+    "starsCommitment",
+    "starsUnderstanding",
+    "starsTaskExecution",
+    "starsParticipation",
+    "instructorComment",
+    "completedSessions",
+    "recordingLink",
+  ],
+  evaluation_review: [
+    "guardianSalutation",
+    "sessionDate",
+    "sessionNumber",
+    "attendanceStatus",
+    "starsCommitment",
+    "starsUnderstanding",
+    "starsTaskExecution",
+    "starsParticipation",
+    "instructorComment",
+    "completedSessions",
+    "recordingLink",
+  ],
+  evaluation_repeat: [
+    "guardianSalutation",
+    "sessionDate",
+    "sessionNumber",
+    "attendanceStatus",
+    "starsCommitment",
+    "starsUnderstanding",
+    "starsTaskExecution",
+    "starsParticipation",
+    "instructorComment",
+    "completedSessions",
+    "recordingLink",
+  ],
+
+  // ✅ Recording link — متغيرات خاصة بيه
+  session_recording: [
+    "guardianSalutation",
+    "guardianName",
+    "childTitle",
+    "studentName",
+    "sessionName",
+    "recordingLink",
+  ],
 };
 
 // ─────────────────────────────────────────────────────────────
 // FRONTEND FALLBACK TEMPLATES
-// يُستخدم لما مفيش record في الداتابيز — يظهر تلقائياً
 // ─────────────────────────────────────────────────────────────
 const FRONTEND_FALLBACKS = {
 
-  // ✅ تأكيد اللغة للطالب
-  // عربي: بيستخدم {salutation_ar} بس
-  // إنجليزي: بيستخدم {salutation_en} بس
-  // الـ webhook هو اللي بيحدد أي متغير يتملى حسب اللغة المختارة
   language_confirmation: {
     ar: `✅ تم تأكيد اللغة المفضلة
 
@@ -190,9 +236,6 @@ The Code School Team 💻
 🌍 Thank you for choosing Code School`,
   },
 
-  // ✅ تأكيد اللغة لولي الأمر
-  // عربي: بيستخدم {guardianSalutation_ar} + {studentGender_ar} + {studentName_ar}
-  // إنجليزي: بيستخدم {guardianSalutation_en} + {studentGender_en} + {studentName_en}
   guardian_language_notification: {
     ar: `{guardianSalutation_ar}،
 
@@ -219,85 +262,130 @@ Best regards,
 The Code School Team 💻`,
   },
 
-  // ✅ evaluation + recording (موجودة من قبل)
+  // ✅ evaluation_pass — شكل تقرير الحصة الجديد
   evaluation_pass: {
     ar: `{guardianSalutation}،
 
-نود مشاركتكم ملخص أداء {childTitle} *{studentName}* 📊
-
-✅ *الأداء العام: ممتاز*
-
-{studentName} أبدى فهماً ممتازاً للمحتوى والتزاماً ملحوظاً خلال جلسة "{sessionName}". نحن فخورون بتقدمه!
-
+تقرير الحصة 📃✨
+📆 التاريخ : {sessionDate}
+📑 رقم الحصة : {sessionNumber}
+⏱️ مدة الحصة : ساعتين
+👥 الحضور : {attendanceStatus}
+📊 تقييم الأداء :
+⭐ الالتزام والتركيز : {starsCommitment}
+⭐ مستوى الاستيعاب : {starsUnderstanding}
+⭐ تنفيذ المهام : {starsTaskExecution}
+⭐ المشاركة داخل الحصة : {starsParticipation}
+📝 تعليق المدرس :
+{instructorComment}
+🔢 عدد الحصص المنتهية : {completedSessions}
 {recordingLink}
+🙏 نشكركم على ثقتكم في Code School
+📞 للتواصل : +2 011 40 474 129`,
 
-للاستفسار أو المتابعة لا تترددوا في التواصل.
-فريق Code School 💻`,
     en: `{guardianSalutation},
 
-We'd like to share a performance summary for {childTitle} *{studentName}* 📊
-
-✅ *Overall Performance: Excellent*
-
-{studentName} demonstrated excellent understanding and notable commitment during "{sessionName}". We're proud of their progress!
-
+Session Report 📃✨
+📆 Date : {sessionDate}
+📑 Session No. : {sessionNumber}
+⏱️ Duration : 2 hours
+👥 Attendance : {attendanceStatus}
+📊 Performance Evaluation :
+⭐ Commitment & Focus : {starsCommitment}
+⭐ Understanding Level : {starsUnderstanding}
+⭐ Task Execution : {starsTaskExecution}
+⭐ Class Participation : {starsParticipation}
+📝 Instructor's Comment :
+{instructorComment}
+🔢 Sessions Completed : {completedSessions}
 {recordingLink}
-
-Feel free to contact us for any questions.
-Code School Team 💻`,
+🙏 Thank you for trusting Code School
+📞 Contact : +2 011 40 474 129`,
   },
+
+  // ✅ evaluation_review — نفس الشكل
   evaluation_review: {
     ar: `{guardianSalutation}،
 
-نود مشاركتكم ملخص أداء {childTitle} *{studentName}* 📊
-
-⚠️ *الأداء العام: يحتاج مراجعة*
-
-{studentName} أظهر بعض النقاط التي تحتاج مراجعة وتعزيز خلال جلسة "{sessionName}". ننصح بمراجعة مواد الجلسة ومتابعة التدريبات المنزلية.
-
+تقرير الحصة 📃✨
+📆 التاريخ : {sessionDate}
+📑 رقم الحصة : {sessionNumber}
+⏱️ مدة الحصة : ساعتين
+👥 الحضور : {attendanceStatus}
+📊 تقييم الأداء :
+⭐ الالتزام والتركيز : {starsCommitment}
+⭐ مستوى الاستيعاب : {starsUnderstanding}
+⭐ تنفيذ المهام : {starsTaskExecution}
+⭐ المشاركة داخل الحصة : {starsParticipation}
+📝 تعليق المدرس :
+{instructorComment}
+🔢 عدد الحصص المنتهية : {completedSessions}
 {recordingLink}
+🙏 نشكركم على ثقتكم في Code School
+📞 للتواصل : +2 011 40 474 129`,
 
-نحن هنا لدعم {studentName} في أي وقت.
-فريق Code School 💻`,
     en: `{guardianSalutation},
 
-We'd like to share a performance summary for {childTitle} *{studentName}* 📊
-
-⚠️ *Overall Performance: Needs Review*
-
-{studentName} showed some areas that need reinforcement during "{sessionName}". We recommend reviewing session materials and practicing at home.
-
+Session Report 📃✨
+📆 Date : {sessionDate}
+📑 Session No. : {sessionNumber}
+⏱️ Duration : 2 hours
+👥 Attendance : {attendanceStatus}
+📊 Performance Evaluation :
+⭐ Commitment & Focus : {starsCommitment}
+⭐ Understanding Level : {starsUnderstanding}
+⭐ Task Execution : {starsTaskExecution}
+⭐ Class Participation : {starsParticipation}
+📝 Instructor's Comment :
+{instructorComment}
+🔢 Sessions Completed : {completedSessions}
 {recordingLink}
-
-We're here to support {studentName} anytime.
-Code School Team 💻`,
+🙏 Thank you for trusting Code School
+📞 Contact : +2 011 40 474 129`,
   },
+
+  // ✅ evaluation_repeat — نفس الشكل
   evaluation_repeat: {
     ar: `{guardianSalutation}،
 
-نود مشاركتكم ملخص أداء {childTitle} *{studentName}* 📊
-
-🔄 *الأداء العام: يحتاج دعم إضافي*
-
-بعد متابعة أداء {studentName} في جلسة "{sessionName}"، نرى أن الاستفادة القصوى تتطلب مزيداً من الوقت والتدريب على هذا المحتوى.
-
+تقرير الحصة 📃✨
+📆 التاريخ : {sessionDate}
+📑 رقم الحصة : {sessionNumber}
+⏱️ مدة الحصة : ساعتين
+👥 الحضور : {attendanceStatus}
+📊 تقييم الأداء :
+⭐ الالتزام والتركيز : {starsCommitment}
+⭐ مستوى الاستيعاب : {starsUnderstanding}
+⭐ تنفيذ المهام : {starsTaskExecution}
+⭐ المشاركة داخل الحصة : {starsParticipation}
+📝 تعليق المدرس :
+{instructorComment}
+🔢 عدد الحصص المنتهية : {completedSessions}
 {recordingLink}
+🙏 نشكركم على ثقتكم في Code School
+📞 للتواصل : +2 011 40 474 129`,
 
-نقترح مراجعة مواد الجلسة مرة أخرى. يرجى التواصل معنا لمناقشة أفضل الخطوات القادمة.
-فريق Code School 💻`,
     en: `{guardianSalutation},
 
-We'd like to share a performance summary for {childTitle} *{studentName}* 📊
-
-🔄 *Overall Performance: Needs Additional Support*
-
-After monitoring {studentName}'s performance during "{sessionName}", we believe maximum benefit requires more time and practice on this content.
-
+Session Report 📃✨
+📆 Date : {sessionDate}
+📑 Session No. : {sessionNumber}
+⏱️ Duration : 2 hours
+👥 Attendance : {attendanceStatus}
+📊 Performance Evaluation :
+⭐ Commitment & Focus : {starsCommitment}
+⭐ Understanding Level : {starsUnderstanding}
+⭐ Task Execution : {starsTaskExecution}
+⭐ Class Participation : {starsParticipation}
+📝 Instructor's Comment :
+{instructorComment}
+🔢 Sessions Completed : {completedSessions}
 {recordingLink}
-
-Please contact us to discuss the best next steps.
-Code School Team 💻`,
+🙏 Thank you for trusting Code School
+📞 Contact : +2 011 40 474 129`,
   },
+
+  // ✅ session_recording
   session_recording: {
     ar: `{guardianSalutation}،
 
@@ -414,13 +502,9 @@ export default function WhatsAppTemplatesPage() {
       const sd = await sRes.json();
       if (sd.success && sd.data) {
         sd.data.forEach(t => {
-          // ✅ قوالب تأكيد اللغة - نحفظ contentAr و contentEn منفصلين
-          // لأن الـ webhook بيبعت نسخة مختلفة لكل لغة
           if (t.templateType === "student_language_confirmation") {
             map["language_confirmation"] = {
               ...t,
-              // contentAr = القالب العربي (بيتبعت لو اختار عربي)
-              // contentEn = القالب الإنجليزي (بيتبعت لو اختار إنجليزي)
               content:   t.contentAr || t.content || "",
               contentAr: t.contentAr || t.content || "",
               contentEn: t.contentEn || t.content || "",
@@ -465,7 +549,7 @@ export default function WhatsAppTemplatesPage() {
         });
       }
 
-      // ✅ لو مفيش record في الداتابيز لأي template في FRONTEND_FALLBACKS → حط الـ fallback
+      // ✅ fallbacks لو مفيش record في DB
       Object.entries(FRONTEND_FALLBACKS).forEach(([typeId, fb]) => {
         if (!map[typeId]) {
           map[typeId] = {
@@ -473,7 +557,6 @@ export default function WhatsAppTemplatesPage() {
             content:            fb.ar,
             contentAr:          fb.ar,
             contentEn:          fb.en,
-            // قوالب تأكيد اللغة مش message templates - بتروح لـ /api/whatsapp/templates
             isMessageTemplate:  !["language_confirmation", "guardian_language_notification"].includes(typeId),
             isFrontendFallback: true,
             _messageTemplateId: null,
@@ -523,18 +606,16 @@ export default function WhatsAppTemplatesPage() {
         else                                               { payload.guardianContentAr = cur.contentAr || cur.content; payload.guardianContentEn = cur.contentEn; }
 
       } else if (activeTab === "language_confirmation" || activeTab === "guardian_language_notification") {
-        // ✅ قوالب تأكيد اللغة - بتروح لـ /api/whatsapp/templates
         endpoint = "/api/whatsapp/templates";
         const dbType = activeTab === "language_confirmation"
           ? "student_language_confirmation"
           : "guardian_language_confirmation";
 
         if (cur.isFrontendFallback || !cur._id) {
-          // مفيش record → POST لإنشاء جديد
           payload = {
             templateType: dbType,
             name:         activeTab === "language_confirmation" ? "تأكيد اللغة للطالب" : "تأكيد اللغة لولي الأمر",
-            content:      cur.contentAr || cur.content,  // الـ DB بيخزن content كـ AR
+            content:      cur.contentAr || cur.content,
             contentAr:    cur.contentAr || cur.content,
             contentEn:    cur.contentEn || "",
             description:  activeTab === "language_confirmation"
@@ -551,7 +632,6 @@ export default function WhatsAppTemplatesPage() {
           return;
         }
 
-        // يوجد record → PUT للتحديث
         payload = {
           id:        cur._id,
           content:   cur.contentAr || cur.content,
@@ -679,7 +759,6 @@ export default function WhatsAppTemplatesPage() {
   const byCategory  = filtered.reduce((acc, t) => { if (!acc[t.category]) acc[t.category] = []; acc[t.category].push(t); return acc; }, {});
   const textVal     = testLanguage === "ar" ? (curTemplate?.contentAr || curTemplate?.content || "") : (curTemplate?.contentEn || curTemplate?.content || "");
 
-  // ── note for language confirmation templates ───────────────
   const isLangConfirmation = ["language_confirmation", "guardian_language_notification"].includes(activeTab);
 
   // ── loading ────────────────────────────────────────────────
@@ -798,7 +877,6 @@ export default function WhatsAppTemplatesPage() {
                 {activeType.isNew && <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEW</span>}
                 {curTemplate?.isMessageTemplate && !curTemplate?.isFrontendFallback && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800">MessageTemplate</span>}
                 {curTemplate?.isFrontendFallback && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-800">⚡ Default — لم يُحفظ بعد</span>}
-                {/* ✅ بادج خاص لقوالب تأكيد اللغة */}
                 {isLangConfirmation && (
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-800">
                     🌍 باللغة المختارة فقط
@@ -812,7 +890,6 @@ export default function WhatsAppTemplatesPage() {
                 {activeType.type.includes("group")      && <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">👥 بيانات المجموعة</span>}
                 {activeType.type.includes("session")    && <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800">📅 بيانات الحصة</span>}
                 <span className="text-[10px] text-slate-400">{allVars.length} متغير</span>
-                {/* ✅ تلميح إضافي لقوالب تأكيد اللغة */}
                 {isLangConfirmation && (
                   <span className="text-[10px] text-slate-400">
                     • {testLanguage === "ar" ? "يُعرض لمن اختار العربية" : "يُعرض لمن اختار الإنجليزية"}
@@ -823,7 +900,6 @@ export default function WhatsAppTemplatesPage() {
           </div>
         )}
 
-        {/* ✅ تنبيه خاص لقوالب تأكيد اللغة */}
         {isLangConfirmation && (
           <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10 mb-4">
             <Globe className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />

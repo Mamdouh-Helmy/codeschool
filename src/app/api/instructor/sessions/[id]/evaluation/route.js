@@ -15,8 +15,38 @@ const EVALUATION_TEMPLATE_MAP = {
   repeat: 'evaluation_repeat',
 };
 
+// ─── Helper: نجوم من رقم ─────────────────────────────────────────────────────
+function buildStars(score) {
+  const n = Math.min(5, Math.max(1, Math.round(score || 3)));
+  return '⭐'.repeat(n);
+}
+
+// ─── Helper: حالة الحضور بالعربي/إنجليزي ────────────────────────────────────
+function localizeAttendance(status, lang) {
+  const map = {
+    ar: { present: 'حاضر', late: 'متأخر', absent: 'غائب', excused: 'بعذر', null: 'لم يُسجَّل' },
+    en: { present: 'Present', late: 'Late', absent: 'Absent', excused: 'Excused', null: 'N/A' },
+  };
+  return (map[lang] || map.ar)[status] || (lang === 'ar' ? 'لم يُسجَّل' : 'N/A');
+}
+
+// ─── Helper: عدد الحصص المكتملة للطالب في الجروب ────────────────────────────
+async function getCompletedSessionsCount(groupId, studentId) {
+  try {
+    const count = await Session.countDocuments({
+      groupId,
+      status: 'completed',
+      isDeleted: false,
+      'attendance.studentId': studentId,
+      'attendance.status': { $in: ['present', 'late'] },
+    });
+    return count;
+  } catch { return 0; }
+}
+
 // ─── Build rendered message for one student ───────────────────────────────────
-async function buildEvaluationMessage(student, decision, session, rawContent = null) {
+async function buildEvaluationMessage(student, decision, session, extra = {}) {
+  // extra = { rawContent, ratings, comment, attendanceStatus, groupId }
   const lang         = student.communicationPreferences?.preferredLanguage || 'ar';
   const gender       = (student.personalInfo?.gender || 'male').toLowerCase();
   const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase();
@@ -46,21 +76,44 @@ async function buildEvaluationMessage(student, decision, session, rawContent = n
     ? (gender === 'female' ? 'ابنتك' : 'ابنك')
     : (gender === 'female' ? 'your daughter' : 'your son');
 
+  // ── تاريخ الجلسة ──────────────────────────────────────────────────────────
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
         lang === 'ar' ? 'ar-EG' : 'en-US',
-        { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+        { day: '2-digit', month: '2-digit', year: 'numeric' }
       )
     : '';
 
+  // ── رقم الجلسة ────────────────────────────────────────────────────────────
+  const sessionNumber = session?.sessionNumber || '';
+
+  // ── حالة الحضور ───────────────────────────────────────────────────────────
+  const attendanceStatus = localizeAttendance(extra.attendanceStatus || null, lang);
+
+  // ── النجوم ────────────────────────────────────────────────────────────────
+  const ratings = extra.ratings || {};
+  const starsCommitment    = buildStars(ratings.commitment    ?? 3);
+  const starsUnderstanding = buildStars(ratings.understanding ?? 3);
+  const starsTaskExecution = buildStars(ratings.taskExecution ?? 3);
+  const starsParticipation = buildStars(ratings.participation ?? 3);
+
+  // ── تعليق المدرس ──────────────────────────────────────────────────────────
+  const instructorComment = extra.comment?.trim() || (lang === 'ar' ? '—' : '—');
+
+  // ── رابط التسجيل ──────────────────────────────────────────────────────────
   const recordingLinkText = session?.recordingLink
     ? lang === 'ar'
       ? `🎥 رابط التسجيل: ${session.recordingLink}`
       : `🎥 Recording: ${session.recordingLink}`
     : '';
 
-  // ✅ لو مفيش rawContent → جيب من getOrFallback
-  let template = rawContent;
+  // ── عدد الحصص المكتملة ────────────────────────────────────────────────────
+  const completedSessions = extra.groupId
+    ? await getCompletedSessionsCount(extra.groupId, student._id)
+    : 0;
+
+  // ── الـ template ──────────────────────────────────────────────────────────
+  let template = extra.rawContent;
   let isFallback = false;
 
   if (!template) {
@@ -71,14 +124,23 @@ async function buildEvaluationMessage(student, decision, session, rawContent = n
 
   const variables = {
     guardianSalutation,
-    guardianName:     guardianFirstName,
-    studentName:      studentFirstName,
+    guardianName:        guardianFirstName,
+    studentName:         studentFirstName,
     childTitle,
-    sessionName:      session?.title || '',
-    date:             sessionDate,
-    time:             session ? `${session.startTime || ''} - ${session.endTime || ''}` : '',
-    enrollmentNumber: student.enrollmentNumber || '',
-    recordingLink:    recordingLinkText,
+    sessionName:         session?.title || '',
+    sessionDate,
+    sessionNumber,
+    attendanceStatus,
+    starsCommitment,
+    starsUnderstanding,
+    starsTaskExecution,
+    starsParticipation,
+    instructorComment,
+    completedSessions:   String(completedSessions),
+    date:                sessionDate,
+    time:                session ? `${session.startTime || ''} - ${session.endTime || ''}` : '',
+    enrollmentNumber:    student.enrollmentNumber || '',
+    recordingLink:       recordingLinkText,
     decision: lang === 'ar'
       ? (decision === 'pass' ? 'ممتاز' : decision === 'review' ? 'يحتاج مراجعة' : 'يحتاج دعم إضافي')
       : (decision === 'pass' ? 'Excellent' : decision === 'review' ? 'Needs Review' : 'Needs Support'),
@@ -86,7 +148,7 @@ async function buildEvaluationMessage(student, decision, session, rawContent = n
 
   let rendered = template;
   Object.entries(variables).forEach(([key, value]) => {
-    rendered = rendered.replace(new RegExp(`\\{${key}\\}`, 'g'), value || '');
+    rendered = rendered.replace(new RegExp(`\\{${key}\\}`, 'g'), value ?? '');
   });
 
   return {
@@ -128,7 +190,6 @@ async function buildRecordingMessage(student, session, recordingLink) {
     ? (gender === 'female' ? 'ابنتك' : 'ابنك')
     : (gender === 'female' ? 'your daughter' : 'your son');
 
-  // ✅ جيب template من الداتابيز أو fallback
   const result   = await MessageTemplate.getOrFallback('session_recording', lang);
   let rendered   = result.content;
 
@@ -190,9 +251,14 @@ export async function GET(req, { params }) {
       studentId: { $in: allStudentIds },
     }).lean();
     const existingEvalMap = {};
-    existingEvals.forEach((e) => { existingEvalMap[e.studentId.toString()] = e.finalDecision; });
+    existingEvals.forEach((e) => {
+      existingEvalMap[e.studentId.toString()] = {
+        decision:  e.finalDecision,
+        ratings:   e.criteria,
+        comment:   e.notes || '',
+      };
+    });
 
-    // ✅ جيب الـ 4 templates من getOrFallback مباشرة
     const [passResult, reviewResult, repeatResult, recordingResult] = await Promise.all([
       MessageTemplate.getOrFallback('evaluation_pass',   'ar'),
       MessageTemplate.getOrFallback('evaluation_review', 'ar'),
@@ -209,7 +275,9 @@ export async function GET(req, { params }) {
       guardianName:      s.guardianInfo?.name || '',
       preferredLanguage: s.communicationPreferences?.preferredLanguage || 'ar',
       attendanceStatus:  attendanceMap[s._id.toString()] || null,
-      currentDecision:   existingEvalMap[s._id.toString()] || null,
+      currentDecision:   existingEvalMap[s._id.toString()]?.decision || null,
+      currentRatings:    existingEvalMap[s._id.toString()]?.ratings || null,
+      currentComment:    existingEvalMap[s._id.toString()]?.comment || '',
     }));
 
     return NextResponse.json({
@@ -221,6 +289,7 @@ export async function GET(req, { params }) {
           scheduledDate: session.scheduledDate,
           startTime:     session.startTime,
           endTime:       session.endTime,
+          sessionNumber: session.sessionNumber,
           recordingLink: session.recordingLink || '',
           group: { _id: session.groupId?._id, name: session.groupId?.name, code: session.groupId?.code },
         },
@@ -253,7 +322,7 @@ export async function POST(req, { params }) {
     try { const t = await req.text(); if (t?.trim()) body = JSON.parse(t); }
     catch { return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { studentId, decision, customContent } = body;
+    const { studentId, decision, customContent, ratings, comment, attendanceStatus } = body;
     if (!studentId || !decision) return NextResponse.json({ success: false, error: 'studentId and decision required' }, { status: 400 });
     if (!['pass', 'review', 'repeat'].includes(decision)) return NextResponse.json({ success: false, error: 'Invalid decision' }, { status: 400 });
 
@@ -264,7 +333,16 @@ export async function POST(req, { params }) {
     if (!student) return NextResponse.json({ success: false, error: 'Student not found' }, { status: 404 });
 
     const { rendered, lang, isFallback, guardianPhone } = await buildEvaluationMessage(
-      student, decision, session, customContent || null
+      student,
+      decision,
+      session,
+      {
+        rawContent:       customContent || null,
+        ratings:          ratings || {},
+        comment:          comment || '',
+        attendanceStatus: attendanceStatus || null,
+        groupId:          session?.groupId,
+      }
     );
 
     return NextResponse.json({
@@ -321,7 +399,8 @@ export async function PATCH(req, { params }) {
     const results = [];
 
     for (const ev of evaluations) {
-      const { studentId, decision, notes, recordingLink } = ev;
+      // ev = { studentId, decision, notes, recordingLink, ratings, comment }
+      const { studentId, decision, notes, recordingLink, ratings, comment } = ev;
       if (!['pass', 'review', 'repeat'].includes(decision)) continue;
 
       const student = await Student.findById(studentId)
@@ -332,14 +411,31 @@ export async function PATCH(req, { params }) {
       const lang             = student.communicationPreferences?.preferredLanguage || 'ar';
       const attendanceStatus = attendanceMap[studentId?.toString()] || 'absent';
 
-      // ✅ بناء رسالة التقييم (بيجيب من الداتابيز أو fallback تلقائياً)
+      // ── بناء الرسالة بالشكل الجديد ────────────────────────────────────────
       const { rendered, guardianPhone, isFallback } = await buildEvaluationMessage(
-        student, decision, session, null
+        student,
+        decision,
+        session,
+        {
+          rawContent:       null,
+          ratings:          ratings || {},
+          comment:          comment || notes || '',
+          attendanceStatus,
+          groupId:          session.groupId?._id,
+        }
       );
 
-      // ✅ احفظ في StudentEvaluation
+      // ── احفظ في StudentEvaluation ─────────────────────────────────────────
       const attendanceScore = attendanceStatus === 'present' ? 5 : attendanceStatus === 'late' ? 3 : 1;
-      const perfScore       = decision === 'pass' ? 4 : decision === 'review' ? 3 : 2;
+
+      // ✅ استخدم ratings لو موجودة، وإلا default حسب القرار
+      const perfScore = decision === 'pass' ? 4 : decision === 'review' ? 3 : 2;
+      const criteria = {
+        understanding: ratings?.understanding ?? perfScore,
+        commitment:    ratings?.commitment    ?? perfScore,
+        attendance:    attendanceScore,
+        participation: ratings?.participation ?? perfScore,
+      };
 
       await StudentEvaluation.findOneAndUpdate(
         { groupId: session.groupId?._id, studentId },
@@ -348,13 +444,8 @@ export async function PATCH(req, { params }) {
           studentId,
           instructorId:  user.id,
           finalDecision: decision,
-          notes:         notes || '',
-          criteria: {
-            understanding: perfScore,
-            commitment:    perfScore,
-            attendance:    attendanceScore,
-            participation: perfScore,
-          },
+          notes:         comment || notes || '',
+          criteria,
           'metadata.evaluatedAt':    new Date(),
           'metadata.evaluatedBy':    user.id,
           'metadata.lastModifiedAt': new Date(),
@@ -363,7 +454,7 @@ export async function PATCH(req, { params }) {
         { upsert: true, new: true }
       );
 
-      // ✅ تحقق من الرصيد
+      // ── تحقق من الرصيد ────────────────────────────────────────────────────
       const remainingHours = student.creditSystem?.currentPackage?.remainingHours ?? 0;
       if (remainingHours <= 0) {
         console.log(`🔕 Student ${studentId} has zero balance — skipping messages`);
@@ -378,7 +469,7 @@ export async function PATCH(req, { params }) {
         try {
           const { wapilotService } = await import('../../../../../services/wapilot-service');
 
-          // ── رسالة 1: تقييم الأداء ────────────────────────────────────────
+          // ── رسالة 1: تقرير الحصة ─────────────────────────────────────────
           const evalResult = await wapilotService.sendAndLogMessage({
             studentId,
             phoneNumber:    guardianPhone,
@@ -397,7 +488,7 @@ export async function PATCH(req, { params }) {
           });
           messageSent = evalResult?.success || false;
 
-          // ── رسالة 2: رابط التسجيل (لو موجود) ────────────────────────────
+          // ── رسالة 2: رابط التسجيل لو موجود ──────────────────────────────
           if (recordingLink?.trim()) {
             const { rendered: recRendered } = await buildRecordingMessage(student, session, recordingLink);
 

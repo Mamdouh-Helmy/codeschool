@@ -4,146 +4,105 @@ import SectionImageHero from "../../models/SectionImageHero";
 
 export const revalidate = 60;
 
-// GET - جلب جميع الصور
+// GET — جلب كل السجلات (عادةً سجل واحد فقط)
 export async function GET(request) {
   try {
     await connectDB();
 
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get("activeOnly") === "true";
-    const language = searchParams.get("language");
 
-    let filter = {};
+    const filter = activeOnly ? { isActive: true } : {};
 
-    if (activeOnly) {
-      filter.isActive = true;
-    }
-
-    if (language) {
-      filter.language = language;
-    }
-
-    const images = await SectionImageHero.find(filter).sort({
+    const records = await SectionImageHero.find(filter).sort({
       displayOrder: 1,
       createdAt: -1,
     });
 
     return NextResponse.json({
       success: true,
-      data: images,
-      count: images.length,
+      data: records,
+      count: records.length,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("❌ Error fetching images:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "فشل في جلب الصور",
-        error: error.message,
-      },
+      { success: false, message: "فشل في جلب البيانات", error: error.message },
       { status: 500 }
     );
   }
 }
 
-// POST - إنشاء صورة جديدة
+// POST — إنشاء سجل جديد
 export async function POST(request) {
   try {
     await connectDB();
     const body = await request.json();
 
-    // التحقق من الحقول المطلوبة
-    if (!body.language || !body.imageUrl) {
+    if (!body.imageUrl) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "اللغة ورابط الصورة مطلوبان",
-        },
+        { success: false, message: "رابط الصورة الرئيسية مطلوب" },
         { status: 400 }
       );
     }
 
-    // التحقق من عدم وجود سجل بنفس اللغة مسبقاً
-    const existingRecord = await SectionImageHero.findOne({ language: body.language });
-    if (existingRecord) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `يوجد بالفعل سجل للغة ${body.language}. يمكنك تعديله بدلاً من إنشاء جديد.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const newImage = await SectionImageHero.create({
-      language: body.language,
-      imageUrl: body.imageUrl,
+    const record = await SectionImageHero.create({
+      imageUrl:       body.imageUrl,
       secondImageUrl: body.secondImageUrl || "",
-      imageAlt: body.imageAlt || "",
+      imageAlt:       body.imageAlt       || "",
       secondImageAlt: body.secondImageAlt || "",
 
-      // بيانات الهيرو عربي
-      heroTitleAr: body.heroTitleAr || "",
+      heroTitleAr:       body.heroTitleAr       || "",
       heroDescriptionAr: body.heroDescriptionAr || "",
-      instructor1Ar: body.instructor1Ar || "",
+      instructor1Ar:     body.instructor1Ar     || "",
       instructor1RoleAr: body.instructor1RoleAr || "",
-      instructor2Ar: body.instructor2Ar || "",
+      instructor2Ar:     body.instructor2Ar     || "",
       instructor2RoleAr: body.instructor2RoleAr || "",
 
-      // بيانات الهيرو انجليزي
-      heroTitleEn: body.heroTitleEn || "",
+      heroTitleEn:       body.heroTitleEn       || "",
       heroDescriptionEn: body.heroDescriptionEn || "",
-      instructor1En: body.instructor1En || "",
+      instructor1En:     body.instructor1En     || "",
       instructor1RoleEn: body.instructor1RoleEn || "",
-      instructor2En: body.instructor2En || "",
+      instructor2En:     body.instructor2En     || "",
       instructor2RoleEn: body.instructor2RoleEn || "",
 
-      // بيانات Welcome Popup عربي
-      welcomeTitleAr: body.welcomeTitleAr || "",
+      welcomeTitleAr:     body.welcomeTitleAr     || "",
       welcomeSubtitle1Ar: body.welcomeSubtitle1Ar || "",
       welcomeSubtitle2Ar: body.welcomeSubtitle2Ar || "",
-      welcomeFeature1Ar: body.welcomeFeature1Ar || "",
-      welcomeFeature2Ar: body.welcomeFeature2Ar || "",
-      welcomeFeature3Ar: body.welcomeFeature3Ar || "",
-      welcomeFeature4Ar: body.welcomeFeature4Ar || "",
-      welcomeFeature5Ar: body.welcomeFeature5Ar || "",
-      welcomeFeature6Ar: body.welcomeFeature6Ar || "",
+      welcomeFeature1Ar:  body.welcomeFeature1Ar  || "",
+      welcomeFeature2Ar:  body.welcomeFeature2Ar  || "",
+      welcomeFeature3Ar:  body.welcomeFeature3Ar  || "",
+      welcomeFeature4Ar:  body.welcomeFeature4Ar  || "",
+      welcomeFeature5Ar:  body.welcomeFeature5Ar  || "",
+      welcomeFeature6Ar:  body.welcomeFeature6Ar  || "",
 
-      // بيانات Welcome Popup انجليزي
-      welcomeTitleEn: body.welcomeTitleEn || "",
+      welcomeTitleEn:     body.welcomeTitleEn     || "",
       welcomeSubtitle1En: body.welcomeSubtitle1En || "",
       welcomeSubtitle2En: body.welcomeSubtitle2En || "",
-      welcomeFeature1En: body.welcomeFeature1En || "",
-      welcomeFeature2En: body.welcomeFeature2En || "",
-      welcomeFeature3En: body.welcomeFeature3En || "",
-      welcomeFeature4En: body.welcomeFeature4En || "",
-      welcomeFeature5En: body.welcomeFeature5En || "",
-      welcomeFeature6En: body.welcomeFeature6En || "",
+      welcomeFeature1En:  body.welcomeFeature1En  || "",
+      welcomeFeature2En:  body.welcomeFeature2En  || "",
+      welcomeFeature3En:  body.welcomeFeature3En  || "",
+      welcomeFeature4En:  body.welcomeFeature4En  || "",
+      welcomeFeature5En:  body.welcomeFeature5En  || "",
+      welcomeFeature6En:  body.welcomeFeature6En  || "",
 
-      // الأرقام
-      discount: body.discount || 30,
+      discount:     body.discount     ?? 30,
       happyParents: body.happyParents || "250",
-      graduates: body.graduates || "130",
+      graduates:    body.graduates    || "130",
 
-      isActive: body.isActive !== undefined ? body.isActive : true,
-      displayOrder: body.displayOrder || 0,
+      isActive:     body.isActive     ?? true,
+      displayOrder: body.displayOrder ?? 0,
     });
 
     return NextResponse.json({
       success: true,
-      data: newImage,
-      message: "تم إنشاء الصورة بنجاح",
+      data: record,
+      message: "تم الإنشاء بنجاح",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("❌ Error creating image:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "فشل في إنشاء الصورة",
-        error: error.message,
-      },
+      { success: false, message: "فشل في الإنشاء", error: error.message },
       { status: 500 }
     );
   }

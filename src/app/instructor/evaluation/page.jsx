@@ -57,6 +57,45 @@ const ATTENDANCE_BADGE = {
   null:     { ar: "لم يُسجَّل", en: "N/A",      color: "text-gray-500 bg-gray-50 border-gray-200 dark:bg-[#21262d] dark:border-[#30363d]" },
 };
 
+// ─── RATING CRITERIA ─────────────────────────────────────────────────────────
+const RATING_CRITERIA = [
+  { key: "commitment",    labelAr: "الالتزام والتركيز",      labelEn: "Commitment & Focus" },
+  { key: "understanding", labelAr: "مستوى الاستيعاب",        labelEn: "Understanding Level" },
+  { key: "taskExecution", labelAr: "تنفيذ المهام",           labelEn: "Task Execution" },
+  { key: "participation", labelAr: "المشاركة داخل الحصة",    labelEn: "Class Participation" },
+];
+
+// ─── Star Rating Component ────────────────────────────────────────────────────
+function StarRating({ value, onChange, disabled, size = "md" }) {
+  const [hovered, setHovered] = useState(0);
+  const stars = [1, 2, 3, 4, 5];
+  const sz = size === "sm" ? "w-4 h-4" : "w-5 h-5";
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {stars.map((star) => (
+        <button
+          key={star}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange && onChange(star)}
+          onMouseEnter={() => !disabled && setHovered(star)}
+          onMouseLeave={() => setHovered(0)}
+          className={`transition-all duration-100 disabled:cursor-default ${!disabled ? "hover:scale-110 cursor-pointer" : ""}`}
+        >
+          <Star
+            className={`${sz} transition-colors duration-100 ${
+              star <= (hovered || value)
+                ? "fill-amber-400 text-amber-400"
+                : "fill-gray-200 text-gray-200 dark:fill-[#30363d] dark:text-[#30363d]"
+            }`}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Animated Counter ─────────────────────────────────────────────────────────
 function AnimatedCounter({ value, duration = 800 }) {
   const [count, setCount] = useState(0);
@@ -75,7 +114,7 @@ function AnimatedCounter({ value, duration = 800 }) {
 }
 
 // ─── Message Preview Modal ────────────────────────────────────────────────────
-function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onConfirm }) {
+function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onConfirm, ratings, comment, attendanceStatus }) {
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
@@ -95,7 +134,13 @@ function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onCo
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ studentId: student._id, decision }),
+          body: JSON.stringify({
+            studentId: student._id,
+            decision,
+            ratings,
+            comment,
+            attendanceStatus,
+          }),
         });
         const data = await res.json();
         if (data.success) setPreview(data.data);
@@ -103,7 +148,7 @@ function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onCo
       } catch { setError(t("خطأ في الاتصال", "Connection error")); }
       finally { setLoading(false); }
     })();
-  }, [student._id, decision, sessionId]);
+  }, [student._id, decision, sessionId, ratings, comment, attendanceStatus]);
 
   const lang = preview?.lang || "ar";
   const msgIsAr = lang === "ar";
@@ -113,7 +158,7 @@ function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onCo
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full sm:max-w-lg max-h-[90vh] bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden">
 
-        {/* Header — gradient like dashboard */}
+        {/* Header */}
         <div className={`relative bg-gradient-to-br ${cfg.gradient} p-5 overflow-hidden flex-shrink-0`}>
           <div className="absolute inset-0 opacity-10"
             style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
@@ -215,7 +260,13 @@ function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onCo
 }
 
 // ─── Student Eval Card ────────────────────────────────────────────────────────
-function StudentEvalCard({ student, decision, onSetDecision, onPreview, submitting, recordingLink, onRecordingLinkChange, isAr }) {
+function StudentEvalCard({
+  student, decision, onSetDecision, onPreview, submitting,
+  recordingLink, onRecordingLinkChange,
+  ratings, onRatingChange,
+  comment, onCommentChange,
+  isAr,
+}) {
   const cfg = decision ? DECISIONS[decision] : null;
   const Icon = cfg?.icon;
   const att = ATTENDANCE_BADGE[student.attendanceStatus] || ATTENDANCE_BADGE[null];
@@ -228,7 +279,7 @@ function StudentEvalCard({ student, decision, onSetDecision, onPreview, submitti
       {/* Top gradient bar */}
       {cfg && <div className={`h-1 w-full bg-gradient-to-r ${cfg.gradient}`} />}
 
-      {/* Hover glow — pointer-events-none so buttons stay clickable */}
+      {/* Hover glow */}
       <div className={`absolute inset-0 bg-gradient-to-br opacity-0 group-hover/card:opacity-5 transition-opacity duration-300 pointer-events-none
         ${cfg ? cfg.gradient : "from-primary to-purple-600"}`} />
 
@@ -295,18 +346,58 @@ function StudentEvalCard({ student, decision, onSetDecision, onPreview, submitti
           })}
         </div>
 
+        {/* ── Star Ratings (تظهر لما يختار قرار) ── */}
+        {cfg && (
+          <div className="mt-3 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d] space-y-2">
+            <p className="text-[10px] font-black text-gray-500 dark:text-[#6e7681] uppercase tracking-wide mb-2">
+              {t("تقييم الأداء", "Performance Rating")}
+            </p>
+            {RATING_CRITERIA.map((criterion) => (
+              <div key={criterion.key} className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-gray-600 dark:text-[#8b949e] flex-1 truncate">
+                  {isAr ? criterion.labelAr : criterion.labelEn}
+                </span>
+                <StarRating
+                  value={ratings[criterion.key] || 3}
+                  onChange={(val) => onRatingChange(student._id, criterion.key, val)}
+                  disabled={submitting}
+                  size="sm"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── تعليق المدرس ── */}
+        {cfg && (
+          <div className="mt-2.5">
+            <textarea
+              value={comment || ""}
+              onChange={(e) => onCommentChange(student._id, e.target.value)}
+              disabled={submitting}
+              rows={2}
+              placeholder={t("تعليق المدرس (اختياري)...", "Instructor comment (optional)...")}
+              dir={isAr ? "rtl" : "ltr"}
+              className={`w-full text-xs rounded-xl border px-3 py-2.5 resize-none outline-none transition-all bg-gray-50 dark:bg-[#21262d] text-gray-700 dark:text-[#c9d1d9] placeholder-gray-400 font-medium leading-relaxed
+                ${comment?.trim()
+                  ? "border-blue-400 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/10"
+                  : "border-gray-100 dark:border-[#30363d] focus:border-primary/40"}`}
+            />
+          </div>
+        )}
+
         {/* Preview button */}
         {cfg && (student.credits ?? 0) > 0 && (
           <button
             onClick={(e) => { e.stopPropagation(); onPreview(student, decision); }}
-            className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold bg-gray-50 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] border border-gray-100 dark:border-[#30363d] hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all group/preview">
+            className="mt-2.5 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold bg-gray-50 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] border border-gray-100 dark:border-[#30363d] hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all group/preview">
             <Eye className="w-3.5 h-3.5 group-hover/preview:scale-110 transition-transform" />
             {t("معاينة رسالة ولي الأمر", "Preview Parent Message")}
           </button>
         )}
 
         {cfg && (student.credits ?? 0) <= 0 && (
-          <div className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs bg-gray-50 dark:bg-[#21262d] text-gray-400 border border-gray-100 dark:border-[#30363d]">
+          <div className="mt-2.5 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs bg-gray-50 dark:bg-[#21262d] text-gray-400 border border-gray-100 dark:border-[#30363d]">
             🔕 {t("لن تُرسل رسالة — رصيد صفر", "No message — zero credits")}
           </div>
         )}
@@ -383,6 +474,12 @@ export default function InstructorEvaluationPage() {
   const [submitSummary, setSubmitSummary]   = useState(null);
   const [animateProgress, setAnimateProgress] = useState(false);
 
+  // ── New state: ratings & comments per student ──────────────────────────────
+  // ratings: { [studentId]: { commitment, understanding, taskExecution, participation } }
+  const [ratings, setRatings]   = useState({});
+  // comments: { [studentId]: string }
+  const [comments, setComments] = useState({});
+
   const fetchData = useCallback(async () => {
     if (!sessionId) { setError(t("لم يتم تحديد جلسة", "No session specified")); setLoading(false); return; }
     try {
@@ -392,9 +489,22 @@ export default function InstructorEvaluationPage() {
       if (data.success) {
         setSessionData(data.data.session);
         setStudents(data.data.students || []);
-        const existing = {};
-        (data.data.students || []).forEach((s) => { if (s.currentDecision) existing[s._id] = s.currentDecision; });
-        setDecisions(existing);
+        const existingDecisions = {};
+        const existingRatings   = {};
+        const existingComments  = {};
+        (data.data.students || []).forEach((s) => {
+          if (s.currentDecision) existingDecisions[s._id] = s.currentDecision;
+          if (s.currentRatings)  existingRatings[s._id]   = {
+            commitment:    s.currentRatings.commitment    || 3,
+            understanding: s.currentRatings.understanding || 3,
+            taskExecution: s.currentRatings.taskExecution || 3,
+            participation: s.currentRatings.participation || 3,
+          };
+          if (s.currentComment)  existingComments[s._id]  = s.currentComment;
+        });
+        setDecisions(existingDecisions);
+        setRatings(existingRatings);
+        setComments(existingComments);
         setTimeout(() => setAnimateProgress(true), 300);
       } else {
         setError(data.message || data.error || t("فشل التحميل", "Failed to load"));
@@ -410,12 +520,32 @@ export default function InstructorEvaluationPage() {
       if (prev[studentId] === decision) { const n = { ...prev }; delete n[studentId]; return n; }
       return { ...prev, [studentId]: decision };
     });
+    // default ratings لو مش موجودين
+    setRatings((prev) => prev[studentId] ? prev : {
+      ...prev,
+      [studentId]: { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 },
+    });
   }, []);
 
-  const handlePreview = useCallback((student, decision) => setPreviewModal({ student, decision }), []);
+  const handleRatingChange = useCallback((studentId, criterion, value) => {
+    setRatings((prev) => ({
+      ...prev,
+      [studentId]: { ...(prev[studentId] || {}), [criterion]: value },
+    }));
+  }, []);
+
+  const handleCommentChange = useCallback((studentId, value) => {
+    setComments((prev) => ({ ...prev, [studentId]: value }));
+  }, []);
+
+  const handlePreview = useCallback((student, decision) => {
+    setPreviewModal({ student, decision });
+  }, []);
+
   const handleRecordingLinkChange = useCallback((studentId, url) => {
     setRecordingLinks((prev) => ({ ...prev, [studentId]: url }));
   }, []);
+
   const handleConfirmFromModal = useCallback((studentId, decision) => {
     setDecisions((prev) => ({ ...prev, [studentId]: decision }));
     setPreviewModal(null);
@@ -428,8 +558,10 @@ export default function InstructorEvaluationPage() {
       setSubmitting(true);
       const evaluations = filled.map((studentId) => ({
         studentId,
-        decision: decisions[studentId],
+        decision:      decisions[studentId],
         recordingLink: recordingLinks[studentId] || null,
+        ratings:       ratings[studentId] || { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 },
+        comment:       comments[studentId] || '',
       }));
       const res = await fetch(`/api/instructor/sessions/${sessionId}/evaluation`, {
         method: "PATCH",
@@ -607,7 +739,7 @@ export default function InstructorEvaluationPage() {
 
         {!loading && !error && students.length > 0 && (
           <>
-            {/* Progress Summary — same style as attendance SummaryBar */}
+            {/* Progress Summary */}
             <div className="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] p-5 shadow-lg dark:shadow-black/40">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md">
@@ -680,6 +812,10 @@ export default function InstructorEvaluationPage() {
                   submitting={submitting}
                   recordingLink={recordingLinks[student._id] || ""}
                   onRecordingLinkChange={handleRecordingLinkChange}
+                  ratings={ratings[student._id] || { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 }}
+                  onRatingChange={handleRatingChange}
+                  comment={comments[student._id] || ""}
+                  onCommentChange={handleCommentChange}
                   isAr={isAr}
                 />
               ))}
@@ -762,6 +898,9 @@ export default function InstructorEvaluationPage() {
           isAr={isAr}
           onClose={() => setPreviewModal(null)}
           onConfirm={handleConfirmFromModal}
+          ratings={ratings[previewModal.student._id] || { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 }}
+          comment={comments[previewModal.student._id] || ""}
+          attendanceStatus={previewModal.student.attendanceStatus}
         />
       )}
 
