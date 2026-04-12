@@ -117,7 +117,7 @@ MessageTemplateSchema.pre("save", async function () {
   }
 });
 
-// ─── Methods ──────────────────────────────────────────────────────────────────
+// ─── Methods fgfg ──────────────────────────────────────────────────────────────────
 MessageTemplateSchema.methods.getContent = function (language = "ar") {
   return language === "ar" ? this.contentAr : this.contentEn;
 };
