@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ==================== USER ====================
+model User {
+  id         String  @id @default(cuid())
+  name       String
+  email      String  @unique
+  username   String? @unique
+  password   String
+  gender     Gender?
+  role       Role    @default(student)
+  image      String  @default("/images/default-avatar.jpg")
+  qrCode     String  @default("")
+  qrCodeData String  @default("")
+
+  profileBio      String @default("")
+  profileJobTitle String @default("Developer")
+  profileCompany  String @default("")
+  profileWebsite  String @default("")
+  profileLocation String @default("")
+  profilePhone    String @default("")
+
+  emailVerified Boolean @default(false)
+  isActive      Boolean @default(true)
+
+  lastGroupNotificationSent DateTime?
+  lastNotificationGroupId   String?
+
+  notificationHistory NotificationHistory[]
+  portfolio           Portfolio?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([username])
+  @@index([gender])
+}
+
+// ==================== NOTIFICATION HISTORY ====================
+model NotificationHistory {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId        String?
+  groupName      String      @default("")
+  courseName     String      @default("")
+  messageContent String      @default("")
+  language       Language    @default(ar)
+  sentAt         DateTime    @default(now())
+  status         NotifStatus @default(sent)
+  failureReason  String      @default("")
+
+  @@index([userId])
+}
+
+// ==================== PORTFOLIO ====================
+model Portfolio {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String  @default("")
+  description String  @default("")
+  isPublished Boolean @default(true)
+  views       Int     @default(0)
+  theme       String  @default("dark")
+  layout      String  @default("standard")
+
+  githubUrl   String @default("")
+  linkedinUrl String @default("")
+  twitterUrl  String @default("")
+
+  contactEmail    String @default("")
+  contactPhone    String @default("")
+  contactLocation String @default("")
+
+  skills   Skill[]
+  projects Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Skill {
+  id          String    @id @default(cuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  name        String
+  level       Int       @default(50)
+  category    String    @default("")
+  icon        String    @default("")
+
+  @@index([portfolioId])
+}
+
+model Project {
+  id           String    @id @default(cuid())
+  portfolioId  String
+  portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  title        String
+  description  String    @default("")
+  technologies String[]
+  status       String    @default("in-progress")
+  featured     Boolean   @default(false)
+  startDate    DateTime?
+  endDate      DateTime?
+  projectUrl   String    @default("")
+  githubUrl    String    @default("")
+
+  @@index([portfolioId])
+}
+
+// ==================== VERIFICATION ====================
+model Verification {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  code       String
+  verified   Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([email])
+}
+
+// ==================== ENUMS ====================
+enum Gender {
+  male
+  female
+}
+
+enum Role {
+  admin
+  marketing
+  student
+  instructor
+}
+
+enum Language {
+  ar
+  en
+}
+
+enum NotifStatus {
+  sent
+  failed
+}

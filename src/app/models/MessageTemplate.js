@@ -103,7 +103,7 @@ MessageTemplateSchema.index({ templateType: 1, isActive: 1 });
 MessageTemplateSchema.index({ recipientType: 1 });
 
 // ─── Ensure only one default per type + recipient ─────────────────────────────
-MessageTemplateSchema.pre("save", async function (next) {
+MessageTemplateSchema.pre("save", async function () {
   if (this.isDefault) {
     await this.constructor.updateMany(
       {
@@ -115,7 +115,6 @@ MessageTemplateSchema.pre("save", async function (next) {
       { $set: { isDefault: false } },
     );
   }
-  next();
 });
 
 // ─── Methods ──────────────────────────────────────────────────────────────────
