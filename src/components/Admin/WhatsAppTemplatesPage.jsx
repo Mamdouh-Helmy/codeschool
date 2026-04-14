@@ -10,6 +10,12 @@ import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 
 // ─────────────────────────────────────────────────────────────
+// القوالب اللي عندها محتوى واحد بس (عربي وإنجليزي مدمجين في رسالة واحدة)
+// مش محتاجين سويتش لغة
+// ─────────────────────────────────────────────────────────────
+const SINGLE_CONTENT_TEMPLATES = ["student_welcome", "guardian_notification"];
+
+// ─────────────────────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────────────────────
 const TEMPLATE_TYPES = [
@@ -121,7 +127,6 @@ const ALL_VARS = {
 // TEMPLATE VARS MAP
 // ─────────────────────────────────────────────────────────────
 const TEMPLATE_VARS = {
-  // ✅ رسائل الترحيب - bilingual
   student_welcome:               ["salutation_ar","salutation_en","welcome_ar","name_ar","name_en","fullName","you_ar"],
   guardian_notification:         ["guardianSalutation_ar","studentGender_ar","studentName_ar","studentName_en","relationship_ar","fullStudentName"],
   language_confirmation:         ["salutation_ar","salutation_en","name_ar","name_en","selectedLanguage_ar","selectedLanguage_en"],
@@ -142,56 +147,23 @@ const TEMPLATE_VARS = {
   excused_notification:          ["guardianSalutation","guardianName","studentName","childTitle","status","sessionName","date","time","enrollmentNumber"],
   group_completion_student:      ["studentSalutation","guardianSalutation","studentName","guardianName","childTitle","groupName","groupCode","courseName","enrollmentNumber","feedbackLink"],
   group_completion_guardian:     ["studentSalutation","guardianSalutation","studentName","guardianName","childTitle","groupName","groupCode","courseName","enrollmentNumber","feedbackLink"],
-
-  // ✅ Evaluation — المتغيرات الجديدة بتاعت تقرير الحصة
   evaluation_pass: [
-    "guardianSalutation",
-    "sessionDate",
-    "sessionNumber",
-    "attendanceStatus",
-    "starsCommitment",
-    "starsUnderstanding",
-    "starsTaskExecution",
-    "starsParticipation",
-    "instructorComment",
-    "completedSessions",
-    "recordingLink",
+    "guardianSalutation","sessionDate","sessionNumber","attendanceStatus",
+    "starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation",
+    "instructorComment","completedSessions","recordingLink",
   ],
   evaluation_review: [
-    "guardianSalutation",
-    "sessionDate",
-    "sessionNumber",
-    "attendanceStatus",
-    "starsCommitment",
-    "starsUnderstanding",
-    "starsTaskExecution",
-    "starsParticipation",
-    "instructorComment",
-    "completedSessions",
-    "recordingLink",
+    "guardianSalutation","sessionDate","sessionNumber","attendanceStatus",
+    "starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation",
+    "instructorComment","completedSessions","recordingLink",
   ],
   evaluation_repeat: [
-    "guardianSalutation",
-    "sessionDate",
-    "sessionNumber",
-    "attendanceStatus",
-    "starsCommitment",
-    "starsUnderstanding",
-    "starsTaskExecution",
-    "starsParticipation",
-    "instructorComment",
-    "completedSessions",
-    "recordingLink",
+    "guardianSalutation","sessionDate","sessionNumber","attendanceStatus",
+    "starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation",
+    "instructorComment","completedSessions","recordingLink",
   ],
-
-  // ✅ Recording link — متغيرات خاصة بيه
   session_recording: [
-    "guardianSalutation",
-    "guardianName",
-    "childTitle",
-    "studentName",
-    "sessionName",
-    "recordingLink",
+    "guardianSalutation","guardianName","childTitle","studentName","sessionName","recordingLink",
   ],
 };
 
@@ -262,7 +234,6 @@ Best regards,
 The Code School Team 💻`,
   },
 
-  // ✅ evaluation_pass — شكل تقرير الحصة الجديد
   evaluation_pass: {
     ar: `{guardianSalutation}،
 
@@ -303,7 +274,6 @@ Session Report 📃✨
 📞 Contact : +2 011 40 474 129`,
   },
 
-  // ✅ evaluation_review — نفس الشكل
   evaluation_review: {
     ar: `{guardianSalutation}،
 
@@ -344,7 +314,6 @@ Session Report 📃✨
 📞 Contact : +2 011 40 474 129`,
   },
 
-  // ✅ evaluation_repeat — نفس الشكل
   evaluation_repeat: {
     ar: `{guardianSalutation}،
 
@@ -385,7 +354,6 @@ Session Report 📃✨
 📞 Contact : +2 011 40 474 129`,
   },
 
-  // ✅ session_recording
   session_recording: {
     ar: `{guardianSalutation}،
 
@@ -465,6 +433,13 @@ export default function WhatsAppTemplatesPage() {
   const hintsRef    = useRef(null);
   const [hintsPos, setHintsPos] = useState({ top: 0, left: 0, right: 0 });
 
+  // ── لما activeTab يتغير لقالب single-content، فرض العربي دايماً ──
+  useEffect(() => {
+    if (SINGLE_CONTENT_TEMPLATES.includes(activeTab)) {
+      setTestLanguage("ar");
+    }
+  }, [activeTab]);
+
   // ── hints position ─────────────────────────────────────────
   useEffect(() => {
     if (!showHints) return;
@@ -503,21 +478,27 @@ export default function WhatsAppTemplatesPage() {
       if (sd.success && sd.data) {
         sd.data.forEach(t => {
           if (t.templateType === "student_language_confirmation") {
-            map["language_confirmation"] = {
-              ...t,
-              content:   t.contentAr || t.content || "",
-              contentAr: t.contentAr || t.content || "",
-              contentEn: t.contentEn || t.content || "",
-            };
+            if (!map["language_confirmation"]) {
+              map["language_confirmation"] = {
+                ...t,
+                content:   t.contentAr || t.content || "",
+                contentAr: t.contentAr || t.content || "",
+                contentEn: t.contentEn || t.content || "",
+              };
+            }
           } else if (t.templateType === "guardian_language_confirmation") {
-            map["guardian_language_notification"] = {
-              ...t,
-              content:   t.contentAr || t.content || "",
-              contentAr: t.contentAr || t.content || "",
-              contentEn: t.contentEn || t.content || "",
-            };
+            if (!map["guardian_language_notification"]) {
+              map["guardian_language_notification"] = {
+                ...t,
+                content:   t.contentAr || t.content || "",
+                contentAr: t.contentAr || t.content || "",
+                contentEn: t.contentEn || t.content || "",
+              };
+            }
           } else {
-            map[t.templateType] = t;
+            if (!map[t.templateType]) {
+              map[t.templateType] = t;
+            }
           }
         });
       }
@@ -525,27 +506,52 @@ export default function WhatsAppTemplatesPage() {
       const id = await iRes.json();
       if (id.success && id.data) {
         const d = id.data;
-        map["instructor_group_activation"] = { ...d, content: d.contentAr || d.content || "", contentAr: d.contentAr || d.content || "", contentEn: d.contentEn || "" };
+        if (!map["instructor_group_activation"]) {
+          map["instructor_group_activation"] = {
+            ...d,
+            content:   d.contentAr || d.content || "",
+            contentAr: d.contentAr || d.content || "",
+            contentEn: d.contentEn || "",
+          };
+        }
       }
 
       const gd = await gRes.json();
       if (gd.success && gd.data) {
         const d = gd.data;
-        map["group_student_welcome_student"]  = { ...d, templateType: "group_student_welcome_student",  content: d.studentContentAr  || d.content || "", contentAr: d.studentContentAr  || "", contentEn: d.studentContentEn  || "" };
-        map["group_student_welcome_guardian"] = { ...d, templateType: "group_student_welcome_guardian", content: d.guardianContentAr || d.content || "", contentAr: d.guardianContentAr || "", contentEn: d.guardianContentEn || "" };
+        if (!map["group_student_welcome_student"]) {
+          map["group_student_welcome_student"] = {
+            ...d,
+            templateType: "group_student_welcome_student",
+            content:   d.studentContentAr  || d.content || "",
+            contentAr: d.studentContentAr  || "",
+            contentEn: d.studentContentEn  || "",
+          };
+        }
+        if (!map["group_student_welcome_guardian"]) {
+          map["group_student_welcome_guardian"] = {
+            ...d,
+            templateType: "group_student_welcome_guardian",
+            content:   d.guardianContentAr || d.content || "",
+            contentAr: d.guardianContentAr || "",
+            contentEn: d.guardianContentEn || "",
+          };
+        }
       }
 
       const md = await mRes.json();
       if (md.success && md.data) {
         md.data.forEach(t => {
-          map[t.templateType] = {
-            ...t,
-            content:            t.contentAr || "",
-            contentAr:          t.contentAr || "",
-            contentEn:          t.contentEn || "",
-            isMessageTemplate:  true,
-            _messageTemplateId: t._id,
-          };
+          if (!map[t.templateType]) {
+            map[t.templateType] = {
+              ...t,
+              content:            t.contentAr || "",
+              contentAr:          t.contentAr || "",
+              contentEn:          t.contentEn || "",
+              isMessageTemplate:  true,
+              _messageTemplateId: t._id,
+            };
+          }
         });
       }
 
@@ -575,15 +581,27 @@ export default function WhatsAppTemplatesPage() {
   const updateContent = (val) => {
     const cur = templates[activeTab];
     if (!cur) return;
-    setTemplates(p => ({
-      ...p,
-      [activeTab]: {
-        ...cur,
-        content:   val,
-        contentAr: testLanguage === "ar" ? val : cur.contentAr,
-        contentEn: testLanguage === "en" ? val : cur.contentEn,
-      },
-    }));
+
+    // القوالب single-content بتحفظ في content بس (مش contentAr/contentEn)
+    if (SINGLE_CONTENT_TEMPLATES.includes(activeTab)) {
+      setTemplates(p => ({
+        ...p,
+        [activeTab]: {
+          ...cur,
+          content: val,
+        },
+      }));
+    } else {
+      setTemplates(p => ({
+        ...p,
+        [activeTab]: {
+          ...cur,
+          content:   val,
+          contentAr: testLanguage === "ar" ? val : cur.contentAr,
+          contentEn: testLanguage === "en" ? val : cur.contentEn,
+        },
+      }));
+    }
   };
 
   // ── save ───────────────────────────────────────────────────
@@ -661,6 +679,7 @@ export default function WhatsAppTemplatesPage() {
         payload = { _id: cur._messageTemplateId || cur._id, templateType: activeTab, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn };
 
       } else {
+        // ✅ student_welcome و guardian_notification — حفظ content بس
         endpoint = "/api/whatsapp/templates";
         payload  = { id: cur._id, content: cur.content, setAsDefault: true };
       }
@@ -677,7 +696,14 @@ export default function WhatsAppTemplatesPage() {
   const getPreview = () => {
     const tmpl = templates[activeTab];
     if (!tmpl) return "";
-    let text = testLanguage === "ar" ? (tmpl.contentAr || tmpl.content || "") : (tmpl.contentEn || tmpl.content || "");
+
+    // القوالب single-content: استخدم content مباشرة بدون lang switch
+    let text = SINGLE_CONTENT_TEMPLATES.includes(activeTab)
+      ? (tmpl.content || "")
+      : testLanguage === "ar"
+        ? (tmpl.contentAr || tmpl.content || "")
+        : (tmpl.contentEn || tmpl.content || "");
+
     const VAR_EXAMPLES = getVarExamples(testLanguage);
     Object.entries(VAR_EXAMPLES).forEach(([key, example]) => {
       text = text.replace(new RegExp(key.replace(/[{}]/g, "\\$&"), "g"), example);
@@ -687,9 +713,12 @@ export default function WhatsAppTemplatesPage() {
 
   // ── insert variable ────────────────────────────────────────
   const insertVariable = (variable) => {
-    const textVal   = testLanguage === "ar"
-      ? (templates[activeTab]?.contentAr || templates[activeTab]?.content || "")
-      : (templates[activeTab]?.contentEn || templates[activeTab]?.content || "");
+    const textVal = SINGLE_CONTENT_TEMPLATES.includes(activeTab)
+      ? (templates[activeTab]?.content || "")
+      : testLanguage === "ar"
+        ? (templates[activeTab]?.contentAr || templates[activeTab]?.content || "")
+        : (templates[activeTab]?.contentEn || templates[activeTab]?.content || "");
+
     const before    = textVal.substring(0, cursorPos);
     const lastAt    = before.lastIndexOf("@");
     const insertText = variable.key;
@@ -752,12 +781,19 @@ export default function WhatsAppTemplatesPage() {
   };
 
   // ── derived ────────────────────────────────────────────────
-  const curTemplate = templates[activeTab];
-  const activeType  = TEMPLATE_TYPES.find(t => t.id === activeTab);
-  const C           = C_MAP[activeType?.color || "violet"];
-  const filtered    = TEMPLATE_TYPES.filter(t => !searchQ || t.label.includes(searchQ));
-  const byCategory  = filtered.reduce((acc, t) => { if (!acc[t.category]) acc[t.category] = []; acc[t.category].push(t); return acc; }, {});
-  const textVal     = testLanguage === "ar" ? (curTemplate?.contentAr || curTemplate?.content || "") : (curTemplate?.contentEn || curTemplate?.content || "");
+  const curTemplate  = templates[activeTab];
+  const activeType   = TEMPLATE_TYPES.find(t => t.id === activeTab);
+  const C            = C_MAP[activeType?.color || "violet"];
+  const filtered     = TEMPLATE_TYPES.filter(t => !searchQ || t.label.includes(searchQ));
+  const byCategory   = filtered.reduce((acc, t) => { if (!acc[t.category]) acc[t.category] = []; acc[t.category].push(t); return acc; }, {});
+  const isSingleContent = SINGLE_CONTENT_TEMPLATES.includes(activeTab);
+
+  // textVal: للـ textarea — single content يأخذ content مباشرة
+  const textVal = isSingleContent
+    ? (curTemplate?.content || "")
+    : testLanguage === "ar"
+      ? (curTemplate?.contentAr || curTemplate?.content || "")
+      : (curTemplate?.contentEn || curTemplate?.content || "");
 
   const isLangConfirmation = ["language_confirmation", "guardian_language_notification"].includes(activeTab);
 
@@ -820,16 +856,18 @@ export default function WhatsAppTemplatesPage() {
 
           <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          {/* Language Toggle */}
-          <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 flex-shrink-0">
-            {["ar","en"].map(lang => (
-              <button key={lang} onClick={() => setTestLanguage(lang)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all
-                  ${testLanguage === lang ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400"}`}>
-                {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 EN"}
-              </button>
-            ))}
-          </div>
+          {/* ✅ Language Toggle — مخفي للقوالب single-content */}
+          {!isSingleContent && (
+            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 flex-shrink-0">
+              {["ar","en"].map(lang => (
+                <button key={lang} onClick={() => setTestLanguage(lang)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all
+                    ${testLanguage === lang ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400"}`}>
+                  {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 EN"}
+                </button>
+              ))}
+            </div>
+          )}
 
           <button onClick={fetchTemplates} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 flex-shrink-0">
             <RefreshCw className="w-4 h-4" />
@@ -877,6 +915,11 @@ export default function WhatsAppTemplatesPage() {
                 {activeType.isNew && <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEW</span>}
                 {curTemplate?.isMessageTemplate && !curTemplate?.isFrontendFallback && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800">MessageTemplate</span>}
                 {curTemplate?.isFrontendFallback && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-800">⚡ Default — لم يُحفظ بعد</span>}
+                {isSingleContent && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700">
+                    🌐 رسالة ثنائية اللغة
+                  </span>
+                )}
                 {isLangConfirmation && (
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-800">
                     🌍 باللغة المختارة فقط
@@ -922,7 +965,10 @@ export default function WhatsAppTemplatesPage() {
               <div className={`flex items-center justify-between px-4 py-2.5 border-b ${C.light} ${C.border}`}>
                 <div className="flex items-center gap-2">
                   <Edit className={`w-3.5 h-3.5 ${C.text}`} />
-                  <span className={`text-xs font-bold ${C.text}`}>تحرير القالب {testLanguage === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}</span>
+                  {/* ✅ label اللغة مخفي للقوالب single-content */}
+                  <span className={`text-xs font-bold ${C.text}`}>
+                    تحرير القالب{!isSingleContent && (testLanguage === "ar" ? " 🇸🇦 عربي" : " 🇬🇧 English")}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${C.light} ${C.text} border ${C.border}`}>اكتب @ لإدراج مثال</span>
@@ -1108,6 +1154,7 @@ export default function WhatsAppTemplatesPage() {
                     <li>• المعاينة تعرض القيم بنفس لغة القالب المحدد</li>
                     <li>• النقطة الخضراء = يوجد محتوى محفوظ للقالب</li>
                     <li>• عدّل العربي والإنجليزي بشكل مستقل</li>
+                    {isSingleContent && <li>• 🌐 هذا القالب رسالة واحدة تحتوي عربي وإنجليزي معاً</li>}
                     {isLangConfirmation && <li>• 🌍 هذا القالب بيتبعت باللغة المختارة من الطالب فقط</li>}
                   </ul>
                 </div>

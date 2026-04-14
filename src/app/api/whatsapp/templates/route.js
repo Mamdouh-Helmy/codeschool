@@ -225,7 +225,7 @@ export async function GET(req) {
     let templates = await WhatsAppTemplate.find(query)
       .populate("metadata.createdBy", "name email")
       .populate("metadata.lastModifiedBy", "name email")
-      .sort({ "metadata.createdAt": -1 });
+      .sort({ isDefault: -1, "metadata.createdAt": -1 });
 
     // ✅ تأكد إن الـ 4 أنواع كلها موجودة
     if (getDefault && !templateType) {
