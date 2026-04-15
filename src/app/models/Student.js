@@ -56,7 +56,7 @@ const sessionReminderSchema = new mongoose.Schema(
       sessionNumber: Number,
     },
   },
-  { _id: true, timestamps: true }
+  { _id: true, timestamps: true },
 );
 
 const whatsappMessageSchema = new mongoose.Schema(
@@ -152,7 +152,7 @@ const whatsappMessageSchema = new mongoose.Schema(
     error: { type: String },
     errorDetails: { stack: String, code: String, message: String },
   },
-  { _id: true, timestamps: true }
+  { _id: true, timestamps: true },
 );
 
 // ✅ Credit Hours Package Schema
@@ -261,9 +261,8 @@ const StudentSchema = new mongoose.Schema(
       // الحل: نبعت null دايماً لما الحقل فاضي (من route.js)
       nationalId: {
         type: String,
-        unique: true,
-        sparse: true,
         default: null,
+        // مش unique ومش sparse خالص
       },
       address: {
         street: { type: String, default: "" },
@@ -409,7 +408,7 @@ const StudentSchema = new mongoose.Schema(
   {
     timestamps: true,
     strict: true,
-  }
+  },
 );
 
 // =============================================
@@ -514,7 +513,7 @@ StudentSchema.methods.getBalanceStatus = function () {
         ? Math.round(
             ((this.creditSystem?.stats?.totalHoursUsed || 0) /
               this.creditSystem.currentPackage.totalHours) *
-              100
+              100,
           )
         : 0,
   };
@@ -636,7 +635,7 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
         e.hours === exceptionData.hours &&
         e.reason === exceptionData.reason &&
         new Date(e.startDate).toDateString() === today &&
-        e.status === "active"
+        e.status === "active",
     );
 
     if (existingException) {
@@ -688,13 +687,13 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
       if (this.creditSystem.currentPackage) {
         console.log(`➕ Adding ${exceptionData.hours} hours to package`);
         console.log(
-          `   Before: ${this.creditSystem.currentPackage.remainingHours}`
+          `   Before: ${this.creditSystem.currentPackage.remainingHours}`,
         );
 
         this.creditSystem.currentPackage.remainingHours += exceptionData.hours;
 
         console.log(
-          `   After: ${this.creditSystem.currentPackage.remainingHours}`
+          `   After: ${this.creditSystem.currentPackage.remainingHours}`,
         );
 
         if (!this.creditSystem.usageHistory) {
@@ -726,7 +725,7 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
     await this.save();
     console.log("✅ Exception added successfully");
     console.log(
-      `📊 Final totalHoursRemaining: ${this.creditSystem.stats.totalHoursRemaining}`
+      `📊 Final totalHoursRemaining: ${this.creditSystem.stats.totalHoursRemaining}`,
     );
 
     return { success: true, data: newException };
@@ -754,7 +753,7 @@ StudentSchema.methods.endCreditException = async function (exceptionId) {
 
     if (exception.type === "freeze") {
       const hasActiveFreeze = this.creditSystem.exceptions.some(
-        (e) => e.type === "freeze" && e.status === "active"
+        (e) => e.type === "freeze" && e.status === "active",
       );
 
       if (!hasActiveFreeze) {
@@ -798,7 +797,7 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
         (e) =>
           e.type === "addition" &&
           e.status === "active" &&
-          (!e.endDate || new Date() <= new Date(e.endDate))
+          (!e.endDate || new Date() <= new Date(e.endDate)),
       );
 
       for (const exception of activeAdditions) {
@@ -806,7 +805,7 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
 
         const deductFromException = Math.min(
           exception.hours || 0,
-          hoursToDeduct
+          hoursToDeduct,
         );
         exception.hours = (exception.hours || 0) - deductFromException;
         hoursToDeduct -= deductFromException;
@@ -817,7 +816,7 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
           exception.endDate = new Date();
           this.creditSystem.stats.activeExceptions = Math.max(
             0,
-            (this.creditSystem.stats.activeExceptions || 0) - 1
+            (this.creditSystem.stats.activeExceptions || 0) - 1,
           );
         }
       }
@@ -827,7 +826,7 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
       const currentPackage = this.creditSystem.currentPackage;
       const deductFromPackage = Math.min(
         currentPackage.remainingHours,
-        hoursToDeduct
+        hoursToDeduct,
       );
       currentPackage.remainingHours -= deductFromPackage;
       hoursToDeduct -= deductFromPackage;
@@ -930,13 +929,16 @@ StudentSchema.methods.addCreditHours = async function (addData) {
 
     this.creditSystem.stats.totalHoursUsed = Math.max(
       0,
-      (this.creditSystem.stats.totalHoursUsed || 0) - addData.hours
+      (this.creditSystem.stats.totalHoursUsed || 0) - addData.hours,
     );
     this.creditSystem.stats.totalHoursRemaining =
       this.getEffectiveRemainingHours();
     this.creditSystem.stats.lastUsageDate = new Date();
 
-    if (currentPackage.remainingHours > 0 && currentPackage.status === "completed") {
+    if (
+      currentPackage.remainingHours > 0 &&
+      currentPackage.status === "completed"
+    ) {
       currentPackage.status = "active";
       this.creditSystem.status = "active";
     }
@@ -958,4 +960,5 @@ StudentSchema.methods.addCreditHours = async function (addData) {
   }
 };
 
-export default mongoose.models.Student || mongoose.model("Student", StudentSchema);
+export default mongoose.models.Student ||
+  mongoose.model("Student", StudentSchema);
