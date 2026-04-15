@@ -14,6 +14,13 @@ function normalizeGender(gender) {
   return "male";
 }
 
+// ✅ دالة مساعدة لتحويل القيم الفاضية لـ null
+function nullIfEmpty(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  return value;
+}
+
 export async function POST(req) {
   try {
     console.log("🚀 Starting student creation process...");
@@ -53,8 +60,10 @@ export async function POST(req) {
           : null,
       personalInfo: {
         ...studentData.personalInfo,
-        // ✅ FIXED: تحويل gender إلى lowercase قبل الحفظ
+        // ✅ تحويل gender إلى lowercase قبل الحفظ
         gender: normalizeGender(studentData.personalInfo?.gender),
+        // ✅ FIX: تحويل nationalId الفاضي لـ null عشان الـ sparse index يشتغل صح
+        nationalId: nullIfEmpty(studentData.personalInfo?.nationalId),
         nickname: {
           ar: studentData.personalInfo?.nickname?.ar || "",
           en: studentData.personalInfo?.nickname?.en || "",
@@ -451,7 +460,7 @@ export async function GET(req) {
     const language = searchParams.get("language");
     const hasWhatsappResponse = searchParams.get("hasWhatsappResponse");
     const guardianNotified = searchParams.get("guardianNotified");
-    const creditStatus = searchParams.get("creditStatus"); // ✅ NEW: فلتر حالة الساعات
+    const creditStatus = searchParams.get("creditStatus");
 
     const query = { isDeleted: false };
 
@@ -472,7 +481,6 @@ export async function GET(req) {
       query["metadata.whatsappResponseReceived"] = false;
     }
 
-    // ✅ NEW: فلتر حسب حالة الساعات
     if (creditStatus) {
       switch (creditStatus) {
         case "active":
@@ -481,10 +489,7 @@ export async function GET(req) {
           break;
         case "frozen":
           query["creditSystem.exceptions"] = {
-            $elemMatch: {
-              type: "freeze",
-              status: "active"
-            }
+            $elemMatch: { type: "freeze", status: "active" },
           };
           break;
         case "expired":
@@ -533,9 +538,7 @@ export async function GET(req) {
       .limit(limit)
       .lean();
 
-    // ✅ تنسيق البيانات مع تضمين نظام الساعات بالكامل
     const formattedStudents = students.map((student) => {
-      // حساب إحصائيات الساعات
       const creditSystem = student.creditSystem || {
         currentPackage: null,
         packagesHistory: [],
@@ -547,17 +550,14 @@ export async function GET(req) {
           totalHoursRemaining: 0,
           totalSessionsAttended: 0,
           totalExceptions: 0,
-          activeExceptions: 0
+          activeExceptions: 0,
         },
-        status: "no_package"
+        status: "no_package",
       };
 
-      // التأكد من وجود currentPackage
       const currentPackage = creditSystem.currentPackage || null;
-      
-      // حساب الاستثناءات النشطة
       const activeExceptions = creditSystem.exceptions?.filter(
-        e => e.status === "active"
+        (e) => e.status === "active"
       ) || [];
 
       return {
@@ -582,19 +582,19 @@ export async function GET(req) {
         enrollmentInfo: student.enrollmentInfo,
         academicInfo: student.academicInfo,
         communicationPreferences: student.communicationPreferences,
-        
-        // ✅ نظام الساعات كامل
         creditSystem: {
-          currentPackage: currentPackage ? {
-            ...currentPackage,
-            packageType: currentPackage.packageType,
-            totalHours: currentPackage.totalHours || 0,
-            remainingHours: currentPackage.remainingHours || 0,
-            startDate: currentPackage.startDate,
-            endDate: currentPackage.endDate,
-            price: currentPackage.price || 0,
-            status: currentPackage.status || "active"
-          } : null,
+          currentPackage: currentPackage
+            ? {
+                ...currentPackage,
+                packageType: currentPackage.packageType,
+                totalHours: currentPackage.totalHours || 0,
+                remainingHours: currentPackage.remainingHours || 0,
+                startDate: currentPackage.startDate,
+                endDate: currentPackage.endDate,
+                price: currentPackage.price || 0,
+                status: currentPackage.status || "active",
+              }
+            : null,
           packagesHistory: creditSystem.packagesHistory || [],
           exceptions: creditSystem.exceptions || [],
           usageHistory: creditSystem.usageHistory || [],
@@ -606,12 +606,10 @@ export async function GET(req) {
             totalExceptions: creditSystem.stats?.totalExceptions || 0,
             activeExceptions: creditSystem.stats?.activeExceptions || 0,
             lastPackagePurchase: creditSystem.stats?.lastPackagePurchase,
-            lastUsageDate: creditSystem.stats?.lastUsageDate
+            lastUsageDate: creditSystem.stats?.lastUsageDate,
           },
-          status: creditSystem.status || "no_package"
+          status: creditSystem.status || "no_package",
         },
-
-        // ✅ إضافة حقول مساعدة للعرض السريع
         creditInfo: {
           hasPackage: !!currentPackage,
           packageType: currentPackage?.packageType,
@@ -619,20 +617,21 @@ export async function GET(req) {
           usedHours: creditSystem.stats?.totalHoursUsed || 0,
           remainingHours: currentPackage?.remainingHours || 0,
           status: creditSystem.status || "no_package",
-          hasActiveFreeze: activeExceptions.some(e => e.type === "freeze"),
+          hasActiveFreeze: activeExceptions.some((e) => e.type === "freeze"),
           activeExceptionsCount: activeExceptions.length,
           packageEndDate: currentPackage?.endDate,
-          usagePercentage: currentPackage?.totalHours 
-            ? Math.round(((creditSystem.stats?.totalHoursUsed || 0) / currentPackage.totalHours) * 100)
-            : 0
+          usagePercentage: currentPackage?.totalHours
+            ? Math.round(
+                ((creditSystem.stats?.totalHoursUsed || 0) /
+                  currentPackage.totalHours) *
+                  100
+              )
+            : 0,
         },
-
         metadata: student.metadata,
         createdAt: student.metadata.createdAt,
         createdBy: student.metadata.createdBy,
         authUserId: student.authUserId,
-        
-        // WhatsApp data
         whatsappStatus: student.metadata?.whatsappStatus || "pending",
         whatsappInteractiveSent: student.metadata?.whatsappInteractiveSent || false,
         whatsappButtons: student.metadata?.whatsappButtons || [],
@@ -656,41 +655,36 @@ export async function GET(req) {
       };
     });
 
-    // ✅ حساب إحصائيات الساعات
     const creditStats = {
       totalWithPackage: await Student.countDocuments({
         ...query,
-        "creditSystem.currentPackage": { $ne: null }
+        "creditSystem.currentPackage": { $ne: null },
       }),
       totalActive: await Student.countDocuments({
         ...query,
-        "creditSystem.status": "active"
+        "creditSystem.status": "active",
       }),
       totalFrozen: await Student.countDocuments({
         ...query,
         "creditSystem.exceptions": {
-          $elemMatch: {
-            type: "freeze",
-            status: "active"
-          }
-        }
+          $elemMatch: { type: "freeze", status: "active" },
+        },
       }),
       totalExpired: await Student.countDocuments({
         ...query,
-        "creditSystem.status": "expired"
+        "creditSystem.status": "expired",
       }),
       totalNoPackage: await Student.countDocuments({
         ...query,
-        "creditSystem.currentPackage": null
+        "creditSystem.currentPackage": null,
       }),
       lowBalance: await Student.countDocuments({
         ...query,
         "creditSystem.status": "active",
-        "creditSystem.currentPackage.remainingHours": { $lte: 5, $gt: 0 }
-      })
+        "creditSystem.currentPackage.remainingHours": { $lte: 5, $gt: 0 },
+      }),
     };
 
-    // ✅ إحصائيات WhatsApp (كما هي)
     const whatsappStats = {
       total: totalStudents,
       sent: await Student.countDocuments({ ...query, "metadata.whatsappStatus": "sent" }),
@@ -755,7 +749,7 @@ export async function GET(req) {
         success: true,
         data: formattedStudents,
         whatsappStats,
-        creditStats, // ✅ إضافة إحصائيات الساعات
+        creditStats,
         pagination: {
           page,
           limit,
@@ -824,8 +818,10 @@ export async function PUT(req, context) {
       personalInfo: updateData.personalInfo
         ? {
             ...updateData.personalInfo,
-            // ✅ FIXED: تحويل gender في التحديث أيضاً
+            // ✅ تحويل gender في التحديث أيضاً
             gender: normalizeGender(updateData.personalInfo?.gender),
+            // ✅ FIX: تحويل nationalId الفاضي لـ null
+            nationalId: nullIfEmpty(updateData.personalInfo?.nationalId),
             nickname: {
               ar: updateData.personalInfo?.nickname?.ar || "",
               en: updateData.personalInfo?.nickname?.en || "",
@@ -988,7 +984,6 @@ export async function DELETE(req, context) {
       );
     }
 
-    // ✅ حذف نهائي من قاعدة البيانات
     const deletedStudent = await Student.findOneAndDelete({ _id: id, isDeleted: false });
 
     if (!deletedStudent) {

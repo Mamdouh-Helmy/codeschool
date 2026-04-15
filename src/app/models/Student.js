@@ -56,7 +56,7 @@ const sessionReminderSchema = new mongoose.Schema(
       sessionNumber: Number,
     },
   },
-  { _id: true, timestamps: true },
+  { _id: true, timestamps: true }
 );
 
 const whatsappMessageSchema = new mongoose.Schema(
@@ -97,15 +97,12 @@ const whatsappMessageSchema = new mongoose.Schema(
         "bilingual_language_confirmation_guardian",
         "credit_alert",
         "credit_exhausted",
-        "absence_notification",
-        "late_notification",
-        "excused_notification",
         "student_welcome",
         "guardian_welcome",
         "evaluation_pass",
         "evaluation_review",
         "evaluation_repeat",
-        "session_recording"
+        "session_recording",
       ],
       required: true,
     },
@@ -155,7 +152,7 @@ const whatsappMessageSchema = new mongoose.Schema(
     error: { type: String },
     errorDetails: { stack: String, code: String, message: String },
   },
-  { _id: true, timestamps: true },
+  { _id: true, timestamps: true }
 );
 
 // ✅ Credit Hours Package Schema
@@ -259,7 +256,15 @@ const StudentSchema = new mongoose.Schema(
         enum: ["male", "female", "other", "Male", "Female"],
         default: "male",
       },
-      nationalId: { type: String, unique: true, sparse: true },
+      // ✅ FIX: nationalId اختياري - sparse index يتجاهل null تلقائياً
+      // المشكلة كانت إن "" (string فاضي) بيتعامل كـ duplicate مع الـ unique index
+      // الحل: نبعت null دايماً لما الحقل فاضي (من route.js)
+      nationalId: {
+        type: String,
+        unique: true,
+        sparse: true,
+        default: null,
+      },
       address: {
         street: { type: String, default: "" },
         city: { type: String, default: "" },
@@ -404,7 +409,7 @@ const StudentSchema = new mongoose.Schema(
   {
     timestamps: true,
     strict: true,
-  },
+  }
 );
 
 // =============================================
@@ -417,24 +422,19 @@ const StudentSchema = new mongoose.Schema(
 StudentSchema.methods.getEffectiveRemainingHours = function () {
   let total = 0;
 
-  // رصيد الحزمة الحالية فقط (لأن استثناءات addition مضافة بالفعل إلى remainingHours)
   if (this.creditSystem?.currentPackage) {
     total += this.creditSystem.currentPackage.remainingHours || 0;
   }
-
-  // ❌ لا نضيف الاستثناءات هنا لأنها مضافة بالفعل إلى remainingHours
 
   return total;
 };
 
 /**
- * ✅ التحقق من صلاحية الطالب لاستقبال الرسائل (محدثة)
+ * ✅ التحقق من صلاحية الطالب لاستقبال الرسائل
  */
 StudentSchema.methods.canReceiveMessages = function () {
-  // حساب الرصيد الفعلي
   const effectiveRemaining = this.getEffectiveRemainingHours();
 
-  // التحقق من الرصيد
   if (effectiveRemaining <= 0) {
     return {
       canReceive: false,
@@ -444,7 +444,6 @@ StudentSchema.methods.canReceiveMessages = function () {
     };
   }
 
-  // التحقق من إعدادات الإشعارات
   const whatsappEnabled =
     this.communicationPreferences?.notificationChannels?.whatsapp;
   if (!whatsappEnabled) {
@@ -455,7 +454,6 @@ StudentSchema.methods.canReceiveMessages = function () {
     };
   }
 
-  // التحقق من وجود رقم واتساب صالح
   if (
     !this.personalInfo?.whatsappNumber &&
     !this.guardianInfo?.whatsappNumber &&
@@ -476,7 +474,7 @@ StudentSchema.methods.canReceiveMessages = function () {
 };
 
 /**
- * ✅ الحصول على حالة الرصيد (محدثة)
+ * ✅ الحصول على حالة الرصيد
  */
 StudentSchema.methods.getBalanceStatus = function () {
   const effectiveRemaining = this.getEffectiveRemainingHours();
@@ -516,7 +514,7 @@ StudentSchema.methods.getBalanceStatus = function () {
         ? Math.round(
             ((this.creditSystem?.stats?.totalHoursUsed || 0) /
               this.creditSystem.currentPackage.totalHours) *
-              100,
+              100
           )
         : 0,
   };
@@ -561,7 +559,6 @@ StudentSchema.methods.addCreditPackage = async function (packageData) {
       status: "active",
     };
 
-    // إذا كان هناك package حالي، انقله للتاريخ
     if (this.creditSystem?.currentPackage) {
       if (!this.creditSystem.packagesHistory) {
         this.creditSystem.packagesHistory = [];
@@ -573,7 +570,6 @@ StudentSchema.methods.addCreditPackage = async function (packageData) {
       });
     }
 
-    // تأكد من وجود creditSystem
     if (!this.creditSystem) {
       this.creditSystem = {
         currentPackage: null,
@@ -595,11 +591,10 @@ StudentSchema.methods.addCreditPackage = async function (packageData) {
 
     this.creditSystem.currentPackage = newPackage;
     this.creditSystem.stats.totalHoursPurchased += totalHours;
-    this.creditSystem.stats.totalHoursRemaining = totalHours; // ✅ الرصيد المبدئي = totalHours
+    this.creditSystem.stats.totalHoursRemaining = totalHours;
     this.creditSystem.stats.lastPackagePurchase = new Date();
     this.creditSystem.status = "active";
 
-    // إعادة تفعيل الإشعارات
     if (this.communicationPreferences?.notificationChannels) {
       this.communicationPreferences.notificationChannels.whatsapp = true;
     }
@@ -612,7 +607,7 @@ StudentSchema.methods.addCreditPackage = async function (packageData) {
   }
 };
 
-// ✅ إضافة استثناء (معدلة - بدون مضاعفة)
+// ✅ إضافة استثناء
 StudentSchema.methods.addCreditException = async function (exceptionData) {
   try {
     console.log("🔄 addCreditException called with:", exceptionData);
@@ -634,7 +629,6 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
       this.creditSystem.exceptions = [];
     }
 
-    // التحقق من وجود استثناء مكرر
     const today = new Date(exceptionData.startDate).toDateString();
     const existingException = this.creditSystem.exceptions.find(
       (e) =>
@@ -642,7 +636,7 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
         e.hours === exceptionData.hours &&
         e.reason === exceptionData.reason &&
         new Date(e.startDate).toDateString() === today &&
-        e.status === "active",
+        e.status === "active"
     );
 
     if (existingException) {
@@ -669,18 +663,15 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
 
     this.creditSystem.exceptions.push(newException);
 
-    // تحديث الإحصائيات
     this.creditSystem.stats.totalExceptions =
       (this.creditSystem.stats.totalExceptions || 0) + 1;
     this.creditSystem.stats.activeExceptions =
       (this.creditSystem.stats.activeExceptions || 0) + 1;
 
-    // إذا كان استثناء من نوع freeze، غير حالة النظام
     if (exceptionData.type === "freeze") {
       this.creditSystem.status = "frozen";
     }
 
-    // إذا كان استثناء من نوع deduction، اخصم الساعات
     if (exceptionData.type === "deduction" && exceptionData.hours) {
       const deductionResult = await this.deductCreditHours({
         hours: exceptionData.hours,
@@ -693,22 +684,19 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
       }
     }
 
-    // ✅ إذا كان استثناء من نوع addition، أضف الساعات للرصيد مباشرة
     if (exceptionData.type === "addition" && exceptionData.hours) {
       if (this.creditSystem.currentPackage) {
         console.log(`➕ Adding ${exceptionData.hours} hours to package`);
         console.log(
-          `   Before: ${this.creditSystem.currentPackage.remainingHours}`,
+          `   Before: ${this.creditSystem.currentPackage.remainingHours}`
         );
 
-        // أضف الساعات إلى remainingHours (مرة واحدة فقط)
         this.creditSystem.currentPackage.remainingHours += exceptionData.hours;
 
         console.log(
-          `   After: ${this.creditSystem.currentPackage.remainingHours}`,
+          `   After: ${this.creditSystem.currentPackage.remainingHours}`
         );
 
-        // سجل العملية في history
         if (!this.creditSystem.usageHistory) {
           this.creditSystem.usageHistory = [];
         }
@@ -724,14 +712,12 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
           deductedFromPackage: 0,
         });
 
-        // ✅ إعادة تفعيل الإشعارات إذا كان الرصيد أكبر من صفر
         if (this.creditSystem.currentPackage.remainingHours > 0) {
           if (this.communicationPreferences?.notificationChannels) {
             this.communicationPreferences.notificationChannels.whatsapp = true;
           }
         }
 
-        // ✅ تحديث totalHoursRemaining بقيمة الحزمة فقط (لأن الاستثناء مضاف فيها)
         this.creditSystem.stats.totalHoursRemaining =
           this.creditSystem.currentPackage.remainingHours;
       }
@@ -740,7 +726,7 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
     await this.save();
     console.log("✅ Exception added successfully");
     console.log(
-      `📊 Final totalHoursRemaining: ${this.creditSystem.stats.totalHoursRemaining}`,
+      `📊 Final totalHoursRemaining: ${this.creditSystem.stats.totalHoursRemaining}`
     );
 
     return { success: true, data: newException };
@@ -762,15 +748,13 @@ StudentSchema.methods.endCreditException = async function (exceptionId) {
     exception.endDate = new Date();
     exception.updatedAt = new Date();
 
-    // تقليل عدد الاستثناءات النشطة
     if (this.creditSystem.stats.activeExceptions > 0) {
       this.creditSystem.stats.activeExceptions -= 1;
     }
 
-    // إذا كان استثناء freeze وكان هو الوحيد النشط، رجع الحالة لـ active
     if (exception.type === "freeze") {
       const hasActiveFreeze = this.creditSystem.exceptions.some(
-        (e) => e.type === "freeze" && e.status === "active",
+        (e) => e.type === "freeze" && e.status === "active"
       );
 
       if (!hasActiveFreeze) {
@@ -806,7 +790,6 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
     let deductedFromExceptions = 0;
     let deductedFromPackage = 0;
 
-    // الخصم من الاستثناءات أولاً
     if (
       this.creditSystem.exceptions &&
       this.creditSystem.exceptions.length > 0
@@ -815,7 +798,7 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
         (e) =>
           e.type === "addition" &&
           e.status === "active" &&
-          (!e.endDate || new Date() <= new Date(e.endDate)),
+          (!e.endDate || new Date() <= new Date(e.endDate))
       );
 
       for (const exception of activeAdditions) {
@@ -823,7 +806,7 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
 
         const deductFromException = Math.min(
           exception.hours || 0,
-          hoursToDeduct,
+          hoursToDeduct
         );
         exception.hours = (exception.hours || 0) - deductFromException;
         hoursToDeduct -= deductFromException;
@@ -834,18 +817,17 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
           exception.endDate = new Date();
           this.creditSystem.stats.activeExceptions = Math.max(
             0,
-            (this.creditSystem.stats.activeExceptions || 0) - 1,
+            (this.creditSystem.stats.activeExceptions || 0) - 1
           );
         }
       }
     }
 
-    // الخصم المتبقي من الحزمة
     if (hoursToDeduct > 0 && this.creditSystem.currentPackage) {
       const currentPackage = this.creditSystem.currentPackage;
       const deductFromPackage = Math.min(
         currentPackage.remainingHours,
-        hoursToDeduct,
+        hoursToDeduct
       );
       currentPackage.remainingHours -= deductFromPackage;
       hoursToDeduct -= deductFromPackage;
@@ -933,34 +915,34 @@ StudentSchema.methods.addCreditHours = async function (addData) {
       this.creditSystem.usageHistory = [];
     }
 
-    const usageRecord = {
+    this.creditSystem.usageHistory.push({
       sessionId: addData.sessionId || null,
       groupId: addData.groupId || null,
       date: new Date(),
       hoursDeducted: -addData.hours,
-      sessionTitle: addData.sessionTitle || "Manual Credit Addition",
-      groupName: addData.groupName || "System",
-      attendanceStatus: addData.attendanceStatus || "refund",
-      notes:
-        addData.notes || `Manual credit addition of ${addData.hours} hours`,
+      sessionTitle: addData.sessionTitle || "Refund",
+      groupName: addData.groupName || "",
+      attendanceStatus: "refund",
+      notes: addData.reason || "Hours refunded",
       deductedFromExceptions: 0,
-      deductedFromPackage: addData.hours,
-    };
+      deductedFromPackage: -addData.hours,
+    });
 
-    this.creditSystem.usageHistory.push(usageRecord);
-
-    this.creditSystem.stats.totalHoursUsed =
-      (this.creditSystem.stats.totalHoursUsed || 0) - addData.hours;
+    this.creditSystem.stats.totalHoursUsed = Math.max(
+      0,
+      (this.creditSystem.stats.totalHoursUsed || 0) - addData.hours
+    );
     this.creditSystem.stats.totalHoursRemaining =
       this.getEffectiveRemainingHours();
-    this.creditSystem.stats.totalSessionsAttended =
-      (this.creditSystem.stats.totalSessionsAttended || 0) - 1;
     this.creditSystem.stats.lastUsageDate = new Date();
 
-    if (currentPackage.remainingHours > 0) {
-      if (this.communicationPreferences?.notificationChannels) {
-        this.communicationPreferences.notificationChannels.whatsapp = true;
-      }
+    if (currentPackage.remainingHours > 0 && currentPackage.status === "completed") {
+      currentPackage.status = "active";
+      this.creditSystem.status = "active";
+    }
+
+    if (this.communicationPreferences?.notificationChannels) {
+      this.communicationPreferences.notificationChannels.whatsapp = true;
     }
 
     await this.save();
@@ -968,7 +950,7 @@ StudentSchema.methods.addCreditHours = async function (addData) {
     return {
       success: true,
       remainingHours: this.getEffectiveRemainingHours(),
-      usageRecord,
+      addedHours: addData.hours,
     };
   } catch (error) {
     console.error("❌ Error adding credit hours:", error);
@@ -976,427 +958,4 @@ StudentSchema.methods.addCreditHours = async function (addData) {
   }
 };
 
-// ✅ التحقق من صلاحية الطالب لحضور جلسة
-StudentSchema.methods.canAttendSession = async function () {
-  try {
-    const effectiveRemaining = this.getEffectiveRemainingHours();
-
-    if (effectiveRemaining < 2) {
-      return {
-        canAttend: false,
-        reason: "insufficient_hours",
-        message: "Insufficient hours for session (need 2 hours)",
-        remainingHours: effectiveRemaining,
-      };
-    }
-
-    const activeFreeze = this.creditSystem.exceptions?.find(
-      (e) =>
-        e.type === "freeze" &&
-        e.status === "active" &&
-        (!e.endDate || new Date() <= new Date(e.endDate)),
-    );
-
-    if (activeFreeze) {
-      return {
-        canAttend: false,
-        reason: "frozen",
-        message: `Account frozen: ${activeFreeze.reason}`,
-        exception: activeFreeze,
-      };
-    }
-
-    return {
-      canAttend: true,
-      remainingHours: effectiveRemaining,
-      packageEndDate: this.creditSystem.currentPackage?.endDate,
-    };
-  } catch (error) {
-    console.error("❌ Error checking attendance eligibility:", error);
-    return {
-      canAttend: false,
-      reason: "error",
-      message: error.message,
-    };
-  }
-};
-
-// ✅ الحصول على إحصائيات الساعات
-StudentSchema.methods.getCreditStats = function () {
-  if (!this.creditSystem) {
-    return {
-      hasPackage: false,
-      packageType: null,
-      totalHours: 0,
-      usedHours: 0,
-      remainingHours: 0,
-      usagePercentage: 0,
-      status: "no_package",
-      activeExceptions: [],
-      recentUsage: [],
-      canReceiveMessages: false,
-      balanceLevel: "none",
-    };
-  }
-
-  const currentPackage = this.creditSystem.currentPackage;
-  const totalHours = currentPackage?.totalHours || 0;
-  const usedHours = this.creditSystem.stats?.totalHoursUsed || 0;
-  const remainingHours = this.getEffectiveRemainingHours();
-  const usagePercentage = totalHours > 0 ? (usedHours / totalHours) * 100 : 0;
-
-  let balanceLevel = "good";
-  if (remainingHours <= 0) balanceLevel = "zero";
-  else if (remainingHours <= 2) balanceLevel = "critical";
-  else if (remainingHours <= 5) balanceLevel = "low";
-
-  const activeExceptions =
-    this.creditSystem.exceptions?.filter((e) => e.status === "active") || [];
-
-  const recentUsage =
-    this.creditSystem.usageHistory
-      ?.sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 10) || [];
-
-  const canReceive = this.canReceiveMessages();
-
-  return {
-    hasPackage: !!currentPackage,
-    packageType: currentPackage?.packageType,
-    packageStartDate: currentPackage?.startDate,
-    packageEndDate: currentPackage?.endDate,
-    totalHours,
-    usedHours,
-    remainingHours,
-    usagePercentage: Math.round(usagePercentage * 100) / 100,
-    status: this.creditSystem.status,
-    activeExceptions,
-    activeExceptionsCount: activeExceptions.length,
-    recentUsage,
-    lastUsageDate: this.creditSystem.stats?.lastUsageDate,
-    balanceLevel,
-    canReceiveMessages: canReceive.canReceive,
-    messagesDisabledReason: !canReceive.canReceive ? canReceive.reason : null,
-    lowBalanceAlertsSent: this.creditSystem.stats?.lowBalanceAlertsSent || 0,
-    zeroBalanceDate: this.creditSystem.stats?.zeroBalanceDate,
-  };
-};
-
-// ✅ تسجيل إشعار الرصيد المنخفض
-StudentSchema.methods.logLowBalanceAlert = async function () {
-  if (!this.creditSystem?.stats) return;
-
-  this.creditSystem.stats.lowBalanceAlertsSent =
-    (this.creditSystem.stats.lowBalanceAlertsSent || 0) + 1;
-  await this.save();
-};
-
-// ✅ تعطيل إشعارات الطالب يدوياً
-StudentSchema.methods.disableNotifications = async function (
-  reason = "manual",
-) {
-  if (this.communicationPreferences?.notificationChannels) {
-    this.communicationPreferences.notificationChannels.whatsapp = false;
-    this.creditSystem.stats.notificationsDisabledAt = new Date();
-    this.creditSystem.notes = this.creditSystem.notes
-      ? `${this.creditSystem.notes}\nNotifications disabled at ${new Date().toISOString()} - Reason: ${reason}`
-      : `Notifications disabled at ${new Date().toISOString()} - Reason: ${reason}`;
-
-    await this.save();
-    return { success: true };
-  }
-  return { success: false, error: "No notification channels found" };
-};
-
-// ✅ تفعيل إشعارات الطالب
-StudentSchema.methods.enableNotifications = async function () {
-  if (this.communicationPreferences?.notificationChannels) {
-    this.communicationPreferences.notificationChannels.whatsapp = true;
-    this.creditSystem.notes = this.creditSystem.notes
-      ? `${this.creditSystem.notes}\nNotifications enabled at ${new Date().toISOString()}`
-      : `Notifications enabled at ${new Date().toISOString()}`;
-
-    await this.save();
-    return { success: true };
-  }
-  return { success: false, error: "No notification channels found" };
-};
-
-// =============================================
-// ✅ WHATSAPP METHODS
-// =============================================
-
-StudentSchema.methods.logWhatsAppMessage = async function (messageData) {
-  try {
-    if (!this.whatsappMessages) {
-      this.whatsappMessages = [];
-    }
-
-    const validLanguages = ["ar", "en", "bilingual"];
-    const language = validLanguages.includes(messageData.language)
-      ? messageData.language
-      : "ar";
-
-    const messageToLog = {
-      messageType: messageData.messageType,
-      messageContent: messageData.messageContent,
-      language: language,
-      status: messageData.status || "sent",
-      recipientNumber: messageData.recipientNumber,
-      wapilotMessageId: messageData.wapilotMessageId || null,
-      sentAt: messageData.sentAt || new Date(),
-      metadata: {
-        groupId: messageData.metadata?.groupId || null,
-        groupName: messageData.metadata?.groupName || null,
-        groupCode: messageData.metadata?.groupCode || null,
-        sessionId: messageData.metadata?.sessionId || null,
-        sessionTitle: messageData.metadata?.sessionTitle || null,
-        attendanceStatus: messageData.metadata?.attendanceStatus || null,
-        isCustomMessage: messageData.metadata?.isCustomMessage || false,
-        recipientType: messageData.metadata?.recipientType || "student",
-        guardianName: messageData.metadata?.guardianName || null,
-        automationType: messageData.metadata?.automationType || null,
-        interactive: messageData.metadata?.interactive || false,
-        selectedLanguage: messageData.metadata?.selectedLanguage || null,
-        reminderType: messageData.metadata?.reminderType || null,
-        oldStatus: messageData.metadata?.oldStatus || null,
-        newStatus: messageData.metadata?.newStatus || null,
-        isBilingual: messageData.metadata?.isBilingual || false,
-        languages: messageData.metadata?.languages || null,
-        nameFormat: messageData.metadata?.nameFormat || null,
-        studentGender: messageData.metadata?.studentGender || null,
-        studentNicknameAr: messageData.metadata?.studentNicknameAr || null,
-        studentNicknameEn: messageData.metadata?.studentNicknameEn || null,
-        guardianNicknameAr: messageData.metadata?.guardianNicknameAr || null,
-        guardianNicknameEn: messageData.metadata?.guardianNicknameEn || null,
-        relationship: messageData.metadata?.relationship || null,
-        remainingHours: messageData.metadata?.remainingHours,
-        alertType: messageData.metadata?.alertType,
-      },
-      error: messageData.error || null,
-      errorDetails: messageData.errorDetails || null,
-    };
-
-    this.whatsappMessages.push(messageToLog);
-
-    if (!this.metadata) this.metadata = {};
-    this.metadata.whatsappTotalMessages =
-      (this.metadata.whatsappTotalMessages || 0) + 1;
-    this.metadata.whatsappLastInteraction = new Date();
-    this.metadata.updatedAt = new Date();
-
-    await mongoose.model("Student").updateOne(
-      { _id: this._id },
-      {
-        $push: { whatsappMessages: messageToLog },
-        $set: {
-          "metadata.whatsappTotalMessages": this.metadata.whatsappTotalMessages,
-          "metadata.whatsappLastInteraction": new Date(),
-          "metadata.updatedAt": new Date(),
-        },
-      },
-    );
-
-    return this;
-  } catch (error) {
-    console.error("❌ [logWhatsAppMessage] Error:", error.message);
-    return null;
-  }
-};
-
-StudentSchema.methods.getWhatsAppMessages = function (filters = {}) {
-  if (!this.whatsappMessages || this.whatsappMessages.length === 0) return [];
-
-  let messages = [...this.whatsappMessages];
-
-  if (filters.messageType)
-    messages = messages.filter((m) => m.messageType === filters.messageType);
-  if (filters.status)
-    messages = messages.filter((m) => m.status === filters.status);
-  if (filters.language)
-    messages = messages.filter((m) => m.language === filters.language);
-  if (filters.startDate)
-    messages = messages.filter((m) => m.sentAt >= new Date(filters.startDate));
-  if (filters.endDate)
-    messages = messages.filter((m) => m.sentAt <= new Date(filters.endDate));
-
-  return messages.sort((a, b) => b.sentAt - a.sentAt);
-};
-
-StudentSchema.methods.getWhatsAppStats = function () {
-  if (!this.whatsappMessages || this.whatsappMessages.length === 0) {
-    return {
-      total: 0,
-      sent: 0,
-      failed: 0,
-      pending: 0,
-      byType: {},
-      byLanguage: {},
-    };
-  }
-
-  const stats = {
-    total: this.whatsappMessages.length,
-    sent: 0,
-    failed: 0,
-    pending: 0,
-    byType: {},
-    byLanguage: {},
-  };
-
-  this.whatsappMessages.forEach((msg) => {
-    if (msg.status === "sent") stats.sent++;
-    if (msg.status === "failed") stats.failed++;
-    if (msg.status === "pending") stats.pending++;
-    stats.byType[msg.messageType] = (stats.byType[msg.messageType] || 0) + 1;
-    stats.byLanguage[msg.language] = (stats.byLanguage[msg.language] || 0) + 1;
-  });
-
-  return stats;
-};
-
-// =============================================
-// ✅ SESSION REMINDER METHODS
-// =============================================
-
-StudentSchema.methods.addSessionReminder = function (reminderData) {
-  if (!this.sessionReminders) this.sessionReminders = [];
-  this.sessionReminders.push(reminderData);
-  if (!this.metadata) this.metadata = {};
-  if (reminderData.reminderType === "24hours")
-    this.metadata.lastSessionReminder24h = new Date();
-  else if (reminderData.reminderType === "1hour")
-    this.metadata.lastSessionReminder1h = new Date();
-  this.metadata.totalSessionReminders =
-    (this.metadata.totalSessionReminders || 0) + 1;
-  this.metadata.whatsappTotalMessages =
-    (this.metadata.whatsappTotalMessages || 0) + 1;
-  this.metadata.whatsappLastInteraction = new Date();
-  return this.save();
-};
-
-StudentSchema.methods.hasReceivedReminder = function (sessionId, reminderType) {
-  if (!this.sessionReminders || this.sessionReminders.length === 0)
-    return false;
-  return this.sessionReminders.some(
-    (r) =>
-      r.sessionId.toString() === sessionId.toString() &&
-      r.reminderType === reminderType &&
-      r.status === "sent",
-  );
-};
-
-StudentSchema.methods.getSessionReminders = function (sessionId) {
-  if (!this.sessionReminders) return [];
-  return this.sessionReminders.filter(
-    (r) => r.sessionId.toString() === sessionId.toString(),
-  );
-};
-
-// =============================================
-// ✅ STATIC METHODS
-// =============================================
-
-StudentSchema.statics.getStudentsForReminder = async function (
-  groupId,
-  sessionId,
-  reminderType,
-) {
-  const students = await this.find({
-    "academicInfo.groupIds": groupId,
-    "enrollmentInfo.status": "Active",
-    "personalInfo.whatsappNumber": { $exists: true, $ne: null, $ne: "" },
-    isDeleted: false,
-  });
-
-  const eligibleStudents = [];
-  for (const student of students) {
-    const canReceive = student.canReceiveMessages();
-    if (
-      canReceive.canReceive &&
-      !student.hasReceivedReminder(sessionId, reminderType)
-    ) {
-      eligibleStudents.push(student);
-    }
-  }
-
-  return eligibleStudents;
-};
-
-StudentSchema.statics.getExpiredPackages = async function () {
-  const now = new Date();
-  return await this.find({
-    "creditSystem.currentPackage.endDate": { $lt: now },
-    "creditSystem.currentPackage.status": "active",
-    isDeleted: false,
-  });
-};
-
-StudentSchema.statics.getLowBalanceStudents = async function (threshold = 5) {
-  const students = await this.find({
-    isDeleted: false,
-  });
-
-  return students.filter((student) => {
-    const effectiveRemaining = student.getEffectiveRemainingHours();
-    return effectiveRemaining <= threshold && effectiveRemaining > 0;
-  });
-};
-
-StudentSchema.statics.getZeroBalanceStudents = async function () {
-  const students = await this.find({
-    isDeleted: false,
-  });
-
-  return students.filter((student) => {
-    return student.getEffectiveRemainingHours() <= 0;
-  });
-};
-
-StudentSchema.statics.getStudentsWithDisabledNotifications = async function () {
-  return await this.find({
-    "communicationPreferences.notificationChannels.whatsapp": false,
-    isDeleted: false,
-  });
-};
-
-// =============================================
-// ✅ VIRTUALS
-// =============================================
-
-StudentSchema.virtual("fullNameWithNumber").get(function () {
-  return `${this.personalInfo.fullName} (${this.enrollmentNumber})`;
-});
-
-StudentSchema.virtual("age").get(function () {
-  if (!this.personalInfo.dateOfBirth) return null;
-  const today = new Date();
-  const birthDate = new Date(this.personalInfo.dateOfBirth);
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-});
-
-// =============================================
-// ✅ INDEXES
-// =============================================
-
-StudentSchema.index({ enrollmentNumber: 1 });
-StudentSchema.index({ "personalInfo.email": 1 });
-StudentSchema.index({ "personalInfo.phone": 1 });
-StudentSchema.index({ "guardianInfo.phone": 1 });
-StudentSchema.index({ "guardianInfo.whatsappNumber": 1 });
-StudentSchema.index({ "academicInfo.groupIds": 1 });
-StudentSchema.index({ isDeleted: 1 });
-StudentSchema.index({ "creditSystem.status": 1 });
-StudentSchema.index({ "creditSystem.currentPackage.remainingHours": 1 });
-
-// =============================================
-// ✅ EXPORT
-// =============================================
-
-export default mongoose.models.Student ||
-  mongoose.model("Student", StudentSchema);
+export default mongoose.models.Student || mongoose.model("Student", StudentSchema);
