@@ -309,6 +309,8 @@ export async function onGroupActivated(groupId, userId) {
   }
 }
 
+// /src/app/services/groupAutomation.js
+
 async function getMessageTemplate(
   templateType,
   language = "ar",
@@ -327,32 +329,43 @@ async function getMessageTemplate(
 
     if (template) {
       // ✅ اختيار المحتوى حسب اللغة المطلوبة
-      let content;
+      let content = "";
       
       if (validLanguage === "ar") {
         content = template.contentAr;
-        console.log(`📋 Using Arabic content for ${templateType}`);
       } else {
         content = template.contentEn;
-        console.log(`📋 Using English content for ${templateType}`);
       }
       
-      // ✅ إذا كانت اللغة المطلوبة غير موجودة أو فارغة، نستخدم القالب الاحتياطي
+      console.log(`📋 Using ${validLanguage} content for ${templateType}`);
+      console.log(`   Content preview: ${content?.substring(0, 100)}...`);
+      
+      // ✅ إذا كانت اللغة المطلوبة غير موجودة أو فارغة، نستخدم اللغة الأخرى
       if (!content || content.trim() === '') {
-        console.log(`⚠️ ${validLanguage} content empty, using fallback template`);
+        console.log(`⚠️ ${validLanguage} content empty, trying other language`);
         
-        // استخدام القالب الاحتياطي باللغة المطلوبة
-        const fallbackContent = getFallbackTemplate(templateType, validLanguage, recipientType);
+        // جرب اللغة الأخرى
+        if (validLanguage === "ar") {
+          content = template.contentEn;
+        } else {
+          content = template.contentAr;
+        }
         
-        return {
-          content: fallbackContent,
-          templateId: template._id,
-          templateName: template.name,
-          recipientType: template.recipientType,
-          isCustom: false,
-          isDefault: true,
-          isFallback: true, // للإشارة أن هذا قالب احتياطي
-        };
+        // لو لسه فاضي، استخدم القالب الاحتياطي
+        if (!content || content.trim() === '') {
+          console.log(`⚠️ Both languages empty, using fallback template`);
+          const fallbackContent = getFallbackTemplate(templateType, validLanguage, recipientType);
+          
+          return {
+            content: fallbackContent,
+            templateId: template._id,
+            templateName: template.name,
+            recipientType: template.recipientType,
+            isCustom: false,
+            isDefault: true,
+            isFallback: true,
+          };
+        }
       }
 
       return {
@@ -367,16 +380,20 @@ async function getMessageTemplate(
 
     // لو مفيش قالب في DB، نستخدم القالب الاحتياطي
     console.log(`⚠️ No template found in DB for ${templateType}, using fallback`);
+    const fallbackContent = getFallbackTemplate(templateType, validLanguage, recipientType);
+    
     return {
-      content: getFallbackTemplate(templateType, validLanguage, recipientType),
+      content: fallbackContent,
       isCustom: false,
       isFallback: true,
       recipientType,
     };
   } catch (error) {
     console.error(`❌ Error fetching template [${templateType}]:`, error);
+    const fallbackContent = getFallbackTemplate(templateType, validLanguage, recipientType);
+    
     return {
-      content: getFallbackTemplate(templateType, validLanguage, recipientType),
+      content: fallbackContent,
       isCustom: false,
       isFallback: true,
       recipientType,
@@ -727,7 +744,9 @@ export async function sendAbsenceNotifications(
 /**
  * ✅ القوالب الاحتياطية - لو مفيش template في DB
  */
-   function getFallbackTemplate(
+// /src/app/services/groupAutomation.js
+
+function getFallbackTemplate(
   templateType,
   language = "ar",
   recipientType = "guardian",
@@ -784,116 +803,6 @@ Your session starts in 1 hour:
 Please get ready now! 🚀
 Code School Team 💻`,
     },
-    student_welcome: {
-      ar: `{studentSalutation}،
-
-يسرنا إعلامك بأنه تم تسجيلك بنجاح في Code School! 🎉
-
-📘 البرنامج: {courseName}
-👥 المجموعة: {groupName} ({groupCode})
-
-رحلتك التعليمية ستبدأ قريباً! 🚀
-
-فريق Code School 💻`,
-      en: `{studentSalutation},
-
-We are pleased to confirm your enrollment at Code School! 🎉
-
-📘 Program: {courseName}
-👥 Group: {groupName} ({groupCode})
-
-Your learning journey starts soon! 🚀
-
-Code School Team 💻`,
-    },
-    session_cancelled_student: {
-      ar: `{studentSalutation}،
-
-نود إعلامك بأنه تم إلغاء جلستك:
-
-📘 الجلسة: {sessionName}
-📅 التاريخ: {date}
-⏰ الوقت: {time}
-
-📌 ملاحظات هامة:
-- هذه الجلسة لن تحسب من باقتك.
-- سيتم إعلامك بموعد الجلسة التعويضية قريباً.
-
-نعتذر عن أي إزعاج،
-فريق Code School 💻`,
-      en: `{studentSalutation},
-
-We would like to inform you that your session has been cancelled:
-
-📘 Session: {sessionName}
-📅 Date: {date}
-⏰ Time: {time}
-
-📌 Important Notes:
-- This session will not be counted from your package.
-- We will inform you about the makeup session soon.
-
-We apologize for any inconvenience,
-Code School Team 💻`,
-    },
-    session_postponed_student: {
-      ar: `{studentSalutation}،
-
-نود إعلامك بأنه تم تأجيل جلستك:
-
-📘 الجلسة: {sessionName}
-📅 التاريخ الأصلي: {date}
-⏰ الوقت الأصلي: {time}
-
-📌 الموعد الجديد:
-📅 {newDate}
-⏰ {newTime}
-🔗 رابط الاجتماع: {meetingLink}
-
-شكراً لتفهمك،
-فريق Code School 💻`,
-      en: `{studentSalutation},
-
-We would like to inform you that your session has been postponed:
-
-📘 Session: {sessionName}
-📅 Original Date: {date}
-⏰ Original Time: {time}
-
-📌 New Schedule:
-📅 {newDate}
-⏰ {newTime}
-🔗 Meeting Link: {meetingLink}
-
-Thank you for your understanding,
-Code School Team 💻`,
-    },
-    group_completion_student: {
-      ar: `{studentSalutation}،
-
-مبروك على إتمام دورة **{courseName}** بنجاح! 🎓🎉
-
-نحن فخورون بإنجازك وتفانيك طوال الرحلة التعليمية.
-
-📚 المجموعة: {groupName} ({groupCode})
-
-نتمنى لك التوفيق في مسيرتك! 🚀
-
-فريق Code School 💻`,
-      en: `{studentSalutation},
-
-Congratulations on successfully completing **{courseName}**! 🎓🎉
-
-We are proud of your achievement and dedication.
-
-📚 Group: {groupName} ({groupCode})
-
-We wish you success in your journey! 🚀
-
-Code School Team 💻`,
-    },
-
-    // ========== قوالب ولي الأمر ==========
     reminder_24h_guardian: {
       ar: `{guardianSalutation}،
 
@@ -944,26 +853,34 @@ Code School Team 💻`,
 Please get ready now! 🚀
 Code School Team 💻`,
     },
-    guardian_notification: {
-      ar: `{guardianSalutation}،
+    session_cancelled_student: {
+      ar: `{studentSalutation}،
 
-يسرنا إعلامكم بأنه تم تسجيل {childTitle} **{studentName}** بنجاح في Code School! 🎉
+نود إعلامك بأنه تم إلغاء جلستك:
 
-📘 البرنامج: {courseName}
-👥 المجموعة: {groupName} ({groupCode})
+📘 الجلسة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
 
-نتطلع لرؤية تقدم {studentName} معنا! 🚀
+📌 ملاحظات هامة:
+- هذه الجلسة لن تحسب من باقتك.
+- سيتم إعلامك بموعد الجلسة التعويضية قريباً.
 
+نعتذر عن أي إزعاج،
 فريق Code School 💻`,
-      en: `{guardianSalutation},
+      en: `{studentSalutation},
 
-We are pleased to inform you that {childTitle} **{studentName}** has been successfully enrolled at Code School! 🎉
+We would like to inform you that your session has been cancelled:
 
-📘 Program: {courseName}
-👥 Group: {groupName} ({groupCode})
+📘 Session: {sessionName}
+📅 Date: {date}
+⏰ Time: {time}
 
-We look forward to seeing {studentName}'s progress! 🚀
+📌 Important Notes:
+- This session will not be counted from your package.
+- We will inform you about the makeup session soon.
 
+We apologize for any inconvenience,
 Code School Team 💻`,
     },
     session_cancelled_guardian: {
@@ -994,6 +911,38 @@ We would like to inform you that {childTitle} **{studentName}**'s session has be
 - We will inform you about the makeup session soon.
 
 We apologize for any inconvenience,
+Code School Team 💻`,
+    },
+    session_postponed_student: {
+      ar: `{studentSalutation}،
+
+نود إعلامك بأنه تم تأجيل جلستك:
+
+📘 الجلسة: {sessionName}
+📅 التاريخ الأصلي: {date}
+⏰ الوقت الأصلي: {time}
+
+📌 الموعد الجديد:
+📅 {newDate}
+⏰ {newTime}
+🔗 رابط الاجتماع: {meetingLink}
+
+شكراً لتفهمك،
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+We would like to inform you that your session has been postponed:
+
+📘 Session: {sessionName}
+📅 Original Date: {date}
+⏰ Original Time: {time}
+
+📌 New Schedule:
+📅 {newDate}
+⏰ {newTime}
+🔗 Meeting Link: {meetingLink}
+
+Thank you for your understanding,
 Code School Team 💻`,
     },
     session_postponed_guardian: {
@@ -1028,8 +977,55 @@ We would like to inform you that {childTitle} **{studentName}**'s session has be
 Thank you for your understanding,
 Code School Team 💻`,
     },
+    group_completion_student: {
+      ar: `{studentSalutation}،
 
-    // ========== قوالب الغياب (بدون suffix) ==========
+مبروك على إتمام دورة **{courseName}** بنجاح! 🎓🎉
+
+نحن فخورون بإنجازك وتفانيك طوال الرحلة التعليمية.
+
+📚 المجموعة: {groupName} ({groupCode})
+
+نتمنى لك التوفيق في مسيرتك! 🚀
+
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+Congratulations on successfully completing **{courseName}**! 🎓🎉
+
+We are proud of your achievement and dedication.
+
+📚 Group: {groupName} ({groupCode})
+
+We wish you success in your journey! 🚀
+
+Code School Team 💻`,
+    },
+    group_completion_guardian: {
+      ar: `{guardianSalutation}،
+
+يسرنا إعلامكم بأن {childTitle} **{studentName}** قد أتم بنجاح دورة **{courseName}**! 🎓🎉
+
+نحن فخورون بإنجازه وتفانيه طوال الرحلة التعليمية.
+
+📚 المجموعة: {groupName} ({groupCode})
+
+نتطلع لرؤية المزيد من النجاحات! 🚀
+
+فريق Code School 💻`,
+      en: `{guardianSalutation},
+
+We are pleased to inform you that {childTitle} **{studentName}** has successfully completed **{courseName}**! 🎓🎉
+
+We are proud of their achievement and dedication.
+
+📚 Group: {groupName} ({groupCode})
+
+We look forward to seeing more successes! 🚀
+
+Code School Team 💻`,
+    },
+    // ========== قوالب الغياب ==========
     absence_notification: {
       ar: `{guardianSalutation}،
 
@@ -1090,27 +1086,47 @@ Code School Team 💻`,
 
 Code School Team 💻`,
     },
-    group_completion_guardian: {
+    student_welcome: {
+      ar: `{studentSalutation}،
+
+يسرنا إعلامك بأنه تم تسجيلك بنجاح في Code School! 🎉
+
+📘 البرنامج: {courseName}
+👥 المجموعة: {groupName} ({groupCode})
+
+رحلتك التعليمية ستبدأ قريباً! 🚀
+
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+We are pleased to confirm your enrollment at Code School! 🎉
+
+📘 Program: {courseName}
+👥 Group: {groupName} ({groupCode})
+
+Your learning journey starts soon! 🚀
+
+Code School Team 💻`,
+    },
+    guardian_notification: {
       ar: `{guardianSalutation}،
 
-يسرنا إعلامكم بأن {childTitle} **{studentName}** قد أتم بنجاح دورة **{courseName}**! 🎓🎉
+يسرنا إعلامكم بأنه تم تسجيل {childTitle} **{studentName}** بنجاح في Code School! 🎉
 
-نحن فخورون بإنجازه وتفانيه طوال الرحلة التعليمية.
+📘 البرنامج: {courseName}
+👥 المجموعة: {groupName} ({groupCode})
 
-📚 المجموعة: {groupName} ({groupCode})
-
-نتطلع لرؤية المزيد من النجاحات! 🚀
+نتطلع لرؤية تقدم {studentName} معنا! 🚀
 
 فريق Code School 💻`,
       en: `{guardianSalutation},
 
-We are pleased to inform you that {childTitle} **{studentName}** has successfully completed **{courseName}**! 🎓🎉
+We are pleased to inform you that {childTitle} **{studentName}** has been successfully enrolled at Code School! 🎉
 
-We are proud of their achievement and dedication.
+📘 Program: {courseName}
+👥 Group: {groupName} ({groupCode})
 
-📚 Group: {groupName} ({groupCode})
-
-We look forward to seeing more successes! 🚀
+We look forward to seeing {studentName}'s progress! 🚀
 
 Code School Team 💻`,
     },
@@ -1128,28 +1144,24 @@ Code School Team 💻`,
   let templateKey;
 
   if (noSuffixTypes.includes(templateType)) {
-    // استخدم المفتاح كما هو
     templateKey = templateType;
   } else {
-    // أزل الـ suffix الموجود وأضف الصحيح
     const baseKey = templateType
       .replace(/_guardian$/, "")
       .replace(/_student$/, "");
-
-    templateKey =
-      recipientType === "student"
-        ? `${baseKey}_student`
-        : `${baseKey}_guardian`;
+    
+    templateKey = recipientType === "student"
+      ? `${baseKey}_student`
+      : `${baseKey}_guardian`;
   }
 
-  // ✅ التأكد من وجود القالب في اللغة المطلوبة، وإلا استخدام العربية كاحتياطي
   const template = templates[templateKey];
+  
   if (!template) {
     console.log(`⚠️ No fallback template found for key: ${templateKey}`);
     return "";
   }
 
-  // ✅ إرجاع المحتوى باللغة المطلوبة، أو العربية إذا لم توجد
   return template[language] || template.ar || "";
 }
 
@@ -2982,7 +2994,10 @@ export async function onSessionStatusChanged(
     console.log(`\n🔄 SESSION STATUS CHANGE ==========`);
     console.log(`📋 Session: ${sessionId} | Status: ${newStatus}`);
     console.log(
-      `📝 Student Msg: ${metadata?.studentMessage ? "Yes" : "No"} | Guardian Msg: ${metadata?.guardianMessage ? "Yes" : "No"}`,
+      `📝 Per-student Student Msgs: ${metadata?.studentMessages ? Object.keys(metadata.studentMessages).length : 0}`,
+    );
+    console.log(
+      `📝 Per-student Guardian Msgs: ${metadata?.guardianMessages ? Object.keys(metadata.guardianMessages).length : 0}`,
     );
 
     if (newStatus !== "cancelled" && newStatus !== "postponed") {
@@ -3007,18 +3022,8 @@ export async function onSessionStatusChanged(
     let failCount = 0;
     const notificationResults = [];
 
-    const studentTemplateType =
-      newStatus === "cancelled"
-        ? "session_cancelled_student"
-        : "session_postponed_student";
-    const guardianTemplateType =
-      newStatus === "cancelled"
-        ? "session_cancelled_guardian"
-        : "session_postponed_guardian";
-
     for (const student of students) {
       try {
-        // ✅ FIX: await
         const { variables, language } = await prepareStudentVariables(
           student,
           group,
@@ -3026,41 +3031,70 @@ export async function onSessionStatusChanged(
           { newDate, newTime },
         );
 
+        const studentIdStr = student._id.toString();
+
         console.log(
-          `📤 ${student.personalInfo?.fullName} | ${language} | ${student.personalInfo?.gender} | ${student.guardianInfo?.relationship}`,
+          `📤 ${student.personalInfo?.fullName} | ${language}`,
         );
         console.log(
           `   Student: ${variables.studentSalutation} | Guardian: ${variables.guardianSalutation}`,
         );
 
+        // ============================================================
+        // ✅ رسالة الطالب
+        // الأولوية:
+        // 1. per-student message (rendered بالفعل من المودال)
+        // 2. قالب عام (للتوافق القديم)
+        // 3. قالب من DB
+        // ============================================================
         let finalStudentMessage = "";
-        if (metadata?.studentMessage) {
-          finalStudentMessage = replaceVariables(
-            metadata.studentMessage,
-            variables,
-          );
+
+        const perStudentMsg = metadata?.studentMessages?.[studentIdStr];
+        const sharedStudentMsg = metadata?.studentMessage;
+
+        if (perStudentMsg) {
+          // ✅ بالفعل تم renderها في المودال، نستخدمها مباشرة
+          finalStudentMessage = perStudentMsg;
+          console.log(`   📝 Using per-student rendered message for ${student.personalInfo?.fullName}`);
+        } else if (sharedStudentMsg) {
+          // ✅ قالب عام - نحتاج نعمله render
+          finalStudentMessage = replaceVariables(sharedStudentMsg, variables);
+          console.log(`   📝 Using shared student template`);
         } else {
-          const template = await getMessageTemplate(
-            studentTemplateType,
-            language,
-            "student",
-          );
+          // ✅ قالب من DB
+          const templateType = newStatus === "cancelled" 
+            ? "session_cancelled_student" 
+            : "session_postponed_student";
+          const template = await getMessageTemplate(templateType, language, "student");
           finalStudentMessage = replaceVariables(template.content, variables);
+          console.log(`   📝 Using DB student template`);
         }
 
+        // ============================================================
+        // ✅ رسالة ولي الأمر
+        // نفس الأولوية
+        // ============================================================
         let finalGuardianMessage = "";
-        if (metadata?.guardianMessage) {
-          finalGuardianMessage = replaceVariables(
-            metadata.guardianMessage,
-            variables,
-          );
+
+        const perGuardianMsg = metadata?.guardianMessages?.[studentIdStr];
+        const sharedGuardianMsg = metadata?.guardianMessage;
+
+        if (perGuardianMsg) {
+          // ✅ بالفعل تم renderها في المودال، نستخدمها مباشرة
+          finalGuardianMessage = perGuardianMsg;
+          console.log(`   📝 Using per-student rendered guardian message`);
+        } else if (sharedGuardianMsg) {
+          // ✅ قالب عام - نحتاج نعمله render
+          finalGuardianMessage = replaceVariables(sharedGuardianMsg, variables);
+          console.log(`   📝 Using shared guardian template`);
         } else {
-          const template = await getMessageTemplate(
-            guardianTemplateType,
-            language,
-            "guardian",
-          );
+          // ✅ قالب من DB
+          const templateType = newStatus === "cancelled" 
+            ? "session_cancelled_guardian" 
+            : "session_postponed_guardian";
+          const template = await getMessageTemplate(templateType, language, "guardian");
           finalGuardianMessage = replaceVariables(template.content, variables);
+          console.log(`   📝 Using DB guardian template`);
         }
 
         const result = await sendToStudentWithLogging({
@@ -3068,7 +3102,7 @@ export async function onSessionStatusChanged(
           student,
           studentMessage: finalStudentMessage,
           guardianMessage: finalGuardianMessage,
-          messageType: guardianTemplateType,
+          messageType: newStatus === "cancelled" ? "session_cancelled" : "session_postponed",
           metadata: {
             sessionId,
             sessionTitle: session.title,
@@ -3077,9 +3111,7 @@ export async function onSessionStatusChanged(
             newStatus,
             newDate,
             newTime,
-            isCustomMessage: !!(
-              metadata?.studentMessage || metadata?.guardianMessage
-            ),
+            isCustomMessage: !!(perStudentMsg || perGuardianMsg || sharedStudentMsg || sharedGuardianMsg),
           },
         });
 
@@ -3096,10 +3128,21 @@ export async function onSessionStatusChanged(
           });
         } else {
           failCount++;
+          notificationResults.push({
+            studentId: student._id,
+            studentName: student.personalInfo?.fullName,
+            status: "failed",
+            error: result.error,
+          });
         }
       } catch (error) {
-        console.error(`Error processing student:`, error);
+        console.error(`Error processing student ${student._id}:`, error);
         failCount++;
+        notificationResults.push({
+          studentId: student._id,
+          status: "failed",
+          error: error.message,
+        });
       }
     }
 
@@ -3112,7 +3155,10 @@ export async function onSessionStatusChanged(
       failCount,
       notificationResults,
       customMessageUsed: !!(
-        metadata?.studentMessage || metadata?.guardianMessage
+        metadata?.studentMessages ||
+        metadata?.guardianMessages ||
+        metadata?.studentMessage ||
+        metadata?.guardianMessage
       ),
     };
   } catch (error) {

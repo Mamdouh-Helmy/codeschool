@@ -1,6 +1,7 @@
 // /src/app/services/wapilot-service.js
 import Student from "../models/Student.js";
 import { connectDB } from "@/lib/mongodb";
+import TemplateVariable from "../models/TemplateVariable.js";
 
 const FORCE_PRODUCTION = true;
 
@@ -19,6 +20,8 @@ class WapilotService {
       FORCE_PRODUCTION || (this.isEnabled && process.env.NODE_ENV === "production")
         ? "production"
         : "simulation";
+    this.dbVars = null; // Cache for template variables
+    this.lastVarsFetch = null;
 
     console.log("📱 Wapilot WhatsApp Service initialized:", {
       enabled: this.isEnabled,
@@ -28,57 +31,129 @@ class WapilotService {
   }
 
   // ============================================================
-  // ✅ دوال بناء التحية - مشتركة
+  // ✅ جلب المتغيرات من قاعدة البيانات
   // ============================================================
 
-  getStudentSalutation(gender, language = "ar", arabicName = "", englishName = "") {
-    const male = isMaleGender(gender);
-    if (language === "ar") {
-      const displayName = arabicName ? ` ${arabicName}` : "";
-      return male ? `عزيزي الطالب${displayName}` : `عزيزتي الطالبة${displayName}`;
-    } else {
-      const displayName = englishName ? ` ${englishName}` : "";
-      return `Dear student${displayName}`;
+  async fetchDbVariables() {
+    try {
+      await connectDB();
+      const vars = await TemplateVariable.find({ isActive: true }).lean();
+      const varsMap = {};
+      vars.forEach(v => {
+        varsMap[v.key] = {
+          valueAr: v.valueAr,
+          valueEn: v.valueEn,
+        };
+      });
+      this.dbVars = varsMap;
+      this.lastVarsFetch = new Date();
+      console.log(`✅ Fetched ${vars.length} template variables from DB`);
+      return varsMap;
+    } catch (error) {
+      console.error("❌ Error fetching template variables:", error);
+      return {};
     }
   }
 
-  getGuardianSalutation(guardianName, relationship, guardianNickname = null, language = "ar") {
+  async getDbVariable(key, lang = "ar") {
+    if (!this.dbVars) {
+      await this.fetchDbVariables();
+    }
+    const v = this.dbVars?.[key];
+    if (!v) return null;
+    return lang === "ar" ? v.valueAr : v.valueEn;
+  }
+
+  // ============================================================
+  // ✅ دوال بناء التحية - باستخدام المتغيرات من DB
+  // ============================================================
+
+  async getStudentSalutation(gender, language = "ar", arabicName = "", englishName = "") {
+    const male = isMaleGender(gender);
+    const displayNameAr = arabicName ? ` ${arabicName}` : "";
+    const displayNameEn = englishName ? ` ${englishName}` : "";
+    
     if (language === "ar") {
-      const displayName = guardianNickname?.ar || guardianName?.split(" ")[0] || guardianName || "";
+      // Try to get from DB first
+      const dbSalutationAr = await this.getDbVariable("salutation_ar", "ar");
+      if (dbSalutationAr) {
+        return `${dbSalutationAr}${displayNameAr}`;
+      }
+      return male ? `عزيزي الطالب${displayNameAr}` : `عزيزتي الطالبة${displayNameAr}`;
+    } else {
+      const dbSalutationEn = await this.getDbVariable("salutation_en", "en");
+      if (dbSalutationEn) {
+        return `${dbSalutationEn}${displayNameEn}`;
+      }
+      return `Dear student${displayNameEn}`;
+    }
+  }
+
+  async getGuardianSalutation(guardianName, relationship, guardianNickname = null, language = "ar") {
+    const displayNameAr = guardianNickname?.ar || guardianName?.split(" ")[0] || guardianName || "";
+    const displayNameEn = guardianNickname?.en || guardianName?.split(" ")[0] || guardianName || "";
+    
+    if (language === "ar") {
+      const dbGuardianSalutationAr = await this.getDbVariable("guardianSalutation_ar", "ar");
+      if (dbGuardianSalutationAr) {
+        return `${dbGuardianSalutationAr} ${displayNameAr}`;
+      }
       switch (relationship) {
-        case "father": return `عزيزي الأستاذ ${displayName}`;
-        case "mother": return `عزيزتي السيدة ${displayName}`;
-        case "guardian": return `عزيزي السيد ${displayName}`;
-        default: return `عزيزي/عزيزتي ${displayName}`;
+        case "father": return `عزيزي الأستاذ ${displayNameAr}`;
+        case "mother": return `عزيزتي السيدة ${displayNameAr}`;
+        case "guardian": return `عزيزي السيد ${displayNameAr}`;
+        default: return `عزيزي/عزيزتي ${displayNameAr}`;
       }
     } else {
-      const displayName = guardianNickname?.en || guardianName?.split(" ")[0] || guardianName || "";
+      const dbGuardianSalutationEn = await this.getDbVariable("guardianSalutation_en", "en");
+      if (dbGuardianSalutationEn) {
+        return `${dbGuardianSalutationEn} ${displayNameEn}`;
+      }
       switch (relationship) {
-        case "father": return `Dear Mr. ${displayName}`;
-        case "mother": return `Dear Mrs. ${displayName}`;
-        case "guardian": return `Dear Mr./Mrs. ${displayName}`;
-        default: return `Dear ${displayName}`;
+        case "father": return `Dear Mr. ${displayNameEn}`;
+        case "mother": return `Dear Mrs. ${displayNameEn}`;
+        case "guardian": return `Dear Mr./Mrs. ${displayNameEn}`;
+        default: return `Dear ${displayNameEn}`;
       }
     }
   }
 
-  getStudentChildTitle(gender, language = "ar") {
+  async getStudentChildTitle(gender, language = "ar") {
     const male = isMaleGender(gender);
-    if (language === "ar") return male ? "الابن" : "الابنة";
-    return male ? "son" : "daughter";
+    if (language === "ar") {
+      const dbStudentGenderAr = await this.getDbVariable("studentGender_ar", "ar");
+      if (dbStudentGenderAr) return dbStudentGenderAr;
+      return male ? "الابن" : "الابنة";
+    } else {
+      const dbStudentGenderEn = await this.getDbVariable("studentGender_en", "en");
+      if (dbStudentGenderEn) return dbStudentGenderEn;
+      return male ? "son" : "daughter";
+    }
+  }
+
+  async getWelcomeMessage(language = "ar", gender = "male") {
+    const male = isMaleGender(gender);
+    if (language === "ar") {
+      const dbWelcomeAr = await this.getDbVariable("welcome_ar", "ar");
+      if (dbWelcomeAr) return dbWelcomeAr;
+      return male ? "أهلاً بك" : "أهلاً بكِ";
+    } else {
+      return "Welcome";
+    }
   }
 
   // ============================================================
   // ✅ رسالة اختيار اللغة للطالب (bilingual - رسالة ترحيب)
   // ============================================================
 
-  prepareBilingualLanguageSelectionMessage(studentName, gender, nickname = null) {
+  async prepareBilingualLanguageSelectionMessage(studentName, gender, nickname = null) {
     const male = isMaleGender(gender);
     const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
     const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
-    const salutationAr = this.getStudentSalutation(gender, "ar", arabicName, englishName);
-    const salutationEn = this.getStudentSalutation(gender, "en", arabicName, englishName);
-    const welcomeAr = male ? "أهلاً بك" : "أهلاً بكِ";
+    
+    const salutationAr = await this.getStudentSalutation(gender, "ar", arabicName, englishName);
+    const salutationEn = await this.getStudentSalutation(gender, "en", arabicName, englishName);
+    const welcomeAr = await this.getWelcomeMessage("ar", gender);
 
     return `${salutationAr}
 ${salutationEn}
@@ -109,16 +184,16 @@ The Code School Team 💻
   // ✅ رسالة إشعار ولي الأمر (bilingual - رسالة ترحيب)
   // ============================================================
 
-  prepareBilingualGuardianNotificationMessage(
+  async prepareBilingualGuardianNotificationMessage(
     guardianName, studentName, studentGender, relationship,
     guardianNickname = null, studentNickname = null,
   ) {
-    const guardianSalAr = this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar");
-    const guardianSalEn = this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en");
+    const guardianSalAr = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar");
+    const guardianSalEn = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en");
     const studentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
     const studentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
-    const titleAr = this.getStudentChildTitle(studentGender, "ar");
-    const titleEn = this.getStudentChildTitle(studentGender, "en");
+    const titleAr = await this.getStudentChildTitle(studentGender, "ar");
+    const titleEn = await this.getStudentChildTitle(studentGender, "en");
     const enrolledVerb = isMaleGender(studentGender) ? "انضم" : "انضمت";
 
     return `${guardianSalAr}
@@ -147,12 +222,12 @@ The Code School Team 💻
   // ✅ رسالة تأكيد اللغة للطالب - باللغة المختارة فقط
   // ============================================================
 
-  prepareLanguageConfirmationMessage(studentName, gender, selectedLanguage, nickname = null) {
+  async prepareLanguageConfirmationMessage(studentName, gender, selectedLanguage, nickname = null) {
     const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
     const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
+    const salutation = await this.getStudentSalutation(gender, selectedLanguage, arabicName, englishName);
 
     if (selectedLanguage === "en") {
-      const salutation = this.getStudentSalutation(gender, "en", arabicName, englishName);
       return `✅ Language Preference Confirmed
 
 ${salutation},
@@ -172,7 +247,6 @@ The Code School Team 💻
     }
 
     // ✅ عربي
-    const salutation = this.getStudentSalutation(gender, "ar", arabicName, englishName);
     return `✅ تم تأكيد اللغة المفضلة
 
 ${salutation}،
@@ -195,17 +269,17 @@ ${salutation}،
   // ✅ رسالة تأكيد اللغة لولي الأمر - باللغة المختارة فقط
   // ============================================================
 
-  prepareGuardianLanguageConfirmationMessage(
+  async prepareGuardianLanguageConfirmationMessage(
     guardianName, studentName, studentGender, relationship, selectedLanguage,
     guardianNickname = null, studentNickname = null,
   ) {
     const studentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
     const studentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
-    const titleAr = this.getStudentChildTitle(studentGender, "ar");
-    const titleEn = this.getStudentChildTitle(studentGender, "en");
+    const titleAr = await this.getStudentChildTitle(studentGender, "ar");
+    const titleEn = await this.getStudentChildTitle(studentGender, "en");
+    const salutation = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, selectedLanguage);
 
     if (selectedLanguage === "en") {
-      const salutation = this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en");
       return `${salutation},
 
 We are pleased to inform you that your ${titleEn} **${studentNameEn}** has successfully selected *English* as their preferred communication language.
@@ -221,7 +295,6 @@ The Code School Team 💻`;
     }
 
     // ✅ عربي
-    const salutation = this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar");
     const enrolledVerb = isMaleGender(studentGender) ? "قام" : "قامت";
     return `${salutation}،
 
@@ -460,14 +533,14 @@ The Code School Team 💻`;
               .replace(/{name_en}/g, studentNickname?.en || studentName.split(" ")[0] || studentName)
               .replace(/{fullName}/g, studentName)
               .replace(/{gender}/g, male ? "ولد" : "بنت")
-              .replace(/{salutation_ar}/g, this.getStudentSalutation(gender, "ar", studentNickname?.ar, studentNickname?.en))
-              .replace(/{salutation_en}/g, this.getStudentSalutation(gender, "en", studentNickname?.ar, studentNickname?.en))
-              .replace(/{you_ar}/g, male ? "أنت" : "أنتِ")
+              .replace(/{salutation_ar}/g, await this.getStudentSalutation(gender, "ar", studentNickname?.ar, studentNickname?.en))
+              .replace(/{salutation_en}/g, await this.getStudentSalutation(gender, "en", studentNickname?.ar, studentNickname?.en))
+              .replace(/{you_ar}/g, await this.getDbVariable("you_ar", "ar") || (male ? "أنت" : "أنتِ"))
               .replace(/{you_en}/g, "you")
-              .replace(/{welcome_ar}/g, male ? "أهلاً بك" : "أهلاً بكِ")
+              .replace(/{welcome_ar}/g, await this.getWelcomeMessage("ar", gender))
               .replace(/{welcome_en}/g, "Welcome");
           } else {
-            languageMessage = this.prepareBilingualLanguageSelectionMessage(studentName, gender, studentNickname);
+            languageMessage = await this.prepareBilingualLanguageSelectionMessage(studentName, gender, studentNickname);
           }
 
           const listTitle = male
@@ -537,12 +610,12 @@ The Code School Team 💻`;
               .replace(/{fullStudentName}/g, studentName)
               .replace(/{relationship_ar}/g, relationship === "father" ? "الأب" : relationship === "mother" ? "الأم" : "الوصي")
               .replace(/{relationship_en}/g, relationship === "father" ? "father" : relationship === "mother" ? "mother" : "guardian")
-              .replace(/{studentGender_ar}/g, male ? "الابن" : "الابنة")
-              .replace(/{studentGender_en}/g, male ? "son" : "daughter")
-              .replace(/{guardianSalutation_ar}/g, this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar"))
-              .replace(/{guardianSalutation_en}/g, this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en"));
+              .replace(/{studentGender_ar}/g, await this.getStudentChildTitle(gender, "ar"))
+              .replace(/{studentGender_en}/g, await this.getStudentChildTitle(gender, "en"))
+              .replace(/{guardianSalutation_ar}/g, await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar"))
+              .replace(/{guardianSalutation_en}/g, await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en"));
           } else {
-            guardianMessage = this.prepareBilingualGuardianNotificationMessage(
+            guardianMessage = await this.prepareBilingualGuardianNotificationMessage(
               guardianName, studentName, gender, relationship, guardianNickname, studentNickname,
             );
           }
@@ -623,7 +696,7 @@ The Code School Team 💻`;
       if (studentPhone) {
         const preparedStudentNumber = this.preparePhoneNumber(studentPhone);
         if (preparedStudentNumber) {
-          const studentMessage = this.prepareLanguageConfirmationMessage(
+          const studentMessage = await this.prepareLanguageConfirmationMessage(
             studentName, gender, selectedLanguage, studentNickname,
           );
 
@@ -632,7 +705,7 @@ The Code School Team 💻`;
             phoneNumber: preparedStudentNumber,
             messageContent: studentMessage,
             messageType: "bilingual_language_confirmation",
-            language: selectedLanguage, // ✅ اللغة المختارة فعلاً
+            language: selectedLanguage,
             metadata: {
               selectedLanguage,
               automationType: "language_selection_response",
@@ -640,7 +713,7 @@ The Code School Team 💻`;
               studentGender: gender,
               studentNicknameAr: studentNickname?.ar || null,
               studentNicknameEn: studentNickname?.en || null,
-              isBilingual: false, // ✅ مش bilingual
+              isBilingual: false,
             },
           });
         }
@@ -650,7 +723,7 @@ The Code School Team 💻`;
       if (guardianPhone) {
         const preparedGuardianNumber = this.preparePhoneNumber(guardianPhone);
         if (preparedGuardianNumber) {
-          const guardianMessage = this.prepareGuardianLanguageConfirmationMessage(
+          const guardianMessage = await this.prepareGuardianLanguageConfirmationMessage(
             guardianName, studentName, gender, relationship, selectedLanguage,
             guardianNickname, studentNickname,
           );
@@ -660,7 +733,7 @@ The Code School Team 💻`;
             phoneNumber: preparedGuardianNumber,
             messageContent: guardianMessage,
             messageType: "bilingual_language_confirmation_guardian",
-            language: selectedLanguage, // ✅ اللغة المختارة فعلاً
+            language: selectedLanguage,
             metadata: {
               selectedLanguage,
               automationType: "language_selection_response",
@@ -669,7 +742,7 @@ The Code School Team 💻`;
               studentName,
               studentGender: gender,
               relationship,
-              isBilingual: false, // ✅ مش bilingual
+              isBilingual: false,
             },
           });
         }
@@ -701,6 +774,7 @@ The Code School Team 💻`;
       mode: this.mode,
       lastChecked: new Date(),
       genderHandling: "✅ Case-insensitive (male/Male/MALE all work correctly)",
+      usesDbVariables: true,
     };
   }
 }

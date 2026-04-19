@@ -7,7 +7,6 @@ import mongoose from 'mongoose';
 
 export async function POST(req, { params }) {
   try {
-    // ✅ FIX: ضيف requireAdmin
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
 
@@ -15,7 +14,7 @@ export async function POST(req, { params }) {
 
     const { id } = await params;
 
-    // ✅ FIX: استخدام req.text() بأمان
+    // ── Parse body بأمان ────────────────────────────────────────────────────
     let body = {};
     try {
       const text = await req.text();
@@ -29,8 +28,11 @@ export async function POST(req, { params }) {
       );
     }
 
-    const { reminderType = '24hours', metadata } = body;
+    // ✅ FIX: استقبال metadata الصح من الفرونت
+    // الفرونت بيبعت: { reminderType, metadata: { studentMessages, guardianMessages } }
+    const { reminderType = '24hours', metadata = {} } = body;
 
+    // ── Validation ──────────────────────────────────────────────────────────
     if (!['24hours', '1hour'].includes(reminderType)) {
       return NextResponse.json(
         { success: false, error: 'Invalid reminder type. Use 24hours or 1hour' },
@@ -45,16 +47,27 @@ export async function POST(req, { params }) {
       );
     }
 
+    // ── Logging ──────────────────────────────────────────────────────────────
+    const studentMsgsCount  = metadata?.studentMessages
+      ? Object.keys(metadata.studentMessages).length
+      : 0;
+    const guardianMsgsCount = metadata?.guardianMessages
+      ? Object.keys(metadata.guardianMessages).length
+      : 0;
+
     console.log(`\n📨 Manual reminder for session: ${id}`);
     console.log(`⏰ Type: ${reminderType}`);
-    console.log(`📝 Student Message: ${metadata?.studentMessage ? 'Yes' : 'No'}`);
-    console.log(`📝 Guardian Message: ${metadata?.guardianMessage ? 'Yes' : 'No'}`);
+    console.log(`📝 Per-student messages:  ${studentMsgsCount}`);
+    console.log(`📝 Per-guardian messages: ${guardianMsgsCount}`);
 
+    // ── Send ─────────────────────────────────────────────────────────────────
+    // ✅ metadata بيوصل كامل لـ sendManualSessionReminder
+    // اللي بيقرأ منه: metadata.studentMessages[studentId] و metadata.guardianMessages[studentId]
     const result = await sendManualSessionReminder(
       id,
       reminderType,
-      null,
-      metadata || {}
+      null,       // customMessage — مش بنستخدمه لأن عندنا per-student messages
+      metadata    // ✅ { studentMessages: { [sid]: renderedMsg }, guardianMessages: { [sid]: renderedMsg } }
     );
 
     if (!result.success) {
@@ -68,14 +81,14 @@ export async function POST(req, { params }) {
       success: true,
       message: `${reminderType} reminders sent successfully`,
       data: {
-        totalStudents: result.totalStudents,
-        successCount: result.successCount,
-        failCount: result.failCount,
-        reminderType: result.reminderType,
-        customMessageUsed: result.customMessageUsed,
-        studentMessageUsed: !!metadata?.studentMessage,
-        guardianMessageUsed: !!metadata?.guardianMessage,
-        notificationResults: result.notificationResults,
+        totalStudents:        result.totalStudents,
+        successCount:         result.successCount,
+        failCount:            result.failCount,
+        reminderType:         result.reminderType,
+        customMessageUsed:    result.customMessageUsed,
+        studentMessagesCount: studentMsgsCount,
+        guardianMessagesCount: guardianMsgsCount,
+        notificationResults:  result.notificationResults,
       }
     });
 

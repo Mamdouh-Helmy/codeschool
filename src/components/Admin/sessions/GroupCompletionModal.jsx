@@ -17,6 +17,38 @@ import {
   Globe
 } from "lucide-react";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// resolveVar — gender-aware value from a DB TemplateVariable object
+// ─────────────────────────────────────────────────────────────────────────────
+function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
+  const v = dbVars[key];
+  if (!v) return null;
+
+  const { studentGender = "male", guardianType = "father" } = genderContext;
+  const isMale   = String(studentGender).toLowerCase() !== "female";
+  const isFather = String(guardianType).toLowerCase()  !== "mother";
+
+  if (v.hasGender) {
+    if (v.genderType === "student") {
+      return lang === "ar"
+        ? (isMale ? v.valueMaleAr   : v.valueFemaleAr) || v.valueAr || null
+        : (isMale ? v.valueMaleEn   : v.valueFemaleEn) || v.valueEn || null;
+    }
+    if (v.genderType === "guardian") {
+      return lang === "ar"
+        ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || null
+        : (isFather ? v.valueFatherEn : v.valueMotherEn) || v.valueEn || null;
+    }
+    if (v.genderType === "instructor") {
+      return lang === "ar"
+        ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
+        : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
+    }
+  }
+
+  return lang === "ar" ? v.valueAr || null : v.valueEn || null;
+}
+
 export default function GroupCompletionModal({
   group,
   groupId,
@@ -55,9 +87,26 @@ export default function GroupCompletionModal({
   const [sending, setSending] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState({ student: false, guardian: false });
 
+  // ✅ DB template variables (نفس منطق ReminderModal)
+  const [dbVars, setDbVars] = useState({});
+
   const studentTextareaRef = useRef(null);
   const guardianTextareaRef = useRef(null);
   const hintsRef = useRef({ student: null, guardian: null });
+
+  // ── Fetch DB template variables on mount ──────────────────────────────────
+  useEffect(() => {
+    fetch("/api/whatsapp/template-variables")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          const map = {};
+          data.data.forEach((v) => { map[v.key] = v; });
+          setDbVars(map);
+        }
+      })
+      .catch((err) => console.error("❌ Failed to load template variables:", err));
+  }, []);
 
   // Click outside handler
   useEffect(() => {
@@ -80,34 +129,108 @@ export default function GroupCompletionModal({
     }
   }, [groupStudents]);
 
-  // ✅ FIX: جلب القوالب لجميع الطلاب مرة واحدة
+  // ✅ بناء المتغيرات لكل طالب - مع دعم dbVars
+  const buildVariables = useCallback(
+    (student) => {
+      if (!student) return {};
+      
+      const lang = student.communicationPreferences?.preferredLanguage || "ar";
+      const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
+      const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
+      const isMale = gender !== "female";
+      const isFather = relationship !== "mother";
+      const genderCtx = { studentGender: gender, guardianType: relationship };
+
+      const studentFirstName =
+        lang === "ar"
+          ? student.personalInfo?.nickname?.ar?.trim() || student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
+          : student.personalInfo?.nickname?.en?.trim() || student.personalInfo?.fullName?.split(" ")[0] || "Student";
+
+      const guardianFirstName =
+        lang === "ar"
+          ? student.guardianInfo?.nickname?.ar?.trim() || student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر"
+          : student.guardianInfo?.nickname?.en?.trim() || student.guardianInfo?.name?.split(" ")[0] || "Guardian";
+
+      // ── DB vars → fallback ───────────────────────────────────────────────────
+      const salutationBase_ar =
+        resolveVar(dbVars, "salutation_ar", "ar", genderCtx) ||
+        (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
+
+      const guardianSalBase_ar =
+        resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) ||
+        (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
+
+      const guardianSalBase_en =
+        resolveVar(dbVars, "guardianSalutation_en", "en", genderCtx) ||
+        (isFather ? "Dear Mr." : "Dear Mrs.");
+
+      const childTitleAr =
+        resolveVar(dbVars, "childTitle", "ar", genderCtx) ||
+        (isMale ? "ابنك" : "ابنتك");
+
+      const childTitleEn =
+        resolveVar(dbVars, "childTitle", "en", genderCtx) ||
+        (isMale ? "your son" : "your daughter");
+
+      // ── Composed salutations ─────────────────────────────────────────────────
+      const guardianSalutation_ar = `${guardianSalBase_ar} ${guardianFirstName}`;
+      const guardianSalutation_en = `${guardianSalBase_en} ${guardianFirstName}`;
+      const guardianSalutation = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
+
+      const studentSalutation_ar = `${salutationBase_ar} ${studentFirstName}`;
+      const studentSalutation = lang === "ar" ? studentSalutation_ar : `Dear ${studentFirstName}`;
+
+      const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
+
+      return {
+        studentSalutation,
+        guardianSalutation,
+        salutation: guardianSalutation,
+        studentName: studentFirstName,
+        studentFullName: student.personalInfo?.fullName || "",
+        guardianName: guardianFirstName,
+        guardianFullName: student.guardianInfo?.name || "",
+        childTitle,
+        groupName: group?.name || "",
+        groupCode: group?.code || "",
+        courseName: group?.courseSnapshot?.title || "",
+        enrollmentNumber: student.enrollmentNumber || "",
+        feedbackLink: formData.feedbackLink || "",
+      };
+    },
+    [group, formData.feedbackLink, dbVars]
+  );
+
+  // ✅ استبدال المتغيرات في النص
+  const renderTemplate = useCallback(
+    (template, student) => {
+      if (!template || !student) return template || "";
+      const variables = buildVariables(student);
+      let result = template;
+      Object.entries(variables).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          result = result.replace(new RegExp(`\\{${key}\\}`, "g"), String(value));
+        }
+      });
+      return result;
+    },
+    [buildVariables]
+  );
+
+  // ✅ جلب القوالب لجميع الطلاب
   useEffect(() => {
     const fetchAllTemplates = async () => {
       if (!resolvedGroupId || groupStudents.length === 0) return;
       
       setLoadingTemplates(true);
       try {
-        // جلب أول session عشان نستخدمها في جلب القوالب
-        const sessionsRes = await fetch(`/api/groups/${resolvedGroupId}/sessions`);
-        const sessionsJson = await sessionsRes.json();
-        const sessions = sessionsJson.data || [];
-        const firstSession = sessions[0];
-        
-        if (!firstSession) {
-          // لو مفيش sessions، نجيب القوالب الافتراضية مباشرة
-          await fetchDefaultTemplates();
-          return;
-        }
-
-        // جلب القوالب لكل طالب
         const templatesPromises = groupStudents.map(async (student) => {
-          const res = await fetch(`/api/sessions/${firstSession.id}/templates`, {
+          const res = await fetch(`/api/groups/${resolvedGroupId}/completion-templates`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              eventType: "group_completion",
               studentId: student._id,
-              extraData: { feedbackLink: formData.feedbackLink },
+              feedbackLink: formData.feedbackLink,
             }),
           });
           const json = await res.json();
@@ -137,7 +260,6 @@ export default function GroupCompletionModal({
         setStudentTemplates(newStudentTemplates);
         setGuardianTemplates(newGuardianTemplates);
 
-        // عرض قالب أول طالب
         if (groupStudents[0]) {
           setCurrentStudentMessage(newStudentTemplates[groupStudents[0]._id] || '');
           setCurrentGuardianMessage(newGuardianTemplates[groupStudents[0]._id] || '');
@@ -145,129 +267,21 @@ export default function GroupCompletionModal({
 
       } catch (error) {
         console.error("Error fetching templates:", error);
-        // لو فشل، نجيب القوالب الافتراضية
-        await fetchDefaultTemplates();
+        toast.error(isRTL ? "فشل تحميل القوالب" : "Failed to load templates");
       } finally {
         setLoadingTemplates(false);
       }
     };
 
-    const fetchDefaultTemplates = async () => {
-      try {
-        const newStudentTemplates = {};
-        const newGuardianTemplates = {};
-        
-        for (const student of groupStudents) {
-          const lang = student.communicationPreferences?.preferredLanguage || "ar";
-          
-          // جلب قالب الطالب الافتراضي
-          const stuRes = await fetch(`/api/message-templates?type=group_completion_student&recipient=student&default=true`);
-          const stuJson = await stuRes.json();
-          if (stuJson.success && stuJson.data?.length > 0) {
-            newStudentTemplates[student._id] = lang === "ar" ? stuJson.data[0].contentAr : stuJson.data[0].contentEn;
-          }
-          
-          // جلب قالب ولي الأمر الافتراضي
-          const guaRes = await fetch(`/api/message-templates?type=group_completion_guardian&recipient=guardian&default=true`);
-          const guaJson = await guaRes.json();
-          if (guaJson.success && guaJson.data?.length > 0) {
-            newGuardianTemplates[student._id] = lang === "ar" ? guaJson.data[0].contentAr : guaJson.data[0].contentEn;
-          }
-        }
-        
-        setStudentTemplates(newStudentTemplates);
-        setGuardianTemplates(newGuardianTemplates);
-        
-        if (groupStudents[0]) {
-          setCurrentStudentMessage(newStudentTemplates[groupStudents[0]._id] || '');
-          setCurrentGuardianMessage(newGuardianTemplates[groupStudents[0]._id] || '');
-        }
-      } catch (e) {
-        console.error("fetchDefaultTemplates error", e);
-      }
-    };
-
     fetchAllTemplates();
-  }, [resolvedGroupId, groupStudents, formData.feedbackLink]);
+  }, [resolvedGroupId, groupStudents, formData.feedbackLink, isRTL]);
 
-  // بناء المتغيرات لكل طالب
-  const buildVariables = useCallback(
-    (student) => {
-      if (!student) return {};
-      const lang = student.communicationPreferences?.preferredLanguage || "ar";
-      const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
-      const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
-
-      const studentFirstName =
-        lang === "ar"
-          ? student.personalInfo?.nickname?.ar?.trim() || student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
-          : student.personalInfo?.nickname?.en?.trim() || student.personalInfo?.fullName?.split(" ")[0] || "Student";
-
-      const guardianFirstName =
-        lang === "ar"
-          ? student.guardianInfo?.nickname?.ar?.trim() || student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر"
-          : student.guardianInfo?.nickname?.en?.trim() || student.guardianInfo?.name?.split(" ")[0] || "Guardian";
-
-      let studentSalutation =
-        lang === "ar"
-          ? gender === "female"
-            ? `عزيزتي ${studentFirstName}`
-            : `عزيزي ${studentFirstName}`
-          : `Dear ${studentFirstName}`;
-
-      let guardianSalutation = "";
-      if (lang === "ar") {
-        if (relationship === "mother") guardianSalutation = `عزيزتي السيدة ${guardianFirstName}`;
-        else if (relationship === "father") guardianSalutation = `عزيزي الأستاذ ${guardianFirstName}`;
-        else guardianSalutation = `عزيزي/عزيزتي ${guardianFirstName}`;
-      } else {
-        if (relationship === "mother") guardianSalutation = `Dear Mrs. ${guardianFirstName}`;
-        else if (relationship === "father") guardianSalutation = `Dear Mr. ${guardianFirstName}`;
-        else guardianSalutation = `Dear ${guardianFirstName}`;
-      }
-
-      const childTitle =
-        lang === "ar"
-          ? gender === "female" ? "ابنتك" : "ابنك"
-          : gender === "female" ? "your daughter" : "your son";
-
-      return {
-        studentSalutation,
-        guardianSalutation,
-        salutation: guardianSalutation,
-        studentName: studentFirstName,
-        studentFullName: student.personalInfo?.fullName || "",
-        guardianName: guardianFirstName,
-        guardianFullName: student.guardianInfo?.name || "",
-        childTitle,
-        groupName: group?.name || "",
-        groupCode: group?.code || "",
-        courseName: group?.courseSnapshot?.title || "",
-        enrollmentNumber: student.enrollmentNumber || "",
-        feedbackLink: formData.feedbackLink || "",
-      };
-    },
-    [group, formData.feedbackLink]
-  );
-
-  // ✅ replace المتغيرات في النص
-  const replaceVarsInContent = useCallback(
-    (content, student) => {
-      if (!content || !student) return content || "";
-      const variables = buildVariables(student);
-      return Object.entries(variables).reduce((msg, [key, val]) => {
-        return msg.replace(new RegExp(`\\{${key}\\}`, "g"), String(val ?? ""));
-      }, content);
-    },
-    [buildVariables]
-  );
-
-  // ✅ المعاينة تستخدم replaceVarsInContent على الـ raw content
+  // ✅ المعاينة - تستخدم renderTemplate على الـ raw content
   useEffect(() => {
     if (!selectedStudentForPreview) return;
-    setPreviewStudentMessage(replaceVarsInContent(currentStudentMessage, selectedStudentForPreview));
-    setPreviewGuardianMessage(replaceVarsInContent(currentGuardianMessage, selectedStudentForPreview));
-  }, [currentStudentMessage, currentGuardianMessage, selectedStudentForPreview, replaceVarsInContent]);
+    setPreviewStudentMessage(renderTemplate(currentStudentMessage, selectedStudentForPreview));
+    setPreviewGuardianMessage(renderTemplate(currentGuardianMessage, selectedStudentForPreview));
+  }, [currentStudentMessage, currentGuardianMessage, selectedStudentForPreview, renderTemplate]);
 
   // المتغيرات المتاحة للـ hints
   const availableVariables = useMemo(
@@ -302,14 +316,12 @@ export default function GroupCompletionModal({
       
       setSelectedStudentForPreview(student);
       
-      // ✅ استخدام القالب المعدل يدوياً إذا موجود، وإلا استخدم القالب الافتراضي
       const studentTemplate = editedStudentTemplates[studentId] || studentTemplates[studentId] || '';
       const guardianTemplate = editedGuardianTemplates[studentId] || guardianTemplates[studentId] || '';
       
       setCurrentStudentMessage(studentTemplate);
       setCurrentGuardianMessage(guardianTemplate);
       
-      // تحديث حالة manual edit
       setManuallyEdited({
         student: !!editedStudentTemplates[studentId],
         guardian: !!editedGuardianTemplates[studentId]
@@ -325,217 +337,181 @@ export default function GroupCompletionModal({
     setLoadingTemplates(true);
     try {
       const studentId = selectedStudentForPreview._id;
-      const lang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
       
-      // جلب القوالب الافتراضية
-      const [stuRes, guaRes] = await Promise.all([
-        fetch(`/api/message-templates?type=group_completion_student&recipient=student&default=true`),
-        fetch(`/api/message-templates?type=group_completion_guardian&recipient=guardian&default=true`),
-      ]);
-      
-      const [stuJson, guaJson] = await Promise.all([stuRes.json(), guaRes.json()]);
-      
-      let studentTemplate = '';
-      let guardianTemplate = '';
-      
-      if (stuJson.success && stuJson.data?.length > 0) {
-        studentTemplate = lang === "ar" ? stuJson.data[0].contentAr : stuJson.data[0].contentEn;
-      }
-      
-      if (guaJson.success && guaJson.data?.length > 0) {
-        guardianTemplate = lang === "ar" ? guaJson.data[0].contentAr : guaJson.data[0].contentEn;
-      }
-
-      // تحديث القوالب الافتراضية
-      setStudentTemplates(prev => ({
-        ...prev,
-        [studentId]: studentTemplate
-      }));
-      setGuardianTemplates(prev => ({
-        ...prev,
-        [studentId]: guardianTemplate
-      }));
-
-      // إزالة أي تعديلات يدوية
-      setEditedStudentTemplates(prev => {
-        const newState = { ...prev };
-        delete newState[studentId];
-        return newState;
+      const res = await fetch(`/api/groups/${resolvedGroupId}/completion-templates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: studentId,
+          feedbackLink: formData.feedbackLink,
+        }),
       });
-      setEditedGuardianTemplates(prev => {
-        const newState = { ...prev };
-        delete newState[studentId];
-        return newState;
-      });
-
-      // عرض القوالب الافتراضية
-      setCurrentStudentMessage(studentTemplate);
-      setCurrentGuardianMessage(guardianTemplate);
-      setManuallyEdited({ student: false, guardian: false });
       
-      toast.success(isRTL ? "تم استعادة القوالب الافتراضية" : "Default templates restored");
+      const json = await res.json();
+      
+      if (json.success) {
+        const studentTemplate = json.data.student?.rawContent || json.data.student?.content || '';
+        const guardianTemplate = json.data.guardian?.rawContent || json.data.guardian?.content || '';
+
+        setStudentTemplates(prev => ({
+          ...prev,
+          [studentId]: studentTemplate
+        }));
+        setGuardianTemplates(prev => ({
+          ...prev,
+          [studentId]: guardianTemplate
+        }));
+
+        setEditedStudentTemplates(prev => {
+          const newState = { ...prev };
+          delete newState[studentId];
+          return newState;
+        });
+        setEditedGuardianTemplates(prev => {
+          const newState = { ...prev };
+          delete newState[studentId];
+          return newState;
+        });
+
+        setCurrentStudentMessage(studentTemplate);
+        setCurrentGuardianMessage(guardianTemplate);
+        setManuallyEdited({ student: false, guardian: false });
+        
+        toast.success(isRTL ? "تم استعادة القوالب الافتراضية" : "Default templates restored");
+      }
     } catch (e) {
       console.error("resetToDefault error:", e);
       toast.error(isRTL ? "فشل استعادة القوالب" : "Failed to reset templates");
     } finally {
       setLoadingTemplates(false);
     }
-  }, [selectedStudentForPreview, isRTL]);
+  }, [selectedStudentForPreview, resolvedGroupId, formData.feedbackLink, isRTL]);
 
   // حفظ القالب في DB
   const saveTemplateToDatabase = useCallback(
-  async (type, content) => {
-    if (!content?.trim() || !selectedStudentForPreview) return;
-    
-    setSavingTemplate((prev) => ({ ...prev, [type]: true }));
-    try {
-      const templateType = type === "student" ? "group_completion_student" : "group_completion_guardian";
-      const recipientType = type === "student" ? "student" : "guardian";
-      const lang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
-      const templateName = type === "student" ? "Group Completion - Student" : "Group Completion - Guardian";
-
-      const searchRes = await fetch(`/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`);
-      const searchJson = await searchRes.json();
-
-      if (searchJson.success && searchJson.data.length > 0) {
-        const templateId = searchJson.data[0]._id;
-        const existingTemplate = searchJson.data[0];
-        
-        const updateData = { 
-          id: templateId, 
-          name: templateName, 
-          isDefault: true,
-          updatedAt: new Date()
-        };
-
-        console.log(`📝 Existing template found:`, {
-          templateId,
-          existingContentAr: existingTemplate.contentAr?.substring(0, 50) + '...',
-          existingContentEn: existingTemplate.contentEn?.substring(0, 50) + '...',
-          lang
-        });
-        
-        // ✅ نحدث اللغة الحالية فقط، ونحتفظ باللغة الأخرى كما هي
-        if (lang === "ar") {
-          updateData.contentAr = content;
-          updateData.contentEn = existingTemplate.contentEn || '';
-          console.log(`📝 Updating Arabic content only, keeping English:`, {
-            newContentAr: updateData.contentAr?.substring(0, 50) + '...',
-            keptContentEn: updateData.contentEn?.substring(0, 50) + '...'
-          });
-        } else {
-          updateData.contentEn = content;
-          updateData.contentAr = existingTemplate.contentAr || '';
-          console.log(`📝 Updating English content only, keeping Arabic:`, {
-            keptContentAr: updateData.contentAr?.substring(0, 50) + '...',
-            newContentEn: updateData.contentEn?.substring(0, 50) + '...'
-          });
-        }
-        
-        const res = await fetch(`/api/message-templates`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updateData),
-        });
-        const json = await res.json();
-        if (json.success) {
-          toast.success(
-            isRTL 
-              ? `تم تحديث القالب (${lang === 'ar' ? 'عربي' : 'إنجليزي'})` 
-              : `Template (${lang === 'ar' ? 'Arabic' : 'English'}) updated`
-          );
-          
-          // تحديث القوالب الافتراضية بعد الحفظ
-          if (type === "student") {
-            setStudentTemplates(prev => ({
-              ...prev,
-              [selectedStudentForPreview._id]: content
-            }));
-          } else {
-            setGuardianTemplates(prev => ({
-              ...prev,
-              [selectedStudentForPreview._id]: content
-            }));
-          }
-        } else throw new Error(json.error);
-      } else {
-        // إنشاء قالب جديد - نضع المحتوى في اللغة المناسبة فقط
-        console.log(`📝 No existing template found, creating new one for language: ${lang}`);
-        
-        const newTemplate = {
-          templateType,
-          recipientType,
-          name: templateName,
-          description: `Group completion notification for ${recipientType}`,
-          isDefault: true,
-          isActive: true,
-          variables: [
-            { key: "studentSalutation", label: "Student Salutation", example: "عزيزي أحمد" },
-            { key: "guardianSalutation", label: "Guardian Salutation", example: "عزيزي الأستاذ محمد" },
-            { key: "studentName", label: "Student Name", example: "أحمد" },
-            { key: "guardianName", label: "Guardian Name", example: "محمد" },
-            { key: "childTitle", label: "Son/Daughter", example: "ابنك" },
-            { key: "groupName", label: "Group Name", example: "المجموعة أ" },
-            { key: "groupCode", label: "Group Code", example: "GRP-001" },
-            { key: "courseName", label: "Course Name", example: "Python" },
-            { key: "feedbackLink", label: "Feedback Link", example: "https://forms.google.com/..." },
-          ],
-        };
-        
-        // ✅ نخزن المحتوى في اللغة المناسبة فقط
-        if (lang === "ar") { 
-          newTemplate.contentAr = content; 
-          newTemplate.contentEn = ''; 
-          console.log(`📝 Created new Arabic template:`, {
-            contentAr: newTemplate.contentAr?.substring(0, 50) + '...',
-            contentEn: '(empty)'
-          });
-        } else { 
-          newTemplate.contentEn = content; 
-          newTemplate.contentAr = ''; 
-          console.log(`📝 Created new English template:`, {
-            contentAr: '(empty)',
-            contentEn: newTemplate.contentEn?.substring(0, 50) + '...'
-          });
-        }
-
-        const res = await fetch(`/api/message-templates`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newTemplate),
-        });
-        const json = await res.json();
-        if (json.success) {
-          toast.success(
-            isRTL 
-              ? `تم حفظ القالب (${lang === 'ar' ? 'عربي' : 'إنجليزي'})` 
-              : `Template (${lang === 'ar' ? 'Arabic' : 'English'}) saved`
-          );
-          
-          // تحديث القوالب الافتراضية بعد الحفظ
-          if (type === "student") {
-            setStudentTemplates(prev => ({
-              ...prev,
-              [selectedStudentForPreview._id]: content
-            }));
-          } else {
-            setGuardianTemplates(prev => ({
-              ...prev,
-              [selectedStudentForPreview._id]: content
-            }));
-          }
-        } else throw new Error(json.error);
-      }
+    async (type, content) => {
+      if (!content?.trim() || !selectedStudentForPreview) return;
       
-    } catch (error) {
-      console.error("saveTemplate error:", error);
-      toast.error(isRTL ? "فشل حفظ القالب: " + error.message : "Failed to save template: " + error.message);
-    } finally {
-      setSavingTemplate((prev) => ({ ...prev, [type]: false }));
-    }
-  },
-  [selectedStudentForPreview, isRTL, setStudentTemplates, setGuardianTemplates]
-);
+      setSavingTemplate((prev) => ({ ...prev, [type]: true }));
+      try {
+        const templateType = type === "student" ? "group_completion_student" : "group_completion_guardian";
+        const recipientType = type === "student" ? "student" : "guardian";
+        const lang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
+        const templateName = type === "student" ? "Group Completion - Student" : "Group Completion - Guardian";
+
+        const searchRes = await fetch(`/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`);
+        const searchJson = await searchRes.json();
+
+        if (searchJson.success && searchJson.data.length > 0) {
+          const templateId = searchJson.data[0]._id;
+          const existingTemplate = searchJson.data[0];
+          
+          const updateData = { 
+            id: templateId, 
+            name: templateName, 
+            isDefault: true,
+            updatedAt: new Date()
+          };
+          
+          if (lang === "ar") {
+            updateData.contentAr = content;
+            updateData.contentEn = existingTemplate.contentEn || '';
+          } else {
+            updateData.contentEn = content;
+            updateData.contentAr = existingTemplate.contentAr || '';
+          }
+          
+          const res = await fetch(`/api/message-templates`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updateData),
+          });
+          const json = await res.json();
+          if (json.success) {
+            toast.success(
+              isRTL 
+                ? `تم تحديث القالب (${lang === 'ar' ? 'عربي' : 'إنجليزي'})` 
+                : `Template (${lang === 'ar' ? 'Arabic' : 'English'}) updated`
+            );
+            
+            if (type === "student") {
+              setStudentTemplates(prev => ({
+                ...prev,
+                [selectedStudentForPreview._id]: content
+              }));
+            } else {
+              setGuardianTemplates(prev => ({
+                ...prev,
+                [selectedStudentForPreview._id]: content
+              }));
+            }
+          } else throw new Error(json.error);
+        } else {
+          const newTemplate = {
+            templateType,
+            recipientType,
+            name: templateName,
+            description: `Group completion notification for ${recipientType}`,
+            isDefault: true,
+            isActive: true,
+            variables: [
+              { key: "guardianSalutation", label: "Guardian Salutation" },
+              { key: "studentSalutation", label: "Student Salutation" },
+              { key: "studentName", label: "Student Name" },
+              { key: "guardianName", label: "Guardian Name" },
+              { key: "childTitle", label: "Son/Daughter" },
+              { key: "groupName", label: "Group Name" },
+              { key: "groupCode", label: "Group Code" },
+              { key: "courseName", label: "Course Name" },
+              { key: "enrollmentNumber", label: "Enrollment Number" },
+              { key: "feedbackLink", label: "Feedback Link" },
+            ],
+          };
+          
+          if (lang === "ar") { 
+            newTemplate.contentAr = content; 
+            newTemplate.contentEn = ''; 
+          } else { 
+            newTemplate.contentEn = content; 
+            newTemplate.contentAr = ''; 
+          }
+
+          const res = await fetch(`/api/message-templates`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newTemplate),
+          });
+          const json = await res.json();
+          if (json.success) {
+            toast.success(
+              isRTL 
+                ? `تم حفظ القالب (${lang === 'ar' ? 'عربي' : 'إنجليزي'})` 
+                : `Template (${lang === 'ar' ? 'Arabic' : 'English'}) saved`
+            );
+            
+            if (type === "student") {
+              setStudentTemplates(prev => ({
+                ...prev,
+                [selectedStudentForPreview._id]: content
+              }));
+            } else {
+              setGuardianTemplates(prev => ({
+                ...prev,
+                [selectedStudentForPreview._id]: content
+              }));
+            }
+          } else throw new Error(json.error);
+        }
+        
+      } catch (error) {
+        console.error("saveTemplate error:", error);
+        toast.error(isRTL ? "فشل حفظ القالب: " + error.message : "Failed to save template: " + error.message);
+      } finally {
+        setSavingTemplate((prev) => ({ ...prev, [type]: false }));
+      }
+    },
+    [selectedStudentForPreview, isRTL]
+  );
 
   // دوال الـ hints
   const insertVariable = useCallback(
@@ -637,7 +613,7 @@ export default function GroupCompletionModal({
     }
   }, [showHints, selectedHintIndex, availableVariables, insertVariable]);
 
-  // ✅ إرسال الرسائل - كل طالب بقالبه المناسب
+  // ✅ إرسال الرسائل
   const handleSend = useCallback(async () => {
     if (!currentStudentMessage?.trim() || !currentGuardianMessage?.trim()) {
       toast.error(isRTL ? "الرجاء كتابة الرسالتين" : "Please write both messages");
@@ -647,28 +623,6 @@ export default function GroupCompletionModal({
     setSending(true);
 
     try {
-      // ── الخطوة 1: عمل الغروب completed بدون إرسال رسائل ──
-      const markRes = await fetch(`/api/groups/${resolvedGroupId}/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          markOnly: true,
-          autoDetected: true,
-          feedbackLink: formData.feedbackLink || null,
-        }),
-      });
-
-      const markJson = await markRes.json();
-
-      if (!markJson.success) {
-        toast.error(markJson.error || (isRTL ? "فشل إتمام المجموعة" : "Failed to complete group"));
-        setSending(false);
-        return;
-      }
-
-      toast.success(isRTL ? "✅ تم إتمام المجموعة، جاري الإرسال..." : "✅ Group completed, sending messages...");
-
-      // ── الخطوة 2: إرسال لكل طالب بقالبه المناسب ──
       let successCount = 0;
       let failCount = 0;
 
@@ -676,13 +630,11 @@ export default function GroupCompletionModal({
         const student = groupStudents[i];
         const studentId = student._id;
 
-        // ✅ استخدام القالب المناسب لكل طالب
         const studentRaw = editedStudentTemplates[studentId] || studentTemplates[studentId] || '';
         const guardianRaw = editedGuardianTemplates[studentId] || guardianTemplates[studentId] || '';
 
-        // ✅ استبدال المتغيرات لكل طالب بناءً على بياناته هو
-        const studentMsg = replaceVarsInContent(studentRaw, student);
-        const guardianMsg = replaceVarsInContent(guardianRaw, student);
+        const studentMsg = renderTemplate(studentRaw, student);
+        const guardianMsg = renderTemplate(guardianRaw, student);
 
         try {
           const res = await fetch(`/api/groups/${resolvedGroupId}/complete`, {
@@ -718,13 +670,11 @@ export default function GroupCompletionModal({
           toast.error(`❌ ${student.personalInfo?.fullName}`, { duration: 3000 });
         }
 
-        // تأخير بين كل طالب والتاني
         if (i < groupStudents.length - 1) {
           await new Promise((r) => setTimeout(r, 1500));
         }
       }
 
-      // ── النتيجة النهائية ──
       toast.success(
         isRTL
           ? `🎉 اكتمل الإرسال: ${successCount} نجح، ${failCount} فشل`
@@ -740,7 +690,7 @@ export default function GroupCompletionModal({
     } finally {
       setSending(false);
     }
-  }, [currentStudentMessage, currentGuardianMessage, resolvedGroupId, groupStudents, studentTemplates, guardianTemplates, editedStudentTemplates, editedGuardianTemplates, replaceVarsInContent, formData.feedbackLink, isRTL, onClose, onRefresh]);
+  }, [currentStudentMessage, currentGuardianMessage, resolvedGroupId, groupStudents, studentTemplates, guardianTemplates, editedStudentTemplates, editedGuardianTemplates, renderTemplate, formData.feedbackLink, isRTL, onClose, onRefresh]);
 
   // Hints Dropdown component
   const HintsDropdown = ({ type, borderColor, bgColor, textColor }) => (
@@ -860,7 +810,6 @@ export default function GroupCompletionModal({
                     const rel = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
                     const isEdited = editedStudentTemplates[student._id] || editedGuardianTemplates[student._id];
                     
-                    // بناء نص الخيار مع الرموز التعبيرية كنص وليس كعناصر
                     let optionText = student.personalInfo?.fullName || "";
                     optionText += ` · ${lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}`;
                     optionText += ` · ${gender === "female" ? "👧" : "👦"}`;

@@ -4,19 +4,7 @@ import mongoose from "mongoose";
 /**
  * يخزّن قيم المتغيرات القابلة للتعديل من الـ UI
  * كل متغير بيتخزن مرة واحدة بالعربي والإنجليزي
- *
- * مثال:
- *   key: "salutation_ar"
- *   valueAr: "عزيزي الطالب ممدوح"
- *   valueEn: "عزيزي الطالب ممدوح"   ← نفس القيمة (AR only)
- *
- *   key: "salutation_en"
- *   valueAr: "Dear student Mamdouh"
- *   valueEn: "Dear student Mamdouh"  ← نفس القيمة (EN only)
- *
- *   key: "guardianSalutation"
- *   valueAr: "عزيزي الأستاذ محمد"
- *   valueEn: "Dear Mr. Mohamed"
+ * مع دعم الجنس: male/female للطالب والمدرب، father/mother لولي الأمر
  */
 const TemplateVariableSchema = new mongoose.Schema(
   {
@@ -25,73 +13,53 @@ const TemplateVariableSchema = new mongoose.Schema(
       required: true,
       unique: true,
       trim: true,
-      // مثال: "salutation_ar", "guardianSalutation", "childTitle"
     },
 
-    // الاسم المعروض للمستخدم
-    labelAr: {
+    labelAr: { type: String, required: true, trim: true },
+    labelEn: { type: String, required: true, trim: true },
+
+    icon: { type: String, default: "📝" },
+
+    // ── القيم الافتراضية (للمعاينة) ──────────────────────────
+    valueAr: { type: String, required: true, default: "" },
+    valueEn: { type: String, required: true, default: "" },
+
+    // ── قيم الجنس للطالب (ذكر / أنثى) ──────────────────────
+    valueMaleAr:   { type: String, default: "" },
+    valueMaleEn:   { type: String, default: "" },
+    valueFemaleAr: { type: String, default: "" },
+    valueFemaleEn: { type: String, default: "" },
+
+    // ── قيم ولي الأمر (أب / أم) ──────────────────────────────
+    valueFatherAr: { type: String, default: "" },
+    valueFatherEn: { type: String, default: "" },
+    valueMotherAr: { type: String, default: "" },
+    valueMotherEn: { type: String, default: "" },
+
+    // هل يدعم هذا المتغير التمييز بالجنس؟
+    hasGender: { type: Boolean, default: false },
+    // نوع الجنس: "student" | "guardian" | "instructor"
+    genderType: {
       type: String,
-      required: true,
-      trim: true,
-    },
-    labelEn: {
-      type: String,
-      required: true,
-      trim: true,
+      enum: ["student", "guardian", "instructor", null],
+      default: null,
     },
 
-    // الأيقونة المعروضة في الـ UI
-    icon: {
-      type: String,
-      default: "📝",
-    },
-
-    // القيمة الفعلية للمتغير (اللي بتتحط في الرسالة)
-    valueAr: {
-      type: String,
-      required: true,
-      default: "",
-    },
-    valueEn: {
-      type: String,
-      required: true,
-      default: "",
-    },
-
-    // تصنيف المتغير — لعرضه في مجموعات
     group: {
       type: String,
       enum: [
-        "student",
-        "guardian",
-        "group",
-        "session",
-        "attendance",
-        "evaluation",
-        "common",
+        "student", "guardian", "instructor",
+        "group", "session", "attendance",
+        "reminder", "completion", "evaluation", "common",
       ],
       default: "common",
     },
 
-    // وصف مختصر
-    description: {
-      type: String,
-      default: "",
-    },
-
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-
-    updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
+    description: { type: String, default: "" },
+    isActive:    { type: Boolean, default: true },
+    updatedBy:   { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 TemplateVariableSchema.index({ key: 1 }, { unique: true });
@@ -100,13 +68,40 @@ TemplateVariableSchema.index({ isActive: 1 });
 
 /**
  * Static: بيجيب كل المتغيرات كـ map جاهز للاستخدام في render
- * بيرجع: { "{key}": "value" }
+ * @param {string} lang - "ar" | "en"
+ * @param {object} genderContext - { studentGender: "male"|"female", guardianType: "father"|"mother", instructorGender: "male"|"female" }
  */
-TemplateVariableSchema.statics.getVarsMap = async function (lang = "ar") {
+TemplateVariableSchema.statics.getVarsMap = async function (lang = "ar", genderContext = {}) {
   const vars = await this.find({ isActive: true }).lean();
+  const {
+    studentGender   = "male",
+    guardianType    = "father",
+    instructorGender = "male",
+  } = genderContext;
+
   const map = {};
   vars.forEach((v) => {
-    map[`{${v.key}}`] = lang === "ar" ? v.valueAr : v.valueEn;
+    let val;
+    if (v.hasGender) {
+      if (v.genderType === "student") {
+        val = lang === "ar"
+          ? (studentGender === "male" ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr
+          : (studentGender === "male" ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn;
+      } else if (v.genderType === "guardian") {
+        val = lang === "ar"
+          ? (guardianType === "father" ? v.valueFatherAr : v.valueMotherAr) || v.valueAr
+          : (guardianType === "father" ? v.valueFatherEn : v.valueMotherEn) || v.valueEn;
+      } else if (v.genderType === "instructor") {
+        val = lang === "ar"
+          ? (instructorGender === "male" ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr
+          : (instructorGender === "male" ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn;
+      } else {
+        val = lang === "ar" ? v.valueAr : v.valueEn;
+      }
+    } else {
+      val = lang === "ar" ? v.valueAr : v.valueEn;
+    }
+    map[`{${v.key}}`] = val || "";
   });
   return map;
 };
@@ -116,18 +111,16 @@ TemplateVariableSchema.statics.getVarsMap = async function (lang = "ar") {
  */
 TemplateVariableSchema.statics.seedDefaults = async function () {
   const defaults = getDefaultVariables();
-  const results = [];
-
+  const results  = [];
   for (const variable of defaults) {
     const existing = await this.findOne({ key: variable.key });
     if (!existing) {
-      const created = await this.create(variable);
+      await this.create(variable);
       results.push({ key: variable.key, action: "created" });
     } else {
       results.push({ key: variable.key, action: "exists" });
     }
   }
-
   return results;
 };
 
@@ -135,65 +128,96 @@ export default mongoose.models.TemplateVariable ||
   mongoose.model("TemplateVariable", TemplateVariableSchema);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// القيم الافتراضية — نفس ALL_VARS في الفرونت إند بس في الداتابيز
+// القيم الافتراضية الكاملة — مع دعم الجنس
 // ─────────────────────────────────────────────────────────────────────────────
 export function getDefaultVariables() {
   return [
-    // ── Student basic ─────────────────────────────────────────
+
+    // ══════════════════════════════════════════════════════════
+    // STUDENT — الطالب (مع ذكر / أنثى)
+    // ══════════════════════════════════════════════════════════
     {
       key: "salutation_ar",
-      labelAr: "تحية (عربي)",
-      labelEn: "Salutation (AR)",
+      labelAr: "تحية الطالب (عربي)",
+      labelEn: "Student Salutation (AR)",
       icon: "👋",
-      valueAr: "عزيزي الطالب ممدوح",
-      valueEn: "عزيزي الطالب ممدوح",
+      valueAr:    "عزيزي الطالب ممدوح",
+      valueEn:    "عزيزي الطالب ممدوح",
+      valueMaleAr:   "عزيزي الطالب ممدوح",
+      valueMaleEn:   "عزيزي الطالب ممدوح",
+      valueFemaleAr: "عزيزتي الطالبة سارة",
+      valueFemaleEn: "عزيزتي الطالبة سارة",
+      hasGender: true, genderType: "student",
       group: "student",
-      description: "التحية بالعربي للطالب",
     },
     {
       key: "salutation_en",
-      labelAr: "تحية (إنجليزي)",
-      labelEn: "Salutation (EN)",
+      labelAr: "تحية الطالب (إنجليزي)",
+      labelEn: "Student Salutation (EN)",
       icon: "👋",
-      valueAr: "Dear student Mamdouh",
-      valueEn: "Dear student Mamdouh",
+      valueAr:    "Dear student Mamdouh",
+      valueEn:    "Dear student Mamdouh",
+      valueMaleAr:   "Dear student Mamdouh",
+      valueMaleEn:   "Dear student Mamdouh",
+      valueFemaleAr: "Dear student Sara",
+      valueFemaleEn: "Dear student Sara",
+      hasGender: true, genderType: "student",
       group: "student",
-      description: "التحية بالإنجليزي للطالب",
     },
     {
       key: "name_ar",
-      labelAr: "الاسم (عربي)",
+      labelAr: "اسم الطالب (عربي)",
       labelEn: "Name (AR)",
       icon: "👤",
-      valueAr: "ممدوح",
-      valueEn: "ممدوح",
+      valueAr:    "ممدوح",
+      valueEn:    "ممدوح",
+      valueMaleAr:   "ممدوح",
+      valueMaleEn:   "ممدوح",
+      valueFemaleAr: "سارة",
+      valueFemaleEn: "سارة",
+      hasGender: true, genderType: "student",
       group: "student",
     },
     {
       key: "name_en",
-      labelAr: "الاسم (إنجليزي)",
+      labelAr: "اسم الطالب (إنجليزي)",
       labelEn: "Name (EN)",
       icon: "👤",
-      valueAr: "Mamdouh",
-      valueEn: "Mamdouh",
+      valueAr:    "Mamdouh",
+      valueEn:    "Mamdouh",
+      valueMaleAr:   "Mamdouh",
+      valueMaleEn:   "Mamdouh",
+      valueFemaleAr: "Sara",
+      valueFemaleEn: "Sara",
+      hasGender: true, genderType: "student",
       group: "student",
     },
     {
       key: "fullName",
-      labelAr: "الاسم الكامل",
+      labelAr: "الاسم الكامل للطالب",
       labelEn: "Full Name",
       icon: "📝",
-      valueAr: "ممدوح أحمد",
-      valueEn: "Mamdouh Ahmed",
+      valueAr:    "ممدوح أحمد",
+      valueEn:    "Mamdouh Ahmed",
+      valueMaleAr:   "ممدوح أحمد",
+      valueMaleEn:   "Mamdouh Ahmed",
+      valueFemaleAr: "سارة محمد",
+      valueFemaleEn: "Sara Mohamed",
+      hasGender: true, genderType: "student",
       group: "student",
     },
     {
       key: "you_ar",
-      labelAr: "أنت / حضرتك",
+      labelAr: "أنت / أنتِ",
       labelEn: "You (AR)",
       icon: "🫵",
-      valueAr: "أنت",
-      valueEn: "أنت",
+      valueAr:    "أنت",
+      valueEn:    "أنت",
+      valueMaleAr:   "أنت",
+      valueMaleEn:   "أنت",
+      valueFemaleAr: "أنتِ",
+      valueFemaleEn: "أنتِ",
+      hasGender: true, genderType: "student",
       group: "student",
     },
     {
@@ -201,19 +225,22 @@ export function getDefaultVariables() {
       labelAr: "أهلاً (عربي)",
       labelEn: "Welcome (AR)",
       icon: "🌟",
-      valueAr: "أهلاً بك",
-      valueEn: "أهلاً بك",
+      valueAr:    "أهلاً بك",
+      valueEn:    "أهلاً بك",
+      valueMaleAr:   "أهلاً بك",
+      valueMaleEn:   "أهلاً بك",
+      valueFemaleAr: "أهلاً بكِ",
+      valueFemaleEn: "أهلاً بكِ",
+      hasGender: true, genderType: "student",
       group: "student",
     },
-
-    // ── Language confirmation ─────────────────────────────────
     {
       key: "selectedLanguage_ar",
       labelAr: "اللغة المختارة (عربي)",
       labelEn: "Selected Language (AR)",
       icon: "🌍",
-      valueAr: "العربية",
-      valueEn: "الإنجليزية",
+      valueAr: "العربية", valueEn: "الإنجليزية",
+      hasGender: false,
       group: "student",
     },
     {
@@ -221,19 +248,40 @@ export function getDefaultVariables() {
       labelAr: "اللغة المختارة (إنجليزي)",
       labelEn: "Selected Language (EN)",
       icon: "🌍",
-      valueAr: "Arabic",
-      valueEn: "English",
+      valueAr: "Arabic", valueEn: "English",
+      hasGender: false,
       group: "student",
     },
+    {
+      key: "studentSalutation",
+      labelAr: "تحية الطالب (في رسائل ولي الأمر)",
+      labelEn: "Student Salutation (in guardian msgs)",
+      icon: "👋",
+      valueAr:    "عزيزي ممدوح",
+      valueEn:    "Dear Mamdouh",
+      valueMaleAr:   "عزيزي ممدوح",
+      valueMaleEn:   "Dear Mamdouh",
+      valueFemaleAr: "عزيزتي سارة",
+      valueFemaleEn: "Dear Sara",
+      hasGender: true, genderType: "student",
+      group: "guardian",
+    },
 
-    // ── Guardian ──────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    // GUARDIAN — ولي الأمر (أب / أم)
+    // ══════════════════════════════════════════════════════════
     {
       key: "guardianSalutation_ar",
       labelAr: "تحية ولي الأمر (عربي)",
       labelEn: "Guardian Salutation (AR)",
       icon: "👋",
-      valueAr: "عزيزي الأستاذ محمد",
-      valueEn: "عزيزي الأستاذ محمد",
+      valueAr:    "عزيزي الأستاذ محمد",
+      valueEn:    "عزيزي الأستاذ محمد",
+      valueFatherAr: "عزيزي الأستاذ محمد",
+      valueFatherEn: "عزيزي الأستاذ محمد",
+      valueMotherAr: "عزيزتي السيدة فاطمة",
+      valueMotherEn: "عزيزتي السيدة فاطمة",
+      hasGender: true, genderType: "guardian",
       group: "guardian",
     },
     {
@@ -241,8 +289,13 @@ export function getDefaultVariables() {
       labelAr: "تحية ولي الأمر (إنجليزي)",
       labelEn: "Guardian Salutation (EN)",
       icon: "👋",
-      valueAr: "Dear Mr. Mohamed",
-      valueEn: "Dear Mr. Mohamed",
+      valueAr:    "Dear Mr. Mohamed",
+      valueEn:    "Dear Mr. Mohamed",
+      valueFatherAr: "Dear Mr. Mohamed",
+      valueFatherEn: "Dear Mr. Mohamed",
+      valueMotherAr: "Dear Mrs. Fatima",
+      valueMotherEn: "Dear Mrs. Fatima",
+      hasGender: true, genderType: "guardian",
       group: "guardian",
     },
     {
@@ -250,80 +303,13 @@ export function getDefaultVariables() {
       labelAr: "تحية ولي الأمر",
       labelEn: "Guardian Salutation",
       icon: "👋",
-      valueAr: "عزيزي الأستاذ محمد",
-      valueEn: "Dear Mr. Mohamed",
-      group: "guardian",
-    },
-    {
-      key: "studentSalutation",
-      labelAr: "تحية الطالب",
-      labelEn: "Student Salutation",
-      icon: "👋",
-      valueAr: "عزيزي ممدوح",
-      valueEn: "Dear Mamdouh",
-      group: "guardian",
-    },
-    {
-      key: "studentGender_ar",
-      labelAr: "جنس الطالب (عربي)",
-      labelEn: "Student Gender (AR)",
-      icon: "⚧",
-      valueAr: "الابن",
-      valueEn: "الابن",
-      group: "guardian",
-    },
-    {
-      key: "studentGender_en",
-      labelAr: "جنس الطالب (إنجليزي)",
-      labelEn: "Student Gender (EN)",
-      icon: "⚧",
-      valueAr: "son",
-      valueEn: "son",
-      group: "guardian",
-    },
-    {
-      key: "studentName_ar",
-      labelAr: "اسم الطالب (عربي)",
-      labelEn: "Student Name (AR)",
-      icon: "👤",
-      valueAr: "ممدوح",
-      valueEn: "ممدوح",
-      group: "guardian",
-    },
-    {
-      key: "studentName_en",
-      labelAr: "اسم الطالب (إنجليزي)",
-      labelEn: "Student Name (EN)",
-      icon: "👤",
-      valueAr: "Mamdouh",
-      valueEn: "Mamdouh",
-      group: "guardian",
-    },
-    {
-      key: "studentName",
-      labelAr: "اسم الطالب",
-      labelEn: "Student Name",
-      icon: "👤",
-      valueAr: "ممدوح",
-      valueEn: "Mamdouh",
-      group: "guardian",
-    },
-    {
-      key: "relationship_ar",
-      labelAr: "العلاقة (عربي)",
-      labelEn: "Relationship (AR)",
-      icon: "👨‍👩‍👦",
-      valueAr: "الأب",
-      valueEn: "الأب",
-      group: "guardian",
-    },
-    {
-      key: "fullStudentName",
-      labelAr: "الاسم الكامل للطالب",
-      labelEn: "Full Student Name",
-      icon: "📝",
-      valueAr: "ممدوح أحمد علي",
-      valueEn: "Mamdouh Ahmed Ali",
+      valueAr:    "عزيزي الأستاذ محمد",
+      valueEn:    "Dear Mr. Mohamed",
+      valueFatherAr: "عزيزي الأستاذ محمد",
+      valueFatherEn: "Dear Mr. Mohamed",
+      valueMotherAr: "عزيزتي السيدة فاطمة",
+      valueMotherEn: "Dear Mrs. Fatima",
+      hasGender: true, genderType: "guardian",
       group: "guardian",
     },
     {
@@ -331,8 +317,111 @@ export function getDefaultVariables() {
       labelAr: "اسم ولي الأمر",
       labelEn: "Guardian Name",
       icon: "👨",
-      valueAr: "محمد",
-      valueEn: "Mohamed",
+      valueAr:    "محمد",
+      valueEn:    "Mohamed",
+      valueFatherAr: "محمد",
+      valueFatherEn: "Mohamed",
+      valueMotherAr: "فاطمة",
+      valueMotherEn: "Fatima",
+      hasGender: true, genderType: "guardian",
+      group: "guardian",
+    },
+    {
+      key: "studentGender_ar",
+      labelAr: "جنس الطالب (عربي)",
+      labelEn: "Student Gender (AR)",
+      icon: "⚧",
+      valueAr:    "الابن",
+      valueEn:    "الابن",
+      valueMaleAr:   "الابن",
+      valueMaleEn:   "الابن",
+      valueFemaleAr: "الابنة",
+      valueFemaleEn: "الابنة",
+      hasGender: true, genderType: "student",
+      group: "guardian",
+    },
+    {
+      key: "studentGender_en",
+      labelAr: "جنس الطالب (إنجليزي)",
+      labelEn: "Student Gender (EN)",
+      icon: "⚧",
+      valueAr:    "son",
+      valueEn:    "son",
+      valueMaleAr:   "son",
+      valueMaleEn:   "son",
+      valueFemaleAr: "daughter",
+      valueFemaleEn: "daughter",
+      hasGender: true, genderType: "student",
+      group: "guardian",
+    },
+    {
+      key: "studentName_ar",
+      labelAr: "اسم الطالب - عربي (في رسائل ولي الأمر)",
+      labelEn: "Student Name (AR)",
+      icon: "👤",
+      valueAr:    "ممدوح",
+      valueEn:    "ممدوح",
+      valueMaleAr:   "ممدوح",
+      valueMaleEn:   "ممدوح",
+      valueFemaleAr: "سارة",
+      valueFemaleEn: "سارة",
+      hasGender: true, genderType: "student",
+      group: "guardian",
+    },
+    {
+      key: "studentName_en",
+      labelAr: "اسم الطالب - إنجليزي (في رسائل ولي الأمر)",
+      labelEn: "Student Name (EN)",
+      icon: "👤",
+      valueAr:    "Mamdouh",
+      valueEn:    "Mamdouh",
+      valueMaleAr:   "Mamdouh",
+      valueMaleEn:   "Mamdouh",
+      valueFemaleAr: "Sara",
+      valueFemaleEn: "Sara",
+      hasGender: true, genderType: "student",
+      group: "guardian",
+    },
+    {
+      key: "studentName",
+      labelAr: "اسم الطالب",
+      labelEn: "Student Name",
+      icon: "👤",
+      valueAr:    "ممدوح",
+      valueEn:    "Mamdouh",
+      valueMaleAr:   "ممدوح",
+      valueMaleEn:   "Mamdouh",
+      valueFemaleAr: "سارة",
+      valueFemaleEn: "Sara",
+      hasGender: true, genderType: "student",
+      group: "guardian",
+    },
+    {
+      key: "relationship_ar",
+      labelAr: "صلة القرابة (عربي)",
+      labelEn: "Relationship (AR)",
+      icon: "👨‍👩‍👦",
+      valueAr:    "الأب",
+      valueEn:    "الأب",
+      valueFatherAr: "الأب",
+      valueFatherEn: "الأب",
+      valueMotherAr: "الأم",
+      valueMotherEn: "الأم",
+      hasGender: true, genderType: "guardian",
+      group: "guardian",
+    },
+    {
+      key: "fullStudentName",
+      labelAr: "الاسم الكامل للطالب",
+      labelEn: "Full Student Name",
+      icon: "📝",
+      valueAr:    "ممدوح أحمد علي",
+      valueEn:    "Mamdouh Ahmed Ali",
+      valueMaleAr:   "ممدوح أحمد علي",
+      valueMaleEn:   "Mamdouh Ahmed Ali",
+      valueFemaleAr: "سارة محمد علي",
+      valueFemaleEn: "Sara Mohamed Ali",
+      hasGender: true, genderType: "student",
       group: "guardian",
     },
     {
@@ -340,8 +429,18 @@ export function getDefaultVariables() {
       labelAr: "ابنك / ابنتك",
       labelEn: "Child Title",
       icon: "👶",
-      valueAr: "ابنك",
-      valueEn: "your son",
+      valueAr:    "ابنك",
+      valueEn:    "your son",
+      valueFatherAr: "ابنك",
+      valueFatherEn: "your son",
+      valueMotherAr: "ابنتك",
+      valueMotherEn: "your daughter",
+      // للمزيد من الدقة — يتأثر بجنس الطالب أيضاً
+      valueMaleAr:   "ابنك",
+      valueMaleEn:   "your son",
+      valueFemaleAr: "ابنتك",
+      valueFemaleEn: "your daughter",
+      hasGender: true, genderType: "student",
       group: "guardian",
     },
     {
@@ -349,289 +448,365 @@ export function getDefaultVariables() {
       labelAr: "رقم القيد",
       labelEn: "Enrollment Number",
       icon: "🔢",
-      valueAr: "STU-2024-001",
-      valueEn: "STU-2024-001",
+      valueAr: "STU-2024-001", valueEn: "STU-2024-001",
+      hasGender: false,
       group: "guardian",
     },
 
-    // ── Group ─────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    // INSTRUCTOR — المدرب (مع ذكر / أنثى)
+    // ══════════════════════════════════════════════════════════
+    {
+      key: "instructorSalutation",
+      labelAr: "تحية المدرب",
+      labelEn: "Instructor Salutation",
+      icon: "👋",
+      valueAr:    "عزيزي الأستاذ أحمد",
+      valueEn:    "Dear Mr. Ahmed",
+      valueMaleAr:   "عزيزي الأستاذ أحمد",
+      valueMaleEn:   "Dear Mr. Ahmed",
+      valueFemaleAr: "عزيزتي الأستاذة نورا",
+      valueFemaleEn: "Dear Ms. Nora",
+      hasGender: true, genderType: "instructor",
+      group: "instructor",
+    },
     {
       key: "salutation",
-      labelAr: "التحية",
-      labelEn: "Salutation",
+      labelAr: "التحية (للمجموعات / المدرب)",
+      labelEn: "Salutation (groups/instructor)",
       icon: "👋",
-      valueAr: "عزيزي ممدوح",
-      valueEn: "Dear Mamdouh",
-      group: "group",
-    },
-    {
-      key: "courseName",
-      labelAr: "اسم الكورس",
-      labelEn: "Course Name",
-      icon: "📚",
-      valueAr: "الإنجليزية للمبتدئين",
-      valueEn: "English for Beginners",
-      group: "group",
-    },
-    {
-      key: "groupName",
-      labelAr: "اسم المجموعة",
-      labelEn: "Group Name",
-      icon: "👥",
-      valueAr: "مستوى مبتدئ A1",
-      valueEn: "Beginner Level A1",
-      group: "group",
-    },
-    {
-      key: "groupCode",
-      labelAr: "كود المجموعة",
-      labelEn: "Group Code",
-      icon: "🔤",
-      valueAr: "GRP-001",
-      valueEn: "GRP-001",
-      group: "group",
-    },
-    {
-      key: "startDate",
-      labelAr: "تاريخ البدء",
-      labelEn: "Start Date",
-      icon: "📅",
-      valueAr: "الاثنين 15 مايو 2024",
-      valueEn: "Monday, May 15, 2024",
-      group: "group",
-    },
-    {
-      key: "timeTo",
-      labelAr: "وقت النهاية",
-      labelEn: "End Time",
-      icon: "⏰",
-      valueAr: "08:30 مساءً",
-      valueEn: "08:30 PM",
-      group: "group",
-    },
-    {
-      key: "timeFrom",
-      labelAr: "وقت البداية",
-      labelEn: "Start Time",
-      icon: "⏰",
-      valueAr: "07:00 مساءً",
-      valueEn: "07:00 PM",
-      group: "group",
-    },
-    {
-      key: "instructor",
-      labelAr: "اسم المدرب",
-      labelEn: "Instructor",
-      icon: "👨‍🏫",
-      valueAr: "أستاذ أحمد",
-      valueEn: "Mr. Ahmed",
-      group: "group",
+      valueAr:    "عزيزي ممدوح",
+      valueEn:    "Dear Mamdouh",
+      valueMaleAr:   "عزيزي أحمد",
+      valueMaleEn:   "Dear Ahmed",
+      valueFemaleAr: "عزيزتي نورا",
+      valueFemaleEn: "Dear Nora",
+      hasGender: true, genderType: "instructor",
+      group: "instructor",
     },
     {
       key: "instructorName",
       labelAr: "اسم المدرب (مختصر)",
-      labelEn: "Instructor Name",
+      labelEn: "Instructor Name (short)",
       icon: "👨‍🏫",
-      valueAr: "أحمد",
-      valueEn: "Ahmed",
+      valueAr:    "أحمد",
+      valueEn:    "Ahmed",
+      valueMaleAr:   "أحمد",
+      valueMaleEn:   "Ahmed",
+      valueFemaleAr: "نورا",
+      valueFemaleEn: "Nora",
+      hasGender: true, genderType: "instructor",
+      group: "instructor",
+    },
+    {
+      key: "instructorFullName",
+      labelAr: "الاسم الكامل للمدرب",
+      labelEn: "Instructor Full Name",
+      icon: "👨‍🏫",
+      valueAr:    "أحمد محمد علي",
+      valueEn:    "Ahmed Mohamed Ali",
+      valueMaleAr:   "أحمد محمد علي",
+      valueMaleEn:   "Ahmed Mohamed Ali",
+      valueFemaleAr: "نورا محمد علي",
+      valueFemaleEn: "Nora Mohamed Ali",
+      hasGender: true, genderType: "instructor",
+      group: "instructor",
+    },
+    {
+      key: "instructorTitle",
+      labelAr: "لقب المدرب",
+      labelEn: "Instructor Title",
+      icon: "🎓",
+      valueAr:    "الأستاذ أحمد",
+      valueEn:    "Mr. Ahmed",
+      valueMaleAr:   "الأستاذ أحمد",
+      valueMaleEn:   "Mr. Ahmed",
+      valueFemaleAr: "الأستاذة نورا",
+      valueFemaleEn: "Ms. Nora",
+      hasGender: true, genderType: "instructor",
+      group: "instructor",
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // GROUP — المجموعة
+    // ══════════════════════════════════════════════════════════
+    {
+      key: "courseName",
+      labelAr: "اسم الكورس", labelEn: "Course Name", icon: "📚",
+      valueAr: "الإنجليزية للمبتدئين", valueEn: "English for Beginners",
+      hasGender: false, group: "group",
+    },
+    {
+      key: "groupName",
+      labelAr: "اسم المجموعة", labelEn: "Group Name", icon: "👥",
+      valueAr: "مستوى مبتدئ A1", valueEn: "Beginner Level A1",
+      hasGender: false, group: "group",
+    },
+    {
+      key: "groupCode",
+      labelAr: "كود المجموعة", labelEn: "Group Code", icon: "🔤",
+      valueAr: "GRP-001", valueEn: "GRP-001",
+      hasGender: false, group: "group",
+    },
+    {
+      key: "startDate",
+      labelAr: "تاريخ بدء المجموعة", labelEn: "Group Start Date", icon: "📅",
+      valueAr: "الاثنين 15 مايو 2024", valueEn: "Monday, May 15, 2024",
+      hasGender: false, group: "group",
+    },
+    {
+      key: "timeTo",
+      labelAr: "وقت نهاية الحصة", labelEn: "Session End Time", icon: "⏰",
+      valueAr: "08:30 مساءً", valueEn: "08:30 PM",
+      hasGender: false, group: "group",
+    },
+    {
+      key: "timeFrom",
+      labelAr: "وقت بداية الحصة", labelEn: "Session Start Time", icon: "⏰",
+      valueAr: "07:00 مساءً", valueEn: "07:00 PM",
+      hasGender: false, group: "group",
+    },
+    {
+      key: "instructor",
+      labelAr: "اسم المدرب (في المجموعات)", labelEn: "Instructor (groups)", icon: "👨‍🏫",
+      valueAr:    "الأستاذ أحمد",
+      valueEn:    "Mr. Ahmed",
+      valueMaleAr:   "الأستاذ أحمد",
+      valueMaleEn:   "Mr. Ahmed",
+      valueFemaleAr: "الأستاذة نورا",
+      valueFemaleEn: "Ms. Nora",
+      hasGender: true, genderType: "instructor",
       group: "group",
     },
     {
       key: "firstMeetingLink",
-      labelAr: "رابط أول جلسة",
-      labelEn: "First Meeting Link",
-      icon: "🔗",
-      valueAr: "https://meet.google.com/abc-xyz",
-      valueEn: "https://meet.google.com/abc-xyz",
-      group: "group",
+      labelAr: "رابط أول جلسة", labelEn: "First Meeting Link", icon: "🔗",
+      valueAr: "https://meet.google.com/abc-xyz", valueEn: "https://meet.google.com/abc-xyz",
+      hasGender: false, group: "group",
     },
     {
       key: "studentCount",
-      labelAr: "عدد الطلاب",
-      labelEn: "Student Count",
-      icon: "👥",
-      valueAr: "8",
-      valueEn: "8",
-      group: "group",
+      labelAr: "عدد طلاب المجموعة", labelEn: "Student Count", icon: "👥",
+      valueAr: "8", valueEn: "8",
+      hasGender: false, group: "group",
     },
 
-    // ── Session ───────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    // SESSION — الحصة
+    // ══════════════════════════════════════════════════════════
     {
       key: "sessionName",
-      labelAr: "اسم الحصة",
-      labelEn: "Session Name",
-      icon: "📘",
-      valueAr: "الدرس الأول: التعارف",
-      valueEn: "Lesson 1: Introduction",
-      group: "session",
+      labelAr: "اسم الحصة", labelEn: "Session Name", icon: "📘",
+      valueAr: "الدرس الأول: التعارف", valueEn: "Lesson 1: Introduction",
+      hasGender: false, group: "session",
     },
     {
       key: "date",
-      labelAr: "التاريخ",
-      labelEn: "Date",
-      icon: "📅",
-      valueAr: "الثلاثاء 20 مايو 2024",
-      valueEn: "Tuesday, May 20, 2024",
-      group: "session",
+      labelAr: "تاريخ الحصة", labelEn: "Session Date", icon: "📅",
+      valueAr: "الثلاثاء 20 مايو 2024", valueEn: "Tuesday, May 20, 2024",
+      hasGender: false, group: "session",
     },
     {
       key: "time",
-      labelAr: "الوقت",
-      labelEn: "Time",
-      icon: "⏰",
-      valueAr: "07:00 - 08:30 مساءً",
-      valueEn: "07:00 - 08:30 PM",
-      group: "session",
+      labelAr: "وقت الحصة", labelEn: "Session Time", icon: "⏰",
+      valueAr: "07:00 - 08:30 مساءً", valueEn: "07:00 - 08:30 PM",
+      hasGender: false, group: "session",
     },
     {
       key: "meetingLink",
-      labelAr: "رابط الحصة",
-      labelEn: "Meeting Link",
-      icon: "🔗",
-      valueAr: "https://meet.google.com/abc-xyz",
-      valueEn: "https://meet.google.com/abc-xyz",
-      group: "session",
+      labelAr: "رابط الحصة", labelEn: "Meeting Link", icon: "🔗",
+      valueAr: "https://meet.google.com/abc-xyz", valueEn: "https://meet.google.com/abc-xyz",
+      hasGender: false, group: "session",
     },
     {
       key: "newDate",
-      labelAr: "التاريخ الجديد",
-      labelEn: "New Date",
-      icon: "📅",
-      valueAr: "الخميس 22 مايو 2024",
-      valueEn: "Thursday, May 22, 2024",
-      group: "session",
+      labelAr: "التاريخ الجديد (بعد التأجيل)", labelEn: "New Date", icon: "📅",
+      valueAr: "الخميس 22 مايو 2024", valueEn: "Thursday, May 22, 2024",
+      hasGender: false, group: "session",
     },
     {
       key: "newTime",
-      labelAr: "الوقت الجديد",
-      labelEn: "New Time",
-      icon: "⏰",
-      valueAr: "08:00 - 09:30 مساءً",
-      valueEn: "08:00 - 09:30 PM",
-      group: "session",
+      labelAr: "الوقت الجديد (بعد التأجيل)", labelEn: "New Time", icon: "⏰",
+      valueAr: "08:00 - 09:30 مساءً", valueEn: "08:00 - 09:30 PM",
+      hasGender: false, group: "session",
+    },
+    {
+      key: "cancellationReason",
+      labelAr: "سبب الإلغاء", labelEn: "Cancellation Reason", icon: "❌",
+      valueAr: "ظروف طارئة", valueEn: "Emergency circumstances",
+      hasGender: false, group: "session",
+    },
+    {
+      key: "postponeReason",
+      labelAr: "سبب التأجيل", labelEn: "Postpone Reason", icon: "🔄",
+      valueAr: "تعارض في الجدول", valueEn: "Schedule conflict",
+      hasGender: false, group: "session",
     },
 
-    // ── Attendance ────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    // ATTENDANCE — الحضور
+    // ══════════════════════════════════════════════════════════
     {
-      key: "status",
-      labelAr: "الحالة",
-      labelEn: "Status",
-      icon: "📌",
-      valueAr: "غائب",
-      valueEn: "Absent",
+      key: "attendanceStatus",
+      labelAr: "حالة الحضور", labelEn: "Attendance Status", icon: "📌",
+      valueAr: "حاضر",
+      valueEn: "Present",
+      valueMaleAr: "حاضر", valueMaleEn: "Present",
+      valueFemaleAr: "حاضرة", valueFemaleEn: "Present",
+      hasGender: true, genderType: "student",
       group: "attendance",
     },
+    {
+      key: "status",
+      labelAr: "الحالة", labelEn: "Status", icon: "📌",
+      valueAr: "حاضر",
+      valueEn: "Present",
+      valueMaleAr: "حاضر", valueMaleEn: "Present",
+      valueFemaleAr: "حاضرة", valueFemaleEn: "Present",
+      hasGender: true, genderType: "student",
+      group: "attendance",
+    },
+    {
+      key: "lateMinutes",
+      labelAr: "دقائق التأخير", labelEn: "Minutes Late", icon: "⏱️",
+      valueAr: "15", valueEn: "15",
+      hasGender: false, group: "attendance",
+    },
 
-    // ── Evaluation ────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    // REMINDER — التذكيرات
+    // ══════════════════════════════════════════════════════════
+    {
+      key: "reminderType",
+      labelAr: "نوع التذكير", labelEn: "Reminder Type", icon: "🔔",
+      valueAr: "تذكير بموعد الحصة", valueEn: "Session reminder",
+      hasGender: false, group: "reminder",
+    },
+    {
+      key: "hoursLeft",
+      labelAr: "عدد الساعات المتبقية", labelEn: "Hours Left", icon: "⏳",
+      valueAr: "24", valueEn: "24",
+      hasGender: false, group: "reminder",
+    },
+    {
+      key: "minutesLeft",
+      labelAr: "عدد الدقائق المتبقية", labelEn: "Minutes Left", icon: "⏱️",
+      valueAr: "60", valueEn: "60",
+      hasGender: false, group: "reminder",
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // COMPLETION — الإكمال
+    // ══════════════════════════════════════════════════════════
+    {
+      key: "completionDate",
+      labelAr: "تاريخ إكمال المجموعة", labelEn: "Completion Date", icon: "🎉",
+      valueAr: "الجمعة 30 يونيو 2024", valueEn: "Friday, June 30, 2024",
+      hasGender: false, group: "completion",
+    },
+    {
+      key: "totalSessions",
+      labelAr: "إجمالي عدد الحصص", labelEn: "Total Sessions", icon: "🔢",
+      valueAr: "12", valueEn: "12",
+      hasGender: false, group: "completion",
+    },
+    {
+      key: "certificateLink",
+      labelAr: "رابط الشهادة", labelEn: "Certificate Link", icon: "🏆",
+      valueAr: "https://codeschool.com/certificate/xxx",
+      valueEn: "https://codeschool.com/certificate/xxx",
+      hasGender: false, group: "completion",
+    },
+    {
+      key: "feedbackLink",
+      labelAr: "رابط الاستبيان", labelEn: "Feedback Link", icon: "⭐",
+      valueAr: "https://forms.gle/xyz123", valueEn: "https://forms.gle/xyz123",
+      hasGender: false, group: "completion",
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // EVALUATION — التقييم
+    // ══════════════════════════════════════════════════════════
     {
       key: "sessionDate",
-      labelAr: "تاريخ الجلسة",
-      labelEn: "Session Date",
-      icon: "📆",
-      valueAr: "30/12/2025",
-      valueEn: "12/30/2025",
-      group: "evaluation",
+      labelAr: "تاريخ الجلسة (في التقرير)", labelEn: "Session Date (report)", icon: "📆",
+      valueAr: "30/12/2025", valueEn: "12/30/2025",
+      hasGender: false, group: "evaluation",
     },
     {
       key: "sessionNumber",
-      labelAr: "رقم الحصة",
-      labelEn: "Session Number",
-      icon: "📑",
-      valueAr: "1",
-      valueEn: "1",
-      group: "evaluation",
-    },
-    {
-      key: "attendanceStatus",
-      labelAr: "الحضور",
-      labelEn: "Attendance Status",
-      icon: "👥",
-      valueAr: "حاضر",
-      valueEn: "Present",
-      group: "evaluation",
+      labelAr: "رقم الحصة (في التقرير)", labelEn: "Session Number (report)", icon: "📑",
+      valueAr: "1", valueEn: "1",
+      hasGender: false, group: "evaluation",
     },
     {
       key: "starsCommitment",
-      labelAr: "نجوم الالتزام والتركيز",
-      labelEn: "Stars: Commitment",
-      icon: "⭐",
-      valueAr: "⭐⭐⭐⭐⭐",
-      valueEn: "⭐⭐⭐⭐⭐",
-      group: "evaluation",
+      labelAr: "نجوم الالتزام", labelEn: "Stars: Commitment", icon: "⭐",
+      valueAr: "⭐⭐⭐⭐⭐", valueEn: "⭐⭐⭐⭐⭐",
+      hasGender: false, group: "evaluation",
     },
     {
       key: "starsUnderstanding",
-      labelAr: "نجوم مستوى الاستيعاب",
-      labelEn: "Stars: Understanding",
-      icon: "⭐",
-      valueAr: "⭐⭐⭐⭐",
-      valueEn: "⭐⭐⭐⭐",
-      group: "evaluation",
+      labelAr: "نجوم الاستيعاب", labelEn: "Stars: Understanding", icon: "⭐",
+      valueAr: "⭐⭐⭐⭐", valueEn: "⭐⭐⭐⭐",
+      hasGender: false, group: "evaluation",
     },
     {
       key: "starsTaskExecution",
-      labelAr: "نجوم تنفيذ المهام",
-      labelEn: "Stars: Task Execution",
-      icon: "⭐",
-      valueAr: "⭐⭐⭐⭐",
-      valueEn: "⭐⭐⭐⭐",
-      group: "evaluation",
+      labelAr: "نجوم تنفيذ المهام", labelEn: "Stars: Task Execution", icon: "⭐",
+      valueAr: "⭐⭐⭐⭐", valueEn: "⭐⭐⭐⭐",
+      hasGender: false, group: "evaluation",
     },
     {
       key: "starsParticipation",
-      labelAr: "نجوم المشاركة داخل الحصة",
-      labelEn: "Stars: Participation",
-      icon: "⭐",
-      valueAr: "⭐⭐⭐⭐",
-      valueEn: "⭐⭐⭐⭐",
-      group: "evaluation",
+      labelAr: "نجوم المشاركة", labelEn: "Stars: Participation", icon: "⭐",
+      valueAr: "⭐⭐⭐⭐", valueEn: "⭐⭐⭐⭐",
+      hasGender: false, group: "evaluation",
     },
     {
       key: "instructorComment",
-      labelAr: "تعليق المدرس",
-      labelEn: "Instructor Comment",
-      icon: "📝",
-      valueAr: "أداء ممتاز، استمر هكذا!",
-      valueEn: "Excellent performance, keep it up!",
-      group: "evaluation",
+      labelAr: "تعليق المدرس", labelEn: "Instructor Comment", icon: "📝",
+      valueAr: "أداء ممتاز، استمر هكذا!", valueEn: "Excellent performance, keep it up!",
+      hasGender: false, group: "evaluation",
     },
     {
       key: "completedSessions",
-      labelAr: "عدد الحصص المنتهية",
-      labelEn: "Completed Sessions",
-      icon: "🔢",
-      valueAr: "2",
-      valueEn: "2",
-      group: "evaluation",
+      labelAr: "عدد الحصص المنتهية", labelEn: "Completed Sessions", icon: "🔢",
+      valueAr: "2", valueEn: "2",
+      hasGender: false, group: "evaluation",
     },
     {
       key: "recordingLink",
-      labelAr: "رابط التسجيل",
-      labelEn: "Recording Link",
-      icon: "🎥",
+      labelAr: "رابط تسجيل الحصة", labelEn: "Recording Link", icon: "🎥",
       valueAr: "🎥 رابط التسجيل: https://drive.google.com/xxx",
       valueEn: "🎥 Recording: https://drive.google.com/xxx",
+      hasGender: false, group: "evaluation",
+    },
+    {
+      key: "evaluationDecision",
+      labelAr: "نتيجة التقييم النهائية", labelEn: "Evaluation Decision", icon: "🏆",
+      valueAr: "ممتاز — جاهز للانتقال للمستوى التالي",
+      valueEn: "Excellent — Ready for the next level",
+      valueMaleAr: "ممتاز — جاهز للانتقال للمستوى التالي",
+      valueMaleEn: "Excellent — Ready for the next level",
+      valueFemaleAr: "ممتازة — جاهزة للانتقال للمستوى التالي",
+      valueFemaleEn: "Excellent — Ready for the next level",
+      hasGender: true, genderType: "student",
       group: "evaluation",
     },
 
-    // ── Common ────────────────────────────────────────────────
-    {
-      key: "feedbackLink",
-      labelAr: "رابط التقييم",
-      labelEn: "Feedback Link",
-      icon: "⭐",
-      valueAr: "https://forms.gle/xyz123",
-      valueEn: "https://forms.gle/xyz123",
-      group: "common",
-    },
+    // ══════════════════════════════════════════════════════════
+    // COMMON — عامة
+    // ══════════════════════════════════════════════════════════
     {
       key: "decision",
-      labelAr: "نتيجة التقييم",
-      labelEn: "Evaluation Decision",
-      icon: "🏆",
+      labelAr: "نتيجة التقييم (مختصرة)", labelEn: "Evaluation Decision (short)", icon: "🏆",
       valueAr: "ممتاز",
       valueEn: "Excellent",
-      group: "evaluation",
+      valueMaleAr: "ممتاز", valueMaleEn: "Excellent",
+      valueFemaleAr: "ممتازة", valueFemaleEn: "Excellent",
+      hasGender: true, genderType: "student",
+      group: "common",
     },
   ];
 }
