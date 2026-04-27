@@ -175,6 +175,13 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           badge: createBadge(t('common.new') || "New"),
         },
 
+        {
+          label: t('dashboard.overviewPage') || "نظرة عامة",
+          href: "/admin/overview",
+          icon: "ion:bar-chart-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
+
       ]
     },
     {

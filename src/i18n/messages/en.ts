@@ -4093,6 +4093,7 @@ const en = {
   "allSessions.error": "Error",
   "allSessions.errorMessage": "Failed to load session data",
   "allSessions.retry": "Retry",
+  "dashboard.overviewPage" : "Overview",
 };
 
 export default en;

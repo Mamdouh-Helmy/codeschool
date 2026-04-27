@@ -4221,6 +4221,7 @@ const ar = {
   "allSessions.error": "حدث خطأ",
   "allSessions.errorMessage": "تعذر تحميل بيانات الجلسات",
   "allSessions.retry": "إعادة المحاولة",
+  "dashboard.overviewPage" : "نظرة عامة"
 };
 
 export default ar;
