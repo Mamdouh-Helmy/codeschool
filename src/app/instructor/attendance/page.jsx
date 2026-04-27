@@ -16,60 +16,32 @@ import { useLocale } from "@/app/context/LocaleContext";
 // ─── Status Config ──────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
   present: {
-    labelAr: "حاضر",
-    labelEn: "Present",
-    icon: CheckCircle2,
-    color: "emerald",
-    bg: "bg-emerald-500",
-    gradient: "from-emerald-400 to-teal-500",
-    lightBg: "bg-emerald-50 dark:bg-emerald-900/20",
-    border: "border-emerald-400 dark:border-emerald-600",
-    text: "text-emerald-700 dark:text-emerald-400",
-    ring: "ring-emerald-400",
-    deductCredits: true,
-    sendMessage: false,
+    labelAr: "حاضر", labelEn: "Present", icon: CheckCircle2,
+    color: "emerald", bg: "bg-emerald-500", gradient: "from-emerald-400 to-teal-500",
+    lightBg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-400 dark:border-emerald-600",
+    text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-400",
+    deductCredits: true, sendMessage: false,
   },
   absent: {
-    labelAr: "غائب",
-    labelEn: "Absent",
-    icon: UserX,
-    color: "red",
-    bg: "bg-red-500",
-    gradient: "from-red-400 to-rose-500",
-    lightBg: "bg-red-50 dark:bg-red-900/20",
-    border: "border-red-400 dark:border-red-600",
-    text: "text-red-700 dark:text-red-400",
-    ring: "ring-red-400",
-    deductCredits: false,
-    sendMessage: true,
+    labelAr: "غائب", labelEn: "Absent", icon: UserX,
+    color: "red", bg: "bg-red-500", gradient: "from-red-400 to-rose-500",
+    lightBg: "bg-red-50 dark:bg-red-900/20", border: "border-red-400 dark:border-red-600",
+    text: "text-red-700 dark:text-red-400", ring: "ring-red-400",
+    deductCredits: false, sendMessage: true,
   },
   late: {
-    labelAr: "متأخر",
-    labelEn: "Late",
-    icon: Clock,
-    color: "amber",
-    bg: "bg-amber-500",
-    gradient: "from-amber-400 to-orange-500",
-    lightBg: "bg-amber-50 dark:bg-amber-900/20",
-    border: "border-amber-400 dark:border-amber-600",
-    text: "text-amber-700 dark:text-amber-400",
-    ring: "ring-amber-400",
-    deductCredits: true,
-    sendMessage: true,
+    labelAr: "متأخر", labelEn: "Late", icon: Clock,
+    color: "amber", bg: "bg-amber-500", gradient: "from-amber-400 to-orange-500",
+    lightBg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-400 dark:border-amber-600",
+    text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-400",
+    deductCredits: true, sendMessage: true,
   },
   excused: {
-    labelAr: "معذور",
-    labelEn: "Excused",
-    icon: ShieldCheck,
-    color: "blue",
-    bg: "bg-blue-500",
-    gradient: "from-blue-400 to-indigo-500",
-    lightBg: "bg-blue-50 dark:bg-blue-900/20",
-    border: "border-blue-400 dark:border-blue-600",
-    text: "text-blue-700 dark:text-blue-400",
-    ring: "ring-blue-400",
-    deductCredits: false,
-    sendMessage: true,
+    labelAr: "معذور", labelEn: "Excused", icon: ShieldCheck,
+    color: "blue", bg: "bg-blue-500", gradient: "from-blue-400 to-indigo-500",
+    lightBg: "bg-blue-50 dark:bg-blue-900/20", border: "border-blue-400 dark:border-blue-600",
+    text: "text-blue-700 dark:text-blue-400", ring: "ring-blue-400",
+    deductCredits: false, sendMessage: true,
   },
 };
 
@@ -93,6 +65,211 @@ function fmtTime(time, isAr) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
+// ─── Variable Resolution (mirrors AttendanceModal logic) ─────────────────────
+
+/**
+ * resolveVar — picks the gender-aware value from a DB TemplateVariable object.
+ * Mirrors the exact logic in AttendanceModal.
+ */
+function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
+  const v = dbVars[key];
+  if (!v) return null;
+
+  const { studentGender = "male", guardianType = "father" } = genderContext;
+  const isMale   = String(studentGender).toLowerCase() !== "female";
+  const isFather = String(guardianType).toLowerCase()  !== "mother";
+
+  if (v.hasGender) {
+    if (v.genderType === "student") {
+      return lang === "ar"
+        ? (isMale ? v.valueMaleAr   : v.valueFemaleAr) || v.valueAr || null
+        : (isMale ? v.valueMaleEn   : v.valueFemaleEn) || v.valueEn || null;
+    }
+    if (v.genderType === "guardian") {
+      return lang === "ar"
+        ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || null
+        : (isFather ? v.valueFatherEn : v.valueMotherEn) || v.valueEn || null;
+    }
+    if (v.genderType === "instructor") {
+      return lang === "ar"
+        ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
+        : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
+    }
+  }
+
+  return lang === "ar" ? v.valueAr || null : v.valueEn || null;
+}
+
+/**
+ * buildVariables — assembles the full variable map for a student.
+ * DB vars take priority; falls back to computed values when DB has nothing.
+ * Mirrors the exact logic in AttendanceModal.
+ *
+ * @param {object} student   - student object from the API
+ * @param {string} status    - "absent" | "late" | "excused" | "present"
+ * @param {object} session   - sessionData object (title, scheduledDate, startTime, endTime, …)
+ * @param {object} dbVars    - map of { [key]: TemplateVariable } loaded from /api/whatsapp/template-variables
+ */
+function buildVariables(student, status, session, dbVars = {}) {
+  if (!student) return {};
+ 
+  const lang         = (student.preferredLanguage || "ar").toLowerCase();
+  const gender       = (student.gender || "male").toLowerCase().trim();
+  const relationship = (student.guardianRelationship || "father").toLowerCase().trim();
+  const isMale       = gender !== "female";
+  const isFather     = relationship !== "mother";
+  const genderCtx    = { studentGender: gender, guardianType: relationship };
+ 
+  // ── Resolve the correct first name (nickname → fullName first word) ────────
+  // Priority: nicknameAr/En → first word of fullName
+  const studentFirstName =
+    lang === "ar"
+      ? student.nicknameAr || student.name?.split(" ")[0] || "الطالب"
+      : student.nicknameEn || student.name?.split(" ")[0] || "Student";
+ 
+  const guardianFirstName =
+    lang === "ar"
+      ? student.guardianNicknameAr || student.guardianName?.split(" ")[0] || "ولي الأمر"
+      : student.guardianNicknameEn || student.guardianName?.split(" ")[0] || "Guardian";
+ 
+  // ── DB vars → hardcoded fallback for the SALUTATION BASE only ─────────────
+  // We take ONLY the base phrase from DB (e.g. "أهلا الأستاذ") then append
+  // the resolved first name ourselves — DB value already has a trailing space.
+  const guardianSalBase_ar =
+    resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) ||
+    (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
+ 
+  const guardianSalBase_en =
+    resolveVar(dbVars, "guardianSalutation_en", "en", genderCtx) ||
+    (isFather ? "Dear Mr." : "Dear Mrs.");
+ 
+  const childTitleAr =
+    resolveVar(dbVars, "childTitle", "ar", genderCtx) ||
+    (isMale ? "ابنك" : "ابنتك");
+ 
+  const childTitleEn =
+    resolveVar(dbVars, "childTitle", "en", genderCtx) ||
+    (isMale ? "your son" : "your daughter");
+ 
+  const you_ar =
+    resolveVar(dbVars, "you_ar", "ar", genderCtx) ||
+    (isMale ? "أنت" : "أنتِ");
+ 
+  const welcome_ar =
+    resolveVar(dbVars, "welcome_ar", "ar", genderCtx) ||
+    (isMale ? "أهلاً بك" : "أهلاً بكِ");
+ 
+  const studentGender_ar =
+    resolveVar(dbVars, "studentGender_ar", "ar", genderCtx) ||
+    (isMale ? "الابن" : "الابنة");
+ 
+  const studentGender_en =
+    resolveVar(dbVars, "studentGender_en", "en", genderCtx) ||
+    (isMale ? "son" : "daughter");
+ 
+  const relationship_ar =
+    resolveVar(dbVars, "relationship_ar", "ar", genderCtx) ||
+    (isFather ? "الأب" : "الأم");
+ 
+  // ── Compose final salutations (base + correct first name) ─────────────────
+  // trim() the base in case DB stored trailing space, then join cleanly
+  const guardianSalutation_ar = `${guardianSalBase_ar.trimEnd()} ${guardianFirstName}`;
+  const guardianSalutation_en = `${guardianSalBase_en.trimEnd()} ${guardianFirstName}`;
+  const guardianSalutation    = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
+ 
+  const studentSalutation = lang === "ar"
+    ? `${isMale ? "عزيزي" : "عزيزتي"} ${studentFirstName}`
+    : `Dear ${studentFirstName}`;
+ 
+  const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
+ 
+  // ── Status text (with Arabic feminine form) ───────────────────────────────
+  const statusMap = {
+    ar: { absent: "غائب",   late: "متأخر",   excused: "معتذر",   present: "حاضر"    },
+    en: { absent: "absent", late: "late",     excused: "excused", present: "present" },
+  };
+  const statusMapFemaleAr = {
+    absent: "غائبة", late: "متأخرة", excused: "معتذرة", present: "حاضرة",
+  };
+  const statusText =
+    lang === "ar" && !isMale
+      ? (statusMapFemaleAr[status] || status)
+      : (statusMap[lang]?.[status] || status);
+ 
+  // ── Session data ──────────────────────────────────────────────────────────
+  const sessionDate = session?.scheduledDate
+    ? new Date(session.scheduledDate).toLocaleDateString(
+        lang === "ar" ? "ar-EG" : "en-US",
+        { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+      )
+    : "";
+ 
+  return {
+    // Guardian
+    guardianSalutation,
+    guardianSalutation_ar,
+    guardianSalutation_en,
+    guardianName:     guardianFirstName,
+    guardianFullName: student.guardianName || "",
+    relationship_ar,
+ 
+    // Student
+    salutation:       guardianSalutation,
+    studentSalutation,
+    studentName:      studentFirstName,
+    studentName_ar:   studentFirstName,
+    studentName_en:   studentFirstName,
+    studentFullName:  student.name || "",
+    fullStudentName:  student.name || "",
+    name_ar:          studentFirstName,
+    name_en:          studentFirstName,
+    fullName:         student.name || "",
+ 
+    // Gender-aware helpers
+    childTitle,
+    you_ar,
+    welcome_ar,
+    studentGender_ar,
+    studentGender_en,
+ 
+    // Status
+    status:           statusText,
+    attendanceStatus: statusText,
+ 
+    // Session
+    sessionName:  session?.title || "",
+    date:         sessionDate,
+    sessionDate,
+    time:         `${session?.startTime || ""} - ${session?.endTime || ""}`,
+    meetingLink:  session?.meetingLink || "",
+ 
+    // Group
+    groupName: session?.group?.name || session?.groupName || "",
+    groupCode: session?.group?.code || session?.groupCode || "",
+ 
+    // Student extras
+    enrollmentNumber: student.enrollmentNumber || "",
+ 
+    // Language
+    selectedLanguage_ar: lang === "ar" ? "العربية" : "الإنجليزية",
+    selectedLanguage_en: lang === "ar" ? "Arabic"  : "English",
+  };
+}
+
+/**
+ * renderTemplate — replaces every {variable} placeholder with its resolved value.
+ */
+function renderTemplate(template, variables) {
+  if (!template) return "";
+  let result = template;
+  Object.entries(variables).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      result = result.replace(new RegExp(`\\{${key}\\}`, "g"), String(value));
+    }
+  });
+  return result;
+}
+
 // ─── Animated Counter ────────────────────────────────────────────────────────
 const AnimatedCounter = ({ value, duration = 800 }) => {
   const [count, setCount] = useState(0);
@@ -113,31 +290,54 @@ const AnimatedCounter = ({ value, duration = 800 }) => {
 };
 
 // ─── Message Preview Modal ───────────────────────────────────────────────────
-function MessagePreviewModal({ student, attendanceStatus, sessionId, isAr, onClose, onConfirm }) {
-  const [loading, setLoading] = useState(true);
-  const [template, setTemplate] = useState(null);
-  const [error, setError] = useState("");
+/**
+ * Receives `dbVars` and `students` so it can render the raw template
+ * content client-side with real student data — no extra server round-trip needed.
+ */
+// ─── Message Preview Modal (updated) ────────────────────────────────────────
+// Drop-in replacement for the MessagePreviewModal in InstructorAttendancePage.jsx
+
+function MessagePreviewModal({
+  student,
+  attendanceStatus,
+  sessionId,
+  sessionData,   // from parent state — used as fallback
+  isAr,
+  onClose,
+  onConfirm,
+  dbVars,        // map of { [key]: TemplateVariable } loaded from /api/whatsapp/template-variables
+}) {
+  const [loading,     setLoading]     = useState(true);
+  const [rawTemplate, setRawTemplate] = useState(null);
+  const [error,       setError]       = useState("");
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
 
+  // Fetch the RAW template (server no longer renders variables)
   useEffect(() => {
     const fetch_ = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/instructor/sessions/${sessionId}/attendance`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ attendanceStatus, studentId: student._id }),
-        });
+        const res = await fetch(
+          `/api/instructor/sessions/${sessionId}/attendance`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ attendanceStatus, studentId: student._id }),
+          }
+        );
         const data = await res.json();
         if (data.success) {
-          setTemplate(data.data);
+          setRawTemplate(data.data);
         } else {
-          setError(data.error || t("فشل تحميل القالب", "Failed to load template", isAr));
+          setError(
+            data.error ||
+              t("فشل تحميل القالب", "Failed to load template", isAr)
+          );
         }
       } catch {
         setError(t("خطأ في الاتصال", "Connection error", isAr));
@@ -149,18 +349,56 @@ function MessagePreviewModal({ student, attendanceStatus, sessionId, isAr, onClo
   }, [student._id, attendanceStatus, sessionId]);
 
   const cfg = STATUS_CONFIG[attendanceStatus];
-  const lang = template?.metadata?.language || "ar";
+
+  // ── Determine language from server metadata (most accurate source) ─────────
+  const lang = rawTemplate?.metadata?.language || student.preferredLanguage || "ar";
+
+  // ── Build a merged session context ───────────────────────────────────────
+  // Server metadata has the raw DB values; client sessionData has the same
+  // plus maybe group info. Merge so buildVariables has everything it needs.
+  const mergedSession = React.useMemo(() => {
+    const meta = rawTemplate?.metadata;
+    return {
+      title:         meta?.sessionTitle  || sessionData?.title         || "",
+      scheduledDate: meta?.scheduledDate || sessionData?.scheduledDate || null,
+      startTime:     meta?.startTime     || sessionData?.startTime     || "",
+      endTime:       meta?.endTime       || sessionData?.endTime       || "",
+      meetingLink:   meta?.meetingLink   || sessionData?.meetingLink   || "",
+      group: {
+        name: meta?.groupName || sessionData?.group?.name || "",
+        code: meta?.groupCode || sessionData?.group?.code || "",
+      },
+    };
+  }, [rawTemplate, sessionData]);
+
+  // ── Render variables client-side using dbVars ──────────────────────────────
+  const renderedContent = React.useMemo(() => {
+    if (!rawTemplate?.guardian?.content) return null;
+    const variables = buildVariables(student, attendanceStatus, mergedSession, dbVars);
+    return renderTemplate(rawTemplate.guardian.content, variables);
+  }, [rawTemplate, student, attendanceStatus, mergedSession, dbVars]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      dir={isAr ? "rtl" : "ltr"}
+    >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative w-full sm:max-w-lg max-h-[90vh] bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden">
 
-        {/* Header — gradient matching dashboard style */}
-        <div className={`relative bg-gradient-to-br ${cfg.gradient} p-5 overflow-hidden flex-shrink-0`}>
-          <div className="absolute inset-0 opacity-10"
-            style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+        {/* Header */}
+        <div
+          className={`relative bg-gradient-to-br ${cfg.gradient} p-5 overflow-hidden flex-shrink-0`}
+        >
+          <div
+            className="absolute inset-0 opacity-10"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)",
+              backgroundSize: "24px 24px",
+            }}
+          />
           <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
 
           <div className="relative z-10 flex items-center gap-3">
@@ -179,7 +417,10 @@ function MessagePreviewModal({ student, attendanceStatus, sessionId, isAr, onClo
               <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/20 text-white border border-white/20">
                 {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
               </span>
-              <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all">
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all"
+              >
                 <X className="w-4 h-4 text-white" />
               </button>
             </div>
@@ -193,7 +434,9 @@ function MessagePreviewModal({ student, attendanceStatus, sessionId, isAr, onClo
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg">
                 <Loader2 className="w-7 h-7 text-white animate-spin" />
               </div>
-              <p className="text-sm text-gray-400 dark:text-[#8b949e]">{t("جاري تحميل القالب...", "Loading template...", isAr)}</p>
+              <p className="text-sm text-gray-400 dark:text-[#8b949e]">
+                {t("جاري تحميل القالب...", "Loading template...", isAr)}
+              </p>
             </div>
           )}
 
@@ -204,8 +447,9 @@ function MessagePreviewModal({ student, attendanceStatus, sessionId, isAr, onClo
             </div>
           )}
 
-          {!loading && !error && template?.guardian?.content && (
+          {!loading && !error && renderedContent && (
             <>
+              {/* Recipient info */}
               <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d]">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center shadow-sm">
                   <User className="w-4 h-4 text-white" />
@@ -214,55 +458,74 @@ function MessagePreviewModal({ student, attendanceStatus, sessionId, isAr, onClo
                   <p className="text-xs font-bold text-gray-700 dark:text-[#c9d1d9]">
                     {t("إلى: ولي الأمر", "To: Guardian", isAr)}
                   </p>
-                  {student.guardianPhone && (
+                  {/* {student.guardianPhone && (
                     <p className="text-xs text-gray-400 dark:text-[#6e7681] flex items-center gap-1 mt-0.5">
                       <Phone className="w-3 h-3" /> {student.guardianPhone}
                     </p>
-                  )}
+                  )} */}
                 </div>
               </div>
 
+              {/* Rendered WhatsApp bubble */}
               <div className="bg-[#dcf8c6] dark:bg-[#1a3a2a] rounded-2xl rounded-tl-sm p-4 shadow-sm border border-[#c5e8a3] dark:border-[#2d5a3d]">
-                <p className="text-[13px] text-gray-800 dark:text-[#d1fae5] leading-relaxed whitespace-pre-wrap font-medium" dir={lang === "ar" ? "rtl" : "ltr"}>
-                  {template.guardian.content}
+                <p
+                  className="text-[13px] text-gray-800 dark:text-[#d1fae5] leading-relaxed whitespace-pre-wrap font-medium"
+                  dir={lang === "ar" ? "rtl" : "ltr"}
+                >
+                  {renderedContent}
                 </p>
                 <div className="flex items-center justify-end gap-1 mt-2 opacity-60">
-                  <span className="text-[10px] text-gray-500 dark:text-[#6b7280]">WhatsApp</span>
+                  <span className="text-[10px] text-gray-500 dark:text-[#6b7280]">
+                    WhatsApp
+                  </span>
                   <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
                 </div>
               </div>
 
-              {template.guardian.isFallback && (
+              {rawTemplate?.guardian?.isFallback && (
                 <div className="flex items-center gap-2 mt-3 p-2.5 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/30">
                   <Info className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                   <p className="text-xs text-amber-700 dark:text-amber-400">
-                    {t("قالب افتراضي (لم يُضبط قالب خاص في الداتابيز)", "Default template (no custom template in DB)", isAr)}
+                    {t(
+                      "قالب افتراضي (لم يُضبط قالب خاص في الداتابيز)",
+                      "Default template (no custom template in DB)",
+                      isAr
+                    )}
                   </p>
                 </div>
               )}
             </>
           )}
 
-          {!loading && !error && !template?.guardian?.content && (
+          {!loading && !error && !renderedContent && (
             <div className="text-center py-8">
               <div className="w-16 h-16 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-2xl flex items-center justify-center mb-3">
                 <MessageSquare className="w-8 h-8 text-gray-300 dark:text-[#6e7681]" />
               </div>
-              <p className="text-sm text-gray-400">{t("لا توجد رسالة لهذا الطالب", "No message for this student", isAr)}</p>
+              <p className="text-sm text-gray-400">
+                {t(
+                  "لا توجد رسالة لهذا الطالب",
+                  "No message for this student",
+                  isAr
+                )}
+              </p>
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="flex gap-2 p-4 border-t border-gray-100 dark:border-[#30363d]">
-          <button onClick={onClose}
-            className="flex-1 py-3 rounded-xl text-sm font-bold bg-gray-100 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d] transition-all">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl text-sm font-bold bg-gray-100 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d] transition-all"
+          >
             {t("إلغاء", "Cancel", isAr)}
           </button>
           <button
             onClick={() => onConfirm(student._id, attendanceStatus)}
             disabled={loading}
-            className={`flex-1 py-3 rounded-xl text-sm font-black text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r ${cfg.gradient}`}>
+            className={`flex-1 py-3 rounded-xl text-sm font-black text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r ${cfg.gradient}`}
+          >
             <Send className="w-4 h-4" />
             {t("تأكيد وإرسال", "Confirm & Send", isAr)}
           </button>
@@ -284,18 +547,13 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
         ? `${cfg.border} shadow-lg`
         : "border-gray-100 dark:border-[#30363d] hover:border-gray-200 dark:hover:border-[#3d444d] shadow-sm"}`}>
 
-      {/* Top accent bar — gradient like dashboard cards */}
-      {isSet && (
-        <div className={`h-1 w-full bg-gradient-to-r ${cfg.gradient}`} />
-      )}
+      {isSet && <div className={`h-1 w-full bg-gradient-to-r ${cfg.gradient}`} />}
 
-      {/* Hover glow effect */}
       {isSet && (
         <div className={`absolute inset-0 bg-gradient-to-br opacity-0 group-hover/card:opacity-5 transition-opacity duration-300 pointer-events-none ${cfg.gradient}`} />
       )}
 
       <div className="p-4">
-        {/* Student info row */}
         <div className="flex items-start gap-3 mb-4">
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-base flex-shrink-0 shadow-md transition-transform duration-300 group-hover/card:scale-110
             ${isSet
@@ -309,7 +567,7 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
           <div className="flex-1 min-w-0">
             <p className="font-bold text-sm text-gray-900 dark:text-[#e6edf3] truncate mb-1.5">{student.name}</p>
             <div className="flex items-center gap-2 flex-wrap">
-              {student.credits !== undefined && (
+              {/* {student.credits !== undefined && (
                 <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border
                   ${student.credits <= 2
                     ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/40"
@@ -319,7 +577,7 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
                   <CreditCard className="w-3 h-3" />
                   {student.credits} {t("ساعة", "hrs", isAr)}
                 </span>
-              )}
+              )} */}
               {student.absenceCount > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-50 dark:bg-red-900/20 text-xs text-red-500 dark:text-red-400 font-medium border border-red-100 dark:border-red-800/30">
                   <AlertTriangle className="w-3 h-3" />
@@ -336,7 +594,6 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
           )}
         </div>
 
-        {/* Status buttons — styled like dashboard action buttons */}
         <div className="grid grid-cols-4 gap-2">
           {STATUS_ORDER.map((status) => {
             const c = STATUS_CONFIG[status];
@@ -361,7 +618,6 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
           })}
         </div>
 
-        {/* Preview message button */}
         {isSet && SEND_STATUSES.includes(currentStatus) && (
           <button
             onClick={(e) => { e.stopPropagation(); onPreview(student, currentStatus); }}
@@ -391,7 +647,6 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
 
   return (
     <div className="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] p-5 shadow-lg dark:shadow-black/40">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-md">
@@ -410,7 +665,6 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
         </div>
       </div>
 
-      {/* Progress bar */}
       <div className="h-2.5 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden mb-5">
         <div
           className="h-full bg-gradient-to-r from-primary to-purple-600 rounded-full relative overflow-hidden transition-all duration-700"
@@ -420,7 +674,6 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
         </div>
       </div>
 
-      {/* Stat cards — same pattern as dashboard stats */}
       <div className="grid grid-cols-4 gap-3">
         {statItems.map(({ key, grad, bg, text, border, icon: Icon }, idx) => (
           <div
@@ -467,19 +720,36 @@ export default function InstructorAttendancePage() {
   const { locale } = useLocale();
   const isAr = locale === "ar";
 
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-  const [sessionData, setSessionData] = useState(null);
-  const [students, setStudents] = useState([]);
-  const [attendance, setAttendance] = useState({});
-  const [previewModal, setPreviewModal] = useState(null);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [animateProgress, setAnimateProgress] = useState(false);
+  const [loading,         setLoading]         = useState(true);
+  const [submitting,      setSubmitting]       = useState(false);
+  const [error,           setError]            = useState("");
+  const [success,         setSuccess]          = useState(false);
+  const [sessionData,     setSessionData]      = useState(null);
+  const [students,        setStudents]         = useState([]);
+  const [attendance,      setAttendance]       = useState({});
+  const [previewModal,    setPreviewModal]     = useState(null);
+  const [search,          setSearch]           = useState("");
+  const [filterStatus,    setFilterStatus]     = useState("all");
+  const [animateProgress, setAnimateProgress]  = useState(false);
+
+  // ── DB template variables (gender-aware) — mirrors AttendanceModal ─────────
+  const [dbVars, setDbVars] = useState({});
 
   const savedStatusRef = useRef({});
+
+  // ── Fetch DB template variables on mount ───────────────────────────────────
+  useEffect(() => {
+    fetch("/api/whatsapp/template-variables")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          const map = {};
+          data.data.forEach((v) => { map[v.key] = v; });
+          setDbVars(map);
+        }
+      })
+      .catch((err) => console.error("❌ Failed to load template variables:", err));
+  }, []);
 
   const fetchData = useCallback(async () => {
     if (!sessionId) {
@@ -536,6 +806,10 @@ export default function InstructorAttendancePage() {
     setAttendance((prev) => ({ ...prev, [studentId]: status }));
   }, []);
 
+  /**
+   * handleSubmit — renders all custom messages client-side before sending.
+   * The PATCH endpoint receives fully-rendered strings (no {variable} placeholders).
+   */
   const handleSubmit = async () => {
     if (Object.keys(attendance).length === 0) return;
     try {
@@ -597,7 +871,6 @@ export default function InstructorAttendancePage() {
   const filledCount = Object.keys(attendance).length;
   const allFilled = filledCount === students.length && students.length > 0;
 
-  // ── No session id ──
   if (!sessionId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22]" dir="rtl">
@@ -615,7 +888,6 @@ export default function InstructorAttendancePage() {
     );
   }
 
-  // ── Success ──
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22]" dir={isAr ? "rtl" : "ltr"}>
@@ -640,7 +912,7 @@ export default function InstructorAttendancePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22]" dir={isAr ? "rtl" : "ltr"}>
 
-      {/* ── Sticky Header — same style as dashboard header ── */}
+      {/* Sticky Header */}
       <div className="sticky top-0 z-30 bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md border-b border-gray-200 dark:border-[#30363d] shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <div className="flex items-center gap-3">
@@ -693,7 +965,7 @@ export default function InstructorAttendancePage() {
         </div>
       </div>
 
-      {/* ── Hero Banner — same as dashboard ── */}
+      {/* Hero Banner */}
       {sessionData && !loading && (
         <div className="max-w-4xl mx-auto px-4 pt-5">
           <div className="relative group">
@@ -701,7 +973,6 @@ export default function InstructorAttendancePage() {
             <div className="relative bg-gradient-to-br from-primary via-purple-600 to-pink-600 rounded-3xl p-5 overflow-hidden shadow-lg">
               <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl animate-pulse" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl" />
-
               <div className="relative z-10 flex items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
@@ -713,8 +984,6 @@ export default function InstructorAttendancePage() {
                     {sessionData.group?.name} · {fmtTime(sessionData.startTime, isAr)} – {fmtTime(sessionData.endTime, isAr)}
                   </p>
                 </div>
-
-                {/* Mini stats in hero */}
                 <div className="flex flex-col gap-2 flex-shrink-0">
                   <div className="flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/20">
                     <Users className="w-4 h-4 text-white" />
@@ -731,7 +1000,7 @@ export default function InstructorAttendancePage() {
         </div>
       )}
 
-      {/* ── Main Content ── */}
+      {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-5 space-y-5">
 
         {loading && <Skeleton />}
@@ -752,7 +1021,6 @@ export default function InstructorAttendancePage() {
 
         {!loading && !error && students.length > 0 && (
           <>
-            {/* Summary */}
             <SummaryBar attendance={attendance} total={students.length} isAr={isAr} animateProgress={animateProgress} />
 
             {/* Quick mark all */}
@@ -829,7 +1097,7 @@ export default function InstructorAttendancePage() {
               )}
             </div>
 
-            {/* Submit sticky button — styled like dashboard CTA */}
+            {/* Submit sticky bar */}
             <div className="sticky bottom-0 pt-3 pb-4">
               <div className="bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-[#30363d] p-4 shadow-xl">
                 <div className="flex items-center gap-4">
@@ -847,7 +1115,7 @@ export default function InstructorAttendancePage() {
                     )}
                   </div>
 
-                  {/* Progress mini ring */}
+                  {/* Mini progress ring */}
                   <div className="relative w-10 h-10 flex-shrink-0">
                     <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                       <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" className="text-gray-100 dark:text-[#21262d]" />
@@ -895,15 +1163,17 @@ export default function InstructorAttendancePage() {
         )}
       </div>
 
-      {/* ── Preview Modal ── */}
+      {/* Preview Modal — passes dbVars + sessionData for client-side rendering */}
       {previewModal && (
         <MessagePreviewModal
           student={previewModal.student}
           attendanceStatus={previewModal.status}
           sessionId={sessionId}
+          sessionData={sessionData}
           isAr={isAr}
           onClose={() => setPreviewModal(null)}
           onConfirm={handleConfirmSingle}
+          dbVars={dbVars}
         />
       )}
 

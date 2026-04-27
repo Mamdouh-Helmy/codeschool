@@ -27,6 +27,8 @@ const MessageTemplateSchema = new mongoose.Schema(
         "evaluation_review",
         "evaluation_repeat",
         "session_recording",
+        "learning_supervisor_intro",  // ✅ جديد
+        "module_overview",            // ✅ جديد
       ],
     },
 
@@ -117,7 +119,7 @@ MessageTemplateSchema.pre("save", async function () {
   }
 });
 
-// ─── Methods fgfg ──────────────────────────────────────────────────────────────────
+// ─── Methods ──────────────────────────────────────────────────────────────────
 MessageTemplateSchema.methods.getContent = function (language = "ar") {
   return language === "ar" ? this.contentAr : this.contentEn;
 };
@@ -157,6 +159,8 @@ MessageTemplateSchema.methods.getExample = function (language = "ar") {
     enrollmentNumber:    "STU001",
     recordingLink:       "🎥 رابط التسجيل: https://drive.google.com/xxx",
     decision:            language === "ar" ? "ممتاز"                   : "Excellent",
+    supervisorName:      language === "ar" ? "أحمد علي"                : "Ahmed Ali",
+    moduleTitle:         language === "ar" ? "Real-Life Mobile Solutions" : "Real-Life Mobile Solutions",
   };
   return this.render(examples, language);
 };
@@ -361,6 +365,69 @@ Session Report 📃✨
 
 The recording can be reviewed anytime for study and revision.
 Code School Team 💻`,
+    },
+
+    // ─── NEW: Learning Supervisor Intro ───────────────────────────────────────
+    learning_supervisor_intro: {
+      variables: [
+        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ أحمد" },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "يوسف" },
+        { key: "supervisorName", label: "اسم المشرف", example: "أحمد علي" },
+      ],
+      ar:
+`{guardianSalutation} 👋
+أنا {supervisorName}، الـ Learning Supervisor الخاص بـ {childTitle} **{studentName}** في Code School ✨
+حبيت أعرف حضرتك بنفسي، لأنني هكون معاكم في المتابعة الأكاديمية خلال الفترة الجاية، وهشارك مع حضرتك التقييمات الدورية، وكمان في بداية كل Module هبعت لحضرتك نظرة بسيطة على اللي {childTitle} هيتعلمه خلالها 🌟
+هدفي إن المتابعة تكون واضحة ومريحة، وإن حضرتك تبقى مطّمن على رحلة {studentName} التعليمية خطوة بخطوة 🤍
+وأي وقت تحب تستفسر عن أي حاجة تخص المستوى أو التقدم، أنا موجود مع حضرتك.
+{supervisorName} ✨
+Learning Supervisor`,
+      en:
+`{guardianSalutation} 👋
+I am {supervisorName}, your Learning Supervisor for {childTitle} **{studentName}** at Code School ✨
+I wanted to introduce myself, as I will be following up on the academic progress during the coming period. I will share periodic evaluations with you, and at the beginning of each Module, I will send you a brief overview of what {childTitle} will be learning 🌟
+My goal is to make follow-up clear and comfortable, and to keep you reassured about {studentName}'s educational journey step by step 🤍
+Anytime you would like to inquire about anything regarding the level or progress, I am here for you.
+{supervisorName} ✨
+Learning Supervisor`,
+    },
+
+    // ─── NEW: Module Overview ─────────────────────────────────────────────────
+    module_overview: {
+      variables: [
+        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ أحمد" },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "يوسف" },
+        { key: "moduleTitle", label: "عنوان الموديول", example: "Real-Life Mobile Solutions" },
+        { key: "supervisorName", label: "اسم المشرف", example: "أحمد علي" },
+      ],
+      ar:
+`{guardianSalutation} 👋
+حابب أشارك مع حضرتك لمحة سريعة عن الـ Module الجديد اللي هيبدأه {childTitle} **{studentName}** ✨
+
+**Module Title:** {moduleTitle}
+
+خلال الـ Module ده، {studentName} هياخد فكرة ممتعة وبسيطة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱
+وهيركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعده يفهم الفكرة خطوة بخطوة بشكل سهل ومناسب لسنه 🌟
+
+وأنا هكون متابع مع حضرتك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.
+
+{supervisorName} ✨
+Learning Supervisor`,
+      en:
+`{guardianSalutation} 👋
+I would like to share with you a quick overview of the new Module that {childTitle} **{studentName}** will be starting ✨
+
+**Module Title:** {moduleTitle}
+
+During this Module, {studentName} will get a fun and simple idea about how the applications we use in our daily lives are built and tailored for users 📱
+He will also focus on building simple screens similar to mobile applications, with practical training to help him understand the concept step by step in an easy and age-appropriate way 🌟
+
+I will be following up with you during the Module and will share any important notes or noticeable progress with you, God willing.
+
+{supervisorName} ✨
+Learning Supervisor`,
     },
 
   };

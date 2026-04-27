@@ -101,6 +101,24 @@ function previewSessions(group) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ✅ Helper: توزيع اللينكات على الجلسات بالـ modulo
+// لو لينك واحد → كل الجلسات تاخد نفس اللينك
+// لو 3 لينكات لـ 6 جلسات → 1→L1, 2→L2, 3→L3, 4→L1, 5→L2, 6→L3
+// لو 0 لينكات → كل الجلسات بدون لينك
+// ─────────────────────────────────────────────────────────────────────────────
+function distributeLinksToSessions(sessions, availableLinks) {
+  if (!availableLinks || availableLinks.length === 0) {
+    return sessions.map((session) => ({ session, assignedLink: null }));
+  }
+
+  return sessions.map((session, i) => ({
+    session,
+    // ✅ modulo: لو لينك واحد يتكرر على كل الجلسات
+    assignedLink: availableLinks[i % availableLinks.length],
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET: Preview link distribution BEFORE activation
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(req, { params }) {
@@ -158,10 +176,12 @@ export async function GET(req, { params }) {
     const sessions = previewSessions(group);
     const totalSessions = sessions.length;
 
-    const sessionPreviews = sessions.map((s, i) => ({
-      session: s,
-      assignedLink: i < availableLinks.length ? availableLinks[i] : null,
-    }));
+    // ✅ توزيع اللينكات بالـ modulo
+    const sessionPreviews = distributeLinksToSessions(sessions, availableLinks);
+
+    // ✅ حساب الجلسات اللي ستحصل على لينكات
+    const sessionsWithLinks = availableLinks.length > 0 ? totalSessions : 0;
+    const sessionsWithout   = availableLinks.length > 0 ? 0 : totalSessions;
 
     return NextResponse.json({
       success: true,
@@ -172,10 +192,11 @@ export async function GET(req, { params }) {
         reservedLinksCount:  reservedLinks.length,
         hasNoLinks:          allLinks.length === 0,
         hasAvailableLinks:   availableLinks.length > 0,
-        sessionsWithLinks:   Math.min(totalSessions, availableLinks.length),
-        sessionsWithout:     Math.max(0, totalSessions - availableLinks.length),
+        // ✅ لو في لينك واحد على الأقل → كل الجلسات ستحصل على لينك
+        sessionsWithLinks,
+        sessionsWithout,
         sessions:            sessionPreviews,
-        availableLinks:      availableLinks,
+        availableLinks,
         reservedLinks:       reservedLinks.map((l) => ({
           id:            l._id,
           name:          l.name,

@@ -27,20 +27,26 @@ import toast from "react-hot-toast";
 
 // ── Platform icons/colors ────────────────────────────────────────────────────
 const PLATFORM_META = {
-  zoom:             { emoji: "🔷", color: "text-blue-600",   bg: "bg-blue-50 dark:bg-blue-900/20",   label: "Zoom" },
-  google_meet:      { emoji: "🔴", color: "text-red-600",    bg: "bg-red-50 dark:bg-red-900/20",     label: "Meet" },
+  zoom:             { emoji: "🔷", color: "text-blue-600",   bg: "bg-blue-50 dark:bg-blue-900/20",     label: "Zoom" },
+  google_meet:      { emoji: "🔴", color: "text-red-600",    bg: "bg-red-50 dark:bg-red-900/20",       label: "Meet" },
   microsoft_teams:  { emoji: "🔵", color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-900/20", label: "Teams" },
-  other:            { emoji: "🔗", color: "text-gray-600",   bg: "bg-gray-50 dark:bg-gray-800",       label: "Other" },
+  other:            { emoji: "🔗", color: "text-gray-600",   bg: "bg-gray-50 dark:bg-gray-800",        label: "Other" },
 };
 
-// ── Distribute available links across sessions (round-robin) ─────────────────
-// لو لينك واحد لـ 6 جلسات → أول جلسة بس تاخد اللينك، الباقي null
-// لو 3 لينكات لـ 6 جلسات → أول 3 جلسات تاخد اللينكات، الباقي null
+// ─────────────────────────────────────────────────────────────────────────────
+// ✅ distributeLinks — modulo distribution
+// لو لينك واحد لـ 10 جلسات  → كل الجلسات تاخد نفس اللينك
+// لو 3 لينكات لـ 7 جلسات   → 1→L1, 2→L2, 3→L3, 4→L1, 5→L2, 6→L3, 7→L1
+// لو 0 لينكات              → كل الجلسات بدون لينك
+// ─────────────────────────────────────────────────────────────────────────────
 function distributeLinks(sessions, links) {
-  if (!links || links.length === 0) return sessions.map(s => ({ ...s, assignedLink: null }));
+  if (!links || links.length === 0) {
+    return sessions.map((s) => ({ ...s, assignedLink: null }));
+  }
   return sessions.map((s, i) => ({
     ...s,
-    assignedLink: i < links.length ? links[i] : null,
+    // ✅ modulo: يكرر اللينكات دورياً على الجلسات
+    assignedLink: links[i % links.length],
   }));
 }
 
@@ -50,11 +56,11 @@ export default function MeetingLinksCheckModal({
   onClose,
   onConfirm, // (forceActivate: bool, releaseReserved: bool) => void
 }) {
-  const [loading, setLoading]           = useState(true);
-  const [releasing, setReleasing]       = useState(false);
-  const [error, setError]               = useState(null);
-  const [rawData, setRawData]           = useState(null);   // data from GET endpoint
-  const [sessionRows, setSessionRows]   = useState([]);     // [{session, assignedLink}]
+  const [loading, setLoading]                 = useState(true);
+  const [releasing, setReleasing]             = useState(false);
+  const [error, setError]                     = useState(null);
+  const [rawData, setRawData]                 = useState(null);
+  const [sessionRows, setSessionRows]         = useState([]);
   const [showAllSessions, setShowAllSessions] = useState(false);
 
   // ── Fetch link status from backend ────────────────────────────────────────
@@ -69,8 +75,12 @@ export default function MeetingLinksCheckModal({
       const d = data.data;
       setRawData(d);
 
-      // Build session rows using distributed links
-      const rows = distributeLinks(d.sessions || [], d.availableLinks || []);
+      // ✅ استخدم الـ sessions اللي جت من الـ backend (بالفعل موزعة بالـ modulo)
+      // أو وزّعها هنا محلياً باستخدام distributeLinks
+      const rows = distributeLinks(
+        (d.sessions || []).map((r) => r.session ?? r), // normalize
+        d.availableLinks || [],
+      );
       setSessionRows(rows);
     } catch {
       setError("فشل في التحقق من اللينكات");
@@ -91,7 +101,7 @@ export default function MeetingLinksCheckModal({
       const data = await res.json();
       if (!data.success) { toast.error(data.error || "فشل إلغاء الحجز"); return; }
       toast.success(`تم إلغاء حجز ${data.released} لينك`);
-      await fetchStatus(); // re-fetch with updated distribution
+      await fetchStatus();
     } catch {
       toast.error("فشل في التواصل مع الخادم");
     } finally {
@@ -102,13 +112,14 @@ export default function MeetingLinksCheckModal({
   if (!isOpen) return null;
 
   // ── Derived state ──────────────────────────────────────────────────────────
-  const totalSessions       = sessionRows.length;
-  const sessionsWithLinks   = sessionRows.filter(r => r.assignedLink).length;
-  const sessionsWithout     = totalSessions - sessionsWithLinks;
-  const hasReservedLinks    = (rawData?.reservedLinksCount ?? 0) > 0;
-  const hasNoLinksAtAll     = (rawData?.totalLinks ?? 0) === 0;
-  const allGood             = sessionsWithout === 0 && totalSessions > 0;
-  const displayedRows       = showAllSessions ? sessionRows : sessionRows.slice(0, 6);
+  const totalSessions     = sessionRows.length;
+  const sessionsWithLinks = sessionRows.filter((r) => r.assignedLink).length;
+  const sessionsWithout   = totalSessions - sessionsWithLinks;
+  const hasReservedLinks  = (rawData?.reservedLinksCount ?? 0) > 0;
+  const hasNoLinksAtAll   = (rawData?.totalLinks ?? 0) === 0;
+  // ✅ allGood: لو في لينك واحد على الأقل → كل الجلسات ستحصل على لينك
+  const allGood           = (rawData?.availableLinksCount ?? 0) > 0;
+  const displayedRows     = showAllSessions ? sessionRows : sessionRows.slice(0, 6);
 
   return (
     <div
@@ -185,6 +196,8 @@ export default function MeetingLinksCheckModal({
               </div>
 
               {/* ── Alert banners ─────────────────────────────────────── */}
+
+              {/* لا يوجد لينكات خالص */}
               {hasNoLinksAtAll && (
                 <Banner
                   type="error"
@@ -194,6 +207,7 @@ export default function MeetingLinksCheckModal({
                 />
               )}
 
+              {/* في لينكات محجوزة وفيه جلسات بدون لينك */}
               {!hasNoLinksAtAll && hasReservedLinks && sessionsWithout > 0 && (
                 <Banner
                   type="warning"
@@ -215,12 +229,17 @@ export default function MeetingLinksCheckModal({
                 />
               )}
 
+              {/* ✅ كل الجلسات ستحصل على لينكات (حتى لو لينك واحد بس) */}
               {!hasNoLinksAtAll && allGood && (
                 <Banner
                   type="success"
                   icon={<CheckCircle className="w-5 h-5 flex-shrink-0" />}
                   title="كل الجلسات ستحصل على لينكات ✓"
-                  body={`${rawData.availableLinksCount} لينك متاح سيتوزع على ${totalSessions} جلسة.`}
+                  body={
+                    rawData.availableLinksCount === 1
+                      ? `لينك واحد متاح وسيتوزع على جميع الـ ${totalSessions} جلسة.`
+                      : `${rawData.availableLinksCount} لينك متاح سيتوزع دورياً على ${totalSessions} جلسة.`
+                  }
                 />
               )}
 
@@ -230,10 +249,20 @@ export default function MeetingLinksCheckModal({
                   <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-blue-500" />
                     توزيع اللينكات على الجلسات
+                    {rawData.availableLinksCount === 1 && (
+                      <span className="text-xs font-normal text-gray-400 dark:text-gray-500">
+                        (نفس اللينك على جميع الجلسات)
+                      </span>
+                    )}
+                    {rawData.availableLinksCount > 1 && (
+                      <span className="text-xs font-normal text-gray-400 dark:text-gray-500">
+                        (توزيع دوري)
+                      </span>
+                    )}
                   </h3>
                   {totalSessions > 6 && (
                     <button
-                      onClick={() => setShowAllSessions(p => !p)}
+                      onClick={() => setShowAllSessions((p) => !p)}
                       className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
                     >
                       {showAllSessions
@@ -256,15 +285,21 @@ export default function MeetingLinksCheckModal({
                   {/* Rows */}
                   <div className="divide-y divide-gray-100 dark:divide-gray-800">
                     {displayedRows.map((row, idx) => {
-                      const pm   = row.assignedLink ? (PLATFORM_META[row.assignedLink.platform] || PLATFORM_META.other) : null;
-                      const date = row.session?.scheduledDate
-                        ? new Date(row.session.scheduledDate).toLocaleDateString("ar-EG", { day: "numeric", month: "short" })
+                      const link = row.assignedLink;
+                      const pm   = link ? (PLATFORM_META[link.platform] || PLATFORM_META.other) : null;
+                      const session = row.session ?? row;
+                      const date = session?.scheduledDate
+                        ? new Date(session.scheduledDate).toLocaleDateString("ar-EG", {
+                            day: "numeric",
+                            month: "short",
+                          })
                         : "—";
+
                       return (
                         <div
                           key={idx}
                           className={`grid grid-cols-12 px-4 py-3 items-center text-sm transition-colors ${
-                            row.assignedLink
+                            link
                               ? "bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60"
                               : "bg-orange-50/60 dark:bg-orange-900/10 hover:bg-orange-50 dark:hover:bg-orange-900/20"
                           }`}
@@ -278,23 +313,30 @@ export default function MeetingLinksCheckModal({
 
                           {/* Title */}
                           <div className="col-span-5 pr-1">
-                            <p className="text-gray-800 dark:text-gray-200 font-medium leading-tight truncate" title={row.session?.title}>
-                              {row.session?.title || `جلسة ${idx + 1}`}
+                            <p
+                              className="text-gray-800 dark:text-gray-200 font-medium leading-tight truncate"
+                              title={session?.title}
+                            >
+                              {session?.title || `جلسة ${idx + 1}`}
                             </p>
                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                              {row.session?.startTime} – {row.session?.endTime}
+                              {session?.startTime} – {session?.endTime}
                             </p>
                           </div>
 
                           {/* Date */}
-                          <div className="col-span-3 text-center text-xs text-gray-500 dark:text-gray-400">{date}</div>
+                          <div className="col-span-3 text-center text-xs text-gray-500 dark:text-gray-400">
+                            {date}
+                          </div>
 
                           {/* Link badge */}
                           <div className="col-span-3 flex justify-center">
-                            {row.assignedLink ? (
-                              <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${pm.bg} ${pm.color}`}>
+                            {link ? (
+                              <span
+                                className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${pm.bg} ${pm.color}`}
+                              >
                                 <span>{pm.emoji}</span>
-                                <span className="truncate max-w-[60px]">{row.assignedLink.name}</span>
+                                <span className="truncate max-w-[60px]">{link.name}</span>
                               </span>
                             ) : (
                               <span className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 font-medium bg-orange-100 dark:bg-orange-900/30 px-2.5 py-1 rounded-full">
@@ -326,10 +368,13 @@ export default function MeetingLinksCheckModal({
                     <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
                   </summary>
                   <div className="mt-2 flex flex-wrap gap-2 pt-1">
-                    {rawData.availableLinks.map(link => {
+                    {rawData.availableLinks.map((link) => {
                       const pm = PLATFORM_META[link.platform] || PLATFORM_META.other;
                       return (
-                        <span key={link._id || link.id} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 ${pm.bg} ${pm.color} font-medium`}>
+                        <span
+                          key={link._id || link.id}
+                          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 ${pm.bg} ${pm.color} font-medium`}
+                        >
                           {pm.emoji} {link.name}
                         </span>
                       );
@@ -352,22 +397,22 @@ export default function MeetingLinksCheckModal({
               إلغاء
             </button>
 
-            {sessionsWithout > 0 && !hasNoLinksAtAll ? (
-              // Some sessions will have no links — warn but allow
+            {/* ✅ لو في لينك واحد على الأقل → كل الجلسات ستحصل على لينك → زرار عادي */}
+            {hasNoLinksAtAll ? (
               <button
                 onClick={() => onConfirm(true, false)}
                 className="flex-1 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
               >
                 <AlertTriangle className="w-4 h-4" />
-                متابعة رغم ذلك ({sessionsWithout} بدون لينك)
+                التفعيل بدون لينكات
               </button>
             ) : (
               <button
-                onClick={() => onConfirm(hasNoLinksAtAll, false)}
+                onClick={() => onConfirm(false, false)}
                 className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
               >
                 <CheckCircle className="w-4 h-4" />
-                {hasNoLinksAtAll ? "التفعيل بدون لينكات" : "متابعة للإشعارات"}
+                متابعة للإشعارات
               </button>
             )}
           </div>

@@ -80,6 +80,10 @@ function buildVariables(student, session, dbVars = {}) {
     resolveVar(dbVars, "salutation_ar", "ar", genderCtx) ||
     (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
 
+  const salutationBase_en =
+    resolveVar(dbVars, "salutation_en", "en", genderCtx) ||
+    "Dear";
+
   const guardianSalBase_ar =
     resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) ||
     (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
@@ -102,7 +106,8 @@ function buildVariables(student, session, dbVars = {}) {
   const guardianSalutation    = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
 
   const studentSalutation_ar  = `${salutationBase_ar} ${studentFirstName}`;
-  const studentSalutation     = lang === "ar" ? studentSalutation_ar : `Dear ${studentFirstName}`;
+  const studentSalutation_en  = `${salutationBase_en} ${studentFirstName}`;
+  const studentSalutation     = lang === "ar" ? studentSalutation_ar : studentSalutation_en;
 
   const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
 
@@ -115,14 +120,36 @@ function buildVariables(student, session, dbVars = {}) {
     : "";
 
   return {
-    studentSalutation,
-    guardianSalutation,
-    salutation: guardianSalutation, // common alias
+    // ── تحيات الطالب ─────────────────────────────────────────────────────
+    studentSalutation,          // يستخدم حسب لغة الطالب (ar أو en)
+    studentSalutation_ar,       // دائماً العربي  → {studentSalutation_ar}
+    studentSalutation_en,       // دائماً الإنجليزي → {studentSalutation_en}
+
+    // ── تحيات ولي الأمر ───────────────────────────────────────────────────
+    guardianSalutation,         // يستخدم حسب لغة الطالب → {guardianSalutation}
+    guardianSalutation_ar,      // دائماً العربي  → {guardianSalutation_ar}
+    guardianSalutation_en,      // دائماً الإنجليزي → {guardianSalutation_en}
+
+    // ── ✅ FIX: المتغيرات اللي كانت مفقودة ──────────────────────────────
+    // {salutation_ar} في قوالب الطالب → تحية الطالب بالعربي
+    salutation_ar: studentSalutation_ar,
+    // {salutation_en} في قوالب الطالب → تحية الطالب بالإنجليزي
+    salutation_en: studentSalutation_en,
+
+    // ── alias مشترك (للتوافق مع القوالب القديمة) ─────────────────────────
+    // {salutation} → تحية ولي الأمر حسب لغة الطالب (الأكثر استخداماً في قوالب الولي)
+    salutation: guardianSalutation,
+
+    // ── أسماء ────────────────────────────────────────────────────────────
     studentName:      studentFirstName,
     studentFullName:  student.personalInfo?.fullName || "",
     guardianName:     guardianFirstName,
     guardianFullName: student.guardianInfo?.name || "",
+
+    // ── childTitle ────────────────────────────────────────────────────────
     childTitle,
+
+    // ── بيانات الجلسة ────────────────────────────────────────────────────
     sessionName:      session?.title       || "",
     date:             sessionDate,
     time:             `${session?.startTime || ""} - ${session?.endTime || ""}`,
@@ -367,16 +394,23 @@ export default function ReminderModal({
             isDefault:   true,
             isActive:    true,
             variables: [
-              { key: "guardianSalutation", label: "Guardian Salutation" },
-              { key: "studentSalutation",  label: "Student Salutation"  },
-              { key: "studentName",        label: "Student Name"        },
-              { key: "guardianName",       label: "Guardian Name"       },
-              { key: "childTitle",         label: "Son/Daughter"        },
-              { key: "sessionName",        label: "Session Name"        },
-              { key: "date",               label: "Date"                },
-              { key: "time",               label: "Time"                },
-              { key: "meetingLink",        label: "Meeting Link"        },
-              { key: "enrollmentNumber",   label: "Enrollment Number"   },
+              { key: "guardianSalutation",    label: "Guardian Salutation"    },
+              { key: "guardianSalutation_ar", label: "Guardian Salutation AR" },
+              { key: "guardianSalutation_en", label: "Guardian Salutation EN" },
+              { key: "studentSalutation",     label: "Student Salutation"     },
+              { key: "studentSalutation_ar",  label: "Student Salutation AR"  },
+              { key: "studentSalutation_en",  label: "Student Salutation EN"  },
+              { key: "salutation_ar",         label: "Salutation AR"          },
+              { key: "salutation_en",         label: "Salutation EN"          },
+              { key: "salutation",            label: "Salutation"             },
+              { key: "studentName",           label: "Student Name"           },
+              { key: "guardianName",          label: "Guardian Name"          },
+              { key: "childTitle",            label: "Son/Daughter"           },
+              { key: "sessionName",           label: "Session Name"           },
+              { key: "date",                  label: "Date"                   },
+              { key: "time",                  label: "Time"                   },
+              { key: "meetingLink",           label: "Meeting Link"           },
+              { key: "enrollmentNumber",      label: "Enrollment Number"      },
             ],
             ...(studentLang === "ar"
               ? { contentAr: content, contentEn: "" }
@@ -419,12 +453,9 @@ export default function ReminderModal({
   );
 
   // ── Send reminders ────────────────────────────────────────────────────────
-  // ✅ FIX: بنبعت studentMessages و guardianMessages كـ objects مقسومة بالـ studentId
-  // عشان الباك إند يقدر يعمل per-student template replacement صح
   const handleSend = useCallback(async () => {
     setSending(true);
     try {
-      // ✅ بناء objects منفصلة للطالب وولي الأمر — key = studentId, value = rendered message
       const studentMessages  = {};
       const guardianMessages = {};
 
@@ -432,11 +463,9 @@ export default function ReminderModal({
         const sid  = student._id.toString();
         const vars = buildVariables(student, session, dbVars);
 
-        // الأولوية: edited → fetched → ""
         const rawStudent  = editedStudentTemplates[sid]  ?? studentTemplates[sid]  ?? "";
         const rawGuardian = editedGuardianTemplates[sid] ?? guardianTemplates[sid] ?? "";
 
-        // render المتغيرات للطالب ده بالذات
         studentMessages[sid]  = renderTemplate(rawStudent,  vars);
         guardianMessages[sid] = renderTemplate(rawGuardian, vars);
       });
@@ -446,7 +475,6 @@ export default function ReminderModal({
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           reminderType,
-          // ✅ بنبعتهم جوه metadata عشان الباك إند يقرأهم صح
           metadata: {
             studentMessages,
             guardianMessages,
@@ -486,16 +514,28 @@ export default function ReminderModal({
   // ── Available variables for hints dropdown ────────────────────────────────
   const availableVariables = useMemo(
     () => [
-      { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر" : "Guardian Salutation", icon: "👤" },
-      { key: "{studentSalutation}",  label: isRTL ? "تحية الطالب"    : "Student Salutation",  icon: "👶" },
-      { key: "{studentName}",        label: isRTL ? "اسم الطالب"     : "Student Name",         icon: "👶" },
-      { key: "{guardianName}",       label: isRTL ? "اسم ولي الأمر"  : "Guardian Name",        icon: "👤" },
-      { key: "{childTitle}",         label: isRTL ? "ابنك/ابنتك"     : "Son/Daughter",         icon: "👪" },
-      { key: "{sessionName}",        label: isRTL ? "اسم الجلسة"     : "Session Name",         icon: "📘" },
-      { key: "{date}",               label: isRTL ? "التاريخ"        : "Date",                 icon: "📅" },
-      { key: "{time}",               label: isRTL ? "الوقت"          : "Time",                 icon: "⏰" },
-      { key: "{meetingLink}",        label: isRTL ? "رابط الاجتماع"  : "Meeting Link",         icon: "🔗" },
-      { key: "{enrollmentNumber}",   label: isRTL ? "الرقم التعريفي" : "Enrollment No.",       icon: "🔢" },
+      // تحيات الطالب
+      { key: "{studentSalutation}",     label: isRTL ? "تحية الطالب (حسب اللغة)"     : "Student Salutation",        icon: "👶" },
+      { key: "{studentSalutation_ar}",  label: isRTL ? "تحية الطالب - عربي"           : "Student Salutation (AR)",    icon: "👶" },
+      { key: "{studentSalutation_en}",  label: isRTL ? "تحية الطالب - إنجليزي"        : "Student Salutation (EN)",    icon: "👶" },
+      // ✅ المتغيرات المُصلحة
+      { key: "{salutation_ar}",         label: isRTL ? "التحية - عربي"                : "Salutation (AR)",            icon: "👋" },
+      { key: "{salutation_en}",         label: isRTL ? "التحية - إنجليزي"             : "Salutation (EN)",            icon: "👋" },
+      // تحيات ولي الأمر
+      { key: "{guardianSalutation}",    label: isRTL ? "تحية ولي الأمر (حسب اللغة)"  : "Guardian Salutation",        icon: "👤" },
+      { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي"        : "Guardian Salutation (AR)",   icon: "👤" },
+      { key: "{guardianSalutation_en}", label: isRTL ? "تحية ولي الأمر - إنجليزي"    : "Guardian Salutation (EN)",   icon: "👤" },
+      { key: "{salutation}",            label: isRTL ? "التحية العامة (ولي الأمر)"    : "Salutation (guardian alias)", icon: "👋" },
+      // أسماء
+      { key: "{studentName}",           label: isRTL ? "اسم الطالب"                   : "Student Name",               icon: "👶" },
+      { key: "{guardianName}",          label: isRTL ? "اسم ولي الأمر"               : "Guardian Name",              icon: "👤" },
+      { key: "{childTitle}",            label: isRTL ? "ابنك/ابنتك"                   : "Son/Daughter",               icon: "👪" },
+      // بيانات الجلسة
+      { key: "{sessionName}",           label: isRTL ? "اسم الجلسة"                   : "Session Name",               icon: "📘" },
+      { key: "{date}",                  label: isRTL ? "التاريخ"                       : "Date",                       icon: "📅" },
+      { key: "{time}",                  label: isRTL ? "الوقت"                         : "Time",                       icon: "⏰" },
+      { key: "{meetingLink}",           label: isRTL ? "رابط الاجتماع"               : "Meeting Link",               icon: "🔗" },
+      { key: "{enrollmentNumber}",      label: isRTL ? "الرقم التعريفي"              : "Enrollment No.",             icon: "🔢" },
     ],
     [isRTL]
   );
@@ -907,6 +947,15 @@ export default function ReminderModal({
                 </span>
                 <span className="text-primary font-semibold">
                   {salutationPreview.childTitle}
+                </span>
+              </p>
+              {/* ✅ عرض salutation_ar في الكارت للتأكد */}
+              <p>
+                <span className="font-medium text-gray-500 dark:text-gray-400">
+                  {isRTL ? "salutation_ar: " : "salutation_ar: "}
+                </span>
+                <span className="text-primary font-semibold">
+                  {salutationPreview.salutation_ar}
                 </span>
               </p>
             </div>

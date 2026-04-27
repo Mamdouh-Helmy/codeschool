@@ -8,14 +8,13 @@ import { onStudentAddedToGroup } from "../../../../services/groupAutomation";
 import { requireAdmin } from "@/utils/authMiddleware";
 
 /**
- * ✅ POST: إضافة طالب إلى مجموعة مع رسالتين منفصلتين
+ * ✅ POST: إضافة طالب إلى مجموعة مع 3 رسائل منفصلة
  */
 export async function POST(req, { params }) {
   try {
-    // ✅ Authentication using your existing middleware
     console.log("🔐 Checking authentication...");
     const authCheck = await requireAdmin(req);
-    
+
     if (!authCheck.authorized) {
       console.log("❌ Authentication failed");
       return authCheck.response;
@@ -25,44 +24,36 @@ export async function POST(req, { params }) {
 
     await connectDB();
 
-    // ✅ انتظر params قبل استخدامه
     const { id } = await params;
     const groupId = id;
-    
+
     console.log("📌 Group ID from params:", groupId);
 
-    // ✅ Parse JSON with error handling
     let body;
     try {
       body = await req.json();
     } catch (parseError) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid JSON in request body",
-        },
+        { success: false, error: "Invalid JSON in request body" },
         { status: 400 }
       );
     }
 
     console.log("\n📥 ADD STUDENT REQUEST ==========");
     console.log("Group ID:", groupId);
-    console.log("Body:", JSON.stringify(body, null, 2));
+    console.log("Body keys:", Object.keys(body));
 
-    const { 
-      studentId, 
-      sendWhatsApp = true,
-      studentMessage = null,
-      guardianMessage = null
+    const {
+      studentId,
+      sendWhatsApp        = true,
+      studentMessage      = null,
+      guardianMessage     = null,
+      moduleOverviewMessage = null,   // ✅ الرسالة الثالثة
     } = body;
 
-    // Validation
     if (!studentId) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Student ID is required",
-        },
+        { success: false, error: "Student ID is required" },
         { status: 400 }
       );
     }
@@ -74,10 +65,7 @@ export async function POST(req, { params }) {
 
     if (!group) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Group not found",
-        },
+        { success: false, error: "Group not found" },
         { status: 404 }
       );
     }
@@ -87,44 +75,31 @@ export async function POST(req, { params }) {
 
     if (!student) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Student not found",
-        },
+        { success: false, error: "Student not found" },
         { status: 404 }
       );
     }
 
     // Check if student already in group
     const studentObjectIds = (group.students || []).map(s => {
-      const id = s._id || s.id || s;
-      return typeof id === 'object' ? id.toString() : String(id);
+      const sid = s._id || s.id || s;
+      return typeof sid === "object" ? sid.toString() : String(sid);
     });
 
-    const studentIdStr = studentId.toString();
-
-    if (studentObjectIds.includes(studentIdStr)) {
+    if (studentObjectIds.includes(studentId.toString())) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Student is already in this group",
-        },
+        { success: false, error: "Student is already in this group" },
         { status: 400 }
       );
     }
 
     // Check group capacity
     const currentCount = group.students?.length || 0;
-    const maxStudents = group.maxStudents || 0;
+    const maxStudents  = group.maxStudents || 0;
 
     if (currentCount >= maxStudents) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Group is full",
-          currentCount,
-          maxStudents,
-        },
+        { success: false, error: "Group is full", currentCount, maxStudents },
         { status: 400 }
       );
     }
@@ -134,6 +109,7 @@ export async function POST(req, { params }) {
     console.log(`Student: ${student.personalInfo?.fullName}`);
     console.log(`Preferred Language: ${student.communicationPreferences?.preferredLanguage || "ar"}`);
     console.log(`Current: ${currentCount}/${maxStudents}`);
+    console.log(`moduleOverviewMessage: ${moduleOverviewMessage ? "✅ provided" : "⚠️ empty"}`);
 
     // Add student to group in database
     await Group.findByIdAndUpdate(
@@ -150,7 +126,7 @@ export async function POST(req, { params }) {
 
     console.log("\n✅ STUDENT ADDED TO GROUP DATABASE ==========");
 
-    // Trigger automation with TWO separate messages
+    // Trigger automation with THREE separate messages ✅
     let automationResult = null;
 
     try {
@@ -158,8 +134,9 @@ export async function POST(req, { params }) {
         studentId,
         groupId,
         {
-          student: studentMessage,
-          guardian: guardianMessage
+          student:       studentMessage,
+          guardian:      guardianMessage,
+          moduleOverview: moduleOverviewMessage,  // ✅
         },
         sendWhatsApp
       );
@@ -169,39 +146,34 @@ export async function POST(req, { params }) {
     } catch (automationError) {
       console.error("\n❌ AUTOMATION ERROR ==========");
       console.error(automationError);
-      // Continue even if automation fails
       automationResult = {
         success: false,
         error: automationError.message,
-        messagesSent: {
-          student: false,
-          guardian: false
-        }
+        messagesSent: { student: false, guardian: false, moduleOverview: false },
       };
     }
 
-    // Return success response
     return NextResponse.json({
       success: true,
       message: "Student added successfully",
       data: {
         group: {
-          id: group._id,
-          name: group.name,
-          code: group.code,
+          id:                   group._id,
+          name:                 group.name,
+          code:                 group.code,
           currentStudentsCount: currentCount + 1,
-          maxStudents: group.maxStudents,
+          maxStudents:          group.maxStudents,
         },
         student: {
-          id: student._id,
-          name: student.personalInfo?.fullName,
-          email: student.personalInfo?.email,
-          whatsappNumber: student.personalInfo?.whatsappNumber,
-          guardianWhatsappNumber: student.guardianInfo?.whatsappNumber,
-          preferredLanguage: student.communicationPreferences?.preferredLanguage || "ar",
-          gender: student.personalInfo?.gender,
-          guardianRelationship: student.guardianInfo?.relationship,
-        }
+          id:                      student._id,
+          name:                    student.personalInfo?.fullName,
+          email:                   student.personalInfo?.email,
+          whatsappNumber:          student.personalInfo?.whatsappNumber,
+          guardianWhatsappNumber:  student.guardianInfo?.whatsappNumber,
+          preferredLanguage:       student.communicationPreferences?.preferredLanguage || "ar",
+          gender:                  student.personalInfo?.gender,
+          guardianRelationship:    student.guardianInfo?.relationship,
+        },
       },
       automation: automationResult,
     });
@@ -209,12 +181,11 @@ export async function POST(req, { params }) {
   } catch (error) {
     console.error("\n❌ ERROR IN ADD STUDENT ==========");
     console.error(error);
-
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Failed to add student to group",
-        details: process.env.NODE_ENV === 'development' ? error.toString() : undefined,
+        error:   error.message || "Failed to add student to group",
+        details: process.env.NODE_ENV === "development" ? error.toString() : undefined,
       },
       { status: 500 }
     );

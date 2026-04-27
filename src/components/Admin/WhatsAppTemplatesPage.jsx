@@ -6,6 +6,7 @@ import {
   Edit, Clock, Bell, Calendar, Award, FileText,
   UserPlus, UserCog, Search, Star, RotateCcw, Video,
   Settings, ChevronDown, ChevronUp, Check, X,
+  BookOpen,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -40,6 +41,9 @@ const TEMPLATE_TYPES = [
   { id: "evaluation_review",              label: "تقييم: يحتاج مراجعة",         icon: FileText,     color: "amber",   emoji: "⚠️", category: "evaluation", type: "guardian_with_session",  api: "message" },
   { id: "evaluation_repeat",              label: "تقييم: يحتاج دعم إضافي",      icon: RotateCcw,    color: "rose",    emoji: "🔄", category: "evaluation", type: "guardian_with_session",  api: "message" },
   { id: "session_recording",              label: "رابط التسجيل",                icon: Video,        color: "sky",     emoji: "🎥", category: "evaluation", type: "guardian_with_session",  api: "message" },
+  // ✅ القالبان الجديدان
+  { id: "learning_supervisor_intro",      label: "تقديم المشرف الأكاديمي",      icon: User,         color: "indigo",  emoji: "👨‍🏫", category: "basic",      type: "guardian_only",          api: "message", isNew: true },
+  { id: "module_overview",                label: "نظرة عامة على الموديول",      icon: BookOpen,     color: "sky",     emoji: "📚", category: "basic",      type: "guardian_only",          api: "message", isNew: true },
 ];
 
 const CATEGORIES = {
@@ -74,23 +78,36 @@ const TEMPLATE_VARS = {
   group_student_welcome_student: ["salutation_ar","salutation_en","courseName","groupName","startDate","timeTo","timeFrom","instructor","firstMeetingLink","studentName"],
   group_student_welcome_guardian:["guardianSalutation_ar","guardianSalutation_en","childTitle","studentName","courseName","groupName","startDate","timeTo","timeFrom","instructor","firstMeetingLink"],
   instructor_group_activation:   ["salutation","courseName","groupName","startDate","timeTo","timeFrom","instructorName","studentCount"],
-  reminder_24h_student:          ["studentSalutation","sessionName","date","time","meetingLink","guardianSalutation","studentName","guardianName","childTitle","enrollmentNumber"],
-  reminder_24h_guardian:         ["guardianSalutation","studentSalutation","studentName","guardianName","childTitle","groupName","groupCode","courseName","enrollmentNumber","feedbackLink"],
-  reminder_1h_student:           ["studentSalutation","sessionName","time","meetingLink","guardianSalutation","studentName","childTitle","enrollmentNumber"],
-  reminder_1h_guardian:          ["guardianSalutation","studentSalutation","studentName","guardianName","childTitle","sessionName","date","time","meetingLink","enrollmentNumber"],
-  session_cancelled_student:     ["guardianSalutation","studentSalutation","studentName","guardianName","childTitle","sessionName","date","time","meetingLink","enrollmentNumber"],
-  session_cancelled_guardian:    ["guardianSalutation","studentSalutation","guardianName","childTitle","sessionName","date","time","meetingLink","enrollmentNumber"],
-  session_postponed_student:     ["guardianSalutation","studentSalutation","studentName","guardianName","childTitle","sessionName","date","time","meetingLink","enrollmentNumber","newDate","newTime"],
-  session_postponed_guardian:    ["guardianSalutation","studentSalutation","studentName","guardianName","childTitle","sessionName","date","time","meetingLink","enrollmentNumber","newDate","newTime"],
-  absence_notification:          ["guardianSalutation","guardianName","studentName","childTitle","status","sessionName","date","time","enrollmentNumber"],
-  late_notification:             ["guardianSalutation","guardianName","studentName","childTitle","status","sessionName","date","time","enrollmentNumber"],
-  excused_notification:          ["guardianSalutation","guardianName","studentName","childTitle","status","sessionName","date","time","enrollmentNumber"],
-  group_completion_student:      ["studentSalutation","guardianSalutation","studentName","guardianName","childTitle","groupName","groupCode","courseName","enrollmentNumber","feedbackLink"],
-  group_completion_guardian:     ["studentSalutation","guardianSalutation","studentName","guardianName","childTitle","groupName","groupCode","courseName","enrollmentNumber","feedbackLink"],
+  
+  // ✅ التذكيرات - تم استبدال studentSalutation بـ salutation_ar و salutation_en
+  reminder_24h_student:          ["salutation_ar", "salutation_en", "sessionName", "date", "time", "meetingLink", "guardianSalutation", "studentName", "guardianName", "childTitle", "enrollmentNumber"],
+  reminder_24h_guardian:         ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
+  reminder_1h_student:           ["salutation_ar", "salutation_en", "sessionName", "time", "meetingLink", "guardianSalutation", "studentName", "childTitle", "enrollmentNumber"],
+  reminder_1h_guardian:          ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
+  
+  // ✅ الحصص - تم استبدال studentSalutation بـ salutation_ar و salutation_en
+  session_cancelled_student:     ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
+  session_cancelled_guardian:    ["guardianSalutation", "salutation_ar", "salutation_en", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
+  session_postponed_student:     ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
+  session_postponed_guardian:    ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
+  
+  // ✅ الحضور - تم استبدال studentSalutation بـ salutation_ar و salutation_en
+  absence_notification:          ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
+  late_notification:             ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
+  excused_notification:          ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
+  
+  // ✅ الإكمال - تم استبدال studentSalutation بـ salutation_ar و salutation_en
+  group_completion_student:      ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
+  group_completion_guardian:     ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
+  
   evaluation_pass:               ["guardianSalutation","sessionDate","sessionNumber","attendanceStatus","starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation","instructorComment","completedSessions","recordingLink"],
   evaluation_review:             ["guardianSalutation","sessionDate","sessionNumber","attendanceStatus","starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation","instructorComment","completedSessions","recordingLink"],
   evaluation_repeat:             ["guardianSalutation","sessionDate","sessionNumber","attendanceStatus","starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation","instructorComment","completedSessions","recordingLink"],
   session_recording:             ["guardianSalutation","guardianName","childTitle","studentName","sessionName","recordingLink"],
+  
+  // ✅ القالبان الجديدان
+  learning_supervisor_intro:     ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
+  module_overview:               ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "supervisorName"],
 };
 
 const FRONTEND_FALLBACKS = {
@@ -117,6 +134,49 @@ const FRONTEND_FALLBACKS = {
   session_recording: {
     ar: `{guardianSalutation}،\n\n🎥 رابط تسجيل جلسة "{sessionName}" لـ{childTitle} *{studentName}*:\n\n{recordingLink}\n\nيمكن مراجعة التسجيل في أي وقت للمذاكرة والمراجعة.\nفريق Code School 💻`,
     en: `{guardianSalutation},\n\n🎥 Recording for "{sessionName}" — {childTitle} *{studentName}*:\n\n{recordingLink}\n\nThe recording can be reviewed anytime for study and revision.\nCode School Team 💻`,
+  },
+  // ✅ القالبان الجديدان
+  learning_supervisor_intro: {
+    ar: `{guardianSalutation} 👋
+أنا {supervisorName}، الـ Learning Supervisor الخاص بـ {childTitle} **{studentName}** في Code School ✨
+حبيت أعرف حضرتك بنفسي، لأنني هكون معاكم في المتابعة الأكاديمية خلال الفترة الجاية، وهشارك مع حضرتك التقييمات الدورية، وكمان في بداية كل Module هبعت لحضرتك نظرة بسيطة على اللي {childTitle} هيتعلمه خلالها 🌟
+هدفي إن المتابعة تكون واضحة ومريحة، وإن حضرتك تبقى مطّمن على رحلة {studentName} التعليمية خطوة بخطوة 🤍
+وأي وقت تحب تستفسر عن أي حاجة تخص المستوى أو التقدم، أنا موجود مع حضرتك.
+{supervisorName} ✨
+Learning Supervisor`,
+    en: `{guardianSalutation} 👋
+I am {supervisorName}, your Learning Supervisor for {childTitle} **{studentName}** at Code School ✨
+I wanted to introduce myself, as I will be following up on the academic progress during the coming period. I will share periodic evaluations with you, and at the beginning of each Module, I will send you a brief overview of what {childTitle} will be learning 🌟
+My goal is to make follow-up clear and comfortable, and to keep you reassured about {studentName}'s educational journey step by step 🤍
+Anytime you would like to inquire about anything regarding the level or progress, I am here for you.
+{supervisorName} ✨
+Learning Supervisor`,
+  },
+  module_overview: {
+    ar: `{guardianSalutation} 👋
+حابب أشارك مع حضرتك لمحة سريعة عن الـ Module الجديد اللي هيبدأه {childTitle} **{studentName}** ✨
+
+**Module Title:** {moduleTitle}
+
+خلال الـ Module ده، {studentName} هياخد فكرة ممتعة وبسيطة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱
+وهيركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعده يفهم الفكرة خطوة بخطوة بشكل سهل ومناسب لسنه 🌟
+
+وأنا هكون متابع مع حضرتك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.
+
+{supervisorName} ✨
+Learning Supervisor`,
+    en: `{guardianSalutation} 👋
+I would like to share with you a quick overview of the new Module that {childTitle} **{studentName}** will be starting ✨
+
+**Module Title:** {moduleTitle}
+
+During this Module, {studentName} will get a fun and simple idea about how the applications we use in our daily lives are built and tailored for users 📱
+He will also focus on building simple screens similar to mobile applications, with practical training to help him understand the concept step by step in an easy and age-appropriate way 🌟
+
+I will be following up with you during the Module and will share any important notes or noticeable progress with you, God willing.
+
+{supervisorName} ✨
+Learning Supervisor`,
   },
 };
 
@@ -247,8 +307,6 @@ function VariableRow({ variable, onSave, saving }) {
         ? <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 font-bold">ذ/أ مدرب</span>
         : <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800 font-bold">ذكر/أنثى</span>
     : null;
-
-
 
   const rowBg = editing
     ? "border-violet-300 dark:border-violet-700 shadow-sm"
@@ -538,7 +596,7 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
 export default function WhatsAppTemplatesPage() {
   useI18n(); // locale consumed elsewhere
 
-  const [activeTab,    setActiveTab]    = useState("student_welcome");
+  const [activeTab,    setActiveTab]    = useState("learning_supervisor_intro"); // ✅ changed default to new template
   const [templates,    setTemplates]    = useState({});
   const [loading,      setLoading]      = useState(true);
   const [saving,       setSaving]       = useState(false);

@@ -15,17 +15,24 @@ class WapilotService {
     this.baseURL = process.env.WHATSAPP_API_URL || "https://api.wapilot.net/api/v2";
     this.apiToken = process.env.WHATSAPP_API_TOKEN;
     this.instanceId = process.env.WHATSAPP_INSTANCE_ID;
+
+    // ✅ Evaluation instance — نفس التوكن، instance تاني بس
+    this.evalInstanceId = process.env.WHATSAPP_EVAL_INSTANCE_ID || this.instanceId;
+
     this.isEnabled = !!this.apiToken && !!this.instanceId;
     this.mode =
       FORCE_PRODUCTION || (this.isEnabled && process.env.NODE_ENV === "production")
         ? "production"
         : "simulation";
-    this.dbVars = null; // Cache for template variables
+    this.dbVars = null;
     this.lastVarsFetch = null;
 
     console.log("📱 Wapilot WhatsApp Service initialized:", {
       enabled: this.isEnabled,
       instance: this.instanceId ? "Configured" : "Not configured",
+      evalInstance: this.evalInstanceId !== this.instanceId
+        ? `Configured (${this.evalInstanceId})`
+        : `Same as main (${this.instanceId})`,
       mode: this.mode,
     });
   }
@@ -65,26 +72,21 @@ class WapilotService {
   }
 
   // ============================================================
-  // ✅ دوال بناء التحية - باستخدام المتغيرات من DB
+  // ✅ دوال بناء التحية
   // ============================================================
 
   async getStudentSalutation(gender, language = "ar", arabicName = "", englishName = "") {
     const male = isMaleGender(gender);
     const displayNameAr = arabicName ? ` ${arabicName}` : "";
     const displayNameEn = englishName ? ` ${englishName}` : "";
-    
+
     if (language === "ar") {
-      // Try to get from DB first
       const dbSalutationAr = await this.getDbVariable("salutation_ar", "ar");
-      if (dbSalutationAr) {
-        return `${dbSalutationAr}${displayNameAr}`;
-      }
+      if (dbSalutationAr) return `${dbSalutationAr}${displayNameAr}`;
       return male ? `عزيزي الطالب${displayNameAr}` : `عزيزتي الطالبة${displayNameAr}`;
     } else {
       const dbSalutationEn = await this.getDbVariable("salutation_en", "en");
-      if (dbSalutationEn) {
-        return `${dbSalutationEn}${displayNameEn}`;
-      }
+      if (dbSalutationEn) return `${dbSalutationEn}${displayNameEn}`;
       return `Dear student${displayNameEn}`;
     }
   }
@@ -92,12 +94,10 @@ class WapilotService {
   async getGuardianSalutation(guardianName, relationship, guardianNickname = null, language = "ar") {
     const displayNameAr = guardianNickname?.ar || guardianName?.split(" ")[0] || guardianName || "";
     const displayNameEn = guardianNickname?.en || guardianName?.split(" ")[0] || guardianName || "";
-    
+
     if (language === "ar") {
       const dbGuardianSalutationAr = await this.getDbVariable("guardianSalutation_ar", "ar");
-      if (dbGuardianSalutationAr) {
-        return `${dbGuardianSalutationAr} ${displayNameAr}`;
-      }
+      if (dbGuardianSalutationAr) return `${dbGuardianSalutationAr} ${displayNameAr}`;
       switch (relationship) {
         case "father": return `عزيزي الأستاذ ${displayNameAr}`;
         case "mother": return `عزيزتي السيدة ${displayNameAr}`;
@@ -106,9 +106,7 @@ class WapilotService {
       }
     } else {
       const dbGuardianSalutationEn = await this.getDbVariable("guardianSalutation_en", "en");
-      if (dbGuardianSalutationEn) {
-        return `${dbGuardianSalutationEn} ${displayNameEn}`;
-      }
+      if (dbGuardianSalutationEn) return `${dbGuardianSalutationEn} ${displayNameEn}`;
       switch (relationship) {
         case "father": return `Dear Mr. ${displayNameEn}`;
         case "mother": return `Dear Mrs. ${displayNameEn}`;
@@ -143,175 +141,111 @@ class WapilotService {
   }
 
   // ============================================================
-  // ✅ رسالة اختيار اللغة للطالب (bilingual - رسالة ترحيب)
+  // ✅ إرسال رسالة نصية — Instance الرئيسي
   // ============================================================
 
-  async prepareBilingualLanguageSelectionMessage(studentName, gender, nickname = null) {
-    const male = isMaleGender(gender);
-    const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
-    const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
-    
-    const salutationAr = await this.getStudentSalutation(gender, "ar", arabicName, englishName);
-    const salutationEn = await this.getStudentSalutation(gender, "en", arabicName, englishName);
-    const welcomeAr = await this.getWelcomeMessage("ar", gender);
+  async sendTextMessage(phoneNumber, messageText) {
+    try {
+      if (!this.apiToken || !this.instanceId) {
+        throw new Error("WhatsApp API Token or Instance ID not configured");
+      }
 
-    return `${salutationAr}
-${salutationEn}
+      const apiUrl = `${this.baseURL}/${this.instanceId}/send-message`;
+      const messagePayload = {
+        chat_id: phoneNumber.replace("+", ""),
+        text: messageText,
+        priority: 0,
+      };
 
-${welcomeAr} في Code School! 🌟
-Welcome to Code School! 🌟
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: this.apiToken },
+        body: JSON.stringify(messagePayload),
+      });
 
-🌍 اختر لغتك المفضلة
-حتى نتمكن من التواصل معك بسهولة وراحة، من فضلك أخبرنا باللغة التي تفضل استقبال رسائلنا بها:
+      const result = await response.json();
+      if (!response.ok) throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
 
-🌍 Choose your preferred language
-To ensure smooth and comfortable communication, please tell us which language you prefer to receive our messages in:
-
-➡️ اللغة العربية
-➡️ English
-
-مع خالص التحية،
-فريق Code School 💻
-
-Best regards,
-The Code School Team 💻
-
-🌍 شكراً لثقتكم في Code School
-🌍 Thank you for trusting Code School`;
-  }
-
-  // ============================================================
-  // ✅ رسالة إشعار ولي الأمر (bilingual - رسالة ترحيب)
-  // ============================================================
-
-  async prepareBilingualGuardianNotificationMessage(
-    guardianName, studentName, studentGender, relationship,
-    guardianNickname = null, studentNickname = null,
-  ) {
-    const guardianSalAr = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar");
-    const guardianSalEn = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en");
-    const studentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
-    const studentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
-    const titleAr = await this.getStudentChildTitle(studentGender, "ar");
-    const titleEn = await this.getStudentChildTitle(studentGender, "en");
-    const enrolledVerb = isMaleGender(studentGender) ? "انضم" : "انضمت";
-
-    return `${guardianSalAr}
-${guardianSalEn}
-
-تحية طيبة وبعد،
-Greetings,
-
-يسعدنا إبلاغكم بأن ${titleAr} **${studentNameAr}** قد ${enrolledVerb} رسمياً إلى عائلتنا التعليمية اليوم. 🎉
-We are pleased to inform you that your ${titleEn} **${studentNameEn}** has officially joined our educational family today. 🎉
-
-سأكون متاحاً شخصياً للرد على أي استفسارات لديكم في أي وقت.
-I will personally be available to answer any questions you may have at any time.
-
-مع خالص الاحترام والتقدير،
-فريق Code School 💻
-
-Best regards,
-The Code School Team 💻
-
-🌍 شكراً لثقتكم في Code School
-🌍 Thank you for trusting Code School`;
-  }
-
-  // ============================================================
-  // ✅ رسالة تأكيد اللغة للطالب - باللغة المختارة فقط
-  // ============================================================
-
-  async prepareLanguageConfirmationMessage(studentName, gender, selectedLanguage, nickname = null) {
-    const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
-    const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
-    const salutation = await this.getStudentSalutation(gender, selectedLanguage, arabicName, englishName);
-
-    if (selectedLanguage === "en") {
-      return `✅ Language Preference Confirmed
-
-${salutation},
-
-Thank you for choosing your preferred language. Your communication language has been successfully set to *English*.
-
-📌 What happens next?
-- All future messages and notifications will be sent to you in English
-- Your course materials and support will be provided in English
-
-We're excited to have you on board and can't wait to see you grow with us! 🚀
-
-Best regards,
-The Code School Team 💻
-
-🌍 Thank you for choosing Code School`;
+      return {
+        success: true,
+        messageId: result.message_id || result.id || result.messageId || result.data?.id,
+        chatId: messagePayload.chat_id,
+        data: result,
+        sentVia: "wapilot",
+        instanceId: this.instanceId,
+        simulated: false,
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      console.error("❌ wapilot API error:", error.message);
+      return {
+        success: false,
+        error: error.message,
+        sentVia: "wapilot",
+        instanceId: this.instanceId,
+        simulated: false,
+        timestamp: new Date(),
+      };
     }
-
-    // ✅ عربي
-    return `✅ تم تأكيد اللغة المفضلة
-
-${salutation}،
-
-شكراً لاختيارك لغتك المفضلة. تم تعيين *اللغة العربية* كلغة التواصل الرسمية معك.
-
-📌 ماذا يحدث الآن؟
-- جميع الرسائل والإشعارات القادمة ستكون باللغة العربية
-- المحتوى التعليمي والدعم الفني سيكون متاحاً بالعربية
-
-نحن متحمسون لوجودك معنا، ونتطلع لرؤية تطورك وإبداعك! 🚀
-
-مع أطيب التحيات،
-فريق Code School 💻
-
-🌍 شكراً لاختيارك Code School`;
   }
 
   // ============================================================
-  // ✅ رسالة تأكيد اللغة لولي الأمر - باللغة المختارة فقط
+  // ✅ إرسال رسالة نصية — Instance التقييم (instance3806)
   // ============================================================
 
-  async prepareGuardianLanguageConfirmationMessage(
-    guardianName, studentName, studentGender, relationship, selectedLanguage,
-    guardianNickname = null, studentNickname = null,
-  ) {
-    const studentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
-    const studentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
-    const titleAr = await this.getStudentChildTitle(studentGender, "ar");
-    const titleEn = await this.getStudentChildTitle(studentGender, "en");
-    const salutation = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, selectedLanguage);
+  async sendEvalTextMessage(phoneNumber, messageText) {
+    try {
+      if (!this.apiToken || !this.evalInstanceId) {
+        console.warn("⚠️ No eval instance configured, falling back to main instance");
+        return await this.sendTextMessage(phoneNumber, messageText);
+      }
 
-    if (selectedLanguage === "en") {
-      return `${salutation},
+      const apiUrl = `${this.baseURL}/${this.evalInstanceId}/send-message`;
+      const messagePayload = {
+        chat_id: phoneNumber.replace("+", ""),
+        text: messageText,
+        priority: 0,
+      };
 
-We are pleased to inform you that your ${titleEn} **${studentNameEn}** has successfully selected *English* as their preferred communication language.
+      console.log(`📤 [EVAL] Sending via ${this.evalInstanceId}`);
 
-📌 What this means?
-- All future messages will be sent in English
-- Course materials and support will be provided in English
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          token: this.apiToken, // ✅ نفس التوكن
+        },
+        body: JSON.stringify(messagePayload),
+      });
 
-Thank you for your continued trust in Code School.
+      const result = await response.json();
+      if (!response.ok) throw new Error(`WhatsApp Eval API error: ${JSON.stringify(result)}`);
 
-Best regards,
-The Code School Team 💻`;
+      return {
+        success: true,
+        messageId: result.message_id || result.id || result.messageId || result.data?.id,
+        chatId: messagePayload.chat_id,
+        data: result,
+        sentVia: "wapilot-eval",
+        instanceId: this.evalInstanceId,
+        simulated: false,
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      console.error("❌ wapilot eval API error:", error.message);
+      return {
+        success: false,
+        error: error.message,
+        sentVia: "wapilot-eval",
+        instanceId: this.evalInstanceId,
+        simulated: false,
+        timestamp: new Date(),
+      };
     }
-
-    // ✅ عربي
-    const enrolledVerb = isMaleGender(studentGender) ? "قام" : "قامت";
-    return `${salutation}،
-
-يسعدنا إبلاغكم بأن ${titleAr} **${studentNameAr}** ${enrolledVerb} باختيار *اللغة العربية* كلغة مفضلة للتواصل بنجاح.
-
-📌 ماذا يعني هذا؟
-- جميع الرسائل القادمة لـ${titleAr} ستكون باللغة العربية
-- المحتوى التعليمي والدعم سيكون متاحاً بالعربية
-
-شكراً لثقتكم المستمرة في Code School.
-
-مع أطيب التحيات،
-فريق Code School 💻`;
   }
 
   // ============================================================
-  // ✅ إرسال وتسجيل رسالة
+  // ✅ sendAndLogMessage — Instance الرئيسي (للتذكيرات والرسائل العادية)
   // ============================================================
 
   async sendAndLogMessage({ studentId, phoneNumber, messageContent, messageType, language = "ar", metadata = {} }) {
@@ -338,6 +272,7 @@ The Code School Team 💻`;
           metadata: {
             ...metadata,
             recipientType: metadata.recipientType || "student",
+            sentFromInstance: this.instanceId,
           },
           error: sendResult.success ? null : sendResult.error || "Unknown error",
         });
@@ -349,6 +284,51 @@ The Code School Team 💻`;
       throw error;
     }
   }
+
+  // ============================================================
+  // ✅ sendAndLogEvalMessage — Instance التقييم (instance3806)
+  // ============================================================
+
+  async sendAndLogEvalMessage({ studentId, phoneNumber, messageContent, messageType, language = "ar", metadata = {} }) {
+    try {
+      const preparedNumber = this.preparePhoneNumber(phoneNumber);
+      if (!preparedNumber) throw new Error("Invalid phone number format");
+
+      let sendResult;
+      if (this.mode === "production") {
+        sendResult = await this.sendEvalTextMessage(preparedNumber, messageContent);
+      } else {
+        sendResult = await this.simulateSendMessage(preparedNumber, messageContent);
+      }
+
+      if (studentId) {
+        await this.logToStudentSchema(studentId, {
+          messageType,
+          messageContent,
+          language,
+          status: sendResult.success ? "sent" : "failed",
+          recipientNumber: preparedNumber,
+          wapilotMessageId: sendResult.messageId || null,
+          sentAt: new Date(),
+          metadata: {
+            ...metadata,
+            recipientType: metadata.recipientType || "guardian",
+            sentFromInstance: this.evalInstanceId, // ✅ تسجيل إن الرسالة اتبعتت من instance التقييم
+          },
+          error: sendResult.success ? null : sendResult.error || "Unknown error",
+        });
+      }
+
+      return sendResult;
+    } catch (error) {
+      console.error(`❌ Error in sendAndLogEvalMessage:`, error.message);
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // ✅ logToStudentSchema
+  // ============================================================
 
   async logToStudentSchema(studentId, messageData) {
     try {
@@ -401,44 +381,169 @@ The Code School Team 💻`;
   }
 
   // ============================================================
-  // ✅ إرسال رسالة نصية
+  // ✅ رسالة اختيار اللغة للطالب (bilingual)
   // ============================================================
 
-  async sendTextMessage(phoneNumber, messageText) {
-    try {
-      if (!this.apiToken || !this.instanceId) {
-        throw new Error("WhatsApp API Token or Instance ID not configured");
-      }
+  async prepareBilingualLanguageSelectionMessage(studentName, gender, nickname = null) {
+    const male = isMaleGender(gender);
+    const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
+    const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
 
-      const apiUrl = `${this.baseURL}/${this.instanceId}/send-message`;
-      const messagePayload = {
-        chat_id: phoneNumber.replace("+", ""),
-        text: messageText,
-        priority: 0,
-      };
+    const salutationAr = await this.getStudentSalutation(gender, "ar", arabicName, englishName);
+    const salutationEn = await this.getStudentSalutation(gender, "en", arabicName, englishName);
+    const welcomeAr = await this.getWelcomeMessage("ar", gender);
 
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", token: this.apiToken },
-        body: JSON.stringify(messagePayload),
-      });
+    return `${salutationAr}
+${salutationEn}
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
+${welcomeAr} في Code School! 🌟
+Welcome to Code School! 🌟
 
-      return {
-        success: true,
-        messageId: result.message_id || result.id || result.messageId || result.data?.id,
-        chatId: messagePayload.chat_id,
-        data: result,
-        sentVia: "wapilot",
-        simulated: false,
-        timestamp: new Date(),
-      };
-    } catch (error) {
-      console.error("❌ wapilot API error:", error.message);
-      return { success: false, error: error.message, sentVia: "wapilot", simulated: false, timestamp: new Date() };
+🌍 اختر لغتك المفضلة
+حتى نتمكن من التواصل معك بسهولة وراحة، من فضلك أخبرنا باللغة التي تفضل استقبال رسائلنا بها:
+
+🌍 Choose your preferred language
+To ensure smooth and comfortable communication, please tell us which language you prefer to receive our messages in:
+
+➡️ اللغة العربية
+➡️ English
+
+مع خالص التحية،
+فريق Code School 💻
+
+Best regards,
+The Code School Team 💻
+
+🌍 شكراً لثقتكم في Code School
+🌍 Thank you for trusting Code School`;
+  }
+
+  // ============================================================
+  // ✅ رسالة إشعار ولي الأمر (bilingual)
+  // ============================================================
+
+  async prepareBilingualGuardianNotificationMessage(
+    guardianName, studentName, studentGender, relationship,
+    guardianNickname = null, studentNickname = null,
+  ) {
+    const guardianSalAr = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar");
+    const guardianSalEn = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en");
+    const studentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
+    const studentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
+    const titleAr = await this.getStudentChildTitle(studentGender, "ar");
+    const titleEn = await this.getStudentChildTitle(studentGender, "en");
+    const enrolledVerb = isMaleGender(studentGender) ? "انضم" : "انضمت";
+
+    return `${guardianSalAr}
+${guardianSalEn}
+
+تحية طيبة وبعد،
+Greetings,
+
+يسعدنا إبلاغكم بأن ${titleAr} **${studentNameAr}** قد ${enrolledVerb} رسمياً إلى عائلتنا التعليمية اليوم. 🎉
+We are pleased to inform you that your ${titleEn} **${studentNameEn}** has officially joined our educational family today. 🎉
+
+سأكون متاحاً شخصياً للرد على أي استفسارات لديكم في أي وقت.
+I will personally be available to answer any questions you may have at any time.
+
+مع خالص الاحترام والتقدير،
+فريق Code School 💻
+
+Best regards,
+The Code School Team 💻
+
+🌍 شكراً لثقتكم في Code School
+🌍 Thank you for trusting Code School`;
+  }
+
+  // ============================================================
+  // ✅ رسالة تأكيد اللغة للطالب
+  // ============================================================
+
+  async prepareLanguageConfirmationMessage(studentName, gender, selectedLanguage, nickname = null) {
+    const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
+    const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
+    const salutation = await this.getStudentSalutation(gender, selectedLanguage, arabicName, englishName);
+
+    if (selectedLanguage === "en") {
+      return `✅ Language Preference Confirmed
+
+${salutation},
+
+Thank you for choosing your preferred language. Your communication language has been successfully set to *English*.
+
+📌 What happens next?
+- All future messages and notifications will be sent to you in English
+- Your course materials and support will be provided in English
+
+We're excited to have you on board and can't wait to see you grow with us! 🚀
+
+Best regards,
+The Code School Team 💻
+
+🌍 Thank you for choosing Code School`;
     }
+
+    return `✅ تم تأكيد اللغة المفضلة
+
+${salutation}،
+
+شكراً لاختيارك لغتك المفضلة. تم تعيين *اللغة العربية* كلغة التواصل الرسمية معك.
+
+📌 ماذا يحدث الآن؟
+- جميع الرسائل والإشعارات القادمة ستكون باللغة العربية
+- المحتوى التعليمي والدعم الفني سيكون متاحاً بالعربية
+
+نحن متحمسون لوجودك معنا، ونتطلع لرؤية تطورك وإبداعك! 🚀
+
+مع أطيب التحيات،
+فريق Code School 💻
+
+🌍 شكراً لاختيارك Code School`;
+  }
+
+  // ============================================================
+  // ✅ رسالة تأكيد اللغة لولي الأمر
+  // ============================================================
+
+  async prepareGuardianLanguageConfirmationMessage(
+    guardianName, studentName, studentGender, relationship, selectedLanguage,
+    guardianNickname = null, studentNickname = null,
+  ) {
+    const studentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
+    const studentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
+    const titleAr = await this.getStudentChildTitle(studentGender, "ar");
+    const titleEn = await this.getStudentChildTitle(studentGender, "en");
+    const salutation = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, selectedLanguage);
+
+    if (selectedLanguage === "en") {
+      return `${salutation},
+
+We are pleased to inform you that your ${titleEn} **${studentNameEn}** has successfully selected *English* as their preferred communication language.
+
+📌 What this means?
+- All future messages will be sent in English
+- Course materials and support will be provided in English
+
+Thank you for your continued trust in Code School.
+
+Best regards,
+The Code School Team 💻`;
+    }
+
+    const enrolledVerb = isMaleGender(studentGender) ? "قام" : "قامت";
+    return `${salutation}،
+
+يسعدنا إبلاغكم بأن ${titleAr} **${studentNameAr}** ${enrolledVerb} باختيار *اللغة العربية* كلغة مفضلة للتواصل بنجاح.
+
+📌 ماذا يعني هذا؟
+- جميع الرسائل القادمة لـ${titleAr} ستكون باللغة العربية
+- المحتوى التعليمي والدعم سيكون متاحاً بالعربية
+
+شكراً لثقتكم المستمرة في Code School.
+
+مع أطيب التحيات،
+فريق Code School 💻`;
   }
 
   // ============================================================
@@ -465,8 +570,6 @@ The Code School Team 💻`;
       });
 
       const result = await response.json();
-      console.log("📦 sendListMessage API response:", JSON.stringify(result, null, 2));
-
       if (!response.ok) throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
 
       return {
@@ -496,7 +599,7 @@ The Code School Team 💻`;
   }
 
   // ============================================================
-  // ✅ إرسال رسائل الترحيب (bilingual - رسالة أولى)
+  // ✅ إرسال رسائل الترحيب (bilingual)
   // ============================================================
 
   async sendWelcomeMessages(
@@ -521,7 +624,7 @@ The Code School Team 💻`;
 
       const results = { student: null, guardian: null };
 
-      // ✅ 1. رسالة الطالب (bilingual - لاختيار اللغة)
+      // ✅ 1. رسالة الطالب
       if (studentPhone) {
         const preparedStudentNumber = this.preparePhoneNumber(studentPhone);
         if (preparedStudentNumber) {
@@ -581,6 +684,7 @@ The Code School Team 💻`;
                 studentNicknameEn: studentNickname?.en || null,
                 isBilingual: true,
                 languages: ["ar", "en"],
+                sentFromInstance: this.instanceId,
               },
             });
 
@@ -589,13 +693,12 @@ The Code School Team 💻`;
                 { _id: studentId },
                 { $set: { "metadata.whatsappChatId": results.student.chatId } }
               );
-              console.log(`💾 Saved chatId: ${results.student.chatId}`);
             }
           }
         }
       }
 
-      // ✅ 2. رسالة ولي الأمر (bilingual - رسالة ترحيب)
+      // ✅ 2. رسالة ولي الأمر
       if (guardianPhone) {
         const preparedGuardianNumber = this.preparePhoneNumber(guardianPhone);
         if (preparedGuardianNumber) {
@@ -639,15 +742,9 @@ The Code School Team 💻`;
                 automationType: "student_creation",
                 recipientType: "guardian",
                 guardianName,
-                guardianNicknameAr: guardianNickname?.ar || null,
-                guardianNicknameEn: guardianNickname?.en || null,
-                studentName,
-                studentNicknameAr: studentNickname?.ar || null,
-                studentNicknameEn: studentNickname?.en || null,
-                studentGender: gender,
-                relationship,
                 isBilingual: true,
                 languages: ["ar", "en"],
+                sentFromInstance: this.instanceId,
               },
             });
           }
@@ -673,7 +770,7 @@ The Code School Team 💻`;
   }
 
   // ============================================================
-  // ✅ إرسال رسائل تأكيد اللغة - باللغة المختارة فقط
+  // ✅ إرسال رسائل تأكيد اللغة
   // ============================================================
 
   async sendLanguageConfirmationMessage(
@@ -692,7 +789,6 @@ The Code School Team 💻`;
 
       const results = { student: null, guardian: null };
 
-      // ✅ رسالة الطالب - باللغة المختارة فقط
       if (studentPhone) {
         const preparedStudentNumber = this.preparePhoneNumber(studentPhone);
         if (preparedStudentNumber) {
@@ -710,16 +806,12 @@ The Code School Team 💻`;
               selectedLanguage,
               automationType: "language_selection_response",
               recipientType: "student",
-              studentGender: gender,
-              studentNicknameAr: studentNickname?.ar || null,
-              studentNicknameEn: studentNickname?.en || null,
               isBilingual: false,
             },
           });
         }
       }
 
-      // ✅ رسالة ولي الأمر - باللغة المختارة فقط
       if (guardianPhone) {
         const preparedGuardianNumber = this.preparePhoneNumber(guardianPhone);
         if (preparedGuardianNumber) {
@@ -738,10 +830,6 @@ The Code School Team 💻`;
               selectedLanguage,
               automationType: "language_selection_response",
               recipientType: "guardian",
-              guardianName,
-              studentName,
-              studentGender: gender,
-              relationship,
               isBilingual: false,
             },
           });
@@ -756,7 +844,6 @@ The Code School Team 💻`;
           guardianNotified: !!results.guardian?.success,
           language: selectedLanguage,
           studentName,
-          studentGender: gender,
           isBilingual: false,
         },
       };
@@ -771,6 +858,8 @@ The Code School Team 💻`;
       enabled: this.isEnabled,
       configured: !!this.apiToken && !!this.instanceId,
       instanceId: this.instanceId,
+      evalInstanceId: this.evalInstanceId,
+      evalInstanceDifferent: this.evalInstanceId !== this.instanceId,
       mode: this.mode,
       lastChecked: new Date(),
       genderHandling: "✅ Case-insensitive (male/Male/MALE all work correctly)",

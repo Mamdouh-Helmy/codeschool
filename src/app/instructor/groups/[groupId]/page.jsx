@@ -1126,11 +1126,11 @@ export default function InstructorGroupDetailPage() {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate">{student.name}</p>
                               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                {student.phone && (
+                                {/* {student.phone && (
                                   <span className="text-xs text-gray-500 dark:text-[#8b949e] flex items-center gap-1">
                                     <Phone className="w-3 h-3" />{student.phone}
                                   </span>
-                                )}
+                                )} */}
                                 {student.guardian && (
                                   <span className="text-xs text-gray-500 dark:text-[#8b949e] flex items-center gap-1">
                                     <User className="w-3 h-3" />{student.guardian}
@@ -1145,7 +1145,7 @@ export default function InstructorGroupDetailPage() {
                                   : "bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400"}`}>
                                 {student.status}
                               </span>
-                              {student.credits !== null && (
+                              {/* {student.credits !== null && (
                                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1
                                   ${student.credits <= 0
                                     ? "bg-gray-100 dark:bg-[#21262d] text-gray-500"
@@ -1156,7 +1156,7 @@ export default function InstructorGroupDetailPage() {
                                     : "bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400"}`}>
                                   <CreditCard className="w-2.5 h-2.5" />{student.credits} {t("ساعة", "hrs")}
                                 </span>
-                              )}
+                              )} */}
                             </div>
                           </div>
                         </div>

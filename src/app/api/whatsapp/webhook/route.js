@@ -3,11 +3,51 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Student from '../../../models/Student';
 import WhatsAppTemplate from '../../../models/WhatsAppTemplate';
+import MessageTemplate from '../../../models/MessageTemplate';
+import TemplateVariable from '../../../models/TemplateVariable';
 import wapilotService from '../../../services/wapilot-service';
 import { CONFIRMATION_TEMPLATES } from '../../../services/whatsapp-templates-data';
 
 const ARABIC_TRIGGERS  = ['arabic_lang', 'عربي', 'عربية', 'arabic', '1'];
 const ENGLISH_TRIGGERS = ['english_lang', 'english', 'انجليزي', 'إنجليزي', '2'];
+
+// ============================================================
+// ✅ جلب متغير من TemplateVariable مع دعم الجنس الكامل
+// ============================================================
+async function getTemplateVar(key, lang = 'ar', genderContext = {}) {
+  try {
+    const v = await TemplateVariable.findOne({ key, isActive: true }).lean();
+    if (!v) return null;
+
+    const { studentGender = 'male', guardianType = 'father', instructorGender = 'male' } = genderContext;
+    const isMale   = String(studentGender).toLowerCase() === 'male';
+    const isFather = guardianType === 'father';
+    const isInstructorMale = String(instructorGender).toLowerCase() === 'male';
+
+    if (v.hasGender) {
+      if (v.genderType === 'student') {
+        return lang === 'ar'
+          ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || ''
+          : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || '';
+      }
+      if (v.genderType === 'guardian') {
+        return lang === 'ar'
+          ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || ''
+          : (isFather ? v.valueFatherEn : v.valueMotherEn) || v.valueEn || '';
+      }
+      if (v.genderType === 'instructor') {
+        return lang === 'ar'
+          ? (isInstructorMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || ''
+          : (isInstructorMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || '';
+      }
+    }
+
+    return lang === 'ar' ? v.valueAr || '' : v.valueEn || '';
+  } catch (err) {
+    console.error(`❌ getTemplateVar(${key}) error:`, err.message);
+    return null;
+  }
+}
 
 // ============================================================
 // ✅ Fallback: بيستخدم CONFIRMATION_TEMPLATES من whatsapp-templates-data
@@ -84,10 +124,10 @@ export async function POST(req) {
 // ============================================================
 async function handleOutgoingMessage(msg) {
   try {
-    const msgId = msg.id || '';
-    const parts = msgId.split('_');
+    const msgId    = msg.id || '';
+    const parts    = msgId.split('_');
     const stanzaId = parts[parts.length - 1];
-    const chatId = (msg.to || '').replace(/@.*$/, '').trim();
+    const chatId   = (msg.to || '').replace(/@.*$/, '').trim();
 
     console.log(`📤 Outgoing - stanzaId: ${stanzaId} | chatId: ${chatId}`);
     if (!stanzaId || !chatId) return;
@@ -112,8 +152,8 @@ async function handleOutgoingMessage(msg) {
 // ============================================================
 async function processIncomingMessage(msg) {
   const selectedRowID = msg.listResponse?.selectedRowID || null;
-  const phoneRaw = (msg.from || '').replace(/@.*$/, '').trim();
-  const replyToId = msg.replyTo?.id || msg.replyToId || null;
+  const phoneRaw      = (msg.from || '').replace(/@.*$/, '').trim();
+  const replyToId     = msg.replyTo?.id || msg.replyToId || null;
 
   // تحديد اللغة المختارة
   let selectedLanguage = null;
@@ -160,7 +200,7 @@ async function processIncomingMessage(msg) {
       isDeleted: false,
     }).sort({ 'metadata.whatsappSentAt': -1 });
     if (student) console.log(`✅ Found by pending status: ${student.personalInfo?.fullName}`);
-    else console.log(`⚠️ Student not found for phone: ${phoneRaw}`);
+    else         console.log(`⚠️ Student not found for phone: ${phoneRaw}`);
   }
 
   if (!student) return { success: false, reason: 'student_not_found' };
@@ -173,29 +213,30 @@ async function processIncomingMessage(msg) {
     {
       $set: {
         'communicationPreferences.preferredLanguage': selectedLanguage,
-        'metadata.whatsappLanguageSelected': true,
-        'metadata.whatsappLanguageSelectedAt': new Date(),
-        'metadata.whatsappLanguageConfirmed': true,
-        'metadata.whatsappLanguageConfirmationAt': new Date(),
-        'metadata.whatsappChatId': phoneRaw,
-        'metadata.updatedAt': new Date(),
+        'metadata.whatsappLanguageSelected':          true,
+        'metadata.whatsappLanguageSelectedAt':        new Date(),
+        'metadata.whatsappLanguageConfirmed':         true,
+        'metadata.whatsappLanguageConfirmationAt':    new Date(),
+        'metadata.whatsappChatId':                    phoneRaw,
+        'metadata.updatedAt':                         new Date(),
       }
     }
   );
 
   console.log(`✅ DB updated - preferredLanguage: ${selectedLanguage}`);
 
-  // ✅ إرسال رسائل التأكيد باللغة المختارة فقط
+  // ✅ إرسال رسائل التأكيد + رسالة المشرف
   const confirmResult = await sendConfirmationMessages(student, selectedLanguage);
 
   return {
     success: true,
-    studentId: student._id,
-    studentName: student.personalInfo?.fullName,
+    studentId:    student._id,
+    studentName:  student.personalInfo?.fullName,
     selectedLanguage,
     confirmationSent: {
-      student: confirmResult.student?.success || false,
-      guardian: confirmResult.guardian?.success || false,
+      student:          confirmResult.student?.success  || false,
+      guardian:         confirmResult.guardian?.success || false,
+      supervisorIntro:  confirmResult.supervisorIntro?.success || false,
     },
   };
 }
@@ -214,10 +255,10 @@ async function findStudentByPhone(phoneRaw) {
   for (const variant of variants) {
     const student = await Student.findOne({
       $or: [
-        { 'personalInfo.whatsappNumber': variant },
-        { 'personalInfo.phone': variant },
-        { 'guardianInfo.whatsappNumber': variant },
-        { 'guardianInfo.phone': variant },
+        { 'personalInfo.whatsappNumber':  variant },
+        { 'personalInfo.phone':           variant },
+        { 'guardianInfo.whatsappNumber':  variant },
+        { 'guardianInfo.phone':           variant },
       ],
       isDeleted: false,
     });
@@ -227,35 +268,33 @@ async function findStudentByPhone(phoneRaw) {
 }
 
 // ============================================================
-// ✅ جلب القالب من الـ DB
+// ✅ جلب القالب من WhatsAppTemplate (الموديل القديم)
 // ============================================================
-async function getTemplateContent(templateType) {
+async function getWhatsAppTemplateContent(templateType) {
   try {
     const template = await WhatsAppTemplate.findOne({
       templateType,
       isDefault: true,
-      isActive: true,
+      isActive:  true,
     });
 
     if (template) {
-      console.log(`📄 DB template found: ${templateType}`);
+      console.log(`📄 WhatsAppTemplate found: ${templateType}`);
       await WhatsAppTemplate.findByIdAndUpdate(template._id, {
         $inc: { 'usageStats.totalSent': 1 },
         $set: { 'usageStats.lastUsedAt': new Date() },
       });
 
-      // ✅ رجّع contentAr و contentEn منفصلين
-      // لو الـ DB مش عنده contentAr/contentEn بعد → fallback على content
       return {
         contentAr: template.contentAr || template.content || null,
         contentEn: template.contentEn || null,
       };
     }
 
-    console.log(`⚠️ No DB template for: ${templateType} → using fallback`);
+    console.log(`⚠️ No WhatsAppTemplate for: ${templateType}`);
     return null;
   } catch (error) {
-    console.error(`❌ getTemplateContent error (${templateType}):`, error.message);
+    console.error(`❌ getWhatsAppTemplateContent(${templateType}):`, error.message);
     return null;
   }
 }
@@ -272,49 +311,42 @@ function applyVars(content, vars) {
 }
 
 // ============================================================
-// ✅ بناء رسالة الطالب من القالب (مع تصفية اللغة)
-// ============================================================
-function buildStudentMessageFromTemplate(templateContent, selectedLanguage, vars) {
-  // استبدل المتغيرات الأساسية أولاً
-  let message = applyVars(templateContent, vars);
-
-  // ✅ لو القالب bilingual وفيه sections لكل لغة، خد اللغة الصح فقط
-  // القوالب عندنا بتحتوي على {lang:ar}...{/lang} أو بتبعت كلها - نحن هنا بنبني رسالة نقية باللغة المختارة
-  // لو القالب مش structured → هنبعته كما هو (الـ fallback هو اللي بيكون monolingual)
-  return message;
-}
-
-// ============================================================
-// ✅ إرسال رسائل التأكيد - باللغة المختارة فقط
+// ✅ إرسال رسائل التأكيد + رسالة المشرف
 // ============================================================
 async function sendConfirmationMessages(student, selectedLanguage) {
-  const results = { student: null, guardian: null };
+  const results = { student: null, guardian: null, supervisorIntro: null };
 
-  // ✅ تجهيز البيانات
-  const gender = student.personalInfo?.gender || 'male';
-  const nickname = student.personalInfo?.nickname || null;
-  const fullName = student.personalInfo?.fullName || '';
-  const nameAr = nickname?.ar || fullName.split(' ')[0] || fullName;
-  const nameEn = nickname?.en || fullName.split(' ')[0] || fullName;
+  // ── بيانات الطالب ─────────────────────────────────────────
+  const gender       = student.personalInfo?.gender || 'male';
+  const nickname     = student.personalInfo?.nickname || null;
+  const fullName     = student.personalInfo?.fullName || '';
+  const nameAr       = nickname?.ar || fullName.split(' ')[0] || fullName;
+  const nameEn       = nickname?.en || fullName.split(' ')[0] || fullName;
+  const isArabic     = selectedLanguage === 'ar';
+  const isMale       = String(gender).toLowerCase() === 'male';
 
-  // التحية بناءً على اللغة المختارة فقط
-  const salutationAr = wapilotService.getStudentSalutation(gender, 'ar', nameAr, nameEn);
-  const salutationEn = wapilotService.getStudentSalutation(gender, 'en', nameAr, nameEn);
-
-  const guardianName = student.guardianInfo?.name || '';
+  // ── بيانات ولي الأمر ──────────────────────────────────────
+  const guardianName     = student.guardianInfo?.name || '';
   const guardianNickname = student.guardianInfo?.nickname || null;
-  const relationship = student.guardianInfo?.relationship || 'father';
-  const childTitleAr = wapilotService.getStudentChildTitle(gender, 'ar');
-  const childTitleEn = wapilotService.getStudentChildTitle(gender, 'en');
-  const guardianSalAr = wapilotService.getGuardianSalutation(guardianName, relationship, guardianNickname, 'ar');
-  const guardianSalEn = wapilotService.getGuardianSalutation(guardianName, relationship, guardianNickname, 'en');
+  const relationship     = student.guardianInfo?.relationship || 'father';
 
-  // ✅ القيم حسب اللغة المختارة
-  const isArabic = selectedLanguage === 'ar';
-  const langLabel = isArabic ? 'العربية' : 'English';
+  // ── genderContext لـ TemplateVariable ─────────────────────
+  const genderCtx = {
+    studentGender:    isMale ? 'male' : 'female',
+    guardianType:     relationship,
+    instructorGender: 'male', // افتراضي — يتغير لو عندك بيانات المشرف
+  };
+
+  // ── التحية والعناوين ──────────────────────────────────────
+  const salutationAr = await wapilotService.getStudentSalutation(gender, 'ar', nameAr, nameEn);
+  const salutationEn = await wapilotService.getStudentSalutation(gender, 'en', nameAr, nameEn);
+  const childTitleAr = await wapilotService.getStudentChildTitle(gender, 'ar');
+  const childTitleEn = await wapilotService.getStudentChildTitle(gender, 'en');
+  const guardianSalAr = await wapilotService.getGuardianSalutation(guardianName, relationship, guardianNickname, 'ar');
+  const guardianSalEn = await wapilotService.getGuardianSalutation(guardianName, relationship, guardianNickname, 'en');
 
   // ============================================================
-  // 1. رسالة الطالب
+  // 1. رسالة الطالب — mainInstance
   // ============================================================
   const studentPhone = student.personalInfo?.whatsappNumber || student.personalInfo?.phone;
 
@@ -322,55 +354,51 @@ async function sendConfirmationMessages(student, selectedLanguage) {
     const preparedNumber = wapilotService.preparePhoneNumber(studentPhone);
 
     if (preparedNumber) {
-      // ✅ templateObj = { contentAr, contentEn } أو null لو مفيش في الـ DB
-      const templateObj = await getTemplateContent('student_language_confirmation');
+      const templateObj = await getWhatsAppTemplateContent('student_language_confirmation');
 
       let studentMessage;
 
       if (templateObj) {
-        // ✅ اختار الـ content المناسب للغة المختارة
         const rawContent = isArabic
           ? (templateObj.contentAr || null)
           : (templateObj.contentEn || templateObj.contentAr || null);
 
         if (rawContent) {
-          // استبدل المتغيرات — كل متغير بقيمة اللغة الصح
           studentMessage = applyVars(rawContent, {
-            '{salutation_ar}': salutationAr,
-            '{salutation_en}': salutationEn,
-            '{name_ar}': nameAr,
-            '{name_en}': nameEn,
-            '{fullName}': isArabic ? nameAr : nameEn,
-            '{you_ar}': String(gender).toLowerCase() === 'male' ? 'أنت' : 'أنتِ',
+            '{salutation_ar}':       salutationAr,
+            '{salutation_en}':       salutationEn,
+            '{name_ar}':             nameAr,
+            '{name_en}':             nameEn,
+            '{fullName}':            isArabic ? nameAr : nameEn,
+            '{you_ar}':              isMale ? 'أنت' : 'أنتِ',
             '{selectedLanguage_ar}': isArabic ? 'العربية' : 'الإنجليزية',
             '{selectedLanguage_en}': isArabic ? 'Arabic' : 'English',
-            '{selectedLanguage}': isArabic ? 'العربية' : 'English',
+            '{selectedLanguage}':    isArabic ? 'العربية' : 'English',
           });
         } else {
           studentMessage = buildFallbackStudentMessage(selectedLanguage, salutationAr, salutationEn, nameAr, nameEn);
         }
       } else {
-        // ✅ Fallback
         studentMessage = buildFallbackStudentMessage(selectedLanguage, salutationAr, salutationEn, nameAr, nameEn);
       }
 
       const sendResult = await wapilotService.sendTextMessage(preparedNumber, studentMessage);
 
       await wapilotService.logToStudentSchema(student._id.toString(), {
-        messageType: 'bilingual_language_confirmation',
-        messageContent: studentMessage,
-        language: selectedLanguage, // ✅ اللغة المختارة فعلاً
-        status: sendResult.success ? 'sent' : 'failed',
-        recipientNumber: preparedNumber,
+        messageType:      'bilingual_language_confirmation',
+        messageContent:   studentMessage,
+        language:         selectedLanguage,
+        status:           sendResult.success ? 'sent' : 'failed',
+        recipientNumber:  preparedNumber,
         wapilotMessageId: sendResult.messageId || null,
-        sentAt: new Date(),
+        sentAt:           new Date(),
         metadata: {
           selectedLanguage,
           automationType: 'language_selection_response',
-          recipientType: 'student',
-          studentGender: gender,
+          recipientType:  'student',
+          studentGender:  gender,
           usedDbTemplate: !!templateObj,
-          isBilingual: false, // ✅ مش bilingual - رسالة باللغة المختارة بس
+          isBilingual:    false,
         },
       });
 
@@ -380,21 +408,19 @@ async function sendConfirmationMessages(student, selectedLanguage) {
   }
 
   // ============================================================
-  // 2. رسالة ولي الأمر
+  // 2. رسالة ولي الأمر — mainInstance
   // ============================================================
   const guardianPhone = student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
 
   if (guardianPhone) {
-    const preparedNumber = wapilotService.preparePhoneNumber(guardianPhone);
+    const preparedGuardianNumber = wapilotService.preparePhoneNumber(guardianPhone);
 
-    if (preparedNumber) {
-      // ✅ templateObj = { contentAr, contentEn } أو null
-      const guardianTemplateObj = await getTemplateContent('guardian_language_confirmation');
+    if (preparedGuardianNumber) {
+      const guardianTemplateObj = await getWhatsAppTemplateContent('guardian_language_confirmation');
 
       let guardianMessage;
 
       if (guardianTemplateObj) {
-        // ✅ اختار الـ content المناسب للغة المختارة
         const rawContent = isArabic
           ? (guardianTemplateObj.contentAr || null)
           : (guardianTemplateObj.contentEn || guardianTemplateObj.contentAr || null);
@@ -403,56 +429,142 @@ async function sendConfirmationMessages(student, selectedLanguage) {
           guardianMessage = applyVars(rawContent, {
             '{guardianSalutation_ar}': guardianSalAr,
             '{guardianSalutation_en}': guardianSalEn,
-            '{guardianName_ar}': guardianNickname?.ar || guardianName.split(' ')[0] || guardianName,
-            '{guardianName_en}': guardianNickname?.en || guardianName.split(' ')[0] || guardianName,
-            '{studentName_ar}': nameAr,
-            '{studentName_en}': nameEn,
-            '{studentGender_ar}': childTitleAr,
-            '{studentGender_en}': childTitleEn,
-            '{fullStudentName}': isArabic ? nameAr : nameEn,
-            '{selectedLanguage_ar}': isArabic ? 'العربية' : 'الإنجليزية',
-            '{selectedLanguage_en}': isArabic ? 'Arabic' : 'English',
-            '{selectedLanguage}': isArabic ? 'العربية' : 'English',
+            '{guardianName_ar}':       guardianNickname?.ar || guardianName.split(' ')[0] || guardianName,
+            '{guardianName_en}':       guardianNickname?.en || guardianName.split(' ')[0] || guardianName,
+            '{studentName_ar}':        nameAr,
+            '{studentName_en}':        nameEn,
+            '{studentGender_ar}':      childTitleAr,
+            '{studentGender_en}':      childTitleEn,
+            '{fullStudentName}':       isArabic ? nameAr : nameEn,
+            '{selectedLanguage_ar}':   isArabic ? 'العربية' : 'الإنجليزية',
+            '{selectedLanguage_en}':   isArabic ? 'Arabic' : 'English',
+            '{selectedLanguage}':      isArabic ? 'العربية' : 'English',
           });
         } else {
-          guardianMessage = buildFallbackGuardianMessage(selectedLanguage, guardianSalAr, guardianSalEn, childTitleAr, childTitleEn, nameAr, nameEn);
+          guardianMessage = buildFallbackGuardianMessage(
+            selectedLanguage, guardianSalAr, guardianSalEn,
+            childTitleAr, childTitleEn, nameAr, nameEn
+          );
         }
       } else {
-        // ✅ Fallback
         guardianMessage = buildFallbackGuardianMessage(
-          selectedLanguage, guardianSalAr, guardianSalEn, childTitleAr, childTitleEn, nameAr, nameEn
+          selectedLanguage, guardianSalAr, guardianSalEn,
+          childTitleAr, childTitleEn, nameAr, nameEn
         );
       }
 
-      const sendResult = await wapilotService.sendTextMessage(preparedNumber, guardianMessage);
+      const sendResult = await wapilotService.sendTextMessage(preparedGuardianNumber, guardianMessage);
 
       await wapilotService.logToStudentSchema(student._id.toString(), {
-        messageType: 'bilingual_language_confirmation_guardian',
-        messageContent: guardianMessage,
-        language: selectedLanguage, // ✅ اللغة المختارة فعلاً
-        status: sendResult.success ? 'sent' : 'failed',
-        recipientNumber: preparedNumber,
+        messageType:      'bilingual_language_confirmation_guardian',
+        messageContent:   guardianMessage,
+        language:         selectedLanguage,
+        status:           sendResult.success ? 'sent' : 'failed',
+        recipientNumber:  preparedGuardianNumber,
         wapilotMessageId: sendResult.messageId || null,
-        sentAt: new Date(),
+        sentAt:           new Date(),
         metadata: {
           selectedLanguage,
           automationType: 'language_selection_response',
-          recipientType: 'guardian',
+          recipientType:  'guardian',
           guardianName,
-          studentName: fullName,
-          studentGender: gender,
+          studentName:    fullName,
+          studentGender:  gender,
           relationship,
           usedDbTemplate: !!guardianTemplateObj,
-          isBilingual: false,
+          isBilingual:    false,
         },
       });
 
       results.guardian = sendResult;
       console.log(`📤 Guardian confirmation [${selectedLanguage}]: ${sendResult.success ? '✅' : '❌'}`);
+
+      // ============================================================
+      // 3. رسالة Learning Supervisor Intro — evalInstance (instance3806)
+      // ============================================================
+      results.supervisorIntro = await sendSupervisorIntroMessage(
+        student,
+        selectedLanguage,
+        preparedGuardianNumber,
+        { nameAr, nameEn, fullName, gender, isMale, guardianName, guardianNickname, relationship, genderCtx, guardianSalAr, guardianSalEn, childTitleAr, childTitleEn }
+      );
     }
   } else {
-    console.log(`⚠️ No guardian phone - skipping guardian confirmation`);
+    console.log(`⚠️ No guardian phone - skipping guardian confirmation & supervisor intro`);
   }
 
   return results;
+}
+
+// ============================================================
+// ✅ رسالة Learning Supervisor Intro — via evalInstance
+// ============================================================
+async function sendSupervisorIntroMessage(student, selectedLanguage, preparedGuardianNumber, studentData) {
+  try {
+    const {
+      nameAr, nameEn, gender, isMale,
+      guardianName, guardianNickname, relationship, genderCtx,
+      guardianSalAr, guardianSalEn, childTitleAr, childTitleEn,
+    } = studentData;
+
+    const isArabic = selectedLanguage === 'ar';
+
+    // ── supervisorName من TemplateVariable (مع دعم جنس المشرف) ──
+    const supervisorName = await getTemplateVar('supervisorName', isArabic ? 'ar' : 'en', genderCtx);
+    const supervisorNameFallback = isArabic ? 'أحمد علي' : 'Ahmed Ali';
+    const finalSupervisorName = supervisorName || supervisorNameFallback;
+
+    // ── التحية — نفس القيم المحسوبة مسبقاً ────────────────
+    const finalGuardianSal = isArabic ? guardianSalAr : guardianSalEn;
+    const finalChildTitle  = isArabic ? childTitleAr  : childTitleEn;
+    const finalStudentName = isArabic ? nameAr        : nameEn;
+
+    // ── جلب القالب من MessageTemplate ──────────────────────
+    // MessageTemplate.getOrFallback بيجيب contentAr أو contentEn حسب اللغة
+    // والـ fallback هو الـ hardcoded template في getFallbackTemplates()
+    const { content: rawContent, isFallback } = await MessageTemplate.getOrFallback(
+      'learning_supervisor_intro',
+      selectedLanguage,
+    );
+
+    if (!rawContent) {
+      console.log('⚠️ No learning_supervisor_intro template found — skipping');
+      return { success: false, reason: 'no_template' };
+    }
+
+    // ── استبدال المتغيرات ───────────────────────────────────
+    const message = applyVars(rawContent, {
+      '{guardianSalutation}': finalGuardianSal,
+      '{childTitle}':         finalChildTitle,
+      '{studentName}':        finalStudentName,
+      '{supervisorName}':     finalSupervisorName,
+    });
+
+    // ── إرسال عبر evalInstance ──────────────────────────────
+    const sendResult = await wapilotService.sendAndLogEvalMessage({
+      studentId:      student._id.toString(),
+      phoneNumber:    preparedGuardianNumber,
+      messageContent: message,
+      messageType:    'learning_supervisor_intro',
+      language:       selectedLanguage,
+      metadata: {
+        automationType:      'language_selection_response',
+        recipientType:       'guardian',
+        guardianName,
+        studentGender:       gender,
+        relationship,
+        supervisorName:      finalSupervisorName,
+        isFallback,
+        sentViaEvalInstance: true,
+      },
+    });
+
+    console.log(`📤 Supervisor intro [${selectedLanguage}] via evalInstance: ${sendResult.success ? '✅' : '❌'}`);
+    return sendResult;
+
+  } catch (error) {
+    // مش هنوقف الـ flow لو الرسالة دي فشلت
+    console.error('❌ sendSupervisorIntroMessage error:', error.message);
+    return { success: false, error: error.message };
+  }
 }

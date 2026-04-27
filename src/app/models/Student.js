@@ -103,6 +103,7 @@ const whatsappMessageSchema = new mongoose.Schema(
         "evaluation_review",
         "evaluation_repeat",
         "session_recording",
+        "module_overview",
       ],
       required: true,
     },

@@ -210,11 +210,11 @@ function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onCo
                   <p className="text-xs font-bold text-gray-700 dark:text-[#c9d1d9]">
                     {t("إلى: ولي الأمر", "To: Guardian")} — {preview.guardianName || preview.guardianPhone}
                   </p>
-                  {preview.guardianPhone && (
+                  {/* {preview.guardianPhone && (
                     <p className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
                       <Phone className="w-3 h-3" /> {preview.guardianPhone}
                     </p>
-                  )}
+                  )} */}
                 </div>
               </div>
 
@@ -297,7 +297,7 @@ function StudentEvalCard({
               <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border ${att.color}`}>
                 {isAr ? att.ar : att.en}
               </span>
-              {student.credits !== undefined && (
+              {/* {student.credits !== undefined && (
                 <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border
                   ${student.credits <= 0   ? "text-gray-400 bg-gray-50 border-gray-200 dark:bg-[#21262d] dark:border-[#30363d]" :
                     student.credits <= 2   ? "text-red-600 bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800/40" :
@@ -306,12 +306,12 @@ function StudentEvalCard({
                   <CreditCard className="w-3 h-3" />
                   {student.credits <= 0 ? t("رصيد صفر", "Zero Credits") : `${student.credits} ${t("ساعة", "hrs")}`}
                 </span>
-              )}
-              {(student.credits ?? 0) <= 0 && (
+              )} */}
+              {/* {(student.credits ?? 0) <= 0 && (
                 <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#21262d] text-gray-400 border border-gray-200 dark:border-[#30363d]">
                   🔕 {t("لن تُرسل رسالة", "No message")}
                 </span>
-              )}
+              )} */}
             </div>
           </div>
 
