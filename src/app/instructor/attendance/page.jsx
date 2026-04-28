@@ -15,6 +15,13 @@ import { useLocale } from "@/app/context/LocaleContext";
 
 // ─── Status Config ──────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
+  pre_absent: {
+    labelAr: "غياب أولي", labelEn: "Pre-Absent", icon: AlertTriangle,
+    color: "orange", bg: "bg-orange-500", gradient: "from-orange-400 to-amber-500",
+    lightBg: "bg-orange-50 dark:bg-orange-900/20", border: "border-orange-400 dark:border-orange-600",
+    text: "text-orange-700 dark:text-orange-400", ring: "ring-orange-400",
+    deductCredits: false, sendMessage: false,
+  },
   present: {
     labelAr: "حاضر", labelEn: "Present", icon: CheckCircle2,
     color: "emerald", bg: "bg-emerald-500", gradient: "from-emerald-400 to-teal-500",
@@ -45,8 +52,9 @@ const STATUS_CONFIG = {
   },
 };
 
-const STATUS_ORDER = ["present", "absent", "late", "excused"];
+const STATUS_ORDER  = ["pre_absent", "present", "absent", "late", "excused"];
 const SEND_STATUSES = ["absent", "late", "excused"];
+// pre_absent مش في SEND_STATUSES — مش بيبعت رسائل ومش بيتحسب
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const t = (ar, en, isAr) => (isAr ? ar : en);
@@ -65,12 +73,7 @@ function fmtTime(time, isAr) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
-// ─── Variable Resolution (mirrors AttendanceModal logic) ─────────────────────
-
-/**
- * resolveVar — picks the gender-aware value from a DB TemplateVariable object.
- * Mirrors the exact logic in AttendanceModal.
- */
+// ─── Variable Resolution ─────────────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
   const v = dbVars[key];
   if (!v) return null;
@@ -100,165 +103,95 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
   return lang === "ar" ? v.valueAr || null : v.valueEn || null;
 }
 
-/**
- * buildVariables — assembles the full variable map for a student.
- * DB vars take priority; falls back to computed values when DB has nothing.
- * Mirrors the exact logic in AttendanceModal.
- *
- * @param {object} student   - student object from the API
- * @param {string} status    - "absent" | "late" | "excused" | "present"
- * @param {object} session   - sessionData object (title, scheduledDate, startTime, endTime, …)
- * @param {object} dbVars    - map of { [key]: TemplateVariable } loaded from /api/whatsapp/template-variables
- */
 function buildVariables(student, status, session, dbVars = {}) {
   if (!student) return {};
- 
+
   const lang         = (student.preferredLanguage || "ar").toLowerCase();
   const gender       = (student.gender || "male").toLowerCase().trim();
   const relationship = (student.guardianRelationship || "father").toLowerCase().trim();
   const isMale       = gender !== "female";
   const isFather     = relationship !== "mother";
   const genderCtx    = { studentGender: gender, guardianType: relationship };
- 
-  // ── Resolve the correct first name (nickname → fullName first word) ────────
-  // Priority: nicknameAr/En → first word of fullName
+
+  const resolve = (key, fallback = "") => {
+    const val = resolveVar(dbVars, key, lang, genderCtx);
+    return val !== null && val !== undefined ? val : fallback;
+  };
+
   const studentFirstName =
     lang === "ar"
       ? student.nicknameAr || student.name?.split(" ")[0] || "الطالب"
       : student.nicknameEn || student.name?.split(" ")[0] || "Student";
- 
+
   const guardianFirstName =
     lang === "ar"
       ? student.guardianNicknameAr || student.guardianName?.split(" ")[0] || "ولي الأمر"
       : student.guardianNicknameEn || student.guardianName?.split(" ")[0] || "Guardian";
- 
-  // ── DB vars → hardcoded fallback for the SALUTATION BASE only ─────────────
-  // We take ONLY the base phrase from DB (e.g. "أهلا الأستاذ") then append
-  // the resolved first name ourselves — DB value already has a trailing space.
-  const guardianSalBase_ar =
-    resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) ||
-    (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
- 
-  const guardianSalBase_en =
-    resolveVar(dbVars, "guardianSalutation_en", "en", genderCtx) ||
-    (isFather ? "Dear Mr." : "Dear Mrs.");
- 
-  const childTitleAr =
-    resolveVar(dbVars, "childTitle", "ar", genderCtx) ||
-    (isMale ? "ابنك" : "ابنتك");
- 
-  const childTitleEn =
-    resolveVar(dbVars, "childTitle", "en", genderCtx) ||
-    (isMale ? "your son" : "your daughter");
- 
-  const you_ar =
-    resolveVar(dbVars, "you_ar", "ar", genderCtx) ||
-    (isMale ? "أنت" : "أنتِ");
- 
-  const welcome_ar =
-    resolveVar(dbVars, "welcome_ar", "ar", genderCtx) ||
-    (isMale ? "أهلاً بك" : "أهلاً بكِ");
- 
-  const studentGender_ar =
-    resolveVar(dbVars, "studentGender_ar", "ar", genderCtx) ||
-    (isMale ? "الابن" : "الابنة");
- 
-  const studentGender_en =
-    resolveVar(dbVars, "studentGender_en", "en", genderCtx) ||
-    (isMale ? "son" : "daughter");
- 
-  const relationship_ar =
-    resolveVar(dbVars, "relationship_ar", "ar", genderCtx) ||
-    (isFather ? "الأب" : "الأم");
- 
-  // ── Compose final salutations (base + correct first name) ─────────────────
-  // trim() the base in case DB stored trailing space, then join cleanly
+
+  const guardianSalBase_ar = resolve("guardianSalutation_ar", isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
+  const guardianSalBase_en = resolve("guardianSalutation_en", isFather ? "Dear Mr." : "Dear Mrs.");
+
   const guardianSalutation_ar = `${guardianSalBase_ar.trimEnd()} ${guardianFirstName}`;
   const guardianSalutation_en = `${guardianSalBase_en.trimEnd()} ${guardianFirstName}`;
   const guardianSalutation    = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
- 
+
   const studentSalutation = lang === "ar"
     ? `${isMale ? "عزيزي" : "عزيزتي"} ${studentFirstName}`
     : `Dear ${studentFirstName}`;
- 
-  const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
- 
-  // ── Status text (with Arabic feminine form) ───────────────────────────────
+
+  const childTitle       = resolve("childTitle",       isMale ? (lang === "ar" ? "ابنك" : "your son") : (lang === "ar" ? "ابنتك" : "your daughter"));
+  const you_ar           = resolve("you_ar",           isMale ? "أنت" : "أنتِ");
+  const welcome_ar       = resolve("welcome_ar",       isMale ? "أهلاً بك" : "أهلاً بكِ");
+  const studentGender_ar = resolve("studentGender_ar", isMale ? "الابن" : "الابنة");
+  const studentGender_en = resolve("studentGender_en", isMale ? "son" : "daughter");
+  const relationship_ar  = resolve("relationship_ar",  isFather ? "الأب" : "الأم");
+
   const statusMap = {
-    ar: { absent: "غائب",   late: "متأخر",   excused: "معتذر",   present: "حاضر"    },
-    en: { absent: "absent", late: "late",     excused: "excused", present: "present" },
+    ar: { absent: "غائب", late: "متأخر", excused: "معتذر", present: "حاضر", pre_absent: "غائب أولي" },
+    en: { absent: "absent", late: "late", excused: "excused", present: "present", pre_absent: "pre-absent" },
   };
   const statusMapFemaleAr = {
-    absent: "غائبة", late: "متأخرة", excused: "معتذرة", present: "حاضرة",
+    absent: "غائبة", late: "متأخرة", excused: "معتذرة", present: "حاضرة", pre_absent: "غائبة أولياً",
   };
-  const statusText =
-    lang === "ar" && !isMale
-      ? (statusMapFemaleAr[status] || status)
-      : (statusMap[lang]?.[status] || status);
- 
-  // ── Session data ──────────────────────────────────────────────────────────
+
+  const statusText = lang === "ar" && !isMale
+    ? (statusMapFemaleAr[status] || status)
+    : (statusMap[lang]?.[status] || status);
+
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
         lang === "ar" ? "ar-EG" : "en-US",
         { weekday: "long", year: "numeric", month: "long", day: "numeric" }
       )
-    : "";
- 
+    : resolve("date", "");
+
+  const sessionTime    = (session?.startTime && session?.endTime)
+    ? `${session.startTime} - ${session.endTime}`
+    : resolve("time", "");
+  const sessionNameVal = session?.title          || resolve("sessionName", "");
+  const groupNameVal   = session?.group?.name    || resolve("groupName", "");
+  const groupCodeVal   = session?.group?.code    || resolve("groupCode", "");
+  const meetingLinkVal = session?.meetingLink    || resolve("meetingLink", "");
+
   return {
-    // Guardian
-    guardianSalutation,
-    guardianSalutation_ar,
-    guardianSalutation_en,
-    guardianName:     guardianFirstName,
-    guardianFullName: student.guardianName || "",
+    guardianSalutation, guardianSalutation_ar, guardianSalutation_en,
+    guardianName: guardianFirstName, guardianFullName: student.guardianName || "",
     relationship_ar,
- 
-    // Student
-    salutation:       guardianSalutation,
-    studentSalutation,
-    studentName:      studentFirstName,
-    studentName_ar:   studentFirstName,
-    studentName_en:   studentFirstName,
-    studentFullName:  student.name || "",
-    fullStudentName:  student.name || "",
-    name_ar:          studentFirstName,
-    name_en:          studentFirstName,
-    fullName:         student.name || "",
- 
-    // Gender-aware helpers
-    childTitle,
-    you_ar,
-    welcome_ar,
-    studentGender_ar,
-    studentGender_en,
- 
-    // Status
-    status:           statusText,
-    attendanceStatus: statusText,
- 
-    // Session
-    sessionName:  session?.title || "",
-    date:         sessionDate,
-    sessionDate,
-    time:         `${session?.startTime || ""} - ${session?.endTime || ""}`,
-    meetingLink:  session?.meetingLink || "",
- 
-    // Group
-    groupName: session?.group?.name || session?.groupName || "",
-    groupCode: session?.group?.code || session?.groupCode || "",
- 
-    // Student extras
-    enrollmentNumber: student.enrollmentNumber || "",
- 
-    // Language
+    salutation: guardianSalutation, studentSalutation,
+    studentName: studentFirstName, studentName_ar: studentFirstName, studentName_en: studentFirstName,
+    studentFullName: student.name || "", fullStudentName: student.name || "",
+    fullName: student.name || "", name_ar: studentFirstName, name_en: studentFirstName,
+    childTitle, you_ar, welcome_ar, studentGender_ar, studentGender_en,
+    status: statusText, attendanceStatus: statusText,
+    sessionName: sessionNameVal, date: sessionDate, sessionDate,
+    time: sessionTime, meetingLink: meetingLinkVal,
+    groupName: groupNameVal, groupCode: groupCodeVal,
+    enrollmentNumber:    student.enrollmentNumber || resolve("enrollmentNumber", ""),
     selectedLanguage_ar: lang === "ar" ? "العربية" : "الإنجليزية",
     selectedLanguage_en: lang === "ar" ? "Arabic"  : "English",
   };
 }
 
-/**
- * renderTemplate — replaces every {variable} placeholder with its resolved value.
- */
 function renderTemplate(template, variables) {
   if (!template) return "";
   let result = template;
@@ -274,12 +207,11 @@ function renderTemplate(template, variables) {
 const AnimatedCounter = ({ value, duration = 800 }) => {
   const [count, setCount] = useState(0);
   useEffect(() => {
-    let startTime;
-    let frame;
+    let startTime; let frame;
     const animate = (timestamp) => {
       if (!startTime) startTime = timestamp;
       const progress = Math.min((timestamp - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
+      const eased    = 1 - Math.pow(1 - progress, 3);
       setCount(Math.floor(eased * value));
       if (progress < 1) frame = requestAnimationFrame(animate);
     };
@@ -290,22 +222,9 @@ const AnimatedCounter = ({ value, duration = 800 }) => {
 };
 
 // ─── Message Preview Modal ───────────────────────────────────────────────────
-/**
- * Receives `dbVars` and `students` so it can render the raw template
- * content client-side with real student data — no extra server round-trip needed.
- */
-// ─── Message Preview Modal (updated) ────────────────────────────────────────
-// Drop-in replacement for the MessagePreviewModal in InstructorAttendancePage.jsx
-
 function MessagePreviewModal({
-  student,
-  attendanceStatus,
-  sessionId,
-  sessionData,   // from parent state — used as fallback
-  isAr,
-  onClose,
-  onConfirm,
-  dbVars,        // map of { [key]: TemplateVariable } loaded from /api/whatsapp/template-variables
+  student, attendanceStatus, sessionId, sessionData,
+  isAr, onClose, onConfirm, dbVars,
 }) {
   const [loading,     setLoading]     = useState(true);
   const [rawTemplate, setRawTemplate] = useState(null);
@@ -316,7 +235,6 @@ function MessagePreviewModal({
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  // Fetch the RAW template (server no longer renders variables)
   useEffect(() => {
     const fetch_ = async () => {
       try {
@@ -334,10 +252,7 @@ function MessagePreviewModal({
         if (data.success) {
           setRawTemplate(data.data);
         } else {
-          setError(
-            data.error ||
-              t("فشل تحميل القالب", "Failed to load template", isAr)
-          );
+          setError(data.error || t("فشل تحميل القالب", "Failed to load template", isAr));
         }
       } catch {
         setError(t("خطأ في الاتصال", "Connection error", isAr));
@@ -348,14 +263,9 @@ function MessagePreviewModal({
     fetch_();
   }, [student._id, attendanceStatus, sessionId]);
 
-  const cfg = STATUS_CONFIG[attendanceStatus];
-
-  // ── Determine language from server metadata (most accurate source) ─────────
+  const cfg  = STATUS_CONFIG[attendanceStatus];
   const lang = rawTemplate?.metadata?.language || student.preferredLanguage || "ar";
 
-  // ── Build a merged session context ───────────────────────────────────────
-  // Server metadata has the raw DB values; client sessionData has the same
-  // plus maybe group info. Merge so buildVariables has everything it needs.
   const mergedSession = React.useMemo(() => {
     const meta = rawTemplate?.metadata;
     return {
@@ -371,7 +281,6 @@ function MessagePreviewModal({
     };
   }, [rawTemplate, sessionData]);
 
-  // ── Render variables client-side using dbVars ──────────────────────────────
   const renderedContent = React.useMemo(() => {
     if (!rawTemplate?.guardian?.content) return null;
     const variables = buildVariables(student, attendanceStatus, mergedSession, dbVars);
@@ -379,26 +288,15 @@ function MessagePreviewModal({
   }, [rawTemplate, student, attendanceStatus, mergedSession, dbVars]);
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
-      dir={isAr ? "rtl" : "ltr"}
-    >
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative w-full sm:max-w-lg max-h-[90vh] bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden">
 
         {/* Header */}
-        <div
-          className={`relative bg-gradient-to-br ${cfg.gradient} p-5 overflow-hidden flex-shrink-0`}
-        >
-          <div
-            className="absolute inset-0 opacity-10"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)",
-              backgroundSize: "24px 24px",
-            }}
-          />
+        <div className={`relative bg-gradient-to-br ${cfg.gradient} p-5 overflow-hidden flex-shrink-0`}>
+          <div className="absolute inset-0 opacity-10"
+            style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
           <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
 
           <div className="relative z-10 flex items-center gap-3">
@@ -406,21 +304,14 @@ function MessagePreviewModal({
               <MessageCircle className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-black text-white">
-                {t("معاينة الرسالة", "Message Preview", isAr)}
-              </p>
-              <p className="text-xs text-white/70 truncate">
-                {student.name} · {t(cfg.labelAr, cfg.labelEn, isAr)}
-              </p>
+              <p className="text-sm font-black text-white">{t("معاينة الرسالة", "Message Preview", isAr)}</p>
+              <p className="text-xs text-white/70 truncate">{student.name} · {t(cfg.labelAr, cfg.labelEn, isAr)}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/20 text-white border border-white/20">
                 {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
               </span>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all"
-              >
+              <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all">
                 <X className="w-4 h-4 text-white" />
               </button>
             </div>
@@ -434,9 +325,7 @@ function MessagePreviewModal({
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg">
                 <Loader2 className="w-7 h-7 text-white animate-spin" />
               </div>
-              <p className="text-sm text-gray-400 dark:text-[#8b949e]">
-                {t("جاري تحميل القالب...", "Loading template...", isAr)}
-              </p>
+              <p className="text-sm text-gray-400 dark:text-[#8b949e]">{t("جاري تحميل القالب...", "Loading template...", isAr)}</p>
             </div>
           )}
 
@@ -449,35 +338,21 @@ function MessagePreviewModal({
 
           {!loading && !error && renderedContent && (
             <>
-              {/* Recipient info */}
               <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d]">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center shadow-sm">
                   <User className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-gray-700 dark:text-[#c9d1d9]">
-                    {t("إلى: ولي الأمر", "To: Guardian", isAr)}
-                  </p>
-                  {/* {student.guardianPhone && (
-                    <p className="text-xs text-gray-400 dark:text-[#6e7681] flex items-center gap-1 mt-0.5">
-                      <Phone className="w-3 h-3" /> {student.guardianPhone}
-                    </p>
-                  )} */}
+                  <p className="text-xs font-bold text-gray-700 dark:text-[#c9d1d9]">{t("إلى: ولي الأمر", "To: Guardian", isAr)}</p>
                 </div>
               </div>
 
-              {/* Rendered WhatsApp bubble */}
               <div className="bg-[#dcf8c6] dark:bg-[#1a3a2a] rounded-2xl rounded-tl-sm p-4 shadow-sm border border-[#c5e8a3] dark:border-[#2d5a3d]">
-                <p
-                  className="text-[13px] text-gray-800 dark:text-[#d1fae5] leading-relaxed whitespace-pre-wrap font-medium"
-                  dir={lang === "ar" ? "rtl" : "ltr"}
-                >
+                <p className="text-[13px] text-gray-800 dark:text-[#d1fae5] leading-relaxed whitespace-pre-wrap font-medium" dir={lang === "ar" ? "rtl" : "ltr"}>
                   {renderedContent}
                 </p>
                 <div className="flex items-center justify-end gap-1 mt-2 opacity-60">
-                  <span className="text-[10px] text-gray-500 dark:text-[#6b7280]">
-                    WhatsApp
-                  </span>
+                  <span className="text-[10px] text-gray-500 dark:text-[#6b7280]">WhatsApp</span>
                   <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
                 </div>
               </div>
@@ -486,11 +361,7 @@ function MessagePreviewModal({
                 <div className="flex items-center gap-2 mt-3 p-2.5 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/30">
                   <Info className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                   <p className="text-xs text-amber-700 dark:text-amber-400">
-                    {t(
-                      "قالب افتراضي (لم يُضبط قالب خاص في الداتابيز)",
-                      "Default template (no custom template in DB)",
-                      isAr
-                    )}
+                    {t("قالب افتراضي (لم يُضبط قالب خاص في الداتابيز)", "Default template (no custom template in DB)", isAr)}
                   </p>
                 </div>
               )}
@@ -502,30 +373,21 @@ function MessagePreviewModal({
               <div className="w-16 h-16 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-2xl flex items-center justify-center mb-3">
                 <MessageSquare className="w-8 h-8 text-gray-300 dark:text-[#6e7681]" />
               </div>
-              <p className="text-sm text-gray-400">
-                {t(
-                  "لا توجد رسالة لهذا الطالب",
-                  "No message for this student",
-                  isAr
-                )}
-              </p>
+              <p className="text-sm text-gray-400">{t("لا توجد رسالة لهذا الطالب", "No message for this student", isAr)}</p>
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="flex gap-2 p-4 border-t border-gray-100 dark:border-[#30363d]">
-          <button
-            onClick={onClose}
-            className="flex-1 py-3 rounded-xl text-sm font-bold bg-gray-100 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d] transition-all"
-          >
+          <button onClick={onClose}
+            className="flex-1 py-3 rounded-xl text-sm font-bold bg-gray-100 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d] transition-all">
             {t("إلغاء", "Cancel", isAr)}
           </button>
           <button
             onClick={() => onConfirm(student._id, attendanceStatus)}
             disabled={loading}
-            className={`flex-1 py-3 rounded-xl text-sm font-black text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r ${cfg.gradient}`}
-          >
+            className={`flex-1 py-3 rounded-xl text-sm font-black text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r ${cfg.gradient}`}>
             <Send className="w-4 h-4" />
             {t("تأكيد وإرسال", "Confirm & Send", isAr)}
           </button>
@@ -538,8 +400,9 @@ function MessagePreviewModal({
 // ─── Student Card ────────────────────────────────────────────────────────────
 function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submitting }) {
   const currentStatus = attendance[student._id] || null;
-  const cfg = currentStatus ? STATUS_CONFIG[currentStatus] : null;
-  const isSet = !!currentStatus;
+  const cfg    = currentStatus ? STATUS_CONFIG[currentStatus] : null;
+  const isSet  = !!currentStatus;
+  const isPreAbsent = currentStatus === "pre_absent";
 
   return (
     <div className={`group/card relative bg-white dark:bg-[#161b22] rounded-2xl border transition-all duration-300 overflow-hidden hover:shadow-xl hover:-translate-y-0.5
@@ -567,21 +430,17 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
           <div className="flex-1 min-w-0">
             <p className="font-bold text-sm text-gray-900 dark:text-[#e6edf3] truncate mb-1.5">{student.name}</p>
             <div className="flex items-center gap-2 flex-wrap">
-              {/* {student.credits !== undefined && (
-                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border
-                  ${student.credits <= 2
-                    ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/40"
-                    : student.credits <= 5
-                      ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/40"
-                      : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40"}`}>
-                  <CreditCard className="w-3 h-3" />
-                  {student.credits} {t("ساعة", "hrs", isAr)}
-                </span>
-              )} */}
               {student.absenceCount > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-50 dark:bg-red-900/20 text-xs text-red-500 dark:text-red-400 font-medium border border-red-100 dark:border-red-800/30">
                   <AlertTriangle className="w-3 h-3" />
                   {student.absenceCount}x {t("غياب", "absent", isAr)}
+                </span>
+              )}
+              {/* ── بادج "غياب أولي" تحذيري ────────────────────────────── */}
+              {isPreAbsent && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-50 dark:bg-orange-900/20 text-xs text-orange-600 dark:text-orange-400 font-bold border border-orange-200 dark:border-orange-800/30 animate-pulse">
+                  <AlertTriangle className="w-3 h-3" />
+                  {t("غياب أولي — لم يُسجَّل بعد", "Pre-Absent — not saved yet", isAr)}
                 </span>
               )}
             </div>
@@ -594,30 +453,33 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
           )}
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
+        {/* ── أزرار الحالة ─────────────────────────────────────────────── */}
+        <div className="grid grid-cols-5 gap-1.5">
           {STATUS_ORDER.map((status) => {
-            const c = STATUS_CONFIG[status];
-            const Icon = c.icon;
+            const c      = STATUS_CONFIG[status];
+            const Icon   = c.icon;
             const isActive = currentStatus === status;
             return (
               <button
                 key={status}
                 disabled={submitting}
                 onClick={() => onSetStatus(student._id, status)}
-                className={`relative flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl text-[10px] font-bold transition-all duration-200 disabled:opacity-50 overflow-hidden
+                title={t(c.labelAr, c.labelEn, isAr)}
+                className={`relative flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl text-[9px] font-bold transition-all duration-200 disabled:opacity-50 overflow-hidden
                   ${isActive
                     ? `bg-gradient-to-br ${c.gradient} text-white shadow-lg scale-[0.97]`
                     : `bg-gray-50 dark:bg-[#21262d] ${c.text} hover:shadow-md border border-gray-100 dark:border-[#30363d] hover:border-opacity-60 hover:-translate-y-0.5`}`}>
                 {isActive && (
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 animate-shimmer" />
                 )}
-                <Icon className="w-4 h-4" />
-                <span>{t(c.labelAr, c.labelEn, isAr)}</span>
+                <Icon className="w-3.5 h-3.5" />
+                <span className="leading-none text-center">{t(c.labelAr, c.labelEn, isAr)}</span>
               </button>
             );
           })}
         </div>
 
+        {/* ── زرار معاينة الرسالة (فقط للـ statuses النهائية) ─────────── */}
         {isSet && SEND_STATUSES.includes(currentStatus) && (
           <button
             onClick={(e) => { e.stopPropagation(); onPreview(student, currentStatus); }}
@@ -626,6 +488,20 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
             {t("معاينة رسالة ولي الأمر", "Preview Parent Message", isAr)}
           </button>
         )}
+
+        {/* ── تنبيه للغياب الأولي ────────────────────────────────────── */}
+        {isPreAbsent && (
+          <div className="mt-3 flex items-center gap-2 p-2.5 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-200 dark:border-orange-800/30">
+            <Info className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
+            <p className="text-[10px] text-orange-700 dark:text-orange-400 font-medium leading-tight">
+              {t(
+                "الغياب الأولي للمتابعة فقط — لن يُحفظ أو يُرسل إشعار حتى تختار غياباً نهائياً",
+                "Pre-absent is for tracking only — no save or notification until you select a final status",
+                isAr
+              )}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -633,16 +509,22 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
 
 // ─── Summary Bar ─────────────────────────────────────────────────────────────
 function SummaryBar({ attendance, total, isAr, animateProgress }) {
+  // ── pre_absent مش بيتحسب في الإحصائيات ──────────────────────────────────
   const counts = { present: 0, absent: 0, late: 0, excused: 0 };
-  Object.values(attendance).forEach((s) => { if (counts[s] !== undefined) counts[s]++; });
+  Object.values(attendance).forEach((s) => {
+    if (s !== "pre_absent" && counts[s] !== undefined) counts[s]++;
+  });
   const filled = Object.values(counts).reduce((a, b) => a + b, 0);
-  const pct = total > 0 ? (filled / total) * 100 : 0;
+  const pct    = total > 0 ? (filled / total) * 100 : 0;
+
+  // عدد الغياب الأولي منفصل
+  const preAbsentCount = Object.values(attendance).filter(s => s === "pre_absent").length;
 
   const statItems = [
     { key: "present", grad: "from-emerald-400 to-teal-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-800/40", icon: CheckCircle2 },
-    { key: "absent",  grad: "from-red-400 to-rose-500",    bg: "bg-red-50 dark:bg-red-900/20",          text: "text-red-600 dark:text-red-400",          border: "border-red-200 dark:border-red-800/40",     icon: UserX },
-    { key: "late",    grad: "from-amber-400 to-orange-500", bg: "bg-amber-50 dark:bg-amber-900/20",     text: "text-amber-600 dark:text-amber-400",      border: "border-amber-200 dark:border-amber-800/40", icon: Clock },
-    { key: "excused", grad: "from-blue-400 to-indigo-500", bg: "bg-blue-50 dark:bg-blue-900/20",        text: "text-blue-600 dark:text-blue-400",        border: "border-blue-200 dark:border-blue-800/40",   icon: ShieldCheck },
+    { key: "absent",  grad: "from-red-400 to-rose-500",     bg: "bg-red-50 dark:bg-red-900/20",          text: "text-red-600 dark:text-red-400",          border: "border-red-200 dark:border-red-800/40",     icon: UserX },
+    { key: "late",    grad: "from-amber-400 to-orange-500", bg: "bg-amber-50 dark:bg-amber-900/20",      text: "text-amber-600 dark:text-amber-400",      border: "border-amber-200 dark:border-amber-800/40", icon: Clock },
+    { key: "excused", grad: "from-blue-400 to-indigo-500",  bg: "bg-blue-50 dark:bg-blue-900/20",        text: "text-blue-600 dark:text-blue-400",        border: "border-blue-200 dark:border-blue-800/40",   icon: ShieldCheck },
   ];
 
   return (
@@ -650,7 +532,7 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-md">
-            <BarChart3 className="w-4.5 h-4.5 text-white" />
+            <BarChart3 className="w-4 h-4 text-white" />
           </div>
           <div>
             <p className="text-sm font-bold text-gray-900 dark:text-[#e6edf3]">{t("ملخص الحضور", "Attendance Summary", isAr)}</p>
@@ -668,8 +550,7 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
       <div className="h-2.5 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden mb-5">
         <div
           className="h-full bg-gradient-to-r from-primary to-purple-600 rounded-full relative overflow-hidden transition-all duration-700"
-          style={{ width: `${pct}%` }}
-        >
+          style={{ width: `${pct}%` }}>
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer" />
         </div>
       </div>
@@ -681,8 +562,7 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
             className={`group/stat relative flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-500 hover:shadow-md hover:-translate-y-0.5
               ${animateProgress ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}
               ${bg} ${border}`}
-            style={{ transitionDelay: `${idx * 80}ms` }}
-          >
+            style={{ transitionDelay: `${idx * 80}ms` }}>
             <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${grad} flex items-center justify-center shadow-sm group-hover/stat:scale-110 transition-transform`}>
               <Icon className="w-4 h-4 text-white" />
             </div>
@@ -693,6 +573,16 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
           </div>
         ))}
       </div>
+
+      {/* ── بادج الغياب الأولي في الأسفل ────────────────────────────────── */}
+      {preAbsentCount > 0 && (
+        <div className="mt-4 flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-200 dark:border-orange-800/30">
+          <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
+          <p className="text-xs text-orange-700 dark:text-orange-400 font-bold">
+            {preAbsentCount} {t("طالب غياب أولي — لم يُسجَّل بعد", "student(s) pre-absent — not saved yet", isAr)}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -715,10 +605,10 @@ function Skeleton() {
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function InstructorAttendancePage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const sessionId = searchParams.get("session");
-  const { locale } = useLocale();
-  const isAr = locale === "ar";
+  const router       = useRouter();
+  const sessionId    = searchParams.get("session");
+  const { locale }   = useLocale();
+  const isAr         = locale === "ar";
 
   const [loading,         setLoading]         = useState(true);
   const [submitting,      setSubmitting]       = useState(false);
@@ -731,13 +621,11 @@ export default function InstructorAttendancePage() {
   const [search,          setSearch]           = useState("");
   const [filterStatus,    setFilterStatus]     = useState("all");
   const [animateProgress, setAnimateProgress]  = useState(false);
-
-  // ── DB template variables (gender-aware) — mirrors AttendanceModal ─────────
-  const [dbVars, setDbVars] = useState({});
+  const [dbVars,          setDbVars]           = useState({});
 
   const savedStatusRef = useRef({});
 
-  // ── Fetch DB template variables on mount ───────────────────────────────────
+  // ── Fetch DB template variables ───────────────────────────────────────────
   useEffect(() => {
     fetch("/api/whatsapp/template-variables")
       .then((r) => r.json())
@@ -759,9 +647,7 @@ export default function InstructorAttendancePage() {
     }
     try {
       setLoading(true);
-      const res = await fetch(`/api/instructor/sessions/${sessionId}/attendance`, {
-        credentials: "include",
-      });
+      const res  = await fetch(`/api/instructor/sessions/${sessionId}/attendance`, { credentials: "include" });
       const data = await res.json();
 
       if (data.success) {
@@ -806,15 +692,18 @@ export default function InstructorAttendancePage() {
     setAttendance((prev) => ({ ...prev, [studentId]: status }));
   }, []);
 
-  /**
-   * handleSubmit — renders all custom messages client-side before sending.
-   * The PATCH endpoint receives fully-rendered strings (no {variable} placeholders).
-   */
   const handleSubmit = async () => {
-    if (Object.keys(attendance).length === 0) return;
+    // ── استبعد pre_absent من أي عملية حفظ ───────────────────────────────
+    const finalAttendance = Object.fromEntries(
+      Object.entries(attendance).filter(([, status]) => status !== "pre_absent")
+    );
+
+    if (Object.keys(finalAttendance).length === 0) return;
+
     try {
       setSubmitting(true);
-      const records = Object.entries(attendance)
+
+      const records = Object.entries(finalAttendance)
         .filter(([studentId, status]) => {
           const savedStatus = savedStatusRef.current[studentId] || null;
           return savedStatus !== status;
@@ -827,7 +716,7 @@ export default function InstructorAttendancePage() {
         return;
       }
 
-      const res = await fetch(`/api/instructor/sessions/${sessionId}/attendance`, {
+      const res  = await fetch(`/api/instructor/sessions/${sessionId}/attendance`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -836,7 +725,7 @@ export default function InstructorAttendancePage() {
       const data = await res.json();
 
       if (data.success) {
-        savedStatusRef.current = { ...attendance };
+        savedStatusRef.current = { ...finalAttendance };
         setSuccess(true);
         setTimeout(() => router.push(`/instructor/evaluation?session=${sessionId}`), 2000);
       } else {
@@ -858,19 +747,25 @@ export default function InstructorAttendancePage() {
   const filteredStudents = students.filter((s) => {
     const matchSearch = !search || s.name?.toLowerCase().includes(search.toLowerCase());
     const matchFilter =
-      filterStatus === "all" ||
-      attendance[s._id] === filterStatus ||
-      (filterStatus === "unset" && !attendance[s._id]);
+      filterStatus === "all"        ? true :
+      filterStatus === "pre_absent" ? attendance[s._id] === "pre_absent" :
+      filterStatus === "unset"      ? !attendance[s._id] :
+      attendance[s._id] === filterStatus;
     return matchSearch && matchFilter;
   });
 
-  const changedCount = Object.entries(attendance).filter(
-    ([studentId, status]) => (savedStatusRef.current[studentId] || null) !== status
-  ).length;
+  // ── changedCount يستبعد pre_absent ───────────────────────────────────────
+  const changedCount = Object.entries(attendance).filter(([studentId, status]) => {
+    if (status === "pre_absent") return false;
+    return (savedStatusRef.current[studentId] || null) !== status;
+  }).length;
 
-  const filledCount = Object.keys(attendance).length;
-  const allFilled = filledCount === students.length && students.length > 0;
+  // ── filledCount يستبعد pre_absent ────────────────────────────────────────
+  const filledCount  = Object.entries(attendance).filter(([, s]) => s !== "pre_absent").length;
+  const allFilled    = filledCount === students.length && students.length > 0;
+  const preAbsentCount = Object.values(attendance).filter(s => s === "pre_absent").length;
 
+  // ─── No session ──────────────────────────────────────────────────────────
   if (!sessionId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22]" dir="rtl">
@@ -888,6 +783,7 @@ export default function InstructorAttendancePage() {
     );
   }
 
+  // ─── Success ─────────────────────────────────────────────────────────────
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22]" dir={isAr ? "rtl" : "ltr"}>
@@ -909,6 +805,7 @@ export default function InstructorAttendancePage() {
     );
   }
 
+  // ─── Main Render ─────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22]" dir={isAr ? "rtl" : "ltr"}>
 
@@ -921,12 +818,11 @@ export default function InstructorAttendancePage() {
               className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 hover:text-primary hover:bg-primary/10 transition-all flex-shrink-0 group">
               {isAr
                 ? <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
-                : <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
-              }
+                : <ChevronLeft  className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />}
             </button>
 
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
-              <ClipboardList className="w-4.5 h-4.5 text-white" />
+              <ClipboardList className="w-4 h-4 text-white" />
             </div>
 
             <div className="flex-1 min-w-0">
@@ -951,7 +847,7 @@ export default function InstructorAttendancePage() {
 
             {!loading && (
               <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 dark:bg-primary/10 rounded-xl border border-primary/20">
+                <div className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-xl border border-primary/20">
                   <Users className="w-4 h-4 text-primary" />
                   <span className="text-sm font-black text-primary">{students.length}</span>
                 </div>
@@ -987,11 +883,15 @@ export default function InstructorAttendancePage() {
                 <div className="flex flex-col gap-2 flex-shrink-0">
                   <div className="flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/20">
                     <Users className="w-4 h-4 text-white" />
-                    <span className="text-white font-black text-sm">{filledCount}<span className="text-white/60 font-normal">/{students.length}</span></span>
+                    <span className="text-white font-black text-sm">
+                      {filledCount}<span className="text-white/60 font-normal">/{students.length}</span>
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/20">
                     <TrendingUp className="w-4 h-4 text-white" />
-                    <span className="text-white font-black text-sm">{students.length > 0 ? Math.round((filledCount / students.length) * 100) : 0}%</span>
+                    <span className="text-white font-black text-sm">
+                      {students.length > 0 ? Math.round((filledCount / students.length) * 100) : 0}%
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1029,15 +929,13 @@ export default function InstructorAttendancePage() {
                 <Zap className="w-3.5 h-3.5 text-primary" />
                 {t("تحديد الكل كـ:", "Mark all as:", isAr)}
               </p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 {STATUS_ORDER.map((s) => {
-                  const c = STATUS_CONFIG[s];
+                  const c    = STATUS_CONFIG[s];
                   const Icon = c.icon;
                   return (
-                    <button
-                      key={s}
-                      onClick={() => markAll(s)}
-                      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${c.lightBg} ${c.text} border ${c.border}`}>
+                    <button key={s} onClick={() => markAll(s)}
+                      className={`flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${c.lightBg} ${c.text} border ${c.border}`}>
                       <Icon className="w-3.5 h-3.5" />
                       {t(c.labelAr, c.labelEn, isAr)}
                     </button>
@@ -1100,6 +998,21 @@ export default function InstructorAttendancePage() {
             {/* Submit sticky bar */}
             <div className="sticky bottom-0 pt-3 pb-4">
               <div className="bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-[#30363d] p-4 shadow-xl">
+
+                {/* تحذير الغياب الأولي */}
+                {preAbsentCount > 0 && (
+                  <div className="flex items-center gap-2 mb-3 p-2.5 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-200 dark:border-orange-800/30">
+                    <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                    <p className="text-xs text-orange-700 dark:text-orange-400 font-bold">
+                      {preAbsentCount} {t(
+                        "طالب غياب أولي — لن يُحفظ عند الضغط على حفظ الحضور",
+                        "student(s) pre-absent — will NOT be saved",
+                        isAr
+                      )}
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-4">
                   <div className="flex-1">
                     <p className="text-sm font-bold text-gray-900 dark:text-[#e6edf3]">
@@ -1110,7 +1023,9 @@ export default function InstructorAttendancePage() {
                     </p>
                     {!allFilled && filledCount > 0 && (
                       <p className="text-xs text-amber-500 mt-0.5">
-                        {students.length - filledCount} {t("طالب لم يُحدد", "student(s) unset", isAr)}
+                        {students.length - filledCount - preAbsentCount > 0 && (
+                          <>{students.length - filledCount - preAbsentCount} {t("طالب لم يُحدد", "student(s) unset", isAr)}</>
+                        )}
                       </p>
                     )}
                   </div>
@@ -1124,7 +1039,7 @@ export default function InstructorAttendancePage() {
                         strokeLinecap="round" />
                       <defs>
                         <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#8c52ff" />
+                          <stop offset="0%"   stopColor="#8c52ff" />
                           <stop offset="100%" stopColor="#a855f7" />
                         </linearGradient>
                       </defs>
@@ -1158,12 +1073,14 @@ export default function InstructorAttendancePage() {
             <div className="w-24 h-24 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
               <Users className="w-12 h-12 text-gray-300 dark:text-[#6e7681]" />
             </div>
-            <p className="text-gray-500 dark:text-[#8b949e] font-medium">{t("لا يوجد طلاب في هذه الجلسة", "No students in this session", isAr)}</p>
+            <p className="text-gray-500 dark:text-[#8b949e] font-medium">
+              {t("لا يوجد طلاب في هذه الجلسة", "No students in this session", isAr)}
+            </p>
           </div>
         )}
       </div>
 
-      {/* Preview Modal — passes dbVars + sessionData for client-side rendering */}
+      {/* Preview Modal */}
       {previewModal && (
         <MessagePreviewModal
           student={previewModal.student}

@@ -544,13 +544,10 @@ export async function sendAbsenceNotifications(
       .populate("groupId")
       .lean();
 
-    if (!session) {
-      throw new Error("Session not found");
-    }
+    if (!session) throw new Error("Session not found");
 
     const group = session.groupId;
 
-    // تجميع الطلاب الذين يحتاجون إشعارات
     const studentsNeedingNotifications = attendanceData.filter((record) =>
       ["absent", "late", "excused"].includes(record.status),
     );
@@ -560,10 +557,6 @@ export async function sendAbsenceNotifications(
       return { success: true, sentCount: 0, skippedCount: 0 };
     }
 
-    console.log(
-      `📊 Found ${studentsNeedingNotifications.length} students needing notifications`,
-    );
-
     let sentCount = 0;
     let skippedCount = 0;
     const results = [];
@@ -571,168 +564,54 @@ export async function sendAbsenceNotifications(
     for (const record of studentsNeedingNotifications) {
       const student = await Student.findById(record.studentId);
 
-      if (!student) {
-        console.log(`❌ Student not found: ${record.studentId}`);
-        skippedCount++;
-        continue;
-      }
+      if (!student) { skippedCount++; continue; }
 
-      // ✅ التحقق من صلاحية الطالب لاستقبال الرسائل
       const canSend = await canSendMessage(student);
-
       if (!canSend) {
-        console.log(
-          `⏭️ Skipping student ${student._id} - not eligible (zero balance or notifications disabled)`,
-        );
         skippedCount++;
-
-        // تسجيل أنه تم تخطي هذا الطالب
-        results.push({
-          studentId: student._id,
-          status: "skipped",
-          reason: "zero_balance_or_disabled",
-        });
-
+        results.push({ studentId: student._id, status: "skipped", reason: "zero_balance_or_disabled" });
         continue;
       }
 
-      // الحصول على رقم ولي الأمر
-      const guardianPhone =
-        student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
+      const guardianPhone = student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
+      if (!guardianPhone) { skippedCount++; continue; }
 
-      if (!guardianPhone) {
-        console.log(`⚠️ No guardian phone for student ${student._id}`);
-        skippedCount++;
-        continue;
-      }
-
-      // الحصول على القالب المناسب
-      let messageContent = customMessages[student._id];
+      // ── الرسالة: إما custom جاهزة من الـ frontend، أو نجيب template ──────
+      let messageContent = customMessages[student._id.toString()];
 
       if (!messageContent) {
         const templates = await getAttendanceTemplates(record.status, student);
         messageContent = templates.guardian?.content;
       }
 
-      if (!messageContent) {
-        console.log(`⚠️ No message content for student ${student._id}`);
-        skippedCount++;
-        continue;
-      }
+      if (!messageContent) { skippedCount++; continue; }
 
-      // بناء المتغيرات
-      const lang = student.communicationPreferences?.preferredLanguage || "ar";
-      const gender = (student.personalInfo?.gender || "male")
-        .toLowerCase()
-        .trim();
-      const relationship = (student.guardianInfo?.relationship || "father")
-        .toLowerCase()
-        .trim();
+      // ── استخدم prepareStudentVariables بدل المنطق القديم ─────────────────
+      // ده بيضمن نفس المتغيرات اللي بتتبنى في الـ preview تماماً
+      const { variables, language } = await prepareStudentVariables(
+        student,
+        group,
+        session,
+        { attendanceStatus: record.status },
+      );
 
-      const studentFirstName =
-        lang === "ar"
-          ? student.personalInfo?.nickname?.ar?.trim() ||
-            student.personalInfo?.fullName?.split(" ")[0] ||
-            "الطالب"
-          : student.personalInfo?.nickname?.en?.trim() ||
-            student.personalInfo?.fullName?.split(" ")[0] ||
-            "Student";
+      // ── استبدل المتغيرات في الرسالة ──────────────────────────────────────
+      let finalMessage = replaceVariables(messageContent, variables);
 
-      const guardianFirstName =
-        lang === "ar"
-          ? student.guardianInfo?.nickname?.ar?.trim() ||
-            student.guardianInfo?.name?.split(" ")[0] ||
-            "ولي الأمر"
-          : student.guardianInfo?.nickname?.en?.trim() ||
-            student.guardianInfo?.name?.split(" ")[0] ||
-            "Guardian";
+      // ── messageType حسب الـ status ────────────────────────────────────────
+      const messageTypeMap = {
+        absent:  "absence_notification",
+        late:    "late_notification",
+        excused: "excused_notification",
+      };
+      const messageType = messageTypeMap[record.status] || "absence_notification";
 
-      let guardianSalutation = "";
-      if (lang === "ar") {
-        if (relationship === "mother") {
-          guardianSalutation = `عزيزتي السيدة ${guardianFirstName}`;
-        } else if (relationship === "father") {
-          guardianSalutation = `عزيزي الأستاذ ${guardianFirstName}`;
-        } else {
-          guardianSalutation = `عزيزي/عزيزتي ${guardianFirstName}`;
-        }
-      } else {
-        if (relationship === "mother") {
-          guardianSalutation = `Dear Mrs. ${guardianFirstName}`;
-        } else if (relationship === "father") {
-          guardianSalutation = `Dear Mr. ${guardianFirstName}`;
-        } else {
-          guardianSalutation = `Dear ${guardianFirstName}`;
-        }
-      }
-
-      const childTitle =
-        lang === "ar"
-          ? gender === "female"
-            ? "ابنتك"
-            : "ابنك"
-          : gender === "female"
-            ? "your daughter"
-            : "your son";
-
-      const statusText =
-        record.status === "absent"
-          ? lang === "ar"
-            ? "غائب"
-            : "absent"
-          : record.status === "late"
-            ? lang === "ar"
-              ? "متأخر"
-              : "late"
-            : lang === "ar"
-              ? "معتذر"
-              : "excused";
-
-      const sessionDate = session?.scheduledDate
-        ? new Date(session.scheduledDate).toLocaleDateString(
-            lang === "ar" ? "ar-EG" : "en-US",
-            { weekday: "long", year: "numeric", month: "long", day: "numeric" },
-          )
-        : "";
-
-      // استبدال المتغيرات
-      let finalMessage = messageContent
-        .replace(/{guardianSalutation}/g, guardianSalutation)
-        .replace(/{guardianName}/g, guardianFirstName)
-        .replace(/{studentName}/g, studentFirstName)
-        .replace(/{childTitle}/g, childTitle)
-        .replace(/{status}/g, statusText)
-        .replace(/{sessionName}/g, session?.title || "")
-        .replace(/{date}/g, sessionDate)
-        .replace(
-          /{time}/g,
-          `${session?.startTime || ""} - ${session?.endTime || ""}`,
-        )
-        .replace(/{enrollmentNumber}/g, student.enrollmentNumber || "");
-
-      // ✅ استخدام القيم الصحيحة من الـ enum
-      let messageType = "";
-      switch (record.status) {
-        case "absent":
-          messageType = "absence_notification";
-          break;
-        case "late":
-          messageType = "late_notification";
-          break;
-        case "excused":
-          messageType = "excused_notification";
-          break;
-        default:
-          messageType = "absence_notification";
-      }
-
-      // ✅ استخدام sendAndLogMessage
       const sendResult = await wapilotService.sendAndLogMessage({
         studentId: student._id,
         phoneNumber: guardianPhone,
         messageContent: finalMessage,
-        messageType: messageType, // ✅ استخدام القيمة الصحيحة
-        language: lang,
+        messageType,
+        language,
         metadata: {
           sessionId: session._id,
           sessionTitle: session.title,
@@ -744,35 +623,18 @@ export async function sendAbsenceNotifications(
 
       if (sendResult.success) {
         sentCount++;
-        results.push({
-          studentId: student._id,
-          status: "sent",
-          messageId: sendResult.messageId,
-        });
+        results.push({ studentId: student._id, status: "sent", messageId: sendResult.messageId });
       } else {
-        console.log(`❌ Failed to send message to student ${student._id}`);
         skippedCount++;
       }
     }
 
-    console.log(
-      `✅ Notifications sent: ${sentCount}, skipped: ${skippedCount}`,
-    );
+    console.log(`✅ Notifications sent: ${sentCount}, skipped: ${skippedCount}`);
+    return { success: true, sentCount, skippedCount, results };
 
-    return {
-      success: true,
-      sentCount,
-      skippedCount,
-      results,
-    };
   } catch (error) {
     console.error("❌ Error sending absence notifications:", error);
-    return {
-      success: false,
-      error: error.message,
-      sentCount: 0,
-      skippedCount: 0,
-    };
+    return { success: false, error: error.message, sentCount: 0, skippedCount: 0 };
   }
 }
 

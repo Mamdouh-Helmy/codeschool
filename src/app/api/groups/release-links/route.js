@@ -1,32 +1,21 @@
-// app/api/groups/[id]/release-links/route.js
-// POST → إلغاء حجز لينكات محددة (أو كلهم لو مفيش IDs)
-// Body: { linkIds?: string[] }   — لو فاضي → يلغي كل المحجوزين
+// app/api/groups/release-links/route.js
+// POST → إلغاء حجز لينكات محددة
+// Body: { linkIds?: string[] } — لو فاضي → يلغي كل المحجوزين
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
-import MeetingLink from "../../../../models/MeetingLink";
+import MeetingLink from "../../../models/MeetingLink";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
-export async function POST(req, { params }) {
+export async function POST(req) {
   try {
-    const { id } = await params;
-
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
 
     await connectDB();
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid group ID" },
-        { status: 400 },
-      );
-    }
-
     const body = await req.json().catch(() => ({}));
-    // لو جالنا linkIds → نلغي المحدد بس
-    // لو مجاش حاجة → نلغي كل المحجوزين
     const { linkIds } = body;
 
     const query = {
@@ -36,11 +25,8 @@ export async function POST(req, { params }) {
       "currentReservation.endTime": { $gte: new Date() },
     };
 
-    // لو في IDs محددة، نفلتر بيها
     if (Array.isArray(linkIds) && linkIds.length > 0) {
-      const validIds = linkIds.filter((id) =>
-        mongoose.Types.ObjectId.isValid(id),
-      );
+      const validIds = linkIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
       if (validIds.length === 0) {
         return NextResponse.json(
           { success: false, error: "No valid link IDs provided" },
@@ -65,10 +51,8 @@ export async function POST(req, { params }) {
       try {
         await link.releaseLink();
         results.push({ id: link._id, name: link.name, success: true });
-        console.log(`🔓 Released link: ${link.name}`);
       } catch (e) {
         results.push({ id: link._id, name: link.name, success: false, error: e.message });
-        console.warn(`⚠️ Could not release link ${link.name}:`, e.message);
       }
     }
 

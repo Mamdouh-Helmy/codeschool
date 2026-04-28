@@ -182,17 +182,15 @@ export default function InstructorReports() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<ReportsData | null>(null);
   const [error, setError] = useState("");
-  const [animateProgress, setAnimateProgress] = useState(false); // same name as InstructorDashboard
+  const [animateProgress, setAnimateProgress] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [user, setUser] = useState(null); // 👈 ADDED: fetch real user data
 
   const [activeTab, setActiveTab] = useState<"overview" | "groups" | "sessions" | "students">("overview");
   const [selectedGroup, setSelectedGroup] = useState("all");
   const [selectedPeriod, setSelectedPeriod] = useState("all");
   const [showGroupFilter, setShowGroupFilter] = useState(false);
-
-  // same dummy pattern as InstructorDashboard — real user shown by Header/Sidebar
-  const user = { id: "", name: "", email: "", role: "instructor" };
 
   const fetchData = useCallback(
     async (showRefresh = false) => {
@@ -203,11 +201,21 @@ export default function InstructorReports() {
         setAnimateProgress(false);
 
         const params = new URLSearchParams({ groupId: selectedGroup, period: selectedPeriod });
-        const res = await fetch(`/api/instructor/reports?${params}`, { credentials: "include" });
-        const json = await res.json();
-        if (!res.ok || !json.success) throw new Error(json.message || "Error");
-        setData(json.data);
-        setTimeout(() => setAnimateProgress(true), 300); // same delay as InstructorDashboard
+        
+        // 👇 Fetch BOTH reports data AND user data (just like Groups page)
+        const [reportsRes, dashboardRes] = await Promise.all([
+          fetch(`/api/instructor/reports?${params}`, { credentials: "include" }),
+          fetch("/api/instructor/dashboard", { credentials: "include" })
+        ]);
+
+        const reportsJson = await reportsRes.json();
+        const dashboardJson = await dashboardRes.json();
+
+        if (!reportsRes.ok || !reportsJson.success) throw new Error(reportsJson.message || "Error");
+        if (dashboardJson.success) setUser(dashboardJson.data.user);
+
+        setData(reportsJson.data);
+        setTimeout(() => setAnimateProgress(true), 300);
       } catch (err: any) {
         setError(err.message);
         if (err.message?.includes("UNAUTHORIZED")) router.push("/signin");
@@ -225,6 +233,13 @@ export default function InstructorReports() {
     await fetch("/api/auth/logout", { method: "POST" });
     localStorage.removeItem("token");
     router.push("/");
+  };
+
+  // Build currentUser object from fetched user data (with fallbacks)
+  const currentUser = user || { 
+    name: isRTL ? "مدرس" : "Instructor", 
+    email: "", 
+    role: "instructor" 
   };
 
   // ── Loading
@@ -306,19 +321,19 @@ export default function InstructorReports() {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - USING currentUser */}
       <div
         className={`fixed lg:static inset-y-0 ${isRTL ? "right-0" : "left-0"} z-50 transform transition-all duration-500
           ${sidebarOpen ? "translate-x-0" : (isRTL ? "translate-x-full" : "-translate-x-full") + " lg:translate-x-0"}
           flex-shrink-0`}
       >
-        <InstructorSidebar user={user as any} onLogout={handleLogout} />
+        <InstructorSidebar user={currentUser as any} onLogout={handleLogout} />
       </div>
 
       <main className="flex-1 min-w-0 transition-all duration-300">
-        {/* InstructorHeader — exact same props as InstructorDashboard */}
+        {/* InstructorHeader — USING currentUser */}
         <InstructorHeader
-          user={user as any}
+          user={currentUser as any}
           notifications={[]}
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
           sidebarOpen={sidebarOpen}
@@ -534,7 +549,7 @@ export default function InstructorReports() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                {/* Attendance Distribution — CSS conic-gradient donut, same card as InstructorDashboard */}
+                {/* Attendance Distribution — CSS conic-gradient donut */}
                 <div className="group/progress relative bg-white dark:bg-[#161b22] rounded-2xl p-6 lg:p-8 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl transition-all duration-300">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-[#e6edf3] mb-1 flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-teal-500" />
@@ -596,7 +611,7 @@ export default function InstructorReports() {
                   )}
                 </div>
 
-                {/* Monthly Attendance — CSS bar chart, same card style */}
+                {/* Monthly Attendance — CSS bar chart */}
                 <div className="group/progress relative bg-white dark:bg-[#161b22] rounded-2xl p-6 lg:p-8 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl transition-all duration-300">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-[#e6edf3] mb-1 flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-teal-500" />
@@ -670,7 +685,7 @@ export default function InstructorReports() {
                 })}
               </div>
 
-              {/* Attendance breakdown — exact same widget as InstructorDashboard "Attendance Overview" */}
+              {/* Attendance breakdown */}
               <div className="bg-white dark:bg-[#161b22] rounded-2xl p-6 lg:p-8 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d]">
                 <h4 className="font-bold text-gray-900 dark:text-[#e6edf3] mb-5 flex items-center gap-2 text-base">
                   <BarChart3 className="w-5 h-5 text-teal-500" />
@@ -706,7 +721,7 @@ export default function InstructorReports() {
           {activeTab === "groups" && (
             <div className="space-y-6">
 
-              {/* Horizontal bar comparison — same progress-bar style */}
+              {/* Horizontal bar comparison */}
               {groups.length > 0 && (
                 <div className="bg-white dark:bg-[#161b22] rounded-2xl p-6 lg:p-8 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d]">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-[#e6edf3] mb-1 flex items-center gap-2">
@@ -743,7 +758,7 @@ export default function InstructorReports() {
                 </div>
               )}
 
-              {/* Group cards — exact same as InstructorDashboard "My Groups" */}
+              {/* Group cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {groups.map((group) => (
                   <div
@@ -777,7 +792,7 @@ export default function InstructorReports() {
                         {group.name} · <span className="font-mono text-xs">{group.code}</span>
                       </p>
 
-                      {/* Progress bar — exact same as InstructorDashboard */}
+                      {/* Progress bar */}
                       <div className="mb-4">
                         <div className="flex justify-between text-sm mb-2">
                           <span className="text-gray-600 dark:text-[#8b949e]">{isRTL ? "التقدم" : "Progress"}</span>
@@ -829,7 +844,7 @@ export default function InstructorReports() {
                         </div>
                       )}
 
-                      {/* Stats row — exact same as InstructorDashboard */}
+                      {/* Stats row */}
                       <div className="flex items-center justify-between text-sm border-t border-gray-100 dark:border-[#30363d] pt-4">
                         <div className="flex items-center gap-1.5 text-gray-500 dark:text-[#8b949e]">
                           <Users className="w-4 h-4" /><span>{group.currentStudentsCount}</span>
@@ -868,7 +883,6 @@ export default function InstructorReports() {
                   <p className="text-gray-500 dark:text-[#8b949e]">{isRTL ? "لا توجد جلسات مكتملة بعد" : "No completed sessions yet"}</p>
                 </div>
               ) : sessionReports.map((session) => (
-                /* Same card as InstructorDashboard "Recent Sessions" */
                 <div key={session._id} className="flex items-start gap-4 p-5 bg-white dark:bg-[#161b22] rounded-xl border border-gray-100 dark:border-[#30363d] hover:shadow-md transition-all">
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center flex-shrink-0">
                     <CheckCircle className="w-5 h-5 text-white" />
@@ -967,7 +981,7 @@ export default function InstructorReports() {
                 </div>
               </div>
 
-              {/* All Students — same list pattern as InstructorDashboard "Recent Sessions" */}
+              {/* All Students */}
               <div className="bg-white dark:bg-[#161b22] rounded-2xl shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] overflow-hidden">
                 <div className="p-5 border-b border-gray-100 dark:border-[#30363d] flex items-center justify-between">
                   <h3 className="font-bold text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
@@ -1011,7 +1025,6 @@ export default function InstructorReports() {
         </div>
       </main>
 
-      {/* same keyframes as InstructorDashboard */}
       <style jsx>{`
         @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         .animate-shimmer { animation: shimmer 2s infinite; }

@@ -113,7 +113,6 @@ function distributeLinksToSessions(sessions, availableLinks) {
 
   return sessions.map((session, i) => ({
     session,
-    // ✅ modulo: لو لينك واحد يتكرر على كل الجلسات
     assignedLink: availableLinks[i % availableLinks.length],
   }));
 }
@@ -192,16 +191,21 @@ export async function GET(req, { params }) {
         reservedLinksCount:  reservedLinks.length,
         hasNoLinks:          allLinks.length === 0,
         hasAvailableLinks:   availableLinks.length > 0,
-        // ✅ لو في لينك واحد على الأقل → كل الجلسات ستحصل على لينك
         sessionsWithLinks,
         sessionsWithout,
         sessions:            sessionPreviews,
         availableLinks,
-        reservedLinks:       reservedLinks.map((l) => ({
+        // ✅ UPDATED: إضافة link و reservedFor للفرونت
+        reservedLinks: reservedLinks.map((l) => ({
           id:            l._id,
           name:          l.name,
           platform:      l.platform,
+          link:          l.link,
           reservedUntil: l.currentReservation?.endTime,
+          reservedFor: {
+            sessionId: l.currentReservation?.sessionId,
+            groupId:   l.currentReservation?.groupId,
+          },
         })),
       },
     });
@@ -241,7 +245,6 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ FIX: populate الصح للهيكل الجديد {userId, countTime}
     const group = await Group.findOne({ _id: id, isDeleted: false })
       .populate("courseId")
       .populate("instructors.userId", "name email gender profile");
@@ -336,7 +339,6 @@ export async function POST(req, { params }) {
 
     await Group.findByIdAndUpdate(id, updateData);
 
-    // ✅ FIX: populate الصح للهيكل الجديد {userId, countTime}
     const updatedGroup = await Group.findById(id)
       .populate("courseId", "title level curriculum")
       .populate("instructors.userId", "name email gender profile");
@@ -359,7 +361,6 @@ export async function POST(req, { params }) {
         notificationsSent: 0,
       };
 
-      // ✅ FIX: التحقق من وجود مدربين بالهيكل الجديد
       if (updatedGroup.instructors?.length > 0) {
         try {
           instructorNotificationResult = await sendInstructorWelcomeMessages(
@@ -371,7 +372,6 @@ export async function POST(req, { params }) {
         }
       }
 
-      // ✅ FIX: normalize الـ instructors في الـ response للفرونت
       const normalizedInstructors = (updatedGroup.instructors || []).map((entry) => ({
         _id:        entry.userId?._id || entry.userId,
         id:         entry.userId?._id || entry.userId,
