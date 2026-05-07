@@ -36,6 +36,18 @@ import {
   Zap,
 } from "lucide-react";
 
+// ── Design tokens with brand colors ──
+const C = {
+  primary: "#ff6700",
+  primaryDark: "#f67d00",
+  secondary: "#004d59",
+  accent: "#feaf00",
+  primaryGrad: "from-[#ff6700] to-[#f67d00]",
+  primaryGrad2: "from-[#ff6700] via-[#f67d00] to-[#004d59]",
+  primaryText: "text-[#ff6700]",
+  primaryBg: "bg-[#ff6700]",
+};
+
 // ── Types ──
 interface SessionColorScheme {
   gradient: string;
@@ -105,32 +117,32 @@ const DAYS_AR = ["أحد", "إث", "ثل", "أرب", "خم", "جم", "سب"];
 const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
-// ── Status Badge ──
+// ── Status Badge with brand colors ──
 const StatusBadge = ({ status, isRTL }: { status: string; isRTL: boolean }) => {
   const config: Record<string, { label: string; labelAr: string; cls: string }> = {
-    scheduled:  { label: "Upcoming",  labelAr: "قادمة",    cls: "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20" },
-    completed:  { label: "Done",      labelAr: "مكتملة",   cls: "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400 border border-green-200 dark:border-green-500/20" },
+    scheduled:  { label: "Upcoming",  labelAr: "قادمة",    cls: "bg-primary/10 text-primary border border-primary/20" },
+    completed:  { label: "Done",      labelAr: "مكتملة",   cls: "bg-secondary/10 text-secondary border border-secondary/20" },
     cancelled:  { label: "Cancelled", labelAr: "ملغاة",    cls: "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/20" },
-    postponed:  { label: "Postponed", labelAr: "مؤجلة",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20" },
+    postponed:  { label: "Postponed", labelAr: "مؤجلة",   cls: "bg-accent/10 text-accent border border-accent/20" },
   };
   const c = config[status] || config.scheduled;
   return <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${c.cls}`}>{isRTL ? c.labelAr : c.label}</span>;
 };
 
-// ── Attendance Badge ──
+// ── Attendance Badge with brand colors ──
 const AttendanceBadge = ({ status, isRTL }: { status: string | null; isRTL: boolean }) => {
   if (!status) return null;
   const config: Record<string, { label: string; labelAr: string; cls: string }> = {
-    present:  { label: "Present",  labelAr: "حاضر",    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" },
+    present:  { label: "Present",  labelAr: "حاضر",    cls: "bg-secondary/10 text-secondary" },
     absent:   { label: "Absent",   labelAr: "غائب",    cls: "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400" },
-    late:     { label: "Late",     labelAr: "متأخر",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" },
-    excused:  { label: "Excused",  labelAr: "معذور",   cls: "bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400" },
+    late:     { label: "Late",     labelAr: "متأخر",   cls: "bg-accent/10 text-accent" },
+    excused:  { label: "Excused",  labelAr: "معذور",   cls: "bg-secondary/10 text-secondary" },
   };
   const c = config[status] || config.present;
   return <span className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-medium ${c.cls}`}>{isRTL ? c.labelAr : c.label}</span>;
 };
 
-// ── Session Card (List View) ──
+// ── Session Card (List View) with brand colors ──
 const SessionCard = ({ session, isRTL }: { session: SessionItem; isRTL: boolean }) => {
   const [expanded, setExpanded] = useState(false);
   const cs = session.colorScheme;
@@ -211,7 +223,7 @@ const SessionCard = ({ session, isRTL }: { session: SessionItem; isRTL: boolean 
                 href={session.meetingLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-primary to-purple-600 text-white text-xs font-semibold rounded-lg hover:shadow-lg hover:shadow-primary/30 transition-all hover:scale-105"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-primary to-[#f67d00] text-white text-xs font-semibold rounded-lg hover:shadow-lg hover:shadow-primary/30 transition-all hover:scale-105"
               >
                 <Video className="w-3 h-3" />
                 {isRTL ? "انضم" : "Join"}
@@ -222,7 +234,7 @@ const SessionCard = ({ session, isRTL }: { session: SessionItem; isRTL: boolean 
                 href={session.recordingLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] text-xs font-semibold rounded-lg hover:bg-gray-200 dark:hover:bg-[#30363d] transition-all"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-secondary/10 text-secondary text-xs font-semibold rounded-lg hover:bg-secondary/20 transition-all"
               >
                 <Play className="w-3 h-3" />
                 {isRTL ? "تسجيل" : "Replay"}
@@ -264,7 +276,7 @@ const SessionCard = ({ session, isRTL }: { session: SessionItem; isRTL: boolean 
   );
 };
 
-// ── Month Calendar ──
+// ── Month Calendar with brand colors ──
 const MonthCalendar = ({
   currentDate,
   sessions,
@@ -329,7 +341,7 @@ const MonthCalendar = ({
             >
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold mb-1 transition-colors ${
                 isToday
-                  ? "bg-gradient-to-br from-primary to-purple-600 text-white shadow-md shadow-primary/30"
+                  ? "bg-gradient-to-br from-primary to-[#f67d00] text-white shadow-md shadow-primary/30"
                   : isSelected
                     ? "bg-primary/15 text-primary"
                     : "text-gray-700 dark:text-[#8b949e] group-hover:bg-gray-200 dark:group-hover:bg-[#30363d]"
@@ -360,7 +372,7 @@ const MonthCalendar = ({
   );
 };
 
-// ── Week View ──
+// ── Week View with brand colors ──
 const WeekView = ({ sessions, currentDate, isRTL }: { sessions: SessionItem[]; currentDate: Date; isRTL: boolean }) => {
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(currentDate);
@@ -381,7 +393,7 @@ const WeekView = ({ sessions, currentDate, isRTL }: { sessions: SessionItem[]; c
                 {(isRTL ? DAYS_AR : DAYS_EN)[d.getDay()]}
               </p>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mx-auto ${
-                isToday ? "bg-gradient-to-br from-primary to-purple-600 text-white shadow-md" : "text-gray-700 dark:text-[#e6edf3]"
+                isToday ? "bg-gradient-to-br from-primary to-[#f67d00] text-white shadow-md" : "text-gray-700 dark:text-[#e6edf3]"
               }`}>
                 {d.getDate()}
               </div>
@@ -517,7 +529,7 @@ export default function SchedulePage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-[#0d1117] flex items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto bg-gradient-to-br from-primary to-purple-600 rounded-2xl flex items-center justify-center shadow-xl shadow-primary/30 mb-4 animate-pulse">
+          <div className="w-16 h-16 mx-auto bg-gradient-to-br from-primary to-[#f67d00] rounded-2xl flex items-center justify-center shadow-xl shadow-primary/30 mb-4 animate-pulse">
             <Calendar className="w-8 h-8 text-white" />
           </div>
           <p className="text-gray-500 dark:text-[#8b949e] text-sm">{isRTL ? "جارٍ تحميل الجدول..." : "Loading schedule..."}</p>
@@ -530,9 +542,9 @@ export default function SchedulePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0d1117]" dir={isRTL ? "rtl" : "ltr"}>
         <div className="text-center p-8">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <AlertCircle className="w-16 h-16 text-primary mx-auto mb-4" />
           <p className="text-gray-600 dark:text-[#8b949e] mb-4">{error}</p>
-          <button onClick={() => fetchSchedule()} className="px-6 py-3 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl font-semibold">
+          <button onClick={() => fetchSchedule()} className="px-6 py-3 bg-gradient-to-r from-primary to-[#f67d00] text-white rounded-xl font-semibold">
             {isRTL ? "إعادة المحاولة" : "Try Again"}
           </button>
         </div>
@@ -552,10 +564,10 @@ export default function SchedulePage() {
       });
 
   const statsCards = [
-    { icon: CalendarDays, label: isRTL ? "إجمالي الجلسات" : "Total Sessions",  value: stats?.total || 0,     gradient: "from-blue-400 to-cyan-500",   shadow: "shadow-blue-500/20" },
-    { icon: CheckCircle,  label: isRTL ? "مكتملة"          : "Completed",       value: stats?.completed || 0, gradient: "from-green-400 to-emerald-500",shadow: "shadow-green-500/20" },
-    { icon: Zap,          label: isRTL ? "قادمة"            : "Upcoming",        value: stats?.upcoming || 0,  gradient: "from-purple-400 to-pink-500",  shadow: "shadow-purple-500/20" },
-    { icon: Radio,        label: isRTL ? "اليوم"            : "Today",           value: stats?.today || 0,     gradient: "from-primary to-violet-600",  shadow: "shadow-primary/20" },
+    { icon: CalendarDays, label: isRTL ? "إجمالي الجلسات" : "Total Sessions",  value: stats?.total || 0,     gradient: "from-primary to-[#f67d00]",   shadow: "shadow-primary/20" },
+    { icon: CheckCircle,  label: isRTL ? "مكتملة"          : "Completed",       value: stats?.completed || 0, gradient: "from-secondary to-[#ff6437]", shadow: "shadow-secondary/20" },
+    { icon: Zap,          label: isRTL ? "قادمة"            : "Upcoming",        value: stats?.upcoming || 0,  gradient: "from-accent to-[#f67d00]",    shadow: "shadow-accent/20" },
+    { icon: Radio,        label: isRTL ? "اليوم"            : "Today",           value: stats?.today || 0,     gradient: "from-primary to-secondary", shadow: "shadow-primary/20" },
   ];
 
   return (
@@ -584,17 +596,17 @@ export default function SchedulePage() {
 
         <div className="p-4 sm:p-6 lg:p-8 space-y-6">
 
-          {/* ── Page Header ── */}
+          {/* ── Page Header with brand colors ── */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-[#e6edf3] flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/30">
                   <Calendar className="w-5 h-5 text-white" />
                 </div>
                 {isRTL ? "جدولي الدراسي" : "My Schedule"}
               </h1>
               <p className="text-sm text-gray-500 dark:text-[#8b949e] mt-1 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                <Sparkles className="w-3.5 h-3.5 text-accent" />
                 {isRTL ? "تابع جلساتك ومواعيدك الدراسية" : "Track your sessions and study appointments"}
               </p>
             </div>
@@ -611,7 +623,7 @@ export default function SchedulePage() {
                   onClick={() => { setView(key); setSelectedDay(null); }}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                     view === key
-                      ? "bg-gradient-to-r from-primary to-purple-600 text-white shadow-md"
+                      ? "bg-gradient-to-r from-primary to-secondary text-white shadow-md"
                       : "text-gray-500 dark:text-[#8b949e] hover:bg-gray-100 dark:hover:bg-[#21262d]"
                   }`}
                 >
@@ -622,7 +634,7 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* ── Stats Cards ── */}
+          {/* ── Stats Cards with brand colors ── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {statsCards.map(({ icon: Icon, label, value, gradient, shadow }) => (
               <div key={label} className={`group relative bg-white dark:bg-[#161b22] rounded-2xl p-5 border border-gray-100 dark:border-[#30363d] shadow-lg dark:shadow-black/40 hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5`}>
@@ -637,7 +649,7 @@ export default function SchedulePage() {
             ))}
           </div>
 
-          {/* ── Filters Row ── */}
+          {/* ── Filters Row with brand colors ── */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Navigation */}
             <div className="flex items-center gap-2 bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl px-2 py-1.5 shadow-sm">
@@ -726,12 +738,12 @@ export default function SchedulePage() {
               )}
             </div>
 
-            {/* Side Panel (month/week view) */}
+            {/* Side Panel (month/week view) with brand colors */}
             {view !== "list" && (
               <div className="xl:col-span-1 space-y-4">
                 {/* Selected day sessions */}
                 <div className="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] shadow-lg dark:shadow-black/40 overflow-hidden">
-                  <div className="p-4 border-b border-gray-100 dark:border-[#30363d] bg-gradient-to-r from-primary/5 to-purple-600/5">
+                  <div className="p-4 border-b border-gray-100 dark:border-[#30363d] bg-gradient-to-r from-primary/5 to-secondary/5">
                     <h3 className="font-bold text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
                       <CalendarDays className="w-4 h-4 text-primary" />
                       {selectedDay
@@ -767,11 +779,11 @@ export default function SchedulePage() {
                     <div className="space-y-2">
                       {groups.map((g, idx) => {
                         const colors = [
-                          "from-blue-500 to-cyan-500",
-                          "from-green-400 to-emerald-500",
-                          "from-pink-500 to-rose-500",
-                          "from-amber-400 to-orange-500",
-                          "from-purple-500 to-indigo-600",
+                          "from-primary to-[#f67d00]",
+                          "from-secondary to-[#ff6437]",
+                          "from-accent to-[#f67d00]",
+                          "from-primary to-secondary",
+                          "from-secondary to-primary",
                         ];
                         return (
                           <div key={g._id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-[#1c2128] transition-colors">
@@ -783,7 +795,7 @@ export default function SchedulePage() {
                               <p className="text-xs text-gray-500 dark:text-[#8b949e] truncate">{g.courseTitle}</p>
                             </div>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                              g.status === "active" ? "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400" : "bg-gray-100 text-gray-600 dark:bg-[#21262d] dark:text-[#8b949e]"
+                              g.status === "active" ? "bg-primary/10 text-primary" : "bg-gray-100 text-gray-600 dark:bg-[#21262d] dark:text-[#8b949e]"
                             }`}>
                               {g.status === "active" ? (isRTL ? "نشط" : "Active") : (isRTL ? "مكتمل" : "Done")}
                             </span>
@@ -805,6 +817,13 @@ export default function SchedulePage() {
         }
         .animate-ping {
           animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
       `}</style>
     </div>

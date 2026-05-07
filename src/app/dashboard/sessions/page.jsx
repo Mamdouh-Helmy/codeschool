@@ -13,12 +13,20 @@ import {
 import { useLocale } from "@/app/context/LocaleContext";
 import { useI18n } from "@/i18n/I18nProvider";
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// ─── Design tokens with brand colors ──────────────────────────────────────────
 const C = {
-  primaryGrad: "from-[#8c52ff] to-[#6c3be8]",
-  primaryGrad2: "from-[#8c52ff] via-[#7a3ff0] to-[#6c3be8]",
-  primaryText: "text-[#8c52ff]",
-  primaryBg: "bg-[#8c52ff]",
+  primary: "#ff6700",
+  primaryDark: "#f67d00",
+  secondary: "#004d59",
+  accent: "#feaf00",
+  primaryGrad: "from-[#ff6700] to-[#f67d00]",
+  primaryGrad2: "from-[#ff6700] via-[#f67d00] to-[#004d59]",
+  primaryText: "text-[#ff6700]",
+  primaryBg: "bg-[#ff6700]",
+  secondaryText: "text-[#004d59]",
+  secondaryBg: "bg-[#004d59]",
+  accentText: "text-[#feaf00]",
+  accentBg: "bg-[#feaf00]",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -49,14 +57,14 @@ const fmtDateKey = (d) => new Date(d).toISOString().split("T")[0];
 const STATUS = (locale = 'ar') => ({
   completed: { 
     label: locale === 'ar' ? "مكتملة" : "Completed", 
-    dot: "bg-emerald-400", 
-    badge: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40", 
+    dot: "bg-secondary", 
+    badge: "bg-secondary/10 dark:bg-secondary/20 text-secondary dark:text-secondary border border-secondary/20", 
     icon: CheckCircle 
   },
   scheduled: { 
     label: locale === 'ar' ? "مجدولة" : "Scheduled", 
-    dot: "bg-blue-400", 
-    badge: "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40", 
+    dot: "bg-primary", 
+    badge: "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border border-primary/20", 
     icon: Clock 
   },
   cancelled: { 
@@ -67,8 +75,8 @@ const STATUS = (locale = 'ar') => ({
   },
   postponed: { 
     label: locale === 'ar' ? "مؤجلة" : "Postponed", 
-    dot: "bg-amber-400", 
-    badge: "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40", 
+    dot: "bg-accent", 
+    badge: "bg-accent/10 dark:bg-accent/20 text-accent dark:text-accent border border-accent/20", 
     icon: Clock 
   },
 });
@@ -76,20 +84,20 @@ const STATUS = (locale = 'ar') => ({
 const ATT = (locale = 'ar') => ({
   present: { 
     label: locale === 'ar' ? "حاضر" : "Present", 
-    color: "text-emerald-600 dark:text-emerald-400", 
-    bg: "bg-emerald-50 dark:bg-emerald-900/20", 
+    color: "text-secondary", 
+    bg: "bg-secondary/10", 
     icon: CheckCircle 
   },
   late: { 
     label: locale === 'ar' ? "متأخر" : "Late", 
-    color: "text-amber-600 dark:text-amber-400", 
-    bg: "bg-amber-50 dark:bg-amber-900/20", 
+    color: "text-accent", 
+    bg: "bg-accent/10", 
     icon: Clock 
   },
   excused: { 
     label: locale === 'ar' ? "معذور" : "Excused", 
-    color: "text-blue-600 dark:text-blue-400", 
-    bg: "bg-blue-50 dark:bg-blue-900/20", 
+    color: "text-secondary", 
+    bg: "bg-secondary/10", 
     icon: BadgeCheck 
   },
   absent: { 
@@ -104,17 +112,17 @@ const PLAT = (locale = 'ar') => ({
   zoom: { 
     label: locale === 'ar' ? "Zoom" : "Zoom", 
     icon: "🔷", 
-    grad: "from-blue-500 to-blue-600" 
+    grad: "from-primary to-[#f67d00]" 
   },
   google_meet: { 
     label: locale === 'ar' ? "Meet" : "Meet", 
     icon: "🔴", 
-    grad: "from-green-500 to-emerald-600" 
+    grad: "from-secondary to-[#ff6437]" 
   },
   microsoft_teams: { 
     label: locale === 'ar' ? "Teams" : "Teams", 
     icon: "🔵", 
-    grad: "from-purple-500 to-indigo-600" 
+    grad: "from-primary to-secondary" 
   },
   other: { 
     label: locale === 'ar' ? "رابط" : "Link", 
@@ -143,8 +151,8 @@ function SessionModal({ session, onClose, locale }) {
 
       <div className="relative w-full sm:max-w-xl max-h-[92vh] overflow-y-auto bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col">
 
-        {/* Header */}
-        <div className={`relative bg-gradient-to-br ${C.primaryGrad} p-6 rounded-t-3xl sm:rounded-t-3xl overflow-hidden flex-shrink-0`}>
+        {/* Header with brand gradient */}
+        <div className={`relative bg-gradient-to-br ${C.primaryGrad2} p-6 rounded-t-3xl sm:rounded-t-3xl overflow-hidden flex-shrink-0`}>
           <div className="absolute inset-0 opacity-10"
             style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
           <div className="absolute -top-8 -left-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
@@ -201,7 +209,7 @@ function SessionModal({ session, onClose, locale }) {
           {/* Recording */}
           {isCompleted && session.recordingLink && (
             <a href={session.recordingLink} target="_blank" rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl font-bold text-sm text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100 transition-all">
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl font-bold text-sm text-secondary bg-secondary/10 border border-secondary/20 hover:bg-secondary/20 transition-all">
               <Play className="w-4 h-4" />{t("allSessions.modal.watchRecording")}
             </a>
           )}
@@ -226,8 +234,8 @@ function SessionModal({ session, onClose, locale }) {
                     <div
                       className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0
       ${isCompleted
-                          ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-                          : "bg-[#8c52ff]/10 text-[#8c52ff]"
+                          ? "bg-secondary/10 text-secondary"
+                          : "bg-primary/10 text-primary"
                         }`}
                     >
                       {i + 1}
@@ -238,12 +246,12 @@ function SessionModal({ session, onClose, locale }) {
                     </span>
 
                     {isCompleted && (
-                      <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-secondary flex-shrink-0" />
                     )}
                   </div>
                 ))}
               </div>
-              <div className="flex items-center justify-between px-4 py-2.5 bg-[#8c52ff]/5 dark:bg-[#8c52ff]/10 border-t border-[#8c52ff]/20">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-primary/5 dark:bg-primary/10 border-t border-primary/20">
                 <span className="text-xs text-gray-500 dark:text-[#8b949e]">{t("allSessions.modal.totalDuration")}</span>
                 <span className={`text-sm font-black ${C.primaryText}`}>{t("allSessions.modal.duration")}</span>
               </div>
@@ -262,7 +270,7 @@ function SessionModal({ session, onClose, locale }) {
               <div className="flex flex-wrap gap-2">
                 {session.materials.map((mat, i) => (
                   <a key={i} href={mat.url} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-medium text-gray-700 dark:text-[#8b949e] hover:border-[#8c52ff]/50 hover:text-[#8c52ff] transition-all">
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-medium text-gray-700 dark:text-[#8b949e] hover:border-primary/50 hover:text-primary transition-all">
                     <FileText className="w-3.5 h-3.5" />{mat.name || `${t("allSessions.modal.file")} ${i + 1}`}<ExternalLink className="w-3 h-3" />
                   </a>
                 ))}
@@ -272,11 +280,11 @@ function SessionModal({ session, onClose, locale }) {
 
           {/* Notes */}
           {session.instructorNotes && (
-            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4">
-              <h4 className="text-xs font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+            <div className="bg-accent/10 dark:bg-accent/10 border border-accent/20 rounded-2xl p-4">
+              <h4 className="text-xs font-bold text-accent mb-2 flex items-center gap-1.5">
                 <Info className="w-3.5 h-3.5" />{t("allSessions.modal.instructorNotes")}
               </h4>
-              <p className="text-sm text-amber-800 dark:text-amber-300/80 leading-relaxed">{session.instructorNotes}</p>
+              <p className="text-sm text-accent/80 dark:text-accent/80 leading-relaxed">{session.instructorNotes}</p>
             </div>
           )}
         </div>
@@ -299,7 +307,6 @@ function SessionRow({ session, onOpen, locale }) {
   const isToday = session.isToday && session.status === "scheduled";
 
   const handleClick = () => {
-    // Locked sessions are not clickable
     if (isLocked) return;
     onOpen(session);
   };
@@ -313,9 +320,9 @@ function SessionRow({ session, onOpen, locale }) {
           ? "opacity-50 cursor-not-allowed"
           : "cursor-pointer hover:-translate-y-0.5 hover:shadow-md"}
         ${isToday
-          ? "border-[#8c52ff]/40 shadow-md shadow-[#8c52ff]/10 ring-1 ring-[#8c52ff]/20"
+          ? "border-primary/40 shadow-md shadow-primary/10 ring-1 ring-primary/20"
           : isCompleted
-            ? "border-emerald-200/60 dark:border-emerald-800/30 hover:shadow-emerald-500/5"
+            ? "border-secondary/30 dark:border-secondary/30 hover:shadow-secondary/5"
             : "border-gray-100 dark:border-[#30363d] hover:border-gray-200 dark:hover:border-[#3d444d]"}`}
     >
       {/* Bubble */}
@@ -323,10 +330,10 @@ function SessionRow({ session, onOpen, locale }) {
         ${isLocked
           ? "bg-gray-100 dark:bg-[#21262d] text-gray-400 dark:text-[#6e7681]"
           : isCompleted
-            ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
+            ? "bg-gradient-to-br from-secondary to-secondary/80 text-white"
             : isToday
               ? `bg-gradient-to-br ${C.primaryGrad} text-white`
-              : "bg-gradient-to-br from-blue-400 to-indigo-500 text-white"}`}>
+              : "bg-gradient-to-br from-primary to-[#f67d00] text-white"}`}>
         {isLocked
           ? <Lock className="w-4 h-4" />
           : isCompleted
@@ -341,11 +348,11 @@ function SessionRow({ session, onOpen, locale }) {
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
           {isToday && (
             <span className={`text-[10px] font-black ${C.primaryText} flex items-center gap-1`}>
-              <span className="w-1 h-1 rounded-full bg-[#8c52ff] animate-pulse" />{t("allSessions.today")}
+              <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />{t("allSessions.today")}
             </span>
           )}
           <h3 className={`font-bold text-sm truncate transition-colors
-            ${isLocked ? "text-gray-400 dark:text-[#6e7681]" : `text-gray-900 dark:text-[#e6edf3] ${!isLocked ? "group-hover:text-[#8c52ff]" : ""}`}`}>
+            ${isLocked ? "text-gray-400 dark:text-[#6e7681]" : `text-gray-900 dark:text-[#e6edf3] ${!isLocked ? "group-hover:text-primary" : ""}`}`}>
             {session.title}
           </h3>
         </div>
@@ -376,7 +383,7 @@ function SessionRow({ session, onOpen, locale }) {
         {isCompleted && session.recordingLink && (
           <a href={session.recordingLink} target="_blank" rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100 transition-all">
+            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-secondary/10 text-secondary border border-secondary/20 hover:bg-secondary/20 transition-all">
             <Play className="w-3 h-3" />{t("allSessions.recording")}
           </a>
         )}
@@ -384,7 +391,7 @@ function SessionRow({ session, onOpen, locale }) {
           <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{cfg.label}
         </span>
         {!isLocked && (
-          <ChevronRight className={`w-4 h-4 text-gray-300 dark:text-[#6e7681] group-hover:text-[#8c52ff] transition-all ${locale === 'ar' ? 'rotate-180' : ''}`} />
+          <ChevronRight className={`w-4 h-4 text-gray-300 dark:text-[#6e7681] group-hover:text-primary transition-all ${locale === 'ar' ? 'rotate-180' : ''}`} />
         )}
       </div>
     </div>
@@ -408,10 +415,10 @@ function DateHeader({ dateKey, count, locale }) {
       </div>
       <div>
         <div className="flex items-center gap-2">
-          <span className={`font-black text-sm ${isToday ? "text-[#8c52ff]" : "text-gray-900 dark:text-[#e6edf3]"}`}>
+          <span className={`font-black text-sm ${isToday ? C.primaryText : "text-gray-900 dark:text-[#e6edf3]"}`}>
             {isToday ? t("allSessions.date.today") : d.toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', { weekday: "long" })}
           </span>
-          {isToday && <span className="w-2 h-2 rounded-full bg-[#8c52ff] animate-pulse" />}
+          {isToday && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
         </div>
         <span className="text-xs text-gray-400 dark:text-[#6e7681]">
           {d.toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', { month: "long", day: "numeric" })} · {count} {count === 1 ? t("allSessions.date.sessions") : t("allSessions.date.sessions_plural")}
@@ -436,7 +443,7 @@ export default function AllSessionsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [notifications, setNotifications] = useState([]);
-  const [modal, setModal] = useState(null); // selected session for modal
+  const [modal, setModal] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -530,7 +537,7 @@ export default function AllSessionsPage() {
           sidebarOpen={sidebarOpen} 
         />
 
-        {/* Sticky toolbar */}
+        {/* Sticky toolbar with brand colors */}
         <div className="sticky top-0 z-20 bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md border-b border-gray-200 dark:border-[#30363d]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between py-4 gap-3">
@@ -555,7 +562,7 @@ export default function AllSessionsPage() {
                   value={search} 
                   onChange={(e) => setSearch(e.target.value)} 
                   placeholder={t("allSessions.search")}
-                  className={`w-48 bg-gray-100 dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl ${locale === 'ar' ? 'pr-9 pl-4' : 'pl-9 pr-4'} py-2 text-sm text-gray-900 dark:text-[#e6edf3] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#8c52ff]/30 focus:border-[#8c52ff]/60`} />
+                  className={`w-48 bg-gray-100 dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl ${locale === 'ar' ? 'pr-9 pl-4' : 'pl-9 pr-4'} py-2 text-sm text-gray-900 dark:text-[#e6edf3] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/60`} />
               </div>
 
               {/* View toggle */}
@@ -573,13 +580,13 @@ export default function AllSessionsPage() {
               </div>
             </div>
 
-            {/* Filters */}
+            {/* Filters with brand colors */}
             <div className="flex gap-1.5 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
               {FILTERS.map(({ id, label, count }) => (
                 <button key={id} onClick={() => setFilter(id)}
                   className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition-all
                     ${filter === id
-                      ? `bg-[#8c52ff] text-white shadow-md shadow-[#8c52ff]/30`
+                      ? `bg-primary text-white shadow-md shadow-primary/30`
                       : "bg-gray-100 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d]"}`}>
                   {label}
                   <span className={`text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-black
@@ -595,9 +602,9 @@ export default function AllSessionsPage() {
         {/* Content */}
         <div className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
 
-          {/* Join Now Banner */}
+          {/* Join Now Banner with brand gradient */}
           {joinNow.length > 0 && filter === "all" && (
-            <div className={`mb-5 bg-gradient-to-r ${C.primaryGrad} rounded-2xl p-4 text-white relative overflow-hidden`}>
+            <div className={`mb-5 bg-gradient-to-r ${C.primaryGrad2} rounded-2xl p-4 text-white relative overflow-hidden`}>
               <div className="absolute -top-6 -left-6 w-24 h-24 bg-white/10 rounded-full blur-xl" />
               <div className="relative z-10 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -608,7 +615,7 @@ export default function AllSessionsPage() {
                   <p className="font-bold text-sm truncate">{joinNow[0].title}</p>
                 </div>
                 <a href={joinNow[0].meetingLink} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 bg-white text-[#8c52ff] font-bold text-xs px-4 py-2 rounded-xl hover:bg-purple-50 transition-all shadow-lg flex-shrink-0">
+                  className="flex items-center gap-2 bg-white text-primary font-bold text-xs px-4 py-2 rounded-xl hover:bg-gray-50 transition-all shadow-lg flex-shrink-0">
                   <Video className="w-4 h-4" />{t("allSessions.joinNow")}
                 </a>
               </div>
@@ -625,7 +632,7 @@ export default function AllSessionsPage() {
 
           {!loading && error && (
             <div className="text-center py-16">
-              <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+              <AlertCircle className="w-16 h-16 text-primary mx-auto mb-4" />
               <p className="text-gray-500 mb-4">{error}</p>
               <button onClick={load} className={`px-6 py-3 bg-gradient-to-r ${C.primaryGrad} text-white rounded-xl font-bold hover:shadow-lg transition-all`}>
                 {t("allSessions.retry")}
