@@ -12,6 +12,20 @@ import {
 import { useLocale } from "@/app/context/LocaleContext";
 import { useI18n } from "@/i18n/I18nProvider";
 
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const C = {
+  primary: "#ff6700",
+  primaryDark: "#f67d00",
+  primaryBg: "bg-[#ff6700]",
+  primaryText: "text-[#ff6700]",
+  primaryBorder: "border-[#ff6700]",
+  primaryLight: "bg-[#ff6700]/10",
+  primaryGrad: "from-[#ff6700] to-[#f67d00]",
+  primaryGrad2: "from-[#ff6700] via-[#f67d00] to-[#004d59]",
+  secondary: "#004d59",
+  accent: "#feaf00",
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtTime = (t, locale = 'ar') => {
   if (!t) return "";
@@ -40,8 +54,8 @@ const LEVEL_CFG = {
 };
 
 const STATUS_CFG = {
-  active:    { labelEn: "Active",   labelAr: "نشط",   dot: "bg-emerald-400", cls: "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20" },
-  completed: { labelEn: "Completed", labelAr: "مكتمل", dot: "bg-blue-400",    cls: "bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/20" },
+  active:    { labelEn: "Active",   labelAr: "نشط",   dot: "bg-primary", cls: "bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary border-primary/20" },
+  completed: { labelEn: "Completed", labelAr: "مكتمل", dot: "bg-secondary",    cls: "bg-secondary/10 dark:bg-secondary/10 text-secondary dark:text-secondary border-secondary/20" },
   draft:     { labelEn: "Draft", labelAr: "مسودة", dot: "bg-gray-400",    cls: "bg-gray-100 dark:bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-500/20" },
   cancelled: { labelEn: "Cancelled",  labelAr: "ملغي",  dot: "bg-red-400",     cls: "bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/20" },
 };
@@ -67,7 +81,7 @@ function AnimatedCounter({ value = 0, duration = 1500 }) {
   return <span>{count}</span>;
 }
 
-// ─── Circular Progress Ring ───────────────────────────────────────────────────
+// ─── Circular Progress Ring with brand colors ─────────────────────────────────
 function ProgressRing({ value = 0, size = 140, stroke = 10 }) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
@@ -76,8 +90,8 @@ function ProgressRing({ value = 0, size = 140, stroke = 10 }) {
     <svg width={size} height={size} className="-rotate-90">
       <defs>
         <linearGradient id="pg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#c084fc" />
-          <stop offset="100%" stopColor="#8c52ff" />
+          <stop offset="0%" stopColor="#ff6700" />
+          <stop offset="100%" stopColor="#004d59" />
         </linearGradient>
       </defs>
       <circle cx={size/2} cy={size/2} r={r} fill="none"
@@ -130,11 +144,11 @@ function SessionItem({ session, sessionNumber, moduleCompleted, locale }) {
       {/* Session number badge */}
       <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black flex-shrink-0
         ${isDone
-          ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-sm"
+          ? "bg-gradient-to-br from-secondary to-secondary/80 text-white shadow-sm"
           : isActive
             ? "text-white shadow-sm"
             : "bg-gray-100 dark:bg-[#21262d] text-gray-400 dark:text-[#6e7681]"}`}
-        style={isActive && !isDone ? { background: "linear-gradient(135deg, #8c52ff, #a855f7)" } : {}}>
+        style={isActive && !isDone ? { background: "linear-gradient(135deg, #ff6700, #f67d00)" } : {}}>
         {isDone ? <CheckCircle className="w-4 h-4" /> : `${locale === 'ar' ? 'ج' : 'S'}${sessionNumber}`}
       </div>
 
@@ -145,7 +159,7 @@ function SessionItem({ session, sessionNumber, moduleCompleted, locale }) {
           {session.title || session.lessonTitle || `${locale === 'ar' ? `جلسة ${sessionNumber}` : `Session ${sessionNumber}`}`}
         </p>
         {isActive && (
-          <span className="text-[10px] text-purple-500 dark:text-purple-400 font-semibold">
+          <span className="text-[10px] text-primary font-semibold">
             {t("groupDetails.status.inProgress")}
           </span>
         )}
@@ -167,7 +181,6 @@ function ModuleRow({ mod, index, locale }) {
   const done = mod.isCompleted;
   const active = mod.isActive;
 
-  // Build sessions from lessons
   const buildSessionsFromLessons = () => {
     if (mod.sessions?.length > 0) return mod.sessions;
     
@@ -203,8 +216,8 @@ function ModuleRow({ mod, index, locale }) {
 
   return (
     <div className={`rounded-2xl border overflow-hidden transition-all duration-300
-      ${done   ? "border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/30 dark:bg-emerald-900/5"
-      : active ? "border-purple-200 dark:border-purple-800/40 bg-purple-50/30 dark:bg-purple-900/5"
+      ${done   ? "border-secondary/30 dark:border-secondary/30 bg-secondary/5 dark:bg-secondary/5"
+      : active ? "border-primary/30 dark:border-primary/30 bg-primary/5 dark:bg-primary/5"
                : "border-gray-100 dark:border-[#30363d] bg-white dark:bg-[#161b22]"}`}>
 
       {/* Module Header */}
@@ -212,18 +225,18 @@ function ModuleRow({ mod, index, locale }) {
         className="w-full flex items-center gap-4 p-5 text-right hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
         <div
           className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black flex-shrink-0 shadow-md
-            ${done ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
+            ${done ? "bg-gradient-to-br from-secondary to-secondary/80 text-white"
                    : active ? "text-white"
                             : "bg-gray-100 dark:bg-[#21262d] text-gray-400 dark:text-[#6e7681]"}`}
-          style={active && !done ? { background: "linear-gradient(135deg, #8c52ff, #a855f7)" } : {}}>
+          style={active && !done ? { background: "linear-gradient(135deg, #ff6700, #f67d00)" } : {}}>
           {done ? <CheckCircle className="w-5 h-5" /> : index + 1}
         </div>
 
         <div className="flex-1 min-w-0 text-right">
           <div className="flex items-center gap-2 justify-end mb-2">
             <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex-shrink-0
-              ${done   ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
-              : active ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
+              ${done   ? "bg-secondary/10 dark:bg-secondary/20 text-secondary dark:text-secondary"
+              : active ? "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary"
                        : "bg-gray-100 dark:bg-[#21262d] text-gray-500 dark:text-[#6e7681]"}`}>
               {done ? t("groupDetails.status.completedBadge") : active ? t("groupDetails.status.inProgress") : t("groupDetails.status.upcoming")}
             </span>
@@ -233,10 +246,10 @@ function ModuleRow({ mod, index, locale }) {
             <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-gray-100 dark:bg-[#21262d]">
               <div
                 className={`h-full rounded-full transition-all duration-700 relative overflow-hidden
-                  ${done ? "bg-gradient-to-r from-emerald-400 to-teal-500" : ""}`}
+                  ${done ? "bg-gradient-to-r from-secondary to-secondary/80" : ""}`}
                 style={{
                   width: `${mod.progressPercentage || 0}%`,
-                  background: !done && active ? "linear-gradient(90deg, #8c52ff, #a855f7)" : undefined,
+                  background: !done && active ? "linear-gradient(90deg, #ff6700, #f67d00)" : undefined,
                 }}>
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
               </div>
@@ -280,14 +293,14 @@ function ModuleRow({ mod, index, locale }) {
 function InstructorCard({ inst, index, locale }) {
   const { t } = useI18n();
   const grads = [
-    "from-violet-500 to-purple-600",
-    "from-purple-500 to-fuchsia-600",
-    "from-indigo-500 to-violet-600",
-    "from-fuchsia-500 to-pink-600",
+    "from-primary to-[#f67d00]",
+    "from-secondary to-[#ff6437]",
+    "from-[#feaf00] to-[#f67d00]",
+    "from-primary to-secondary",
   ];
   return (
     <div className="group/inst relative bg-white dark:bg-[#161b22] rounded-2xl p-5 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-purple-600/0 group-hover/inst:from-purple-400/5 group-hover/inst:to-purple-600/5 rounded-2xl transition-all duration-300" />
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-secondary/0 group-hover/inst:from-primary/5 group-hover/inst:to-secondary/5 rounded-2xl transition-all duration-300" />
       <div className="relative z-10 flex items-center gap-4">
         <div className={`relative w-16 h-16 rounded-2xl bg-gradient-to-br ${grads[index % grads.length]} flex items-center justify-center text-white text-2xl font-black shadow-lg flex-shrink-0 group-hover/inst:scale-110 transition-transform duration-300`}>
           {inst.avatar || inst.name?.charAt(0) || '👤'}
@@ -296,7 +309,7 @@ function InstructorCard({ inst, index, locale }) {
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-gray-900 dark:text-[#e6edf3] text-base">{inst.name}</h3>
           {inst.email && <p className="text-xs text-gray-400 dark:text-[#6e7681] truncate mt-0.5">{inst.email}</p>}
-          <span className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20">
+          <span className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
             <GraduationCap className="w-3 h-3" />
             {t("groupDetails.team.instructor")}
           </span>
@@ -350,16 +363,16 @@ export default function StudentGroupDetailPage() {
   return (
     <div className={`min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22]`} dir={direction}>
 
-      {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
+      {/* ══ HERO with brand colors ═══════════════════════════════════════════════ */}
       <div className="relative">
         <div className="absolute inset-0 opacity-60 blur-md"
-          style={{ background: "linear-gradient(135deg, #8c52ff, #a855f7, #ec4899)" }} />
+          style={{ background: "linear-gradient(135deg, #ff6700, #004d59, #feaf00)" }} />
         <div className="relative overflow-hidden shadow-lg"
-          style={{ background: "linear-gradient(135deg, #8c52ff 0%, #a855f7 50%, #ec4899 100%)" }}>
+          style={{ background: "linear-gradient(135deg, #ff6700 0%, #004d59 50%, #feaf00 100%)" }}>
 
           {/* Blobs */}
           <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-slow" />
-          <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse-slower" />
+          <div className="absolute bottom-0 left-0 w-72 h-72 bg-primary/20 rounded-full blur-3xl animate-pulse-slower" />
           <div className="absolute inset-0 opacity-[0.06]"
             style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
 
@@ -399,7 +412,7 @@ export default function StudentGroupDetailPage() {
                 <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2 leading-tight">
                   {course?.title || group.name}
                 </h1>
-                <p className="text-lg text-blue-100 font-medium mb-3">{group.name}</p>
+                <p className="text-lg text-white/80 font-medium mb-3">{group.name}</p>
                 {course?.description && (
                   <p className="text-white/70 text-sm max-w-lg leading-relaxed line-clamp-2 mb-5">
                     {course.description}
@@ -440,23 +453,23 @@ export default function StudentGroupDetailPage() {
         </div>
       </div>
 
-      {/* ══ STATS CARDS ═══════════════════════════════════════════════════════ */}
+      {/* ══ STATS CARDS with brand colors ════════════════════════════════════════ */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-10 mb-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard 
             icon={CheckCircle} 
             label={t("groupDetails.stats.completedSessions")} 
             value={stats.completedSessions}
-            gradient="from-green-400 to-emerald-500" 
-            shadowColor="shadow-emerald-500/20" 
+            gradient="from-secondary to-secondary/80" 
+            shadowColor="shadow-secondary/20" 
             delay={0} 
           />
           <StatCard 
             icon={Clock} 
             label={t("groupDetails.stats.remainingSessions")} 
             value={stats.remainingSessions}
-            gradient="from-blue-400 to-cyan-500" 
-            shadowColor="shadow-blue-500/20" 
+            gradient="from-primary to-[#f67d00]" 
+            shadowColor="shadow-primary/20" 
             delay={80} 
           />
           <StatCard 
@@ -464,8 +477,8 @@ export default function StudentGroupDetailPage() {
             label={t("groupDetails.stats.attendanceRate")} 
             value={stats.attendanceRate} 
             suffix="%"
-            gradient="from-violet-400 to-purple-500" 
-            shadowColor="shadow-purple-500/20" 
+            gradient="from-[#feaf00] to-[#f67d00]" 
+            shadowColor="shadow-[#feaf00]/20" 
             delay={160} 
           />
           <StatCard 
@@ -473,17 +486,17 @@ export default function StudentGroupDetailPage() {
             label={t("groupDetails.stats.learningHours")} 
             value={stats.hoursCompleted} 
             suffix={locale === 'ar' ? 'س' : 'h'}
-            gradient="from-amber-400 to-orange-500" 
-            shadowColor="shadow-amber-500/20" 
+            gradient="from-primary to-secondary" 
+            shadowColor="shadow-primary/20" 
             delay={240} 
           />
         </div>
       </div>
 
-      {/* ══ CONTENT ═══════════════════════════════════════════════════════════ */}
+      {/* ══ CONTENT ════════════════════════════════════════════════════════════ */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
 
-        {/* Tab Bar */}
+        {/* Tab Bar with brand gradient */}
         <div className="flex gap-1 p-1.5 rounded-2xl w-fit mb-8 bg-white dark:bg-[#161b22] border border-gray-100 dark:border-[#30363d] shadow-sm">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setTab(id)}
@@ -491,7 +504,7 @@ export default function StudentGroupDetailPage() {
                 ${tab === id
                   ? "text-white shadow-md"
                   : "text-gray-500 dark:text-[#8b949e] hover:text-gray-900 dark:hover:text-[#e6edf3]"}`}
-              style={tab === id ? { background: "linear-gradient(135deg, #8c52ff, #a855f7)", boxShadow: "0 4px 14px rgba(140,82,255,0.4)" } : {}}>
+              style={tab === id ? { background: "linear-gradient(135deg, #ff6700, #004d59)", boxShadow: "0 4px 14px rgba(255,103,0,0.4)" } : {}}>
               <Icon className="w-4 h-4" />{label}
             </button>
           ))}
@@ -504,12 +517,12 @@ export default function StudentGroupDetailPage() {
             {/* LEFT */}
             <div className="lg:col-span-2 space-y-6">
 
-              {/* Next Session */}
+              {/* Next Session with brand gradient */}
               {nextSession && (
                 <div className="relative overflow-hidden rounded-2xl p-6 text-white shadow-lg"
-                  style={{ background: "linear-gradient(135deg, #8c52ff 0%, #a855f7 60%, #ec4899 100%)" }}>
+                  style={{ background: "linear-gradient(135deg, #ff6700 0%, #004d59 60%, #feaf00 100%)" }}>
                   <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl animate-pulse-slow" />
-                  <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-300/20 rounded-full blur-3xl animate-pulse-slower" />
+                  <div className="absolute bottom-0 left-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl animate-pulse-slower" />
                   <div className="absolute inset-0 opacity-[0.06]"
                     style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
                   <div className="relative z-10">
@@ -544,20 +557,20 @@ export default function StudentGroupDetailPage() {
 
               {/* Attendance Card */}
               <div className="group/progress relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl transition-all duration-300 overflow-hidden">
-                <div className="absolute inset-0 from-purple-400/0 to-purple-600/0 group-hover/progress:from-purple-400/5 group-hover/progress:to-purple-600/5 bg-gradient-to-br rounded-2xl transition-all duration-300" />
+                <div className="absolute inset-0 from-primary/0 to-secondary/0 group-hover/progress:from-primary/5 group-hover/progress:to-secondary/5 bg-gradient-to-br rounded-2xl transition-all duration-300" />
                 <div className="relative z-10">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-[#e6edf3] mb-6 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5" style={{ color: "#8c52ff" }} />
+                    <TrendingUp className="w-5 h-5 text-primary" />
                     {t("groupDetails.attendanceDetails")}
                   </h2>
 
                   {/* Big 4 tiles */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                     {[
-                      { label: t("groupDetails.attendance.present"),  value: stats.attendedSessions,  bg: "bg-emerald-50 dark:bg-emerald-900/20",  text: "text-emerald-700 dark:text-emerald-400" },
-                      { label: t("groupDetails.attendance.late"), value: stats.lateSessions,      bg: "bg-amber-50 dark:bg-amber-900/20",      text: "text-amber-700 dark:text-amber-400" },
-                      { label: t("groupDetails.attendance.excused"), value: stats.excusedSessions,   bg: "bg-blue-50 dark:bg-blue-900/20",        text: "text-blue-700 dark:text-blue-400" },
-                      { label: t("groupDetails.attendance.absent"),  value: stats.absentSessions,    bg: "bg-red-50 dark:bg-red-900/20",          text: "text-red-700 dark:text-red-400" },
+                      { label: t("groupDetails.attendance.present"),  value: stats.attendedSessions,  bg: "bg-secondary/10",  text: "text-secondary" },
+                      { label: t("groupDetails.attendance.late"), value: stats.lateSessions,      bg: "bg-[#feaf00]/10",      text: "text-[#feaf00]" },
+                      { label: t("groupDetails.attendance.excused"), value: stats.excusedSessions,   bg: "bg-secondary/10",        text: "text-secondary" },
+                      { label: t("groupDetails.attendance.absent"),  value: stats.absentSessions,    bg: "bg-red-100 dark:bg-red-900/20",          text: "text-red-700 dark:text-red-400" },
                     ].map(({ label, value, bg, text }) => (
                       <div key={label} className={`${bg} rounded-xl p-4 text-center`}>
                         <p className={`text-2xl font-bold ${text} tabular-nums`}>
@@ -571,9 +584,9 @@ export default function StudentGroupDetailPage() {
                   {/* Progress bars */}
                   <div className="space-y-4">
                     {[
-                      { label: t("groupDetails.attendance.present"),  count: stats.attendedSessions,  color: "from-emerald-400 to-teal-500",  pillCls: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" },
-                      { label: t("groupDetails.attendance.late"), count: stats.lateSessions,      color: "from-amber-400 to-orange-400",  pillCls: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" },
-                      { label: t("groupDetails.attendance.excused"), count: stats.excusedSessions,   color: "from-blue-400 to-cyan-500",    pillCls: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" },
+                      { label: t("groupDetails.attendance.present"),  count: stats.attendedSessions,  color: "from-secondary to-secondary/80",  pillCls: "bg-secondary/10 text-secondary" },
+                      { label: t("groupDetails.attendance.late"), count: stats.lateSessions,      color: "from-[#feaf00] to-[#f67d00]",  pillCls: "bg-[#feaf00]/10 text-[#feaf00]" },
+                      { label: t("groupDetails.attendance.excused"), count: stats.excusedSessions,   color: "from-primary to-[#f67d00]",    pillCls: "bg-primary/10 text-primary" },
                       { label: t("groupDetails.attendance.absent"),  count: stats.absentSessions,    color: "from-red-400 to-rose-500",     pillCls: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" },
                     ].map(({ label, count, color, pillCls }) => {
                       const total = stats.completedSessions || 0;
@@ -603,12 +616,12 @@ export default function StudentGroupDetailPage() {
               {/* Sessions CTA */}
               <Link href={`/dashboard/groups/${groupId}/sessions`}
                 className="group/cta relative flex items-center justify-between p-5 rounded-2xl border hover:shadow-md transition-all overflow-hidden"
-                style={{ background: "rgba(140,82,255,0.06)", borderColor: "rgba(140,82,255,0.2)" }}>
+                style={{ background: "rgba(255,103,0,0.06)", borderColor: "rgba(255,103,0,0.2)" }}>
                 <div className="absolute inset-0 opacity-0 group-hover/cta:opacity-100 transition-opacity duration-300 rounded-2xl"
-                  style={{ background: "rgba(140,82,255,0.08)" }} />
+                  style={{ background: "rgba(255,103,0,0.08)" }} />
                 <div className="relative z-10 flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
-                    style={{ background: "linear-gradient(135deg, #8c52ff, #a855f7)", boxShadow: "0 4px 14px rgba(140,82,255,0.3)" }}>
+                    style={{ background: "linear-gradient(135deg, #ff6700, #004d59)", boxShadow: "0 4px 14px rgba(255,103,0,0.3)" }}>
                     <Play className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -619,7 +632,7 @@ export default function StudentGroupDetailPage() {
                   </div>
                 </div>
                 <ChevronRight className={`relative z-10 w-5 h-5 group-hover/cta:-translate-x-1 transition-transform ${locale === 'ar' ? '' : 'rotate-180'}`}
-                  style={{ color: "#8c52ff" }} />
+                  style={{ color: "#ff6700" }} />
               </Link>
             </div>
 
@@ -628,11 +641,11 @@ export default function StudentGroupDetailPage() {
 
               {/* Schedule */}
               <div className="group/card relative bg-white dark:bg-[#161b22] rounded-2xl p-5 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 overflow-hidden">
-                <div className="absolute inset-0 from-purple-400/0 to-purple-600/0 group-hover/card:from-purple-400/5 group-hover/card:to-purple-600/5 bg-gradient-to-br rounded-2xl transition-all duration-300" />
+                <div className="absolute inset-0 from-primary/0 to-secondary/0 group-hover/card:from-primary/5 group-hover/card:to-secondary/5 bg-gradient-to-br rounded-2xl transition-all duration-300" />
                 <div className="relative z-10">
                   <h3 className="text-sm font-bold text-gray-900 dark:text-[#e6edf3] mb-4 flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-500/10 flex items-center justify-center">
-                      <Calendar className="w-3.5 h-3.5" style={{ color: "#8c52ff" }} />
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Calendar className="w-3.5 h-3.5 text-primary" />
                     </div>
                     {t("groupDetails.schedule.title")}
                   </h3>
@@ -641,7 +654,7 @@ export default function StudentGroupDetailPage() {
                       <p className="text-[11px] text-gray-400 dark:text-[#6e7681] mb-2 font-medium">{t("groupDetails.schedule.days")}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {group.schedule?.daysOfWeek?.map(d => (
-                          <span key={d} className="text-xs px-2.5 py-1 rounded-lg font-semibold bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20">
+                          <span key={d} className="text-xs px-2.5 py-1 rounded-lg font-semibold bg-primary/10 text-primary border border-primary/20">
                             {daysMap[d] || d}
                           </span>
                         ))}
@@ -670,11 +683,11 @@ export default function StudentGroupDetailPage() {
               {/* Course Info */}
               {course && (
                 <div className="group/card relative bg-white dark:bg-[#161b22] rounded-2xl p-5 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 overflow-hidden">
-                  <div className="absolute inset-0 from-purple-400/0 to-purple-600/0 group-hover/card:from-purple-400/5 group-hover/card:to-purple-600/5 bg-gradient-to-br rounded-2xl transition-all duration-300" />
+                  <div className="absolute inset-0 from-primary/0 to-secondary/0 group-hover/card:from-primary/5 group-hover/card:to-secondary/5 bg-gradient-to-br rounded-2xl transition-all duration-300" />
                   <div className="relative z-10">
                     <h3 className="text-sm font-bold text-gray-900 dark:text-[#e6edf3] mb-4 flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-500/10 flex items-center justify-center">
-                        <BookOpen className="w-3.5 h-3.5" style={{ color: "#8c52ff" }} />
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <BookOpen className="w-3.5 h-3.5 text-primary" />
                       </div>
                       {t("groupDetails.courseInfo.title")}
                     </h3>
@@ -698,11 +711,11 @@ export default function StudentGroupDetailPage() {
 
               {/* Students */}
               <div className="group/card relative bg-white dark:bg-[#161b22] rounded-2xl p-5 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 overflow-hidden">
-                <div className="absolute inset-0 from-purple-400/0 to-purple-600/0 group-hover/card:from-purple-400/5 group-hover/card:to-purple-600/5 bg-gradient-to-br rounded-2xl transition-all duration-300" />
+                <div className="absolute inset-0 from-primary/0 to-secondary/0 group-hover/card:from-primary/5 group-hover/card:to-secondary/5 bg-gradient-to-br rounded-2xl transition-all duration-300" />
                 <div className="relative z-10">
                   <h3 className="text-sm font-bold text-gray-900 dark:text-[#e6edf3] mb-3 flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-500/10 flex items-center justify-center">
-                      <Users className="w-3.5 h-3.5" style={{ color: "#8c52ff" }} />
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Users className="w-3.5 h-3.5 text-primary" />
                     </div>
                     {t("groupDetails.students.title")}
                   </h3>
@@ -711,7 +724,7 @@ export default function StudentGroupDetailPage() {
                       <div className="h-full rounded-full relative overflow-hidden"
                         style={{
                           width: `${Math.min((group.currentStudentsCount / group.maxStudents) * 100, 100)}%`,
-                          background: "linear-gradient(90deg, #8c52ff, #a855f7)",
+                          background: "linear-gradient(90deg, #ff6700, #004d59)",
                           transition: "width 1.2s cubic-bezier(.4,0,.2,1)"
                         }}>
                         <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
@@ -735,8 +748,8 @@ export default function StudentGroupDetailPage() {
           <div className="max-w-3xl space-y-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-4 text-xs text-gray-400 dark:text-[#6e7681]">
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />{t("groupDetails.curriculum.completed")}</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ background: "#8c52ff" }} />{t("groupDetails.curriculum.inProgress")}</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-secondary" />{t("groupDetails.curriculum.completed")}</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary" />{t("groupDetails.curriculum.inProgress")}</span>
               </div>
               <p className="text-sm text-gray-500 dark:text-[#8b949e]">
                 {modules.filter(m => m.isCompleted).length} / {modules.length} {t("groupDetails.curriculum.modulesCompleted")}
@@ -781,7 +794,7 @@ function LoadingState({ locale }) {
   
   return (
     <div className={`min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22]`} dir={locale === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="h-72 animate-pulse" style={{ background: "linear-gradient(135deg, #8c52ff, #a855f7, #ec4899)" }} />
+      <div className="h-72 animate-pulse" style={{ background: "linear-gradient(135deg, #ff6700, #004d59, #feaf00)" }} />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {[...Array(4)].map((_, i) => (
@@ -815,7 +828,7 @@ function ErrorState({ message, onRetry, locale }) {
         <p className="text-gray-500 dark:text-[#8b949e] mb-6">{message || t("groupDetails.errorMessage")}</p>
         <button onClick={onRetry}
           className="px-6 py-3 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-300 transform hover:scale-105"
-          style={{ background: "linear-gradient(135deg, #8c52ff, #a855f7)", boxShadow: "0 4px 14px rgba(140,82,255,0.4)" }}>
+          style={{ background: "linear-gradient(135deg, #ff6700, #004d59)", boxShadow: "0 4px 14px rgba(255,103,0,0.4)" }}>
           {t("groupDetails.retry")}
         </button>
       </div>

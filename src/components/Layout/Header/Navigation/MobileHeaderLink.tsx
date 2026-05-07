@@ -8,7 +8,6 @@ const MobileHeaderLink: React.FC<{ item: HeaderItem }> = ({ item }) => {
   const { t } = useI18n();
   const [submenuOpen, setSubmenuOpen] = useState(false);
 
-  // دالة مساعدة لعرض النص
   const getDisplayText = (menuItem: any) => {
     if (menuItem.isDynamic) {
       return menuItem.label;
@@ -24,7 +23,7 @@ const MobileHeaderLink: React.FC<{ item: HeaderItem }> = ({ item }) => {
 
   const handleNavigate = () => {
     router.push(item.href);
-  }
+  };
 
   const path = usePathname();
 
@@ -32,7 +31,9 @@ const MobileHeaderLink: React.FC<{ item: HeaderItem }> = ({ item }) => {
     <div className="relative w-full">
       <button
         onClick={item.submenu ? handleToggle : handleNavigate}
-        className={`flex items-center justify-between w-full py-2 text-black dark:text-white focus:outline-none ${path == item.href ? '!text-primary' : null} ${path.startsWith(`/${item.label.toLowerCase()}`) ? '!text-primary' : null}`}
+        className={`flex items-center justify-between w-full py-2 text-black dark:text-white focus:outline-none transition-colors duration-150 ${
+          path === item.href ? '!text-primary' : null
+        } ${path.startsWith(`/${item.label.toLowerCase()}`) ? '!text-primary' : null}`}
       >
         {getDisplayText(item)}
         {item.submenu && (
@@ -42,9 +43,17 @@ const MobileHeaderLink: React.FC<{ item: HeaderItem }> = ({ item }) => {
         )}
       </button>
       {submenuOpen && item.submenu && (
-        <div className="bg-white dark:bg-darkmode p-2 w-full">
+        <div className="bg-white dark:bg-dark_input rounded-lg p-2 w-full border border-gray-100 dark:border-dark_border mt-1">
           {item.submenu.map((subItem, index) => (
-            <Link key={index} href={subItem.href} className="block py-2 text-gray-500 ">
+            <Link
+              key={index}
+              href={subItem.href}
+              className={`block py-2 px-3 rounded-md text-sm transition-colors duration-150 ${
+                path === subItem.href
+                  ? 'text-primary font-medium'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover hover:text-primary'
+              }`}
+            >
               {getDisplayText(subItem)}
             </Link>
           ))}

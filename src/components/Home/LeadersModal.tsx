@@ -2,7 +2,7 @@
 import React from "react";
 import Modal from "@/components/Common/Modal";
 import { useI18n } from "@/i18n/I18nProvider";
-import { Project } from "./YoungStars"; // استيراد النوع من الملف الرئيسي
+import { Project } from "./YoungStars";
 
 export default function LeadersModal({
   open,
@@ -17,7 +17,6 @@ export default function LeadersModal({
 }) {
   const { t } = useI18n();
 
- 
   const leadersMap = new Map();
   for (const p of projects) {
     const key = p.student?.id || p.student?.email || p._id;
@@ -43,7 +42,7 @@ export default function LeadersModal({
             <button
               key={p._id}
               onClick={() => onSelect(p)}
-              className="group relative bg-white dark:bg-darkmode rounded-2xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 p-4 text-left border border-transparent hover:border-primary/30"
+              className="group relative bg-white dark:bg-darkmode rounded-2xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 p-4 text-left border border-secondary/10 hover:border-primary/30"
             >
               {/* صورة القائد */}
               <div className="relative w-full aspect-square overflow-hidden rounded-xl mb-3">
@@ -52,7 +51,7 @@ export default function LeadersModal({
                   alt={p.title || "leader"}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-secondary/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </div>
 
               {/* تفاصيل القائد */}
@@ -66,7 +65,7 @@ export default function LeadersModal({
               </div>
 
               {/* زر عرض المشروع عند Hover */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 rounded-2xl transition-opacity duration-300">
+              <div className="absolute inset-0 flex items-center justify-center bg-secondary/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 rounded-2xl transition-opacity duration-300">
                 <span className="bg-primary text-white px-4 py-2 rounded-xl font-medium shadow-lg">
                   {t("youngStars.viewProject")}
                 </span>

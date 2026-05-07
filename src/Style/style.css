@@ -1,46 +1,67 @@
-.thumb .slick-list .slick-track{
-    @apply !flex !items-center !gap-5;
+.thumb .slick-list .slick-track {
+  @apply !flex !items-center !gap-5;
 }
-.thumb .slick-next:before, .thumb .slick-prev:before{
-    @apply text-primary;
+
+/* ── Slick Arrows ── */
+.thumb .slick-next:before,
+.thumb .slick-prev:before {
+  @apply text-[#ff6700];
 }
-.upcoming .slick-next:before, .upcoming .slick-prev:before{
-    @apply text-primary;
+.upcoming .slick-next:before,
+.upcoming .slick-prev:before {
+  @apply text-[#ff6700];
 }
-.slick-dots li.slick-active button:before{
-    @apply !text-primary;
+
+/* ── Slick Dots ── */
+.slick-dots li.slick-active button:before {
+  @apply !text-[#ff6700];
 }
-.slick-dots li button:before{
-    @apply !text-base;
+.slick-dots li button:before {
+  @apply !text-base;
 }
-.slick-dots li button:before{
-    @apply !text-blue-700;
+.slick-dots li button:before {
+  @apply !text-[#004d59];
 }
-/*  */
-.year_slider .slick-list{
-    padding: 0px 15% 0 0 !important;
+
+/* ── Year Slider ── */
+.year_slider .slick-list {
+  padding: 0px 15% 0 0 !important;
 }
-.upcoming .slick-slide{
-    @apply px-2;
+
+/* ── Upcoming Slider ── */
+.upcoming .slick-slide {
+  @apply px-2;
 }
-.testimonial .slick-prev{
-    @apply left-[90%];
+
+/* ── Testimonial Slider ── */
+.testimonial .slick-prev {
+  @apply left-[90%];
 }
-.testimonial .slick-next{
-    @apply left-[95%];
+.testimonial .slick-next {
+  @apply left-[95%];
 }
-.testimonial .slick-prev, .testimonial .slick-next{
-    @apply top-[28%];
+.testimonial .slick-prev,
+.testimonial .slick-next {
+  @apply top-[28%];
 }
-.testimonial .slick-prev:before, .testimonial .slick-next:before{
-    @apply text-[32px] leading-[2.5rem] text-primary dark:text-white lg:inline-block hidden;
+.testimonial .slick-prev:before,
+.testimonial .slick-next:before {
+  @apply text-[32px] leading-[2.5rem] text-[#ff6700] dark:text-[#feaf00] lg:inline-block hidden;
 }
-.testimonial .slick-prev, .testimonial .slick-next {
-    @apply z-10;
+.testimonial .slick-prev,
+.testimonial .slick-next {
+  @apply z-10;
 }
-.upcoming .slick-next:before, .upcoming .slick-prev:before, .thumb .slick-next:before, .thumb .slick-prev:before{
-    @apply lg:inline-block hidden;
+
+/* ── Hide on Mobile ── */
+.upcoming .slick-next:before,
+.upcoming .slick-prev:before,
+.thumb .slick-next:before,
+.thumb .slick-prev:before {
+  @apply lg:inline-block hidden;
 }
+
+/* ── Scrollbar Hide ── */
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -48,6 +69,8 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ── Animations ── */
 @keyframes fadeZoomIn {
   0% {
     opacity: 0;
@@ -57,4 +80,44 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes slideInRight {
+  0% {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.animate-fade-zoom-in {
+  animation: fadeZoomIn 0.4s ease-out forwards;
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out forwards;
+}
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s ease-out forwards;
+}
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
 }

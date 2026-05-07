@@ -59,9 +59,11 @@ export default function GroupsAdmin() {
         groupId: null
     });
 
+    // ✅ أضفنا selectedLinkIds للـ pendingActivation
     const [pendingActivation, setPendingActivation] = useState({
         forceActivate: false,
-        releaseReserved: false
+        releaseReserved: false,
+        selectedLinkIds: [],
     });
 
     const [addStudentsModalOpen, setAddStudentsModalOpen] = useState(false);
@@ -142,18 +144,13 @@ export default function GroupsAdmin() {
     };
 
     const onViewDetails = (groupId) => {
-        console.log(`📋 Opening details for group: ${groupId}`);
-        setViewDetailsModal({
-            open: true,
-            groupId: groupId
-        });
+        setViewDetailsModal({ open: true, groupId });
     };
 
     const onView = async (id) => {
         try {
             const res = await fetch(`/api/groups/${id}`);
             const json = await res.json();
-
             if (json.success) {
                 setEditingGroup(json.data);
                 setModalOpen(true);
@@ -208,12 +205,8 @@ export default function GroupsAdmin() {
 
         document.getElementById('confirmDelete').onclick = async () => {
             const loadingToast = toast.loading(t("groups.delete.loading"), { position: 'top-center' });
-            
             try {
-                const res = await fetch(`/api/groups/${id}`, {
-                    method: "DELETE",
-                });
-
+                const res = await fetch(`/api/groups/${id}`, { method: "DELETE" });
                 if (res.ok) {
                     await loadGroups();
                     toast.success(t("groups.delete.success"), { id: loadingToast, position: 'top-center' });
@@ -230,28 +223,26 @@ export default function GroupsAdmin() {
         };
 
         confirmationModal.onclick = (e) => {
-            if (e.target === confirmationModal) {
-                document.body.removeChild(confirmationModal);
-            }
+            if (e.target === confirmationModal) document.body.removeChild(confirmationModal);
         };
     };
 
     const onActivateWithNotification = async (groupId) => {
-        console.log(`📂 Starting activation flow for group: ${groupId}`);
-
         if (!groupId) {
             toast.error(t("groups.activate.invalidId"), { position: 'top-center' });
             return;
         }
-
         setMeetingLinksModal({ open: true, groupId });
     };
 
-    const onMeetingLinksCheckConfirmed = async (forceActivate, releaseReserved) => {
+    // ✅ استقبل selectedLinkIds من المودال
+    const onMeetingLinksCheckConfirmed = async (forceActivate, releaseReserved, selectedLinkIds = []) => {
         const groupId = meetingLinksModal.groupId;
         
         setMeetingLinksModal({ open: false, groupId: null });
-        setPendingActivation({ forceActivate, releaseReserved });
+
+        // ✅ خزّن selectedLinkIds في الـ state
+        setPendingActivation({ forceActivate, releaseReserved, selectedLinkIds });
 
         try {
             const res = await fetch(`/api/groups/${groupId}`, {
@@ -259,9 +250,7 @@ export default function GroupsAdmin() {
                 headers: { 'Cache-Control': 'no-cache' }
             });
 
-            if (!res.ok) {
-                throw new Error(`Failed to fetch group: ${res.status}`);
-            }
+            if (!res.ok) throw new Error(`Failed to fetch group: ${res.status}`);
 
             const json = await res.json();
 
@@ -296,8 +285,10 @@ export default function GroupsAdmin() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     instructorMessages,
-                    forceActivate: pendingActivation.forceActivate,
+                    forceActivate:   pendingActivation.forceActivate,
                     releaseReserved: pendingActivation.releaseReserved,
+                    // ✅ أرسل الـ IDs المختارة للـ API
+                    selectedLinkIds: pendingActivation.selectedLinkIds,
                 })
             });
 
@@ -307,7 +298,7 @@ export default function GroupsAdmin() {
                 await loadGroups();
                 toast.success(t("groups.activate.success"), { id: loadingToast, position: 'top-center' });
                 setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
-                setPendingActivation({ forceActivate: false, releaseReserved: false });
+                setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [] });
             } else {
                 toast.error(result.error || t("groups.activate.failed"), { id: loadingToast, position: 'top-center' });
             }
@@ -324,21 +315,21 @@ export default function GroupsAdmin() {
 
     const getStatusColor = (status) => {
         switch (status) {
-            case 'active': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-            case 'draft': return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+            case 'active':    return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+            case 'draft':     return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
             case 'completed': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
             case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-            default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+            default:          return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
         }
     };
 
     const getStatusLabel = (status) => {
         switch (status) {
-            case 'active': return t("groups.status.active");
-            case 'draft': return t("groups.status.draft");
+            case 'active':    return t("groups.status.active");
+            case 'draft':     return t("groups.status.draft");
             case 'completed': return t("groups.status.completed");
             case 'cancelled': return t("groups.status.cancelled");
-            default: return status;
+            default:          return status;
         }
     };
 
@@ -346,13 +337,9 @@ export default function GroupsAdmin() {
         if (!dateString) return 'N/A';
         try {
             return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
+                year: 'numeric', month: 'short', day: 'numeric'
             });
-        } catch {
-            return 'N/A';
-        }
+        } catch { return 'N/A'; }
     };
 
     if (loading && groups.length === 0) {
@@ -384,10 +371,7 @@ export default function GroupsAdmin() {
                         </div>
                     </div>
                     <button
-                        onClick={() => {
-                            setEditingGroup(null);
-                            setModalOpen(true);
-                        }}
+                        onClick={() => { setEditingGroup(null); setModalOpen(true); }}
                         className="bg-primary hover:bg-primary/90 text-white px-4 py-2.5 md:px-6 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 w-full md:w-auto justify-center"
                     >
                         <Plus className="w-4 h-4" />
@@ -398,75 +382,23 @@ export default function GroupsAdmin() {
 
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
-                <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase">
-                                {t("groups.stats.total")}
-                            </p>
-                            <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white">
-                                {stats.total}
-                            </p>
+                {[
+                    { label: t("groups.stats.total"),     value: stats.total,     icon: <Users className="w-8 h-8 md:w-10 md:h-10 text-primary" />,          color: "text-MidnightNavyText dark:text-white" },
+                    { label: t("groups.stats.active"),    value: stats.active,    icon: <CheckCircle className="w-8 h-8 md:w-10 md:h-10 text-green-600" />,  color: "text-green-600" },
+                    { label: t("groups.stats.draft"),     value: stats.draft,     icon: <AlertCircle className="w-8 h-8 md:w-10 md:h-10 text-gray-600" />,   color: "text-gray-600" },
+                    { label: t("groups.stats.completed"), value: stats.completed, icon: <Target className="w-8 h-8 md:w-10 md:h-10 text-blue-600" />,        color: "text-blue-600" },
+                    { label: t("groups.stats.cancelled"), value: stats.cancelled, icon: <XCircle className="w-8 h-8 md:w-10 md:h-10 text-red-600" />,        color: "text-red-600" },
+                ].map((stat) => (
+                    <div key={stat.label} className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase">{stat.label}</p>
+                                <p className={`text-lg md:text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+                            </div>
+                            {stat.icon}
                         </div>
-                        <Users className="w-8 h-8 md:w-10 md:h-10 text-primary" />
                     </div>
-                </div>
-
-                <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase">
-                                {t("groups.stats.active")}
-                            </p>
-                            <p className="text-lg md:text-2xl font-bold text-green-600">
-                                {stats.active}
-                            </p>
-                        </div>
-                        <CheckCircle className="w-8 h-8 md:w-10 md:h-10 text-green-600" />
-                    </div>
-                </div>
-
-                <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase">
-                                {t("groups.stats.draft")}
-                            </p>
-                            <p className="text-lg md:text-2xl font-bold text-gray-600">
-                                {stats.draft}
-                            </p>
-                        </div>
-                        <AlertCircle className="w-8 h-8 md:w-10 md:h-10 text-gray-600" />
-                    </div>
-                </div>
-
-                <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase">
-                                {t("groups.stats.completed")}
-                            </p>
-                            <p className="text-lg md:text-2xl font-bold text-blue-600">
-                                {stats.completed}
-                            </p>
-                        </div>
-                        <Target className="w-8 h-8 md:w-10 md:h-10 text-blue-600" />
-                    </div>
-                </div>
-
-                <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase">
-                                {t("groups.stats.cancelled")}
-                            </p>
-                            <p className="text-lg md:text-2xl font-bold text-red-600">
-                                {stats.cancelled}
-                            </p>
-                        </div>
-                        <XCircle className="w-8 h-8 md:w-10 md:h-10 text-red-600" />
-                    </div>
-                </div>
+                ))}
             </div>
 
             {/* Filters */}
@@ -484,7 +416,6 @@ export default function GroupsAdmin() {
                             />
                         </div>
                     </div>
-
                     <div className="flex flex-wrap gap-2">
                         <select
                             value={filters.status}
@@ -497,7 +428,6 @@ export default function GroupsAdmin() {
                             <option value="completed">{t("groups.status.completed")}</option>
                             <option value="cancelled">{t("groups.status.cancelled")}</option>
                         </select>
-
                         <button
                             onClick={() => loadGroups()}
                             className="px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg flex items-center gap-2 text-sm"
@@ -515,44 +445,23 @@ export default function GroupsAdmin() {
                     <table className="min-w-full divide-y divide-PowderBlueBorder dark:divide-dark_border">
                         <thead className="bg-gray-50 dark:bg-dark_input">
                             <tr>
-                                <th className="py-3 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    {t("groups.table.group")}
-                                </th>
-                                <th className="py-3 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    {t("groups.table.course")}
-                                </th>
-                                <th className="py-3 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    {t("groups.table.status")}
-                                </th>
-                                <th className="py-3 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    {t("groups.table.students")}
-                                </th>
-                                <th className="py-3 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    {t("groups.table.sessions")}
-                                </th>
-                                <th className="py-3 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">
-                                    {t("groups.table.actions")}
-                                </th>
+                                {[t("groups.table.group"), t("groups.table.course"), t("groups.table.status"),
+                                  t("groups.table.students"), t("groups.table.sessions"), t("groups.table.actions")].map((h) => (
+                                    <th key={h} className="py-3 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">{h}</th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-PowderBlueBorder dark:divide-dark_border">
                             {groups.map((group) => (
                                 <tr key={group.id} className="hover:bg-gray-50 dark:hover:bg-dark_input transition-colors">
                                     <td className="py-3 px-4">
-                                        <div>
-                                            <p className="font-medium text-sm text-MidnightNavyText dark:text-white">
-                                                {group.name}
-                                            </p>
-                                            <p className="text-xs text-SlateBlueText dark:text-darktext flex items-center gap-1">
-                                                <Hash className="w-3 h-3" />
-                                                {group.code}
-                                            </p>
-                                        </div>
+                                        <p className="font-medium text-sm text-MidnightNavyText dark:text-white">{group.name}</p>
+                                        <p className="text-xs text-SlateBlueText dark:text-darktext flex items-center gap-1">
+                                            <Hash className="w-3 h-3" />{group.code}
+                                        </p>
                                     </td>
                                     <td className="py-3 px-4">
-                                        <p className="text-sm text-MidnightNavyText dark:text-white">
-                                            {group.course?.title || 'N/A'}
-                                        </p>
+                                        <p className="text-sm text-MidnightNavyText dark:text-white">{group.course?.title || 'N/A'}</p>
                                     </td>
                                     <td className="py-3 px-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(group.status)}`}>
@@ -562,76 +471,42 @@ export default function GroupsAdmin() {
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-2">
                                             <Users className="w-4 h-4 text-gray-400" />
-                                            <span className="text-sm">
-                                                {group.studentsCount}/{group.maxStudents}
-                                            </span>
+                                            <span className="text-sm">{group.studentsCount}/{group.maxStudents}</span>
                                         </div>
                                     </td>
                                     <td className="py-3 px-4">
-                                        <div className="text-sm">
-                                            {group.sessionsGenerated ? (
-                                                <span className="text-green-600 flex items-center gap-1">
-                                                    <CheckCircle className="w-3 h-3" />
-                                                    {group.totalSessions}
-                                                </span>
-                                            ) : (
-                                                <span className="text-gray-400">{t("groups.sessions.notGenerated")}</span>
-                                            )}
-                                        </div>
+                                        {group.sessionsGenerated ? (
+                                            <span className="text-green-600 flex items-center gap-1 text-sm">
+                                                <CheckCircle className="w-3 h-3" />{group.totalSessions}
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-400 text-sm">{t("groups.sessions.notGenerated")}</span>
+                                        )}
                                     </td>
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={() => onViewDetails(group.id)}
-                                                className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
-                                                title={t("groups.actions.viewDetails")}
-                                            >
+                                            <button onClick={() => onViewDetails(group.id)} className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors" title={t("groups.actions.viewDetails")}>
                                                 <Info className="w-4 h-4 text-blue-600" />
                                             </button>
-                                            
                                             {group.status === 'draft' && (
-                                                <button
-                                                    onClick={() => onActivateWithNotification(group.id)}
-                                                    className="p-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors"
-                                                    title={t("groups.actions.activate")}
-                                                >
+                                                <button onClick={() => onActivateWithNotification(group.id)} className="p-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors" title={t("groups.actions.activate")}>
                                                     <PlayCircle className="w-4 h-4 text-green-600" />
                                                 </button>
                                             )}
-                                            
                                             {group.status === 'active' && !group.isFull && (
-                                                <button
-                                                    onClick={() => onAddStudents(group.id)}
-                                                    className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
-                                                    title={t("groups.actions.addStudents")}
-                                                >
+                                                <button onClick={() => onAddStudents(group.id)} className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors" title={t("groups.actions.addStudents")}>
                                                     <UserPlus className="w-4 h-4 text-blue-600" />
                                                 </button>
                                             )}
-                                            
                                             {group.sessionsGenerated && (
-                                                <button
-                                                    onClick={() => router.push(`/admin/sessions?groupId=${group.id}`)}
-                                                    className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors"
-                                                    title={t("groups.actions.viewSessions")}
-                                                >
+                                                <button onClick={() => router.push(`/admin/sessions?groupId=${group.id}`)} className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors" title={t("groups.actions.viewSessions")}>
                                                     <Calendar className="w-4 h-4 text-purple-600" />
                                                 </button>
                                             )}
-                                            
-                                            <button
-                                                onClick={() => onEdit(group)}
-                                                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                                                title={t("groups.actions.edit")}
-                                            >
+                                            <button onClick={() => onEdit(group)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title={t("groups.actions.edit")}>
                                                 <Edit className="w-4 h-4 text-primary" />
                                             </button>
-                                            
-                                            <button
-                                                onClick={() => onDelete(group.id, group.name)}
-                                                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                                                title={t("groups.actions.delete")}
-                                            >
+                                            <button onClick={() => onDelete(group.id, group.name)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title={t("groups.actions.delete")}>
                                                 <Trash2 className="w-4 h-4 text-red-600" />
                                             </button>
                                         </div>
@@ -642,23 +517,17 @@ export default function GroupsAdmin() {
                     </table>
                 </div>
 
-                {/* Empty State */}
                 {groups.length === 0 && !loading && (
                     <div className="text-center py-12 px-4">
                         <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-bold mb-2">{t("groups.empty.title")}</h3>
                         <p className="text-sm text-gray-500 mb-6">{t("groups.empty.description")}</p>
-                        <button
-                            onClick={() => setModalOpen(true)}
-                            className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold flex items-center gap-2 mx-auto"
-                        >
-                            <Plus className="w-4 h-4" />
-                            {t("groups.empty.button")}
+                        <button onClick={() => setModalOpen(true)} className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold flex items-center gap-2 mx-auto">
+                            <Plus className="w-4 h-4" />{t("groups.empty.button")}
                         </button>
                     </div>
                 )}
 
-                {/* Pagination */}
                 {pagination.totalPages > 1 && (
                     <div className="px-4 py-3 border-t border-PowderBlueBorder dark:border-dark_border">
                         <div className="flex items-center justify-between">
@@ -669,39 +538,13 @@ export default function GroupsAdmin() {
                                     .replace("{total}", pagination.total.toString())}
                             </div>
                             <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => handleFilterChange('page', 1)}
-                                    disabled={pagination.page === 1}
-                                    className="p-2 border rounded disabled:opacity-50"
-                                >
-                                    <ChevronsRight className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => handleFilterChange('page', pagination.page - 1)}
-                                    disabled={pagination.page === 1}
-                                    className="p-2 border rounded disabled:opacity-50"
-                                >
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
+                                <button onClick={() => handleFilterChange('page', 1)} disabled={pagination.page === 1} className="p-2 border rounded disabled:opacity-50"><ChevronsRight className="w-4 h-4" /></button>
+                                <button onClick={() => handleFilterChange('page', pagination.page - 1)} disabled={pagination.page === 1} className="p-2 border rounded disabled:opacity-50"><ChevronRight className="w-4 h-4" /></button>
                                 <span className="px-3 py-1 text-sm">
-                                    {t("groups.pagination.page")
-                                        .replace("{page}", pagination.page.toString())
-                                        .replace("{pages}", pagination.totalPages.toString())}
+                                    {t("groups.pagination.page").replace("{page}", pagination.page.toString()).replace("{pages}", pagination.totalPages.toString())}
                                 </span>
-                                <button
-                                    onClick={() => handleFilterChange('page', pagination.page + 1)}
-                                    disabled={pagination.page === pagination.totalPages}
-                                    className="p-2 border rounded disabled:opacity-50"
-                                >
-                                    <ChevronLeft className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => handleFilterChange('page', pagination.totalPages)}
-                                    disabled={pagination.page === pagination.totalPages}
-                                    className="p-2 border rounded disabled:opacity-50"
-                                >
-                                    <ChevronsLeft className="w-4 h-4" />
-                                </button>
+                                <button onClick={() => handleFilterChange('page', pagination.page + 1)} disabled={pagination.page === pagination.totalPages} className="p-2 border rounded disabled:opacity-50"><ChevronLeft className="w-4 h-4" /></button>
+                                <button onClick={() => handleFilterChange('page', pagination.totalPages)} disabled={pagination.page === pagination.totalPages} className="p-2 border rounded disabled:opacity-50"><ChevronsLeft className="w-4 h-4" /></button>
                             </div>
                         </div>
                     </div>
@@ -709,64 +552,18 @@ export default function GroupsAdmin() {
             </div>
 
             {/* Modals */}
-            
-            {/* Group Form Modal */}
-            <Modal
-                open={modalOpen}
-                title={editingGroup ? t("groups.edit") : t("groups.createNew")}
-                onClose={() => {
-                    setModalOpen(false);
-                    setEditingGroup(null);
-                }}
-                size="xl"
-            >
-                <GroupForm
-                    initial={editingGroup}
-                    onClose={() => {
-                        setModalOpen(false);
-                        setEditingGroup(null);
-                    }}
-                    onSaved={onSaved}
-                />
+            <Modal open={modalOpen} title={editingGroup ? t("groups.edit") : t("groups.createNew")} onClose={() => { setModalOpen(false); setEditingGroup(null); }} size="xl">
+                <GroupForm initial={editingGroup} onClose={() => { setModalOpen(false); setEditingGroup(null); }} onSaved={onSaved} />
             </Modal>
 
-            {/* Group Details Modal */}
-            <Modal
-                open={viewDetailsModal.open}
-                title="" 
-                onClose={() => setViewDetailsModal({ open: false, groupId: null })}
-                size="full"
-            >
-                <GroupDetailsPage
-                    groupId={viewDetailsModal.groupId}
-                    onClose={() => {
-                        setViewDetailsModal({ open: false, groupId: null });
-                        loadGroups();
-                    }}
-                />
+            <Modal open={viewDetailsModal.open} title="" onClose={() => setViewDetailsModal({ open: false, groupId: null })} size="full">
+                <GroupDetailsPage groupId={viewDetailsModal.groupId} onClose={() => { setViewDetailsModal({ open: false, groupId: null }); loadGroups(); }} />
             </Modal>
 
-            {/* Add Students Modal */}
-            <Modal
-                open={addStudentsModalOpen}
-                title={t("groups.actions.addStudents")}
-                onClose={() => {
-                    setAddStudentsModalOpen(false);
-                    setSelectedGroupForStudents(null);
-                }}
-                size="xl"
-            >
-                <AddStudentsToGroup
-                    groupId={selectedGroupForStudents}
-                    onClose={() => {
-                        setAddStudentsModalOpen(false);
-                        setSelectedGroupForStudents(null);
-                    }}
-                    onStudentAdded={() => loadGroups()}
-                />
+            <Modal open={addStudentsModalOpen} title={t("groups.actions.addStudents")} onClose={() => { setAddStudentsModalOpen(false); setSelectedGroupForStudents(null); }} size="xl">
+                <AddStudentsToGroup groupId={selectedGroupForStudents} onClose={() => { setAddStudentsModalOpen(false); setSelectedGroupForStudents(null); }} onStudentAdded={() => loadGroups()} />
             </Modal>
 
-            {/* Meeting Links Check Modal */}
             <MeetingLinksCheckModal
                 isOpen={meetingLinksModal.open}
                 groupId={meetingLinksModal.groupId}
@@ -774,13 +571,9 @@ export default function GroupsAdmin() {
                 onConfirm={onMeetingLinksCheckConfirmed}
             />
 
-            {/* Instructor Notification Modal */}
             <InstructorNotificationModal
                 isOpen={instructorNotificationModal.open}
-                onClose={() => {
-                    setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
-                    setPendingActivation({ forceActivate: false, releaseReserved: false });
-                }}
+                onClose={() => { setInstructorNotificationModal({ open: false, groupData: null, instructors: [] }); setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [] }); }}
                 instructors={instructorNotificationModal.instructors}
                 groupData={instructorNotificationModal.groupData}
                 onSendNotifications={handleActivateAndNotify}

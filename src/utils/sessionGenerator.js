@@ -303,18 +303,22 @@ async function assignMeetingLinkToSession(sessionData, userId) {
 /**
  * ✅ Generate sessions based on module selection
  */
-export async function generateSessionsForGroup(groupId, group, userId) {
+// ✅ الجزء المعدل فقط من sessionGenerator.js
+// غيّر signature الدالة وجزء الـ meeting links assignment
+
+// ─── قبل الكود القديم ───────────────────────────────────────────────────────
+// export async function generateSessionsForGroup(groupId, group, userId) {
+// ─── بعد التعديل ────────────────────────────────────────────────────────────
+
+export async function generateSessionsForGroup(groupId, group, userId, selectedLinkIds = []) {
   try {
-    console.log(
-      `\n🔄 ========== GENERATING SESSIONS (WITH MODULE SELECTION) ==========`
-    );
+    console.log(`\n🔄 ========== GENERATING SESSIONS (WITH MODULE SELECTION) ==========`);
     console.log(`Group ID: ${groupId}`);
     console.log(`Group Name: ${group.name}`);
     console.log(`Group Status: ${group.status}`);
+    console.log(`🔗 Selected Link IDs: ${selectedLinkIds.length > 0 ? selectedLinkIds.join(", ") : "none (no links)"}`);
 
-    if (!group) {
-      throw new Error("Group not found");
-    }
+    if (!group) throw new Error("Group not found");
 
     if (group.status !== "active") {
       throw new Error(`Group must be active. Current status: ${group.status}`);
@@ -322,11 +326,7 @@ export async function generateSessionsForGroup(groupId, group, userId) {
 
     if (group.sessionsGenerated) {
       console.log("⚠️ Sessions already generated for this group");
-      return {
-        success: false,
-        message: "Sessions already generated",
-        totalGenerated: 0,
-      };
+      return { success: false, message: "Sessions already generated", totalGenerated: 0 };
     }
 
     const course = group.courseId;
@@ -334,116 +334,71 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       throw new Error("Course curriculum not found");
     }
 
-    // Get module selection
-    const moduleSelection = group.moduleSelection || { mode: 'all', selectedModules: [] };
+    const moduleSelection = group.moduleSelection || { mode: "all", selectedModules: [] };
     console.log(`📋 Module Selection Mode: ${moduleSelection.mode}`);
-    
-    if (moduleSelection.mode === 'specific') {
-      console.log(`  Selected Modules: ${moduleSelection.selectedModules.map(i => i + 1).join(', ')}`);
+
+    if (moduleSelection.mode === "specific") {
+      console.log(`  Selected Modules: ${moduleSelection.selectedModules.map((i) => i + 1).join(", ")}`);
     }
 
-    // Filter curriculum based on selection
     let modulesToGenerate = [];
-    if (moduleSelection.mode === 'all') {
+    if (moduleSelection.mode === "all") {
       modulesToGenerate = course.curriculum;
       console.log(`📚 Generating sessions for ALL ${modulesToGenerate.length} modules`);
     } else {
       modulesToGenerate = moduleSelection.selectedModules
-        .map(idx => course.curriculum[idx])
-        .filter(module => module !== undefined);
+        .map((idx) => course.curriculum[idx])
+        .filter((module) => module !== undefined);
       console.log(`📚 Generating sessions for ${modulesToGenerate.length} specific modules`);
     }
 
-    if (modulesToGenerate.length === 0) {
-      throw new Error("No modules selected for session generation");
-    }
+    if (modulesToGenerate.length === 0) throw new Error("No modules selected for session generation");
 
     const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
 
     if (!startDate || !daysOfWeek || daysOfWeek.length === 0) {
-      throw new Error(
-        "Invalid schedule: Must have start date and at least 1 selected day"
-      );
+      throw new Error("Invalid schedule: Must have start date and at least 1 selected day");
     }
 
     console.log("📅 Schedule configuration:", {
       startDate: new Date(startDate).toISOString().split("T")[0],
-      daysOfWeek: daysOfWeek,
-      daysPerWeek: daysOfWeek.length,
-      timeFrom: timeFrom,
-      timeTo: timeTo,
+      daysOfWeek, daysPerWeek: daysOfWeek.length, timeFrom, timeTo,
     });
 
-    // Validate schedule days
     const scheduleValidation = validateScheduleDays(startDate, daysOfWeek);
-    if (!scheduleValidation.valid) {
-      throw new Error(scheduleValidation.error);
-    }
+    if (!scheduleValidation.valid) throw new Error(scheduleValidation.error);
 
-    console.log(
-      `✅ Schedule validated. Start day: ${scheduleValidation.startDayName}, Days per week: ${scheduleValidation.daysCount}`
-    );
+    console.log(`✅ Schedule validated. Start day: ${scheduleValidation.startDayName}, Days per week: ${scheduleValidation.daysCount}`);
 
-    // Calculate total sessions needed (only for selected modules)
     let totalSessions = 0;
-    modulesToGenerate.forEach((module) => {
-      totalSessions += module.totalSessions || 3;
-    });
-
+    modulesToGenerate.forEach((module) => { totalSessions += module.totalSessions || 3; });
     console.log(`📊 Total sessions to generate: ${totalSessions}`);
 
-    // Create flexible weekly schedule
-    const sessionDates = createFlexibleWeeklySchedule(
-      startDate,
-      daysOfWeek,
-      totalSessions
-    );
-
-    if (sessionDates.length === 0) {
-      throw new Error("Failed to create session dates");
-    }
-
+    const sessionDates = createFlexibleWeeklySchedule(startDate, daysOfWeek, totalSessions);
+    if (sessionDates.length === 0) throw new Error("Failed to create session dates");
     console.log(`\n📊 Generated ${sessionDates.length} session dates`);
 
-    // Generate sessions
+    // ── Build session objects ─────────────────────────────────────────────
     const sessions = [];
     let sessionIndex = 0;
 
     for (let moduleIdx = 0; moduleIdx < modulesToGenerate.length; moduleIdx++) {
-      const originalModuleIndex = moduleSelection.mode === 'all' 
-        ? moduleIdx 
+      const originalModuleIndex = moduleSelection.mode === "all"
+        ? moduleIdx
         : moduleSelection.selectedModules[moduleIdx];
-      
-      const module = modulesToGenerate[moduleIdx];
 
+      const module = modulesToGenerate[moduleIdx];
       console.log(`\n📖 Processing Module ${originalModuleIndex + 1}: ${module.title}`);
 
       if (!module.lessons || module.lessons.length !== 6) {
-        console.warn(
-          `⚠️ Module ${originalModuleIndex + 1} must have exactly 6 lessons (has ${module.lessons?.length || 0})`
-        );
+        console.warn(`⚠️ Module ${originalModuleIndex + 1} must have exactly 6 lessons (has ${module.lessons?.length || 0})`);
         continue;
       }
 
       const sessionGroups = [
-        {
-          sessionNumber: 1,
-          lessonIndexes: [0, 1],
-          lessonNumbers: "1-2",
-          lessons: [module.lessons[0], module.lessons[1]],
-        },
-        {
-          sessionNumber: 2,
-          lessonIndexes: [2, 3],
-          lessonNumbers: "3-4",
-          lessons: [module.lessons[2], module.lessons[3]],
-        },
-        {
-          sessionNumber: 3,
-          lessonIndexes: [4, 5],
-          lessonNumbers: "5-6",
-          lessons: [module.lessons[4], module.lessons[5]],
-        },
+        { sessionNumber: 1, lessonIndexes: [0, 1], lessonNumbers: "1-2", lessons: [module.lessons[0], module.lessons[1]] },
+        { sessionNumber: 2, lessonIndexes: [2, 3], lessonNumbers: "3-4", lessons: [module.lessons[2], module.lessons[3]] },
+        { sessionNumber: 3, lessonIndexes: [4, 5], lessonNumbers: "5-6", lessons: [module.lessons[4], module.lessons[5]] },
       ];
 
       for (const sessionGroup of sessionGroups) {
@@ -453,10 +408,10 @@ export async function generateSessionsForGroup(groupId, group, userId) {
         }
 
         const scheduledDate = sessionDates[sessionIndex];
-        const lessonTitles = sessionGroup.lessons.map((l) => l.title).join(" & ");
-        const sessionTitle = `${module.title} - Session ${sessionGroup.sessionNumber}: ${lessonTitles}`;
+        const lessonTitles  = sessionGroup.lessons.map((l) => l.title).join(" & ");
+        const sessionTitle  = `${module.title} - Session ${sessionGroup.sessionNumber}: ${lessonTitles}`;
 
-        const session = {
+        sessions.push({
           _id: new mongoose.Types.ObjectId(),
           groupId: group._id,
           courseId: course._id,
@@ -465,7 +420,7 @@ export async function generateSessionsForGroup(groupId, group, userId) {
           lessonIndexes: sessionGroup.lessonIndexes,
           title: sessionTitle,
           description: `Covers Lessons ${sessionGroup.lessonNumbers}`,
-          scheduledDate: scheduledDate,
+          scheduledDate,
           startTime: timeFrom,
           endTime: timeTo,
           status: "scheduled",
@@ -484,17 +439,12 @@ export async function generateSessionsForGroup(groupId, group, userId) {
             updatedAt: new Date(),
           },
           isDeleted: false,
-        };
+        });
 
-        sessions.push(session);
         sessionIndex++;
 
-        console.log(
-          `  ✅ Session ${sessionGroup.sessionNumber} (Lessons ${sessionGroup.lessonNumbers})`
-        );
-        console.log(
-          `    📅 ${scheduledDate.toISOString().split("T")[0]} (${getDayName(scheduledDate.getDay())})`
-        );
+        console.log(`  ✅ Session ${sessionGroup.sessionNumber} (Lessons ${sessionGroup.lessonNumbers})`);
+        console.log(`    📅 ${scheduledDate.toISOString().split("T")[0]} (${getDayName(scheduledDate.getDay())})`);
         console.log(`    🕐 ${timeFrom} - ${timeTo}`);
         console.log(`    📚 ${lessonTitles}`);
       }
@@ -502,53 +452,78 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       console.log(`  📊 Created 3 sessions for module ${originalModuleIndex + 1}`);
     }
 
-    console.log(`\n📊 Generation Summary:`);
-    console.log(`  Total Modules Processed: ${modulesToGenerate.length}`);
-    console.log(`  Total Sessions Generated: ${sessions.length}`);
-    console.log(`  Days per Week: ${daysOfWeek.length}`);
-    console.log(`  Selected Days: ${daysOfWeek.join(', ')}`);
-    console.log(`  Module Selection Mode: ${moduleSelection.mode}`);
-    if (moduleSelection.mode === 'specific') {
-      console.log(`  Selected Module Numbers: ${moduleSelection.selectedModules.map(i => i + 1).join(', ')}`);
-    }
-
-    // Assign meeting links to sessions
+    // ── ✅ Assign meeting links (modulo — no reservation) ─────────────────
     console.log(`\n🔗 Assigning meeting links to sessions...`);
+
+    let allAvailableLinks = [];
+
+    if (selectedLinkIds.length > 0) {
+      // جيب فقط اللينكات التي اختارها المستخدم بالترتيب
+      allAvailableLinks = await MeetingLink.find({
+        _id: { $in: selectedLinkIds },
+        isDeleted: false,
+      }).lean();
+
+      // رتّبهم بنفس ترتيب اختيار المستخدم
+      allAvailableLinks.sort(
+        (a, b) =>
+          selectedLinkIds.indexOf(a._id.toString()) -
+          selectedLinkIds.indexOf(b._id.toString()),
+      );
+
+      console.log(`📋 Using ${allAvailableLinks.length} user-selected meeting links`);
+    } else {
+      console.log(`📋 No links selected — sessions will have no meeting links`);
+    }
 
     const sessionsWithLinks = [];
     let linksAssigned = 0;
-    let linksFailed = 0;
+    let linksFailed   = 0;
 
-    for (const session of sessions) {
-      try {
-        const sessionWithLink = await assignMeetingLinkToSession(session, userId);
-        sessionsWithLinks.push(sessionWithLink);
+    for (let i = 0; i < sessions.length; i++) {
+      const session = sessions[i];
 
-        if (sessionWithLink.meetingLink) {
-          linksAssigned++;
-        } else {
-          linksFailed++;
-        }
-      } catch (linkError) {
-        console.error(`  ❌ Failed to assign link: ${linkError.message}`);
+      if (allAvailableLinks.length === 0) {
+        // لا يوجد لينكات مختارة — السيشن بدون لينك
         sessionsWithLinks.push(session);
         linksFailed++;
+        continue;
       }
+
+      // ✅ توزيع دوري بالـ modulo
+      const link = allAvailableLinks[i % allAvailableLinks.length];
+
+      sessionsWithLinks.push({
+        ...session,
+        meetingLink: link.link,
+        meetingCredentials: {
+          username: link.credentials?.username,
+          password: link.credentials?.password,
+        },
+        meetingLinkId: link._id,
+        meetingPlatform: link.platform,
+        automationEvents: {
+          ...(session.automationEvents || {}),
+          meetingLinkAssigned: true,
+          meetingLinkAssignedAt: new Date(),
+        },
+      });
+
+      linksAssigned++;
     }
 
     console.log(`\n🔗 Meeting Link Assignment Summary:`);
-    console.log(`  Total Sessions: ${sessions.length}`);
-    console.log(`  Links Assigned: ${linksAssigned}`);
-    console.log(`  Links Failed: ${linksFailed}`);
+    console.log(`  Total Sessions:  ${sessions.length}`);
+    console.log(`  Links Assigned:  ${linksAssigned}`);
+    console.log(`  Links Failed:    ${linksFailed}`);
 
-    // Analyze day distribution
+    // ── Day distribution analysis ─────────────────────────────────────────
     const dayDistribution = {};
     const dateSet = new Set();
 
     sessionsWithLinks.forEach((session) => {
       const dayName = getDayName(new Date(session.scheduledDate).getDay());
       const dateStr = session.scheduledDate.toISOString().split("T")[0];
-
       dayDistribution[dayName] = (dayDistribution[dayName] || 0) + 1;
       dateSet.add(dateStr);
     });
@@ -557,16 +532,11 @@ export async function generateSessionsForGroup(groupId, group, userId) {
     Object.entries(dayDistribution).forEach(([day, count]) => {
       console.log(`  ${day}: ${count} session(s)`);
     });
-
     console.log(`\n📅 Unique Dates Used: ${dateSet.size}`);
 
     if (sessionsWithLinks.length > 0) {
-      console.log(
-        `  Start Date: ${sessionsWithLinks[0].scheduledDate.toISOString().split("T")[0]}`
-      );
-      console.log(
-        `  End Date: ${sessionsWithLinks[sessionsWithLinks.length - 1].scheduledDate.toISOString().split("T")[0]}`
-      );
+      console.log(`  Start Date: ${sessionsWithLinks[0].scheduledDate.toISOString().split("T")[0]}`);
+      console.log(`  End Date:   ${sessionsWithLinks[sessionsWithLinks.length - 1].scheduledDate.toISOString().split("T")[0]}`);
     }
 
     console.log(`\n✅ Session Generation Completed Successfully!`);
@@ -581,11 +551,8 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       distribution: dayDistribution,
       uniqueDates: Array.from(dateSet).sort(),
       schedule: {
-        daysOfWeek: daysOfWeek,
-        daysPerWeek: daysOfWeek.length,
-        startDate: new Date(startDate),
-        timeFrom: timeFrom,
-        timeTo: timeTo,
+        daysOfWeek, daysPerWeek: daysOfWeek.length,
+        startDate: new Date(startDate), timeFrom, timeTo,
       },
       moduleSelection: {
         mode: moduleSelection.mode,
@@ -594,16 +561,12 @@ export async function generateSessionsForGroup(groupId, group, userId) {
       },
       meetingLinks: {
         assigned: linksAssigned,
-        failed: linksFailed,
-        total: sessionsWithLinks.length,
+        failed:   linksFailed,
+        total:    sessionsWithLinks.length,
       },
     };
   } catch (error) {
     console.error("❌ Error generating sessions:", error);
-    console.error("❌ Error details:", {
-      message: error.message,
-      stack: error.stack,
-    });
     throw error;
   }
 }

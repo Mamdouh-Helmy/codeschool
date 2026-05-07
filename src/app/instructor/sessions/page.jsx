@@ -8,20 +8,16 @@ import InstructorSidebar from "../InstructorSidebar";
 import InstructorHeader from "../InstructorHeader";
 import {
   Calendar, Clock, CheckCircle, X, Play, Video,
-  AlertCircle, ChevronRight, ChevronLeft, BookOpen,
-  Users, Timer, FileText, Info, Search, Filter,
-  ClipboardList, TrendingUp, Layers, ExternalLink,
-  BarChart3, UserCheck, UserX, Loader2, RefreshCw,
-  Eye, Edit3, Plus, Lock, Unlock, ArrowRight,
-  ChevronDown, MoreHorizontal, Star, Zap,
+  AlertCircle, ChevronRight, BookOpen,
+  Users, Timer, FileText, Info, Search,
+  ClipboardList, ExternalLink,
+  BarChart3, UserCheck, Loader2, RefreshCw,
+  ChevronDown, Star, Zap,
   CalendarDays, ListFilter, GraduationCap, Globe,
   Presentation, FolderOpen, BookMarked,
+  Layers, Copy, Eye, EyeOff, Lock, User, Link2,
+  TrendingUp, Award, LayoutGrid,
 } from "lucide-react";
-
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const PRIMARY_GRAD = "from-primary to-purple-600";
-const PRIMARY_TEXT = "text-primary";
-const PRIMARY_BG   = "bg-primary";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtTime(t) {
@@ -30,48 +26,31 @@ function fmtTime(t) {
   const period = h >= 12 ? "PM" : "AM";
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${period}`;
 }
-
 function fmtTimeAr(t) {
   if (!t) return "";
   const [h, m] = t.split(":").map(Number);
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "م" : "ص"}`;
 }
-
 function fmtDateShort(d, isAr) {
   if (!d) return "";
-  return new Date(d).toLocaleDateString(isAr ? "ar-EG" : "en-US", {
-    month: "short", day: "numeric",
-  });
+  return new Date(d).toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "short", day: "numeric" });
 }
-
 function fmtDateFull(d, isAr) {
   if (!d) return "";
   return new Date(d).toLocaleDateString(isAr ? "ar-EG" : "en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 }
-
-function fmtDateKey(d) {
-  return new Date(d).toISOString().split("T")[0];
-}
-
+function fmtDateKey(d) { return new Date(d).toISOString().split("T")[0]; }
 function getAttendanceRate(session) {
   const total = session.attendance?.length || 0;
   if (!total) return null;
-  const present = session.attendance.filter(
-    (a) => a.status === "present" || a.status === "late"
-  ).length;
+  const present = session.attendance.filter(a => a.status === "present" || a.status === "late").length;
   return Math.round((present / total) * 100);
 }
-
-// ✅ FIX 1: Deduplicate lessons by title
 function deduplicateLessons(lessons = []) {
   const seen = new Set();
-  return lessons.filter((l) => {
-    if (seen.has(l.title)) return false;
-    seen.add(l.title);
-    return true;
-  });
+  return lessons.filter(l => { if (seen.has(l.title)) return false; seen.add(l.title); return true; });
 }
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -80,25 +59,25 @@ const STATUS_CFG = {
     labelEn: "Completed", labelAr: "مكتملة",
     dot: "bg-emerald-400",
     badge: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40",
-    icon: CheckCircle,
+    icon: CheckCircle, color: "emerald",
   },
   scheduled: {
     labelEn: "Scheduled", labelAr: "مجدولة",
-    dot: "bg-blue-400",
-    badge: "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40",
-    icon: Clock,
+    dot: "bg-[#004d59]",
+    badge: "bg-[#004d59]/10 dark:bg-[#004d59]/20 text-[#004d59] dark:text-teal-400 border border-[#004d59]/20 dark:border-[#004d59]/30",
+    icon: Clock, color: "teal",
   },
   cancelled: {
     labelEn: "Cancelled", labelAr: "ملغاة",
     dot: "bg-red-400",
     badge: "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/40",
-    icon: X,
+    icon: X, color: "red",
   },
   postponed: {
     labelEn: "Postponed", labelAr: "مؤجلة",
-    dot: "bg-amber-400",
-    badge: "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40",
-    icon: Clock,
+    dot: "bg-[#feaf00]",
+    badge: "bg-[#feaf00]/10 dark:bg-[#feaf00]/10 text-[#f67d00] dark:text-[#feaf00] border border-[#feaf00]/30 dark:border-[#feaf00]/20",
+    icon: Clock, color: "amber",
   },
 };
 
@@ -106,12 +85,11 @@ const STATUS_CFG = {
 function AnimatedCounter({ value, duration = 1200 }) {
   const [count, setCount] = useState(0);
   useEffect(() => {
-    let start; let frame;
+    let start, frame;
     const run = (ts) => {
       if (!start) start = ts;
       const p = Math.min((ts - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setCount(Math.floor(eased * value));
+      setCount(Math.floor((1 - Math.pow(1 - p, 3)) * value));
       if (p < 1) frame = requestAnimationFrame(run);
     };
     frame = requestAnimationFrame(run);
@@ -120,7 +98,153 @@ function AnimatedCounter({ value, duration = 1200 }) {
   return <span>{count}</span>;
 }
 
-// ─── Course Info Section (new) ────────────────────────────────────────────────
+// ─── Meeting Credentials Card ─────────────────────────────────────────────────
+function MeetingCredentials({ session, isAr }) {
+  const [showPass, setShowPass] = useState(false);
+  const [copied, setCopied] = useState(null);
+  const t = (ar, en) => isAr ? ar : en;
+
+  const copyToClipboard = (text, field) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(field);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  if (!session.meetingLink) return null;
+
+  const hasUsername = session.meetingCredentials?.username;
+  const hasPassword = session.meetingCredentials?.password;
+
+  return (
+    <div className="rounded-2xl overflow-hidden border border-[#ff6700]/30 dark:border-[#ff6700]/20 bg-gradient-to-br from-orange-50/80 to-amber-50/50 dark:from-[#ff6700]/5 dark:to-[#feaf00]/5">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#ff6700]/20 dark:border-[#ff6700]/10 bg-gradient-to-r from-[#ff6700]/10 to-transparent dark:from-[#ff6700]/10">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md">
+          <Video className="w-4 h-4 text-white" />
+        </div>
+        <div>
+          <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
+            {t("بيانات الجلسة", "Session Access")}
+          </span>
+          {session.meetingPlatform && (
+            <p className="text-[10px] text-[#ff6700] font-bold capitalize">{session.meetingPlatform}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {/* Meeting Link */}
+        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-[#161b22]/50 border border-gray-200/60 dark:border-[#30363d]/60">
+          <Link2 className="w-4 h-4 text-[#004d59] dark:text-[#ff6437] flex-shrink-0" />
+          <a
+            href={session.meetingLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 text-xs text-[#004d59] dark:text-[#ff6437] font-semibold hover:underline truncate"
+          >
+            {session.meetingLink}
+          </a>
+          <button
+            onClick={() => copyToClipboard(session.meetingLink, "link")}
+            className="flex-shrink-0 p-1.5 rounded-lg hover:bg-[#ff6700]/10 transition-colors"
+            title={t("نسخ", "Copy")}
+          >
+            {copied === "link"
+              ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+              : <Copy className="w-3.5 h-3.5 text-gray-400" />}
+          </button>
+        </div>
+
+        {/* Username */}
+        {hasUsername && (
+          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-[#161b22]/50 border border-gray-200/60 dark:border-[#30363d]/60">
+            <User className="w-4 h-4 text-[#004d59] dark:text-[#8b949e] flex-shrink-0" />
+            <span className="flex-1 text-xs text-gray-700 dark:text-[#c9d1d9] font-mono">
+              {session.meetingCredentials.username}
+            </span>
+            <button
+              onClick={() => copyToClipboard(session.meetingCredentials.username, "user")}
+              className="flex-shrink-0 p-1.5 rounded-lg hover:bg-[#ff6700]/10 transition-colors"
+            >
+              {copied === "user"
+                ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                : <Copy className="w-3.5 h-3.5 text-gray-400" />}
+            </button>
+          </div>
+        )}
+
+        {/* Password */}
+        {hasPassword && (
+          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-[#161b22]/50 border border-gray-200/60 dark:border-[#30363d]/60">
+            <Lock className="w-4 h-4 text-[#004d59] dark:text-[#8b949e] flex-shrink-0" />
+            <span className="flex-1 text-xs text-gray-700 dark:text-[#c9d1d9] font-mono tracking-widest">
+              {showPass ? session.meetingCredentials.password : "••••••••"}
+            </span>
+            <button
+              onClick={() => setShowPass(!showPass)}
+              className="flex-shrink-0 p-1.5 rounded-lg hover:bg-[#ff6700]/10 transition-colors"
+            >
+              {showPass
+                ? <EyeOff className="w-3.5 h-3.5 text-gray-400" />
+                : <Eye className="w-3.5 h-3.5 text-gray-400" />}
+            </button>
+            {showPass && (
+              <button
+                onClick={() => copyToClipboard(session.meetingCredentials.password, "pass")}
+                className="flex-shrink-0 p-1.5 rounded-lg hover:bg-[#ff6700]/10 transition-colors"
+              >
+                {copied === "pass"
+                  ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                  : <Copy className="w-3.5 h-3.5 text-gray-400" />}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Start Button */}
+        <a
+          href={session.meetingLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-black text-sm text-white bg-gradient-to-r from-[#ff6700] to-[#feaf00] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
+        >
+          <Video className="w-4.5 h-4.5" />
+          {t("ابدأ الجلسة الآن", "Start Session Now")}
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ─── Session Description Card ─────────────────────────────────────────────────
+function SessionDescriptionCard({ session, isAr }) {
+  const t = (ar, en) => isAr ? ar : en;
+  const description = session.description;
+  if (!description) return null;
+
+  return (
+    <div className="rounded-2xl border border-[#004d59]/20 dark:border-[#004d59]/30 bg-gradient-to-br from-[#004d59]/5 to-[#feaf00]/5 dark:from-[#004d59]/10 dark:to-transparent overflow-hidden">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#004d59]/15 dark:border-[#004d59]/20">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#004d59] to-[#004d59]/70 flex items-center justify-center shadow-md">
+          <FileText className="w-4 h-4 text-white" />
+        </div>
+        <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
+          {t("وصف الجلسة", "Session Description")}
+        </span>
+        <span className="mr-auto text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 dark:bg-[#004d59]/20 text-[#004d59] dark:text-teal-400 font-bold border border-[#004d59]/20">
+          {t("ساعتان", "2 hours")}
+        </span>
+      </div>
+      <div className="px-4 py-3">
+        <p className="text-sm text-gray-700 dark:text-[#c9d1d9] leading-relaxed">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Course Info Section ──────────────────────────────────────────────────────
 function CourseInfoSection({ session, isAr }) {
   const t = (ar, en) => isAr ? ar : en;
   const course = session.courseInfo;
@@ -129,35 +253,31 @@ function CourseInfoSection({ session, isAr }) {
   const moduleData = course.moduleData;
   const blogBody = isAr ? moduleData?.blogBodyAr : moduleData?.blogBodyEn;
   const hasBlog = blogBody && blogBody.trim().length > 0;
-
   const [showBlog, setShowBlog] = useState(false);
 
   return (
     <div className="space-y-3">
-
-      {/* Course header card */}
-      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/10 dark:to-purple-900/10 rounded-2xl border border-indigo-200/60 dark:border-indigo-800/30 overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-indigo-100 dark:border-indigo-800/30">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-            <GraduationCap className="w-3.5 h-3.5 text-white" />
+      {/* Course header — replaced indigo/purple with brand palette */}
+      <div className="rounded-2xl border border-[#004d59]/20 dark:border-[#004d59]/30 bg-gradient-to-br from-[#004d59]/5 to-[#ff6700]/5 dark:from-[#004d59]/10 dark:to-[#ff6700]/5 overflow-hidden">
+        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#004d59]/15 dark:border-[#004d59]/20">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#004d59] to-[#ff6700] flex items-center justify-center shadow-md">
+            <GraduationCap className="w-4 h-4 text-white" />
           </div>
-          <span className="text-sm font-bold text-indigo-900 dark:text-indigo-300">
+          <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
             {t("معلومات الكورس", "Course Info")}
           </span>
         </div>
-
         <div className="p-4 space-y-3">
-          {/* Course title + meta chips */}
           <div>
             <h3 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-2">{course.title}</h3>
             <div className="flex flex-wrap gap-1.5">
               {course.grade && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium border border-indigo-200 dark:border-indigo-700/30">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 dark:bg-[#004d59]/20 text-[#004d59] dark:text-teal-300 font-medium border border-[#004d59]/20 dark:border-[#004d59]/30">
                   🎒 {course.grade}
                 </span>
               )}
               {course.subject && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium border border-purple-200 dark:border-purple-700/30">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 dark:bg-[#ff6700]/10 text-[#ff6700] dark:text-[#ff6437] font-medium border border-[#ff6700]/20 dark:border-[#ff6700]/20">
                   📘 {course.subject}
                 </span>
               )}
@@ -167,68 +287,49 @@ function CourseInfoSection({ session, isAr }) {
                 </span>
               )}
               {course.duration && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium border border-amber-200 dark:border-amber-700/30">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/15 dark:bg-[#feaf00]/10 text-[#f67d00] dark:text-[#feaf00] font-medium border border-[#feaf00]/30 dark:border-[#feaf00]/20">
                   ⏱ {course.duration}
                 </span>
               )}
             </div>
           </div>
-
-          {/* Course description */}
           {course.description && (
-            <p className="text-xs text-gray-600 dark:text-[#8b949e] leading-relaxed border-t border-indigo-100 dark:border-indigo-800/30 pt-3">
-              {course.description}
-            </p>
+            <p className="text-xs text-gray-600 dark:text-[#8b949e] leading-relaxed border-t border-[#004d59]/10 dark:border-[#004d59]/20 pt-3">{course.description}</p>
           )}
         </div>
       </div>
 
-      {/* Module info */}
+      {/* Module info — replaced sky/blue with brand palette */}
       {moduleData && (
-        <div className="bg-gray-50 dark:bg-[#0d1117]/60 rounded-2xl border border-gray-100 dark:border-[#30363d] overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-[#30363d]">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center flex-shrink-0">
-              <Layers className="w-3.5 h-3.5 text-white" />
+        <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#0d1117]/60 overflow-hidden">
+          <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-[#30363d]">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#004d59] to-[#ff6437] flex items-center justify-center shadow-md">
+              <Layers className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm font-bold text-gray-900 dark:text-[#e6edf3]">
-              {t("الوحدة الدراسية", "Module")}
-            </span>
-            <span className="mr-auto text-[10px] px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold border border-sky-200 dark:border-sky-800/30">
+            <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">{t("الوحدة الدراسية", "Module")}</span>
+            <span className="mr-auto text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 dark:bg-[#ff6700]/10 text-[#ff6700] dark:text-[#ff6437] font-black border border-[#ff6700]/20 dark:border-[#ff6700]/20">
               {t(`الوحدة ${(session.moduleIndex ?? 0) + 1}`, `Module ${(session.moduleIndex ?? 0) + 1}`)}
             </span>
           </div>
           <div className="p-4">
-            <h4 className="font-bold text-sm text-gray-900 dark:text-[#e6edf3] mb-1">{moduleData.title}</h4>
-            {moduleData.description && (
-              <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">{moduleData.description}</p>
-            )}
-
-            {/* Presentation link */}
+            <h4 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-1">{moduleData.title}</h4>
+            {moduleData.description && <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">{moduleData.description}</p>}
             {moduleData.presentationUrl && (
-              <a
-                href={moduleData.presentationUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-semibold text-gray-700 dark:text-[#8b949e] hover:border-primary/50 hover:text-primary transition-all"
-              >
-                <Presentation className="w-3.5 h-3.5" />
-                {t("عرض البريزنتيشن", "View Presentation")}
-                <ExternalLink className="w-3 h-3" />
+              <a href={moduleData.presentationUrl} target="_blank" rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-bold text-gray-700 dark:text-[#8b949e] hover:border-[#ff6700]/50 hover:text-[#ff6700] transition-all">
+                <Presentation className="w-3.5 h-3.5" />{t("عرض البريزنتيشن", "View Presentation")}<ExternalLink className="w-3 h-3" />
               </a>
             )}
-
-            {/* Projects */}
             {moduleData.projects?.length > 0 && (
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-[#21262d]">
-                <p className="text-[10px] font-bold text-gray-500 dark:text-[#6e7681] mb-2 flex items-center gap-1">
+                <p className="text-[10px] font-black text-gray-500 dark:text-[#6e7681] mb-2 flex items-center gap-1">
                   <FolderOpen className="w-3 h-3" />{t("مشاريع الوحدة", "Module Projects")}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {moduleData.projects.map((url, i) => (
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-lg text-[10px] font-medium text-gray-600 dark:text-[#8b949e] hover:border-primary/50 hover:text-primary transition-all">
-                      <Globe className="w-2.5 h-2.5" />{t(`مشروع ${i + 1}`, `Project ${i + 1}`)}
-                      <ExternalLink className="w-2 h-2" />
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-lg text-[10px] font-medium text-gray-600 dark:text-[#8b949e] hover:border-[#ff6700]/50 hover:text-[#ff6700] transition-all">
+                      <Globe className="w-2.5 h-2.5" />{t(`مشروع ${i + 1}`, `Project ${i + 1}`)}<ExternalLink className="w-2 h-2" />
                     </a>
                   ))}
                 </div>
@@ -238,26 +339,20 @@ function CourseInfoSection({ session, isAr }) {
         </div>
       )}
 
-      {/* Blog body toggle */}
+      {/* Blog toggle — replaced rose/pink with brand palette */}
       {hasBlog && (
         <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] overflow-hidden">
-          <button
-            onClick={() => setShowBlog(!showBlog)}
-            className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 dark:bg-[#0d1117]/60 hover:bg-gray-100 dark:hover:bg-[#0d1117]/80 transition-colors"
-          >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center flex-shrink-0">
-              <BookMarked className="w-3.5 h-3.5 text-white" />
+          <button onClick={() => setShowBlog(!showBlog)}
+            className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 dark:bg-[#0d1117]/60 hover:bg-gray-100 dark:hover:bg-[#0d1117]/80 transition-colors">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#f67d00] flex items-center justify-center shadow-md">
+              <BookMarked className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm font-bold text-gray-900 dark:text-[#e6edf3] flex-1 text-start">
-              {t("محتوى الوحدة التفصيلي", "Module Detailed Content")}
-            </span>
+            <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3] flex-1 text-start">{t("محتوى الوحدة التفصيلي", "Module Detailed Content")}</span>
             <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showBlog ? "rotate-180" : ""}`} />
           </button>
           {showBlog && (
-            <div
-              className="p-4 prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed bg-white dark:bg-[#0d1117]/30 border-t border-gray-100 dark:border-[#30363d] overflow-auto max-h-72"
-              dangerouslySetInnerHTML={{ __html: blogBody }}
-            />
+            <div className="p-4 prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed bg-white dark:bg-[#0d1117]/30 border-t border-gray-100 dark:border-[#30363d] overflow-auto max-h-72"
+              dangerouslySetInnerHTML={{ __html: blogBody }} />
           )}
         </div>
       )}
@@ -271,211 +366,205 @@ function SessionModal({ session, onClose, isAr }) {
   const isCompleted = session.status === "completed";
   const attRate = getAttendanceRate(session);
   const t = (ar, en) => isAr ? ar : en;
-
-  // ✅ FIX 2: only show action buttons if session is TODAY
   const isActuallyToday = session.isToday;
+  const formatTime = isAr ? fmtTimeAr : fmtTime;
+  const lessons = deduplicateLessons(session.lessons || []);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  const formatTime = isAr ? fmtTimeAr : fmtTime;
-
-  const attBreakdown = isCompleted && session.attendance?.length > 0
-    ? {
-        present: session.attendance.filter((a) => a.status === "present").length,
-        absent:  session.attendance.filter((a) => a.status === "absent").length,
-        late:    session.attendance.filter((a) => a.status === "late").length,
-        excused: session.attendance.filter((a) => a.status === "excused").length,
-        total:   session.attendance.length,
-      }
-    : null;
-
-  // ✅ FIX 1: deduplicate lessons
-  const lessons = deduplicateLessons(session.lessons || []);
+  const attBreakdown = isCompleted && session.attendance?.length > 0 ? {
+    present: session.attendance.filter(a => a.status === "present").length,
+    absent:  session.attendance.filter(a => a.status === "absent").length,
+    late:    session.attendance.filter(a => a.status === "late").length,
+    excused: session.attendance.filter(a => a.status === "excused").length,
+    total:   session.attendance.length,
+  } : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
 
-      <div className="relative w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col">
+      <div className="relative w-full sm:max-w-2xl max-h-[94vh] overflow-y-auto bg-white dark:bg-[#0d1117] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col border border-gray-100 dark:border-[#21262d]">
 
-        {/* Modal Header */}
-        <div className="relative bg-gradient-to-br from-primary via-purple-600 to-pink-600 p-6 rounded-t-3xl sm:rounded-t-3xl overflow-hidden flex-shrink-0">
-          <div className="absolute inset-0 opacity-10"
-            style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
-          <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+        {/* ── Modal Header ── */}
+        <div className="relative overflow-hidden flex-shrink-0" style={{background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)"}}>
+          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+          <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full opacity-20" style={{background: "#feaf00"}} />
+          <div className="absolute top-0 left-1/2 w-32 h-32 rounded-full opacity-10" style={{background: "#ff6437", filter: "blur(20px)"}} />
 
-          <div className="relative z-10">
-            <div className="flex items-start justify-between mb-3">
+          <div className="relative z-10 p-6">
+            <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full border border-white/20 flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-black px-3 py-1 rounded-full border border-white/25 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${cfg.dot} animate-pulse`} />
                   {isAr ? cfg.labelAr : cfg.labelEn}
                 </span>
                 {isActuallyToday && (
-                  <span className="bg-yellow-400/30 text-yellow-100 text-xs font-bold px-2.5 py-1 rounded-full border border-yellow-300/30">
+                  <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40">
                     ✨ {t("اليوم", "Today")}
                   </span>
                 )}
               </div>
-              <button onClick={onClose}
-                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all flex-shrink-0">
+              <button onClick={onClose} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-all border border-white/20">
                 <X className="w-4 h-4 text-white" />
               </button>
             </div>
 
             <h2 className="text-xl font-black text-white mb-1 leading-snug">{session.title}</h2>
-            <p className="text-white/60 text-sm font-medium mb-4">
+            <p className="text-white/60 text-sm font-medium mb-5">
               {session.group?.name} · {t("الجلسة", "Session")} {session.sessionNumber} ·{" "}
               {t(`الوحدة ${(session.moduleIndex ?? 0) + 1}`, `Module ${(session.moduleIndex ?? 0) + 1}`)}
             </p>
 
             <div className="flex flex-wrap gap-2">
-              <span className="flex items-center gap-1.5 bg-white/15 text-white text-xs px-3 py-1.5 rounded-full border border-white/20">
-                <Calendar className="w-3 h-3" />{fmtDateFull(session.scheduledDate, isAr)}
-              </span>
-              <span className="flex items-center gap-1.5 bg-white/15 text-white text-xs px-3 py-1.5 rounded-full border border-white/20">
-                <Clock className="w-3 h-3" />{formatTime(session.startTime)} – {formatTime(session.endTime)}
-              </span>
-              <span className="flex items-center gap-1.5 bg-white/15 text-white text-xs px-3 py-1.5 rounded-full border border-white/20">
-                <Timer className="w-3 h-3" />{t("ساعتان", "2 hours")}
-              </span>
+              {[
+                { icon: Calendar, text: fmtDateFull(session.scheduledDate, isAr) },
+                { icon: Clock, text: `${formatTime(session.startTime)} – ${formatTime(session.endTime)}` },
+                { icon: Timer, text: t("ساعتان", "2 hours") },
+              ].map(({ icon: Icon, text }, i) => (
+                <span key={i} className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full border border-white/15">
+                  <Icon className="w-3 h-3" />{text}
+                </span>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-5 space-y-4">
+        {/* ── Modal Body ── */}
+        <div className="p-5 space-y-4 bg-gray-50/50 dark:bg-[#0d1117]">
 
-          {/* ✅ FIX 2: Action Buttons — only show if TODAY */}
-          {isActuallyToday && (
-            <div className="grid grid-cols-2 gap-3">
-              {session.meetingLink && (
-                <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
-                  className="col-span-2 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-black text-sm bg-gradient-to-r from-primary to-purple-600 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
-                  <Video className="w-5 h-5" />{t("بدء الجلسة الآن", "Start Session Now")}<ExternalLink className="w-4 h-4" />
-                </a>
-              )}
-              {!session.attendanceTaken && session.status === "scheduled" && (
-                <Link href={`/instructor/attendance?session=${session._id}`}
-                  className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800/40 hover:bg-green-100 transition-all">
-                  <ClipboardList className="w-4 h-4" />{t("تسجيل الحضور", "Take Attendance")}
-                </Link>
-              )}
-            </div>
+          <SessionDescriptionCard session={session} isAr={isAr} />
+
+          {isActuallyToday && session.meetingLink && (
+            <MeetingCredentials session={session} isAr={isAr} />
           )}
 
-          {/* Recording link — always visible when completed */}
+          {isActuallyToday && !session.meetingLink && !session.attendanceTaken && session.status === "scheduled" && (
+            <Link href={`/instructor/attendance?session=${session._id}`}
+              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+              <ClipboardList className="w-5 h-5" />{t("تسجيل الحضور الآن", "Take Attendance Now")}
+            </Link>
+          )}
+
+          {isActuallyToday && session.meetingLink && !session.attendanceTaken && session.status === "scheduled" && (
+            <Link href={`/instructor/attendance?session=${session._id}`}
+              className="flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all">
+              <ClipboardList className="w-4 h-4" />{t("تسجيل الحضور", "Take Attendance")}
+            </Link>
+          )}
+
           {isCompleted && session.recordingLink && (
             <a href={session.recordingLink} target="_blank" rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800/40 hover:bg-purple-100 transition-all">
+              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border border-[#004d59]/30 dark:border-[#004d59]/30 bg-gradient-to-r from-[#004d59]/10 to-transparent dark:from-[#004d59]/10 text-[#004d59] dark:text-teal-400 hover:from-[#004d59]/15 transition-all">
               <Play className="w-4 h-4" />{t("مشاهدة التسجيل", "Watch Recording")}
             </a>
           )}
 
-          {/* Attendance Breakdown (completed only) */}
+          {/* Attendance Breakdown */}
           {attBreakdown && (
-            <div className="bg-gray-50 dark:bg-[#0d1117]/60 rounded-2xl border border-gray-100 dark:border-[#30363d] overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-[#30363d]">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
-                  <BarChart3 className="w-3.5 h-3.5 text-white" />
+            <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] bg-white dark:bg-[#161b22] overflow-hidden shadow-sm">
+              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-[#30363d] bg-gray-50/80 dark:bg-[#0d1117]/40">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md">
+                  <BarChart3 className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-sm font-bold text-gray-900 dark:text-[#e6edf3]">
-                  {t("إحصائيات الحضور", "Attendance Stats")}
-                </span>
+                <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">{t("إحصائيات الحضور", "Attendance Stats")}</span>
                 {attRate !== null && (
-                  <span className={`ml-auto text-sm font-black ${attRate >= 80 ? "text-emerald-500" : attRate >= 60 ? "text-amber-500" : "text-red-500"}`}>
+                  <span className={`ml-auto text-base font-black ${attRate >= 80 ? "text-emerald-500" : attRate >= 60 ? "text-[#feaf00]" : "text-red-500"}`}>
                     {attRate}%
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-4 divide-x dark:divide-[#30363d]">
+              <div className="grid grid-cols-4 divide-x dark:divide-[#30363d] rtl:divide-x-reverse">
                 {[
-                  { key: "present", label: t("حاضر",  "Present"), color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
-                  { key: "absent",  label: t("غائب",  "Absent"),  color: "text-red-600 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-900/20" },
-                  { key: "late",    label: t("متأخر", "Late"),    color: "text-amber-600 dark:text-amber-400",     bg: "bg-amber-50 dark:bg-amber-900/20" },
-                  { key: "excused", label: t("معذور", "Excused"), color: "text-blue-600 dark:text-blue-400",       bg: "bg-blue-50 dark:bg-blue-900/20" },
+                  { key: "present", label: t("حاضر","Present"),  color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50/60 dark:bg-emerald-900/10" },
+                  { key: "absent",  label: t("غائب","Absent"),   color: "text-red-600 dark:text-red-400",         bg: "bg-red-50/60 dark:bg-red-900/10" },
+                  { key: "late",    label: t("متأخر","Late"),    color: "text-[#f67d00] dark:text-[#feaf00]",     bg: "bg-[#feaf00]/10 dark:bg-[#feaf00]/5" },
+                  { key: "excused", label: t("معذور","Excused"), color: "text-[#004d59] dark:text-teal-400",      bg: "bg-[#004d59]/5 dark:bg-[#004d59]/10" },
                 ].map(({ key, label, color, bg }) => (
                   <div key={key} className={`p-3 text-center ${bg}`}>
                     <div className={`text-2xl font-black ${color}`}>{attBreakdown[key]}</div>
-                    <div className="text-[10px] text-gray-500 dark:text-[#8b949e] font-medium">{label}</div>
+                    <div className="text-[10px] text-gray-500 dark:text-[#8b949e] font-medium mt-0.5">{label}</div>
                   </div>
                 ))}
               </div>
-              <div className="px-4 py-2.5 flex items-center gap-2">
-                <div className="flex-1 h-2 bg-gray-200 dark:bg-[#21262d] rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-primary to-purple-600 rounded-full"
-                    style={{ width: `${attRate || 0}%` }} />
+              <div className="px-4 py-2.5 flex items-center gap-2 bg-gray-50/50 dark:bg-[#0d1117]/20">
+                <div className="flex-1 h-2 bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-1000"
+                    style={{ width: `${attRate || 0}%`, background: "linear-gradient(90deg, #004d59, #ff6700)" }} />
                 </div>
-                <span className="text-xs text-gray-500 dark:text-[#8b949e]">
+                <span className="text-xs text-gray-400 dark:text-[#6e7681] font-medium whitespace-nowrap">
                   {attBreakdown.total} {t("طالب", "students")}
                 </span>
               </div>
             </div>
           )}
 
-          {/* ✅ FIX 1: Lessons — deduplicated */}
+          {/* Lessons */}
           {lessons.length > 0 && (
-            <div className="bg-gray-50 dark:bg-[#0d1117]/60 rounded-2xl border border-gray-100 dark:border-[#30363d] overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-[#30363d]">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
-                  <BookOpen className="w-3.5 h-3.5 text-white" />
+            <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] bg-white dark:bg-[#161b22] overflow-hidden shadow-sm">
+              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-[#30363d] bg-gray-50/80 dark:bg-[#0d1117]/40">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#004d59] to-[#004d59]/80 flex items-center justify-center shadow-md">
+                  <BookOpen className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-sm font-bold text-gray-900 dark:text-[#e6edf3]">
-                  {t("الدروس المغطاة", "Lessons Covered")}
+                <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">{t("الدروس المغطاة", "Lessons Covered")}</span>
+                <span className="mr-auto text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#21262d] text-gray-500 dark:text-[#8b949e] font-bold border border-gray-200 dark:border-[#30363d]">
+                  {lessons.length} {t("درس", "lessons")}
                 </span>
-                <span className="mr-auto text-[10px] text-gray-400">{lessons.length} {t("درس", "lessons")}</span>
               </div>
-              <div className="divide-y divide-gray-100 dark:divide-[#21262d]">
+              <div className="divide-y divide-gray-50 dark:divide-[#21262d]">
                 {lessons.map((lesson, i) => (
-                  <div key={i} className="flex items-start gap-3 px-4 py-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5
-                      ${isCompleted ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600" : "bg-primary/10 text-primary"}`}>
+                  <div key={i} className="flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50/60 dark:hover:bg-[#0d1117]/30 transition-colors">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5 shadow-sm
+                      ${isCompleted
+                        ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
+                        : "bg-gradient-to-br from-[#ff6700]/20 to-[#feaf00]/20 text-[#ff6700]"}`}>
                       {i + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800 dark:text-[#c9d1d9] font-medium">{lesson.title}</p>
+                      <p className="text-sm text-gray-800 dark:text-[#c9d1d9] font-bold">{lesson.title}</p>
                       {lesson.description && (
                         <p className="text-xs text-gray-400 dark:text-[#6e7681] mt-0.5 leading-relaxed">{lesson.description}</p>
                       )}
                       {lesson.duration && (
-                        <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-gray-400">
+                        <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-gray-400 bg-gray-50 dark:bg-[#21262d] px-2 py-0.5 rounded-full border border-gray-100 dark:border-[#30363d]">
                           <Clock className="w-2.5 h-2.5" />{lesson.duration}
                         </span>
                       )}
                     </div>
-                    {isCompleted && <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />}
+                    {isCompleted && (
+                      <div className="w-6 h-6 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* ✅ FIX 3: Course Info (new section) */}
           <CourseInfoSection session={session} isAr={isAr} />
 
-          {/* Notes */}
           {session.instructorNotes && (
-            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4">
-              <h4 className="text-xs font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+            <div className="bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20 rounded-2xl p-4">
+              <h4 className="text-xs font-black text-[#f67d00] dark:text-[#feaf00] mb-2 flex items-center gap-1.5">
                 <Info className="w-3.5 h-3.5" />{t("ملاحظات الجلسة", "Session Notes")}
               </h4>
-              <p className="text-sm text-amber-800 dark:text-amber-300/80 leading-relaxed">{session.instructorNotes}</p>
+              <p className="text-sm text-[#f67d00]/80 dark:text-[#feaf00]/70 leading-relaxed">{session.instructorNotes}</p>
             </div>
           )}
 
-          {/* Materials */}
-          {session.materials && session.materials.length > 0 && (
-            <div>
-              <h4 className="text-sm font-bold text-gray-900 dark:text-[#e6edf3] mb-2 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" />{t("المواد التعليمية", "Materials")}
+          {session.materials?.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-black text-gray-500 dark:text-[#6e7681] flex items-center gap-1.5 px-1">
+                <FileText className="w-3.5 h-3.5" />{t("المواد التعليمية", "Materials")}
               </h4>
               <div className="flex flex-wrap gap-2">
                 {session.materials.map((mat, i) => (
                   <a key={i} href={mat.url} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-medium text-gray-700 dark:text-[#8b949e] hover:border-primary/50 hover:text-primary transition-all">
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-bold text-gray-700 dark:text-[#8b949e] hover:border-[#ff6700]/50 hover:text-[#ff6700] transition-all shadow-sm">
                     <FileText className="w-3.5 h-3.5" />{mat.name || `ملف ${i + 1}`}<ExternalLink className="w-3 h-3" />
                   </a>
                 ))}
@@ -498,86 +587,90 @@ function SessionRow({ session, onOpen, isAr }) {
   const t = (ar, en) => isAr ? ar : en;
   const sessionNum = (session.moduleIndex ?? 0) * 3 + (session.sessionNumber ?? 1);
 
+  const iconColors = {
+    completed: "from-emerald-400 to-teal-500",
+    scheduled: isToday ? "from-[#ff6700] to-[#feaf00]" : "from-[#004d59] to-[#004d59]/70",
+    cancelled: "from-red-400 to-red-500",
+    postponed: "from-[#feaf00] to-[#f67d00]",
+  };
+
   return (
     <div
       onClick={() => onOpen(session)}
-      className={`group flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border bg-white dark:bg-[#161b22]
-        cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md
+      className={`group flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-2xl border bg-white dark:bg-[#161b22]
+        cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg
         ${isToday
-          ? "border-primary/40 shadow-md shadow-primary/10 ring-1 ring-primary/20"
+          ? "border-[#ff6700]/40 shadow-md shadow-[#ff6700]/10 ring-1 ring-[#ff6700]/20"
           : isCompleted
             ? "border-emerald-200/60 dark:border-emerald-800/30 hover:shadow-emerald-500/5"
-            : "border-gray-100 dark:border-[#30363d] hover:border-gray-200 dark:hover:border-[#3d444d]"}`}
+            : "border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/30 dark:hover:border-[#004d59]/40"}`}
     >
-      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 shadow-sm
-        ${isCompleted
-          ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
-          : isToday
-            ? "bg-gradient-to-br from-primary to-purple-600 text-white"
-            : session.status === "cancelled"
-              ? "bg-gradient-to-br from-red-400 to-red-500 text-white"
-              : session.status === "postponed"
-                ? "bg-gradient-to-br from-amber-400 to-orange-400 text-white"
-                : "bg-gradient-to-br from-blue-400 to-indigo-500 text-white"}`}>
+      {/* Icon */}
+      <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 shadow-md bg-gradient-to-br ${iconColors[session.status] || iconColors.scheduled} text-white`}>
         {isCompleted
           ? <CheckCircle className="w-5 h-5" />
           : session.status === "cancelled"
             ? <X className="w-5 h-5" />
-            : <span className="text-sm">{sessionNum}</span>}
+            : <span className="text-sm font-black">{sessionNum}</span>}
       </div>
 
+      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
           {isToday && (
-            <span className="text-[10px] font-black text-primary flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-[10px] font-black text-[#ff6700] flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#ff6700] animate-pulse" />
               {t("اليوم", "Today")}
             </span>
           )}
-          <h3 className="font-bold text-sm truncate transition-colors text-gray-900 dark:text-[#e6edf3] group-hover:text-primary">
+          <h3 className="font-black text-sm truncate text-gray-900 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors duration-200">
             {session.title}
           </h3>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-[#6e7681] flex-wrap">
+        <div className="flex items-center gap-2.5 text-xs text-gray-400 dark:text-[#6e7681] flex-wrap">
           <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtDateShort(session.scheduledDate, isAr)}</span>
           <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatTime(session.startTime)}</span>
-          {session.group?.name && (
-            <span className="flex items-center gap-1"><Users className="w-3 h-3" />{session.group.name}</span>
-          )}
+          {session.group?.name && <span className="flex items-center gap-1"><Users className="w-3 h-3" />{session.group.name}</span>}
+          <span className="flex items-center gap-1 text-[#004d59] dark:text-teal-600 font-medium">
+            <Timer className="w-3 h-3" />{t("ساعتان", "2h")}
+          </span>
         </div>
       </div>
 
+      {/* Right side */}
       <div className="flex items-center gap-2 flex-shrink-0">
         {isCompleted && attRate !== null && (
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-50 dark:bg-[#21262d] border border-gray-100 dark:border-[#30363d]">
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-50 dark:bg-[#21262d] border border-gray-100 dark:border-[#30363d]">
             <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span className={`text-xs font-bold ${attRate >= 80 ? "text-emerald-600" : attRate >= 60 ? "text-amber-600" : "text-red-600"}`}>
+            <span className={`text-xs font-black ${attRate >= 80 ? "text-emerald-600" : attRate >= 60 ? "text-[#f67d00]" : "text-red-600"}`}>
               {attRate}%
             </span>
           </div>
         )}
 
-        {/* ✅ FIX 2: Join button only when session.showJoinButton (already computed by API as today+scheduled+time) */}
         {session.showJoinButton && (
           <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-primary to-purple-600 text-white shadow-md hover:shadow-lg hover:scale-105 transition-all">
-            <Video className="w-3.5 h-3.5" />{t("بدء", "Start")}
+            onClick={e => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            style={{background: "linear-gradient(135deg, #ff6700, #feaf00)"}}>
+            <Video className="w-3.5 h-3.5" />{t("ابدأ", "Start")}
           </a>
         )}
 
         {isCompleted && !session.attendanceTaken && (
-          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 dark:bg-amber-900/20 text-amber-600 border border-amber-200 dark:border-amber-800/40">
+          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black bg-[#feaf00]/10 dark:bg-[#feaf00]/10 text-[#f67d00] dark:text-[#feaf00] border border-[#feaf00]/30 dark:border-[#feaf00]/20">
             <ClipboardList className="w-3 h-3" />{t("يحتاج حضور", "Needs Attendance")}
           </span>
         )}
 
-        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${cfg.badge}`}>
+        <span className={`text-[10px] px-2.5 py-1 rounded-full font-black hidden sm:flex items-center gap-1 ${cfg.badge}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
           {isAr ? cfg.labelAr : cfg.labelEn}
         </span>
 
-        <ChevronRight className={`w-4 h-4 text-gray-300 dark:text-[#6e7681] group-hover:text-primary transition-all ${isAr ? "rotate-180" : ""}`} />
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-[#21262d] group-hover:bg-[#ff6700]/10 transition-colors">
+          <ChevronRight className={`w-4 h-4 text-gray-300 dark:text-[#6e7681] group-hover:text-[#ff6700] transition-colors ${isAr ? "rotate-180" : ""}`} />
+        </div>
       </div>
     </div>
   );
@@ -587,47 +680,51 @@ function SessionRow({ session, onOpen, isAr }) {
 function DateHeader({ dateKey, sessions, isAr }) {
   const d = new Date(dateKey);
   const isToday = fmtDateKey(new Date()) === dateKey;
-  const count = sessions.length;
   const t = (ar, en) => isAr ? ar : en;
 
   return (
     <div className="flex items-center gap-3 mb-3">
-      <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 shadow-sm
-        ${isToday ? "bg-gradient-to-br from-primary to-purple-600 text-white" : "bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] text-gray-700 dark:text-[#8b949e]"}`}>
-        <span className="text-xs font-black leading-none">{d.getDate()}</span>
+      <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 shadow-sm border
+        ${isToday
+          ? "border-transparent text-white shadow-md"
+          : "bg-white dark:bg-[#161b22] border-gray-200 dark:border-[#30363d] text-gray-700 dark:text-[#8b949e]"}`}
+        style={isToday ? {background: "linear-gradient(135deg, #004d59, #ff6700)"} : {}}>
+        <span className="text-sm font-black leading-none">{d.getDate()}</span>
         <span className="text-[9px] leading-none mt-0.5 opacity-80">
           {d.toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "short" })}
         </span>
       </div>
       <div>
         <div className="flex items-center gap-2">
-          <span className={`font-black text-sm ${isToday ? "text-primary" : "text-gray-900 dark:text-[#e6edf3]"}`}>
+          <span className={`font-black text-sm ${isToday ? "text-[#ff6700]" : "text-gray-900 dark:text-[#e6edf3]"}`}>
             {isToday ? t("اليوم", "Today") : d.toLocaleDateString(isAr ? "ar-EG" : "en-US", { weekday: "long" })}
           </span>
-          {isToday && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
+          {isToday && <span className="w-2 h-2 rounded-full bg-[#ff6700] animate-pulse" />}
         </div>
         <span className="text-xs text-gray-400 dark:text-[#6e7681]">
-          {d.toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "long", day: "numeric" })} · {count} {t("جلسة", count === 1 ? "session" : "sessions")}
+          {d.toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "long", day: "numeric" })} · {sessions.length} {t("جلسة", sessions.length === 1 ? "session" : "sessions")}
         </span>
       </div>
-      <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent dark:from-[#30363d]" />
+      <div className="flex-1 h-px" style={{background: "linear-gradient(to right, rgba(0,77,89,0.3), transparent)"}} />
     </div>
   );
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
-function StatCard({ icon: Icon, value, label, grad, animate = true }) {
+function StatCard({ icon: Icon, value, label, gradient }) {
   return (
-    <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-4 sm:p-5 shadow-sm dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-md transition-all duration-300">
+    <div className="group relative bg-white dark:bg-[#161b22] rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-[#30363d] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+      <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4" style={{background: gradient}} />
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-md group-hover/stats:scale-110 transition-transform duration-300 flex-shrink-0`}>
+        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300 flex-shrink-0"
+          style={{background: gradient}}>
           <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
         </div>
         <div>
           <p className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-[#e6edf3]">
-            {animate ? <AnimatedCounter value={value} /> : value}
+            <AnimatedCounter value={typeof value === "number" ? value : 0} />
           </p>
-          <p className="text-xs text-gray-500 dark:text-[#8b949e] font-medium">{label}</p>
+          <p className="text-xs text-gray-500 dark:text-[#8b949e] font-medium mt-0.5">{label}</p>
         </div>
       </div>
     </div>
@@ -638,8 +735,9 @@ function StatCard({ icon: Icon, value, label, grad, animate = true }) {
 function Skeleton() {
   return (
     <div className="space-y-3">
-      {[...Array(6)].map((_, i) => (
-        <div key={i} className="h-16 bg-white dark:bg-[#161b22] rounded-2xl animate-pulse border border-gray-100 dark:border-[#30363d]" />
+      {[...Array(5)].map((_, i) => (
+        <div key={i} className="h-[72px] bg-white dark:bg-[#161b22] rounded-2xl animate-pulse border border-gray-100 dark:border-[#30363d]"
+          style={{opacity: 1 - i * 0.15}} />
       ))}
     </div>
   );
@@ -652,15 +750,14 @@ export default function InstructorSessionsPage() {
   const router = useRouter();
   const t = (ar, en) => isAr ? ar : en;
 
-  const [loading, setLoading]         = useState(true);
-  const [refreshing, setRefreshing]   = useState(false);
-  const [error, setError]             = useState("");
-  const [sessions, setSessions]       = useState([]);
-  const [stats, setStats]             = useState(null);
-  const [user, setUser]               = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [modal, setModal]             = useState(null);
-
+  const [loading, setLoading]           = useState(true);
+  const [refreshing, setRefreshing]     = useState(false);
+  const [error, setError]               = useState("");
+  const [sessions, setSessions]         = useState([]);
+  const [stats, setStats]               = useState(null);
+  const [user, setUser]                 = useState(null);
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [modal, setModal]               = useState(null);
   const [filter, setFilter]             = useState("all");
   const [search, setSearch]             = useState("");
   const [groupByDate, setGroupByDate]   = useState(true);
@@ -669,28 +766,21 @@ export default function InstructorSessionsPage() {
 
   const fetchData = useCallback(async (showRefresh = false) => {
     try {
-      if (showRefresh) setRefreshing(true);
-      else setLoading(true);
+      if (showRefresh) setRefreshing(true); else setLoading(true);
       setError("");
-
       const [sessRes, dashRes] = await Promise.all([
-        fetch("/api/instructor/sessions", { credentials: "include" }).then((r) => r.json()),
-        fetch("/api/instructor/dashboard", { credentials: "include" }).then((r) => r.json()),
+        fetch("/api/instructor/sessions", { credentials: "include" }).then(r => r.json()),
+        fetch("/api/instructor/dashboard", { credentials: "include" }).then(r => r.json()),
       ]);
-
       if (sessRes.success) {
         setSessions(sessRes.data.sessions || []);
         setStats(sessRes.data.stats || null);
-
         const groupMap = {};
-        (sessRes.data.sessions || []).forEach((s) => {
-          if (s.group?._id) groupMap[s.group._id] = s.group.name;
-        });
+        (sessRes.data.sessions || []).forEach(s => { if (s.group?._id) groupMap[s.group._id] = s.group.name; });
         setGroups(Object.entries(groupMap).map(([id, name]) => ({ id, name })));
       } else {
         setError(sessRes.message || t("حدث خطأ", "Something went wrong"));
       }
-
       if (dashRes.success) setUser(dashRes.data.user);
     } catch {
       setError(t("فشل تحميل البيانات", "Failed to load data"));
@@ -708,24 +798,19 @@ export default function InstructorSessionsPage() {
     router.push("/");
   };
 
-  const filtered = sessions.filter((s) => {
-    const today = fmtDateKey(new Date());
-    const sDate = fmtDateKey(s.scheduledDate);
+  const today = fmtDateKey(new Date());
 
+  const filtered = sessions.filter(s => {
+    const sDate = fmtDateKey(s.scheduledDate);
     const filterMatch =
       filter === "all"       ? true :
       filter === "completed" ? s.status === "completed" :
       filter === "upcoming"  ? s.status === "scheduled" :
       filter === "today"     ? sDate === today :
       filter === "cancelled" ? s.status === "cancelled" || s.status === "postponed" :
-      filter === "needs_att" ? s.status === "completed" && !s.attendanceTaken :
-      true;
-
+      filter === "needs_att" ? s.status === "completed" && !s.attendanceTaken : true;
     const groupMatch = selectedGroup === "all" || s.group?._id === selectedGroup;
-    const searchMatch = !search ||
-      s.title?.toLowerCase().includes(search.toLowerCase()) ||
-      s.group?.name?.toLowerCase().includes(search.toLowerCase());
-
+    const searchMatch = !search || s.title?.toLowerCase().includes(search.toLowerCase()) || s.group?.name?.toLowerCase().includes(search.toLowerCase());
     return filterMatch && groupMatch && searchMatch;
   });
 
@@ -736,38 +821,34 @@ export default function InstructorSessionsPage() {
   });
 
   const byDate = {};
-  sorted.forEach((s) => {
-    const dk = fmtDateKey(s.scheduledDate);
-    if (!byDate[dk]) byDate[dk] = [];
-    byDate[dk].push(s);
-  });
+  sorted.forEach(s => { const dk = fmtDateKey(s.scheduledDate); if (!byDate[dk]) byDate[dk] = []; byDate[dk].push(s); });
   const sortedDates = Object.keys(byDate).sort((a, b) => new Date(a) - new Date(b));
 
-  const today = fmtDateKey(new Date());
   const FILTERS = [
-    { id: "all",       labelAr: "الكل",        labelEn: "All",              count: sessions.length },
-    { id: "upcoming",  labelAr: "القادمة",      labelEn: "Upcoming",         count: sessions.filter((s) => s.status === "scheduled").length },
-    { id: "completed", labelAr: "المكتملة",     labelEn: "Completed",        count: sessions.filter((s) => s.status === "completed").length },
-    { id: "today",     labelAr: "اليوم",        labelEn: "Today",            count: sessions.filter((s) => fmtDateKey(s.scheduledDate) === today).length },
-    { id: "needs_att", labelAr: "تحتاج حضور",  labelEn: "Need Attendance",  count: sessions.filter((s) => s.status === "completed" && !s.attendanceTaken).length },
-    { id: "cancelled", labelAr: "ملغاة/مؤجلة", labelEn: "Cancelled",        count: sessions.filter((s) => s.status === "cancelled" || s.status === "postponed").length },
+    { id: "all",       labelAr: "الكل",        labelEn: "All",             count: sessions.length },
+    { id: "upcoming",  labelAr: "القادمة",      labelEn: "Upcoming",        count: sessions.filter(s => s.status === "scheduled").length },
+    { id: "completed", labelAr: "المكتملة",     labelEn: "Completed",       count: sessions.filter(s => s.status === "completed").length },
+    { id: "today",     labelAr: "اليوم",        labelEn: "Today",           count: sessions.filter(s => fmtDateKey(s.scheduledDate) === today).length },
+    { id: "needs_att", labelAr: "تحتاج حضور",  labelEn: "Need Attendance", count: sessions.filter(s => s.status === "completed" && !s.attendanceTaken).length },
+    { id: "cancelled", labelAr: "ملغاة/مؤجلة", labelEn: "Cancelled",       count: sessions.filter(s => s.status === "cancelled" || s.status === "postponed").length },
   ];
 
-  const todayJoinable = sessions.filter((s) => s.showJoinButton);
+  const todayJoinable = sessions.filter(s => s.showJoinButton);
   const currentUser = user || { name: isAr ? "مدرس" : "Instructor", email: "", role: "instructor" };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22] flex" dir={isAr ? "rtl" : "ltr"}>
+    <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17] flex" dir={isAr ? "rtl" : "ltr"}>
 
       {refreshing && (
-        <div className={`fixed top-4 ${isAr ? "left-4" : "right-4"} z-50 bg-primary text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2`}>
+        <div className={`fixed top-4 ${isAr ? "left-4" : "right-4"} z-50 text-white px-4 py-2 rounded-xl shadow-xl flex items-center gap-2`}
+          style={{background: "linear-gradient(135deg, #004d59, #ff6700)"}}>
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-sm">{t("جاري التحديث...", "Refreshing...")}</span>
+          <span className="text-sm font-bold">{t("جاري التحديث...", "Refreshing...")}</span>
         </div>
       )}
 
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <div className={`fixed lg:static inset-y-0 ${isAr ? "right-0" : "left-0"} z-50 transform transition-all duration-500
@@ -784,12 +865,13 @@ export default function InstructorSessionsPage() {
           onRefresh={() => fetchData(true)}
         />
 
-        {/* Sticky Toolbar */}
-        <div className="sticky top-0 z-20 bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md border-b border-gray-200 dark:border-[#30363d]">
+        {/* ── Sticky Toolbar ── */}
+        <div className="sticky top-0 z-20 bg-white/95 dark:bg-[#0d1117]/95 backdrop-blur-xl border-b border-gray-200/80 dark:border-[#21262d]">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between py-4 gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
+                  style={{background: "linear-gradient(135deg, #004d59, #ff6700)"}}>
                   <Calendar className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -809,53 +891,50 @@ export default function InstructorSessionsPage() {
                   <Search className={`absolute ${isAr ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
                   <input
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={e => setSearch(e.target.value)}
                     placeholder={t("بحث...", "Search...")}
-                    className={`w-44 bg-gray-100 dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl ${isAr ? "pr-9 pl-4" : "pl-9 pr-4"} py-2 text-sm text-gray-900 dark:text-[#e6edf3] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/60`}
+                    className={`w-44 bg-gray-100 dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl ${isAr ? "pr-9 pl-4" : "pl-9 pr-4"} py-2 text-sm text-gray-900 dark:text-[#e6edf3] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ff6700]/30 focus:border-[#ff6700]/50 transition-all`}
                   />
                 </div>
 
                 {groups.length > 1 && (
-                  <select
-                    value={selectedGroup}
-                    onChange={(e) => setSelectedGroup(e.target.value)}
-                    className="hidden sm:block bg-gray-100 dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl px-3 py-2 text-sm text-gray-700 dark:text-[#8b949e] focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  >
+                  <select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}
+                    className="hidden sm:block bg-gray-100 dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl px-3 py-2 text-sm text-gray-700 dark:text-[#8b949e] focus:outline-none focus:ring-2 focus:ring-[#ff6700]/30 transition-all">
                     <option value="all">{t("كل المجموعات", "All Groups")}</option>
-                    {groups.map((g) => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
+                    {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                   </select>
                 )}
 
-                <div className="flex bg-gray-100 dark:bg-[#21262d] rounded-xl p-1 gap-0.5">
+                <div className="flex bg-gray-100 dark:bg-[#161b22] rounded-xl p-1 gap-0.5 border border-gray-200 dark:border-[#30363d]">
                   <button onClick={() => setGroupByDate(true)}
-                    className={`p-1.5 rounded-lg transition-all ${groupByDate ? `bg-white dark:bg-[#161b22] shadow text-primary` : "text-gray-400"}`}>
+                    className={`p-1.5 rounded-lg transition-all ${groupByDate ? "bg-white dark:bg-[#21262d] shadow text-[#ff6700]" : "text-gray-400 hover:text-gray-600"}`}>
                     <CalendarDays className="w-4 h-4" />
                   </button>
                   <button onClick={() => setGroupByDate(false)}
-                    className={`p-1.5 rounded-lg transition-all ${!groupByDate ? `bg-white dark:bg-[#161b22] shadow text-primary` : "text-gray-400"}`}>
+                    className={`p-1.5 rounded-lg transition-all ${!groupByDate ? "bg-white dark:bg-[#21262d] shadow text-[#ff6700]" : "text-gray-400 hover:text-gray-600"}`}>
                     <ListFilter className="w-4 h-4" />
                   </button>
                 </div>
 
                 <button onClick={() => fetchData(true)}
-                  className="p-2 rounded-xl bg-gray-100 dark:bg-[#21262d] text-gray-500 hover:text-primary transition-colors">
+                  className="p-2 rounded-xl bg-gray-100 dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] text-gray-500 hover:text-[#ff6700] hover:border-[#ff6700]/30 transition-all">
                   <RefreshCw className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
+            {/* Filter Tabs */}
             <div className="flex gap-1.5 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
               {FILTERS.map(({ id, labelAr, labelEn, count }) => (
                 <button key={id} onClick={() => setFilter(id)}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition-all
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black flex-shrink-0 transition-all duration-200
                     ${filter === id
-                      ? "bg-primary text-white shadow-md shadow-primary/30"
-                      : "bg-gray-100 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d]"}`}>
+                      ? "text-white shadow-md"
+                      : "bg-gray-100 dark:bg-[#161b22] text-gray-600 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#21262d] border border-gray-200 dark:border-[#30363d]"}`}
+                  style={filter === id ? {background: "linear-gradient(135deg, #004d59, #ff6700)", boxShadow: "0 4px 12px rgba(255,103,0,0.25)"} : {}}>
                   {isAr ? labelAr : labelEn}
                   <span className={`text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black
-                    ${filter === id ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-[#30363d] text-gray-500"}`}>
+                    ${filter === id ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-[#21262d] text-gray-500 dark:text-[#6e7681]"}`}>
                     {count}
                   </span>
                 </button>
@@ -864,54 +943,60 @@ export default function InstructorSessionsPage() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* ── Content ── */}
         <div className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
 
+          {/* Stat Cards */}
           {!loading && stats && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-              <StatCard icon={Calendar}      value={stats.total}               label={t("إجمالي الجلسات", "Total Sessions")}    grad="from-primary to-purple-600" />
-              <StatCard icon={CheckCircle}   value={stats.completed}           label={t("مكتملة", "Completed")}                grad="from-emerald-400 to-teal-500" />
-              <StatCard icon={Clock}         value={stats.scheduled}           label={t("مجدولة", "Scheduled")}                grad="from-blue-400 to-indigo-500" />
-              <StatCard icon={ClipboardList} value={stats.needsAttendance || 0} label={t("تحتاج حضور", "Need Attendance")}    grad="from-amber-400 to-orange-500" />
+              <StatCard icon={Calendar}      value={stats.total}                label={t("إجمالي الجلسات", "Total Sessions")}  gradient="linear-gradient(135deg, #004d59, #004d59aa)" />
+              <StatCard icon={CheckCircle}   value={stats.completed}            label={t("مكتملة", "Completed")}              gradient="linear-gradient(135deg, #10b981, #14b8a6)" />
+              <StatCard icon={Clock}         value={stats.scheduled}            label={t("مجدولة", "Scheduled")}              gradient="linear-gradient(135deg, #ff6700, #feaf00)" />
+              <StatCard icon={ClipboardList} value={stats.needsAttendance || 0} label={t("تحتاج حضور", "Need Attendance")}   gradient="linear-gradient(135deg, #feaf00, #ff6437)" />
             </div>
           )}
 
+          {/* Today's Session Banner */}
           {todayJoinable.length > 0 && filter === "all" && (
-            <div className="mb-5 bg-gradient-to-r from-primary to-purple-600 rounded-2xl p-4 text-white relative overflow-hidden">
-              <div className="absolute -top-6 -left-6 w-24 h-24 bg-white/10 rounded-full blur-xl" />
+            <div className="mb-5 rounded-2xl p-4 text-white relative overflow-hidden shadow-lg"
+              style={{background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)"}}>
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+              <div className="absolute -top-8 -right-8 w-32 h-32 bg-[#feaf00]/20 rounded-full blur-2xl" />
               <div className="relative z-10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <Zap className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0 border border-white/20">
+                  <Zap className="w-5 h-5 text-[#feaf00]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-white/70 font-medium">{t("جلسة اليوم جاهزة", "Today's Session Ready")}</p>
-                  <p className="font-bold text-sm truncate">{todayJoinable[0].title}</p>
+                  <p className="text-xs text-white/60 font-bold">{t("جلسة اليوم جاهزة", "Today's Session Ready")}</p>
+                  <p className="font-black text-sm truncate">{todayJoinable[0].title}</p>
                 </div>
                 <a href={todayJoinable[0].meetingLink} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 bg-white text-primary font-bold text-xs px-4 py-2 rounded-xl hover:bg-purple-50 transition-all shadow-lg flex-shrink-0">
+                  className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
+                  style={{color: "#ff6700"}}>
                   <Video className="w-4 h-4" />{t("ابدأ الآن", "Start Now")}
                 </a>
               </div>
             </div>
           )}
 
-          {filter === "all" && !loading && sessions.filter((s) => s.status === "completed" && !s.attendanceTaken).length > 0 && (
-            <div className="mb-5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4">
+          {/* Needs Attendance Warning */}
+          {filter === "all" && !loading && sessions.filter(s => s.status === "completed" && !s.attendanceTaken).length > 0 && (
+            <div className="mb-5 bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20 rounded-2xl p-4">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-                  <ClipboardList className="w-4 h-4 text-amber-600" />
+                <div className="w-9 h-9 rounded-xl bg-[#feaf00]/20 dark:bg-[#feaf00]/10 flex items-center justify-center flex-shrink-0 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+                  <ClipboardList className="w-4 h-4 text-[#f67d00] dark:text-[#feaf00]" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
-                    {sessions.filter((s) => s.status === "completed" && !s.attendanceTaken).length}{" "}
+                  <p className="text-sm font-black text-[#f67d00] dark:text-[#feaf00]">
+                    {sessions.filter(s => s.status === "completed" && !s.attendanceTaken).length}{" "}
                     {t("جلسة تحتاج تسجيل حضور", "sessions need attendance recording")}
                   </p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                  <p className="text-xs text-[#f67d00]/70 dark:text-[#feaf00]/60 mt-0.5">
                     {t("انقر على الجلسة لتسجيل الحضور", "Click on a session to record attendance")}
                   </p>
                 </div>
                 <button onClick={() => setFilter("needs_att")}
-                  className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline flex-shrink-0">
+                  className="text-xs font-black text-[#f67d00] dark:text-[#feaf00] hover:underline flex-shrink-0 px-3 py-1.5 rounded-lg bg-[#feaf00]/20 dark:bg-[#feaf00]/10 border border-[#feaf00]/30 dark:border-[#feaf00]/20 transition-colors hover:bg-[#feaf00]/30 dark:hover:bg-[#feaf00]/20">
                   {t("عرضها", "Show them")}
                 </button>
               </div>
@@ -922,10 +1007,13 @@ export default function InstructorSessionsPage() {
 
           {!loading && error && (
             <div className="text-center py-16">
-              <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+              <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4 border border-red-200 dark:border-red-800/30">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+              </div>
               <p className="text-gray-500 mb-4">{error}</p>
               <button onClick={() => fetchData()}
-                className="px-6 py-3 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl font-bold hover:shadow-lg transition-all">
+                className="px-6 py-3 text-white rounded-xl font-black hover:shadow-lg transition-all"
+                style={{background: "linear-gradient(135deg, #004d59, #ff6700)"}}>
                 {t("إعادة المحاولة", "Try Again")}
               </button>
             </div>
@@ -933,10 +1021,10 @@ export default function InstructorSessionsPage() {
 
           {!loading && !error && sorted.length === 0 && (
             <div className="text-center py-20">
-              <div className="w-20 h-20 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
+              <div className="w-20 h-20 mx-auto rounded-2xl bg-gray-100 dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] flex items-center justify-center mb-4">
                 <Calendar className="w-10 h-10 text-gray-300 dark:text-[#6e7681]" />
               </div>
-              <p className="text-gray-500 dark:text-[#8b949e] font-medium">
+              <p className="text-gray-500 dark:text-[#8b949e] font-bold">
                 {t("لا توجد جلسات في هذا الفلتر", "No sessions found for this filter")}
               </p>
             </div>
@@ -945,22 +1033,18 @@ export default function InstructorSessionsPage() {
           {!loading && !error && sorted.length > 0 && (
             groupByDate ? (
               <div className="space-y-7">
-                {sortedDates.map((dk) => (
+                {sortedDates.map(dk => (
                   <div key={dk}>
                     <DateHeader dateKey={dk} sessions={byDate[dk]} isAr={isAr} />
                     <div className="space-y-2.5" style={{ [isAr ? "paddingRight" : "paddingLeft"]: "60px" }}>
-                      {byDate[dk].map((s) => (
-                        <SessionRow key={s._id} session={s} onOpen={setModal} isAr={isAr} />
-                      ))}
+                      {byDate[dk].map(s => <SessionRow key={s._id} session={s} onOpen={setModal} isAr={isAr} />)}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="space-y-2.5">
-                {sorted.map((s) => (
-                  <SessionRow key={s._id} session={s} onOpen={setModal} isAr={isAr} />
-                ))}
+                {sorted.map(s => <SessionRow key={s._id} session={s} onOpen={setModal} isAr={isAr} />)}
               </div>
             )
           )}

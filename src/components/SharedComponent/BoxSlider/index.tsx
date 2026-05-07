@@ -157,9 +157,7 @@ const BoxSlider = () => {
     eventDate.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
 
-    // إذا كان اليوم هو اليوم الحالي
     if (+eventDate === +today) {
-      // إذا كان اليوم الحالي وليس فيه event
       if (!hasEvent) {
         return "today-no-event";
       }
@@ -242,7 +240,6 @@ const BoxSlider = () => {
             const { day, month, year } = formatDate(dayData.date);
             const status = getEventStatus(dayData.date, dayData.hasEvent);
 
-            // تحديد الكلاسات بناءً على الحالة
             let boxClasses = "";
             let dayClasses = "";
             let dateClasses = "";
@@ -252,7 +249,6 @@ const BoxSlider = () => {
               dayClasses = "text-gray-500";
               dateClasses = "text-gray-500";
             } else if (status === "today-no-event") {
-              // إذا كان اليوم الحالي وليس فيه event
               boxClasses = "bg-gray-300 dark:bg-gray-700 opacity-90 cursor-default";
               dayClasses = "text-gray-500";
               dateClasses = "text-gray-500";
@@ -261,28 +257,23 @@ const BoxSlider = () => {
               dayClasses = "text-primary";
               dateClasses = "text-primary";
             } else if (status === "soon" && !dayData.hasEvent) {
-              // إذا كان يوم مستقبلي وليس فيه event
               boxClasses = "bg-gray-300 dark:bg-gray-700 opacity-90 cursor-default";
               dayClasses = "text-gray-500";
               dateClasses = "text-gray-500";
             } else {
-              // إذا كان يوم مستقبلي وفيه event
-              boxClasses = "bg-IcyBreeze dark:bg-darklight hover:bg-primary transition-all duration-300";
+              boxClasses = "bg-IcyBreeze dark:bg-darklight hover:bg-primary/80 hover:text-white transition-all duration-300 cursor-pointer";
               dayClasses = "text-gray-400 group-hover:text-white";
               dateClasses = "text-gray-400 group-hover:text-white";
             }
 
-            // تحديد النص المعروض لليوم
             const labelForDay = status === "today" || status === "today-no-event"
               ? t("upcoming.today") || (isArabic ? "اليوم" : "Today")
               : day;
 
-            // تحديد البادج
             const smallBadge = status === "soon" && dayData.hasEvent
               ? t("upcoming.comingSoon") || (isArabic ? "قريباً" : "Soon")
               : null;
 
-            // تحقق إذا كان هذا اليوم هو اليوم الحالي
             const isTargetDay = index === targetIndex;
 
             return (

@@ -1,8 +1,6 @@
 "use client";
 
-import React, {
-  useEffect, useState, useCallback, useMemo, useRef,
-} from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/app/context/LocaleContext";
 import StudentSidebar from "../StudentSidebar";
@@ -40,8 +38,7 @@ interface Stats {
   session: number; group: number; credit: number; system: number;
 }
 
-// ─── Color palette ──────────────────────────────────────────────────────────
-// [gradientFrom, gradientTo, softBg, softBgDark, textColor, textColorDark, borderColor, borderColorDark, glowColor]
+// ─── Color palette with brand colors ─────────────────────────────────────────
 const PALETTE: Record<string, string[]> = {
   blue:    ["#3b82f6","#06b6d4", "rgba(59,130,246,.08)","rgba(59,130,246,.12)", "#1d4ed8","#93c5fd", "rgba(59,130,246,.2)","rgba(59,130,246,.25)", "rgba(59,130,246,.15)"],
   cyan:    ["#06b6d4","#0ea5e9", "rgba(6,182,212,.08)","rgba(6,182,212,.12)",  "#0e7490","#67e8f9",  "rgba(6,182,212,.2)","rgba(6,182,212,.25)",  "rgba(6,182,212,.15)"],
@@ -49,7 +46,9 @@ const PALETTE: Record<string, string[]> = {
   amber:   ["#f59e0b","#f97316","rgba(245,158,11,.08)","rgba(245,158,11,.12)", "#92400e","#fcd34d", "rgba(245,158,11,.2)","rgba(245,158,11,.25)", "rgba(245,158,11,.15)"],
   green:   ["#10b981","#34d399","rgba(16,185,129,.08)","rgba(16,185,129,.12)", "#065f46","#6ee7b7", "rgba(16,185,129,.2)","rgba(16,185,129,.25)", "rgba(16,185,129,.15)"],
   purple:  ["#8b5cf6","#a78bfa","rgba(139,92,246,.08)","rgba(139,92,246,.12)", "#5b21b6","#c4b5fd", "rgba(139,92,246,.2)","rgba(139,92,246,.25)", "rgba(139,92,246,.15)"],
-  primary: ["#8c52ff","#a855f7","rgba(140,82,255,.08)","rgba(140,82,255,.12)", "#5b21b6","#c084fc", "rgba(140,82,255,.2)","rgba(140,82,255,.25)", "rgba(140,82,255,.15)"],
+  primary: ["#ff6700","#f67d00","rgba(255,103,0,.08)","rgba(255,103,0,.12)", "#d95200","#ff9a44", "rgba(255,103,0,.2)","rgba(255,103,0,.25)", "rgba(255,103,0,.15)"],
+  secondary: ["#004d59","#ff6437","rgba(0,77,89,.08)","rgba(0,77,89,.12)", "#003540","#00a8b8", "rgba(0,77,89,.2)","rgba(0,77,89,.25)", "rgba(0,77,89,.15)"],
+  accent: ["#feaf00","#f67d00","rgba(254,175,0,.08)","rgba(254,175,0,.12)", "#e69900","#ffcc44", "rgba(254,175,0,.2)","rgba(254,175,0,.25)", "rgba(254,175,0,.15)"],
   gray:    ["#94a3b8","#cbd5e1","rgba(148,163,184,.08)","rgba(148,163,184,.12)","#475569","#94a3b8","rgba(148,163,184,.2)","rgba(148,163,184,.25)","rgba(148,163,184,.1)"],
 };
 
@@ -127,7 +126,6 @@ const MsgCard = React.memo(({ msg, isRTL, onDelete, deleting, idx }: {
   const [confirmDel,  setConfirmDel]  = useState(false);
   const [hovered,     setHovered]     = useState(false);
   
-  // ✅ التصحيح: في المتصفح setTimeout يعيد number
   const timerRef = useRef<number>(undefined);
   
   const p = PALETTE[msg.color] || PALETTE.gray;
@@ -145,12 +143,10 @@ const MsgCard = React.memo(({ msg, isRTL, onDelete, deleting, idx }: {
     }
     else { 
       setConfirmDel(true); 
-      // ✅ استخدام window.setTimeout صراحة
       timerRef.current = window.setTimeout(() => setConfirmDel(false), 3000); 
     }
   };
 
-  // staggered entrance delay
   const delay = `${Math.min(idx * 40, 300)}ms`;
 
   return (
@@ -225,7 +221,7 @@ const MsgCard = React.memo(({ msg, isRTL, onDelete, deleting, idx }: {
               )}
 
               {msg.metadata.remainingHours != null && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-500/20">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
                   <Wallet className="w-2.5 h-2.5" />
                   {isRTL ? `${msg.metadata.remainingHours}س متبقية` : `${msg.metadata.remainingHours}h left`}
                 </span>
@@ -361,7 +357,6 @@ export default function MessagesPage() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [page, setPage]               = useState(1);
   
-  // ✅ التصحيح هنا أيضاً
   const debRef = useRef<number>(undefined);
   const PAGE_SIZE = 25;
 
@@ -388,7 +383,6 @@ export default function MessagesPage() {
   const onSearchInput = (v: string) => {
     setSearchInput(v);
     clearTimeout(debRef.current);
-    // ✅ استخدام window.setTimeout
     debRef.current = window.setTimeout(() => { setSearch(v); setPage(1); }, 220);
   };
   const clearSearch = () => { setSearchInput(""); setSearch(""); setPage(1); };
@@ -428,7 +422,6 @@ export default function MessagesPage() {
       });
     } catch (e) { console.error(e); }
     
-    // ✅ استخدام window.setTimeout
     window.setTimeout(() => {
       setAllMsgs(prev => prev.filter(m => m._id !== id));
       setStats(prev => prev ? { ...prev, all: Math.max(0, prev.all-1) } : prev);
@@ -448,7 +441,7 @@ export default function MessagesPage() {
       <div className="min-h-screen bg-gray-50 dark:bg-[#0d1117] flex items-center justify-center" dir={isRTL?"rtl":"ltr"}>
         <div className="text-center">
           <div className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center shadow-xl mb-4 animate-pulse"
-            style={{ background: "linear-gradient(135deg,#8c52ff,#06b6d4)", boxShadow: "0 16px 40px -8px rgba(140,82,255,.4)" }}>
+            style={{ background: "linear-gradient(135deg,#ff6700,#004d59)", boxShadow: "0 16px 40px -8px rgba(255,103,0,.4)" }}>
             <Bell className="w-8 h-8 text-white" />
           </div>
           <p className="text-sm text-gray-400 dark:text-[#6e7681]">
@@ -484,16 +477,16 @@ export default function MessagesPage() {
           onRefresh={() => fetchAll(true)}
         />
 
-        {/* ── Hero bar ── */}
+        {/* ── Hero bar with brand gradient ── */}
         <div
-          style={{ background: "linear-gradient(135deg, rgba(140,82,255,.06) 0%, rgba(6,182,212,.04) 100%)" }}
+          style={{ background: "linear-gradient(135deg, rgba(255,103,0,.06) 0%, rgba(0,77,89,.04) 100%)" }}
           className="border-b border-gray-100 dark:border-[#21262d] px-4 sm:px-6 lg:px-8 py-5"
         >
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0"
-                style={{ background: "linear-gradient(135deg,#8c52ff,#06b6d4)", boxShadow: "0 8px 20px -4px rgba(140,82,255,.35)" }}
+                style={{ background: "linear-gradient(135deg,#ff6700,#004d59)", boxShadow: "0 8px 20px -4px rgba(255,103,0,.35)" }}
               >
                 <Bell className="w-5 h-5 text-white" />
               </div>
@@ -542,7 +535,7 @@ export default function MessagesPage() {
             )}
           </div>
 
-          {/* ── Filter tabs ── */}
+          {/* ── Filter tabs with brand colors ── */}
           <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
             {TABS.map(tab => {
               const count = stats ? (stats[tab.key as keyof Stats] ?? 0) : 0;
@@ -551,7 +544,7 @@ export default function MessagesPage() {
                 <button
                   key={tab.key}
                   onClick={() => { setActiveFilter(tab.key); setPage(1); }}
-                  style={active ? { background: "linear-gradient(135deg,#8c52ff,#7c3aed)", boxShadow: "0 4px 14px -3px rgba(140,82,255,.35)" } : {}}
+                  style={active ? { background: "linear-gradient(135deg,#ff6700,#004d59)", boxShadow: "0 4px 14px -3px rgba(255,103,0,.35)" } : {}}
                   className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12.5px] font-medium transition-all duration-200 whitespace-nowrap
                     ${active
                       ? "text-white border border-transparent"
@@ -609,7 +602,7 @@ export default function MessagesPage() {
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <div
                 className="w-24 h-24 rounded-3xl flex items-center justify-center mb-5"
-                style={{ background: "linear-gradient(135deg,rgba(140,82,255,.08),rgba(6,182,212,.08))", border: "1px solid rgba(140,82,255,.12)" }}
+                style={{ background: "linear-gradient(135deg,rgba(255,103,0,.08),rgba(0,77,89,.08))", border: "1px solid rgba(255,103,0,.12)" }}
               >
                 {search
                   ? <Search className="w-10 h-10 text-primary/30" />

@@ -18,7 +18,6 @@ import {
   Play,
   CheckCircle,
   Bell,
-  Menu,
   TrendingUp,
   Target,
   Sparkles,
@@ -41,22 +40,6 @@ interface StudentUser {
   role: string;
   studentId?: string;
   image?: string | null;
-}
-
-interface SystemStats {
-  totalStudents?: number;
-  totalActiveCourses?: number;
-  systemCompletionRate?: number;
-  [key: string]: any;
-}
-
-interface AttendanceBreakdown {
-  attended: number;
-  absent: number;
-  late: number;
-  excused: number;
-  completed: number;
-  total: number;
 }
 
 interface Stats {
@@ -87,22 +70,15 @@ interface ProgressStage {
   isActive?: boolean;
 }
 
-interface ProgressStatsCard {
+interface ProgressSummaryCard {
   id: string;
   title: string;
   titleAr: string;
   value: string | number;
   icon: string;
+  iconColor: string;
   bgColor: string;
   borderColor: string;
-  iconColor: string;
-}
-
-interface ProgressData {
-  stages: ProgressStage[];
-  statsCards: ProgressStatsCard[];
-  summaryCards?: ProgressStatsCard[];
-  [key: string]: any;
 }
 
 interface Course {
@@ -135,8 +111,6 @@ interface UpcomingEvent {
   type?: string;
   location?: string;
   groupName?: string;
-  color?: string;
-  icon?: string;
 }
 
 interface NextSession {
@@ -164,16 +138,14 @@ interface Notification {
 interface DashboardData {
   user: StudentUser;
   stats?: Stats;
-  systemStats?: SystemStats;
-  attendanceBreakdown?: AttendanceBreakdown;
-  progressData?: ProgressData;
+  progressData?: {
+    stages: ProgressStage[];
+    summaryCards: ProgressSummaryCard[];
+  };
   nextSession?: NextSession;
   currentCourses?: Course[];
   upcomingEvents?: UpcomingEvent[];
   notifications?: Notification[];
-  groups?: any[];
-  sessions?: any[];
-  [key: string]: any;
 }
 
 interface ApiResponse {
@@ -183,151 +155,70 @@ interface ApiResponse {
   error?: string;
 }
 
-// ============ Loading Skeleton Component ============
-const DashboardSkeleton = () => {
-  const { locale } = useLocale();
-  const isRTL = locale === "ar";
-  
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0d1117]">
-      <div className="flex">
-        {/* Sidebar Skeleton */}
-        <div className="w-64 h-screen bg-white dark:bg-[#161b22] border-l border-gray-200 dark:border-[#30363d] hidden lg:block">
-          <div className="p-6 border-b border-gray-200 dark:border-[#30363d]">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/50 to-purple-600/50 animate-pulse" />
-              <div className="flex-1">
-                <div className="h-5 w-32 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse mb-2" />
-                <div className="h-3 w-24 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
-              </div>
-            </div>
-          </div>
-          <div className="p-3 space-y-2">
-            {[...Array(7)].map((_, i) => (
-              <div key={i} className="flex items-center gap-3 p-3">
-                <div className="w-9 h-9 rounded-lg bg-gray-200 dark:bg-[#21262d] animate-pulse" />
-                <div className="flex-1 h-4 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Main Content Skeleton */}
-        <main className="flex-1 min-w-0">
-          {/* Header Skeleton */}
-          <div className="h-16 bg-white dark:bg-[#161b22] border-b border-gray-200 dark:border-[#30363d] px-6 flex items-center justify-between">
-            <div className="w-8 h-8 bg-gray-200 dark:bg-[#21262d] rounded-lg animate-pulse lg:hidden" />
-            <div className={`flex items-center gap-4 ${isRTL ? 'mr-auto' : 'ml-auto'}`}>
-              <div className="w-8 h-8 bg-gray-200 dark:bg-[#21262d] rounded-full animate-pulse" />
-              <div className="w-8 h-8 bg-gray-200 dark:bg-[#21262d] rounded-full animate-pulse" />
-              <div className="w-10 h-10 bg-gray-200 dark:bg-[#21262d] rounded-full animate-pulse" />
-            </div>
-          </div>
-
-          {/* Content Skeletons */}
-          <div className="p-4 sm:p-6 lg:p-8">
-            {/* Hero Skeleton */}
-            <div className="bg-gradient-to-br from-primary/30 via-lightblue/30 to-lightcyan/30 rounded-3xl p-8 mb-8">
-              <div className="max-w-xl">
-                <div className="h-8 w-64 bg-white/30 rounded animate-pulse mb-4" />
-                <div className="h-4 w-96 bg-white/30 rounded animate-pulse mb-6" />
-                <div className="flex gap-3">
-                  <div className="h-12 w-32 bg-white/30 rounded-xl animate-pulse" />
-                  <div className="h-12 w-32 bg-white/20 rounded-xl animate-pulse" />
-                </div>
-              </div>
-            </div>
-
-            {/* Stats Grid Skeleton */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-[#161b22] rounded-2xl p-6 border border-gray-100 dark:border-[#30363d]">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-[#21262d] animate-pulse" />
-                    <div className="w-16 h-6 bg-gray-200 dark:bg-[#21262d] rounded-full animate-pulse" />
-                  </div>
-                  <div className="h-8 w-24 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse mb-2" />
-                  <div className="h-4 w-32 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
-                </div>
-              ))}
-            </div>
-
-            {/* Progress Section Skeleton */}
-            <div className="bg-white dark:bg-[#161b22] rounded-2xl p-6 lg:p-8 mb-8">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <div className="h-6 w-48 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse mb-2" />
-                  <div className="h-4 w-64 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
-                </div>
-                <div className="h-4 w-20 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
-              </div>
-              <div className="flex justify-between mb-8">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="text-center">
-                    <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-[#21262d] animate-pulse mb-2 mx-auto" />
-                    <div className="h-3 w-16 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse mb-1 mx-auto" />
-                    <div className="h-3 w-12 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse mx-auto" />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Courses Grid Skeleton */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-[#161b22] rounded-2xl p-6 border border-gray-100 dark:border-[#30363d]">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-[#21262d] animate-pulse" />
-                    <div className="w-20 h-6 bg-gray-200 dark:bg-[#21262d] rounded-full animate-pulse" />
-                  </div>
-                  <div className="h-5 w-40 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse mb-2" />
-                  <div className="h-4 w-full bg-gray-200 dark:bg-[#21262d] rounded animate-pulse mb-2" />
-                  <div className="h-4 w-3/4 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse mb-4" />
-                  <div className="mb-4">
-                    <div className="flex justify-between mb-2">
-                      <div className="h-3 w-16 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
-                      <div className="h-3 w-8 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
-                    </div>
-                    <div className="h-2 w-full bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-};
-
-// ============ Animated Counter Component ============
-const AnimatedCounter = ({ value, duration = 2000 }: { value: number; duration?: number }) => {
+// ============ Animated Counter ============
+const AnimatedCounter = ({ value, duration = 1800 }: { value: number; duration?: number }) => {
   const [count, setCount] = useState(0);
-
   useEffect(() => {
     let startTime: number;
-    let animationFrame: number;
-
+    let frame: number;
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
       const progress = Math.min((timestamp - startTime) / duration, 1);
-
-      // Easing function for smooth animation
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-      setCount(Math.floor(easeOutQuart * value));
-
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate);
-      }
+      const eased = 1 - Math.pow(1 - progress, 4);
+      setCount(Math.floor(eased * value));
+      if (progress < 1) frame = requestAnimationFrame(animate);
     };
-
-    animationFrame = requestAnimationFrame(animate);
-
-    return () => cancelAnimationFrame(animationFrame);
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
   }, [value, duration]);
-
   return <span>{count.toLocaleString()}</span>;
 };
+
+// ============ Skeleton ============
+const DashboardSkeleton = ({ isRTL }: { isRTL: boolean }) => (
+  <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17]">
+    <div className="flex">
+      <div className="w-64 h-screen bg-white dark:bg-[#161b22] border-l border-gray-200 dark:border-[#30363d] hidden lg:block">
+        <div className="p-6 border-b border-gray-200 dark:border-[#30363d]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#ff6700]/20 animate-pulse" />
+            <div className="flex-1">
+              <div className="h-5 w-32 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse mb-2" />
+              <div className="h-3 w-24 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+        <div className="p-3 space-y-2">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="flex items-center gap-3 p-3">
+              <div className="w-9 h-9 rounded-lg bg-gray-200 dark:bg-[#21262d] animate-pulse" />
+              <div className="flex-1 h-4 bg-gray-200 dark:bg-[#21262d] rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <main className="flex-1 min-w-0">
+        <div className="h-16 bg-white dark:bg-[#161b22] border-b border-gray-200 dark:border-[#30363d] px-6 flex items-center justify-between">
+          <div className="w-8 h-8 bg-gray-200 dark:bg-[#21262d] rounded-lg animate-pulse lg:hidden" />
+          <div className={`flex items-center gap-4 ${isRTL ? "mr-auto" : "ml-auto"}`}>
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="w-8 h-8 bg-gray-200 dark:bg-[#21262d] rounded-full animate-pulse" />
+            ))}
+          </div>
+        </div>
+        <div className="p-6 lg:p-8">
+          <div className="rounded-3xl p-8 mb-8 animate-pulse h-48"
+            style={{ background: "linear-gradient(135deg, #004d5933 0%, #ff670033 100%)" }} />
+          <div className="grid grid-cols-3 gap-6 mb-8">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white dark:bg-[#161b22] rounded-2xl p-6 h-32 animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+);
 
 // ============ Main Component ============
 export default function StudentDashboard() {
@@ -336,50 +227,35 @@ export default function StudentDashboard() {
   const isRTL = locale === "ar";
   const router = useRouter();
 
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [error, setError] = useState<string>("");
-  const [animateProgress, setAnimateProgress] = useState<boolean>(false);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [error, setError] = useState("");
+  const [animateProgress, setAnimateProgress] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
+  useEffect(() => { fetchData(); }, []);
   useEffect(() => {
-    fetchStudentData();
-  }, []);
-
-  useEffect(() => {
-    if (dashboardData) {
-      setTimeout(() => setAnimateProgress(true), 300);
-    }
+    if (dashboardData) setTimeout(() => setAnimateProgress(true), 300);
   }, [dashboardData]);
 
-  const fetchStudentData = async (showRefresh = false): Promise<void> => {
+  const fetchData = async (showRefresh = false) => {
     try {
-      if (showRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+      if (showRefresh) setRefreshing(true);
+      else setLoading(true);
       setError("");
 
-      const dashboardRes = await fetch(`/api/student/dashboard`, {
+      const res = await fetch("/api/student/dashboard", {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
       });
+      const response: ApiResponse = await res.json();
 
-      const response: ApiResponse = await dashboardRes.json();
-
-      if (!dashboardRes.ok || !response.success) {
-        throw new Error(response.message || response.error || t("common.error"));
-      }
-
+      if (!res.ok || !response.success) throw new Error(response.message || response.error || "Error");
       setDashboardData(response.data);
-    } catch (error: any) {
-      console.error("❌ Error fetching student data:", error);
-      setError(error.message || t("common.error"));
-      if (error.message?.includes("غير مصرح") || error.message?.includes("UNAUTHORIZED")) {
-        router.push("/signin");
-      }
+    } catch (err: any) {
+      setError(err.message);
+      if (err.message?.includes("UNAUTHORIZED")) router.push("/signin");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -388,14 +264,24 @@ export default function StudentDashboard() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-      });
+      await fetch("/api/auth/logout", { method: "POST" });
       localStorage.removeItem("token");
       router.push("/");
-    } catch (error) {
-      console.error("Sign out error:", error);
-    }
+    } catch (e) {}
+  };
+
+  const getStageIcon = (iconName: string): any => {
+    const icons: Record<string, any> = {
+      Play, BookOpen, Award, CheckCircle, Brain, Rocket,
+    };
+    return icons[iconName] || BookOpen;
+  };
+
+  const getStatIcon = (iconName: string): any => {
+    const icons: Record<string, any> = {
+      CheckCircle, Clock, Award, TrendingUp, Target, Star, X, BarChart3,
+    };
+    return icons[iconName] || CheckCircle;
   };
 
   const getCourseIcon = (iconType: string): React.ReactNode => {
@@ -424,70 +310,39 @@ export default function StudentDashboard() {
     return icons[iconType] || icons.code;
   };
 
-  const getStageIcon = (iconName: string): any => {
-    const icons: Record<string, any> = {
-      Play: Play,
-      BookOpen: BookOpen,
-      Award: Award,
-      CheckCircle: CheckCircle,
-      Brain: Brain,
-      Rocket: Rocket,
-    };
-    return icons[iconName] || BookOpen;
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return isRTL ? "صباح الخير" : "Good Morning";
+    if (h < 18) return isRTL ? "مساء الخير" : "Good Afternoon";
+    return isRTL ? "مساء الخير" : "Good Evening";
   };
 
-  const getStatIcon = (iconName: string): any => {
-    const icons: Record<string, any> = {
-      CheckCircle: CheckCircle,
-      Clock: Clock,
-      Award: Award,
-      TrendingUp: TrendingUp,
-      Target: Target,
-      Star: Star,
-      X: X,
-      BarChart3: BarChart3,
-    };
-    return icons[iconName] || CheckCircle;
-  };
+  if (loading) return <DashboardSkeleton isRTL={isRTL} />;
 
-  // ── Loading State with Skeleton ──
-  if (loading) {
-    return <DashboardSkeleton />;
-  }
-
-  // ── Error State with Better Design ──
   if (error && !dashboardData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22]" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="text-center max-w-md mx-auto p-8">
-          <div className="relative mb-6">
-            <div className="w-24 h-24 mx-auto bg-red-100 dark:bg-red-500/10 rounded-full flex items-center justify-center">
-              <AlertCircle className="h-12 w-12 text-red-500 animate-pulse" />
-            </div>
-            <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-yellow-400 animate-spin-slow" />
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fb] dark:bg-[#0a0f17]" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="text-center max-w-md p-8">
+          <div className="w-24 h-24 mx-auto bg-red-100 dark:bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+            <AlertCircle className="h-12 w-12 text-red-500 animate-pulse" />
           </div>
-
           <h3 className="text-2xl font-bold text-gray-900 dark:text-[#e6edf3] mb-3">
-            {t("common.error")}
+            {isRTL ? "حدث خطأ" : "Something went wrong"}
           </h3>
-
-          <p className="text-gray-600 dark:text-[#8b949e] mb-6">
-            {error}
-          </p>
-
+          <p className="text-gray-600 dark:text-[#8b949e] mb-6">{error}</p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={() => fetchStudentData()}
-              className="px-6 py-3 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 transform hover:scale-105"
+              onClick={() => fetchData()}
+              className="px-6 py-3 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+              style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
             >
-              {t("common.tryAgain")}
+              {isRTL ? "إعادة المحاولة" : "Try Again"}
             </button>
-
             <button
               onClick={() => router.push("/")}
-              className="px-6 py-3 bg-gray-200 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] rounded-xl font-semibold hover:bg-gray-300 dark:hover:bg-[#30363d] transition-all duration-300"
+              className="px-6 py-3 bg-gray-200 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] rounded-xl font-semibold transition-all"
             >
-              {t("common.home")}
+              {isRTL ? "الرئيسية" : "Home"}
             </button>
           </div>
         </div>
@@ -498,8 +353,6 @@ export default function StudentDashboard() {
   const {
     user,
     stats,
-    systemStats,
-    attendanceBreakdown,
     progressData,
     nextSession,
     currentCourses = [],
@@ -507,46 +360,16 @@ export default function StudentDashboard() {
     notifications = [],
   } = dashboardData || {};
 
-  const currentUser = user || { _id: "", name: t("common.student"), email: "", role: "student", image: null };
-  const currentSystemStats = systemStats || { totalStudents: 0, totalActiveCourses: 0, systemCompletionRate: 87 };
-  const currentStats = stats || { 
-    totalSessions: 0, 
-    completedSessions: 0,
-    attendedSessions: 0, 
-    lateSessions: 0, 
-    excusedSessions: 0,
-    absentSessions: 0,
-    attendanceRate: 0,
-    progressPercentage: 0,
-    totalGroups: 0,
-    activeGroups: 0 
-  };
-
-  // ✅ حساب القيم الصحيحة
-  const completedSessionsCount = currentStats.completedSessions || 0;
-  const totalSessionsCount = currentStats.totalSessions || 0;
-  const progressPercentage = currentStats.progressPercentage || 
-    (totalSessionsCount > 0 ? Math.round((completedSessionsCount / totalSessionsCount) * 100) : 0);
+  const currentUser = user || { _id: "", name: isRTL ? "طالب" : "Student", email: "", role: "student", image: null };
   
-  const attendedSessionsCount = currentStats.attendedSessions || 0;
-  const absentSessionsCount = currentStats.absentSessions || 0;
-  const lateSessionsCount = currentStats.lateSessions || 0;
-  
-  // ✅ كل جلسة = ساعتين
-  const hoursLearnedCount = completedSessionsCount * 2;
-  
-  // ✅ الإنجازات (1 لكل 5 جلسات)
+  const attendedSessionsCount = stats?.attendedSessions || 0;
+  const absentSessionsCount = stats?.absentSessions || 0;
+  const totalSessionsCount = stats?.totalSessions || 1;
+  const completedSessionsCount = stats?.completedSessions || 0;
   const achievementsCount = Math.min(Math.floor(completedSessionsCount / 5), 20);
+  const progressPercentage = stats?.progressPercentage || 
+    (totalSessionsCount > 0 ? Math.round((completedSessionsCount / totalSessionsCount) * 100) : 0);
 
-  // Get greeting based on time
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return t("common.goodMorning");
-    if (hour < 18) return t("common.goodAfternoon");
-    return t("common.goodEvening");
-  };
-
-  // Prepare progress stages from API or use defaults
   const progressStages = progressData?.stages || [
     {
       id: "start",
@@ -555,19 +378,18 @@ export default function StudentDashboard() {
       percentage: 100,
       status: "completed",
       icon: "Play",
-      color: "green",
-      gradient: "from-green-400 to-emerald-500"
+      gradient: "from-[#004d59] to-[#ff6700]",
+      color: "green"
     },
     {
       id: "current",
       label: "Current Level",
       labelAr: "المستوى الحالي",
       percentage: progressPercentage,
-      status: progressPercentage >= 100 ? "completed" : 
-              progressPercentage >= 80 ? "almost_there" : "active",
+      status: progressPercentage >= 100 ? "completed" : progressPercentage >= 80 ? "almost_there" : "active",
       icon: "BookOpen",
+      gradient: "from-[#ff6700] to-[#feaf00]",
       color: "blue",
-      gradient: "from-blue-400 to-cyan-500",
       isActive: progressPercentage < 100
     },
     {
@@ -577,8 +399,8 @@ export default function StudentDashboard() {
       percentage: Math.min(progressPercentage + 25, 100),
       status: progressPercentage >= 75 ? "almost_there" : "pending",
       icon: "Award",
-      color: "purple",
-      gradient: "from-purple-400 to-pink-500"
+      gradient: "from-[#004d59] to-[#ff6437]",
+      color: "purple"
     },
     {
       id: "completion",
@@ -587,99 +409,118 @@ export default function StudentDashboard() {
       percentage: progressPercentage >= 100 ? 100 : 0,
       status: progressPercentage >= 100 ? "completed" : "pending",
       icon: "CheckCircle",
-      color: "gray",
-      gradient: "from-gray-400 to-slate-400"
+      gradient: "from-[#004d59] to-[#004d59]/70",
+      color: "gray"
     }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22] flex relative" dir={isRTL ? "rtl" : "ltr"}>
+    <div
+      className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17] flex relative"
+      dir={isRTL ? "rtl" : "ltr"}
+    >
       {/* Refresh indicator */}
       {refreshing && (
-        <div className={`fixed top-4 ${isRTL ? 'left-4' : 'right-4'} z-50 bg-primary text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-slide-down`}>
+        <div className={`fixed top-4 ${isRTL ? "left-4" : "right-4"} z-50 text-white px-4 py-2 rounded-xl shadow-xl flex items-center gap-2`}
+          style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-sm">{t("common.refreshing")}</span>
+          <span className="text-sm font-bold">{isRTL ? "جاري التحديث..." : "Refreshing..."}</span>
         </div>
       )}
 
-      {/* Mobile sidebar backdrop with blur */}
+      {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/40 dark:bg-black/60 z-40 lg:hidden backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <div
-        className={`
-          fixed lg:static inset-y-0 ${isRTL ? "right-0" : "left-0"} z-50 transform transition-all duration-500 ease-out-expo
-          ${sidebarOpen 
-            ? (isRTL ? "translate-x-0" : "translate-x-0") 
-            : (isRTL ? "translate-x-full" : "-translate-x-full") + " lg:translate-x-0"
-          }
-          flex-shrink-0
-        `}
+        className={`fixed lg:static inset-y-0 ${isRTL ? "right-0" : "left-0"} z-50 transform transition-all duration-500
+          ${sidebarOpen ? "translate-x-0" : (isRTL ? "translate-x-full" : "-translate-x-full") + " lg:translate-x-0"}
+          flex-shrink-0`}
       >
         <StudentSidebar user={currentUser} onLogout={handleLogout} />
       </div>
 
-      {/* Main Content */}
+      {/* Main */}
       <main className="flex-1 min-w-0 transition-all duration-300">
         <StudentHeader
           user={currentUser}
           notifications={notifications}
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
           sidebarOpen={sidebarOpen}
-          onRefresh={() => fetchStudentData(true)}
+          onRefresh={() => fetchData(true)}
         />
 
-        {/* Content Area */}
         <div className="p-4 sm:p-6 lg:p-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
 
-            {/* ══════════════ Left Column ══════════════ */}
+            {/* ── Left Column ── */}
             <div className="lg:col-span-2 space-y-6 lg:space-y-8">
 
-              {/* Hero Banner - مصغر */}
+              {/* Hero Banner */}
               <div className="relative group max-w-4xl mx-auto">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary via-purple-600 to-pink-600 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500" />
-                <div className="relative bg-gradient-to-br from-primary via-purple-600 to-pink-600 rounded-3xl p-6 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-                  <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-slow" />
-                  <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse-slower" />
+                <div className="absolute inset-0 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500"
+                  style={{ background: "linear-gradient(135deg, #004d59, #ff6700, #feaf00)" }} />
+                <div className="relative rounded-3xl p-6 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
+                  style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}>
+
+                  {/* dot pattern */}
+                  <div className="absolute inset-0 opacity-10"
+                    style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+                  <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl animate-pulse-slow"
+                    style={{ background: "#feaf00", opacity: 0.15 }} />
+                  <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full blur-3xl animate-pulse-slower"
+                    style={{ background: "#ff6437", opacity: 0.1 }} />
 
                   <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-6">
                     <div className="max-w-xl text-center lg:text-right">
                       <div className="flex items-center gap-2 justify-center lg:justify-start mb-2">
-                        <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
-                        <span className="text-yellow-300 font-medium text-sm">
-                          {getGreeting()}, {currentUser.name?.split(' ')[0] || t("common.student")}!
+                        <Sparkles className="w-4 h-4 text-[#feaf00] animate-pulse" />
+                        <span className="text-[#feaf00] font-bold text-sm">
+                          {getGreeting()}, {currentUser?.name?.split(" ")[0] || (isRTL ? "طالب" : "Student")}!
                         </span>
                       </div>
 
-                      <h2 className="text-2xl lg:text-3xl font-bold text-white mb-3">
-                        {t("dashboard.continueJourney")}
+                      <h2 className="text-2xl lg:text-3xl font-black text-white mb-3">
+                        {isRTL ? "رحلتك التعليمية" : "Your Learning Journey"}
                       </h2>
 
-                      <p className="text-blue-100 mb-6 text-base">
-                        {t("dashboard.progressMessage")}
+                      <p className="text-white/70 mb-6 text-base">
+                        {isRTL
+                          ? `لديك ${stats?.totalSessions || 0} جلسة إجمالية و ${stats?.attendedSessions || 0} جلسة حضرتها`
+                          : `You have ${stats?.totalSessions || 0} total sessions and attended ${stats?.attendedSessions || 0}`}
                       </p>
 
                       <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
                         <Link
-                          href="/dashboard/sessions"
-                          className="group/btn relative px-6 py-3 bg-white text-primary rounded-xl font-semibold hover:bg-blue-50 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-1 overflow-hidden text-sm"
-                        >
-                          <span className="relative z-10">{t("dashboard.browseCourses")}</span>
-                          <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-white opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300" />
-                        </Link>
+  href="/dashboard/sessions"
+  className="
+    group/btn relative px-6 py-3 rounded-xl font-black
+    text-white text-sm overflow-hidden
+    transition-all duration-300
+    shadow-[0_10px_30px_rgba(255,103,0,0.25)]
+    hover:shadow-[0_15px_40px_rgba(0,77,89,0.35)]
+    hover:-translate-y-1
+    bg-gradient-to-r from-[#004d59] via-[#ff6700] to-[#feaf00]
+    bg-[length:200%_200%]
+    hover:bg-right
+  "
+>
+  {/* Glow Effect */}
+  <span className="absolute inset-0 bg-white/10 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300" />
 
-                        {/* <button className="group/btn relative px-6 py-3 bg-white/10 backdrop-blur-sm text-white rounded-xl font-semibold hover:bg-white/20 transition-all duration-300 border border-white/20 overflow-hidden shadow-sm hover:shadow-md text-sm">
-                          <span className="relative z-10 flex items-center gap-2">
-                            <Zap className="w-4 h-4" />
-                            {t("dashboard.quickStart")}
-                          </span>
-                        </button> */}
+  {/* Shine Effect */}
+  <span className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover/btn:left-full transition-all duration-700" />
+
+  <span className="relative z-10 flex items-center gap-2">
+    {isRTL ? "جلساتي" : "My Sessions"}
+    <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+  </span>
+</Link>
                       </div>
                     </div>
 
@@ -694,134 +535,113 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              {/* Stats Cards - Attendance مع Achievements (حضور, غياب, إنجازات) */}
+              {/* Stats Cards: Attended, Absent, Achievements */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                {/* Attended Card */}
-                <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1">
-                  <div className="absolute inset-0 bg-gradient-to-br from-green-400/0 to-emerald-500/0 group-hover/stats:from-green-400/10 group-hover/stats:to-emerald-500/10 rounded-2xl transition-all duration-300" />
 
+                {/* Attended Sessions */}
+                <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4"
+                    style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }} />
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover/stats:scale-110 transition-transform duration-300">
+                      <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300"
+                        style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
                         <CheckCircle className="w-7 h-7 text-white" />
                       </div>
-                      <span className="px-3 py-1 bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400 rounded-full text-xs font-semibold">
-                        {t("dashboard.attended")}
+                      <span className="px-3 py-1 rounded-full text-xs font-bold"
+                        style={{ background: "#ff670015", color: "#ff6700", border: "1px solid #ff670025" }}>
+                        {isRTL ? "حضور" : "Attended"}
                       </span>
                     </div>
-
-                    <h3 className="text-3xl font-bold text-gray-900 dark:text-[#e6edf3] mb-1">
+                    <h3 className="text-3xl font-black text-gray-900 dark:text-[#e6edf3] mb-1">
                       <AnimatedCounter value={attendedSessionsCount} />
                     </h3>
-
                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                      {t("dashboard.attendedSessions")}
+                      {isRTL ? "الجلسات التي حضرتها" : "Sessions Attended"}
                     </p>
-
-                    <div className="mt-4 h-1 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full" 
-                        style={{ width: `${totalSessionsCount > 0 ? (attendedSessionsCount / totalSessionsCount) * 100 : 0}%` }}
-                      />
+                    <div className="mt-4 h-1.5 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full"
+                        style={{ width: `${(attendedSessionsCount / totalSessionsCount) * 100}%`, background: "linear-gradient(90deg, #004d59, #ff6700)" }} />
                     </div>
                   </div>
                 </div>
 
-                {/* Absent Card */}
-                <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1">
-                  <div className="absolute inset-0 bg-gradient-to-br from-red-400/0 to-red-500/0 group-hover/stats:from-red-400/10 group-hover/stats:to-red-500/10 rounded-2xl transition-all duration-300" />
-
+                {/* Absent Sessions */}
+                <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4"
+                    style={{ background: "linear-gradient(135deg, #ef4444, #f87171)" }} />
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-red-400 to-red-500 flex items-center justify-center shadow-lg shadow-red-500/20 group-hover/stats:scale-110 transition-transform duration-300">
+                      <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300"
+                        style={{ background: "linear-gradient(135deg, #ef4444, #f87171)" }}>
                         <X className="w-7 h-7 text-white" />
                       </div>
-                      <span className="px-3 py-1 bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 rounded-full text-xs font-semibold">
-                        {t("dashboard.absent")}
+                      <span className="px-3 py-1 rounded-full text-xs font-bold"
+                        style={{ background: "#ef444415", color: "#ef4444", border: "1px solid #ef444425" }}>
+                        {isRTL ? "غياب" : "Absent"}
                       </span>
                     </div>
-
-                    <h3 className="text-3xl font-bold text-gray-900 dark:text-[#e6edf3] mb-1">
+                    <h3 className="text-3xl font-black text-gray-900 dark:text-[#e6edf3] mb-1">
                       <AnimatedCounter value={absentSessionsCount} />
                     </h3>
-
                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                      {t("dashboard.absentSessions")}
+                      {isRTL ? "الجلسات التي غاب عنها" : "Sessions Absent"}
                     </p>
-
-                    <div className="mt-4 h-1 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-red-400 to-red-500 rounded-full" 
-                        style={{ width: `${totalSessionsCount > 0 ? (absentSessionsCount / totalSessionsCount) * 100 : 0}%` }}
-                      />
+                    <div className="mt-4 h-1.5 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full"
+                        style={{ width: `${(absentSessionsCount / totalSessionsCount) * 100}%`, background: "linear-gradient(90deg, #ef4444, #f87171)" }} />
                     </div>
                   </div>
                 </div>
 
-                {/* Achievements Card */}
-                <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1">
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-400/0 to-pink-500/0 group-hover/stats:from-purple-400/10 group-hover/stats:to-pink-500/10 rounded-2xl transition-all duration-300" />
-
+                {/* Achievements */}
+                <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4"
+                    style={{ background: "linear-gradient(135deg, #feaf00, #f67d00)" }} />
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20 group-hover/stats:scale-110 transition-transform duration-300">
+                      <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300"
+                        style={{ background: "linear-gradient(135deg, #feaf00, #f67d00)" }}>
                         <Award className="w-7 h-7 text-white" />
                       </div>
-                      <span className="px-3 py-1 bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full text-xs font-semibold">
-                        {t("dashboard.achievements")}
+                      <span className="px-3 py-1 rounded-full text-xs font-bold"
+                        style={{ background: "#feaf0015", color: "#f67d00", border: "1px solid #feaf0030" }}>
+                        {isRTL ? "إنجازات" : "Achievements"}
                       </span>
                     </div>
-
-                    <h3 className="text-3xl font-bold text-gray-900 dark:text-[#e6edf3] mb-1">
+                    <h3 className="text-3xl font-black text-gray-900 dark:text-[#e6edf3] mb-1">
                       <AnimatedCounter value={achievementsCount} />
                     </h3>
-
                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                      {t("dashboard.achievements")}
+                      {isRTL ? "الإنجازات التي حققتها" : "Achievements Earned"}
                     </p>
-
-                    <div className="mt-4 h-1 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-purple-400 to-pink-500 rounded-full" 
-                        style={{ width: `${achievementsCount > 0 ? Math.min((achievementsCount / 20) * 100, 100) : 0}%` }}
-                      />
+                    <div className="mt-4 h-1.5 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full"
+                        style={{ width: `${(achievementsCount / 20) * 100}%`, background: "linear-gradient(90deg, #feaf00, #f67d00)" }} />
                     </div>
                   </div>
                 </div>
-              </div>          
+              </div>
 
-              {/* Progress Section with improved design */}
+              {/* Progress Section */}
               <div className="group/progress relative bg-white dark:bg-[#161b22] rounded-2xl p-6 lg:p-8 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl transition-all duration-300">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-purple-600/0 group-hover/progress:from-primary/5 group-hover/progress:to-purple-600/5 rounded-2xl transition-all duration-300" />
-
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h3 className="text-2xl font-bold text-gray-900 dark:text-[#e6edf3] mb-2 flex items-center gap-2">
-                        <TrendingUp className="w-6 h-6 text-primary" />
-                        {t("dashboard.learningProgress")}
+                      <h3 className="text-2xl font-black text-gray-900 dark:text-[#e6edf3] mb-2 flex items-center gap-2">
+                        <TrendingUp className="w-6 h-6" style={{ color: "#ff6700" }} />
+                        {isRTL ? "تقدم التعلم" : "Learning Progress"}
                       </h3>
                       <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                        {t("dashboard.trackJourney")}
+                        {isRTL ? "تتبع إنجازاتك التعليمية" : "Track your learning achievements"}
                       </p>
                     </div>
-                    {/* <Link
-                      href="/dashboard/progress"
-                      className="group/link text-primary hover:text-primary/80 text-sm font-medium flex items-center gap-1 px-4 py-2 rounded-lg hover:bg-primary/5 transition-all"
-                    >
-                      {t("dashboard.viewDetails")}
-                      {isRTL ? (
-                        <ChevronLeft className="w-4 h-4 group-hover/link:-translate-x-1 transition-transform" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 group-hover/link:translate-x-1 transition-transform" />
-                      )}
-                    </Link> */}
                   </div>
 
                   {/* Progress Timeline */}
                   <div className="relative mb-8 w-full">
                     <div className="flex w-full items-stretch">
-                      {progressStages.map((stage: ProgressStage, index: number) => {
+                      {progressStages.map((stage, index) => {
                         const StageIcon = getStageIcon(stage.icon);
                         const isCompleted = stage.status === "completed";
                         const isActive = stage.isActive || stage.status === "active";
@@ -830,50 +650,51 @@ export default function StudentDashboard() {
 
                         const nextStage = progressStages[index + 1];
                         let lineProgress = 0;
-                        if (isCompleted) {
-                          lineProgress = 100;
-                        } else if (isActive && nextStage) {
+                        if (isCompleted) lineProgress = 100;
+                        else if (isActive && nextStage) {
                           const cur = stage.percentage || 0;
                           const nxt = nextStage.percentage || 0;
                           lineProgress = cur > 0 && nxt > 0 ? Math.min((cur / nxt) * 100, 100) : 0;
                         }
 
+                        const stageStyle = isCompleted
+                          ? { background: "linear-gradient(135deg, #004d59, #ff6700)" }
+                          : isActive
+                          ? { background: "linear-gradient(135deg, #ff6700, #feaf00)" }
+                          : isAlmostThere
+                          ? { background: "linear-gradient(135deg, #004d59, #ff6437)", opacity: 0.6 }
+                          : {};
+
                         return (
-                          <div
-                            key={stage.id}
-                            className={`flex items-center ${index === progressStages.length - 1 ? "flex-none" : "flex-1"}`}
-                          >
-                            {/* Stage Circle */}
+                          <div key={stage.id} className={`flex items-center ${index === progressStages.length - 1 ? "flex-none" : "flex-1"}`}>
                             <div className="flex flex-col items-center w-16">
                               <div
                                 className={`
-                                  relative w-14 h-14 rounded-full flex items-center justify-center shadow-lg mb-2
-                                  transition-all duration-700 ease-out-expo mx-auto
+                                  relative w-14 h-14 rounded-full flex items-center justify-center shadow-lg mb-2 mx-auto
+                                  transition-all duration-700
                                   ${animateProgress ? "scale-100 opacity-100" : "scale-50 opacity-0"}
-                                  ${isCompleted ? `bg-gradient-to-br ${stage.gradient}` : ""}
-                                  ${isActive ? `bg-gradient-to-br ${stage.gradient} ring-4 ring-${stage.color}-200 dark:ring-${stage.color}-500/20 animate-pulse-ring` : ""}
-                                  ${isAlmostThere ? `bg-gradient-to-br ${stage.gradient} opacity-60` : ""}
                                   ${isPending ? "bg-gray-100 dark:bg-[#21262d] border-2 border-gray-200 dark:border-[#30363d]" : ""}
+                                  ${isActive ? "ring-4 ring-[#ff6700]/20 animate-pulse-ring" : ""}
                                 `}
-                                style={{ transitionDelay: `${index * 150}ms` }}
+                                style={{
+                                  ...(isPending ? {} : stageStyle),
+                                  transitionDelay: `${index * 150}ms`,
+                                }}
                               >
                                 <StageIcon
-                                  className={`
-                                    w-6 h-6 transition-all duration-500
-                                    ${isPending ? "text-gray-300 dark:text-[#6e7681]" : "text-white"}
-                                    ${isActive ? "animate-bounce" : ""}
-                                  `}
+                                  className={`w-6 h-6 transition-all duration-500 ${isPending ? "text-gray-300 dark:text-[#6e7681]" : "text-white"} ${isActive ? "animate-bounce" : ""}`}
                                 />
-
                                 {isActive && (
                                   <>
-                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-4 border-white dark:border-[#161b22] animate-ping" />
-                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-4 border-white dark:border-[#161b22]" />
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full border-4 border-white dark:border-[#161b22] animate-ping"
+                                      style={{ background: "#ff6700" }} />
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full border-4 border-white dark:border-[#161b22]"
+                                      style={{ background: "#ff6700" }} />
                                   </>
                                 )}
-
                                 {isCompleted && (
-                                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-[#161b22] flex items-center justify-center">
+                                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white dark:border-[#161b22] flex items-center justify-center"
+                                    style={{ background: "#004d59" }}>
                                     <CheckCircle className="w-3 h-3 text-white" />
                                   </div>
                                 )}
@@ -882,39 +703,33 @@ export default function StudentDashboard() {
                               <div className="text-center w-full">
                                 <span
                                   className={`
-                                    inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold mb-1
+                                    inline-block px-2 py-0.5 rounded-full text-[10px] font-black mb-1
                                     transition-all duration-500
                                     ${animateProgress ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}
-                                    ${isCompleted ? "bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400" : ""}
-                                    ${isActive ? "bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400" : ""}
-                                    ${isAlmostThere ? "bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400" : ""}
-                                    ${isPending ? "bg-gray-100 dark:bg-[#21262d] text-gray-500 dark:text-[#6e7681]" : ""}
                                   `}
-                                  style={{ transitionDelay: `${index * 150 + 100}ms` }}
+                                  style={{
+                                    ...(isCompleted ? { background: "#004d5915", color: "#004d59", border: "1px solid #004d5925" }
+                                      : isActive ? { background: "#ff670015", color: "#ff6700", border: "1px solid #ff670025" }
+                                      : isAlmostThere ? { background: "#feaf0015", color: "#f67d00", border: "1px solid #feaf0025" }
+                                      : { background: "#f3f4f6", color: "#9ca3af", border: "1px solid #e5e7eb" }),
+                                    transitionDelay: `${index * 150 + 100}ms`,
+                                  }}
                                 >
-                                  {isCompleted && t("dashboard.completed")}
-                                  {isActive && t("dashboard.inProgress")}
-                                  {isAlmostThere && t("dashboard.almostThere")}
-                                  {isPending && t("dashboard.pending")}
+                                  {isCompleted && (isRTL ? "مكتمل" : "Done")}
+                                  {isActive && (isRTL ? "جارٍ" : "Active")}
+                                  {isAlmostThere && (isRTL ? "قريباً" : "Soon")}
+                                  {isPending && (isRTL ? "قادم" : "Pending")}
                                 </span>
 
                                 <p
-                                  className={`
-                                    font-semibold text-xs transition-all duration-500 truncate px-1
-                                    ${animateProgress ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}
-                                    ${isPending ? "text-gray-500 dark:text-[#8b949e]" : "text-gray-900 dark:text-[#e6edf3]"}
-                                  `}
+                                  className={`font-black text-xs transition-all duration-500 truncate px-1 ${animateProgress ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"} ${isPending ? "text-gray-500 dark:text-[#8b949e]" : "text-gray-900 dark:text-[#e6edf3]"}`}
                                   style={{ transitionDelay: `${index * 150 + 150}ms` }}
                                 >
                                   {isRTL ? stage.labelAr : stage.label}
                                 </p>
 
                                 <p
-                                  className={`
-                                    text-[10px] transition-all duration-500
-                                    ${animateProgress ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}
-                                    ${isPending ? "text-gray-400 dark:text-[#6e7681]" : "text-gray-500 dark:text-[#8b949e]"}
-                                  `}
+                                  className={`text-[10px] transition-all duration-500 ${animateProgress ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"} ${isPending ? "text-gray-400 dark:text-[#6e7681]" : "text-gray-500 dark:text-[#8b949e]"}`}
                                   style={{ transitionDelay: `${index * 150 + 200}ms` }}
                                 >
                                   {stage.percentage}%
@@ -922,18 +737,14 @@ export default function StudentDashboard() {
                               </div>
                             </div>
 
-                            {/* Progress Line */}
                             {index < progressStages.length - 1 && (
                               <div className="flex-1 h-2 relative overflow-hidden mx-0.5">
                                 <div className="absolute inset-0 bg-gray-200 dark:bg-[#30363d] rounded-full" />
                                 <div
-                                  className={`
-                                    absolute left-0 top-0 h-full rounded-full
-                                    transition-all duration-1000 ease-out-expo
-                                    bg-gradient-to-r ${stage.gradient}
-                                  `}
+                                  className="absolute left-0 top-0 h-full rounded-full transition-all duration-1000"
                                   style={{
                                     width: animateProgress ? `${lineProgress}%` : "0%",
+                                    background: "linear-gradient(90deg, #004d59, #ff6700)",
                                     transitionDelay: `${index * 150 + 300}ms`,
                                   }}
                                 >
@@ -941,16 +752,13 @@ export default function StudentDashboard() {
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer" />
                                   )}
                                 </div>
-
                                 {isActive && lineProgress > 0 && lineProgress < 100 && (
                                   <div
-                                    className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg transition-all duration-1000 ease-out-expo"
-                                    style={{
-                                      left: animateProgress ? `${lineProgress}%` : "0%",
-                                      transitionDelay: `${index * 150 + 300}ms`,
-                                    }}
+                                    className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg transition-all duration-1000"
+                                    style={{ left: animateProgress ? `${lineProgress}%` : "0%", transitionDelay: `${index * 150 + 300}ms` }}
                                   >
-                                    <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-75" />
+                                    <div className="absolute inset-0 rounded-full animate-ping opacity-75"
+                                      style={{ background: "#ff6700" }} />
                                   </div>
                                 )}
                               </div>
@@ -961,53 +769,11 @@ export default function StudentDashboard() {
                     </div>
                   </div>
 
-                  {/* Progress Stats Cards - إذا كانت موجودة في API */}
-                  {progressData?.summaryCards && progressData.summaryCards.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 justify-items-center mt-6">
-                      {progressData.summaryCards.map((card: ProgressStatsCard, idx: number) => {
+                  {/* Summary Cards */}
+                  {progressData?.summaryCards && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                      {progressData.summaryCards.map((card, idx) => {
                         const StatIcon = getStatIcon(card.icon);
-                        
-                        // ✅ لو الـ card هي achievements، بنحولها لـ completion rate
-                        if (card.id === "achievements" || card.title === "Achievements" || card.titleAr === "الإنجازات") {
-                          return (
-                            <div
-                              key={card.id}
-                              className={`
-                                relative group/card flex items-start gap-3 p-5 rounded-xl border w-full
-                                transition-all duration-500 hover:shadow-xl hover:scale-105 cursor-pointer
-                                ${animateProgress ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}
-                                bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border-blue-200 dark:border-blue-800
-                              `}
-                              style={{ transitionDelay: `${600 + idx * 100}ms` }}
-                            >
-                              <div className="absolute inset-0 bg-gradient-to-br from-white/0 to-white/10 rounded-xl opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" />
-
-                              <div className="absolute inset-0 rounded-xl overflow-hidden">
-                                <div 
-                                  className="h-full bg-gradient-to-r from-blue-400/20 to-cyan-400/20 transition-all duration-1000"
-                                  style={{ width: `${progressPercentage}%` }}
-                                />
-                              </div>
-
-                              <div className="relative z-10 w-12 h-12 rounded-lg bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center flex-shrink-0">
-                                <BarChart3 className="w-6 h-6 text-white" />
-                              </div>
-
-                              <div className="relative z-10 flex-1 min-w-0">
-                                <h4 className="text-3xl font-bold text-gray-900 dark:text-[#e6edf3] mb-0.5">
-                                  {progressPercentage}%
-                                </h4>
-                                <p className="text-xs text-gray-500 dark:text-[#8b949e]">
-                                  {isRTL ? "نسبة الإكمال" : "Completion Rate"}
-                                </p>
-                              </div>
-
-                              <Sparkles className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" />
-                            </div>
-                          );
-                        }
-
-                        // ✅ باقي الكاردز (Attended, Absent) تفضل زي ما هي
                         return (
                           <div
                             key={card.id}
@@ -1015,26 +781,24 @@ export default function StudentDashboard() {
                               relative group/card flex items-start gap-3 p-5 rounded-xl border w-full
                               transition-all duration-500 hover:shadow-xl hover:scale-105 cursor-pointer
                               ${animateProgress ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}
-                              ${card.bgColor} ${card.borderColor}
+                              bg-white dark:bg-[#161b22]
                             `}
-                            style={{ transitionDelay: `${600 + idx * 100}ms` }}
+                            style={{
+                              borderColor: "#004d5920",
+                              transitionDelay: `${600 + idx * 100}ms`,
+                            }}
                           >
-                            <div className={`absolute inset-0 bg-gradient-to-br from-white/0 to-white/10 rounded-xl opacity-0 group-hover/card:opacity-100 transition-opacity duration-300`} />
-
                             <div className={`relative z-10 w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${card.iconColor}`}>
                               <StatIcon className="w-6 h-6" />
                             </div>
-
                             <div className="relative z-10 flex-1 min-w-0">
-                              <h4 className="text-3xl font-bold text-gray-900 dark:text-[#e6edf3] mb-0.5">
+                              <h4 className="text-3xl font-black text-gray-900 dark:text-[#e6edf3] mb-0.5">
                                 {card.value}
                               </h4>
                               <p className="text-xs text-gray-500 dark:text-[#8b949e]">
                                 {isRTL ? card.titleAr : card.title}
                               </p>
                             </div>
-
-                            <Sparkles className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" />
                           </div>
                         );
                       })}
@@ -1043,100 +807,96 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              {/* Current Courses with improved design */}
+              {/* Current Courses */}
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
-                      <BookOpen className="w-6 h-6 text-primary" />
-                      {t("dashboard.currentCourses")}
+                    <h3 className="text-2xl font-black text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
+                      <BookOpen className="w-6 h-6" style={{ color: "#ff6700" }} />
+                      {isRTL ? "دوراتي الحالية" : "My Current Courses"}
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-[#8b949e] mt-1">
-                      {t("dashboard.continueWhereLeft")}
+                      {isRTL ? "الدورات التي تدرسها حالياً" : "Your current enrolled courses"}
                     </p>
                   </div>
-                  <Link
-                    href="/dashboard/groups"
-                    className="group/link text-primary hover:text-primary/80 text-sm font-medium flex items-center gap-1 px-4 py-2 rounded-lg hover:bg-primary/5 transition-all"
-                  >
-                    {t("dashboard.viewAll")}
-                    {isRTL ? (
-                      <ChevronLeft className="w-4 h-4 group-hover/link:-translate-x-1 transition-transform" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 group-hover/link:translate-x-1 transition-transform" />
-                    )}
-                  </Link>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
                   {currentCourses && currentCourses.length > 0 ? (
-                    currentCourses.map((course: Course) => (
+                    currentCourses.map((course) => (
                       <div
                         key={course._id}
-                        className="group/course relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 cursor-pointer overflow-hidden"
+                        className="group/card relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 cursor-pointer overflow-hidden"
                       >
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/0 to-primary/5 opacity-0 group-hover/course:opacity-100 transition-opacity duration-300" />
-
-                        {/* Decorative elements */}
-                        <div className="absolute -top-4 -right-4 w-24 h-24 bg-gradient-to-br from-primary/10 to-purple-600/10 rounded-full blur-2xl opacity-0 group-hover/course:opacity-100 transition-opacity duration-500" />
+                        <div className="absolute -top-4 -right-4 w-24 h-24 rounded-full blur-2xl opacity-0 group-hover/card:opacity-100 transition-opacity duration-500"
+                          style={{ background: "linear-gradient(135deg, #ff670020, #feaf0020)" }} />
 
                         <div className="relative z-10">
                           <div className="flex items-start justify-between mb-4">
-                            <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${course.gradient} flex items-center justify-center flex-shrink-0 shadow-lg group-hover/course:scale-110 transition-transform duration-300`}>
+                            <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover/card:scale-110 transition-transform`}
+                              style={{ background: `linear-gradient(135deg, ${course.gradient})` }}>
                               {getCourseIcon(course.icon)}
                             </div>
-                            <span className="px-3 py-1 bg-cyan-100 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 rounded-full text-xs font-semibold border border-transparent dark:border-cyan-500/20">
-                              {t("dashboard.inProgress")}
+                            <span className="px-3 py-1 rounded-full text-xs font-black bg-cyan-100 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400">
+                              {isRTL ? "قيد التقدم" : "In Progress"}
                             </span>
                           </div>
 
-                          <h4 className="text-xl font-bold text-gray-900 dark:text-[#e6edf3] mb-2 group-hover/course:text-primary transition-colors">
+                          <h4 className="text-lg font-black text-gray-900 dark:text-[#e6edf3] mb-1 transition-colors line-clamp-1"
+                            onMouseEnter={e => (e.currentTarget.style.color = "#ff6700")}
+                            onMouseLeave={e => (e.currentTarget.style.color = "")}>
                             {course.title}
                           </h4>
-
                           <p className="text-sm text-gray-500 dark:text-[#8b949e] mb-4 line-clamp-2">
                             {course.description}
                           </p>
 
                           {course.instructor && (
                             <p className="text-xs text-gray-400 dark:text-[#6e7681] mb-3">
-                              {t("dashboard.instructor")}: {course.instructor}
+                              {isRTL ? "المدرس" : "Instructor"}: {course.instructor}
                             </p>
                           )}
 
+                          {/* Progress bar */}
                           <div className="mb-4">
                             <div className="flex justify-between text-sm mb-2">
-                              <span className="text-gray-600 dark:text-[#8b949e]">{t("dashboard.progress")}</span>
-                              <span className="font-semibold text-gray-900 dark:text-[#e6edf3]">
+                              <span className="text-gray-600 dark:text-[#8b949e]">
+                                {isRTL ? "التقدم" : "Progress"}
+                              </span>
+                              <span className="font-black text-gray-900 dark:text-[#e6edf3]">
                                 {course.progress}%
                               </span>
                             </div>
                             <div className="w-full h-2.5 bg-gray-200 dark:bg-[#21262d] rounded-full overflow-hidden">
                               <div
-                                className={`h-full bg-gradient-to-r ${course.gradient} rounded-full transition-all duration-1000 ease-out-expo relative overflow-hidden`}
-                                style={{ width: `${course.progress}%` }}
+                                className="h-full rounded-full relative overflow-hidden"
+                                style={{
+                                  width: `${course.progress}%`,
+                                  background: `linear-gradient(90deg, ${course.gradient})`,
+                                }}
                               >
                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer" />
                               </div>
                             </div>
                           </div>
 
+                          {/* Stats row */}
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-1.5 text-gray-500 dark:text-[#8b949e]">
                               <BookOpen className="w-4 h-4" />
-                              <span>{course.completedSessions || 0} / {course.totalSessions || 0} {t("dashboard.sessions")}</span>
+                              <span>{course.completedSessions || 0}/{course.totalSessions || 0} {isRTL ? "جلسة" : "sessions"}</span>
                             </div>
-                            <div className="flex items-center gap-1.5 text-gray-500 dark:text-[#8b949e]">
+                            <div className="flex items-center gap-1.5 font-black" style={{ color: "#ff6700" }}>
                               <Clock className="w-4 h-4" />
-                              <span>{course.hoursLeft || 0}{t("dashboard.hoursLeft")}</span>
+                              <span>{course.hoursLeft || 0}{isRTL ? "ساعة متبقية" : "h left"}</span>
                             </div>
                           </div>
 
                           {course.nextLesson && (
                             <div className="mt-4 pt-4 border-t border-gray-100 dark:border-[#30363d]">
                               <p className="text-xs text-gray-500 dark:text-[#8b949e] flex items-center gap-1">
-                                <Play className="w-3 h-3" />
-                                {t("dashboard.next")}: {course.nextLesson}
+                                <Play className="w-3 h-3" style={{ color: "#ff6700" }} />
+                                {isRTL ? "التالي" : "Next"}: {course.nextLesson}
                               </p>
                             </div>
                           )}
@@ -1148,45 +908,35 @@ export default function StudentDashboard() {
                       <div className="w-24 h-24 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
                         <BookOpen className="w-12 h-12 text-gray-400 dark:text-[#6e7681]" />
                       </div>
-                      <p className="text-gray-500 dark:text-[#8b949e] mb-4">
-                        {t("dashboard.noCourses")}
+                      <p className="text-gray-500 dark:text-[#8b949e]">
+                        {isRTL ? "لا توجد دورات حالية" : "No current courses"}
                       </p>
-                      <Link
-                        href="/dashboard/courses"
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 transform hover:scale-105"
-                      >
-                        {t("dashboard.browseCourses")}
-                        {isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                      </Link>
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* ══════════════ Right Column ══════════════ */}
+            {/* ── Right Column ── */}
             <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-24 lg:self-start">
 
-              {/* Calendar & Upcoming Events with improved design */}
+              {/* Calendar & Upcoming Events */}
               <div className="relative group/calendar bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl transition-all duration-300">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-purple-600/0 group-hover/calendar:from-primary/5 group-hover/calendar:to-purple-600/5 rounded-2xl transition-all duration-300" />
-
                 <div className="relative z-10">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-[#e6edf3] mb-4 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-primary" />
-                    {t("dashboard.calendar")}
+                  <h3 className="text-lg font-black text-gray-900 dark:text-[#e6edf3] mb-4 flex items-center gap-2">
+                    <Calendar className="w-5 h-5" style={{ color: "#ff6700" }} />
+                    {isRTL ? "التقويم" : "Calendar"}
                   </h3>
 
+                  {/* Mini Calendar */}
                   <div className="text-center mb-6">
-                    <div className="text-sm font-semibold text-gray-900 dark:text-[#e6edf3] mb-4">
+                    <div className="text-sm font-black text-gray-900 dark:text-[#e6edf3] mb-4">
                       {new Date().toLocaleDateString(isRTL ? "ar-EG" : "en-US", { month: "long", year: "numeric" }).toUpperCase()}
                     </div>
 
                     <div className="grid grid-cols-7 gap-1 text-xs mb-2">
-                      {(isRTL ? ["ح", "ن", "ث", "ر", "خ", "ج", "س"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]).map((day: string) => (
-                        <div key={day} className="text-gray-500 dark:text-[#6e7681] font-medium py-1">
-                          {day}
-                        </div>
+                      {(isRTL ? ["ح", "ن", "ث", "ر", "خ", "ج", "س"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]).map((day) => (
+                        <div key={day} className="text-gray-500 dark:text-[#6e7681] font-bold py-1">{day}</div>
                       ))}
                     </div>
 
@@ -1195,7 +945,6 @@ export default function StudentDashboard() {
                         const today = new Date().getDate();
                         const currentMonth = new Date().getMonth();
                         const firstDay = new Date(new Date().getFullYear(), currentMonth, 1).getDay();
-                        // Adjust for Arabic (Friday = 0 in Arabic calendar)
                         const adjustedFirstDay = isRTL ? (firstDay === 0 ? 6 : firstDay - 1) : firstDay;
                         const day = i - (adjustedFirstDay === 0 ? 6 : adjustedFirstDay - 1) + 1;
                         const isToday = day === today;
@@ -1205,201 +954,157 @@ export default function StudentDashboard() {
                           <button
                             key={i}
                             className={`
-                              aspect-square rounded-lg flex items-center justify-center font-medium transition-all
+                              aspect-square rounded-lg flex items-center justify-center font-black transition-all text-xs
                               ${isToday && isValidDay
-                                ? "bg-gradient-to-br from-primary to-purple-600 text-white shadow-md shadow-primary/30 transform scale-105"
+                                ? "text-white shadow-md transform scale-105"
                                 : isValidDay
                                   ? "text-gray-700 dark:text-[#8b949e] hover:bg-gray-100 dark:hover:bg-[#21262d]"
                                   : "text-gray-300 dark:text-[#6e7681]"
                               }
                             `}
+                            style={isToday && isValidDay ? { background: "linear-gradient(135deg, #004d59, #ff6700)" } : {}}
                             disabled={!isValidDay}
                           >
-                            {isValidDay ? day : ''}
+                            {isValidDay ? day : ""}
                           </button>
                         );
                       })}
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <h4 className="text-sm font-semibold text-gray-700 dark:text-[#8b949e] flex items-center gap-2">
-                      <span className="w-1 h-4 bg-primary rounded-full" />
-                      {t("dashboard.upcomingEvents")}
+                  {/* Upcoming Events */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-black text-gray-700 dark:text-[#8b949e] flex items-center gap-2">
+                      <span className="w-1 h-4 rounded-full" style={{ background: "#ff6700" }} />
+                      {isRTL ? "الأحداث القادمة" : "Upcoming Events"}
                     </h4>
 
                     {upcomingEvents && upcomingEvents.length > 0 ? (
-                      upcomingEvents.slice(0, 3).map((event: UpcomingEvent, idx: number) => (
-                        <div
-                          key={idx}
-                          className={`
-                            group/event flex items-start gap-3 p-3 rounded-xl border transition-all duration-300 hover:shadow-md cursor-pointer
-                            ${idx === 0
-                              ? "bg-green-50 dark:bg-green-500/5 border-green-100 dark:border-green-500/15 hover:bg-green-100 dark:hover:bg-green-500/10"
-                              : idx === 1
-                                ? "bg-blue-50 dark:bg-blue-500/5 border-blue-100 dark:border-blue-500/15 hover:bg-blue-100 dark:hover:bg-blue-500/10"
-                                : "bg-purple-50 dark:bg-purple-500/5 border-purple-100 dark:border-purple-500/15 hover:bg-purple-100 dark:hover:bg-purple-500/10"
-                            }
-                          `}
-                        >
-                          <div className={`
-                            w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
-                            ${idx === 0
-                              ? "bg-gradient-to-br from-green-400 to-emerald-500"
-                              : idx === 1
-                                ? "bg-gradient-to-br from-blue-400 to-cyan-500"
-                                : "bg-gradient-to-br from-purple-400 to-pink-500"
-                            }
-                          `}>
-                            <Calendar className="w-5 h-5 text-white" />
-                          </div>
+                      upcomingEvents.slice(0, 3).map((event, idx) => {
+                        const eventBg = [
+                          { bg: "#ff670008", border: "#ff670020", iconBg: "linear-gradient(135deg, #004d59, #ff6700)" },
+                          { bg: "#004d5908", border: "#004d5920", iconBg: "linear-gradient(135deg, #004d59, #ff6437)" },
+                          { bg: "#feaf0008", border: "#feaf0025", iconBg: "linear-gradient(135deg, #feaf00, #f67d00)" },
+                        ][idx] || { bg: "#f9fafb", border: "#e5e7eb", iconBg: "linear-gradient(135deg, #004d59, #ff6700)" };
 
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate">
-                              {event.title}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-[#8b949e]">
-                              {event.formattedDate || event.date} · {event.startTime} - {event.endTime}
-                            </p>
-                            {event.location && (
-                              <p className="text-xs text-gray-400 dark:text-[#6e7681] mt-1">
-                                📍 {event.location}
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-start gap-3 p-3 rounded-xl border transition-all hover:shadow-md cursor-pointer"
+                            style={{ background: eventBg.bg, borderColor: eventBg.border }}
+                          >
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                              style={{ background: eventBg.iconBg }}>
+                              <Calendar className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-black text-sm text-gray-900 dark:text-[#e6edf3] truncate">
+                                {event.title}
                               </p>
-                            )}
+                              <p className="text-xs text-gray-500 dark:text-[#8b949e]">
+                                {event.formattedDate || event.date} · {event.startTime} - {event.endTime}
+                              </p>
+                              {event.groupName && (
+                                <p className="text-xs mt-0.5 font-black" style={{ color: "#ff6700" }}>
+                                  {event.groupName}
+                                </p>
+                              )}
+                            </div>
                           </div>
-
-                          {isRTL ? (
-                            <ChevronLeft className="w-4 h-4 text-gray-400 opacity-0 group-hover/event:opacity-100 transition-opacity" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover/event:opacity-100 transition-opacity" />
-                          )}
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="text-center py-6">
                         <Calendar className="w-12 h-12 text-gray-300 dark:text-[#6e7681] mx-auto mb-2" />
                         <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                          {t("dashboard.noUpcomingEvents")}
+                          {isRTL ? "لا توجد أحداث قادمة" : "No upcoming events"}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {/* Next Session */}
+                  {/* Next Session Card */}
                   {nextSession && (
                     <div className="mt-6 pt-6 border-t border-gray-100 dark:border-[#30363d]">
-                      <h4 className="text-sm font-semibold text-gray-700 dark:text-[#8b949e] mb-3 flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-primary" />
-                        {nextSession.isToday 
-                          ? t("dashboard.todaysSession")
-                          : t("dashboard.nextSession")}
+                      <h4 className="text-sm font-black text-gray-700 dark:text-[#8b949e] mb-3 flex items-center gap-2">
+                        <Clock className="w-4 h-4" style={{ color: "#ff6700" }} />
+                        {nextSession.isToday
+                          ? (isRTL ? "جلسة اليوم" : "Today's Session")
+                          : (isRTL ? "الجلسة القادمة" : "Next Session")}
                       </h4>
 
-                      <div className="relative group/session overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-cyan-400/20 rounded-xl blur-xl opacity-0 group-hover/session:opacity-100 transition-opacity duration-500" />
-
-                        <div className="relative bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-[#1c2128] dark:to-[#1c2128] dark:border dark:border-[#30363d] rounded-xl p-4">
-                          <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-400/10 to-cyan-400/10 rounded-full blur-2xl" />
-
-                          <div className="relative z-10">
-                            <p className="font-semibold text-gray-900 dark:text-[#e6edf3]">
-                              {nextSession.title}
-                            </p>
-
-                            <p className="text-sm text-gray-600 dark:text-[#8b949e] mt-2 flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {nextSession.date} · {nextSession.time}
-                            </p>
-
-                            {nextSession.isToday && (
-                              <div className="mt-4">
-                                {nextSession.meetingLink ? (
-                                  <a
-                                    href={nextSession.meetingLink}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 text-sm bg-gradient-to-r from-primary to-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 transform hover:scale-105"
-                                  >
-                                    {t("dashboard.joinMeeting")}
-                                    {isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                  </a>
-                                ) : (
-                                  <p className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
-                                    <Clock className="w-3 h-3 animate-pulse" />
-                                    {t("dashboard.meetingLinkSoon")}
-                                  </p>
-                                )}
-                              </div>
+                      <div className="relative rounded-xl p-4 border border-[#004d59]/20 dark:border-[#004d59]/30"
+                        style={{ background: "linear-gradient(135deg, #004d5908, #ff670008)" }}>
+                        <p className="font-black text-gray-900 dark:text-[#e6edf3]">
+                          {nextSession.title}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-[#8b949e] mt-2 flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {nextSession.date} · {nextSession.time}
+                        </p>
+                        {nextSession.groupName && (
+                          <p className="text-xs mt-1 font-black" style={{ color: "#ff6700" }}>{nextSession.groupName}</p>
+                        )}
+                        {nextSession.isToday && (
+                          <div className="mt-3">
+                            {nextSession.meetingLink ? (
+                              <a
+                                href={nextSession.meetingLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-sm text-white px-4 py-2 rounded-xl font-black hover:shadow-lg transition-all transform hover:scale-105"
+                                style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+                              >
+                                {isRTL ? "انضمام" : "Join Session"}
+                                {isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                              </a>
+                            ) : (
+                              <p className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
+                                <Clock className="w-3 h-3 animate-pulse" />
+                                {isRTL ? "رابط الجلسة قريباً" : "Meeting link coming soon"}
+                              </p>
                             )}
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Notifications Widget with improved design */}
+              {/* Notifications */}
               {notifications && notifications.length > 0 && (
-                <div className="relative group/notif bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl transition-all duration-300">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-purple-600/0 group-hover/notif:from-primary/5 group-hover/notif:to-purple-600/5 rounded-2xl transition-all duration-300" />
+                <div className="bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d]">
+                  <h4 className="font-black text-gray-900 dark:text-[#e6edf3] mb-4 flex items-center gap-2 text-base">
+                    <Bell className="w-5 h-5" style={{ color: "#ff6700" }} />
+                    {isRTL ? "الإشعارات" : "Notifications"}
+                  </h4>
 
-                  <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-semibold text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
-                        <Bell className="w-4 h-4 text-primary" />
-                        {t("dashboard.notifications")}
-                      </h4>
-                      <span className="text-xs bg-gradient-to-r from-primary to-purple-600 text-white px-2 py-1 rounded-full font-medium animate-pulse">
-                        {notifications.length} {t("dashboard.new")}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      {notifications.slice(0, 4).map((note: Notification, idx: number) => (
-                        <div
-                          key={idx}
-                          className="group/item flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-[#1c2128] transition-all duration-300 cursor-pointer"
-                        >
-                          <div className="relative">
-                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/10 to-purple-600/10 flex items-center justify-center flex-shrink-0">
-                              <Bell className="w-5 h-5 text-primary" />
-                            </div>
-                            {!note.isRead && (
-                              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-[#161b22]" />
-                            )}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 dark:text-[#e6edf3] truncate">
-                              {isRTL ? (note.titleAr || note.title) : note.title}
-                            </p>
-                            {note.message && (
-                              <p className="text-xs text-gray-500 dark:text-[#8b949e] mt-0.5 line-clamp-1">
-                                {note.message}
-                              </p>
-                            )}
-                            <p className="text-xs text-gray-400 dark:text-[#6e7681] mt-1">
-                              {note.time}
-                            </p>
-                          </div>
-
-                          {isRTL ? (
-                            <ChevronLeft className="w-4 h-4 text-gray-400 opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                          )}
+                  <div className="space-y-3">
+                    {notifications.slice(0, 3).map((note, idx) => (
+                      <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-[#1c2128]">
+                        <div className="w-8 h-8 rounded-lg bg-[#ff6700]/10 flex items-center justify-center flex-shrink-0">
+                          <Bell className="w-4 h-4 text-[#ff6700]" />
                         </div>
-                      ))}
-                    </div>
-
-                    <Link
-                      href="/dashboard/messages"
-                      className="mt-4 block text-center text-sm bg-gradient-to-r from-primary to-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 transform hover:scale-105"
-                    >
-                      {t("dashboard.viewAllNotifications")}
-                    </Link>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate">
+                            {isRTL ? (note.titleAr || note.title) : note.title}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-[#8b949e] mt-0.5">
+                            {note.time}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
+
+                  <Link
+                    href="/dashboard/messages"
+                    className="mt-4 block text-center text-sm text-white px-4 py-2.5 rounded-xl font-black hover:shadow-lg transition-all hover:scale-105"
+                    style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+                  >
+                    {isRTL ? "عرض كل الإشعارات" : "View All Notifications"}
+                  </Link>
                 </div>
               )}
             </div>
@@ -1407,75 +1112,17 @@ export default function StudentDashboard() {
         </div>
       </main>
 
-      {/* Add custom CSS for animations */}
       <style jsx>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-20px); }
-        }
-        
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 0.6; }
-        }
-        
-        @keyframes pulse-slower {
-          0%, 100% { opacity: 0.2; }
-          50% { opacity: 0.4; }
-        }
-        
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        
-        @keyframes slide-down {
-          0% { transform: translateY(-100%); opacity: 0; }
-          100% { transform: translateY(0); opacity: 1; }
-        }
-        
-        @keyframes fade-in {
-          0% { opacity: 0; }
-          100% { opacity: 1; }
-        }
-        
-        @keyframes pulse-ring {
-          0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
-          70% { box-shadow: 0 0 0 10px rgba(139, 92, 246, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
-        }
-        
-        .animate-float {
-          animation: float 6s ease-in-out infinite;
-        }
-        
-        .animate-pulse-slow {
-          animation: pulse-slow 4s ease-in-out infinite;
-        }
-        
-        .animate-pulse-slower {
-          animation: pulse-slower 6s ease-in-out infinite;
-        }
-        
-        .animate-shimmer {
-          animation: shimmer 2s infinite;
-        }
-        
-        .animate-slide-down {
-          animation: slide-down 0.5s ease-out;
-        }
-        
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out;
-        }
-        
-        .animate-pulse-ring {
-          animation: pulse-ring 2s infinite;
-        }
-        
-        .ease-out-expo {
-          transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
-        }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
+        @keyframes pulse-slow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.6; } }
+        @keyframes pulse-slower { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.4; } }
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(255,103,0,0.4); } 70% { box-shadow: 0 0 0 10px rgba(255,103,0,0); } 100% { box-shadow: 0 0 0 0 rgba(255,103,0,0); } }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        .animate-pulse-slow { animation: pulse-slow 4s ease-in-out infinite; }
+        .animate-pulse-slower { animation: pulse-slower 6s ease-in-out infinite; }
+        .animate-shimmer { animation: shimmer 2s infinite; }
+        .animate-pulse-ring { animation: pulse-ring 2s infinite; }
       `}</style>
     </div>
   );

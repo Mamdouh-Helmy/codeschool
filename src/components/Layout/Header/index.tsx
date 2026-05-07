@@ -52,8 +52,7 @@ const Header: React.FC = () => {
   const signUpRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
-  
-  // تغيير نوع الـ refs إلى HTMLLIElement
+
   const marketingDropdownRef = useRef<HTMLLIElement>(null);
   const instructorDropdownRef = useRef<HTMLLIElement>(null);
   const studentDropdownRef = useRef<HTMLLIElement>(null);
@@ -80,7 +79,6 @@ const Header: React.FC = () => {
     )
       setNavbarOpen(false);
 
-    // Close dropdowns when clicking outside
     if (
       marketingDropdownRef.current &&
       !marketingDropdownRef.current.contains(event.target as Node)
@@ -120,7 +118,6 @@ const Header: React.FC = () => {
   const [loadingUser, setLoadingUser] = useState(false);
   const USER_ENDPOINT = "/api/users/me";
 
-  // Fetch user data using stored token
   const fetchUserWithToken = async (token: string) => {
     try {
       setLoadingUser(true);
@@ -156,7 +153,6 @@ const Header: React.FC = () => {
     }
   };
 
-  // Check token on mount
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
@@ -164,7 +160,6 @@ const Header: React.FC = () => {
     }
   }, []);
 
-  // Handler لتحديث بيانات المستخدم من ProfileModal
   const handleProfileUpdate = (updatedUser: LocalUser) => {
     setLocalUser(updatedUser);
   };
@@ -183,11 +178,9 @@ const Header: React.FC = () => {
     }
   };
 
-  // 🔥 دالة للتحقق مما إذا كان المستخدم يمكنه الوصول للبورتفليو
   const canAccessPortfolio = localUser &&
     (localUser.role === "student" || localUser.role === "admin" || localUser.role === "marketing" || localUser.role === "user" || localUser.role === "instructor");
 
-  // Function to close all dropdowns
   const closeAllDropdowns = () => {
     setMarketingDropdownOpen(false);
     setInstructorDropdownOpen(false);
@@ -199,10 +192,11 @@ const Header: React.FC = () => {
     <>
       <div className="relative"></div>
       <header
-        className={`fixed h-24 top-0 py-1 z-50 w-full bg-transparent transition-all ${sticky
-          ? "shadow-lg dark:shadow-darkmd bg-white dark:bg-secondary"
-          : "shadow-none"
-          }`}
+        className={`fixed h-24 top-0 py-1 z-50 w-full bg-transparent transition-all ${
+          sticky
+            ? "shadow-lg dark:shadow-darkmd bg-white dark:bg-darkmode"
+            : "shadow-none"
+        }`}
       >
         <div className="container">
           <div className="flex items-center justify-between py-6">
@@ -235,10 +229,10 @@ const Header: React.FC = () => {
                       </svg>
                     </button>
                     {marketingDropdownOpen && (
-                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#011120] rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border-none dark:border-gray-700">
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-darklight rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border border-gray-100 dark:border-dark_border">
                         <Link
                           href="/portfolio/builder"
-                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
                           {t("nav.createPortfolio") || "إنشاء بورتفليو"}
@@ -246,7 +240,7 @@ const Header: React.FC = () => {
                         {localUser?.username && (
                           <Link
                             href={`/portfolio/${localUser.username}`}
-                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                             onClick={closeAllDropdowns}
                           >
                             {t("nav.myPortfolio") || "بورتفليو"}
@@ -254,14 +248,14 @@ const Header: React.FC = () => {
                         )}
                         <Link
                           href="/marketing"
-                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
                           {t("nav.dashboard") || "لوحة التحكم"}
                         </Link>
                         <Link
                           href="/marketing/blogs"
-                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
                           {t("nav.addBlog") || "إضافة مدونة"}
@@ -293,10 +287,10 @@ const Header: React.FC = () => {
                       </svg>
                     </button>
                     {instructorDropdownOpen && (
-                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#011120] rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border-none dark:border-gray-700">
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-darklight rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border border-gray-100 dark:border-dark_border">
                         <Link
                           href="/portfolio/builder"
-                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
                           {t("nav.createPortfolio") || "إنشاء بورتفليو"}
@@ -304,7 +298,7 @@ const Header: React.FC = () => {
                         {localUser?.username && (
                           <Link
                             href={`/portfolio/${localUser.username}`}
-                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                             onClick={closeAllDropdowns}
                           >
                             {t("nav.myPortfolio") || "بورتفليو"}
@@ -312,7 +306,7 @@ const Header: React.FC = () => {
                         )}
                         <Link
                           href="/instructor"
-                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
                           {t("nav.instructorDashboard") || "لوحة تحكم المدرّس"}
@@ -344,10 +338,10 @@ const Header: React.FC = () => {
                       </svg>
                     </button>
                     {studentDropdownOpen && (
-                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#011120] rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border-none dark:border-gray-700">
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-darklight rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border border-gray-100 dark:border-dark_border">
                         <Link
                           href="/portfolio/builder"
-                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
                           {t("nav.createPortfolio") || "إنشاء بورتفليو"}
@@ -355,7 +349,7 @@ const Header: React.FC = () => {
                         {localUser?.username && (
                           <Link
                             href={`/portfolio/${localUser.username}`}
-                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                             onClick={closeAllDropdowns}
                           >
                             {t("nav.myPortfolio") || "بورتفليو"}
@@ -363,7 +357,7 @@ const Header: React.FC = () => {
                         )}
                         <Link
                           href="/dashboard"
-                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
                           {t("nav.dashboard") || "لوحة التحكم"}
@@ -395,10 +389,10 @@ const Header: React.FC = () => {
                       </svg>
                     </button>
                     {adminDropdownOpen && (
-                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#011120] rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border-none dark:border-gray-700">
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-darklight rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border border-gray-100 dark:border-dark_border">
                         <Link
                           href="/portfolio/builder"
-                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
                           {t("nav.createPortfolio") || "إنشاء بورتفليو"}
@@ -406,7 +400,7 @@ const Header: React.FC = () => {
                         {localUser?.username && (
                           <Link
                             href={`/portfolio/${localUser.username}`}
-                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                             onClick={closeAllDropdowns}
                           >
                             {t("nav.myPortfolio") || "بورتفليو"}
@@ -414,7 +408,7 @@ const Header: React.FC = () => {
                         )}
                         <Link
                           href="/admin"
-                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#102c46]"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
                           {t("nav.dashboard") || "لوحة التحكم"}
@@ -430,10 +424,11 @@ const Header: React.FC = () => {
                     <li>
                       <Link
                         href="/portfolio/builder"
-                        className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/portfolio/builder"
-                          ? "text-primary"
-                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                          }`}
+                        className={`text-base font-medium transition-colors duration-200 ${
+                          pathUrl === "/portfolio/builder"
+                            ? "text-primary"
+                            : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        }`}
                       >
                         {t("nav.createPortfolio") || "إنشاء بورتفليو"}
                       </Link>
@@ -442,10 +437,11 @@ const Header: React.FC = () => {
                       <li>
                         <Link
                           href={`/portfolio/${localUser.username}`}
-                          className={`text-base font-medium transition-colors duration-200 ${pathUrl === `/portfolio/${localUser.username}`
-                            ? "text-primary"
-                            : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                            }`}
+                          className={`text-base font-medium transition-colors duration-200 ${
+                            pathUrl === `/portfolio/${localUser.username}`
+                              ? "text-primary"
+                              : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                          }`}
                         >
                           {t("nav.myPortfolio") || "بورتفليو"}
                         </Link>
@@ -454,10 +450,11 @@ const Header: React.FC = () => {
                     <li>
                       <Link
                         href="/dashboard"
-                        className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/dashboard"
-                          ? "text-primary"
-                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                          }`}
+                        className={`text-base font-medium transition-colors duration-200 ${
+                          pathUrl === "/dashboard"
+                            ? "text-primary"
+                            : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                        }`}
                       >
                         {t("nav.dashboard") || "لوحة التحكم"}
                       </Link>
@@ -481,16 +478,13 @@ const Header: React.FC = () => {
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                 className="flex h-8 w-8 items-center justify-center text-body-color duration-300 dark:text-white"
               >
-                {/* أيقونة القمر - تظهر في الوضع الفاتح فقط */}
                 <svg
                   viewBox="0 0 23 23"
-                  className={`h-8 w-8 text-dark dark:hidden ${!sticky && pathUrl === "/" && "text-white"
-                    }`}
+                  className={`h-8 w-8 text-dark dark:hidden ${!sticky && pathUrl === "/" && "text-white"}`}
                 >
                   <path d="M16.6111 15.855C17.591 15.1394 18.3151 14.1979 18.7723 13.1623C16.4824 13.4065 14.1342 12.4631 12.6795 10.4711C11.2248 8.47905 11.0409 5.95516 11.9705 3.84818C10.8449 3.9685 9.72768 4.37162 8.74781 5.08719C5.7759 7.25747 5.12529 11.4308 7.29558 14.4028C9.46586 17.3747 13.6392 18.0253 16.6111 15.855Z" />
                 </svg>
 
-                {/* أيقونة الشمس - تظهر في الوضع الداكن فقط */}
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -516,7 +510,7 @@ const Header: React.FC = () => {
                 <>
                   <button
                     onClick={() => setIsProfileOpen(true)}
-                    className="flex items-center space-x-2 rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+                    className="flex items-center space-x-2 rounded-full p-1 hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                   >
                     <img
                       src={
@@ -567,20 +561,17 @@ const Header: React.FC = () => {
 
               <button
                 onClick={() => setNavbarOpen(!navbarOpen)}
-                className="block lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+                className="block lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                 aria-label="Toggle menu"
               >
                 <span
-                  className={`block w-6 h-0.5 bg-black dark:bg-white transition-all duration-200 ${navbarOpen ? "rotate-45 translate-y-2" : ""
-                    }`}
+                  className={`block w-6 h-0.5 bg-black dark:bg-white transition-all duration-200 ${navbarOpen ? "rotate-45 translate-y-2" : ""}`}
                 ></span>
                 <span
-                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${navbarOpen ? "opacity-0" : ""
-                    }`}
+                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${navbarOpen ? "opacity-0" : ""}`}
                 ></span>
                 <span
-                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${navbarOpen ? "-rotate-45 -translate-y-2" : ""
-                    }`}
+                  className={`block w-6 h-0.5 bg-black dark:bg-white mt-1.5 transition-all duration-200 ${navbarOpen ? "-rotate-45 -translate-y-2" : ""}`}
                 ></span>
               </button>
             </div>
@@ -591,26 +582,27 @@ const Header: React.FC = () => {
           <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 z-40" />
         )}
 
-        {/* قائمة الموبايل */}
+        {/* Mobile Menu */}
         <div
           ref={mobileMenuRef}
-          className={`lg:hidden fixed top-0 right-0 h-full w-full bg-white dark:bg-darkmode shadow-lg transform transition-transform duration-300 max-w-64 ${navbarOpen ? "translate-x-0" : "translate-x-full"
-            } z-50`}
+          className={`lg:hidden fixed top-0 right-0 h-full w-full bg-white dark:bg-darklight shadow-lg dark:shadow-black/40 transform transition-transform duration-300 max-w-64 ${
+            navbarOpen ? "translate-x-0" : "translate-x-full"
+          } z-50`}
         >
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-dark_border">
             <h2 className="text-lg font-bold text-black dark:text-SlateBlueText">
               {t("header.menu")}
             </h2>
             <button
               onClick={() => setNavbarOpen(false)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-darkhover rounded-lg transition-all duration-200"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
-                className="dark:text-SlateBlueText"
+                className="dark:text-white"
               >
                 <path
                   fill="none"
@@ -632,7 +624,7 @@ const Header: React.FC = () => {
             {/* Mobile menu sections based on user role */}
             {localUser?.role === "marketing" && (
               <div className="w-full mb-4">
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-darkmuted mb-2 px-4">
                   {t("nav.dashboard") || "لوحة التسويق"}
                 </h3>
                 <div className="space-y-1">
@@ -640,7 +632,7 @@ const Header: React.FC = () => {
                     <Link
                       href="/portfolio/builder"
                       onClick={() => setNavbarOpen(false)}
-                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
                       {t("nav.createPortfolio") || "إنشاء بورتفليو"}
                     </Link>
@@ -649,7 +641,7 @@ const Header: React.FC = () => {
                     <Link
                       href={`/portfolio/${localUser.username}`}
                       onClick={() => setNavbarOpen(false)}
-                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
                       {t("nav.myPortfolio") || "بورتفليو"}
                     </Link>
@@ -657,14 +649,14 @@ const Header: React.FC = () => {
                   <Link
                     href="/marketing"
                     onClick={() => setNavbarOpen(false)}
-                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                   >
                     {t("nav.dashboard") || "لوحة التحكم"}
                   </Link>
                   <Link
                     href="/marketing/blogs"
                     onClick={() => setNavbarOpen(false)}
-                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                   >
                     {t("nav.addBlog") || "إضافة مدونة"}
                   </Link>
@@ -674,7 +666,7 @@ const Header: React.FC = () => {
 
             {localUser?.role === "instructor" && (
               <div className="w-full mb-4">
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-darkmuted mb-2 px-4">
                   {t("nav.instructorDashboard") || "لوحة المدرب"}
                 </h3>
                 <div className="space-y-1">
@@ -682,7 +674,7 @@ const Header: React.FC = () => {
                     <Link
                       href="/portfolio/builder"
                       onClick={() => setNavbarOpen(false)}
-                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
                       {t("nav.createPortfolio") || "إنشاء بورتفليو"}
                     </Link>
@@ -691,7 +683,7 @@ const Header: React.FC = () => {
                     <Link
                       href={`/portfolio/${localUser.username}`}
                       onClick={() => setNavbarOpen(false)}
-                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
                       {t("nav.myPortfolio") || "بورتفليو"}
                     </Link>
@@ -699,7 +691,7 @@ const Header: React.FC = () => {
                   <Link
                     href="/instructor"
                     onClick={() => setNavbarOpen(false)}
-                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                   >
                     {t("nav.instructorDashboard") || "لوحة تحكم المدرّس"}
                   </Link>
@@ -709,7 +701,7 @@ const Header: React.FC = () => {
 
             {localUser?.role === "student" && (
               <div className="w-full mb-4">
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-darkmuted mb-2 px-4">
                   {t("nav.studentDashboard") || "لوحة الطالب"}
                 </h3>
                 <div className="space-y-1">
@@ -717,7 +709,7 @@ const Header: React.FC = () => {
                     <Link
                       href="/portfolio/builder"
                       onClick={() => setNavbarOpen(false)}
-                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
                       {t("nav.createPortfolio") || "إنشاء بورتفليو"}
                     </Link>
@@ -726,7 +718,7 @@ const Header: React.FC = () => {
                     <Link
                       href={`/portfolio/${localUser.username}`}
                       onClick={() => setNavbarOpen(false)}
-                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
                       {t("nav.myPortfolio") || "بورتفليو"}
                     </Link>
@@ -734,7 +726,7 @@ const Header: React.FC = () => {
                   <Link
                     href="/dashboard"
                     onClick={() => setNavbarOpen(false)}
-                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                   >
                     {t("nav.dashboard") || "لوحة التحكم"}
                   </Link>
@@ -744,7 +736,7 @@ const Header: React.FC = () => {
 
             {localUser?.role === "admin" && (
               <div className="w-full mb-4">
-                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-darkmuted mb-2 px-4">
                   {t("nav.adminDashboard") || "لوحة الأدمن"}
                 </h3>
                 <div className="space-y-1">
@@ -752,7 +744,7 @@ const Header: React.FC = () => {
                     <Link
                       href="/portfolio/builder"
                       onClick={() => setNavbarOpen(false)}
-                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
                       {t("nav.createPortfolio") || "إنشاء بورتفليو"}
                     </Link>
@@ -761,7 +753,7 @@ const Header: React.FC = () => {
                     <Link
                       href={`/portfolio/${localUser.username}`}
                       onClick={() => setNavbarOpen(false)}
-                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
                       {t("nav.myPortfolio") || "بورتفليو"}
                     </Link>
@@ -769,7 +761,7 @@ const Header: React.FC = () => {
                   <Link
                     href="/admin"
                     onClick={() => setNavbarOpen(false)}
-                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                   >
                     {t("nav.dashboard") || "لوحة التحكم"}
                   </Link>
@@ -777,13 +769,13 @@ const Header: React.FC = () => {
               </div>
             )}
 
-            {/* Regular user (no role-based grouping) */}
+            {/* Regular user */}
             {localUser && localUser.role === "user" && canAccessPortfolio && (
               <>
                 <Link
                   href="/portfolio/builder"
                   onClick={() => setNavbarOpen(false)}
-                  className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                  className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                 >
                   {t("nav.createPortfolio") || "إنشاء بورتفليو"}
                 </Link>
@@ -791,7 +783,7 @@ const Header: React.FC = () => {
                   <Link
                     href={`/portfolio/${localUser.username}`}
                     onClick={() => setNavbarOpen(false)}
-                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                   >
                     {t("nav.myPortfolio") || "بورتفليو"}
                   </Link>
@@ -799,7 +791,7 @@ const Header: React.FC = () => {
                 <Link
                   href="/dashboard"
                   onClick={() => setNavbarOpen(false)}
-                  className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                  className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                 >
                   {t("nav.dashboard") || "لوحة التحكم"}
                 </Link>
@@ -830,7 +822,7 @@ const Header: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <div className="flex items-center space-x-3 px-4 py-2 border-b border-gray-200 dark:border-gray-700 pb-4">
+                  <div className="flex items-center space-x-3 px-4 py-2 border-b border-gray-200 dark:border-dark_border pb-4">
                     <img
                       src={
                         localUser.image && localUser.image.length > 0
@@ -851,7 +843,7 @@ const Header: React.FC = () => {
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                         {localUser.name || localUser.email}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      <p className="text-xs text-gray-500 dark:text-darkmuted truncate">
                         {localUser.email}
                       </p>
                     </div>
@@ -883,26 +875,29 @@ const Header: React.FC = () => {
 
         {/* Dialogs */}
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isSuccessDialogOpen
-            ? "opacity-100 transform translate-y-0"
-            : "opacity-0 transform -translate-y-4 pointer-events-none"
-            }`}
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
+            authDialog?.isSuccessDialogOpen
+              ? "opacity-100 transform translate-y-0"
+              : "opacity-0 transform -translate-y-4 pointer-events-none"
+          }`}
         >
           <SuccessfullLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isFailedDialogOpen
-            ? "opacity-100 transform translate-y-0"
-            : "opacity-0 transform -translate-y-4 pointer-events-none"
-            }`}
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
+            authDialog?.isFailedDialogOpen
+              ? "opacity-100 transform translate-y-0"
+              : "opacity-0 transform -translate-y-4 pointer-events-none"
+          }`}
         >
           <FailedLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isUserRegistered
-            ? "opacity-100 transform translate-y-0"
-            : "opacity-0 transform -translate-y-4 pointer-events-none"
-            }`}
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
+            authDialog?.isUserRegistered
+              ? "opacity-100 transform translate-y-0"
+              : "opacity-0 transform -translate-y-4 pointer-events-none"
+          }`}
         >
           <UserRegistered />
         </div>
@@ -916,23 +911,15 @@ const Header: React.FC = () => {
           <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
             <button
               onClick={() => setIsSignInOpen(false)}
-              className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
+              className="hover:bg-gray-200 dark:hover:bg-darkhover p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
             >
-              <Icon
-                icon="ic:round-close"
-                className="text-2xl dark:text-white"
-              />
+              <Icon icon="ic:round-close" className="text-2xl dark:text-white" />
             </button>
             <Signin
-              signInOpen={(value: boolean) =>
-                setIsSignInOpen(value)
-              }
+              signInOpen={(value: boolean) => setIsSignInOpen(value)}
               onSuccess={(userData) => {
                 setLocalUser(userData);
-                localStorage.setItem(
-                  "user",
-                  JSON.stringify(userData)
-                );
+                localStorage.setItem("user", JSON.stringify(userData));
               }}
             />
           </div>
@@ -947,17 +934,12 @@ const Header: React.FC = () => {
           <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
             <button
               onClick={() => setIsSignUpOpen(false)}
-              className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
+              className="hover:bg-gray-200 dark:hover:bg-darkhover p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
             >
-              <Icon
-                icon="ic:round-close"
-                className="text-2xl dark:text-white"
-              />
+              <Icon icon="ic:round-close" className="text-2xl dark:text-white" />
             </button>
             <SignUp
-              signUpOpen={(value: boolean) =>
-                setIsSignUpOpen(value)
-              }
+              signUpOpen={(value: boolean) => setIsSignUpOpen(value)}
               onSuccess={(userData) => {
                 setLocalUser(userData);
               }}
@@ -974,12 +956,9 @@ const Header: React.FC = () => {
           <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
             <button
               onClick={() => setIsProfileOpen(false)}
-              className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
+              className="hover:bg-gray-200 dark:hover:bg-darkhover p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
             >
-              <Icon
-                icon="ic:round-close"
-                className="text-2xl dark:text-white"
-              />
+              <Icon icon="ic:round-close" className="text-2xl dark:text-white" />
             </button>
             <ProfileModal
               onClose={() => setIsProfileOpen(false)}

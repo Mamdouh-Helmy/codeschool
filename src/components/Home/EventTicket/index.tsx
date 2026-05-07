@@ -71,8 +71,6 @@ const EventTicket: React.FC = () => {
     const fetchSectionImage = async () => {
       try {
         setImageLoading(true);
-
-        // استخدم المسار الديناميكي بدون language
         const res = await fetch(`/api/section-images/event-ticket`);
         if (res.ok) {
           const result = await res.json();
@@ -246,13 +244,26 @@ const EventTicket: React.FC = () => {
                               <td className="py-4 px-4 font-bold text-secondary dark:text-white">
                                 {plan.price} {plan.currency}
                               </td>
-
                               <td className="py-4 px-4 text-secondary dark:text-darktext">
                                 {plan.name}
                               </td>
-
                               <td className="py-4 px-4 text-SlateBlueText">
                                 {plan.billingPeriod}
+                              </td>
+                              <td className="py-4 px-4">
+                                {!isSubscribed ? (
+                                  <button
+                                    onClick={() => handleSubscribe(plan._id)}
+                                    disabled={processing}
+                                    className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 hover:scale-105"
+                                  >
+                                    {processing ? t("common.processing") : t("eventTicket.subscribe")}
+                                  </button>
+                                ) : (
+                                  <span className="text-green-600 dark:text-green-400 font-medium">
+                                    {t("eventTicket.subscribed")}
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -264,9 +275,9 @@ const EventTicket: React.FC = () => {
                   <div className="mt-6">
                     <Link
                       href="/subscriptions"
-                      className="btn btn-1 hover-filled-slide-down w-full text-center rounded-lg overflow-hidden"
+                      className="block w-full text-center bg-secondary hover:bg-secondary/90 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-300 hover:scale-105"
                     >
-                      <span>{t("eventTicket.viewAllSubscriptions")}</span>
+                      {t("eventTicket.viewAllSubscriptions")}
                     </Link>
                   </div>
                 </div>

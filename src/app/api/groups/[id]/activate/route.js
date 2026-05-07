@@ -1,8 +1,4 @@
 // app/api/groups/[id]/activate/route.js
-// ─────────────────────────────────────────────────────────────────────────────
-// GET  → فحص اللينكات وإرجاع معاينة توزيعها على الجلسات (قبل التفعيل)
-// POST → تفعيل المجموعة فعلياً
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
@@ -17,8 +13,7 @@ import {
 import mongoose from "mongoose";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: build simulated session list (title + date) from group config
-// WITHOUT writing to DB — purely for preview
+// Helper: build simulated session list for preview (no DB writes)
 // ─────────────────────────────────────────────────────────────────────────────
 function previewSessions(group) {
   const course = group.courseId;
@@ -32,7 +27,6 @@ function previewSessions(group) {
     Thursday: 4, Friday: 5, Saturday: 6,
   };
 
-  // Which modules to include?
   let modulesToUse = [];
   if (moduleSelection.mode === "all") {
     modulesToUse = course.curriculum.map((m, i) => ({ module: m, origIdx: i }));
@@ -42,24 +36,20 @@ function previewSessions(group) {
       .filter((x) => x.module);
   }
 
-  // Build sorted day numbers
   const dayNums = daysOfWeek.map((d) => dayMap[d]).sort((a, b) => a - b);
   const daysPerWeek = dayNums.length;
 
-  // Adjust start to first selected day
   const base = new Date(startDate);
   const firstDay = dayNums[0];
   let diff = firstDay - base.getDay();
   if (diff < 0) diff += 7;
   base.setDate(base.getDate() + diff);
 
-  // Total sessions needed
   let total = modulesToUse.reduce(
     (s, { module: m }) => s + (m.totalSessions || 3),
     0,
   );
 
-  // Generate dates
   const dates = [];
   for (let i = 0; i < total; i++) {
     const dayInCycle = i % daysPerWeek;
@@ -73,7 +63,6 @@ function previewSessions(group) {
     dates.push(d);
   }
 
-  // Build session objects
   const sessions = [];
   let dateIdx = 0;
   for (const { module: m, origIdx } of modulesToUse) {
@@ -101,23 +90,6 @@ function previewSessions(group) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ✅ Helper: توزيع اللينكات على الجلسات بالـ modulo
-// لو لينك واحد → كل الجلسات تاخد نفس اللينك
-// لو 3 لينكات لـ 6 جلسات → 1→L1, 2→L2, 3→L3, 4→L1, 5→L2, 6→L3
-// لو 0 لينكات → كل الجلسات بدون لينك
-// ─────────────────────────────────────────────────────────────────────────────
-function distributeLinksToSessions(sessions, availableLinks) {
-  if (!availableLinks || availableLinks.length === 0) {
-    return sessions.map((session) => ({ session, assignedLink: null }));
-  }
-
-  return sessions.map((session, i) => ({
-    session,
-    assignedLink: availableLinks[i % availableLinks.length],
-  }));
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // GET: Preview link distribution BEFORE activation
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(req, { params }) {
@@ -130,10 +102,7 @@ export async function GET(req, { params }) {
     await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid group ID" },
-        { status: 400 },
-      );
+      return NextResponse.json({ success: false, error: "Invalid group ID" }, { status: 400 });
     }
 
     const group = await Group.findOne({ _id: id, isDeleted: false }).populate(
@@ -142,13 +111,9 @@ export async function GET(req, { params }) {
     );
 
     if (!group) {
-      return NextResponse.json(
-        { success: false, error: "Group not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ success: false, error: "Group not found" }, { status: 404 });
     }
 
-    // All non-deleted links
     const allLinks = await MeetingLink.find({
       isDeleted: false,
       status: { $in: ["available", "reserved", "in_use"] },
@@ -156,7 +121,6 @@ export async function GET(req, { params }) {
 
     const now = new Date();
 
-    // Truly available (no active reservation)
     const availableLinks = allLinks.filter(
       (l) =>
         l.status === "available" ||
@@ -164,21 +128,15 @@ export async function GET(req, { params }) {
         new Date(l.currentReservation?.endTime) < now,
     );
 
-    // Reserved (active reservation)
     const reservedLinks = allLinks.filter(
       (l) =>
         l.currentReservation?.sessionId &&
         new Date(l.currentReservation?.endTime) >= now,
     );
 
-    // Build preview sessions
     const sessions = previewSessions(group);
     const totalSessions = sessions.length;
 
-    // ✅ توزيع اللينكات بالـ modulo
-    const sessionPreviews = distributeLinksToSessions(sessions, availableLinks);
-
-    // ✅ حساب الجلسات اللي ستحصل على لينكات
     const sessionsWithLinks = availableLinks.length > 0 ? totalSessions : 0;
     const sessionsWithout   = availableLinks.length > 0 ? 0 : totalSessions;
 
@@ -193,9 +151,8 @@ export async function GET(req, { params }) {
         hasAvailableLinks:   availableLinks.length > 0,
         sessionsWithLinks,
         sessionsWithout,
-        sessions:            sessionPreviews,
+        sessions,
         availableLinks,
-        // ✅ UPDATED: إضافة link و reservedFor للفرونت
         reservedLinks: reservedLinks.map((l) => ({
           id:            l._id,
           name:          l.name,
@@ -211,10 +168,7 @@ export async function GET(req, { params }) {
     });
   } catch (error) {
     console.error("❌ GET activate error:", error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
@@ -232,17 +186,16 @@ export async function POST(req, { params }) {
     const body = await req.json();
     const {
       instructorMessages = {},
-      forceActivate = false,
-      releaseReserved = false,
+      forceActivate    = false,
+      releaseReserved  = false,
+      // ✅ استقبل الـ IDs المختارة من الفرونت
+      selectedLinkIds  = [],
     } = body;
 
     await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid group ID format" },
-        { status: 400 },
-      );
+      return NextResponse.json({ success: false, error: "Invalid group ID format" }, { status: 400 });
     }
 
     const group = await Group.findOne({ _id: id, isDeleted: false })
@@ -250,10 +203,7 @@ export async function POST(req, { params }) {
       .populate("instructors.userId", "name email gender profile");
 
     if (!group) {
-      return NextResponse.json(
-        { success: false, error: "Group not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ success: false, error: "Group not found" }, { status: 404 });
     }
 
     // ── Release reserved links if requested ──────────────────────────────
@@ -268,7 +218,6 @@ export async function POST(req, { params }) {
       for (const link of reservedLinks) {
         try {
           await link.releaseLink();
-          console.log(`🔓 Released link: ${link.name}`);
         } catch (e) {
           console.warn(`⚠️ Could not release link ${link.name}:`, e.message);
         }
@@ -276,64 +225,40 @@ export async function POST(req, { params }) {
       console.log(`✅ Released ${reservedLinks.length} reserved links`);
     }
 
-    // ── Standard validations ─────────────────────────────────────────────
+    // ── Validations ──────────────────────────────────────────────────────
     let isReactivation = false;
 
-    if (group.status === "active") {
-      isReactivation = true;
-    }
+    if (group.status === "active")     isReactivation = true;
     if (group.status === "completed") {
-      return NextResponse.json(
-        { success: false, error: "Cannot activate a completed group" },
-        { status: 400 },
-      );
+      return NextResponse.json({ success: false, error: "Cannot activate a completed group" }, { status: 400 });
     }
     if (!group.courseId?.curriculum?.length) {
-      return NextResponse.json(
-        { success: false, error: "Cannot activate group: Course has no curriculum" },
-        { status: 400 },
-      );
+      return NextResponse.json({ success: false, error: "Cannot activate group: Course has no curriculum" }, { status: 400 });
     }
-    if (
-      !group.schedule?.startDate ||
-      !group.schedule?.daysOfWeek?.length ||
-      group.schedule.daysOfWeek.length > 3
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Group must have a valid schedule with 1 to 3 days selected (currently has ${group.schedule?.daysOfWeek?.length || 0} days)`,
-        },
-        { status: 400 },
-      );
+    if (!group.schedule?.startDate || !group.schedule?.daysOfWeek?.length || group.schedule.daysOfWeek.length > 3) {
+      return NextResponse.json({
+        success: false,
+        error: `Group must have a valid schedule with 1 to 3 days selected (currently has ${group.schedule?.daysOfWeek?.length || 0} days)`,
+      }, { status: 400 });
     }
 
-    const moduleSelection = group.moduleSelection || {
-      mode: "all",
-      selectedModules: [],
-    };
-    if (
-      moduleSelection.mode === "specific" &&
-      moduleSelection.selectedModules.length === 0
-    ) {
-      return NextResponse.json(
-        { success: false, error: "No modules selected for session generation" },
-        { status: 400 },
-      );
+    const moduleSelection = group.moduleSelection || { mode: "all", selectedModules: [] };
+    if (moduleSelection.mode === "specific" && moduleSelection.selectedModules.length === 0) {
+      return NextResponse.json({ success: false, error: "No modules selected for session generation" }, { status: 400 });
     }
 
     // ── Update group status ──────────────────────────────────────────────
     const updateData = {
       $set: {
         "metadata.lastModifiedBy": adminUser.id,
-        "metadata.updatedAt": new Date(),
+        "metadata.updatedAt":      new Date(),
       },
     };
     if (!isReactivation) {
-      updateData.$set.status = "active";
-      updateData.$set["metadata.activatedAt"] = new Date();
+      updateData.$set.status                   = "active";
+      updateData.$set["metadata.activatedAt"]  = new Date();
     } else {
-      updateData.$set["metadata.reactivatedAt"] = new Date();
+      updateData.$set["metadata.reactivatedAt"]  = new Date();
       updateData.$set["metadata.lastRegeneration"] = new Date();
     }
 
@@ -344,15 +269,12 @@ export async function POST(req, { params }) {
       .populate("instructors.userId", "name email gender profile");
 
     // ── Sync indexes ─────────────────────────────────────────────────────
-    try {
-      await Session.syncIndexes();
-    } catch (e) {
-      console.warn("⚠️ syncIndexes:", e.message);
-    }
+    try { await Session.syncIndexes(); } catch (e) { console.warn("⚠️ syncIndexes:", e.message); }
 
     // ── Automation ───────────────────────────────────────────────────────
     try {
-      const automationResult = await onGroupActivated(id, adminUser.id);
+      // ✅ مرّر selectedLinkIds لـ onGroupActivated
+      const automationResult = await onGroupActivated(id, adminUser.id, selectedLinkIds);
 
       let instructorNotificationResult = {
         success: true,
@@ -363,36 +285,31 @@ export async function POST(req, { params }) {
 
       if (updatedGroup.instructors?.length > 0) {
         try {
-          instructorNotificationResult = await sendInstructorWelcomeMessages(
-            id,
-            instructorMessages,
-          );
+          instructorNotificationResult = await sendInstructorWelcomeMessages(id, instructorMessages);
         } catch (e) {
           instructorNotificationResult = { success: false, error: e.message };
         }
       }
 
       const normalizedInstructors = (updatedGroup.instructors || []).map((entry) => ({
-        _id:        entry.userId?._id || entry.userId,
-        id:         entry.userId?._id || entry.userId,
-        name:       entry.userId?.name || "",
-        email:      entry.userId?.email || "",
-        gender:     entry.userId?.gender || "",
-        profile:    entry.userId?.profile || {},
-        countTime:  entry.countTime || 0,
+        _id:       entry.userId?._id || entry.userId,
+        id:        entry.userId?._id || entry.userId,
+        name:      entry.userId?.name  || "",
+        email:     entry.userId?.email || "",
+        gender:    entry.userId?.gender || "",
+        profile:   entry.userId?.profile || {},
+        countTime: entry.countTime || 0,
       }));
 
       return NextResponse.json({
         success: true,
-        message: isReactivation
-          ? "Group reactivated successfully"
-          : "Group activated successfully",
+        message: isReactivation ? "Group reactivated successfully" : "Group activated successfully",
         data: {
           id:            updatedGroup._id,
           code:          updatedGroup.code,
           name:          updatedGroup.name,
           status:        updatedGroup.status,
-          activatedAt:   updatedGroup.metadata?.activatedAt ?? null,
+          activatedAt:   updatedGroup.metadata?.activatedAt   ?? null,
           reactivatedAt: updatedGroup.metadata?.reactivatedAt ?? null,
           course:        updatedGroup.courseId,
           instructors:   normalizedInstructors,
@@ -404,8 +321,7 @@ export async function POST(req, { params }) {
             selectedDays: updatedGroup.schedule.daysOfWeek,
             startDate:    updatedGroup.schedule.startDate,
           },
-          moduleSelection:
-            updatedGroup.moduleSelection || { mode: "all", selectedModules: [] },
+          moduleSelection: updatedGroup.moduleSelection || { mode: "all", selectedModules: [] },
         },
         automation: {
           sessions: {
@@ -419,9 +335,9 @@ export async function POST(req, { params }) {
             triggered:           updatedGroup.instructors?.length > 0,
             status:              instructorNotificationResult?.success ? "sent" : "failed",
             customMessagesUsed:  Object.keys(instructorMessages).length,
-            notificationsSent:   instructorNotificationResult?.notificationsSent || 0,
+            notificationsSent:   instructorNotificationResult?.notificationsSent   || 0,
             notificationsFailed: instructorNotificationResult?.notificationsFailed || 0,
-            successRate:         instructorNotificationResult?.successRate || 0,
+            successRate:         instructorNotificationResult?.successRate          || 0,
             results:             instructorNotificationResult,
           },
         },
@@ -429,25 +345,16 @@ export async function POST(req, { params }) {
     } catch (automationError) {
       console.error("❌ Automation failed:", automationError);
       if (!isReactivation) {
-        await Group.findByIdAndUpdate(id, {
-          $set: { status: "draft", "metadata.updatedAt": new Date() },
-        });
+        await Group.findByIdAndUpdate(id, { $set: { status: "draft", "metadata.updatedAt": new Date() } });
       }
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Automation failed: ${automationError.message}`,
-          suggestion:
-            "Group status reverted to draft. Please check the schedule and try again.",
-        },
-        { status: 500 },
-      );
+      return NextResponse.json({
+        success: false,
+        error:      `Automation failed: ${automationError.message}`,
+        suggestion: "Group status reverted to draft. Please check the schedule and try again.",
+      }, { status: 500 });
     }
   } catch (error) {
     console.error("❌ Error activating group:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to activate group" },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: false, error: error.message || "Failed to activate group" }, { status: 500 });
   }
 }

@@ -78,39 +78,29 @@ async function filterEligibleStudents(students) {
 /**
  * ✅ EVENT 1: Group Activated (for session generation)
  */
-export async function onGroupActivated(groupId, userId) {
+// ✅ الجزء المعدل فقط من groupAutomation.js
+// استبدل دالة onGroupActivated بالكاملة بهذه النسخة
+
+// ✅ استبدل دالة onGroupActivated كاملة في groupAutomation.js بهذه النسخة
+
+export async function onGroupActivated(groupId, userId, selectedLinkIds = []) {
   try {
     console.log(`\n🎯 EVENT: Group Activated ==========`);
     console.log(`👥 Group: ${groupId}`);
     console.log(`👤 Activated by: ${userId}`);
+    console.log(`🔗 Selected Link IDs: ${selectedLinkIds.length > 0 ? selectedLinkIds.join(", ") : "none"}`);
 
     const group = await Group.findById(groupId)
       .populate("courseId")
       .populate("instructors", "name email profile");
 
-    if (!group) {
-      throw new Error("Group not found");
-    }
+    if (!group) throw new Error("Group not found");
 
     console.log(`📊 Group status: ${group.status}`);
     console.log(`📚 Course: ${group.courseId?.title}`);
-    console.log(
-      `📖 Curriculum modules: ${group.courseId?.curriculum?.length || 0}`,
-    );
+    console.log(`📖 Curriculum modules: ${group.courseId?.curriculum?.length || 0}`);
+    console.log(`📅 Schedule: ${group.schedule.daysOfWeek} | ${group.schedule.timeFrom} - ${group.schedule.timeTo}`);
 
-    // ✅ التحقق من إعدادات الجدول
-    console.log(`📅 Group Schedule:`);
-    console.log(
-      `   Start Date: ${
-        new Date(group.schedule.startDate).toISOString().split("T")[0]
-      }`,
-    );
-    console.log(`   Days of Week: ${group.schedule.daysOfWeek}`);
-    console.log(
-      `   Time: ${group.schedule.timeFrom} - ${group.schedule.timeTo}`,
-    );
-
-    // ✅ UPDATED: التحقق من أن هناك 1-3 أيام مختارة
     if (
       !group.schedule.daysOfWeek ||
       group.schedule.daysOfWeek.length === 0 ||
@@ -121,11 +111,6 @@ export async function onGroupActivated(groupId, userId) {
       );
     }
 
-    console.log(
-      `✅ Schedule validated: ${group.schedule.daysOfWeek.length} day(s) selected - ${group.schedule.daysOfWeek.join(", ")}`,
-    );
-
-    // ✅ FIXED: التحقق مما إذا كانت الحصص موجودة مسبقاً
     const Session = (await import("../models/Session")).default;
     const existingSessionsCount = await Session.countDocuments({
       groupId: groupId,
@@ -133,16 +118,11 @@ export async function onGroupActivated(groupId, userId) {
     });
 
     console.log(`📊 Existing sessions count: ${existingSessionsCount}`);
-    console.log(`📊 Group sessionsGenerated flag: ${group.sessionsGenerated}`);
 
-    // ✅ FIXED: إعادة توليد الحصص إذا لزم الأمر
+    // ── حذف السيشنز القديمة لو موجودة ────────────────────────────────────
     if (group.sessionsGenerated || existingSessionsCount > 0) {
       console.log(`🔄 Regenerating sessions for group ${group.code}...`);
 
-      // ✅ حذف جميع الحصص القديمة أولاً
-      console.log("🗑️  Deleting existing sessions...");
-
-      // Release meeting links first
       const existingSessions = await Session.find({
         groupId: groupId,
         isDeleted: false,
@@ -151,65 +131,42 @@ export async function onGroupActivated(groupId, userId) {
 
       for (const session of existingSessions) {
         try {
-          // Import releaseMeetingLink function
-          const { releaseMeetingLink } =
-            await import("../../utils/sessionGenerator");
+          const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
           await releaseMeetingLink(session._id);
         } catch (releaseError) {
-          console.warn(
-            `⚠️ Failed to release meeting link for session ${session._id}:`,
-            releaseError.message,
-          );
+          console.warn(`⚠️ Failed to release meeting link for session ${session._id}:`, releaseError.message);
         }
       }
 
-      // Delete sessions
-      const deleteResult = await Session.deleteMany({
-        groupId: groupId,
-      });
+      const deleteResult = await Session.deleteMany({ groupId: groupId });
       console.log(`✅ Deleted ${deleteResult.deletedCount} existing sessions`);
 
-      // Reset group flag
       await Group.findByIdAndUpdate(groupId, {
-        $set: {
-          sessionsGenerated: false,
-          totalSessionsCount: 0,
-        },
+        $set: { sessionsGenerated: false, totalSessionsCount: 0 },
       });
     }
 
-    // ✅ Generate Sessions
+    // ── توليد السيشنز ──────────────────────────────────────────────────────
     console.log("📅 Generating new sessions...");
 
-    const { generateSessionsForGroup } =
-      await import("../../utils/sessionGenerator");
+    const { generateSessionsForGroup } = await import("../../utils/sessionGenerator");
 
-    const sessionsResult = await generateSessionsForGroup(
-      groupId,
-      group,
-      userId,
-    );
+    const sessionsResult = await generateSessionsForGroup(groupId, group, userId, selectedLinkIds);
 
     if (!sessionsResult.success) {
       throw new Error(sessionsResult.message || "Failed to generate sessions");
     }
 
-    // ✅ التحقق من توزيع السيشنات
     console.log(`📊 Sessions Generation Result:`);
     console.log(`   Total Generated: ${sessionsResult.totalGenerated}`);
     console.log(`   Distribution:`, sessionsResult.distribution);
 
-    // ✅ Save sessions to database
+    // ── حفظ السيشنز في الـ DB ─────────────────────────────────────────────
     if (sessionsResult.sessions && sessionsResult.sessions.length > 0) {
-      console.log(
-        `💾 Saving ${sessionsResult.sessions.length} sessions to database...`,
-      );
+      console.log(`💾 Saving ${sessionsResult.sessions.length} sessions to database...`);
 
       try {
-        const insertResult = await Session.insertMany(sessionsResult.sessions, {
-          ordered: false,
-        });
-
+        const insertResult = await Session.insertMany(sessionsResult.sessions, { ordered: false });
         console.log(`✅ Successfully saved ${insertResult.length} sessions`);
 
         await Group.findByIdAndUpdate(groupId, {
@@ -226,22 +183,71 @@ export async function onGroupActivated(groupId, userId) {
           },
         });
 
-        console.log(
-          `✅ Generated and saved ${sessionsResult.totalGenerated} sessions`,
-        );
+        console.log(`✅ Generated and saved ${sessionsResult.totalGenerated} sessions`);
         console.log(`   First session: ${sessionsResult.startDate}`);
         console.log(`   Last session: ${sessionsResult.endDate}`);
+
+        // ── ✅ Reserve كل لينك مختار مرة واحدة ───────────────────────────
+        // الـ reserve بيبقى من أول سيشن بيستخدم اللينك لآخر سيشن بيستخدمه
+        if (selectedLinkIds.length > 0) {
+          console.log(`\n🔒 Reserving ${selectedLinkIds.length} selected meeting link(s)...`);
+
+          const MeetingLink = (await import("../models/MeetingLink")).default;
+
+          for (const linkId of selectedLinkIds) {
+            try {
+              const link = await MeetingLink.findById(linkId);
+              if (!link) {
+                console.warn(`⚠️ Link ${linkId} not found, skipping`);
+                continue;
+              }
+
+              // السيشنز اللي بتستخدم هذا اللينك بالترتيب
+              const sessionsUsingLink = sessionsResult.sessions.filter(
+                (s) => s.meetingLinkId?.toString() === linkId.toString(),
+              );
+
+              if (sessionsUsingLink.length === 0) continue;
+
+              // أول وآخر سيشن بيستخدم اللينك
+              const firstSession = sessionsUsingLink[0];
+              const lastSession  = sessionsUsingLink[sessionsUsingLink.length - 1];
+
+              const startTime = new Date(firstSession.scheduledDate);
+              const [sh, sm]  = firstSession.startTime.split(":").map(Number);
+              startTime.setHours(sh, sm, 0, 0);
+
+              const endTime  = new Date(lastSession.scheduledDate);
+              const [eh, em] = lastSession.endTime.split(":").map(Number);
+              endTime.setHours(eh, em, 0, 0);
+
+              await link.reserveForSession(
+                lastSession._id,
+                groupId,
+                startTime,
+                endTime,
+                userId,
+              );
+
+              console.log(
+                `✅ Reserved "${link.name}" — ${sessionsUsingLink.length} sessions` +
+                ` (${startTime.toISOString().split("T")[0]} → ${endTime.toISOString().split("T")[0]})`,
+              );
+            } catch (reserveError) {
+              console.warn(`⚠️ Could not reserve link ${linkId}:`, reserveError.message);
+            }
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────
+
       } catch (insertError) {
         console.error("❌ Error inserting sessions:", insertError);
 
         if (insertError.code === 11000) {
-          console.log(
-            "🔄 Trying to insert sessions individually with conflict resolution...",
-          );
+          console.log("🔄 Trying to insert sessions individually with conflict resolution...");
 
           let successCount = 0;
-          let errorCount = 0;
-          const errors = [];
+          let errorCount   = 0;
 
           for (const sessionData of sessionsResult.sessions) {
             try {
@@ -252,17 +258,11 @@ export async function onGroupActivated(groupId, userId) {
                   sessionNumber: sessionData.sessionNumber,
                 },
                 sessionData,
-                {
-                  upsert: true,
-                  new: true,
-                  setDefaultsOnInsert: true,
-                },
+                { upsert: true, new: true, setDefaultsOnInsert: true },
               );
-
               successCount++;
             } catch (individualError) {
               errorCount++;
-              errors.push(individualError.message);
             }
           }
 
@@ -274,14 +274,9 @@ export async function onGroupActivated(groupId, userId) {
                 "metadata.updatedAt": new Date(),
               },
             });
-
-            console.log(
-              `✅ Saved ${successCount} sessions (${errorCount} failed)`,
-            );
+            console.log(`✅ Saved ${successCount} sessions (${errorCount} failed)`);
           } else {
-            throw new Error(
-              `Failed to save any sessions. All ${errorCount} attempts failed.`,
-            );
+            throw new Error(`Failed to save any sessions. All ${errorCount} attempts failed.`);
           }
         } else {
           throw insertError;
@@ -289,14 +284,10 @@ export async function onGroupActivated(groupId, userId) {
       }
     }
 
-    // 2. Notify Instructors (if automation enabled)
     if (group.automation?.whatsappEnabled && group.instructors?.length > 0) {
       console.log("📱 Sending notifications to instructors...");
-
       for (const instructor of group.instructors) {
-        console.log(
-          `📤 Notify instructor: ${instructor.name} (${instructor.email})`,
-        );
+        console.log(`📤 Notify instructor: ${instructor.name} (${instructor.email})`);
       }
     }
 
@@ -315,6 +306,7 @@ export async function onGroupActivated(groupId, userId) {
 
     if (error.code === 11000) {
       try {
+        const Session = (await import("../models/Session")).default;
         await Session.syncIndexes();
         console.log("🔄 Attempted to sync indexes");
       } catch (syncError) {

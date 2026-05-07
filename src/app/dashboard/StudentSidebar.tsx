@@ -34,9 +34,9 @@ interface NavigationItem {
   nameAr: string;
   href: string;
   icon: React.ElementType;
-  gradient: string;
+  activeGradient: string;
   badge?: number;
-  exact?: boolean; // ⭐ NEW
+  exact?: boolean;
 }
 
 interface StudentSidebarProps {
@@ -60,63 +60,52 @@ export default function StudentSidebar({
       nameAr: "الرئيسية",
       href: "/",
       icon: Home,
-      gradient: "from-blue-500 to-cyan-500",
-      exact: true, // ⭐ مهم
+      activeGradient: "linear-gradient(135deg, #004d59, #ff6437)",
+      exact: true,
     },
     {
       name: t("sidebar.dashboard"),
       nameAr: "لوحة التحكم",
       href: "/dashboard",
       icon: LayoutDashboard,
-      gradient: "from-primary to-purple-600",
-      exact: true, // ⭐ مهم
+      activeGradient: "linear-gradient(135deg, #004d59, #ff6700)",
+      exact: true,
     },
     {
       name: t("sidebar.groups"),
       nameAr: "مجموعاتي",
       href: "/dashboard/groups",
       icon: Users,
-      gradient: "from-purple-500 to-pink-500",
+      activeGradient: "linear-gradient(135deg, #ff6700, #f67d00)",
     },
     {
       name: t("sidebar.sessions"),
       nameAr: "جلساتي",
       href: "/dashboard/sessions",
       icon: Calendar,
-      gradient: "from-purple-500 to-pink-500",
+      activeGradient: "linear-gradient(135deg, #ff6700, #feaf00)",
     },
-
     {
       name: t("sidebar.schedule"),
       nameAr: "الجدول",
       href: "/dashboard/schedule",
       icon: Calendar,
-      gradient: "from-pink-500 to-rose-500",
+      activeGradient: "linear-gradient(135deg, #004d59, #feaf00)",
     },
-   
     {
       name: t("sidebar.messages"),
       nameAr: "الرسائل",
       href: "/dashboard/messages",
       icon: MessageSquare,
-      gradient: "from-primary to-cyan-500",
-      
+      activeGradient: "linear-gradient(135deg, #ff6437, #ff6700)",
     },
-   
   ];
 
-  // ✅ SMART ACTIVE DETECTION (FIXED)
   const isActive = (item: NavigationItem): boolean => {
-    // exact pages (home & dashboard)
     if (item.exact) {
       return pathname === item.href;
     }
-
-    // nested routes support
-    return (
-      pathname === item.href ||
-      pathname.startsWith(item.href + "/")
-    );
+    return pathname === item.href || pathname.startsWith(item.href + "/");
   };
 
   const getUserInitial = (): string => {
@@ -157,7 +146,6 @@ export default function StudentSidebar({
         h-full flex flex-col flex-shrink-0 sticky top-0
         transition-all duration-300 ease-in-out
         ${isCollapsed ? "w-20" : "w-64"}
-
         bg-white border-l border-gray-200
         dark:bg-[#161b22] dark:border-[#30363d]
       `}
@@ -165,12 +153,21 @@ export default function StudentSidebar({
       {/* ── Logo ── */}
       <div className="p-6 border-b border-gray-200 dark:border-[#30363d]">
         <Link href="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/30">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
+            style={{
+              background: "linear-gradient(135deg, #004d59, #ff6700)",
+              boxShadow: "0 4px 14px #ff670030",
+            }}
+          >
             <GraduationCap className="w-6 h-6 text-white" />
           </div>
           {!isCollapsed && (
             <div className="flex flex-col">
-              <span className="text-lg font-bold text-gray-900 dark:text-[#e6edf3]">
+              <span
+                className="text-lg font-bold bg-clip-text text-transparent"
+                style={{ backgroundImage: "linear-gradient(135deg, #004d59, #ff6700)" }}
+              >
                 Code School
               </span>
               <span className="text-xs text-gray-500 dark:text-[#8b949e]">
@@ -186,7 +183,7 @@ export default function StudentSidebar({
         <div className="space-y-1">
           {navigationItems.map((item: NavigationItem) => {
             const Icon = item.icon;
-            const active = isActive(item); // ⭐ FIXED
+            const active = isActive(item);
 
             return (
               <Link
@@ -198,12 +195,13 @@ export default function StudentSidebar({
                   ${isCollapsed ? "justify-center" : ""}
                   ${
                     active
-                      ? `bg-gradient-to-r ${item.gradient} text-white shadow-lg`
+                      ? "text-white shadow-lg"
                       : `text-gray-600 dark:text-[#8b949e]
                          hover:bg-gray-100 dark:hover:bg-[#21262d]
                          hover:text-gray-900 dark:hover:text-[#e6edf3]`
                   }
                 `}
+                style={active ? { background: item.activeGradient } : {}}
                 aria-current={active ? "page" : undefined}
               >
                 {/* Icon */}
@@ -211,11 +209,7 @@ export default function StudentSidebar({
                   className={`
                     w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
                     transition-all duration-200
-                    ${
-                      active
-                        ? "bg-white/20"
-                        : "bg-gray-100 dark:bg-[#21262d] group-hover:scale-110"
-                    }
+                    ${active ? "bg-white/20" : "bg-gray-100 dark:bg-[#21262d] group-hover:scale-110"}
                   `}
                 >
                   <Icon
@@ -234,11 +228,12 @@ export default function StudentSidebar({
                       </span>
                       {item.badge !== undefined && item.badge > 0 && (
                         <span
-                          className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                          className={`px-2 py-0.5 text-xs font-bold rounded-full text-white`}
+                          style={
                             active
-                              ? "bg-white/30 text-white"
-                              : "bg-primary text-white"
-                          }`}
+                              ? { background: "rgba(255,255,255,0.3)" }
+                              : { background: "linear-gradient(135deg, #ff6700, #f67d00)" }
+                          }
                         >
                           {item.badge}
                         </span>
@@ -260,8 +255,7 @@ export default function StudentSidebar({
                 {isCollapsed && (
                   <div
                     className={`
-                      absolute ${isRTL ? "left-full" : "right-full"}
-                      ${isRTL ? "ml-2" : "mr-2"} px-3 py-2
+                      absolute ${isRTL ? "left-full ml-2" : "right-full mr-2"} px-3 py-2
                       bg-[#161b22] border border-[#30363d]
                       text-[#e6edf3] text-sm rounded-lg
                       opacity-0 invisible group-hover:opacity-100 group-hover:visible
@@ -289,13 +283,19 @@ export default function StudentSidebar({
         <div
           className={`
             flex items-center gap-3 p-3 rounded-xl
-            bg-gray-50 dark:bg-[#1c2128]
-            border border-transparent dark:border-[#30363d]
+            border
             ${isCollapsed ? "justify-center" : ""}
           `}
+          style={{
+            background: "linear-gradient(135deg, #004d5908, #ff670008)",
+            borderColor: "#004d5920",
+          }}
         >
           <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-white dark:ring-[#161b22] shadow-lg">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ring-2 ring-white dark:ring-[#161b22] shadow-lg"
+              style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+            >
               {getUserInitial()}
             </div>
             <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white dark:border-[#161b22]" />
@@ -308,6 +308,9 @@ export default function StudentSidebar({
               </p>
               <p className="text-xs text-gray-500 dark:text-[#8b949e] truncate">
                 {getUserEmail()}
+              </p>
+              <p className="text-[10px] font-bold mt-0.5" style={{ color: "#ff6700" }}>
+                {isRTL ? "طالب" : "Student"}
               </p>
             </div>
           )}
@@ -332,26 +335,23 @@ export default function StudentSidebar({
             bg-gray-100 dark:bg-[#21262d]
             hover:bg-gray-200 dark:hover:bg-[#30363d]
             text-gray-600 dark:text-[#8b949e]
-            transition-colors flex items-center justify-center gap-2
+            transition-all duration-200 flex items-center justify-center gap-2
             border border-transparent dark:border-[#30363d]
+            group
           "
           aria-label={getCollapseAriaLabel()}
         >
           {isRTL ? (
             <ChevronRight
-              className={`w-4 h-4 transition-transform duration-300 ${
-                isCollapsed ? "" : "rotate-180"
-              }`}
+              className={`w-4 h-4 transition-transform duration-300 group-hover:text-[#ff6700] ${isCollapsed ? "" : "rotate-180"}`}
             />
           ) : (
             <ChevronLeft
-              className={`w-4 h-4 transition-transform duration-300 ${
-                isCollapsed ? "rotate-180" : ""
-              }`}
+              className={`w-4 h-4 transition-transform duration-300 group-hover:text-[#ff6700] ${isCollapsed ? "rotate-180" : ""}`}
             />
           )}
           {!isCollapsed && (
-            <span className="text-xs font-medium">
+            <span className="text-xs font-medium group-hover:text-[#ff6700] transition-colors">
               {getCollapseButtonText()}
             </span>
           )}

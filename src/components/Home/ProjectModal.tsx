@@ -221,16 +221,13 @@ export default function ProjectModal({
         {/* Description Section */}
         {(project.description || project.portfolioLink) && (
           <div className="text-SlateBlueText leading-relaxed space-y-4">
-            {/* {project.description && (
-              <p className="text-base dark:text-gray-300">{project.description}</p>
-            )} */}
             {project.portfolioLink && (
               <div>
                 <a
                   href={project.portfolioLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-primary to-primary/70 text-white px-5 py-2.5 rounded-xl font-medium shadow-md hover:shadow-xl hover:scale-105 transition-all duration-300"
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-primary to-secondary text-white px-5 py-2.5 rounded-xl font-medium shadow-md hover:shadow-xl hover:scale-105 transition-all duration-300"
                 >
                   {t("youngStars.viewPortfolio")}
                 </a>

@@ -2,25 +2,18 @@ import mongoose from "mongoose";
 
 const SectionImageHeroSchema = new mongoose.Schema(
   {
-    // الصور — مشتركة بين العربي والإنجليزي
-    imageUrl: {
+    language: {
       type: String,
+      enum: ["ar", "en"],
       required: true,
-    },
-    secondImageUrl: {
-      type: String,
-      default: "",
-    },
-    imageAlt: {
-      type: String,
-      default: "",
-    },
-    secondImageAlt: {
-      type: String,
-      default: "",
+      unique: true,
     },
 
-    // بيانات الهيرو (عربي)
+    imageUrl:      { type: String, required: true },
+    secondImageUrl:{ type: String, default: "" },
+    imageAlt:      { type: String, default: "" },
+    secondImageAlt:{ type: String, default: "" },
+
     heroTitleAr:       { type: String, default: "إطلاق طاقة المبدعين الصغار!" },
     heroDescriptionAr: { type: String, default: "" },
     instructor1Ar:     { type: String, default: "ياسين عبدالله" },
@@ -28,7 +21,6 @@ const SectionImageHeroSchema = new mongoose.Schema(
     instructor2Ar:     { type: String, default: "فريدة عبدالله" },
     instructor2RoleAr: { type: String, default: "تطوير الويب" },
 
-    // بيانات الهيرو (إنجليزي)
     heroTitleEn:       { type: String, default: "Empower Young Minds!" },
     heroDescriptionEn: { type: String, default: "" },
     instructor1En:     { type: String, default: "Yassin Abdullah" },
@@ -36,7 +28,6 @@ const SectionImageHeroSchema = new mongoose.Schema(
     instructor2En:     { type: String, default: "Farida Abdullah" },
     instructor2RoleEn: { type: String, default: "Web Development" },
 
-    // بيانات Welcome Popup (عربي)
     welcomeTitleAr:     { type: String, default: "ارتقِ بعقول الشباب!" },
     welcomeSubtitle1Ar: { type: String, default: "حوّل مستقبل طفلك مع البرمجة" },
     welcomeSubtitle2Ar: { type: String, default: "احصل على خصم 30% على جميع الدورات" },
@@ -47,7 +38,6 @@ const SectionImageHeroSchema = new mongoose.Schema(
     welcomeFeature5Ar:  { type: String, default: "جميع الفئات العمرية" },
     welcomeFeature6Ar:  { type: String, default: "شهادة معتمدة" },
 
-    // بيانات Welcome Popup (إنجليزي)
     welcomeTitleEn:     { type: String, default: "Empower Young Minds!" },
     welcomeSubtitle1En: { type: String, default: "Transform your child's future with coding" },
     welcomeSubtitle2En: { type: String, default: "Get 30% off on all courses" },
@@ -58,19 +48,15 @@ const SectionImageHeroSchema = new mongoose.Schema(
     welcomeFeature5En:  { type: String, default: "All Age Groups" },
     welcomeFeature6En:  { type: String, default: "Certified Certificate" },
 
-    // أرقام مشتركة
-    discount:     { type: Number, default: 30 },
-    happyParents: { type: String, default: "250" },
-    graduates:    { type: String, default: "130" },
-
+    discount:     { type: Number,  default: 30 },
+    happyParents: { type: String,  default: "250" },
+    graduates:    { type: String,  default: "130" },
     isActive:     { type: Boolean, default: true },
     displayOrder: { type: Number,  default: 0 },
   },
   { timestamps: true }
 );
 
-if (mongoose.models?.SectionImageHero) {
-  delete mongoose.models.SectionImageHero;
-}
+delete mongoose.models?.SectionImageHero;
 
 export default mongoose.model("SectionImageHero", SectionImageHeroSchema);

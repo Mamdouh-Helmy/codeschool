@@ -53,8 +53,8 @@ const LEVEL_CONFIG = {
     advanced: { 
         labelEn: "Advanced", 
         labelAr: "متقدم", 
-        gradient: "from-violet-400 to-purple-500", 
-        bg: "bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300" 
+        gradient: "from-primary to-orange-500", 
+        bg: "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300" 
     },
 };
 
@@ -62,14 +62,14 @@ const STATUS_CONFIG = {
     active: { 
         labelEn: "Active", 
         labelAr: "نشط", 
-        dot: "bg-emerald-400", 
-        badge: "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" 
+        dot: "bg-primary", 
+        badge: "bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary" 
     },
     completed: { 
         labelEn: "Completed", 
         labelAr: "مكتمل", 
-        dot: "bg-blue-400", 
-        badge: "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400" 
+        dot: "bg-secondary", 
+        badge: "bg-secondary/10 dark:bg-secondary/10 text-secondary dark:text-secondary" 
     },
     draft: { 
         labelEn: "Draft", 
@@ -86,12 +86,12 @@ const STATUS_CONFIG = {
 };
 
 const CARD_GRADIENTS = [
-    "from-primary to-purple-600",
-    "from-blue-500 to-cyan-500",
-    "from-emerald-500 to-teal-500",
-    "from-violet-500 to-fuchsia-500",
-    "from-amber-500 to-orange-500",
-    "from-rose-500 to-pink-500",
+    "from-primary to-[#f67d00]",
+    "from-secondary to-[#ff6437]",
+    "from-[#feaf00] to-[#f67d00]",
+    "from-primary to-secondary",
+    "from-secondary to-primary",
+    "from-[#ff6437] to-primary",
 ];
 
 // ─── Animated Counter ─────────────────────────────────────────────────────────
@@ -214,14 +214,14 @@ function GroupCard({ group, index, onClick, locale }) {
                             val: group.stats.attendanceRate, 
                             suffix: "%", 
                             icon: CheckCircle, 
-                            color: "text-emerald-500" 
+                            color: "text-secondary" 
                         },
                         { 
                             label: locale === 'ar' ? "ساعات" : "Hours", 
                             val: group.stats.hoursCompleted, 
                             suffix: locale === 'ar' ? "س" : "h", 
                             icon: Zap, 
-                            color: "text-amber-500" 
+                            color: "text-primary" 
                         },
                     ].map(({ label, val, suffix, icon: Icon, color }) => (
                         <div key={label} className="text-center bg-gray-50 dark:bg-[#0d1117] rounded-xl p-2.5">
@@ -254,8 +254,8 @@ function GroupCard({ group, index, onClick, locale }) {
 
                 {/* Completed + Remaining sessions */}
                 <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/10 rounded-xl px-3 py-2 border border-green-100 dark:border-green-900/20">
-                        <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                    <div className="flex items-center gap-2 bg-secondary/10 dark:bg-secondary/10 rounded-xl px-3 py-2 border border-secondary/20 dark:border-secondary/20">
+                        <CheckCircle className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
                         <div>
                             <p className="text-xs font-bold text-gray-900 dark:text-[#e6edf3]">{group.stats.completedSessions}</p>
                             <p className="text-[10px] text-gray-400 dark:text-[#6e7681]">
@@ -263,8 +263,8 @@ function GroupCard({ group, index, onClick, locale }) {
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/10 rounded-xl px-3 py-2 border border-blue-100 dark:border-blue-900/20">
-                        <Clock className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                    <div className="flex items-center gap-2 bg-primary/10 dark:bg-primary/10 rounded-xl px-3 py-2 border border-primary/20 dark:border-primary/20">
+                        <Clock className="w-3.5 h-3.5 text-primary flex-shrink-0" />
                         <div>
                             <p className="text-xs font-bold text-gray-900 dark:text-[#e6edf3]">{group.stats.remainingSessions}</p>
                             <p className="text-[10px] text-gray-400 dark:text-[#6e7681]">
@@ -329,7 +329,7 @@ function EmptyGroups({ locale }) {
     return (
         <div className="text-center py-20">
             <div className="relative w-28 h-28 mx-auto mb-6">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-purple-600/20 rounded-3xl rotate-6 animate-pulse" />
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-3xl rotate-6 animate-pulse" />
                 <div className="relative w-full h-full bg-white dark:bg-[#161b22] rounded-3xl border border-gray-100 dark:border-[#30363d] flex items-center justify-center shadow-lg">
                     <Users className="w-14 h-14 text-primary/40" />
                 </div>
@@ -452,12 +452,12 @@ export default function MyGroupsPage() {
 
                 <div className="p-4 sm:p-6 lg:p-8">
 
-                    {/* Hero Banner */}
+                    {/* Hero Banner with brand colors */}
                     <div className="relative group/hero min-w-4xl mb-8">
-                        <div className="absolute inset-0 bg-gradient-to-r from-primary via-purple-600 to-pink-600 rounded-3xl opacity-60 blur-md group-hover/hero:opacity-80 transition-opacity duration-500" />
-                        <div className="relative bg-gradient-to-br from-primary via-purple-600 to-pink-600 rounded-3xl p-6 overflow-hidden shadow-lg">
+                        <div className="absolute inset-0 bg-gradient-to-r from-primary via-secondary to-[#feaf00] rounded-3xl opacity-60 blur-md group-hover/hero:opacity-80 transition-opacity duration-500" />
+                        <div className="relative bg-gradient-to-br from-primary via-secondary to-[#feaf00] rounded-3xl p-6 overflow-hidden shadow-lg">
                             <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-slow" />
-                            <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse-slower" />
+                            <div className="absolute bottom-0 left-0 w-72 h-72 bg-secondary/20 rounded-full blur-3xl animate-pulse-slower" />
                             <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-4">
                                 <div>
                                     <div className="flex items-center gap-2 mb-2">
@@ -469,7 +469,7 @@ export default function MyGroupsPage() {
                                     <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">
                                         {t("groups.educationalJourney")}
                                     </h2>
-                                    <p className="text-blue-100 text-sm mb-4">
+                                    <p className="text-white/80 text-sm mb-4">
                                         {t("groups.trackProgress")}
                                     </p>
                                     <div className="flex flex-wrap gap-3">
@@ -506,15 +506,15 @@ export default function MyGroupsPage() {
                         </div>
                     </div>
 
-                    {/* Stats Cards */}
+                    {/* Stats Cards with brand colors */}
                     {!loading && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                             {/* Total Groups */}
                             <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
-                                <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-purple-600/0 group-hover/stats:from-primary/10 group-hover/stats:to-purple-600/10 rounded-2xl transition-all duration-300" />
+                                <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-secondary/0 group-hover/stats:from-primary/10 group-hover/stats:to-secondary/10 rounded-2xl transition-all duration-300" />
                                 <div className="relative z-10">
                                     <div className="flex items-center justify-between mb-4">
-                                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/20 group-hover/stats:scale-110 transition-transform duration-300">
+                                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20 group-hover/stats:scale-110 transition-transform duration-300">
                                             <Users className="w-7 h-7 text-white" />
                                         </div>
                                         <span className="px-3 py-1 bg-primary/10 dark:bg-primary/10 text-primary rounded-full text-xs font-semibold">
@@ -526,7 +526,7 @@ export default function MyGroupsPage() {
                                     </h3>
                                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">{t("groups.totalGroups")}</p>
                                     <div className="mt-4 h-1 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-primary to-purple-600 rounded-full" style={{ width: "100%" }} />
+                                        <div className="h-full bg-gradient-to-r from-primary to-secondary rounded-full" style={{ width: "100%" }} />
                                     </div>
                                 </div>
                             </div>
@@ -536,10 +536,10 @@ export default function MyGroupsPage() {
                                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/0 to-teal-500/0 group-hover/stats:from-emerald-400/10 group-hover/stats:to-teal-500/10 rounded-2xl transition-all duration-300" />
                                 <div className="relative z-10">
                                     <div className="flex items-center justify-between mb-4">
-                                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover/stats:scale-110 transition-transform duration-300">
+                                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-[#f67d00] flex items-center justify-center shadow-lg shadow-primary/20 group-hover/stats:scale-110 transition-transform duration-300">
                                             <Play className="w-7 h-7 text-white" />
                                         </div>
-                                        <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-semibold">
+                                        <span className="px-3 py-1 bg-primary/10 dark:bg-primary/10 text-primary rounded-full text-xs font-semibold">
                                             {t("groups.active")}
                                         </span>
                                     </div>
@@ -548,7 +548,7 @@ export default function MyGroupsPage() {
                                     </h3>
                                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">{t("groups.activeGroups")}</p>
                                     <div className="mt-4 h-1 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full"
+                                        <div className="h-full bg-gradient-to-r from-primary to-[#f67d00] rounded-full"
                                             style={{ width: stats.total > 0 ? `${(stats.active / stats.total) * 100}%` : "0%" }} />
                                     </div>
                                 </div>
@@ -556,13 +556,13 @@ export default function MyGroupsPage() {
 
                             {/* Completed Groups */}
                             <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
-                                <div className="absolute inset-0 bg-gradient-to-br from-blue-400/0 to-indigo-500/0 group-hover/stats:from-blue-400/10 group-hover/stats:to-indigo-500/10 rounded-2xl transition-all duration-300" />
+                                <div className="absolute inset-0 bg-gradient-to-br from-secondary/0 to-[#ff6437]/0 group-hover/stats:from-secondary/10 group-hover/stats:to-[#ff6437]/10 rounded-2xl transition-all duration-300" />
                                 <div className="relative z-10">
                                     <div className="flex items-center justify-between mb-4">
-                                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover/stats:scale-110 transition-transform duration-300">
+                                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-secondary to-[#ff6437] flex items-center justify-center shadow-lg shadow-secondary/20 group-hover/stats:scale-110 transition-transform duration-300">
                                             <CheckCircle className="w-7 h-7 text-white" />
                                         </div>
-                                        <span className="px-3 py-1 bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full text-xs font-semibold">
+                                        <span className="px-3 py-1 bg-secondary/10 dark:bg-secondary/10 text-secondary rounded-full text-xs font-semibold">
                                             {t("groups.completed")}
                                         </span>
                                     </div>
@@ -571,7 +571,7 @@ export default function MyGroupsPage() {
                                     </h3>
                                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">{t("groups.completedGroups")}</p>
                                     <div className="mt-4 h-1 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full"
+                                        <div className="h-full bg-gradient-to-r from-secondary to-[#ff6437] rounded-full"
                                             style={{ width: stats.total > 0 ? `${(stats.completed / stats.total) * 100}%` : "0%" }} />
                                     </div>
                                 </div>
@@ -579,13 +579,13 @@ export default function MyGroupsPage() {
 
                             {/* Learning Hours */}
                             <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
-                                <div className="absolute inset-0 bg-gradient-to-br from-amber-400/0 to-orange-500/0 group-hover/stats:from-amber-400/10 group-hover/stats:to-orange-500/10 rounded-2xl transition-all duration-300" />
+                                <div className="absolute inset-0 bg-gradient-to-br from-[#feaf00]/0 to-[#f67d00]/0 group-hover/stats:from-[#feaf00]/10 group-hover/stats:to-[#f67d00]/10 rounded-2xl transition-all duration-300" />
                                 <div className="relative z-10">
                                     <div className="flex items-center justify-between mb-4">
-                                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover/stats:scale-110 transition-transform duration-300">
+                                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#feaf00] to-[#f67d00] flex items-center justify-center shadow-lg shadow-[#feaf00]/20 group-hover/stats:scale-110 transition-transform duration-300">
                                             <Zap className="w-7 h-7 text-white" />
                                         </div>
-                                        <span className="px-3 py-1 bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-full text-xs font-semibold">
+                                        <span className="px-3 py-1 bg-[#feaf00]/10 dark:bg-[#feaf00]/10 text-[#f67d00] rounded-full text-xs font-semibold">
                                             {t("groups.hours")}
                                         </span>
                                     </div>
@@ -594,7 +594,7 @@ export default function MyGroupsPage() {
                                     </h3>
                                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">{t("groups.learningHours")}</p>
                                     <div className="mt-4 h-1 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full" style={{ width: "100%" }} />
+                                        <div className="h-full bg-gradient-to-r from-[#feaf00] to-[#f67d00] rounded-full" style={{ width: "100%" }} />
                                     </div>
                                 </div>
                             </div>
@@ -623,7 +623,7 @@ export default function MyGroupsPage() {
                                     onClick={() => setFilter(id)}
                                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300
                     ${filter === id
-                                            ? "bg-gradient-to-r from-primary to-purple-600 text-white shadow-lg shadow-primary/30"
+                                            ? "bg-gradient-to-r from-primary to-secondary text-white shadow-lg shadow-primary/30"
                                             : "bg-white dark:bg-[#161b22] text-gray-600 dark:text-[#8b949e] border border-gray-200 dark:border-[#30363d] hover:border-primary/50"
                                         }`}
                                 >
@@ -646,7 +646,7 @@ export default function MyGroupsPage() {
                             <p className="text-gray-600 dark:text-[#8b949e] mb-4">{error}</p>
                             <button
                                 onClick={() => window.location.reload()}
-                                className="px-6 py-3 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-primary/30 transition-all"
+                                className="px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-primary/30 transition-all"
                             >
                                 {t("groups.retry")}
                             </button>

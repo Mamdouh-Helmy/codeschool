@@ -1,14 +1,102 @@
-// components/AddStudentsToGroup.jsx
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  UserPlus, Search, CheckCircle, AlertCircle, Users, Loader2, Eye, Zap
-} from "lucide-react";
-import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
+import toast from "react-hot-toast";
 
+// ─── Icons (inline SVG to avoid import issues) ────────────────────────────────
+const Icon = {
+  Users: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  ),
+  Search: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+  ),
+  Check: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 6 9 17l-5-5"/>
+    </svg>
+  ),
+  UserPlus: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+      <line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/>
+    </svg>
+  ),
+  Eye: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+    </svg>
+  ),
+  Zap: () => (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </svg>
+  ),
+  X: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+    </svg>
+  ),
+  Loader: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+      <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+    </svg>
+  ),
+  Link: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+    </svg>
+  ),
+  Calendar: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/>
+      <line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>
+    </svg>
+  ),
+  School: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m4 6 8-4 8 4"/><path d="m18 10 4 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8l4-2"/>
+      <path d="M14 22v-4a2 2 0 0 0-4 0v4"/><path d="M18 5v17"/><path d="M6 5v17"/>
+      <circle cx="12" cy="10" r="2"/>
+    </svg>
+  ),
+  Alert: () => (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>
+    </svg>
+  ),
+};
+
+// ─── Avatar initials ────────────────────────────────────────────────────────
+const AVATAR_COLORS = [
+  { bg: "#EDE9FF", text: "#5B4FCF" },
+  { bg: "#E0F5EE", text: "#0D6B50" },
+  { bg: "#FAE8E5", text: "#922E18" },
+  { bg: "#F5EBF8", text: "#8A3FA8" },
+  { bg: "#E4F0FD", text: "#1459A0" },
+];
+
+function getInitials(name = "") {
+  const parts = name.trim().split(" ").filter(Boolean);
+  if (parts.length >= 2) return parts[0][0] + parts[1][0];
+  return parts[0]?.[0] || "؟";
+}
+
+function getAvatarColor(name = "") {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded }) {
   const { locale } = useLocale();
   const { t } = useI18n();
@@ -20,35 +108,27 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const [search, setSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
 
-  // ── رسائل الطالب وولي الأمر ──────────────────────────────────────────────
   const [studentMessage, setStudentMessage] = useState("");
   const [guardianMessage, setGuardianMessage] = useState("");
   const [moduleOverviewMessage, setModuleOverviewMessage] = useState("");
 
-  // ── preview ──────────────────────────────────────────────────────────────
   const [studentPreview, setStudentPreview] = useState("");
   const [guardianPreview, setGuardianPreview] = useState("");
   const [moduleOverviewPreview, setModuleOverviewPreview] = useState("");
 
-  // ── hints ────────────────────────────────────────────────────────────────
   const [showStudentHints, setShowStudentHints] = useState(false);
   const [showGuardianHints, setShowGuardianHints] = useState(false);
   const [showModuleOverviewHints, setShowModuleOverviewHints] = useState(false);
   const [selectedHintIndex, setSelectedHintIndex] = useState(0);
 
-  // ── cursors ──────────────────────────────────────────────────────────────
   const [studentCursor, setStudentCursor] = useState(0);
   const [guardianCursor, setGuardianCursor] = useState(0);
   const [moduleOverviewCursor, setModuleOverviewCursor] = useState(0);
 
-  // ── DB vars ──────────────────────────────────────────────────────────────
   const [dbVars, setDbVars] = useState({});
   const [loadingVars, setLoadingVars] = useState(false);
-
-  // ✅ supervisorName gender option — "male" | "female"
   const [supervisorGender, setSupervisorGender] = useState("male");
 
-  // ── templates ────────────────────────────────────────────────────────────
   const [templates, setTemplates] = useState({
     studentMaleAr: "", studentMaleEn: "",
     studentFemaleAr: "", studentFemaleEn: "",
@@ -57,7 +137,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     moduleOverviewAr: "", moduleOverviewEn: "",
   });
 
-  // ── refs ─────────────────────────────────────────────────────────────────
   const saveTimer = useRef(null);
   const templateId = useRef(null);
   const studentTextareaRef = useRef(null);
@@ -69,22 +148,25 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
   const isRTL = locale === "ar";
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Gender flags helper
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─── Helpers ─────────────────────────────────────────────────────────────
   const getGenderFlags = useCallback((student) => {
     if (!student) return { isMale: true, isFather: true };
     const gender = String(student.personalInfo?.gender || "Male").toLowerCase();
     const relationship = String(student.guardianInfo?.relationship || "father").toLowerCase();
-    return {
-      isMale: gender !== "female",
-      isFather: relationship !== "mother",
-    };
+    return { isMale: gender !== "female", isFather: relationship !== "mother" };
   }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Fetch DB variables
-  // ─────────────────────────────────────────────────────────────────────────
+  const buildInstructorsNames = (instructors, language = "ar") => {
+    if (!instructors?.length) return "";
+    const names = instructors.map(i => i.userId?.name || i.name).filter(Boolean);
+    if (!names.length) return "";
+    if (names.length === 1) return names[0];
+    if (language === "ar") {
+      return names.length === 2 ? `${names[0]} و ${names[1]}` : names.slice(0, -1).join(" / ") + " / " + names.at(-1);
+    }
+    return names.length === 2 ? `${names[0]} & ${names[1]}` : names.slice(0, -1).join(", ") + " & " + names.at(-1);
+  };
+
   const fetchDbVariables = async () => {
     setLoadingVars(true);
     try {
@@ -102,9 +184,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // resolveVar — gender-aware value from DB variable object
-  // ─────────────────────────────────────────────────────────────────────────
   const resolveVar = useCallback((key, lang = "ar", genderContext = {}) => {
     const v = dbVars[key];
     if (!v) return null;
@@ -112,136 +191,63 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     const isMale = String(studentGender).toLowerCase() !== "female";
     const isFather = String(guardianType).toLowerCase() !== "mother";
     const isMaleInstructor = String(instructorGender).toLowerCase() !== "female";
-
     if (v.hasGender) {
-      if (v.genderType === "student") {
-        return lang === "ar"
-          ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
-          : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
-      }
-      if (v.genderType === "guardian") {
-        return lang === "ar"
-          ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || null
-          : (isFather ? v.valueFatherEn : v.valueMotherEn) || v.valueEn || null;
-      }
-      // ✅ instructor gender-aware
-      if (v.genderType === "instructor") {
-        return lang === "ar"
-          ? (isMaleInstructor ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
-          : (isMaleInstructor ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
-      }
+      if (v.genderType === "student") return lang === "ar" ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
+      if (v.genderType === "guardian") return lang === "ar" ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || null : (isFather ? v.valueFatherEn : v.valueMotherEn) || v.valueEn || null;
+      if (v.genderType === "instructor") return lang === "ar" ? (isMaleInstructor ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null : (isMaleInstructor ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
     }
     return lang === "ar" ? v.valueAr || null : v.valueEn || null;
   }, [dbVars]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // getStudentContext
-  // ─────────────────────────────────────────────────────────────────────────
   const getStudentContext = useCallback(() => {
     if (!selectedStudent) return null;
-
     const lang = selectedStudent.communicationPreferences?.preferredLanguage || "ar";
     const studentGender = selectedStudent.personalInfo?.gender || "Male";
     const guardianType = selectedStudent.guardianInfo?.relationship || "father";
-    // ✅ instructorGender من الـ state
     const genderCtx = { studentGender, guardianType, instructorGender: supervisorGender };
     const { isMale, isFather } = getGenderFlags(selectedStudent);
-
     const studentFullName = selectedStudent.personalInfo?.fullName || "";
     const guardianFullName = selectedStudent.guardianInfo?.name || "";
-
     const studentNickAr = selectedStudent.personalInfo?.nickname?.ar || studentFullName.split(" ")[0] || "الطالب";
     const studentNickEn = selectedStudent.personalInfo?.nickname?.en || studentFullName.split(" ")[0] || "Student";
     const guardianNickAr = selectedStudent.guardianInfo?.nickname?.ar || guardianFullName.split(" ")[0] || "ولي الأمر";
     const guardianNickEn = selectedStudent.guardianInfo?.nickname?.en || guardianFullName.split(" ")[0] || "Guardian";
-
     const studentNick = lang === "ar" ? studentNickAr : studentNickEn;
     const guardianNick = lang === "ar" ? guardianNickAr : guardianNickEn;
-
-    const salutationBaseAr =
-      resolveVar("salutation_ar", "ar", genderCtx) ||
-      (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
-    const salutationBaseEn =
-      resolveVar("salutation_en", "en", genderCtx) || "Dear student";
-    const guardianSalutationBaseAr =
-      resolveVar("guardianSalutation_ar", "ar", genderCtx) ||
-      (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
-    const guardianSalutationBaseEn =
-      resolveVar("guardianSalutation_en", "en", genderCtx) ||
-      (isFather ? "Dear Mr." : "Dear Mrs.");
-    const childTitleAr =
-      resolveVar("childTitle", "ar", genderCtx) || (isMale ? "ابنك" : "ابنتك");
-    const childTitleEn =
-      resolveVar("childTitle", "en", genderCtx) || (isMale ? "your son" : "your daughter");
-
+    const salutationBaseAr = resolveVar("salutation_ar", "ar", genderCtx) || (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
+    const salutationBaseEn = resolveVar("salutation_en", "en", genderCtx) || "Dear student";
+    const guardianSalutationBaseAr = resolveVar("guardianSalutation_ar", "ar", genderCtx) || (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
+    const guardianSalutationBaseEn = resolveVar("guardianSalutation_en", "en", genderCtx) || (isFather ? "Dear Mr." : "Dear Mrs.");
+    const childTitleAr = resolveVar("childTitle", "ar", genderCtx) || (isMale ? "ابنك" : "ابنتك");
+    const childTitleEn = resolveVar("childTitle", "en", genderCtx) || (isMale ? "your son" : "your daughter");
     const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
-
     const salutationAr = `${salutationBaseAr} ${studentNickAr}`;
     const salutationEn = `${salutationBaseEn} ${studentNickEn}`;
     const guardianSalutationAr = `${guardianSalutationBaseAr} ${guardianNickAr}`;
     const guardianSalutationEn = `${guardianSalutationBaseEn} ${guardianNickEn}`;
-
     const studentSalutation = lang === "ar" ? salutationAr : salutationEn;
     const guardianSalutation = lang === "ar" ? guardianSalutationAr : guardianSalutationEn;
-
-    // ✅ supervisorName gender-aware من DB
-    const supervisorNameValue =
-      resolveVar("supervisorName", lang, genderCtx) || "";
-
-    return {
-      lang, studentGender, guardianType, isMale, isFather,
-      studentNick, guardianNick, childTitle,
-      studentSalutation, guardianSalutation,
-      salutationAr, salutationEn,
-      guardianSalutationAr, guardianSalutationEn,
-      childTitleAr, childTitleEn,
-      supervisorNameValue,
-    };
+    const supervisorNameValue = resolveVar("supervisorName", lang, genderCtx) || "";
+    return { lang, studentGender, guardianType, isMale, isFather, studentNick, guardianNick, childTitle, studentSalutation, guardianSalutation, salutationAr, salutationEn, guardianSalutationAr, guardianSalutationEn, childTitleAr, childTitleEn, supervisorNameValue };
   }, [selectedStudent, resolveVar, getGenderFlags, supervisorGender]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // buildReplacementsMap
-  // ─────────────────────────────────────────────────────────────────────────
   const buildReplacementsMap = useCallback((type) => {
     const ctx = getStudentContext();
     if (!ctx || !group) return {};
-
-    const {
-      lang, isMale, isFather,
-      studentNick, guardianNick, childTitle,
-      salutationAr, salutationEn,
-      guardianSalutationAr, guardianSalutationEn,
-      supervisorNameValue,
-    } = ctx;
-
-    const startDate = group.schedule?.startDate
-      ? new Date(group.schedule.startDate).toLocaleDateString(
-        lang === "ar" ? "ar-EG" : "en-US",
-        { weekday: "long", year: "numeric", month: "long", day: "numeric" }
-      )
-      : "";
-
+    const { lang, isMale, isFather, studentNick, guardianNick, childTitle, salutationAr, salutationEn, guardianSalutationAr, guardianSalutationEn, supervisorNameValue } = ctx;
+    const startDate = group.schedule?.startDate ? new Date(group.schedule.startDate).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "";
     const instructorNames = buildInstructorsNames(group.instructors, lang);
-    const firstMeetingLink = group.firstMeetingLink || "";
-    const courseName = group.courseSnapshot?.title || "";
-    const groupName = group.name || "";
-    const timeFrom = group.schedule?.timeFrom || "";
-    const timeTo = group.schedule?.timeTo || "";
-    const moduleTitle = group.courseSnapshot?.currentModuleTitle || group.courseSnapshot?.title || "";
-
     const common = {
-      "{groupName}": groupName,
-      "{courseName}": courseName,
+      "{groupName}": group.name || "",
+      "{courseName}": group.courseSnapshot?.title || "",
       "{startDate}": startDate,
-      "{timeFrom}": timeFrom,
-      "{timeTo}": timeTo,
+      "{timeFrom}": group.schedule?.timeFrom || "",
+      "{timeTo}": group.schedule?.timeTo || "",
       "{instructor}": instructorNames,
-      "{firstMeetingLink}": firstMeetingLink,
-      "{moduleTitle}": moduleTitle,
-      // ✅ supervisorName gender-aware
+      "{firstMeetingLink}": group.firstMeetingLink || "",
+      "{moduleTitle}": group.courseSnapshot?.currentModuleTitle || group.courseSnapshot?.title || "",
       "{supervisorName}": supervisorNameValue,
     };
-
     if (type === "student") {
       return {
         "{salutation_ar}": salutationAr || (isMale ? `عزيزي الطالب ${studentNick}` : `عزيزتي الطالبة ${studentNick}`),
@@ -249,40 +255,28 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         "{studentName}": studentNick,
         ...common,
       };
-    } else {
-      // guardian + moduleOverview
-      return {
-        // ✅ إضافة {guardianSalutation} بدون suffix للتوافق مع template الـ MessageTemplate
-        "{guardianSalutation}": lang === "ar" ? guardianSalutationAr : guardianSalutationEn,
-        "{guardianSalutation_ar}": guardianSalutationAr || (isFather ? `عزيزي الأستاذ ${guardianNick}` : `عزيزتي السيدة ${guardianNick}`),
-        "{guardianSalutation_en}": guardianSalutationEn || `${isFather ? "Dear Mr." : "Dear Mrs."} ${guardianNick}`,
-        "{guardianName}": guardianNick,
-        "{studentName}": studentNick,
-        "{childTitle}": childTitle,
-        ...common,
-      };
     }
+    return {
+      "{guardianSalutation}": lang === "ar" ? guardianSalutationAr : guardianSalutationEn,
+      "{guardianSalutation_ar}": guardianSalutationAr || (isFather ? `عزيزي الأستاذ ${guardianNick}` : `عزيزتي السيدة ${guardianNick}`),
+      "{guardianSalutation_en}": guardianSalutationEn || `${isFather ? "Dear Mr." : "Dear Mrs."} ${guardianNick}`,
+      "{guardianName}": guardianNick,
+      "{studentName}": studentNick,
+      "{childTitle}": childTitle,
+      ...common,
+    };
   }, [getStudentContext, group]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // replaceVars
-  // ─────────────────────────────────────────────────────────────────────────
   const replaceVars = useCallback((msg, type) => {
     if (!msg || !selectedStudent || !group) return msg || "";
     const map = buildReplacementsMap(type);
     let result = msg;
     for (const [key, value] of Object.entries(map)) {
-      result = result.replace(
-        new RegExp(key.replace(/[{}]/g, "\\$&"), "g"),
-        value ?? ""
-      );
+      result = result.replace(new RegExp(key.replace(/[{}]/g, "\\$&"), "g"), value ?? "");
     }
     return result;
   }, [selectedStudent, group, buildReplacementsMap]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Hint variable lists
-  // ─────────────────────────────────────────────────────────────────────────
   const getStudentVariables = useCallback(() => {
     const ctx = getStudentContext();
     if (!ctx || !group) return [];
@@ -326,46 +320,15 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     ];
   }, [getStudentContext, buildReplacementsMap, group]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Helper: format instructor names
-  // ─────────────────────────────────────────────────────────────────────────
-  const buildInstructorsNames = (instructors, language = "ar") => {
-    if (!instructors?.length) return "";
-    const names = instructors.map(i => i.userId?.name || i.name).filter(Boolean);
-    if (!names.length) return "";
-    if (names.length === 1) return names[0];
-    if (language === "ar") {
-      return names.length === 2
-        ? `${names[0]} و ${names[1]}`
-        : names.slice(0, -1).join(" / ") + " / " + names.at(-1);
-    }
-    return names.length === 2
-      ? `${names[0]} & ${names[1]}`
-      : names.slice(0, -1).join(", ") + " & " + names.at(-1);
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Pick the right template slot for the current student
-  // ─────────────────────────────────────────────────────────────────────────
   const pickTemplateSlot = useCallback((student, type) => {
     if (!student) return { ar: "", en: "" };
     const { isMale, isFather } = getGenderFlags(student);
-    if (type === "student") {
-      return isMale
-        ? { ar: templates.studentMaleAr, en: templates.studentMaleEn }
-        : { ar: templates.studentFemaleAr, en: templates.studentFemaleEn };
-    } else if (type === "guardian") {
-      return isFather
-        ? { ar: templates.guardianFatherAr, en: templates.guardianFatherEn }
-        : { ar: templates.guardianMotherAr, en: templates.guardianMotherEn };
-    } else {
-      return { ar: templates.moduleOverviewAr, en: templates.moduleOverviewEn };
-    }
+    if (type === "student") return isMale ? { ar: templates.studentMaleAr, en: templates.studentMaleEn } : { ar: templates.studentFemaleAr, en: templates.studentFemaleEn };
+    if (type === "guardian") return isFather ? { ar: templates.guardianFatherAr, en: templates.guardianFatherEn } : { ar: templates.guardianMotherAr, en: templates.guardianMotherEn };
+    return { ar: templates.moduleOverviewAr, en: templates.moduleOverviewEn };
   }, [templates, getGenderFlags]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Load group + students + templates
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─── Effects ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!groupId) return;
     const loadData = async () => {
@@ -377,17 +340,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           fetch(`/api/whatsapp/group-templates?default=true&groupId=${groupId}`),
           fetch(`/api/whatsapp/message-templates?type=module_overview&default=true`),
         ]);
-
         const groupData = await groupRes.json();
         if (groupData.success) setGroup(groupData.data);
-
         const studentsData = await studentsRes.json();
         if (studentsData.success) {
           const groupStudentIds = (groupData.data?.students || []).map(s => String(s._id || s.id || s));
           setStudents(studentsData.data.filter(s => !groupStudentIds.includes(String(s._id || s.id))));
         }
-
-        // ── GroupTemplate (رسالة الطالب + ولي الأمر) ─────────────────────────
         if (templateRes.ok) {
           const templateData = await templateRes.json();
           if (templateData.success && templateData.data) {
@@ -407,20 +366,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             });
           }
         }
-
-        // ── MessageTemplate (رسالة نظرة عامة على الموديول) ───────────────────
         if (moduleOverviewRes.ok) {
           const moData = await moduleOverviewRes.json();
           if (moData.success && moData.data?.length > 0) {
             const mo = moData.data[0];
-            setTemplates(prev => ({
-              ...prev,
-              moduleOverviewAr: mo.contentAr || "",
-              moduleOverviewEn: mo.contentEn || "",
-            }));
+            setTemplates(prev => ({ ...prev, moduleOverviewAr: mo.contentAr || "", moduleOverviewEn: mo.contentEn || "" }));
           }
         }
-
       } catch (err) {
         console.error("Error loading:", err);
         toast.error("فشل تحميل البيانات");
@@ -432,25 +384,17 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     fetchDbVariables();
   }, [groupId]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Load correct template slot when student is selected
-  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedStudent) return;
     const lang = selectedStudent.communicationPreferences?.preferredLanguage || "ar";
-
     const studentSlot = pickTemplateSlot(selectedStudent, "student");
     const guardianSlot = pickTemplateSlot(selectedStudent, "guardian");
     const moduleOverviewSlot = pickTemplateSlot(selectedStudent, "moduleOverview");
-
     setStudentMessage(lang === "ar" ? studentSlot.ar : studentSlot.en);
     setGuardianMessage(lang === "ar" ? guardianSlot.ar : guardianSlot.en);
     setModuleOverviewMessage(lang === "ar" ? moduleOverviewSlot.ar : moduleOverviewSlot.en);
   }, [selectedStudent, templates]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Live preview — يتحدث كمان لما supervisorGender يتغير
-  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (selectedStudent && group) {
       setStudentPreview(replaceVars(studentMessage, "student"));
@@ -459,148 +403,68 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     }
   }, [studentMessage, guardianMessage, moduleOverviewMessage, selectedStudent, group, replaceVars, supervisorGender]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Auto-save
-  // ─────────────────────────────────────────────────────────────────────────
   const autoSave = useCallback((type, content) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       if (!templateId.current || !selectedStudent) return;
-
       const lang = selectedStudent.communicationPreferences?.preferredLanguage || "ar";
       const { isMale, isFather } = getGenderFlags(selectedStudent);
-
       let fieldKey;
-      if (type === "student") {
-        if (isMale) fieldKey = lang === "ar" ? "studentMaleContentAr" : "studentMaleContentEn";
-        else fieldKey = lang === "ar" ? "studentFemaleContentAr" : "studentFemaleContentEn";
-      } else if (type === "guardian") {
-        if (isFather) fieldKey = lang === "ar" ? "guardianFatherContentAr" : "guardianFatherContentEn";
-        else fieldKey = lang === "ar" ? "guardianMotherContentAr" : "guardianMotherContentEn";
-      } else {
-        fieldKey = lang === "ar" ? "moduleOverviewContentAr" : "moduleOverviewContentEn";
-      }
-
+      if (type === "student") fieldKey = isMale ? (lang === "ar" ? "studentMaleContentAr" : "studentMaleContentEn") : (lang === "ar" ? "studentFemaleContentAr" : "studentFemaleContentEn");
+      else if (type === "guardian") fieldKey = isFather ? (lang === "ar" ? "guardianFatherContentAr" : "guardianFatherContentEn") : (lang === "ar" ? "guardianMotherContentAr" : "guardianMotherContentEn");
+      else fieldKey = lang === "ar" ? "moduleOverviewContentAr" : "moduleOverviewContentEn";
       try {
         await fetch("/api/whatsapp/group-templates", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: templateId.current, [fieldKey]: content, setAsDefault: true }),
         });
-        console.log(`✅ Auto-saved ${fieldKey}`);
       } catch (err) {
         console.error("Save error:", err);
       }
     }, 3000);
   }, [selectedStudent, getGenderFlags]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // insertVariable
-  // ─────────────────────────────────────────────────────────────────────────
   const insertVariable = (variable, type) => {
-    const textarea = type === "student"
-      ? studentTextareaRef.current
-      : type === "guardian"
-        ? guardianTextareaRef.current
-        : moduleOverviewTextareaRef.current;
-
-    const currentValue = type === "student"
-      ? studentMessage
-      : type === "guardian"
-        ? guardianMessage
-        : moduleOverviewMessage;
-
-    const cursorPos = type === "student"
-      ? studentCursor
-      : type === "guardian"
-        ? guardianCursor
-        : moduleOverviewCursor;
-
+    const textarea = type === "student" ? studentTextareaRef.current : type === "guardian" ? guardianTextareaRef.current : moduleOverviewTextareaRef.current;
+    const currentValue = type === "student" ? studentMessage : type === "guardian" ? guardianMessage : moduleOverviewMessage;
+    const cursorPos = type === "student" ? studentCursor : type === "guardian" ? guardianCursor : moduleOverviewCursor;
     const textBefore = currentValue.substring(0, cursorPos);
     const lastAt = textBefore.lastIndexOf("@");
-
     let newValue, newCursorPos;
-    if (lastAt !== -1) {
-      newValue = currentValue.substring(0, lastAt) + variable.key + currentValue.substring(cursorPos);
-      newCursorPos = lastAt + variable.key.length;
-    } else {
-      newValue = currentValue.substring(0, cursorPos) + variable.key + currentValue.substring(cursorPos);
-      newCursorPos = cursorPos + variable.key.length;
-    }
-
-    if (type === "student") {
-      setStudentMessage(newValue); setShowStudentHints(false); setStudentCursor(newCursorPos);
-    } else if (type === "guardian") {
-      setGuardianMessage(newValue); setShowGuardianHints(false); setGuardianCursor(newCursorPos);
-    } else {
-      setModuleOverviewMessage(newValue); setShowModuleOverviewHints(false); setModuleOverviewCursor(newCursorPos);
-    }
-
+    if (lastAt !== -1) { newValue = currentValue.substring(0, lastAt) + variable.key + currentValue.substring(cursorPos); newCursorPos = lastAt + variable.key.length; }
+    else { newValue = currentValue.substring(0, cursorPos) + variable.key + currentValue.substring(cursorPos); newCursorPos = cursorPos + variable.key.length; }
+    if (type === "student") { setStudentMessage(newValue); setShowStudentHints(false); setStudentCursor(newCursorPos); }
+    else if (type === "guardian") { setGuardianMessage(newValue); setShowGuardianHints(false); setGuardianCursor(newCursorPos); }
+    else { setModuleOverviewMessage(newValue); setShowModuleOverviewHints(false); setModuleOverviewCursor(newCursorPos); }
     autoSave(type, newValue);
     setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(newCursorPos, newCursorPos); }, 0);
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Textarea handlers
-  // ─────────────────────────────────────────────────────────────────────────
-  const handleStudentMessageChange = (e) => {
+  const handleTextareaChange = (e, type) => {
     const value = e.target.value;
     const cursorPos = e.target.selectionStart;
-    setStudentMessage(value);
-    setStudentCursor(cursorPos);
-    autoSave("student", value);
+    if (type === "student") { setStudentMessage(value); setStudentCursor(cursorPos); }
+    else if (type === "guardian") { setGuardianMessage(value); setGuardianCursor(cursorPos); }
+    else { setModuleOverviewMessage(value); setModuleOverviewCursor(cursorPos); }
+    autoSave(type, value);
     const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
-    if (lastAt !== -1 && lastAt === cursorPos - 1) { setShowStudentHints(true); setSelectedHintIndex(0); }
-    else if (lastAt === -1) setShowStudentHints(false);
+    const setShow = type === "student" ? setShowStudentHints : type === "guardian" ? setShowGuardianHints : setShowModuleOverviewHints;
+    if (lastAt !== -1 && lastAt === cursorPos - 1) { setShow(true); setSelectedHintIndex(0); }
+    else if (lastAt === -1) setShow(false);
   };
 
-  const handleGuardianMessageChange = (e) => {
-    const value = e.target.value;
-    const cursorPos = e.target.selectionStart;
-    setGuardianMessage(value);
-    setGuardianCursor(cursorPos);
-    autoSave("guardian", value);
-    const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
-    if (lastAt !== -1 && lastAt === cursorPos - 1) { setShowGuardianHints(true); setSelectedHintIndex(0); }
-    else if (lastAt === -1) setShowGuardianHints(false);
-  };
-
-  const handleModuleOverviewMessageChange = (e) => {
-    const value = e.target.value;
-    const cursorPos = e.target.selectionStart;
-    setModuleOverviewMessage(value);
-    setModuleOverviewCursor(cursorPos);
-    autoSave("moduleOverview", value);
-    const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
-    if (lastAt !== -1 && lastAt === cursorPos - 1) { setShowModuleOverviewHints(true); setSelectedHintIndex(0); }
-    else if (lastAt === -1) setShowModuleOverviewHints(false);
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Keyboard navigation for hints
-  // ─────────────────────────────────────────────────────────────────────────
   const handleKeyDown = (e, type) => {
     const variables = type === "student" ? getStudentVariables() : getGuardianVariables();
-    const show = type === "student"
-      ? showStudentHints
-      : type === "guardian"
-        ? showGuardianHints
-        : showModuleOverviewHints;
+    const show = type === "student" ? showStudentHints : type === "guardian" ? showGuardianHints : showModuleOverviewHints;
+    const setShow = type === "student" ? setShowStudentHints : type === "guardian" ? setShowGuardianHints : setShowModuleOverviewHints;
     if (!show) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setSelectedHintIndex(p => (p + 1) % variables.length); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setSelectedHintIndex(p => (p - 1 + variables.length) % variables.length); }
     else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertVariable(variables[selectedHintIndex], type); }
-    else if (e.key === "Escape") {
-      e.preventDefault();
-      if (type === "student") setShowStudentHints(false);
-      else if (type === "guardian") setShowGuardianHints(false);
-      else setShowModuleOverviewHints(false);
-    }
+    else if (e.key === "Escape") { e.preventDefault(); setShow(false); }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Close hints on outside click
-  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
       if (studentHintsRef.current && !studentHintsRef.current.contains(e.target)) setShowStudentHints(false);
@@ -613,27 +477,19 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // handleAdd
-  // ─────────────────────────────────────────────────────────────────────────
   const handleAdd = async () => {
     if (!selectedStudent) { toast.error("اختر طالباً أولاً"); return; }
     setAdding(true);
     const loadingToast = toast.loading("جاري الإضافة...");
-
-    const resolvedStudentMessage = replaceVars(studentMessage, "student");
-    const resolvedGuardianMessage = replaceVars(guardianMessage, "guardian");
-    const resolvedModuleOverviewMessage = replaceVars(moduleOverviewMessage, "guardian");
-
     try {
       const res = await fetch(`/api/groups/${groupId}/add-student`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           studentId: String(selectedStudent._id || selectedStudent.id),
-          studentMessage: resolvedStudentMessage,
-          guardianMessage: resolvedGuardianMessage,
-          moduleOverviewMessage: resolvedModuleOverviewMessage,
+          studentMessage: replaceVars(studentMessage, "student"),
+          guardianMessage: replaceVars(guardianMessage, "guardian"),
+          moduleOverviewMessage: replaceVars(moduleOverviewMessage, "guardian"),
           sendWhatsApp: true,
         }),
       });
@@ -654,77 +510,143 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Hints dropdown renderer
-  // ─────────────────────────────────────────────────────────────────────────
-  const renderHints = (vars, type, show, hintsRef, color) => {
+  // ─── Sub-components ────────────────────────────────────────────────────────
+
+  const HintsDropdown = ({ vars, type, show, hintsRef }) => {
     if (!show || !vars.length) return null;
     const lang = getStudentContext()?.lang || "ar";
-
-    const c = color === "purple"
-      ? { border: "border-purple-300 dark:border-purple-700", header: "bg-purple-50 dark:bg-purple-900/30 border-b dark:border-purple-800", text: "text-purple-700 dark:text-purple-300", hover: "hover:bg-purple-50 dark:hover:bg-purple-900/20", active: "bg-purple-100 dark:bg-purple-900/40", mono: "text-purple-600 dark:text-purple-400", example: "bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300" }
-      : color === "green"
-        ? { border: "border-green-300 dark:border-green-700", header: "bg-green-50 dark:bg-green-900/30 border-b dark:border-green-800", text: "text-green-700 dark:text-green-300", hover: "hover:bg-green-50 dark:hover:bg-green-900/20", active: "bg-green-100 dark:bg-green-900/40", mono: "text-green-600 dark:text-green-400", example: "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300" }
-        : { border: "border-blue-300 dark:border-blue-700", header: "bg-blue-50 dark:bg-blue-900/30 border-b dark:border-blue-800", text: "text-blue-700 dark:text-blue-300", hover: "hover:bg-blue-50 dark:hover:bg-blue-900/20", active: "bg-blue-100 dark:bg-blue-900/40", mono: "text-blue-600 dark:text-blue-400", example: "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" };
-
     return (
-      <div ref={hintsRef} className={`absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border-2 ${c.border} rounded-lg shadow-xl max-h-56 overflow-y-auto`}>
-        <div className={`p-2 ${c.header}`}>
-          <p className={`text-xs font-semibold ${c.text} flex items-center gap-1`}>
-            <Zap className="w-3 h-3" />
+      <div
+        ref={hintsRef}
+        className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden"
+        style={{ top: "100%" }}
+      >
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+          <Icon.Zap />
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
             {lang === "ar" ? "المتغيرات المتاحة" : "Available Variables"}
-          </p>
+          </span>
         </div>
-        {vars.map((v, i) => (
-          <button key={v.key} type="button" onClick={() => insertVariable(v, type)}
-            className={`w-full px-3 py-2 ${lang === "ar" ? "text-right" : "text-left"} ${c.hover} flex items-start gap-2 ${i === selectedHintIndex ? c.active : ""}`}>
-            <span className="shrink-0">{v.icon}</span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <span className={`text-sm font-mono ${c.mono} shrink-0`}>{v.key}</span>
-                <span className="text-xs text-gray-500 truncate">{v.label}</span>
+        <div className="max-h-52 overflow-y-auto">
+          {vars.map((v, i) => (
+            <button
+              key={v.key}
+              type="button"
+              onClick={() => insertVariable(v, type)}
+              className={`w-full px-3 py-2.5 flex items-start gap-2.5 transition-colors
+                ${i === selectedHintIndex ? "bg-violet-50 dark:bg-violet-900/20" : "hover:bg-gray-50 dark:hover:bg-gray-800"}
+                ${lang === "ar" ? "text-right" : "text-left"}`}
+            >
+              <span className="text-base shrink-0 mt-0.5">{v.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <code className="text-xs font-mono text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-1.5 py-0.5 rounded-md">
+                    {v.key}
+                  </code>
+                  <span className="text-xs text-gray-400">{v.label}</span>
+                </div>
+                {v.example && (
+                  <p className="text-xs mt-1 text-gray-500 dark:text-gray-400 truncate">
+                    → {v.example}
+                  </p>
+                )}
               </div>
-              {v.example && (
-                <span className={`text-xs mt-0.5 px-2 py-0.5 rounded inline-block truncate max-w-full ${c.example}`}>
-                  {v.example}
-                </span>
-              )}
-            </div>
-          </button>
-        ))}
-        <div className="p-2 bg-gray-50 dark:bg-gray-800 border-t dark:border-gray-700 text-xs text-gray-500">
-          ↑ ↓ {lang === "ar" ? "للتنقل • Enter للإدراج • Esc للإغلاق" : "navigate • Enter insert • Esc close"}
+            </button>
+          ))}
+        </div>
+        <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-400">
+          ↑↓ {lang === "ar" ? "تنقل · Enter إدراج · Esc إغلاق" : "navigate · Enter insert · Esc close"}
         </div>
       </div>
     );
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Guards
-  // ─────────────────────────────────────────────────────────────────────────
+  const MessageCard = ({ step, title, badge, subtitle, accentClass, previewHeaderClass, textareaRef, hintsRef, value, type, showHints, vars, preview }) => {
+    const lang = getStudentContext()?.lang || "ar";
+    return (
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+        {/* Card Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2.5">
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${accentClass}`}>
+              {step}
+            </span>
+            <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</span>
+            {badge && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                {badge}
+              </span>
+            )}
+          </div>
+          {subtitle && <span className="text-xs text-gray-400">{subtitle}</span>}
+        </div>
+
+        {/* Card Body */}
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-gray-400 flex items-center gap-1.5">
+            <Icon.Zap />
+            {lang === "ar"
+              ? <>اكتب <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> لإدراج متغير</>
+              : <>Type <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> to insert a variable</>
+            }
+          </p>
+
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => handleTextareaChange(e, type)}
+              onKeyDown={(e) => handleKeyDown(e, type)}
+              dir={lang === "ar" ? "rtl" : "ltr"}
+              rows={5}
+              placeholder={lang === "ar" ? "اكتب رسالتك هنا..." : "Write your message here..."}
+              className="w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 dark:focus:border-violet-600 transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
+            />
+            <HintsDropdown vars={vars} type={type} show={showHints} hintsRef={hintsRef} />
+          </div>
+
+          {/* Preview */}
+          <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
+            <div className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium ${previewHeaderClass}`}>
+              <Icon.Eye />
+              <span>{lang === "ar" ? "معاينة" : "Preview"}</span>
+            </div>
+            <div
+              className="px-3 py-2.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400 whitespace-pre-line max-h-28 overflow-y-auto bg-white dark:bg-gray-900"
+              dir={lang === "ar" ? "rtl" : "ltr"}
+            >
+              {preview || <span className="text-gray-300 dark:text-gray-600 italic">{lang === "ar" ? "لا توجد معاينة بعد" : "No preview yet"}</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Guards ────────────────────────────────────────────────────────────────
   if (loading || loadingVars) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <div className="w-10 h-10 rounded-full border-2 border-violet-200 border-t-violet-500 animate-spin" />
+        <p className="text-sm text-gray-400">جاري التحميل...</p>
       </div>
     );
   }
 
   if (!group) {
     return (
-      <div className="text-center p-8">
-        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <p>المجموعة غير موجودة</p>
+      <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
+        <Icon.Alert />
+        <p className="text-sm">المجموعة غير موجودة</p>
       </div>
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render values
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─── Render values ────────────────────────────────────────────────────────
   const currentCount = group.currentStudentsCount || group.students?.length || 0;
   const maxStudents = group.maxStudents || 0;
   const isFull = currentCount >= maxStudents;
+  const available = maxStudents - currentCount;
 
   const filteredStudents = students.filter(s => {
     const name = s.personalInfo?.fullName?.toLowerCase() || "";
@@ -736,255 +658,379 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const lang = ctx?.lang || "ar";
   const studentVars = getStudentVariables();
   const guardianVars = getGuardianVariables();
-
   const instructorNamesDisplay = buildInstructorsNames(group.instructors, locale === "ar" ? "ar" : "en");
 
   return (
-    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+    <div className="space-y-5" dir={isRTL ? "rtl" : "ltr"}>
 
-      {/* Group Info */}
-      <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-6 rounded-lg border border-primary/20">
-        <h3 className="text-xl font-bold mb-1">{group.name}</h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{group.courseSnapshot?.title} - {group.code}</p>
-        {group.instructors?.length > 0 && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-            <span className="font-medium">👨‍🏫 {group.instructors.length > 1 ? "المدربون" : "المدرب"}:</span>{" "}
-            <span className="text-primary font-medium">{instructorNamesDisplay}</span>
-          </p>
-        )}
-        {group.firstMeetingLink && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-            <span className="font-medium">🔗 رابط الجلسة الأولى:</span>{" "}
-            <a href={group.firstMeetingLink} target="_blank" rel="noopener noreferrer"
-              className="text-blue-500 underline truncate inline-block max-w-xs align-bottom">
-              {group.firstMeetingLink}
-            </a>
-          </p>
-        )}
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div><div className="text-2xl font-bold text-primary">{currentCount}</div><div className="text-xs text-gray-500">الحالي</div></div>
-          <div><div className="text-2xl font-bold text-gray-600">{maxStudents}</div><div className="text-xs text-gray-500">الأقصى</div></div>
-          <div><div className="text-2xl font-bold text-green-600">{maxStudents - currentCount}</div><div className="text-xs text-gray-500">المتاح</div></div>
+      {/* ── Group Card ─────────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+        <div className="p-4 flex items-start gap-3.5">
+          {/* Icon */}
+          <div className="w-12 h-12 rounded-xl bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0">
+            <Icon.Users />
+          </div>
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white leading-snug mb-0.5">
+              {group.name}
+            </h3>
+            <p className="text-xs text-gray-400 mb-2.5">
+              {group.courseSnapshot?.title}
+              {group.code && <span className="mx-1.5 text-gray-200 dark:text-gray-700">·</span>}
+              <span className="font-mono">{group.code}</span>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {group.instructors?.length > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-medium">
+                  <Icon.School />
+                  {instructorNamesDisplay}
+                </span>
+              )}
+              {group.schedule?.timeFrom && (
+                <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+                  <Icon.Calendar />
+                  {group.schedule.timeFrom} — {group.schedule.timeTo}
+                </span>
+              )}
+              {group.firstMeetingLink && (
+                <a
+                  href={group.firstMeetingLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 hover:underline"
+                >
+                  <Icon.Link />
+                  {locale === "ar" ? "رابط الجلسة" : "Session link"}
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-100 dark:divide-gray-800 border-t border-gray-100 dark:border-gray-800">
+          {[
+            { value: currentCount, label: locale === "ar" ? "الحاليون" : "Current", color: "text-violet-600 dark:text-violet-400" },
+            { value: maxStudents, label: locale === "ar" ? "الحد الأقصى" : "Maximum", color: "text-gray-500" },
+            { value: available, label: locale === "ar" ? "متاح" : "Available", color: available > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500" },
+          ].map((s) => (
+            <div key={s.label} className="py-3 text-center">
+              <div className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</div>
+              <div className="text-xs text-gray-400 mt-0.5">{s.label}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Search */}
+      {/* ── Search ─────────────────────────────────────────────────────────── */}
       <div className="relative">
-        <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400`} />
-        <input type="text" placeholder="ابحث عن طالب..." value={search}
+        <span className={`absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${isRTL ? "right-3.5" : "left-3.5"}`}>
+          <Icon.Search />
+        </span>
+        <input
+          type="text"
+          value={search}
           onChange={e => setSearch(e.target.value)}
-          className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white`} />
+          placeholder={locale === "ar" ? "ابحث باسم الطالب أو البريد..." : "Search by name or email..."}
+          className={`w-full py-2.5 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-800 dark:text-white placeholder:text-gray-300 dark:placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 transition-all
+            ${isRTL ? "pr-9 pl-4" : "pl-9 pr-4"}`}
+        />
       </div>
 
-      {/* Students List */}
-      <div className="max-h-72 overflow-y-auto space-y-2 border border-gray-300 dark:border-gray-600 rounded-lg p-3">
-        {filteredStudents.length === 0 ? (
-          <div className="text-center py-8">
-            <Users className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <p className="text-gray-500 text-sm">لا يوجد طلاب متاحين</p>
-          </div>
-        ) : (
-          filteredStudents.map(student => {
-            const sid = String(student._id || student.id);
-            const isSelected = selectedStudent && String(selectedStudent._id || selectedStudent.id) === sid;
-            const sLang = student.communicationPreferences?.preferredLanguage || "ar";
-            const sGender = String(student.personalInfo?.gender || "Male").toLowerCase();
-            const sRelation = String(student.guardianInfo?.relationship || "father").toLowerCase();
+      {/* ── Students List ──────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+        {/* List header */}
+        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-800">
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+            {locale === "ar" ? "الطلاب المتاحون" : "Available students"}
+          </span>
+          <span className="text-xs font-bold text-violet-600 dark:text-violet-400">{filteredStudents.length}</span>
+        </div>
 
-            return (
-              <div key={sid} onClick={() => !isFull && setSelectedStudent(student)}
-                className={`p-3 border rounded-lg cursor-pointer transition-all
-                  ${isSelected ? "border-primary bg-primary/5 dark:bg-primary/10" : "border-gray-200 dark:border-gray-700 hover:border-primary/50"}
-                  ${isFull ? "opacity-50 cursor-not-allowed" : ""}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-semibold text-sm">{student.personalInfo?.fullName}</h4>
-                      {isSelected && <CheckCircle className="w-4 h-4 text-primary" />}
+        <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800">
+          {filteredStudents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-300 dark:text-gray-600">
+              <Icon.Users />
+              <p className="text-sm">{locale === "ar" ? "لا يوجد طلاب متاحين" : "No available students"}</p>
+            </div>
+          ) : (
+            filteredStudents.map(student => {
+              const sid = String(student._id || student.id);
+              const isSelected = selectedStudent && String(selectedStudent._id || selectedStudent.id) === sid;
+              const name = student.personalInfo?.fullName || "";
+              const avatarColor = getAvatarColor(name);
+              const sLang = student.communicationPreferences?.preferredLanguage || "ar";
+              const sGender = String(student.personalInfo?.gender || "Male").toLowerCase();
+              const sRelation = String(student.guardianInfo?.relationship || "father").toLowerCase();
+
+              return (
+                <div
+                  key={sid}
+                  onClick={() => {
+                    if (isFull && !isSelected) return;
+                    setSelectedStudent(isSelected ? null : student);
+                  }}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors
+                    ${isSelected
+                      ? "bg-violet-50 dark:bg-violet-900/20"
+                      : "hover:bg-gray-50 dark:hover:bg-gray-800/60"
+                    }
+                    ${isFull && !isSelected ? "opacity-40 cursor-not-allowed" : ""}`}
+                >
+                  {/* Avatar */}
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0"
+                    style={{ background: avatarColor.bg, color: avatarColor.text }}
+                  >
+                    {getInitials(name)}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{name}</p>
                     </div>
-                    <p className="text-xs text-gray-500">{student.personalInfo?.email}</p>
-                    <div className="flex gap-2 mt-1 flex-wrap">
-                      <span className={`text-xs px-2 py-0.5 rounded ${sLang === "ar" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"}`}>
-                        {sLang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
+                    <p className="text-xs text-gray-400 truncate mb-1.5">{student.personalInfo?.email}</p>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
+                        ${sLang === "ar"
+                          ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300"
+                          : "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300"}`}>
+                        {sLang === "ar" ? "عربي" : "EN"}
                       </span>
-                      <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
-                        {sGender === "female" ? "👧 أنثى" : "👦 ذكر"}
+                      <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
+                        ${sGender === "female"
+                          ? "bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300"
+                          : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300"}`}>
+                        {sGender === "female" ? (locale === "ar" ? "أنثى" : "Female") : (locale === "ar" ? "ذكر" : "Male")}
                       </span>
-                      <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
-                        {sRelation === "mother" ? "👩 أم" : sRelation === "father" ? "👨 أب" : "👤 ولي أمر"}
+                      <span className="text-xs px-1.5 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 font-medium">
+                        {sRelation === "mother" ? (locale === "ar" ? "أم" : "Mother") : (locale === "ar" ? "أب" : "Father")}
                       </span>
                     </div>
                   </div>
+
+                  {/* Check */}
+                  {isSelected && (
+                    <span className="text-violet-500 flex-shrink-0">
+                      <Icon.Check />
+                    </span>
+                  )}
                 </div>
-              </div>
-            );
-          })
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
 
-      {/* Messages Section */}
+      {/* ── Messages Section ───────────────────────────────────────────────── */}
       {selectedStudent && ctx && (
-        <div className="space-y-4">
+        <>
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
+            <span className="text-xs font-semibold text-gray-400 px-1">
+              {lang === "ar" ? "رسائل الترحيب" : "Welcome messages"}
+            </span>
+            <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
+          </div>
 
-          {/* Info bar */}
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+          {/* Context Bar */}
+          <div className="rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 px-4 py-3 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm">{selectedStudent.personalInfo?.fullName}</span>
-              <span className={`text-xs px-2 py-0.5 rounded font-medium ${lang === "ar" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
-                {lang === "ar" ? "🇸🇦 الرسائل بالعربية" : "🇬🇧 Messages in English"}
+              <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                {selectedStudent.personalInfo?.fullName}
               </span>
-              <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
-                {ctx.isMale ? "👦 ذكر" : "👧 أنثى"}
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                ${lang === "ar"
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300"
+                  : "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300"}`}>
+                {lang === "ar" ? "الرسائل بالعربية" : "Messages in English"}
               </span>
-              <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
-                {ctx.isFather ? "👨 أب" : "👩 أم"}
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                ${ctx.isMale ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300" : "bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300"}`}>
+                {ctx.isMale ? (lang === "ar" ? "ذكر" : "Male") : (lang === "ar" ? "أنثى" : "Female")}
+              </span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 font-medium">
+                {ctx.isFather ? (lang === "ar" ? "أب" : "Father") : (lang === "ar" ? "أم" : "Mother")}
               </span>
             </div>
-            <div className="mt-2 text-xs text-gray-500 space-y-1">
-              <p><span className="font-medium">{lang === "ar" ? "تحية الطالب: " : "Student greeting: "}</span><span className="text-primary">{ctx.studentSalutation}</span></p>
-              <p><span className="font-medium">{lang === "ar" ? "تحية ولي الأمر: " : "Guardian greeting: "}</span><span className="text-primary">{ctx.guardianSalutation}</span></p>
-              <p><span className="font-medium">{lang === "ar" ? "ابنك/ابنتك: " : "Child title: "}</span><span className="text-primary">{ctx.childTitle}</span></p>
+            <div className="grid grid-cols-1 gap-1 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "تحية الطالب:" : "Student greeting:"}</span>
+                <span className="text-violet-600 dark:text-violet-400 font-medium">{ctx.studentSalutation}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "تحية ولي الأمر:" : "Guardian greeting:"}</span>
+                <span className="text-violet-600 dark:text-violet-400 font-medium">{ctx.guardianSalutation}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "ابنك/ابنتك:" : "Child title:"}</span>
+                <span className="text-violet-600 dark:text-violet-400 font-medium">{ctx.childTitle}</span>
+              </div>
               {group.instructors?.length > 0 && (
-                <p><span className="font-medium">{group.instructors.length > 1 ? (lang === "ar" ? "المدربون: " : "Instructors: ") : (lang === "ar" ? "المدرب: " : "Instructor: ")}</span><span className="text-primary">{buildInstructorsNames(group.instructors, lang)}</span></p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "المدرب:" : "Instructor:"}</span>
+                  <span className="text-violet-600 dark:text-violet-400 font-medium">{buildInstructorsNames(group.instructors, lang)}</span>
+                </div>
               )}
             </div>
           </div>
 
-          {/* رسالة الطالب */}
-          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-6 h-6 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center justify-center">1</span>
-              <h4 className="text-sm font-bold text-purple-700 dark:text-purple-300">
-                {lang === "ar" ? "رسالة الطالب" : "Student Message"} {ctx.isMale ? "👦" : "👧"}
-              </h4>
-            </div>
-            <div className="relative">
-              <textarea ref={studentTextareaRef} value={studentMessage}
-                onChange={handleStudentMessageChange} onKeyDown={e => handleKeyDown(e, "student")}
-                className="w-full px-4 py-3 border-2 border-purple-200 dark:border-purple-800 rounded-xl focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white resize-none h-40 text-sm"
-                dir={lang === "ar" ? "rtl" : "ltr"}
-                placeholder={lang === "ar" ? "اكتب @ لإظهار المتغيرات..." : "Type @ to show variables..."} />
-              {renderHints(studentVars, "student", showStudentHints, studentHintsRef, "purple")}
-            </div>
-            <div className="mt-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Eye className="w-3.5 h-3.5 text-purple-600" />
-                <span className="text-xs text-purple-600 font-medium">{lang === "ar" ? "معاينة الرسالة" : "Message Preview"}</span>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-purple-100 dark:border-purple-900 text-sm whitespace-pre-line max-h-32 overflow-y-auto" dir={lang === "ar" ? "rtl" : "ltr"}>
-                {studentPreview || (lang === "ar" ? "لا توجد معاينة" : "No preview")}
-              </div>
-            </div>
-          </div>
+          {/* Message 1: Student */}
+          <MessageCard
+            step="1"
+            title={lang === "ar" ? "رسالة الطالب" : "Student Message"}
+            badge={ctx.isMale ? (lang === "ar" ? "ذكر" : "Male") : (lang === "ar" ? "أنثى" : "Female")}
+            subtitle={lang === "ar" ? "للطالب مباشرة" : "Directly to student"}
+            accentClass="bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300"
+            previewHeaderClass="bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
+            textareaRef={studentTextareaRef}
+            hintsRef={studentHintsRef}
+            value={studentMessage}
+            type="student"
+            showHints={showStudentHints}
+            vars={studentVars}
+            preview={studentPreview}
+          />
 
-          {/* رسالة ولي الأمر */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">2</span>
-              <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300">
-                {lang === "ar" ? "رسالة ولي الأمر" : "Guardian Message"} {ctx.isFather ? "👨‍👦" : "👩‍👦"}
-              </h4>
-            </div>
-            <div className="relative">
-              <textarea ref={guardianTextareaRef} value={guardianMessage}
-                onChange={handleGuardianMessageChange} onKeyDown={e => handleKeyDown(e, "guardian")}
-                className="w-full px-4 py-3 border-2 border-blue-200 dark:border-blue-800 rounded-xl focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none h-40 text-sm"
-                dir={lang === "ar" ? "rtl" : "ltr"}
-                placeholder={lang === "ar" ? "اكتب @ لإظهار المتغيرات..." : "Type @ to show variables..."} />
-              {renderHints(guardianVars, "guardian", showGuardianHints, guardianHintsRef, "blue")}
-            </div>
-            <div className="mt-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Eye className="w-3.5 h-3.5 text-blue-600" />
-                <span className="text-xs text-blue-600 font-medium">{lang === "ar" ? "معاينة الرسالة" : "Message Preview"}</span>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-blue-100 dark:border-blue-900 text-sm whitespace-pre-line max-h-32 overflow-y-auto" dir={lang === "ar" ? "rtl" : "ltr"}>
-                {guardianPreview || (lang === "ar" ? "لا توجد معاينة" : "No preview")}
-              </div>
-            </div>
-          </div>
+          {/* Message 2: Guardian */}
+          <MessageCard
+            step="2"
+            title={lang === "ar" ? "رسالة ولي الأمر" : "Guardian Message"}
+            badge={ctx.isFather ? (lang === "ar" ? "أب" : "Father") : (lang === "ar" ? "أم" : "Mother")}
+            subtitle={lang === "ar" ? "لولي أمر الطالب" : "To student's guardian"}
+            accentClass="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+            previewHeaderClass="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+            textareaRef={guardianTextareaRef}
+            hintsRef={guardianHintsRef}
+            value={guardianMessage}
+            type="guardian"
+            showHints={showGuardianHints}
+            vars={guardianVars}
+            preview={guardianPreview}
+          />
 
-          {/* رسالة نظرة عامة على الموديول */}
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-6 h-6 bg-green-500 text-white text-xs font-bold rounded-full flex items-center justify-center">3</span>
-              <h4 className="text-sm font-bold text-green-700 dark:text-green-300">
-                {lang === "ar" ? "رسالة نظرة عامة على الموديول" : "Module Overview Message"} 📚
-              </h4>
-              <span className="text-xs text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded-full">
-                {lang === "ar" ? "لولي الأمر" : "To Guardian"}
-              </span>
-            </div>
-
-            {/* ✅ Supervisor Gender Selector */}
-            <div className="mb-3 flex items-center gap-3 bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700 rounded-lg px-3 py-2">
-              <span className="text-xs font-medium text-green-700 dark:text-green-300 shrink-0">
-                🎓 {lang === "ar" ? "جنس المشرف ({supervisorName}):" : "Supervisor Gender ({supervisorName}):"}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSupervisorGender("male")}
-                  className={`text-xs px-3 py-1 rounded-full border transition-all ${supervisorGender === "male"
-                    ? "bg-green-500 text-white border-green-500"
-                    : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-green-400"}`}>
-                  👨 {lang === "ar" ? "ذكر" : "Male"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSupervisorGender("female")}
-                  className={`text-xs px-3 py-1 rounded-full border transition-all ${supervisorGender === "female"
-                    ? "bg-green-500 text-white border-green-500"
-                    : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-green-400"}`}>
-                  👩 {lang === "ar" ? "أنثى" : "Female"}
-                </button>
-              </div>
-              {/* ✅ عرض القيمة الحالية من DB */}
-              {ctx.supervisorNameValue && (
-                <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                  → {ctx.supervisorNameValue}
+          {/* Message 3: Module Overview */}
+          <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2.5">
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">3</span>
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                  {lang === "ar" ? "نظرة عامة على الموديول" : "Module Overview"}
                 </span>
-              )}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 font-medium">
+                  {lang === "ar" ? "لولي الأمر" : "To Guardian"}
+                </span>
+              </div>
             </div>
 
-            <div className="relative">
-              <textarea
-                ref={moduleOverviewTextareaRef}
-                value={moduleOverviewMessage}
-                onChange={handleModuleOverviewMessageChange}
-                onKeyDown={e => handleKeyDown(e, "moduleOverview")}
-                className="w-full px-4 py-3 border-2 border-green-200 dark:border-green-800 rounded-xl focus:ring-2 focus:ring-green-500 dark:bg-gray-800 dark:text-white resize-none h-40 text-sm"
-                dir={lang === "ar" ? "rtl" : "ltr"}
-                placeholder={lang === "ar" ? "اكتب @ لإظهار المتغيرات... (مثال: {guardianSalutation}, {moduleTitle}, {supervisorName})" : "Type @ to show variables... (e.g. {guardianSalutation}, {moduleTitle}, {supervisorName})"}
-              />
-              {renderHints(guardianVars, "moduleOverview", showModuleOverviewHints, moduleOverviewHintsRef, "green")}
-            </div>
-            <div className="mt-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Eye className="w-3.5 h-3.5 text-green-600" />
-                <span className="text-xs text-green-600 font-medium">{lang === "ar" ? "معاينة الرسالة" : "Message Preview"}</span>
+            <div className="p-4 space-y-3">
+              {/* Supervisor Gender Toggle */}
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
+                <Icon.School />
+                <span className="text-xs text-gray-500 dark:text-gray-400 flex-1">
+                  {lang === "ar" ? "جنس المشرف" : "Supervisor gender"}
+                  <code className="mx-1 px-1.5 py-0.5 rounded bg-white dark:bg-gray-700 font-mono text-gray-400 text-xs">
+                    {"{supervisorName}"}
+                  </code>
+                </span>
+                {/* Toggle Pills */}
+                <div className="flex gap-1 p-0.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
+                  {["male", "female"].map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setSupervisorGender(g)}
+                      className={`text-xs px-3 py-1 rounded-md transition-all font-medium
+                        ${supervisorGender === g
+                          ? "bg-emerald-500 text-white shadow-sm"
+                          : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"}`}
+                    >
+                      {g === "male" ? (lang === "ar" ? "ذكر" : "Male") : (lang === "ar" ? "أنثى" : "Female")}
+                    </button>
+                  ))}
+                </div>
+                {ctx.supervisorNameValue && (
+                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    {ctx.supervisorNameValue}
+                  </span>
+                )}
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-green-100 dark:border-green-900 text-sm whitespace-pre-line max-h-32 overflow-y-auto" dir={lang === "ar" ? "rtl" : "ltr"}>
-                {moduleOverviewPreview || (lang === "ar" ? "لا توجد معاينة" : "No preview")}
+
+              {/* Hint */}
+              <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                <Icon.Zap />
+                {lang === "ar"
+                  ? <>اكتب <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> لإدراج متغير</>
+                  : <>Type <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> to insert a variable</>}
+              </p>
+
+              <div className="relative">
+                <textarea
+                  ref={moduleOverviewTextareaRef}
+                  value={moduleOverviewMessage}
+                  onChange={(e) => handleTextareaChange(e, "moduleOverview")}
+                  onKeyDown={(e) => handleKeyDown(e, "moduleOverview")}
+                  dir={lang === "ar" ? "rtl" : "ltr"}
+                  rows={5}
+                  placeholder={lang === "ar"
+                    ? "مثال: {guardianSalutation}، سيتناول {moduleTitle}... المشرف: {supervisorName}"
+                    : "e.g. {guardianSalutation}, this module covers {moduleTitle}... Supervisor: {supervisorName}"}
+                  className="w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-300 dark:focus:border-emerald-600 transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                />
+                <HintsDropdown vars={guardianVars} type="moduleOverview" show={showModuleOverviewHints} hintsRef={moduleOverviewHintsRef} />
+              </div>
+
+              {/* Preview */}
+              <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                  <Icon.Eye />
+                  <span>{lang === "ar" ? "معاينة" : "Preview"}</span>
+                </div>
+                <div
+                  className="px-3 py-2.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400 whitespace-pre-line max-h-28 overflow-y-auto bg-white dark:bg-gray-900"
+                  dir={lang === "ar" ? "rtl" : "ltr"}
+                >
+                  {moduleOverviewPreview || <span className="text-gray-300 dark:text-gray-600 italic">{lang === "ar" ? "لا توجد معاينة بعد" : "No preview yet"}</span>}
+                </div>
               </div>
             </div>
           </div>
-
-        </div>
+        </>
       )}
 
-      {/* Actions */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <button onClick={onClose} disabled={adding}
-          className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition disabled:opacity-50">
-          إلغاء
+      {/* ── Actions ───────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
+        <button
+          onClick={onClose}
+          disabled={adding}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40"
+        >
+          <Icon.X />
+          {locale === "ar" ? "إلغاء" : "Cancel"}
         </button>
-        <button onClick={handleAdd}
+
+        <button
+          onClick={handleAdd}
           disabled={!selectedStudent || !studentMessage.trim() || !guardianMessage.trim() || isFull || adding}
-          className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2">
-          {adding
-            ? <><Loader2 className="w-4 h-4 animate-spin" />جاري الإضافة...</>
-            : <><UserPlus className="w-4 h-4" />إضافة الطالب</>}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+        >
+          {adding ? (
+            <>
+              <Icon.Loader />
+              {locale === "ar" ? "جاري الإضافة..." : "Adding..."}
+            </>
+          ) : (
+            <>
+              <Icon.UserPlus />
+              {locale === "ar"
+                ? `إضافة${selectedStudent ? ` ${selectedStudent.personalInfo?.fullName?.split(" ")[0]}` : " الطالب"}`
+                : `Add${selectedStudent ? ` ${selectedStudent.personalInfo?.fullName?.split(" ")[0]}` : " student"}`
+              }
+            </>
+          )}
         </button>
       </div>
     </div>

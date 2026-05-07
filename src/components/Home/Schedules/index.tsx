@@ -85,7 +85,6 @@ const Schedules = () => {
   useEffect(() => {
     const fetchSchedule = async () => {
       try {
-        // ✅ تغيير الـ endpoint من /api/schedules إلى /api/events
         const res = await fetch("/api/events", { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to fetch events");
         const result = await res.json();
@@ -171,7 +170,7 @@ const Schedules = () => {
                   })()}
                 </div>
                 <div>
-                  <p className="text-lg font-normal text-SlateBlueText dark:text-opacity-80">
+                  <p className="text-lg font-normal text-SlateBlueText dark:text-primary dark:text-opacity-80">
                     {event.time}
                   </p>
                 </div>
@@ -237,22 +236,15 @@ const Schedules = () => {
                       );
                     })
                   ) : (
-                    <Image
-                      src="/images/default-avatar.jpg"
-                      alt="Speaker"
-                      width={64}
-                      height={64}
-                      quality={100}
-                      className="!w-16 !h-16 rounded-full"
-                    />
+                    <div className="!w-16 !h-16 rounded-full bg-gray-200" />
                   )}
                 </div>
 
                 <div>
-                  <p className="text-lg font-normal text-SlateBlueText dark:text-opacity-80">
+                  <p className="text-lg font-normal text-SlateBlueText dark:text-primary dark:text-opacity-80">
                     {t("schedules.speechBy")}
                   </p>
-                  <div className="text-lg font-medium text-secondary dark:text-white">
+                  <div className="text-lg font-medium text-secondary dark:text-primary dark:text-white">
                     {event.speakers && event.speakers.length > 0 ? (
                       <span className="flex flex-col md:inline-block">
                         {event.speakers.map((s, index) => (
@@ -274,7 +266,7 @@ const Schedules = () => {
               <div className="lg:min-w-40 min-w-max">
                 <Link
                   href={`/events/${event._id}`}
-                  className="btn_outline btn-2 btn_outline hover-outline-slide-down"
+                  className="bg-primary hover:bg-primary/90 text-white font-semibold px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 inline-block"
                 >
                   <span>{t("common.details")}</span>
                 </Link>

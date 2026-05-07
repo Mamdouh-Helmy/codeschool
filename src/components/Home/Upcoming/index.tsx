@@ -110,7 +110,6 @@ const Upcoming = () => {
               return dateA.getTime() - dateB.getTime();
             });
 
-          // عرض أول 3 أحداث فقط مع السماح بالتمرير العمودي للباقي
           setUpcomingEvents(upcoming);
         } else {
           setUpcomingEvents([]);
@@ -157,7 +156,6 @@ const Upcoming = () => {
                 <BoxSlider />
               </div>
               <div>
-                {/* 🔥 حاوية الأحداث بنفس التصميم مع التمرير العمودي */}
                 <div
                   className="flex items-center flex-wrap w-full border border-solid dark:border-dark_border md:px-14 px-6 md:mt-14 mt-6 rounded-22 max-h-[400px] overflow-y-auto no-scrollbar"
                 >
@@ -273,7 +271,7 @@ const Upcoming = () => {
                       <div>
                         <Link
                           href={event.crmRegistrationUrl || "#"}
-                          className="btn_outline btn-2 btn_outline hover-outline-slide-down"
+                          className="bg-primary hover:bg-primary/90 text-white font-semibold px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 inline-block"
                         >
                           <span>{t("upcoming.registerNow")}</span>
                         </Link>

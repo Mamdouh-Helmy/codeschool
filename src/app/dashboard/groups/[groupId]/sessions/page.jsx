@@ -11,16 +11,18 @@ import {
 import { useLocale } from "@/app/context/LocaleContext";
 import { useI18n } from "@/i18n/I18nProvider";
 
-// ─── Design tokens — لون أساسي بنفسجي ──────────────────────────────────────
+// ─── Design tokens — brand colors ──────────────────────────────────────────
 const C = {
-    primary: "#8c52ff",
-    primaryDark: "#7a3ff0",
-    primaryBg: "bg-[#8c52ff]",
-    primaryText: "text-[#8c52ff]",
-    primaryBorder: "border-[#8c52ff]",
-    primaryLight: "bg-[#8c52ff]/10",
-    primaryGrad: "from-[#8c52ff] to-[#6c3be8]",
-    primaryGrad2: "from-[#8c52ff] via-[#7a3ff0] to-[#6c3be8]",
+    primary: "#ff6700",
+    primaryDark: "#f67d00",
+    primaryBg: "bg-[#ff6700]",
+    primaryText: "text-[#ff6700]",
+    primaryBorder: "border-[#ff6700]",
+    primaryLight: "bg-[#ff6700]/10",
+    primaryGrad: "from-[#ff6700] to-[#f67d00]",
+    primaryGrad2: "from-[#ff6700] via-[#f67d00] to-[#004d59]",
+    secondary: "#004d59",
+    accent: "#feaf00",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -46,15 +48,15 @@ const fmtDate = (d, short = false, locale = 'ar') => {
 const STATUS_CFG = (locale = 'ar') => ({
     completed: {
         label: locale === 'ar' ? "مكتملة" : "Completed",
-        badge: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40",
-        dot: "bg-emerald-400",
+        badge: "bg-secondary/10 dark:bg-secondary/20 text-secondary dark:text-secondary border border-secondary/20",
+        dot: "bg-secondary",
         icon: CheckCircle,
-        cardBg: "border-emerald-200/60 dark:border-emerald-800/30",
+        cardBg: "border-secondary/30 dark:border-secondary/30",
     },
     scheduled: {
         label: locale === 'ar' ? "مجدولة" : "Scheduled",
-        badge: "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40",
-        dot: "bg-blue-400",
+        badge: "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border border-primary/20",
+        dot: "bg-primary",
         icon: Clock,
         cardBg: "border-gray-100 dark:border-[#30363d]",
     },
@@ -75,16 +77,16 @@ const STATUS_CFG = (locale = 'ar') => ({
 });
 
 const ATT_CFG = (locale = 'ar') => ({
-    present: { label: locale === 'ar' ? "حاضر" : "Present", color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/20", icon: CheckCircle },
+    present: { label: locale === 'ar' ? "حاضر" : "Present", color: "text-secondary", bg: "bg-secondary/10", icon: CheckCircle },
     late: { label: locale === 'ar' ? "متأخر" : "Late", color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-900/20", icon: Clock },
     excused: { label: locale === 'ar' ? "معذور" : "Excused", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/20", icon: BadgeCheck },
     absent: { label: locale === 'ar' ? "غائب" : "Absent", color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-900/20", icon: X },
 });
 
 const PLAT_CFG = (locale = 'ar') => ({
-    zoom: { label: locale === 'ar' ? "Zoom" : "Zoom", icon: "🔷", grad: "from-blue-500 to-blue-600" },
-    google_meet: { label: locale === 'ar' ? "Meet" : "Meet", icon: "🔴", grad: "from-green-500 to-emerald-600" },
-    microsoft_teams: { label: locale === 'ar' ? "Teams" : "Teams", icon: "🔵", grad: "from-purple-500 to-indigo-600" },
+    zoom: { label: locale === 'ar' ? "Zoom" : "Zoom", icon: "🔷", grad: "from-primary to-[#f67d00]" },
+    google_meet: { label: locale === 'ar' ? "Meet" : "Meet", icon: "🔴", grad: "from-secondary to-[#ff6437]" },
+    microsoft_teams: { label: locale === 'ar' ? "Teams" : "Teams", icon: "🔵", grad: "from-primary to-secondary" },
     other: { label: locale === 'ar' ? "رابط" : "Link", icon: "🔗", grad: C.primaryGrad },
 });
 
@@ -115,8 +117,8 @@ function SessionDetailModal({ session, onClose, locale }) {
             {/* Modal */}
             <div className="relative w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col">
 
-                {/* ── Header ── */}
-                <div className={`relative bg-gradient-to-br ${C.primaryGrad} p-6 rounded-t-3xl sm:rounded-t-3xl overflow-hidden flex-shrink-0`}>
+                {/* ── Header with brand gradient ── */}
+                <div className={`relative bg-gradient-to-br ${C.primaryGrad2} p-6 rounded-t-3xl sm:rounded-t-3xl overflow-hidden flex-shrink-0`}>
                     {/* pattern */}
                     <div className="absolute inset-0 opacity-10"
                         style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
@@ -189,7 +191,7 @@ function SessionDetailModal({ session, onClose, locale }) {
                             href={session.recordingLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl font-bold text-sm text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all"
+                            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl font-bold text-sm text-secondary bg-secondary/10 border border-secondary/20 hover:bg-secondary/20 transition-all"
                         >
                             <Play className="w-4 h-4" />
                             {t("sessions.modal.watchRecording")}
@@ -235,8 +237,8 @@ function SessionDetailModal({ session, onClose, locale }) {
                                         <div
                                             className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0
         ${isCompleted
-                                                    ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-                                                    : "bg-[#8c52ff]/10 text-[#8c52ff]"
+                                                    ? "bg-secondary/10 text-secondary"
+                                                    : "bg-primary/10 text-primary"
                                                 }`}
                                         >
                                             {i + 1}
@@ -249,14 +251,14 @@ function SessionDetailModal({ session, onClose, locale }) {
 
                                         {/* Completed check */}
                                         {isCompleted && (
-                                            <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                                            <CheckCircle className="w-4 h-4 text-secondary flex-shrink-0" />
                                         )}
                                     </div>
                                 ))}
                             </div>
 
                             {/* Total row */}
-                            <div className={`flex items-center justify-between px-4 py-2.5 bg-[#8c52ff]/5 dark:bg-[#8c52ff]/10 border-t border-[#8c52ff]/20`}>
+                            <div className={`flex items-center justify-between px-4 py-2.5 bg-primary/5 dark:bg-primary/10 border-t border-primary/20`}>
                                 <span className="text-xs font-bold text-gray-500 dark:text-[#8b949e]">{t("sessions.modal.totalDuration")}</span>
                                 <span className={`text-sm font-black ${C.primaryText}`}>
                                     {session.lessons.length * 60} {locale === 'ar' ? 'دقيقة = ساعتان' : 'min = 2 hours'}
@@ -277,7 +279,7 @@ function SessionDetailModal({ session, onClose, locale }) {
                             <div className="flex flex-wrap gap-2">
                                 {session.materials.map((mat, i) => (
                                     <a key={i} href={mat.url} target="_blank" rel="noopener noreferrer"
-                                        className={`inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-medium text-gray-700 dark:text-[#8b949e] hover:border-[#8c52ff]/50 hover:text-[#8c52ff] transition-all`}>
+                                        className={`inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-medium text-gray-700 dark:text-[#8b949e] hover:border-primary/50 hover:text-primary transition-all`}>
                                         <FileText className="w-3.5 h-3.5" />
                                         {mat.name || `${t("sessions.modal.file")} ${i + 1}`}
                                         <ExternalLink className="w-3 h-3" />
@@ -337,9 +339,9 @@ function SessionCard({ session, onClick, locale }) {
         ${isLocked
                     ? "border-gray-100 dark:border-[#21262d] opacity-50 cursor-not-allowed"
                     : isCompleted
-                        ? "cursor-pointer hover:-translate-y-0.5 border-emerald-200/60 dark:border-emerald-800/30 hover:shadow-lg"
+                        ? "cursor-pointer hover:-translate-y-0.5 border-secondary/30 dark:border-secondary/30 hover:shadow-lg"
                         : isToday
-                            ? "cursor-pointer hover:-translate-y-0.5 border-[#8c52ff]/40 shadow-lg shadow-[#8c52ff]/10 ring-1 ring-[#8c52ff]/20"
+                            ? "cursor-pointer hover:-translate-y-0.5 border-primary/40 shadow-lg shadow-primary/10 ring-1 ring-primary/20"
                             : "cursor-pointer hover:-translate-y-0.5 border-gray-100 dark:border-[#30363d] hover:shadow-md hover:border-gray-200 dark:hover:border-[#3d444d]"}`}
         >
             {/* Today top ribbon */}
@@ -353,10 +355,10 @@ function SessionCard({ session, onClick, locale }) {
           ${isLocked
                         ? "bg-gray-100 dark:bg-[#21262d] text-gray-400 dark:text-[#6e7681]"
                         : isCompleted
-                            ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
+                            ? "bg-gradient-to-br from-secondary to-secondary/80 text-white"
                             : isToday
                                 ? `bg-gradient-to-br ${C.primaryGrad} text-white`
-                                : "bg-gradient-to-br from-blue-400 to-indigo-500 text-white"}`}>
+                                : "bg-gradient-to-br from-primary to-[#f67d00] text-white"}`}>
                     {isLocked
                         ? <Lock className="w-4 h-4" />
                         : isCompleted
@@ -369,7 +371,7 @@ function SessionCard({ session, onClick, locale }) {
                     <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                         {isToday && (
                             <span className={`text-[10px] font-black ${C.primaryText} flex items-center gap-1`}>
-                                <span className="w-1 h-1 rounded-full bg-[#8c52ff] animate-pulse" /> {t("sessions.today")}
+                                <span className="w-1 h-1 rounded-full bg-primary animate-pulse" /> {t("sessions.today")}
                             </span>
                         )}
                         <h3 className={`font-bold text-sm truncate transition-colors
@@ -423,7 +425,7 @@ function SessionCard({ session, onClick, locale }) {
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100 transition-all"
+                            className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-secondary/10 text-secondary border border-secondary/20 hover:bg-secondary/20 transition-all"
                         >
                             <Play className="w-3 h-3" /> {t("sessions.recording")}
                         </a>
@@ -452,17 +454,17 @@ function ModuleGroup({ moduleData, children, locale }) {
     return (
         <div className="space-y-3">
             <button onClick={() => setCollapsed(!collapsed)} className="w-full flex items-center gap-3 group">
-                <div className={`h-px flex-1 ${isComplete ? "bg-gradient-to-r from-emerald-300 to-transparent dark:from-emerald-700/50" : "bg-gradient-to-r from-gray-200 to-transparent dark:from-[#30363d]"}`} />
+                <div className={`h-px flex-1 ${isComplete ? "bg-gradient-to-r from-secondary to-transparent dark:from-secondary/50" : "bg-gradient-to-r from-gray-200 to-transparent dark:from-[#30363d]"}`} />
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold flex-shrink-0 transition-all
           ${isComplete
-                        ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-400"
-                        : `bg-white dark:bg-[#161b22] border-gray-200 dark:border-[#30363d] text-gray-600 dark:text-[#8b949e] group-hover:border-[#8c52ff]/40 group-hover:text-[#8c52ff]`}`}>
+                        ? "bg-secondary/10 border-secondary/20 text-secondary"
+                        : `bg-white dark:bg-[#161b22] border-gray-200 dark:border-[#30363d] text-gray-600 dark:text-[#8b949e] group-hover:border-primary/40 group-hover:text-primary`}`}>
                     {isComplete ? <CheckCircle className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
                     <span className="max-w-[160px] truncate">{moduleData.moduleName}</span>
                     <span className="opacity-60">{moduleData.completedSessions}/{moduleData.totalSessions}</span>
                     {collapsed ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
                 </div>
-                <div className={`h-px flex-1 ${isComplete ? "bg-gradient-to-l from-emerald-300 to-transparent dark:from-emerald-700/50" : "bg-gradient-to-l from-gray-200 to-transparent dark:from-[#30363d]"}`} />
+                <div className={`h-px flex-1 ${isComplete ? "bg-gradient-to-l from-secondary to-transparent dark:from-secondary/50" : "bg-gradient-to-l from-gray-200 to-transparent dark:from-[#30363d]"}`} />
             </button>
 
             {!collapsed && <div className="space-y-2.5">{children}</div>}
@@ -536,7 +538,7 @@ export default function StudentSessionsPage() {
     return (
         <div className={`min-h-screen bg-gray-50 dark:bg-[#0d1117]`} dir={direction}>
 
-            {/* ── Sticky Header ─────────────────────────────────────────────────── */}
+            {/* ── Sticky Header with brand colors ─────────────────────────────────── */}
             <div className="sticky top-0 z-30 bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md border-b border-gray-200 dark:border-[#30363d]">
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center gap-3 py-4">
@@ -551,8 +553,8 @@ export default function StudentSessionsPage() {
                             </p>
                         </div>
 
-                        {/* Progress */}
-                        <div className="flex items-center gap-2 bg-[#8c52ff]/10 border border-[#8c52ff]/20 px-3 py-1.5 rounded-xl flex-shrink-0">
+                        {/* Progress with brand gradient */}
+                        <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-xl flex-shrink-0">
                             <div className="w-14 h-1.5 bg-gray-200 dark:bg-[#21262d] rounded-full overflow-hidden">
                                 <div className={`h-full bg-gradient-to-r ${C.primaryGrad} rounded-full transition-all duration-1000`}
                                     style={{ width: `${stats.progressPercentage}%` }} />
@@ -581,7 +583,7 @@ export default function StudentSessionsPage() {
                             <button key={id} onClick={() => setFilter(id)}
                                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition-all
                   ${filter === id
-                                        ? `bg-[#8c52ff] text-white shadow-md shadow-[#8c52ff]/30`
+                                        ? `bg-primary text-white shadow-md shadow-primary/30`
                                         : "bg-gray-100 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d]"}`}>
                                 {label}
                                 <span className={`text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-black
@@ -597,9 +599,9 @@ export default function StudentSessionsPage() {
             {/* ── Content ─────────────────────────────────────────────────────────── */}
             <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
-                {/* Next session banner */}
+                {/* Next session banner with brand gradient */}
                 {nextAccessible && filter === "all" && (
-                    <div className={`mb-5 bg-gradient-to-r ${C.primaryGrad} rounded-2xl p-5 text-white relative overflow-hidden`}>
+                    <div className={`mb-5 bg-gradient-to-r ${C.primaryGrad2} rounded-2xl p-5 text-white relative overflow-hidden`}>
                         <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-xl" />
                         <div className="relative z-10 flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -614,7 +616,7 @@ export default function StudentSessionsPage() {
                             </div>
                             {nextAccessible.showJoinButton && (
                                 <a href={nextAccessible.meetingLink} target="_blank" rel="noopener noreferrer"
-                                    className="flex-shrink-0 flex items-center gap-1.5 bg-white text-[#8c52ff] font-black text-xs px-3 py-2 rounded-xl hover:bg-purple-50 transition-all shadow-lg">
+                                    className="flex-shrink-0 flex items-center gap-1.5 bg-white text-primary font-black text-xs px-3 py-2 rounded-xl hover:bg-gray-50 transition-all shadow-lg">
                                     <Video className="w-3.5 h-3.5" /> {t("sessions.joinNow")}
                                 </a>
                             )}

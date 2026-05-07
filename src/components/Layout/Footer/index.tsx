@@ -10,47 +10,46 @@ const Footer: FC = () => {
   const isSubmittingRef = useRef(false);
 
   const handleNewsletterSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (!email) {
-    toast.error("Please enter your email address");
-    return;
-  }
-
-  // منع الإرسال المزدوج بشكل أكثر فعالية
-  if (loading) {
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const response = await fetch('/api/newsletter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email }),
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      toast.success(t("footer.subscribeSuccess") || "Successfully subscribed to newsletter!");
-      setEmail("");
-    } else {
-      toast.error(result.message || "Failed to subscribe");
+    if (!email) {
+      toast.error("Please enter your email address");
+      return;
     }
-  } catch (error) {
-    console.error('Error subscribing to newsletter:', error);
-    toast.error("An error occurred. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+
+    if (loading) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success(t("footer.subscribeSuccess") || "Successfully subscribed to newsletter!");
+        setEmail("");
+      } else {
+        toast.error(result.message || "Failed to subscribe");
+      }
+    } catch (error) {
+      console.error('Error subscribing to newsletter:', error);
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <footer className="bg-secondary">
+    <footer className="bg-secondary dark:bg-darkmode">
       <div className="container">
         <div className="flex items-center justify-between flex-wrap md:pt-44 pt-16 md:pb-20 pb-6 border-b border-solid border-dark_border">
           <div>
@@ -65,19 +64,19 @@ const Footer: FC = () => {
 
           <div>
             <ul className="flex items-center flex-wrap md:gap-30 gap-3 md:py-0 py-5">
-              <li className="text-PaleCerulean sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary">
+              <li className="text-PaleCerulean dark:text-darkmuted sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary dark:hover:text-primary">
                 <Link href="/">{t("nav.homepage")}</Link>
               </li>
-              <li className="text-PaleCerulean sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary">
+              <li className="text-PaleCerulean dark:text-darkmuted sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary dark:hover:text-primary">
                 <Link href="/speakers">{t("nav.speakers")}</Link>
               </li>
-              <li className="text-PaleCerulean sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary">
+              <li className="text-PaleCerulean dark:text-darkmuted sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary dark:hover:text-primary">
                 <Link href="/schedules">{t("nav.schedules")}</Link>
               </li>
-              <li className="text-PaleCerulean sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary">
+              <li className="text-PaleCerulean dark:text-darkmuted sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary dark:hover:text-primary">
                 <Link href="/about">{t("footer.about")}</Link>
               </li>
-              <li className="text-PaleCerulean sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary">
+              <li className="text-PaleCerulean dark:text-darkmuted sm:text-xl text-lg font-normal transition-all duration-0.4s hover:text-primary dark:hover:text-primary">
                 <Link href="/sponsors">{t("footer.sponsors")}</Link>
               </li>
             </ul>
@@ -97,7 +96,7 @@ const Footer: FC = () => {
                     height="27"
                     fill="white"
                     viewBox="0 0 26 27"
-                    className="group-hover:fill-ElectricAqua"
+                    className="group-hover:fill-ElectricAqua dark:fill-darkmuted dark:group-hover:fill-primary transition-colors duration-200"
                     xmlns="http://www.w3.org/2000/svg"
                   >
                     <g clipPath="url(#clip0_7_993)">
@@ -105,12 +104,7 @@ const Footer: FC = () => {
                     </g>
                     <defs>
                       <clipPath id="clip0_7_993">
-                        <rect
-                          width="26"
-                          height="26"
-                          fill="white"
-                          transform="translate(0 0.838745)"
-                        />
+                        <rect width="26" height="26" fill="white" transform="translate(0 0.838745)" />
                       </clipPath>
                     </defs>
                   </svg>
@@ -128,7 +122,7 @@ const Footer: FC = () => {
                     height="27"
                     viewBox="0 0 26 27"
                     fill="#fff"
-                    className="group-hover:fill-ElectricAqua"
+                    className="group-hover:fill-ElectricAqua dark:fill-darkmuted dark:group-hover:fill-primary transition-colors duration-200"
                     xmlns="http://www.w3.org/2000/svg"
                   >
                     <path d="M18.3333 2.16675H7.66667C4.365 2.16675 1.66667 4.86508 1.66667 8.16675V18.8334C1.66667 22.1351 4.365 24.8334 7.66667 24.8334H18.3333C21.635 24.8334 24.3333 22.1351 24.3333 18.8334V8.16675C24.3333 4.86508 21.635 2.16675 18.3333 2.16675ZM13 18.8334C10.2383 18.8334 8.00001 16.5951 8.00001 13.8334C8.00001 11.0717 10.2383 8.83341 13 8.83341C15.7617 8.83341 18 11.0717 18 13.8334C18 16.5951 15.7617 18.8334 13 18.8334ZM18.3333 8.16675C17.6883 8.16675 17.1667 7.64508 17.1667 7.00008C17.1667 6.35508 17.6883 5.83341 18.3333 5.83341C18.9783 5.83341 19.5 6.35508 19.5 7.00008C19.5 7.64508 18.9783 8.16675 18.3333 8.16675Z" />
@@ -147,7 +141,7 @@ const Footer: FC = () => {
                     height="28"
                     viewBox="0 0 26 28"
                     fill="#fff"
-                    className="group-hover:fill-ElectricAqua"
+                    className="group-hover:fill-ElectricAqua dark:fill-darkmuted dark:group-hover:fill-primary transition-colors duration-200"
                     xmlns="http://www.w3.org/2000/svg"
                   >
                     <g clipPath="url(#clip0_7_997)">
@@ -173,7 +167,7 @@ const Footer: FC = () => {
                     height="26"
                     viewBox="0 0 24 24"
                     fill="#fff"
-                    className="group-hover:fill-ElectricAqua"
+                    className="group-hover:fill-ElectricAqua dark:fill-darkmuted dark:group-hover:fill-primary transition-colors duration-200"
                     xmlns="http://www.w3.org/2000/svg"
                   >
                     <path d="M13.5 2.5H10.5V21.5H13.5V2.5ZM19.5 7.5H16.5V21.5H19.5V7.5ZM7.5 12.5H4.5V21.5H7.5V12.5Z" />
@@ -186,11 +180,11 @@ const Footer: FC = () => {
 
         <div className="grid md:grid-cols-12 grid-cols-1 items-center py-8">
           <div className="col-span-5">
-            <p className="text-base font-normal text-PaleCerulean">
+            <p className="text-base font-normal text-PaleCerulean dark:text-darkmuted">
               {t("footer.copyright")}{" "}
               <Link
                 href="https://codeschool.online/"
-                className="hover:text-white"
+                className="hover:text-white dark:hover:text-white transition-colors duration-200"
               >
                 {t("footer.codeSchool")}
               </Link>
@@ -198,20 +192,20 @@ const Footer: FC = () => {
           </div>
 
           <div className="col-span-7 grid md:grid-cols-12 grid-cols-1 items-center gap-6">
-            <p className="text-xl text-PaleCerulean font-normal col-span-4">
+            <p className="text-xl text-PaleCerulean dark:text-darkmuted font-normal col-span-4">
               {t("footer.newsletter")}
             </p>
             <div className="w-full col-span-8">
               <form
                 onSubmit={handleNewsletterSubmit}
-                className="newsletter-form bg-white dark:bg-transparent flex rounded-md justify-end overflow-hidden rounded-tl-lg rounded-bl-lg"
+                className="newsletter-form bg-white dark:bg-darklight flex rounded-md justify-end overflow-hidden rounded-tl-lg rounded-bl-lg border border-transparent dark:border-dark_border"
               >
                 <input
                   type="email"
                   placeholder={t("footer.emailPlaceholder")}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="p-4 text-base border-0 rounded-md outline-0 w-[calc(100%_-_137px)] flex dark:bg-midnight_text dark:text-white dark:rounded-none dark:w-full dark:bg-darkmode"
+                  className="p-4 text-base border-0 rounded-md outline-0 w-[calc(100%_-_137px)] flex dark:bg-dark_input dark:text-white dark:rounded-none dark:w-full dark:placeholder-darkmuted focus:outline-none"
                   required
                 />
                 <button

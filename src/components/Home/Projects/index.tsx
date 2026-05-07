@@ -152,7 +152,7 @@ const Projects = ({ showTitle = true }) => {
       ripple.style.cssText = `
         position: absolute;
         border-radius: 50%;
-        background: rgba(140, 82, 255, 0.6);
+        background: rgba(255, 103, 0, 0.6);
         transform: scale(0);
         animation: ripple 0.6s linear;
         pointer-events: none;
@@ -372,7 +372,7 @@ const Projects = ({ showTitle = true }) => {
               <div
                 key={`${project._id}-${index}`}
                 ref={addToRefs}
-                className={`flex-shrink-0 max-w-[300px] flex-shrink-0 group overflow-hidden cursor-pointer ${index % 2 === 1 ? "mt-28" : ""}`}
+                className={`flex-shrink-0 max-w-[300px] group overflow-hidden cursor-pointer ${index % 2 === 1 ? "mt-28" : ""}`}
                 onClick={() => openProjectDetails(project)}
               >
                 <div className="bg-white dark:bg-darkmode rounded-xl shadow-sm border border-PowderBlueBorder dark:border-dark_border overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-primary/30 transform hover:scale-105">
@@ -395,7 +395,7 @@ const Projects = ({ showTitle = true }) => {
                           />
                         )
                       ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-primary/10 to-Aquamarine/10 flex items-center justify-center">
+                        <div className="w-full h-full bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center">
                           <Code className="w-12 h-12 text-primary/40" />
                         </div>
                       )}
@@ -450,19 +450,20 @@ const Projects = ({ showTitle = true }) => {
         <button
           ref={buttonRef}
           onClick={handleButtonClick}
-          className="btn_outline btn-2 group hover-outline-slide-down transform transition-transform duration-300 hover:scale-105 relative overflow-hidden"
+          className="relative inline-flex items-center gap-3 bg-primary text-white font-semibold px-8 py-4 rounded-2xl shadow-lg hover:shadow-2xl transform transition-all duration-300 hover:scale-105 hover:-translate-y-1 active:scale-95 group overflow-hidden"
           style={{ position: 'relative' }}
         >
-          <span className="!flex !items-center gap-14 relative z-10">
+          <span className="relative z-10 flex items-center gap-2">
             {t("projects.exploreMore")}
           </span>
+          <div className="absolute inset-0 bg-gradient-to-r from-primary to-secondary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
         </button>
       </div>
 
       {showPopup && (
         <div 
           ref={modalRef}
-          className="fixed inset-0 bg-gradient-to-br from-black/60 to-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-gradient-to-br from-secondary/60 to-primary/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           style={{ opacity: 0, display: 'none' }}
         >
           <div 
@@ -487,7 +488,7 @@ const Projects = ({ showTitle = true }) => {
                   <div
                     key={project._id}
                     className="group overflow-hidden cursor-pointer"
-                    // onClick={() => openProjectDetails(project)}
+                    onClick={() => openProjectDetails(project)}
                   >
                     <div className="bg-white dark:bg-darkmode rounded-xl shadow-sm border border-PowderBlueBorder dark:border-dark_border overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-primary/30 h-full transform hover:scale-105">
                       <div className="relative overflow-hidden bg-gray-100 dark:bg-dark_input">
@@ -509,7 +510,7 @@ const Projects = ({ showTitle = true }) => {
                               />
                             )
                           ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-primary/10 to-Aquamarine/10 flex items-center justify-center">
+                            <div className="w-full h-full bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center">
                               <Code className="w-10 h-10 text-primary/40" />
                             </div>
                           )}
@@ -561,9 +562,9 @@ const Projects = ({ showTitle = true }) => {
         </div>
       )}
 
-      {/* باقي الكود بدون تغيير */}
+      {/* Project Details Modal */}
       {selectedProject && (
-        <div className="fixed inset-0 bg-gradient-to-br from-black/60 to-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 modal-overlay">
+        <div className="fixed inset-0 bg-gradient-to-br from-secondary/60 to-primary/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 modal-overlay">
           <div className="bg-white dark:bg-darkmode max-w-4xl w-full mx-auto rounded-xl relative shadow-lg max-h-[90vh] overflow-hidden flex flex-col modal-content">
             <button
               onClick={closeProjectDetails}
@@ -577,7 +578,7 @@ const Projects = ({ showTitle = true }) => {
                 const { src, useImgTag } = getImageInfo(selectedProject.image);
                 if (!src) {
                   return (
-                    <div className="w-full h-full bg-gradient-to-br from-primary/10 to-Aquamarine/10 flex items-center justify-center">
+                    <div className="w-full h-full bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center">
                       <Code className="w-16 h-16 text-primary/40" />
                     </div>
                   );
@@ -616,7 +617,7 @@ const Projects = ({ showTitle = true }) => {
                     {selectedProject.technologies?.map((tech: string, idx: number) => (
                       <span
                         key={idx}
-                        className="bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-lg text-sm font-medium transform transition-transform duration-300 hover:scale-105"
+                        className="px-3 py-1.5 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-lg text-sm font-medium transform transition-transform duration-300 hover:scale-105"
                       >
                         {tech}
                       </span>
@@ -625,7 +626,7 @@ const Projects = ({ showTitle = true }) => {
                 </div>
                 <div className="space-y-4 flex flex-col h-full">
                   <div className="bg-IcyBreeze dark:bg-dark_input rounded-lg p-4 flex-1">
-                    <span className="mb-2 block">{t("projects.student")}</span>
+                    <span className="mb-2 block text-SlateBlueText dark:text-darktext">{t("projects.student")}</span>
                     <div className="flex items-center gap-3 mb-3">
                       <User className="w-5 h-5 text-primary" />
                       <div>

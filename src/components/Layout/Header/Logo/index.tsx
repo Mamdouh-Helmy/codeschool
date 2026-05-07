@@ -2,26 +2,24 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 const Logo: React.FC = () => {
-
   return (
     <Link href="/">
-      <Image
+      <img
         src="/images/logo/logo.png"
         alt="logo"
-        width={110}
+        width={60}
         height={50}
-        // style={{ width: 'auto', height: 'auto' }}
-        quality={100}
-        className='dark:hidden -mt-8'
+       
+        className="dark:hidden"
       />
-      <Image
+
+      <img
         src="/images/logo/footer-logo-white.png"
         alt="logo"
-        width={110}
+        width={60}
         height={50}
-        // style={{ width: 'auto', height: 'auto' }}
-        quality={100}
-        className='dark:block hidden -mt-8'
+       
+        className="dark:block hidden "
       />
     </Link>
   );

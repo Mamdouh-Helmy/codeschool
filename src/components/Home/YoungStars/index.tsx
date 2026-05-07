@@ -49,13 +49,13 @@ const YoungStars = () => {
     if (thumbnails.length === 0 || !activeId) return;
 
     const interval = setInterval(() => {
-      if (window.innerWidth < 768) { // للشاشات الصغيرة فقط
+      if (window.innerWidth < 768) {
         const currentIndex = thumbnails.findIndex(p => p._id === activeId);
         const nextIndex = (currentIndex + 1) % thumbnails.length;
         setActiveId(thumbnails[nextIndex]._id);
         setCurrentIndex(nextIndex);
       }
-    }, 6000); // كل 6 ثواني
+    }, 6000);
 
     return () => clearInterval(interval);
   }, [thumbnails, activeId]);
@@ -479,7 +479,7 @@ const YoungStars = () => {
                 className="relative inline-flex items-center gap-3 bg-primary text-white font-semibold px-8 py-4 rounded-2xl shadow-lg hover:shadow-2xl transform transition-all duration-300 hover:scale-105 hover:-translate-y-1 active:scale-95 group overflow-hidden"
               >
                 <span className="relative z-10">{t("youngStars.meetMoreLeaders")}</span>
-                <div className="absolute inset-0 bg-gradient-to-r from-primary to-purple-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
+                <div className="absolute inset-0 bg-gradient-to-r from-primary to-secondary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
               </button>
             </div>
           </div>

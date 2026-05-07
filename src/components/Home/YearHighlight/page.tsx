@@ -127,46 +127,38 @@ const Highlight = () => {
 
   // دالة محسنة لتحويل الروابط إلى embed
   const getEmbedUrl = (url: string) => {
-    // فيسبوك رييل
     if (url.includes('facebook.com/reel')) {
       const videoId = url.split('/reel/')[1];
       const embedUrl = `https://www.facebook.com/plugins/video.php?href=https%3A%2F%2Fwww.facebook.com%2Freel%2F${videoId}&show_text=0&width=500`;
       return embedUrl;
     }
-    // فيسبوك عادي
     else if (url.includes('facebook.com/')) {
       const embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=0&width=500`;
       return embedUrl;
     }
-    // يوتيوب شورتس
     else if (url.includes('youtube.com/shorts/')) {
       const videoId = url.split('/shorts/')[1]?.split('?')[0];
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
       return embedUrl;
     }
-    // يوتيوب عادي
     else if (url.includes('youtube.com/watch?v=')) {
       const videoId = url.split('v=')[1]?.split('&')[0];
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
       return embedUrl;
     }
-    // youtu.be
     else if (url.includes('youtu.be/')) {
       const videoId = url.split('youtu.be/')[1]?.split('?')[0];
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
       return embedUrl;
     }
-    // تيك توك
     else if (url.includes('tiktok.com')) {
       const videoId = url.split('/video/')[1]?.split('?')[0];
       const embedUrl = `https://www.tiktok.com/embed/v2/${videoId}`;
       return embedUrl;
     }
-
     return url;
   };
 
-  // دالة لمعرفة نوع الفيديو لعرض رسالة إذا لم يكن مدعوم
   const getVideoType = (url: string) => {
     if (url.includes('facebook.com')) return 'facebook';
     if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
@@ -230,7 +222,7 @@ const Highlight = () => {
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={openAllVideosModal}
-                  className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary to-primary/80 text-white text-lg font-semibold rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:from-primary hover:to-primary"
+                  className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary to-primary/80 text-white text-lg font-semibold rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105"
                 >
                   <span>{t("highlight.viewStories")}</span>
                   <Play className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
@@ -251,8 +243,6 @@ const Highlight = () => {
                     <div key={index} className="outline-none px-2">
                       <div className="relative group rounded-3xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-500">
                         <div className="relative aspect-[4/3] rounded-3xl overflow-hidden bg-gray-100 dark:bg-dark_input">
-                          
-                          {/* 🔥 الفيديو نفسه مباشرة بدون أي ماسك */}
                           <iframe
                             className="w-full h-full"
                             src={getEmbedUrl(slide.videoUrl)}
@@ -261,8 +251,6 @@ const Highlight = () => {
                             allowFullScreen
                             loading="lazy"
                           />
-                          
-                          {/* Content Overlay */}
                           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
                             <h3 className="text-xl font-bold text-white mb-2">
                               {slide.title}
@@ -290,7 +278,6 @@ const Highlight = () => {
         {isModalOpen && (
           <div className="fixed inset-0 w-full h-full bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="relative bg-white dark:bg-darkmode rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden">
-              {/* Modal Header */}
               <div className="flex items-center justify-between p-6 border-b border-PowderBlueBorder dark:border-dark_border">
                 <h3 className="text-2xl font-bold text-MidnightNavyText dark:text-white">
                   {t("highlight.modalTitle")}
@@ -303,8 +290,6 @@ const Highlight = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-
-              {/* Video Container */}
               <div className="p-6">
                 <div className="relative aspect-video rounded-2xl overflow-hidden bg-gray-100 dark:bg-dark_input">
                   {getVideoType(currentVideo) === 'youtube' || getVideoType(currentVideo) === 'facebook' ? (
@@ -345,7 +330,6 @@ const Highlight = () => {
         {isAllVideosModalOpen && (
           <div className="fixed inset-0 w-full h-full bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="relative bg-white dark:bg-darkmode rounded-3xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
-              {/* Modal Header */}
               <div className="flex items-center justify-between p-6 border-b border-PowderBlueBorder dark:border-dark_border">
                 <h3 className="text-2xl font-bold text-MidnightNavyText dark:text-white">
                   {t("highlight.allVideos") || "All Success Stories"}
@@ -358,8 +342,6 @@ const Highlight = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-
-              {/* Videos Grid */}
               <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {allVideos.map((video, index) => (
@@ -372,7 +354,6 @@ const Highlight = () => {
                       }}
                     >
                       <div className="relative aspect-video overflow-hidden bg-gray-100 dark:bg-dark_input">
-                        {/* 🔥 الفيديو نفسه في الشبكة */}
                         <iframe
                           className="w-full h-full"
                           src={getEmbedUrl(video.videoUrl)}

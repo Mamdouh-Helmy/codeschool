@@ -70,7 +70,6 @@ const TicketSection = () => {
         }
       } catch (err) {
         console.error("Error fetching section image:", err);
-        // استخدام الصورة الافتراضية في حالة الخطأ
         setSectionImage(null);
       } finally {
         setImageLoading(false);
@@ -80,7 +79,6 @@ const TicketSection = () => {
     fetchSectionImage();
   }, [locale]);
 
-  // ✅ بدل الاشتراك المباشر → نحول المستخدم لصفحة التسعير
   const handleChoosePlan = (planId: string) => {
     router.push(`/subscriptions?plan=${encodeURIComponent(planId)}`);
   };
@@ -89,9 +87,9 @@ const TicketSection = () => {
     <section className="dark:bg-darkmode pt-0">
       <Toaster position="top-center" />
       <div className="container">
-        <div className="bg-primary relative md:mx-auto mx-0 overflow-hidden py-0 rounded-22 lg:-mb-48 dark:lg:-mb-48 md:mt-16 mt-8">
+        <div className="bg-gradient-to-r from-primary to-primary/80 relative md:mx-auto mx-0 overflow-hidden py-0 rounded-22 lg:-mb-48 dark:lg:-mb-48 md:mt-16 mt-8">
           <div className="flex flex-wrap items-center gap-12 justify-between md:p-10 p-5">
-            {/* الخلفية الزرقاء */}
+            {/* الخلفية */}
             <div className="md:w-[48%] w-full h-full absolute top-0 -left-1 md:block hidden">
               {imageLoading ? (
                 <div className="w-full h-64 flex items-center justify-center bg-primary">
@@ -103,7 +101,6 @@ const TicketSection = () => {
                   alt={sectionImage?.imageAlt || t("ticketSection.ticketAlt")}
                   width={100}
                   height={100}
-
                   className="object-cover w-full h-full"
                 />
               )}
@@ -124,7 +121,7 @@ const TicketSection = () => {
                   {plans.slice(0, 2).map((plan) => (
                     <div
                       key={plan._id || plan.id || plan.name}
-                      className="bg-white/10 backdrop-blur-sm p-3 rounded-lg text-white"
+                      className="bg-white/10 backdrop-blur-sm p-3 rounded-lg text-white hover:bg-white/20 transition-all duration-300"
                     >
                       <h3 className="text-lg font-semibold">{plan.name}</h3>
                       <p className="text-white/80 text-xs">
@@ -134,14 +131,11 @@ const TicketSection = () => {
                         {plan.price} {plan.currency} / {plan.billingPeriod}
                       </p>
 
-                      {/* زرار الاشتراك */}
                       <button
                         onClick={() => handleChoosePlan(plan._id!)}
-                        className="btn btn-1 hover-filled-slide-down rounded-md overflow-hidden before:bg-ElectricAqua mt-2 scale-95 hover:scale-100 transition-transform"
+                        className="mt-2 bg-white text-primary hover:bg-gray-100 font-semibold px-6 py-2 rounded-lg transition-all duration-300 hover:scale-105 text-sm"
                       >
-                        <span className="px-6 py-1 !border-ElectricAqua !text-white text-xs font-medium">
-                          {t("ticketSection.choosePlan")}
-                        </span>
+                        {t("ticketSection.choosePlan")}
                       </button>
                     </div>
                   ))}

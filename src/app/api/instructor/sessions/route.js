@@ -4,7 +4,7 @@ import { connectDB } from "@/lib/mongodb";
 import { getUserFromRequest } from "@/lib/auth";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
-import Course from "../../../models/Course";
+import MeetingLink from "../../../models/MeetingLink";
 
 export async function GET(req) {
   try {
@@ -40,7 +40,7 @@ export async function GET(req) {
       .select("_id name code courseId")
       .lean();
 
-    const groupIds = groups.map((g) => g._id);
+    const groupIds = groups.map(g => g._id);
 
     if (groupIds.length === 0) {
       return NextResponse.json({
@@ -54,7 +54,7 @@ export async function GET(req) {
 
     // Map: groupId → curriculum & group info + full course data
     const groupMap = {};
-    groups.forEach((g) => {
+    groups.forEach(g => {
       groupMap[g._id.toString()] = {
         name:       g.name,
         code:       g.code,
@@ -79,10 +79,11 @@ export async function GET(req) {
 
     const allSessions = await Session.find(query)
       .populate({ path: "groupId", select: "name code" })
+      .populate({ path: "meetingLinkId", select: "credentials platform name" })
       .select(
-        "title status scheduledDate startTime endTime moduleIndex sessionNumber " +
-        "lessonIndexes attendanceTaken attendance meetingLink meetingPlatform " +
-        "recordingLink materials instructorNotes groupId description"
+        "title description status scheduledDate startTime endTime moduleIndex sessionNumber " +
+        "lessonIndexes attendanceTaken attendance meetingLink meetingPlatform meetingCredentials " +
+        "meetingLinkId recordingLink materials instructorNotes groupId"
       )
       .sort({ scheduledDate: 1, startTime: 1 })
       .limit(limit)
@@ -93,30 +94,22 @@ export async function GET(req) {
     const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
     const todayEnd   = new Date(now); todayEnd.setHours(23, 59, 59, 999);
 
-    const processedSessions = allSessions.map((session) => {
+    const processedSessions = allSessions.map(session => {
       const gid        = session.groupId?._id?.toString() || session.groupId?.toString();
       const grp        = groupMap[gid] || {};
       const curriculum = grp.curriculum || [];
       const moduleData = curriculum[session.moduleIndex] || {};
 
       // ── Lessons from curriculum (by sessionNumber) ─────────────────────
-      const bySessionNum = (moduleData.lessons || []).filter(
-        (l) => l.sessionNumber === session.sessionNumber
-      );
-      const byIndexes = (moduleData.lessons || []).filter(
-        (l) => (session.lessonIndexes || []).includes(l.order - 1)
-      );
-      const rawLessons = bySessionNum.length > 0 ? bySessionNum : byIndexes;
+      const bySessionNum = (moduleData.lessons || []).filter(l => l.sessionNumber === session.sessionNumber);
+      const byIndexes    = (moduleData.lessons || []).filter(l => (session.lessonIndexes || []).includes(l.order - 1));
+      const rawLessons   = bySessionNum.length > 0 ? bySessionNum : byIndexes;
 
-      // ✅ FIX: deduplicate lessons by title before sending to frontend
+      // Deduplicate lessons by title
       const seenTitles = new Set();
       const lessons = rawLessons
-        .filter((l) => {
-          if (seenTitles.has(l.title)) return false;
-          seenTitles.add(l.title);
-          return true;
-        })
-        .map((l) => ({
+        .filter(l => { if (seenTitles.has(l.title)) return false; seenTitles.add(l.title); return true; })
+        .map(l => ({
           title:       l.title,
           description: l.description || "",
           duration:    l.duration    || "",
@@ -138,10 +131,18 @@ export async function GET(req) {
         sessionEndTime > now &&
         !!session.meetingLink;
 
-      // ── Presentation URL for this session ─────────────────────────────
+      // ── Session description from curriculum (sessions array per module) ─
+      // المودال بيحتوي sessions array كل واحدة بيها sessionNumber
+      // نجيب الوصف من السيشن نفسها أو من الـ module
       const sessionPresentationData = (moduleData.sessions || []).find(
-        (s) => s.sessionNumber === session.sessionNumber
+        s => s.sessionNumber === session.sessionNumber
       );
+
+      // ── Build session description ──────────────────────────────────────
+      // الوصف بيجي من:
+      // 1. session.description (لو موجود في الـ DB مباشرة)
+      // 2. أو من الـ module description كـ fallback
+      const sessionDescription = session.description || "";
 
       // ── Build courseInfo payload ───────────────────────────────────────
       const courseInfo = grp.course ? {
@@ -161,10 +162,22 @@ export async function GET(req) {
         },
       } : null;
 
+      // ── Build meeting credentials ─────────────────────────────────────
+      // الأولوية: session.meetingCredentials → MeetingLink.credentials
+      const rawCreds = (session.meetingCredentials?.username || session.meetingCredentials?.password)
+        ? session.meetingCredentials
+        : session.meetingLinkId?.credentials || null;
+
+      // ارسل الـ credentials دايماً - الـ frontend بيتحكم في الإظهار
+      const meetingCredentials = rawCreds ? {
+        username: rawCreds.username || null,
+        password: rawCreds.password || null,
+      } : null;
+
       return {
         _id:             session._id,
         title:           session.title,
-        description:     session.description || "",
+        description:     sessionDescription,
         status:          session.status,
         scheduledDate:   session.scheduledDate,
         startTime:       session.startTime,
@@ -177,12 +190,14 @@ export async function GET(req) {
         attendance:      session.attendance || [],
         meetingLink:     session.meetingLink  || null,
         meetingPlatform: session.meetingPlatform || null,
+        // ✅ Credentials — only sent when session is today
+        meetingCredentials,
         recordingLink:   session.recordingLink  || null,
         materials:       session.materials || [],
         instructorNotes: session.instructorNotes || null,
         isToday,
         showJoinButton,
-        courseInfo,       // ✅ NEW: full course + module info
+        courseInfo,
         group: {
           _id:  session.groupId?._id || session.groupId,
           name: session.groupId?.name || grp.name || "",
@@ -192,14 +207,14 @@ export async function GET(req) {
     });
 
     // ── 4. Stats ───────────────────────────────────────────────────────────
-    const all   = processedSessions;
+    const all = processedSessions;
     const stats = {
       total:           all.length,
-      completed:       all.filter((s) => s.status === "completed").length,
-      scheduled:       all.filter((s) => s.status === "scheduled").length,
-      cancelled:       all.filter((s) => s.status === "cancelled").length,
-      postponed:       all.filter((s) => s.status === "postponed").length,
-      needsAttendance: all.filter((s) => s.status === "completed" && !s.attendanceTaken).length,
+      completed:       all.filter(s => s.status === "completed").length,
+      scheduled:       all.filter(s => s.status === "scheduled").length,
+      cancelled:       all.filter(s => s.status === "cancelled").length,
+      postponed:       all.filter(s => s.status === "postponed").length,
+      needsAttendance: all.filter(s => s.status === "completed" && !s.attendanceTaken).length,
     };
 
     return NextResponse.json({

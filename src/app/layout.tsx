@@ -1,5 +1,4 @@
 import { DM_Sans } from "next/font/google";
-import "./globals.css";
 import { ThemeProvider } from "next-themes";
 import ScrollToTop from "@/components/ScrollToTop";
 import Aoscompo from "@/utils/aos";
@@ -13,6 +12,7 @@ import { cookies } from "next/headers";
 import { LocaleProvider } from "./context/LocaleContext";
 import { I18nProvider } from "@/i18n/I18nProvider";
 import { Toaster } from "react-hot-toast";
+import "./globals.css";
 
 const dmsans = DM_Sans({ subsets: ["latin"] });
 

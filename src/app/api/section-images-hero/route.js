@@ -2,17 +2,20 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import SectionImageHero from "../../models/SectionImageHero";
 
-export const revalidate = 60;
+export const revalidate = 0;
 
-// GET — جلب كل السجلات (عادةً سجل واحد فقط)
+// ─── GET ────────────────────────────────────────────────────────────────────
 export async function GET(request) {
   try {
     await connectDB();
 
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get("activeOnly") === "true";
+    const language   = searchParams.get("language");
 
-    const filter = activeOnly ? { isActive: true } : {};
+    const filter = {};
+    if (activeOnly) filter.isActive = true;
+    if (language)   filter.language = language;
 
     const records = await SectionImageHero.find(filter).sort({
       displayOrder: 1,
@@ -33,12 +36,13 @@ export async function GET(request) {
   }
 }
 
-// POST — إنشاء سجل جديد
+// ─── POST ────────────────────────────────────────────────────────────────────
 export async function POST(request) {
   try {
     await connectDB();
     const body = await request.json();
 
+    // التحقق من الحقول المطلوبة
     if (!body.imageUrl) {
       return NextResponse.json(
         { success: false, message: "رابط الصورة الرئيسية مطلوب" },
@@ -46,11 +50,28 @@ export async function POST(request) {
       );
     }
 
+    if (!body.language || !["ar", "en"].includes(body.language)) {
+      return NextResponse.json(
+        { success: false, message: "اللغة مطلوبة ويجب أن تكون ar أو en" },
+        { status: 400 }
+      );
+    }
+
+    // منع التكرار قبل الوصول لـ MongoDB unique index
+    const existing = await SectionImageHero.findOne({ language: body.language });
+    if (existing) {
+      return NextResponse.json(
+        { success: false, message: `يوجد بالفعل سجل للغة ${body.language}. عدّله بدلاً من إنشاء جديد.` },
+        { status: 409 }
+      );
+    }
+
     const record = await SectionImageHero.create({
-      imageUrl:       body.imageUrl,
-      secondImageUrl: body.secondImageUrl || "",
-      imageAlt:       body.imageAlt       || "",
-      secondImageAlt: body.secondImageAlt || "",
+      language:      body.language,
+      imageUrl:      body.imageUrl,
+      secondImageUrl:body.secondImageUrl || "",
+      imageAlt:      body.imageAlt       || "",
+      secondImageAlt:body.secondImageAlt || "",
 
       heroTitleAr:       body.heroTitleAr       || "",
       heroDescriptionAr: body.heroDescriptionAr || "",
@@ -89,7 +110,6 @@ export async function POST(request) {
       discount:     body.discount     ?? 30,
       happyParents: body.happyParents || "250",
       graduates:    body.graduates    || "130",
-
       isActive:     body.isActive     ?? true,
       displayOrder: body.displayOrder ?? 0,
     });
@@ -101,6 +121,17 @@ export async function POST(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { success: false, message: "يوجد بالفعل سجل بهذه اللغة" },
+        { status: 409 }
+      );
+    }
+    if (error.name === "ValidationError") {
+      const errors = {};
+      for (const f in error.errors) errors[f] = error.errors[f].message;
+      return NextResponse.json({ success: false, message: "بيانات غير صالحة", errors }, { status: 400 });
+    }
     return NextResponse.json(
       { success: false, message: "فشل في الإنشاء", error: error.message },
       { status: 500 }

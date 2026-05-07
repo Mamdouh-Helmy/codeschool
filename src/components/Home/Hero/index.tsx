@@ -56,14 +56,12 @@ const Hero = () => {
   const [loadingContent, setLoadingContent] = useState(true);
   const [loadingWebinar, setLoadingWebinar] = useState(true);
 
-  // ✅ جلب بيانات Hero من API
   useEffect(() => {
     const fetchHeroData = async () => {
       try {
         setLoadingContent(true);
         const response = await fetch(`/api/section-images-hero?activeOnly=true`);
         const result = await response.json();
-
         if (result.success && result.data.length > 0) {
           setSiteContent(result.data[0]);
         }
@@ -73,18 +71,15 @@ const Hero = () => {
         setLoadingContent(false);
       }
     };
-
     fetchHeroData();
   }, [locale]);
 
-  // ✅ جلب بيانات Webinar من API منفصل
   useEffect(() => {
     const fetchWebinarData = async () => {
       try {
         setLoadingWebinar(true);
         const response = await fetch('/api/webinars/next');
         const result = await response.json();
-
         if (result.success && result.data) {
           setNextWebinar(result.data);
         }
@@ -94,14 +89,11 @@ const Hero = () => {
         setLoadingWebinar(false);
       }
     };
-
     fetchWebinarData();
   }, []);
 
-  // ✅ الحصول على البيانات بناءً على اللغة الحالية
   const getContentByLanguage = () => {
     if (!siteContent) return null;
-
     if (locale === "ar") {
       return {
         imageUrl: siteContent.imageUrl,
@@ -132,8 +124,6 @@ const Hero = () => {
   };
 
   const content = getContentByLanguage();
-
-  // استخدام الوصف من API أو الترجمات الافتراضية
   const fullText = content?.heroDescription || t("hero.description");
   const preview = fullText.split(" ").slice(0, 36).join(" ") + "...";
 
@@ -150,19 +140,16 @@ const Hero = () => {
     return imageUrl;
   };
 
-  // استخدام البيانات من API أو الترجمات الافتراضية
   const displayTitle = content?.heroTitle || t("hero.title");
   const instructor1Name = content?.instructor1 || "";
   const instructor1Role = content?.instructor1Role || "";
   const instructor2Name = content?.instructor2 || "";
   const instructor2Role = content?.instructor2Role || "";
 
-  // نص الويبنار الديناميكي
   const webinarText = nextWebinar
     ? t("hero.webinar", { date: nextWebinar.formattedDate })
     : t("hero.webinar", { date: "" });
 
-  // ✅ تحديد اتجاه الزوايا حسب اللغة
   const firstImageStyle = isRTL
     ? "rounded-tr-[200px] rounded-bl-[200px]"
     : "rounded-tl-[200px] rounded-br-[200px]";
@@ -171,7 +158,6 @@ const Hero = () => {
     ? "rounded-tl-[200px] rounded-br-[200px] mt-32"
     : "rounded-tr-[200px] rounded-bl-[200px] mt-32";
 
-  // تحديد ما إذا كان التحميل مكتملاً
   const isLoading = loadingContent;
 
   return (
@@ -187,7 +173,7 @@ const Hero = () => {
               className="relative z-0 inline-block text-primary text-lg font-bold before:absolute before:content-[''] before:bg-primary/20 before:w-full before:h-2 before:-z-1 dark:before:-z-1 before:bottom-0"
             >
               {loadingWebinar ? (
-                <span className="inline-block w-48 h-6 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></span>
+                <span className="inline-block w-48 h-6 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></span>
               ) : nextWebinar && (
                 <button
                   onClick={() => setShowRegistration(true)}
@@ -201,8 +187,8 @@ const Hero = () => {
             {/* Title */}
             {isLoading ? (
               <div className="py-4 space-y-3">
-                <div className="w-3/4 h-8 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>
-                <div className="w-1/2 h-8 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>
+                <div className="w-3/4 h-8 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></div>
+                <div className="w-1/2 h-8 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></div>
               </div>
             ) : (
               <h1
@@ -218,21 +204,21 @@ const Hero = () => {
             {/* Description */}
             {isLoading ? (
               <div className="space-y-2 md:pb-14 pb-6">
-                <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>
-                <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>
-                <div className="w-3/4 h-4 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>
+                <div className="w-full h-4 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></div>
+                <div className="w-full h-4 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></div>
+                <div className="w-3/4 h-4 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></div>
               </div>
             ) : (
               <p
                 data-aos="fade-up"
                 data-aos-delay="400"
                 data-aos-duration="1000"
-                className="text-xl text-SlateBlueText dark:text-opacity-80 font-normal md:pb-14 pb-6 md:w-[500px]"
+                className="text-xl text-SlateBlueText dark:text-darkmuted font-normal md:pb-14 pb-6 md:w-[500px]"
               >
                 {preview}
                 <button
                   onClick={() => setShowFullText(true)}
-                  className="ml-2 text-[#8c52ff] underline font-semibold"
+                  className="ml-2 text-primary underline font-semibold"
                 >
                   {t("hero.readMore")}
                 </button>
@@ -271,17 +257,15 @@ const Hero = () => {
 
           {/* Images Section */}
           {isLoading ? (
-            // Loading State
             <div className="col-span-6 lg:flex hidden items-center gap-3 animate-pulse">
               <div className="relative w-full">
-                <div className={`relative w-full h-[450px] bg-gray-200 dark:bg-gray-700 ${firstImageStyle}`}></div>
+                <div className={`relative w-full h-[450px] bg-gray-200 dark:bg-dark_input ${firstImageStyle}`}></div>
               </div>
               <div className="relative w-full">
-                <div className={`relative w-full h-[450px] bg-gray-300 dark:bg-gray-600 ${secondImageStyle}`}></div>
+                <div className={`relative w-full h-[450px] bg-gray-300 dark:bg-darklight ${secondImageStyle}`}></div>
               </div>
             </div>
           ) : content ? (
-            // Actual Images
             <div
               data-aos="fade-left"
               data-aos-delay="200"
@@ -291,8 +275,7 @@ const Hero = () => {
             >
               {/* First Image Container */}
               <div className="relative w-full">
-                {/* First Image with overflow */}
-                <div className={`relative w-full h-[450px] ${firstImageStyle} bg-[#ffbd59] overflow-hidden`}>
+                <div className={`relative w-full h-[450px] ${firstImageStyle} bg-secondary overflow-hidden`}>
                   <img
                     src={getImageSrc(content.imageUrl, "/images/hero/john.png")}
                     alt={content.imageAlt}
@@ -301,19 +284,17 @@ const Hero = () => {
                     className="w-full h-full object-cover"
                   />
                 </div>
-
-                {/* Badge outside overflow */}
                 {instructor1Name && (
                   <div
                     className={`
-      bg-[#8c52ff] rounded-2xl shadow-lg 
-      py-3 px-4 
-      absolute top-4 z-50
-      transform transition-all duration-300
-      hover:scale-105 hover:shadow-xl
-      ${isRTL ? "right-0 translate-x-1/3" : "left-0 -translate-x-1/3"}
-      lg:block hidden
-    `}
+                      bg-primary rounded-2xl shadow-lg
+                      py-3 px-4
+                      absolute top-4 z-50
+                      transform transition-all duration-300
+                      hover:scale-105 hover:shadow-xl
+                      ${isRTL ? "right-0 translate-x-1/3" : "left-0 -translate-x-1/3"}
+                      lg:block hidden
+                    `}
                   >
                     <p className="text-base font-bold text-white whitespace-nowrap">
                       {instructor1Name}
@@ -327,7 +308,6 @@ const Hero = () => {
 
               {/* Second Image Container */}
               <div className="relative w-full">
-                {/* Second Image with overflow */}
                 <div className={`relative w-full h-[450px] ${secondImageStyle} bg-primary overflow-hidden`}>
                   <img
                     src={getImageSrc(content.secondImageUrl, "/images/hero/maria.png")}
@@ -337,19 +317,17 @@ const Hero = () => {
                     className="w-full h-full object-cover"
                   />
                 </div>
-
-                {/* Badge للمدرب الثاني */}
                 {instructor2Name && (
                   <div
                     className={`
-      bg-[#ffbd59] rounded-2xl shadow-lg 
-      py-3 px-4 
-      absolute top-36 z-50
-      transform transition-all duration-300
-      hover:scale-105 hover:shadow-xl
-      ${isRTL ? "left-0 -translate-x-1/3" : "right-0 translate-x-1/3"}
-      xl:block hidden
-    `}
+                      bg-secondary rounded-2xl shadow-lg
+                      py-3 px-4
+                      absolute top-36 z-50
+                      transform transition-all duration-300
+                      hover:scale-105 hover:shadow-xl
+                      ${isRTL ? "left-0 -translate-x-1/3" : "right-0 translate-x-1/3"}
+                      xl:block hidden
+                    `}
                   >
                     <p className="text-base font-bold text-white whitespace-nowrap">
                       {instructor2Name}
@@ -365,21 +343,21 @@ const Hero = () => {
         </div>
       </div>
 
-      {/* Modal للوصف الكامل */}
+      {/* Modal: Full Description */}
       {showFullText && content && (
         <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl md:w-[70vw] w-[90vw] mx-4 relative animate-fadeIn font-sans text-base text-SlateBlueText"
+            className="bg-white dark:bg-darklight border border-transparent dark:border-dark_border p-6 rounded-2xl shadow-2xl md:w-[70vw] w-[90vw] mx-4 relative animate-fadeIn font-sans text-base"
             dir={isRTL ? "rtl" : "ltr"}
           >
-            <h2 className="text-2xl font-bold text-[#8c52ff] mb-4">{displayTitle}</h2>
-            <p className="text-base text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-line">
+            <h2 className="text-2xl font-bold text-primary mb-4">{displayTitle}</h2>
+            <p className="text-base text-gray-700 dark:text-darkmuted leading-relaxed whitespace-pre-line">
               {fullText}
             </p>
             <button
               onClick={closeModal}
-              className="absolute top-3 right-3 text-[#8c52ff] text-xl font-bold hover:opacity-80"
+              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-dark_input hover:bg-gray-200 dark:hover:bg-darkhover text-primary text-xl font-bold transition-colors duration-200"
               style={isRTL ? { right: 'auto', left: '12px' } : {}}
             >
               ×
@@ -388,7 +366,7 @@ const Hero = () => {
         </div>
       )}
 
-      {/* Modal للتسجيل في الويبنار */}
+      {/* Modal: Webinar Registration */}
       {showRegistration && nextWebinar && (
         <WebinarRegistrationForm
           webinar={nextWebinar}
@@ -396,7 +374,6 @@ const Hero = () => {
           onClose={closeModal}
           onSuccess={() => {
             closeModal();
-            // تحديث بيانات الويبنار بعد التسجيل
             setNextWebinar({
               ...nextWebinar,
               currentAttendees: nextWebinar.currentAttendees + 1
@@ -405,15 +382,15 @@ const Hero = () => {
         />
       )}
 
-      {/* Modal للفيديو */}
+      {/* Modal: Video */}
       {showVideo && (
         <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-darkmode p-6 rounded-lg shadow-xl md:w-[70vw] w-[90vw] mx-4 relative animate-fadeIn"
+            className="bg-white dark:bg-darklight border border-transparent dark:border-dark_border p-6 rounded-2xl shadow-2xl md:w-[70vw] w-[90vw] mx-4 relative animate-fadeIn"
             dir={isRTL ? "rtl" : "ltr"}
           >
-            <h2 className="text-2xl font-bold text-[#8c52ff] mb-4">{t("hero.watchDemo")}</h2>
+            <h2 className="text-2xl font-bold text-primary mb-4">{t("hero.watchDemo")}</h2>
             <div className="relative pb-[56.25%] h-0 overflow-hidden rounded">
               <iframe
                 src="https://www.youtube.com/embed/p1CrKwmY_ps?autoplay=1"
@@ -427,7 +404,7 @@ const Hero = () => {
             </div>
             <button
               onClick={closeModal}
-              className="absolute top-3 right-3 text-[#8c52ff] text-xl font-bold hover:opacity-80"
+              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-dark_input hover:bg-gray-200 dark:hover:bg-darkhover text-primary text-xl font-bold transition-colors duration-200"
               style={isRTL ? { right: 'auto', left: '12px' } : {}}
             >
               ×

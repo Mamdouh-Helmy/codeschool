@@ -17,15 +17,15 @@ import {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function getLevelGradient(level) {
-  if (level === "advanced")     return "from-red-500 to-orange-500";
-  if (level === "intermediate") return "from-blue-500 to-indigo-500";
-  return "from-green-500 to-teal-500";
+function getLevelStyle(level) {
+  if (level === "advanced") return { gradient: "linear-gradient(135deg, #ff6700, #f67d00)", from: "#ff6700", to: "#f67d00" };
+  if (level === "intermediate") return { gradient: "linear-gradient(135deg, #004d59, #ff6437)", from: "#004d59", to: "#ff6437" };
+  return { gradient: "linear-gradient(135deg, #004d59, #004d59aa)", from: "#004d59", to: "#004d5988" };
 }
 
 function getLevelLabel(level, isAr) {
   if (isAr) {
-    if (level === "advanced")     return "متقدم";
+    if (level === "advanced") return "متقدم";
     if (level === "intermediate") return "متوسط";
     return "مبتدئ";
   }
@@ -34,10 +34,10 @@ function getLevelLabel(level, isAr) {
 
 function getStatusConfig(status) {
   const cfg = {
-    active:    { labelAr: "نشط",   labelEn: "Active",    badge: "bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400",   dot: "bg-green-400" },
-    completed: { labelAr: "مكتمل", labelEn: "Completed", badge: "bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400",       dot: "bg-blue-400" },
-    draft:     { labelAr: "مسودة", labelEn: "Draft",     badge: "bg-gray-100 dark:bg-gray-500/10 text-gray-600 dark:text-gray-400",        dot: "bg-gray-400" },
-    cancelled: { labelAr: "ملغي",  labelEn: "Cancelled", badge: "bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400",           dot: "bg-red-400" },
+    active: { labelAr: "نشط", labelEn: "Active", badge: "bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400", dot: "bg-green-400" },
+    completed: { labelAr: "مكتمل", labelEn: "Completed", badge: "bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400", dot: "bg-blue-400" },
+    draft: { labelAr: "مسودة", labelEn: "Draft", badge: "bg-gray-100 dark:bg-gray-500/10 text-gray-600 dark:text-gray-400", dot: "bg-gray-400" },
+    cancelled: { labelAr: "ملغي", labelEn: "Cancelled", badge: "bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400", dot: "bg-red-400" },
   };
   return cfg[status] || cfg.draft;
 }
@@ -101,9 +101,9 @@ function Skeleton() {
 
 function GroupCard({ group, onClick, isAr, animateCards, index }) {
   const t = (ar, en) => isAr ? ar : en;
-  const course   = group.course || {};
-  const sc       = getStatusConfig(group.status);
-  const lvlGrad  = getLevelGradient(course.level);
+  const course = group.course || {};
+  const sc = getStatusConfig(group.status);
+  const lvlStyle = getLevelStyle(course.level);
   const progress = group.progress || 0;
 
   return (
@@ -118,20 +118,28 @@ function GroupCard({ group, onClick, isAr, animateCards, index }) {
       style={{ transitionDelay: `${index * 70}ms` }}
     >
       {/* Top gradient accent bar */}
-      <div className={`h-1.5 w-full bg-gradient-to-r ${lvlGrad}`} />
+      <div className="h-1.5 w-full" style={{ background: lvlStyle.gradient }} />
 
-      {/* Hover glow overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-purple-600/0 group-hover/card:from-primary/5 group-hover/card:to-purple-600/5 rounded-2xl transition-all duration-300 pointer-events-none" />
+      {/* Hover glow */}
+      <div
+        className="absolute inset-0 rounded-2xl opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 pointer-events-none"
+        style={{ background: `radial-gradient(circle at top right, ${lvlStyle.from}08, transparent 60%)` }}
+      />
 
       <div className="relative z-10 p-6">
 
         {/* Header */}
         <div className="flex items-start gap-4 mb-4">
-          <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${lvlGrad} flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/20 group-hover/card:scale-110 transition-transform duration-300`}>
+          <div
+            className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover/card:scale-110 transition-transform duration-300"
+            style={{ background: lvlStyle.gradient }}
+          >
             <BookOpen className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate mb-1 group-hover/card:text-primary transition-colors">
+            <h3
+              className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate mb-1 transition-colors group-hover/card:text-[#ff6700]"
+            >
               {course.title || group.name}
             </h3>
             <p className="text-xs text-gray-500 dark:text-[#8b949e] truncate mb-2">
@@ -145,13 +153,13 @@ function GroupCard({ group, onClick, isAr, animateCards, index }) {
               </span>
               {/* Level */}
               {course.level && (
-                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full text-white bg-gradient-to-r ${lvlGrad}`}>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full text-white" style={{ background: lvlStyle.gradient }}>
                   {getLevelLabel(course.level, isAr)}
                 </span>
               )}
               {/* Grade */}
               {course.grade && (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 font-medium">
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ background: "#feaf0015", color: "#f67d00", border: "1px solid #feaf0025" }}>
                   🎒 {course.grade}
                 </span>
               )}
@@ -167,24 +175,24 @@ function GroupCard({ group, onClick, isAr, animateCards, index }) {
           </div>
           <div className="h-2 bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
             <div
-              className={`h-full bg-gradient-to-r ${lvlGrad} rounded-full relative overflow-hidden transition-all duration-700`}
-              style={{ width: `${progress}%` }}
+              className="h-full rounded-full relative overflow-hidden transition-all duration-700"
+              style={{ width: `${progress}%`, background: lvlStyle.gradient }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer" />
             </div>
           </div>
         </div>
 
-        {/* Stats row — matches dashboard stats card mini style */}
+        {/* Stats row */}
         <div className="grid grid-cols-3 gap-2 mb-4">
           {[
-            { icon: Users,    value: `${group.currentStudentsCount}/${group.maxStudents}`,                        label: t("طلاب",   "Students"), color: "text-blue-600 dark:text-blue-400",    bg: "bg-blue-100 dark:bg-blue-500/10" },
-            { icon: BookOpen, value: `${group.sessions?.completed || 0}/${group.sessions?.total || 0}`,           label: t("جلسات",  "Sessions"), color: "text-green-600 dark:text-green-400",  bg: "bg-green-100 dark:bg-green-500/10" },
-            { icon: Clock,    value: `${group.teachingHours}h`,                                                   label: t("ساعاتي", "Hours"),    color: "text-primary dark:text-primary",      bg: "bg-purple-100 dark:bg-purple-500/10" },
-          ].map(({ icon: Icon, value, label, color, bg }, i) => (
-            <div key={i} className={`flex flex-col items-center gap-1 py-3 px-1 rounded-xl ${bg}`}>
-              <Icon className={`w-3.5 h-3.5 ${color}`} />
-              <span className={`text-xs font-semibold ${color}`}>{value}</span>
+            { icon: Users, value: `${group.currentStudentsCount}/${group.maxStudents}`, label: t("طلاب", "Students"), bg: "#004d5910", color: "#004d59" },
+            { icon: BookOpen, value: `${group.sessions?.completed || 0}/${group.sessions?.total || 0}`, label: t("جلسات", "Sessions"), bg: "#ff670010", color: "#ff6700" },
+            { icon: Clock, value: `${group.teachingHours}h`, label: t("ساعاتي", "Hours"), bg: "#feaf0015", color: "#f67d00" },
+          ].map(({ icon: Icon, value, label, bg, color }, i) => (
+            <div key={i} className="flex flex-col items-center gap-1 py-3 px-1 rounded-xl" style={{ background: bg }}>
+              <Icon className="w-3.5 h-3.5" style={{ color }} />
+              <span className="text-xs font-semibold" style={{ color }}>{value}</span>
               <span className="text-[9px] text-gray-400 dark:text-[#6e7681]">{label}</span>
             </div>
           ))}
@@ -218,13 +226,13 @@ function GroupCard({ group, onClick, isAr, animateCards, index }) {
         <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-[#30363d]">
           <span className="text-xs">
             {group.sessions?.needsAttendance > 0 && (
-              <span className="text-yellow-600 dark:text-yellow-400 font-semibold flex items-center gap-1">
+              <span className="font-semibold flex items-center gap-1" style={{ color: "#feaf00" }}>
                 <ClipboardList className="w-3 h-3" />
                 {group.sessions.needsAttendance} {t("تحتاج حضور", "need attendance")}
               </span>
             )}
           </span>
-          <span className="flex items-center gap-1 text-xs font-semibold text-primary group-hover/card:gap-2 transition-all">
+          <span className="flex items-center gap-1 text-xs font-semibold group-hover/card:gap-2 transition-all" style={{ color: "#ff6700" }}>
             {t("التفاصيل", "Details")}
             {isAr ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </span>
@@ -242,15 +250,15 @@ export default function InstructorGroupsPage() {
   const t = (ar, en) => isAr ? ar : en;
   const router = useRouter();
 
-  const [loading, setLoading]         = useState(true);
-  const [refreshing, setRefreshing]   = useState(false);
-  const [error, setError]             = useState("");
-  const [groups, setGroups]           = useState([]);
-  const [stats, setStats]             = useState(null);
-  const [user, setUser]               = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [groups, setGroups] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [search, setSearch]           = useState("");
-  const [filter, setFilter]           = useState("all");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
   const [animateCards, setAnimateCards] = useState(false);
 
   const fetchData = useCallback(async (showRefresh = false) => {
@@ -260,7 +268,7 @@ export default function InstructorGroupsPage() {
       setError("");
 
       const [grpRes, dashRes] = await Promise.all([
-        fetch("/api/instructor/groups",    { credentials: "include" }).then((r) => r.json()),
+        fetch("/api/instructor/groups", { credentials: "include" }).then((r) => r.json()),
         fetch("/api/instructor/dashboard", { credentials: "include" }).then((r) => r.json()),
       ]);
 
@@ -298,26 +306,69 @@ export default function InstructorGroupsPage() {
   });
 
   const FILTERS = [
-    { id: "all",       labelAr: "الكل",   labelEn: "All",       count: groups.length },
-    { id: "active",    labelAr: "نشطة",   labelEn: "Active",    count: groups.filter((g) => g.status === "active").length },
+    { id: "all", labelAr: "الكل", labelEn: "All", count: groups.length },
+    { id: "active", labelAr: "نشطة", labelEn: "Active", count: groups.filter((g) => g.status === "active").length },
     { id: "completed", labelAr: "مكتملة", labelEn: "Completed", count: groups.filter((g) => g.status === "completed").length },
-    { id: "draft",     labelAr: "مسودة",  labelEn: "Draft",     count: groups.filter((g) => g.status === "draft").length },
+    { id: "draft", labelAr: "مسودة", labelEn: "Draft", count: groups.filter((g) => g.status === "draft").length },
   ];
 
   const totalStudents = groups.reduce((a, g) => a + (g.currentStudentsCount || 0), 0);
-  const totalHours    = groups.reduce((a, g) => a + (g.teachingHours || 0), 0);
-  const currentUser   = user || { name: isAr ? "مدرس" : "Instructor", email: "", role: "instructor" };
+  const totalHours = groups.reduce((a, g) => a + (g.teachingHours || 0), 0);
+  const currentUser = user || { name: isAr ? "مدرس" : "Instructor", email: "", role: "instructor" };
+
+  // Stats cards config with brand colors
+  const statsCards = [
+    {
+      icon: Users,
+      value: stats?.total || 0,
+      label: t("إجمالي المجموعات", "Total Groups"),
+      badge: t("مجموعة", "Groups"),
+      gradient: "linear-gradient(135deg, #004d59, #ff6700)",
+      badgeBg: "#004d5910", badgeColor: "#004d59", badgeBorder: "#004d5920",
+      barWidth: "100%",
+    },
+    {
+      icon: TrendingUp,
+      value: stats?.active || 0,
+      label: t("مجموعات نشطة", "Active Groups"),
+      badge: t("نشطة", "Active"),
+      gradient: "linear-gradient(135deg, #004d59, #ff6437)",
+      badgeBg: "#004d5910", badgeColor: "#004d59", badgeBorder: "#004d5920",
+      barWidth: stats?.total ? `${Math.round((stats.active / stats.total) * 100)}%` : "0%",
+    },
+    {
+      icon: CheckCircle,
+      value: stats?.completed || 0,
+      label: t("مجموعات مكتملة", "Completed"),
+      badge: t("مكتملة", "Completed"),
+      gradient: "linear-gradient(135deg, #ff6700, #f67d00)",
+      badgeBg: "#ff670010", badgeColor: "#ff6700", badgeBorder: "#ff670020",
+      barWidth: stats?.total ? `${Math.round((stats.completed / stats.total) * 100)}%` : "0%",
+    },
+    {
+      icon: BarChart3,
+      value: stats?.draft || 0,
+      label: t("مسودات", "Drafts"),
+      badge: t("مسودة", "Draft"),
+      gradient: "linear-gradient(135deg, #feaf00, #f67d00)",
+      badgeBg: "#feaf0010", badgeColor: "#f67d00", badgeBorder: "#feaf0025",
+      barWidth: stats?.total ? `${Math.round((stats.draft / stats.total) * 100)}%` : "0%",
+    },
+  ];
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22] flex relative"
+      className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17] flex relative"
       dir={isAr ? "rtl" : "ltr"}
     >
       {/* Refresh indicator */}
       {refreshing && (
-        <div className={`fixed top-4 ${isAr ? "left-4" : "right-4"} z-50 bg-primary text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2`}>
+        <div
+          className={`fixed top-4 ${isAr ? "left-4" : "right-4"} z-50 text-white px-4 py-2 rounded-xl shadow-xl flex items-center gap-2`}
+          style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+        >
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-sm">{t("جاري التحديث...", "Refreshing...")}</span>
+          <span className="text-sm font-bold">{t("جاري التحديث...", "Refreshing...")}</span>
         </div>
       )}
 
@@ -352,7 +403,10 @@ export default function InstructorGroupsPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between py-4 gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-md shadow-primary/20">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md"
+                  style={{ background: "linear-gradient(135deg, #004d59, #ff6700)", boxShadow: "0 4px 14px #ff670025" }}
+                >
                   <Users className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -376,12 +430,14 @@ export default function InstructorGroupsPage() {
                     placeholder={t("بحث...", "Search...")}
                     className={`w-40 sm:w-52 bg-gray-100 dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl
                       ${isAr ? "pr-9 pl-4" : "pl-9 pr-4"} py-2 text-sm text-gray-900 dark:text-[#e6edf3]
-                      placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/60`}
+                      placeholder:text-gray-400 focus:outline-none transition-all`}
+                    onFocus={e => (e.target.style.boxShadow = "0 0 0 3px #ff670020", e.target.style.borderColor = "#ff6700")}
+                    onBlur={e => (e.target.style.boxShadow = "", e.target.style.borderColor = "")}
                   />
                 </div>
                 <button
                   onClick={() => fetchData(true)}
-                  className="p-2 rounded-xl bg-gray-100 dark:bg-[#21262d] text-gray-500 hover:text-primary transition-colors"
+                  className="p-2 rounded-xl bg-gray-100 dark:bg-[#21262d] text-gray-500 hover:text-[#ff6700] transition-colors"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
@@ -389,20 +445,48 @@ export default function InstructorGroupsPage() {
             </div>
 
             {/* Filter tabs */}
-            <div className="flex gap-2 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <div
+              className="flex gap-2 pb-3 overflow-x-auto"
+              style={{ scrollbarWidth: "none" }}
+            >
               {FILTERS.map(({ id, labelAr, labelEn, count }) => (
                 <button
                   key={id}
                   onClick={() => setFilter(id)}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-medium flex-shrink-0 transition-all
-                    ${filter === id
-                      ? "bg-gradient-to-r from-primary to-purple-600 text-white shadow-md shadow-primary/20"
-                      : "bg-gray-100 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d]"
-                    }`}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-medium flex-shrink-0 transition-all duration-300 border
+        ${filter === id
+                      ? "text-white border-transparent shadow-lg"
+                      : "bg-white dark:bg-[#161b22] border-gray-200 dark:border-[#30363d] text-gray-700 dark:text-[#c9d1d9] hover:bg-gray-100 dark:hover:bg-[#21262d]"
+                    }
+      `}
+                  style={
+                    filter === id
+                      ? {
+                        background:
+                          "linear-gradient(135deg, #004d59 0%, #006d77 45%, #ff6700 100%)",
+                        boxShadow: "0 6px 20px rgba(255,103,0,0.25)",
+                      }
+                      : {}
+                  }
                 >
-                  {isAr ? labelAr : labelEn}
-                  <span className={`text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold
-                    ${filter === id ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-[#30363d] text-gray-500"}`}>
+                  <span
+                    className={
+                      filter === id
+                        ? "text-white"
+                        : "text-gray-700 dark:text-[#c9d1d9]"
+                    }
+                  >
+                    {isAr ? labelAr : labelEn}
+                  </span>
+
+                  <span
+                    className={`text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold transition-all
+          ${filter === id
+                        ? "bg-white/20 text-white"
+                        : "bg-gray-200 dark:bg-[#30363d] text-gray-600 dark:text-[#8b949e]"
+                      }
+        `}
+                  >
                     {count}
                   </span>
                 </button>
@@ -414,24 +498,34 @@ export default function InstructorGroupsPage() {
         {/* ── Content ── */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-6">
 
-          {/* ── Hero Banner — matches InstructorDashboard hero ── */}
+          {/* ── Hero Banner ── */}
           {!loading && groups.length > 0 && (
-            <div className="relative group min-w-4xl mx-auto">
-              <div className="absolute inset-0 bg-gradient-to-r from-primary via-purple-600 to-pink-600 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500" />
-              <div className="relative bg-gradient-to-br from-primary via-purple-600 to-pink-600 rounded-3xl p-6 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-slow" />
-                <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse-slower" />
+            <div className="relative group">
+              <div
+                className="absolute inset-0 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500"
+                style={{ background: "linear-gradient(135deg, #004d59, #ff6700, #feaf00)" }}
+              />
+              <div
+                className="relative rounded-3xl p-6 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
+                style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}
+              >
+                <div className="absolute inset-0 opacity-10"
+                  style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+                <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl animate-pulse-slow"
+                  style={{ background: "#feaf00", opacity: 0.15 }} />
+                <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full blur-3xl animate-pulse-slower"
+                  style={{ background: "#ff6437", opacity: 0.1 }} />
 
                 <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
                   <div>
                     <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
-                      <span className="text-yellow-300 font-medium text-sm">
+                      <Sparkles className="w-4 h-4 animate-pulse" style={{ color: "#feaf00" }} />
+                      <span className="font-medium text-sm" style={{ color: "#feaf00" }}>
                         {t("مجموعاتك التعليمية", "Your Teaching Groups")}
                       </span>
                     </div>
                     <h2 className="text-2xl font-bold text-white mb-2">{t("مجموعاتي", "My Groups")}</h2>
-                    <p className="text-blue-100 text-sm">
+                    <p className="text-white/70 text-sm">
                       {t(
                         `${stats?.active || 0} مجموعة نشطة · ${totalStudents} طالب إجمالاً`,
                         `${stats?.active || 0} active groups · ${totalStudents} total students`
@@ -440,39 +534,28 @@ export default function InstructorGroupsPage() {
                   </div>
 
                   <div className="flex gap-3 flex-shrink-0">
-                    <div className="flex flex-col items-center bg-white/15 backdrop-blur-sm rounded-2xl px-5 py-3 border border-white/20">
-                      <span className="text-2xl font-bold text-white">
-                        <AnimatedCounter value={stats?.active || 0} />
-                      </span>
-                      <span className="text-blue-200 text-xs mt-0.5">{t("نشطة", "Active")}</span>
-                    </div>
-                    <div className="flex flex-col items-center bg-white/15 backdrop-blur-sm rounded-2xl px-5 py-3 border border-white/20">
-                      <span className="text-2xl font-bold text-white">
-                        <AnimatedCounter value={totalStudents} />
-                      </span>
-                      <span className="text-blue-200 text-xs mt-0.5">{t("طلاب", "Students")}</span>
-                    </div>
-                    <div className="flex flex-col items-center bg-white/15 backdrop-blur-sm rounded-2xl px-5 py-3 border border-white/20">
-                      <span className="text-2xl font-bold text-white">
-                        <AnimatedCounter value={totalHours} />
-                      </span>
-                      <span className="text-blue-200 text-xs mt-0.5">{t("ساعات", "Hours")}</span>
-                    </div>
+                    {[
+                      { value: stats?.active || 0, label: t("نشطة", "Active") },
+                      { value: totalStudents, label: t("طلاب", "Students") },
+                      { value: totalHours, label: t("ساعات", "Hours") },
+                    ].map(({ value, label }, i) => (
+                      <div key={i} className="flex flex-col items-center bg-white/15 backdrop-blur-sm rounded-2xl px-5 py-3 border border-white/20">
+                        <span className="text-2xl font-bold text-white">
+                          <AnimatedCounter value={value} />
+                        </span>
+                        <span className="text-white/70 text-xs mt-0.5">{label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── Stats Cards — matches dashboard Teaching Hours / Students / Attendance style ── */}
+          {/* ── Stats Cards ── */}
           {!loading && stats && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                { icon: Users,       value: stats.total,     label: t("إجمالي المجموعات", "Total Groups"),    badge: t("مجموعة",   "Groups"),    gradient: "from-primary to-purple-600",    badgeBg: "bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400", barWidth: "100%" },
-                { icon: TrendingUp,  value: stats.active,    label: t("مجموعات نشطة",     "Active Groups"),    badge: t("نشطة",     "Active"),     gradient: "from-green-400 to-emerald-500",  badgeBg: "bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400",    barWidth: stats.total ? `${Math.round((stats.active / stats.total) * 100)}%` : "0%" },
-                { icon: CheckCircle, value: stats.completed, label: t("مجموعات مكتملة",   "Completed"),        badge: t("مكتملة",   "Completed"),  gradient: "from-blue-400 to-indigo-500",    badgeBg: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400",        barWidth: stats.total ? `${Math.round((stats.completed / stats.total) * 100)}%` : "0%" },
-                { icon: BarChart3,   value: stats.draft,     label: t("مسودات",           "Drafts"),           badge: t("مسودة",    "Draft"),      gradient: "from-yellow-400 to-amber-500",   badgeBg: "bg-yellow-100 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400", barWidth: stats.total ? `${Math.round((stats.draft / stats.total) * 100)}%` : "0%" },
-              ].map(({ icon: Icon, value, label, badge, gradient, badgeBg, barWidth }, i) => (
+              {statsCards.map(({ icon: Icon, value, label, badge, gradient, badgeBg, badgeColor, badgeBorder, barWidth }, i) => (
                 <div
                   key={i}
                   className={`
@@ -481,16 +564,20 @@ export default function InstructorGroupsPage() {
                     hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1
                     ${animateCards ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}
                   `}
-                  style={{ transitionDelay: `${i * 60}ms`, transition: "all 0.5s ease" }}
+                  style={{ transitionDelay: `${i * 60}ms` }}
                 >
-                  <div className="absolute inset-0 rounded-2xl opacity-0 group-hover/stats:opacity-100 transition-opacity duration-300"
-                    style={{ background: "radial-gradient(circle at top right, rgba(140,82,255,0.05), transparent 60%)" }} />
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-3">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300`}>
+                      <div
+                        className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300"
+                        style={{ background: gradient }}
+                      >
                         <Icon className="w-6 h-6 text-white" />
                       </div>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${badgeBg}`}>
+                      <span
+                        className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                        style={{ background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}` }}
+                      >
                         {badge}
                       </span>
                     </div>
@@ -500,8 +587,8 @@ export default function InstructorGroupsPage() {
                     <p className="text-xs text-gray-500 dark:text-[#8b949e]">{label}</p>
                     <div className="mt-3 h-1 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
                       <div
-                        className={`h-full bg-gradient-to-r ${gradient} rounded-full transition-all duration-1000`}
-                        style={{ width: animateCards ? barWidth : "0%" }}
+                        className="h-full rounded-full transition-all duration-1000"
+                        style={{ width: animateCards ? barWidth : "0%", background: gradient }}
                       />
                     </div>
                   </div>
@@ -510,7 +597,7 @@ export default function InstructorGroupsPage() {
             </div>
           )}
 
-          {/* Loading skeleton */}
+          {/* Loading */}
           {loading && <Skeleton />}
 
           {/* Error */}
@@ -522,14 +609,17 @@ export default function InstructorGroupsPage() {
               <p className="text-sm font-medium text-red-700 dark:text-red-400 flex-1">{error}</p>
               <button
                 onClick={() => fetchData()}
-                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline px-3 py-1.5 rounded-xl hover:bg-primary/5 transition-all"
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all"
+                style={{ color: "#ff6700" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "#ff670010")}
+                onMouseLeave={e => (e.currentTarget.style.background = "")}
               >
                 <RefreshCw className="w-3 h-3" />{t("إعادة", "Retry")}
               </button>
             </div>
           )}
 
-          {/* Empty state */}
+          {/* Empty */}
           {!loading && !error && filtered.length === 0 && (
             <div className="text-center py-20 bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] shadow-lg">
               <div className="w-24 h-24 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
@@ -539,10 +629,7 @@ export default function InstructorGroupsPage() {
                 {search ? t("لا نتائج للبحث", "No results found") : t("لا توجد مجموعات بعد", "No groups yet")}
               </p>
               {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="text-sm text-primary hover:underline"
-                >
+                <button onClick={() => setSearch("")} className="text-sm font-semibold" style={{ color: "#ff6700" }}>
                   {t("مسح البحث", "Clear search")}
                 </button>
               )}
@@ -555,7 +642,7 @@ export default function InstructorGroupsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
-                    <Users className="w-5 h-5 text-primary" />
+                    <Users className="w-5 h-5" style={{ color: "#ff6700" }} />
                     {filter === "all" ? t("جميع المجموعات", "All Groups") : FILTERS.find((f) => f.id === filter)?.[isAr ? "labelAr" : "labelEn"]}
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-[#8b949e] mt-1">

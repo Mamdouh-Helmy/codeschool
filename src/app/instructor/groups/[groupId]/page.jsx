@@ -20,10 +20,10 @@ import {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function getLevelGradient(level) {
-  if (level === "advanced")     return "from-red-500 to-orange-500";
-  if (level === "intermediate") return "from-blue-500 to-indigo-500";
-  return "from-green-500 to-teal-500";
+function getLevelStyle(level) {
+  if (level === "advanced") return { gradient: "linear-gradient(135deg, #ff6700, #f67d00)", bar: "#ff6700, #f67d00" };
+  if (level === "intermediate") return { gradient: "linear-gradient(135deg, #004d59, #ff6437)", bar: "#004d59, #ff6437" };
+  return { gradient: "linear-gradient(135deg, #004d59, #004d59aa)", bar: "#004d59, #004d5988" };
 }
 
 function fmtTime(t) {
@@ -62,7 +62,7 @@ function AnimatedCounter({ value, duration = 1200 }) {
   return <span>{count}</span>;
 }
 
-// ─── Status config ────────────────────────────────────────────────────────────
+// ─── Session Status config ────────────────────────────────────────────────────
 
 const SESSION_STATUS = {
   completed: {
@@ -70,39 +70,39 @@ const SESSION_STATUS = {
     dot: "bg-emerald-400",
     badge: "bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400",
     icon: CheckCircle,
-    grad: "from-green-400 to-emerald-500",
+    gradient: "linear-gradient(135deg, #004d59, #ff6700)",
   },
   scheduled: {
     labelAr: "مجدولة", labelEn: "Scheduled",
     dot: "bg-blue-400",
     badge: "bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400",
     icon: Clock,
-    grad: "from-blue-400 to-indigo-500",
+    gradient: "linear-gradient(135deg, #004d59, #ff6437)",
   },
   cancelled: {
     labelAr: "ملغاة", labelEn: "Cancelled",
     dot: "bg-red-400",
     badge: "bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400",
     icon: X,
-    grad: "from-red-400 to-rose-500",
+    gradient: "linear-gradient(135deg, #ef4444, #f87171)",
   },
   postponed: {
     labelAr: "مؤجلة", labelEn: "Postponed",
     dot: "bg-yellow-400",
     badge: "bg-yellow-100 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
     icon: Clock,
-    grad: "from-yellow-400 to-amber-500",
+    gradient: "linear-gradient(135deg, #feaf00, #f67d00)",
   },
 };
 
 // ─── Session Row ──────────────────────────────────────────────────────────────
 
-function SessionRow({ session, isAr, lvlGrad }) {
-  const t   = (ar, en) => isAr ? ar : en;
+function SessionRow({ session, isAr, lvlStyle }) {
+  const t = (ar, en) => isAr ? ar : en;
   const cfg = SESSION_STATUS[session.status] || SESSION_STATUS.scheduled;
   const Icon = cfg.icon;
-  const fmt  = isAr ? fmtTimeAr : fmtTime;
-  const isToday     = session.isToday;
+  const fmt = isAr ? fmtTimeAr : fmtTime;
+  const isToday = session.isToday;
   const isCompleted = session.status === "completed";
 
   return (
@@ -111,22 +111,15 @@ function SessionRow({ session, isAr, lvlGrad }) {
         group/row flex items-center gap-3 p-4 rounded-2xl border bg-white dark:bg-[#161b22]
         transition-all duration-300 hover:shadow-md hover:-translate-y-0.5
         ${isToday
-          ? "border-primary/30 ring-1 ring-primary/10 shadow-md"
+          ? "dark:border-[#3d444d] ring-1 shadow-md"
           : "border-gray-100 dark:border-[#30363d] hover:border-gray-200 dark:hover:border-[#3d444d]"}
       `}
+      style={isToday ? { borderColor: "#ff670030", boxShadow: "0 0 0 1px #ff670015" } : {}}
     >
       {/* Icon */}
       <div
-        className={`
-          w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm text-sm font-bold
-          ${isCompleted
-            ? `bg-gradient-to-br ${cfg.grad} text-white`
-            : isToday
-            ? "bg-gradient-to-br from-primary to-purple-600 text-white"
-            : session.status === "cancelled"
-            ? `bg-gradient-to-br ${cfg.grad} text-white`
-            : "bg-gradient-to-br from-blue-400 to-indigo-500 text-white"}
-        `}
+        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm text-sm font-bold text-white"
+        style={{ background: isToday ? "linear-gradient(135deg, #004d59, #ff6700)" : cfg.gradient }}
       >
         {isCompleted ? <Icon className="w-5 h-5" /> : session.sessionNumber}
       </div>
@@ -135,12 +128,12 @@ function SessionRow({ session, isAr, lvlGrad }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
           {isToday && (
-            <span className="text-[10px] font-semibold text-primary flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-[10px] font-semibold flex items-center gap-1" style={{ color: "#ff6700" }}>
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "#ff6700" }} />
               {t("اليوم", "Today")}
             </span>
           )}
-          <p className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate group-hover/row:text-primary transition-colors">
+          <p className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate group-hover/row:text-[#ff6700] transition-colors">
             {session.title}
           </p>
         </div>
@@ -167,7 +160,8 @@ function SessionRow({ session, isAr, lvlGrad }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-purple-600 text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
           >
             <Video className="w-3.5 h-3.5" />{t("بدء", "Start")}
           </a>
@@ -191,61 +185,60 @@ function SessionRow({ session, isAr, lvlGrad }) {
 
 // ─── Module Card ──────────────────────────────────────────────────────────────
 
-function ModuleCard({ module, isAr, lvlGrad, defaultOpen = false }) {
+function ModuleCard({ module, isAr, lvlStyle, defaultOpen = false }) {
   const t = (ar, en) => isAr ? ar : en;
-  const [open, setOpen]     = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen);
   const [showBlog, setShowBlog] = useState(false);
 
   const completedSessions = module.sessions.filter((s) => s.status === "completed").length;
-  const totalSessions     = module.sessions.length;
-  const progress          = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
+  const totalSessions = module.sessions.length;
+  const progress = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
 
   const blogBody = isAr ? module.blogBodyAr : module.blogBodyEn;
-  const hasBlog  = blogBody && blogBody.trim().length > 0;
+  const hasBlog = blogBody && blogBody.trim().length > 0;
 
   return (
     <div
       className={`
         bg-white dark:bg-[#161b22] rounded-2xl border overflow-hidden
         shadow-lg dark:shadow-black/40 transition-all duration-300
-        ${open
-          ? "border-gray-200 dark:border-[#3d444d] shadow-xl"
-          : "border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d]"}
+        ${open ? "border-gray-200 dark:border-[#3d444d] shadow-xl" : "border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d]"}
       `}
     >
-      {/* Module Header */}
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-4 px-6 py-5 text-left hover:bg-gray-50 dark:hover:bg-[#1c2128] transition-colors"
       >
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${lvlGrad} flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/20`}>
+        <div
+          className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
+          style={{ background: lvlStyle.gradient }}
+        >
           <Layers className="w-6 h-6 text-white" />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-3 py-0.5 rounded-full text-xs font-semibold bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400">
+            <span className="px-3 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#004d5910", color: "#004d59", border: "1px solid #004d5920" }}>
               {t(`الوحدة ${module.moduleNumber}`, `Module ${module.moduleNumber}`)}
             </span>
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
               ${progress === 100
                 ? "bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400"
                 : progress > 0
-                ? "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                : "bg-gray-100 dark:bg-[#21262d] text-gray-500 dark:text-[#8b949e]"}`}>
+                  ? "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                  : "bg-gray-100 dark:bg-[#21262d] text-gray-500 dark:text-[#8b949e]"}`}>
               {completedSessions}/{totalSessions} {t("جلسة", "sessions")}
             </span>
           </div>
           <p className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate">{module.title}</p>
         </div>
 
-        {/* Progress bar mini */}
         <div className="hidden sm:flex flex-col items-end gap-1.5 flex-shrink-0 w-24">
           <span className="text-xs font-semibold text-gray-700 dark:text-[#8b949e]">{progress}%</span>
           <div className="w-full h-1.5 bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
             <div
-              className={`h-full bg-gradient-to-r ${lvlGrad} rounded-full transition-all duration-700`}
-              style={{ width: `${progress}%` }}
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${progress}%`, background: lvlStyle.gradient }}
             />
           </div>
         </div>
@@ -261,7 +254,6 @@ function ModuleCard({ module, isAr, lvlGrad, defaultOpen = false }) {
             </p>
           )}
 
-          {/* Links row */}
           {(module.presentationUrls?.length > 0 || module.projects?.length > 0) && (
             <div className="px-6 py-3 flex flex-wrap gap-2 border-b border-gray-100 dark:border-[#30363d]">
               {module.presentationUrls?.map((p, i) => (
@@ -270,7 +262,10 @@ function ModuleCard({ module, isAr, lvlGrad, defaultOpen = false }) {
                   href={p.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 dark:bg-purple-500/10 rounded-xl text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-500/20 transition-all"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                  style={{ background: "#004d5910", color: "#004d59", border: "1px solid #004d5920" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#004d5920")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "#004d5910")}
                 >
                   <Presentation className="w-3 h-3" />
                   {t(`عرض ${p.sessionNumber}`, `Presentation ${p.sessionNumber}`)}
@@ -283,7 +278,10 @@ function ModuleCard({ module, isAr, lvlGrad, defaultOpen = false }) {
                   href={url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 dark:bg-green-500/10 rounded-xl text-xs font-semibold text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-500/20 transition-all"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                  style={{ background: "#ff670010", color: "#ff6700", border: "1px solid #ff670020" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#ff670020")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "#ff670010")}
                 >
                   <Globe className="w-3 h-3" />
                   {t(`مشروع ${i + 1}`, `Project ${i + 1}`)}
@@ -293,21 +291,22 @@ function ModuleCard({ module, isAr, lvlGrad, defaultOpen = false }) {
             </div>
           )}
 
-          {/* Sessions */}
           <div className="p-4 space-y-2">
             {module.sessions.map((session) => (
-              <SessionRow key={session._id} session={session} isAr={isAr} lvlGrad={lvlGrad} />
+              <SessionRow key={session._id} session={session} isAr={isAr} lvlStyle={lvlStyle} />
             ))}
           </div>
 
-          {/* Blog */}
           {hasBlog && (
             <div className="border-t border-gray-100 dark:border-[#30363d]">
               <button
                 onClick={() => setShowBlog(!showBlog)}
                 className="w-full flex items-center gap-2 px-6 py-3 hover:bg-gray-50 dark:hover:bg-[#1c2128] transition-colors"
               >
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center flex-shrink-0">
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+                >
                   <BookMarked className="w-3.5 h-3.5 text-white" />
                 </div>
                 <span className="text-xs font-semibold text-gray-700 dark:text-[#8b949e] flex-1 text-start">
@@ -331,25 +330,34 @@ function ModuleCard({ module, isAr, lvlGrad, defaultOpen = false }) {
 
 // ─── Course Full View ─────────────────────────────────────────────────────────
 
-function CourseFullView({ course, group, lvlGrad, isAr }) {
+function CourseFullView({ course, group, lvlStyle, isAr }) {
   const t = (ar, en) => isAr ? ar : en;
   const levelLabel = {
-    advanced:     isAr ? "متقدم"   : "Advanced",
-    intermediate: isAr ? "متوسط"   : "Intermediate",
-    beginner:     isAr ? "مبتدئ"   : "Beginner",
+    advanced: isAr ? "متقدم" : "Advanced",
+    intermediate: isAr ? "متوسط" : "Intermediate",
+    beginner: isAr ? "مبتدئ" : "Beginner",
   }[course.level] || course.level;
 
   const modules = course.curriculum || [];
 
   return (
     <div className="space-y-6">
-
-      {/* Course Info Card — matches dashboard "Teaching Journey" hero style */}
+      {/* Course Hero — matches dashboard hero */}
       <div className="relative group">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary via-purple-600 to-pink-600 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500" />
-        <div className="relative bg-gradient-to-br from-primary via-purple-600 to-pink-600 rounded-3xl p-6 overflow-hidden shadow-lg">
-          <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-slow" />
-          <div className="absolute bottom-0 left-0 w-56 h-56 bg-purple-500/20 rounded-full blur-3xl animate-pulse-slower" />
+        <div
+          className="absolute inset-0 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500"
+          style={{ background: "linear-gradient(135deg, #004d59, #ff6700, #feaf00)" }}
+        />
+        <div
+          className="relative rounded-3xl p-6 overflow-hidden shadow-lg"
+          style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}
+        >
+          <div className="absolute inset-0 opacity-10"
+            style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+          <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl animate-pulse-slow"
+            style={{ background: "#feaf00", opacity: 0.15 }} />
+          <div className="absolute bottom-0 left-0 w-56 h-56 rounded-full blur-3xl animate-pulse-slower"
+            style={{ background: "#ff6437", opacity: 0.1 }} />
 
           <div className="relative z-10">
             <div className="flex items-start gap-4 mb-5">
@@ -358,26 +366,25 @@ function CourseFullView({ course, group, lvlGrad, isAr }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {course.grade   && <span className="text-xs font-semibold px-3 py-1 rounded-full bg-white/20 text-white border border-white/20">🎒 {course.grade}</span>}
+                  {course.grade && <span className="text-xs font-semibold px-3 py-1 rounded-full bg-white/20 text-white border border-white/20">🎒 {course.grade}</span>}
                   {course.subject && <span className="text-xs font-semibold px-3 py-1 rounded-full bg-white/20 text-white border border-white/20">📘 {course.subject}</span>}
-                  {course.level   && <span className="text-xs font-semibold px-3 py-1 rounded-full bg-white/30 text-white border border-white/30">{levelLabel}</span>}
+                  {course.level && <span className="text-xs font-semibold px-3 py-1 rounded-full bg-white/30 text-white border border-white/30">{levelLabel}</span>}
                 </div>
                 <h2 className="text-xl font-bold text-white mb-1 leading-tight">{course.title}</h2>
-                <p className="text-blue-100 text-sm leading-relaxed">{course.description}</p>
+                <p className="text-white/70 text-sm leading-relaxed">{course.description}</p>
               </div>
             </div>
 
-            {/* Stats row — same style as dashboard hero */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { icon: Layers,   value: course.totalModules,  label: t("وحدات", "Modules") },
-                { icon: BookOpen, value: course.totalLessons,  label: t("دروس", "Lessons") },
+                { icon: Layers, value: course.totalModules, label: t("وحدات", "Modules") },
+                { icon: BookOpen, value: course.totalLessons, label: t("دروس", "Lessons") },
                 { icon: Calendar, value: course.totalSessions, label: t("جلسات", "Sessions") },
               ].map(({ icon: Icon, value, label }, i) => (
                 <div key={i} className="flex flex-col items-center py-3 bg-white/15 backdrop-blur-sm rounded-2xl border border-white/20">
                   <Icon className="w-4 h-4 text-white mb-1" />
                   <span className="font-bold text-xl text-white">{value}</span>
-                  <span className="text-blue-200 text-[10px] mt-0.5">{label}</span>
+                  <span className="text-white/70 text-[10px] mt-0.5">{label}</span>
                 </div>
               ))}
             </div>
@@ -385,11 +392,14 @@ function CourseFullView({ course, group, lvlGrad, isAr }) {
         </div>
       </div>
 
-      {/* Schedule Card — matches dashboard stats card style */}
+      {/* Schedule Card */}
       {group.schedule && (
         <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300"
+              style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }}
+            >
               <Calendar className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -399,7 +409,7 @@ function CourseFullView({ course, group, lvlGrad, isAr }) {
           </div>
           <div className="flex flex-wrap gap-2">
             {group.schedule.daysOfWeek?.map((day) => (
-              <span key={day} className="text-xs px-3 py-1.5 rounded-xl bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 font-medium">{day}</span>
+              <span key={day} className="text-xs px-3 py-1.5 rounded-xl font-medium" style={{ background: "#004d5910", color: "#004d59", border: "1px solid #004d5920" }}>{day}</span>
             ))}
             <span className="text-xs px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] font-medium flex items-center gap-1">
               <Clock className="w-3 h-3" />
@@ -419,7 +429,7 @@ function CourseFullView({ course, group, lvlGrad, isAr }) {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
-              <Layers className="w-5 h-5 text-primary" />
+              <Layers className="w-5 h-5" style={{ color: "#ff6700" }} />
               {t("المنهج الدراسي", "Curriculum")}
             </h3>
             <p className="text-sm text-gray-500 dark:text-[#8b949e] mt-1">
@@ -433,7 +443,7 @@ function CourseFullView({ course, group, lvlGrad, isAr }) {
               key={mIdx}
               mod={mod}
               mIdx={mIdx}
-              lvlGrad={lvlGrad}
+              lvlStyle={lvlStyle}
               isAr={isAr}
               defaultOpen={mIdx === 0}
             />
@@ -446,9 +456,9 @@ function CourseFullView({ course, group, lvlGrad, isAr }) {
 
 // ─── Curriculum Module Card ───────────────────────────────────────────────────
 
-function CurriculumModuleCard({ mod, mIdx, lvlGrad, isAr, defaultOpen }) {
+function CurriculumModuleCard({ mod, mIdx, lvlStyle, isAr, defaultOpen }) {
   const t = (ar, en) => isAr ? ar : en;
-  const [open, setOpen]     = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen);
   const [showBlog, setShowBlog] = useState(false);
 
   const sessionGroups = {};
@@ -475,28 +485,29 @@ function CurriculumModuleCard({ mod, mIdx, lvlGrad, isAr, defaultOpen }) {
 
   const totalUniqueLessons = Object.values(dedupedGroups).reduce((a, ls) => a + ls.length, 0);
   const blogBody = isAr ? mod.blogBodyAr : mod.blogBodyEn;
-  const hasBlog  = blogBody && blogBody.trim().length > 0;
+  const hasBlog = blogBody && blogBody.trim().length > 0;
 
   return (
     <div
       className={`
         bg-white dark:bg-[#161b22] rounded-2xl border overflow-hidden
         shadow-lg dark:shadow-black/40 transition-all duration-300
-        ${open
-          ? "border-gray-200 dark:border-[#3d444d] shadow-xl"
-          : "border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d]"}
+        ${open ? "border-gray-200 dark:border-[#3d444d] shadow-xl" : "border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d]"}
       `}
     >
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-4 px-6 py-5 text-left hover:bg-gray-50 dark:hover:bg-[#1c2128] transition-colors"
       >
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${lvlGrad} flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/20 font-bold text-white text-sm`}>
+        <div
+          className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg font-bold text-white text-sm"
+          style={{ background: lvlStyle.gradient }}
+        >
           {mIdx + 1}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-3 py-0.5 rounded-full text-xs font-semibold bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400">
+            <span className="px-3 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#ff670010", color: "#ff6700", border: "1px solid #ff670020" }}>
               {t(`الوحدة ${mIdx + 1}`, `Module ${mIdx + 1}`)}
             </span>
             <span className="text-xs text-gray-500 dark:text-[#8b949e]">
@@ -527,7 +538,10 @@ function CurriculumModuleCard({ mod, mIdx, lvlGrad, isAr, defaultOpen }) {
                 <div key={sn} className="rounded-2xl border border-gray-100 dark:border-[#30363d] overflow-hidden">
                   <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 dark:bg-[#0d1117]/40">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${lvlGrad} flex items-center justify-center flex-shrink-0 shadow-sm`}>
+                      <div
+                        className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                        style={{ background: lvlStyle.gradient }}
+                      >
                         <span className="text-white text-xs font-bold">{sn}</span>
                       </div>
                       <div>
@@ -545,7 +559,9 @@ function CurriculumModuleCard({ mod, mIdx, lvlGrad, isAr, defaultOpen }) {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-semibold text-gray-700 dark:text-[#8b949e] hover:border-primary/50 hover:text-primary transition-all shadow-sm flex-shrink-0"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl text-xs font-semibold text-gray-700 dark:text-[#8b949e] transition-all shadow-sm flex-shrink-0"
+                        onMouseEnter={e => (e.currentTarget.style.borderColor = "#ff6700", e.currentTarget.style.color = "#ff6700")}
+                        onMouseLeave={e => (e.currentTarget.style.borderColor = "", e.currentTarget.style.color = "")}
                       >
                         <Presentation className="w-3 h-3" />
                         {t("العرض", "Slides")}
@@ -557,7 +573,10 @@ function CurriculumModuleCard({ mod, mIdx, lvlGrad, isAr, defaultOpen }) {
                   <div className="divide-y divide-gray-50 dark:divide-[#21262d]">
                     {lessons.map((lesson, li) => (
                       <div key={li} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-[#0d1117]/30 transition-colors">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold flex-shrink-0 mt-0.5 bg-gradient-to-br ${lvlGrad} text-white shadow-sm`}>
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold flex-shrink-0 mt-0.5 text-white shadow-sm"
+                          style={{ background: lvlStyle.gradient }}
+                        >
                           {li + 1}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -591,7 +610,10 @@ function CurriculumModuleCard({ mod, mIdx, lvlGrad, isAr, defaultOpen }) {
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 dark:bg-green-500/10 rounded-xl text-xs font-semibold text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-500/20 transition-all"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                    style={{ background: "#ff670010", color: "#ff6700", border: "1px solid #ff670020" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#ff670020")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "#ff670010")}
                   >
                     <Globe className="w-3 h-3" />{t(`مشروع ${pi + 1}`, `Project ${pi + 1}`)}<ExternalLink className="w-2.5 h-2.5" />
                   </a>
@@ -606,7 +628,10 @@ function CurriculumModuleCard({ mod, mIdx, lvlGrad, isAr, defaultOpen }) {
                 onClick={() => setShowBlog(!showBlog)}
                 className="w-full flex items-center gap-2 px-6 py-3 hover:bg-gray-50 dark:hover:bg-[#1c2128] transition-colors"
               >
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center flex-shrink-0">
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+                >
                   <BookMarked className="w-3.5 h-3.5 text-white" />
                 </div>
                 <span className="text-xs font-semibold text-gray-700 dark:text-[#8b949e] flex-1 text-start">
@@ -633,15 +658,12 @@ function CurriculumModuleCard({ mod, mIdx, lvlGrad, isAr, defaultOpen }) {
 function Skeleton() {
   return (
     <div className="space-y-6">
-      {/* Hero */}
       <div className="h-56 bg-white dark:bg-[#161b22] rounded-3xl animate-pulse border border-gray-100 dark:border-[#30363d] shadow-lg" />
-      {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
           <div key={i} className="h-24 bg-white dark:bg-[#161b22] rounded-2xl animate-pulse border border-gray-100 dark:border-[#30363d] shadow-lg" />
         ))}
       </div>
-      {/* Cards */}
       <div className="space-y-4">
         {[...Array(3)].map((_, i) => (
           <div key={i} className="h-20 bg-white dark:bg-[#161b22] rounded-2xl animate-pulse border border-gray-100 dark:border-[#30363d] shadow-lg" />
@@ -661,12 +683,12 @@ export default function InstructorGroupDetailPage() {
   const params = useParams();
   const groupId = params?.groupId;
 
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState("");
-  const [data, setData]               = useState(null);
-  const [user, setUser]               = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [data, setData] = useState(null);
+  const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab]     = useState("sessions"); // sessions | students | course
+  const [activeTab, setActiveTab] = useState("sessions");
   const [animateStats, setAnimateStats] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -675,7 +697,7 @@ export default function InstructorGroupDetailPage() {
       setError("");
       const [grpRes, dashRes] = await Promise.all([
         fetch(`/api/instructor/groups/${groupId}`, { credentials: "include" }).then((r) => r.json()),
-        fetch("/api/instructor/dashboard",         { credentials: "include" }).then((r) => r.json()),
+        fetch("/api/instructor/dashboard", { credentials: "include" }).then((r) => r.json()),
       ]);
       if (grpRes.success) setData(grpRes.data);
       else setError(grpRes.message || t("حدث خطأ", "Something went wrong"));
@@ -688,9 +710,7 @@ export default function InstructorGroupDetailPage() {
   }, [groupId, isAr]);
 
   useEffect(() => { if (groupId) fetchData(); }, [fetchData]);
-  useEffect(() => {
-    if (data) setTimeout(() => setAnimateStats(true), 300);
-  }, [data]);
+  useEffect(() => { if (data) setTimeout(() => setAnimateStats(true), 300); }, [data]);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -701,14 +721,15 @@ export default function InstructorGroupDetailPage() {
   const currentUser = user || { name: isAr ? "مدرس" : "Instructor", email: "", role: "instructor" };
 
   if (!groupId) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0d1117]" dir={isAr ? "rtl" : "ltr"}>
+    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fb] dark:bg-[#0a0f17]" dir={isAr ? "rtl" : "ltr"}>
       <div className="text-center max-w-md p-8">
         <div className="w-24 h-24 mx-auto bg-red-100 dark:bg-red-500/10 rounded-full flex items-center justify-center mb-6">
           <AlertCircle className="h-12 w-12 text-red-500 animate-pulse" />
         </div>
         <button
           onClick={() => router.push("/instructor/groups")}
-          className="px-6 py-3 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+          className="px-6 py-3 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+          style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
         >
           {t("العودة", "Back")}
         </button>
@@ -716,24 +737,63 @@ export default function InstructorGroupDetailPage() {
     </div>
   );
 
-  const group    = data?.group;
-  const course   = data?.course;
+  const group = data?.group;
+  const course = data?.course;
   const sessions = data?.sessions;
   const students = data?.students || [];
-  const lvlGrad  = getLevelGradient(course?.level);
+  const lvlStyle = getLevelStyle(course?.level);
 
   const TABS = [
     { id: "sessions", labelAr: "الجلسات", labelEn: "Sessions", count: sessions?.stats?.total || 0 },
-    { id: "students", labelAr: "الطلاب",  labelEn: "Students", count: students.length },
-    { id: "course",   labelAr: "الكورس",  labelEn: "Course",   count: null },
+    { id: "students", labelAr: "الطلاب", labelEn: "Students", count: students.length },
+    { id: "course", labelAr: "الكورس", labelEn: "Course", count: null },
   ];
+
+  // Stats cards with brand colors
+  const statsCards = group ? [
+    {
+      icon: Users,
+      value: `${group.currentStudentsCount}/${group.maxStudents}`,
+      label: t("الطلاب", "Students"),
+      badge: t("مسجل", "Enrolled"),
+      gradient: "linear-gradient(135deg, #004d59, #ff6437)",
+      badgeBg: "#004d5910", badgeColor: "#004d59", badgeBorder: "#004d5920",
+      barWidth: `${Math.min((group.currentStudentsCount / group.maxStudents) * 100, 100)}%`,
+    },
+    {
+      icon: BookOpen,
+      value: `${sessions?.stats?.completed || 0}/${sessions?.stats?.total || 0}`,
+      label: t("الجلسات", "Sessions"),
+      badge: t("مكتملة", "Completed"),
+      gradient: "linear-gradient(135deg, #004d59, #ff6700)",
+      badgeBg: "#ff670010", badgeColor: "#ff6700", badgeBorder: "#ff670020",
+      barWidth: sessions?.stats?.total ? `${Math.round((sessions.stats.completed / sessions.stats.total) * 100)}%` : "0%",
+    },
+    {
+      icon: Clock,
+      value: `${group.teachingHours}h`,
+      label: t("ساعات التدريس", "Teaching Hours"),
+      badge: t("ساعات", "Hours"),
+      gradient: "linear-gradient(135deg, #feaf00, #f67d00)",
+      badgeBg: "#feaf0010", badgeColor: "#f67d00", badgeBorder: "#feaf0025",
+      barWidth: "75%",
+    },
+    {
+      icon: TrendingUp,
+      value: `${group.progress}%`,
+      label: t("التقدم", "Progress"),
+      badge: t("إنجاز", "Done"),
+      gradient: "linear-gradient(135deg, #ff6437, #ff6700)",
+      badgeBg: "#ff643710", badgeColor: "#ff6437", badgeBorder: "#ff643725",
+      barWidth: `${group.progress}%`,
+    },
+  ] : [];
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#0d1117] dark:to-[#161b22] flex relative"
+      className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17] flex relative"
       dir={isAr ? "rtl" : "ltr"}
     >
-      {/* Sidebar backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/40 dark:bg-black/60 z-40 lg:hidden backdrop-blur-sm"
@@ -741,7 +801,6 @@ export default function InstructorGroupDetailPage() {
         />
       )}
 
-      {/* Sidebar */}
       <div
         className={`fixed lg:static inset-y-0 ${isAr ? "right-0" : "left-0"} z-50 transform transition-all duration-500
           ${sidebarOpen ? "translate-x-0" : (isAr ? "translate-x-full" : "-translate-x-full") + " lg:translate-x-0"}
@@ -763,22 +822,24 @@ export default function InstructorGroupDetailPage() {
         <div className="sticky top-0 z-20 bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md border-b border-gray-200 dark:border-[#30363d]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3 py-3">
-              {/* Back */}
               <button
                 onClick={() => router.push("/instructor/groups")}
-                className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 hover:text-primary hover:bg-primary/10 transition-all group flex-shrink-0"
+                className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 transition-all group flex-shrink-0"
+                onMouseEnter={e => (e.currentTarget.style.background = "#ff670010", e.currentTarget.style.color = "#ff6700")}
+                onMouseLeave={e => (e.currentTarget.style.background = "", e.currentTarget.style.color = "")}
               >
                 {isAr
                   ? <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
-                  : <ChevronLeft  className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />}
+                  : <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />}
               </button>
 
-              {/* Icon */}
-              <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${lvlGrad} flex items-center justify-center flex-shrink-0 shadow-md`}>
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md"
+                style={{ background: lvlStyle.gradient }}
+              >
                 <Users className="w-4 h-4 text-white" />
               </div>
 
-              {/* Title */}
               <div className="flex-1 min-w-0">
                 {loading ? (
                   <div className="space-y-1.5">
@@ -793,10 +854,9 @@ export default function InstructorGroupDetailPage() {
                 ) : null}
               </div>
 
-              {/* Refresh */}
               <button
                 onClick={fetchData}
-                className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 hover:text-primary transition-all flex-shrink-0"
+                className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 hover:text-[#ff6700] transition-all flex-shrink-0"
               >
                 <RefreshCw className="w-4 h-4" />
               </button>
@@ -804,21 +864,49 @@ export default function InstructorGroupDetailPage() {
 
             {/* Tabs */}
             {!loading && group && (
-              <div className="flex gap-2 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+              <div
+                className="flex gap-2 pb-3 overflow-x-auto"
+                style={{ scrollbarWidth: "none" }}
+              >
                 {TABS.map(({ id, labelAr, labelEn, count }) => (
                   <button
                     key={id}
                     onClick={() => setActiveTab(id)}
-                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-medium flex-shrink-0 transition-all
-                      ${activeTab === id
-                        ? "bg-gradient-to-r from-primary to-purple-600 text-white shadow-md shadow-primary/20"
-                        : "bg-gray-100 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d]"
-                      }`}
+                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-medium flex-shrink-0 transition-all duration-300 border
+        ${activeTab === id
+                        ? "text-white border-transparent shadow-lg"
+                        : "bg-white dark:bg-[#161b22] border-gray-200 dark:border-[#30363d] text-gray-700 dark:text-[#c9d1d9] hover:bg-gray-100 dark:hover:bg-[#21262d]"
+                      }
+      `}
+                    style={
+                      activeTab === id
+                        ? {
+                          background:
+                            "linear-gradient(135deg, #004d59 0%, #006d77 45%, #ff6700 100%)",
+                          boxShadow: "0 6px 20px rgba(255,103,0,0.25)",
+                        }
+                        : {}
+                    }
                   >
-                    {isAr ? labelAr : labelEn}
+                    <span
+                      className={
+                        activeTab === id
+                          ? "text-white"
+                          : "text-gray-700 dark:text-[#c9d1d9]"
+                      }
+                    >
+                      {isAr ? labelAr : labelEn}
+                    </span>
+
                     {count !== null && (
-                      <span className={`text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold
-                        ${activeTab === id ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-[#30363d] text-gray-500"}`}>
+                      <span
+                        className={`text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold transition-all
+            ${activeTab === id
+                            ? "bg-white/20 text-white"
+                            : "bg-gray-200 dark:bg-[#30363d] text-gray-600 dark:text-[#8b949e]"
+                          }
+          `}
+                      >
                         {count}
                       </span>
                     )}
@@ -842,7 +930,8 @@ export default function InstructorGroupDetailPage() {
               <p className="text-sm font-medium text-red-700 dark:text-red-400 flex-1">{error}</p>
               <button
                 onClick={fetchData}
-                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                className="text-xs font-semibold flex items-center gap-1"
+                style={{ color: "#ff6700" }}
               >
                 <RefreshCw className="w-3 h-3" />{t("إعادة", "Retry")}
               </button>
@@ -851,22 +940,32 @@ export default function InstructorGroupDetailPage() {
 
           {!loading && !error && group && (
             <>
-              {/* ── Hero Banner — matches InstructorDashboard hero exactly ── */}
-              <div className="relative group min-w-4xl mx-auto">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary via-purple-600 to-pink-600 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500" />
-                <div className="relative bg-gradient-to-br from-primary via-purple-600 to-pink-600 rounded-3xl p-6 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-                  <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-slow" />
-                  <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse-slower" />
+              {/* ── Hero Banner ── */}
+              <div className="relative group">
+                <div
+                  className="absolute inset-0 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500"
+                  style={{ background: "linear-gradient(135deg, #004d59, #ff6700, #feaf00)" }}
+                />
+                <div
+                  className="relative rounded-3xl p-6 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
+                  style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}
+                >
+                  <div className="absolute inset-0 opacity-10"
+                    style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+                  <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl animate-pulse-slow"
+                    style={{ background: "#feaf00", opacity: 0.15 }} />
+                  <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full blur-3xl animate-pulse-slower"
+                    style={{ background: "#ff6437", opacity: 0.1 }} />
 
                   <div className="relative z-10">
                     <div className="flex items-start justify-between gap-4 mb-5">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
-                          <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
-                          <span className="text-yellow-300 font-medium text-sm">{course?.subject} · {course?.grade}</span>
+                          <Sparkles className="w-4 h-4 animate-pulse" style={{ color: "#feaf00" }} />
+                          <span className="font-medium text-sm" style={{ color: "#feaf00" }}>{course?.subject} · {course?.grade}</span>
                         </div>
                         <h2 className="text-2xl font-bold text-white mb-1 leading-tight">{group.name}</h2>
-                        <p className="text-blue-100 text-sm">{course?.title}</p>
+                        <p className="text-white/70 text-sm">{course?.title}</p>
                       </div>
                       <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0 border border-white/30 shadow-lg">
                         <BookOpen className="w-7 h-7 text-white" />
@@ -876,7 +975,7 @@ export default function InstructorGroupDetailPage() {
                     {/* Progress bar */}
                     <div className="mb-5">
                       <div className="flex justify-between text-sm mb-1.5">
-                        <span className="text-blue-100">{t("تقدم الجلسات", "Session Progress")}</span>
+                        <span className="text-white/70">{t("تقدم الجلسات", "Session Progress")}</span>
                         <span className="text-white font-semibold">{group.progress}%</span>
                       </div>
                       <div className="h-2.5 bg-white/20 rounded-full overflow-hidden">
@@ -888,89 +987,29 @@ export default function InstructorGroupDetailPage() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Quick actions */}
-                    {/* <div className="flex flex-wrap gap-3">
-                      <Link
-                        href="/instructor/attendance"
-                        className="group/btn relative px-5 py-2.5 bg-white text-primary rounded-xl font-semibold hover:bg-blue-50 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm overflow-hidden"
-                      >
-                        <span className="relative z-10 flex items-center gap-2">
-                          <ClipboardList className="w-4 h-4" />
-                          {t("تسجيل الحضور", "Take Attendance")}
-                        </span>
-                      </Link>
-                      <Link
-                        href="/instructor/sessions"
-                        className="px-5 py-2.5 bg-white/10 backdrop-blur-sm text-white rounded-xl font-semibold hover:bg-white/20 transition-all duration-300 border border-white/20 text-sm"
-                      >
-                        {t("الجلسات", "Sessions")}
-                      </Link>
-                    </div> */}
                   </div>
                 </div>
               </div>
 
-              {/* ── Stats Cards — same style as dashboard Teaching Hours / Students / Attendance ── */}
+              {/* ── Stats Cards ── */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {[
-                  {
-                    icon: Users,
-                    value: `${group.currentStudentsCount}/${group.maxStudents}`,
-                    rawValue: group.currentStudentsCount,
-                    label: t("الطلاب", "Students"),
-                    badge: t("مسجل", "Enrolled"),
-                    gradient: "from-blue-400 to-indigo-500",
-                    badgeBg: "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400",
-                    barColor: "from-blue-400 to-indigo-500",
-                    barWidth: `${Math.min((group.currentStudentsCount / group.maxStudents) * 100, 100)}%`,
-                  },
-                  {
-                    icon: BookOpen,
-                    value: `${sessions?.stats?.completed || 0}/${sessions?.stats?.total || 0}`,
-                    rawValue: sessions?.stats?.completed || 0,
-                    label: t("الجلسات", "Sessions"),
-                    badge: t("مكتملة", "Completed"),
-                    gradient: "from-green-400 to-emerald-500",
-                    badgeBg: "bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400",
-                    barColor: "from-green-400 to-emerald-500",
-                    barWidth: sessions?.stats?.total ? `${Math.round((sessions.stats.completed / sessions.stats.total) * 100)}%` : "0%",
-                  },
-                  {
-                    icon: Clock,
-                    value: `${group.teachingHours}h`,
-                    rawValue: group.teachingHours,
-                    label: t("ساعات التدريس", "Teaching Hours"),
-                    badge: t("ساعات", "Hours"),
-                    gradient: "from-primary to-purple-600",
-                    badgeBg: "bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400",
-                    barColor: "from-primary to-purple-600",
-                    barWidth: "75%",
-                  },
-                  {
-                    icon: TrendingUp,
-                    value: `${group.progress}%`,
-                    rawValue: group.progress,
-                    label: t("التقدم", "Progress"),
-                    badge: t("إنجاز", "Done"),
-                    gradient: "from-yellow-400 to-amber-500",
-                    badgeBg: "bg-yellow-100 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
-                    barColor: "from-yellow-400 to-amber-500",
-                    barWidth: `${group.progress}%`,
-                  },
-                ].map(({ icon: Icon, value, label, badge, gradient, badgeBg, barColor, barWidth }, i) => (
+                {statsCards.map(({ icon: Icon, value, label, badge, gradient, badgeBg, badgeColor, badgeBorder, barWidth }, i) => (
                   <div
                     key={i}
                     className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-5 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1"
                   >
-                    <div className="absolute inset-0 rounded-2xl opacity-0 group-hover/stats:opacity-100 transition-opacity duration-300"
-                      style={{ background: "radial-gradient(circle at top right, rgba(140,82,255,0.05), transparent 60%)" }} />
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-3">
-                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300`}>
+                        <div
+                          className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300"
+                          style={{ background: gradient }}
+                        >
                           <Icon className="w-6 h-6 text-white" />
                         </div>
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${badgeBg}`}>
+                        <span
+                          className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                          style={{ background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}` }}
+                        >
                           {badge}
                         </span>
                       </div>
@@ -978,8 +1017,8 @@ export default function InstructorGroupDetailPage() {
                       <p className="text-xs text-gray-500 dark:text-[#8b949e]">{label}</p>
                       <div className="mt-3 h-1 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
                         <div
-                          className={`h-full bg-gradient-to-r ${barColor} rounded-full transition-all duration-1000`}
-                          style={{ width: animateStats ? barWidth : "0%" }}
+                          className="h-full rounded-full transition-all duration-1000"
+                          style={{ width: animateStats ? barWidth : "0%", background: gradient }}
                         />
                       </div>
                     </div>
@@ -990,57 +1029,64 @@ export default function InstructorGroupDetailPage() {
               {/* ── Sessions Tab ── */}
               {activeTab === "sessions" && (
                 <div className="space-y-6">
-                  {/* Session breakdown cards — like attendance overview */}
-                  <div className="group/progress relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl transition-all duration-300">
+                  {/* Attendance overview */}
+                  <div className="relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl transition-all duration-300">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-[#e6edf3] flex items-center gap-2 mb-5">
-                      <BarChart3 className="w-5 h-5 text-primary" />
+                      <BarChart3 className="w-5 h-5" style={{ color: "#ff6700" }} />
                       {t("إحصائيات الجلسات", "Session Overview")}
                     </h3>
                     <div className="space-y-3">
                       {[
-                        { label: t("مكتملة", "Completed"),  value: sessions?.stats?.completed || 0, color: "from-green-400 to-emerald-500", text: "text-green-600 dark:text-green-400" },
-                        { label: t("مجدولة", "Scheduled"),  value: sessions?.stats?.scheduled || 0, color: "from-blue-400 to-indigo-500",   text: "text-blue-600 dark:text-blue-400" },
-                        { label: t("ملغاة",  "Cancelled"),  value: sessions?.stats?.cancelled || 0, color: "from-red-400 to-rose-500",      text: "text-red-600 dark:text-red-400" },
-                        { label: t("مؤجلة",  "Postponed"),  value: sessions?.stats?.postponed || 0, color: "from-yellow-400 to-amber-500",  text: "text-yellow-600 dark:text-yellow-400" },
+                        { label: t("مكتملة", "Completed"), value: sessions?.stats?.completed || 0, gradient: "linear-gradient(90deg, #004d59, #ff6700)", color: "#004d59" },
+                        { label: t("مجدولة", "Scheduled"), value: sessions?.stats?.scheduled || 0, gradient: "linear-gradient(90deg, #004d59, #ff6437)", color: "#004d59" },
+                        { label: t("ملغاة", "Cancelled"), value: sessions?.stats?.cancelled || 0, gradient: "linear-gradient(90deg, #ef4444, #f87171)", color: "#ef4444" },
+                        { label: t("مؤجلة", "Postponed"), value: sessions?.stats?.postponed || 0, gradient: "linear-gradient(90deg, #feaf00, #f67d00)", color: "#f67d00" },
                       ].map((item) => {
                         const total = sessions?.stats?.total || 1;
-                        const pct   = Math.round((item.value / total) * 100);
+                        const pct = Math.round((item.value / total) * 100);
                         return (
                           <div key={item.label} className="flex items-center gap-3">
-                            <span className={`text-xs font-medium w-16 flex-shrink-0 ${item.text}`}>{item.label}</span>
+                            <span className="text-xs font-medium w-16 flex-shrink-0" style={{ color: item.color }}>{item.label}</span>
                             <div className="flex-1 h-2 bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
                               <div
-                                className={`h-full bg-gradient-to-r ${item.color} rounded-full transition-all duration-1000`}
-                                style={{ width: animateStats ? `${pct}%` : "0%" }}
+                                className="h-full rounded-full transition-all duration-1000"
+                                style={{ width: animateStats ? `${pct}%` : "0%", background: item.gradient }}
                               />
                             </div>
-                            <span className={`text-xs font-bold w-6 text-right flex-shrink-0 ${item.text}`}>{item.value}</span>
+                            <span className="text-xs font-bold w-6 text-right flex-shrink-0" style={{ color: item.color }}>{item.value}</span>
                           </div>
                         );
                       })}
                     </div>
                   </div>
 
-                  {/* Needs attendance alert */}
+                  {/* Needs attendance */}
                   {sessions?.stats?.needsAttendance > 0 && (
-                    <div className="flex items-center gap-3 p-4 bg-yellow-50 dark:bg-yellow-500/10 rounded-2xl border border-yellow-200 dark:border-yellow-500/20">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-yellow-500/20">
+                    <div
+                      className="flex items-center gap-3 p-4 rounded-2xl border"
+                      style={{ background: "#feaf0010", borderColor: "#feaf0030" }}
+                    >
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
+                        style={{ background: "linear-gradient(135deg, #feaf00, #f67d00)" }}
+                      >
                         <ClipboardList className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
+                        <p className="text-sm font-semibold" style={{ color: "#f67d00" }}>
                           {t(
                             `${sessions.stats.needsAttendance} جلسة تحتاج تسجيل حضور`,
                             `${sessions.stats.needsAttendance} session(s) need attendance`
                           )}
                         </p>
-                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-0.5">
+                        <p className="text-xs mt-0.5" style={{ color: "#f67d00", opacity: 0.8 }}>
                           {t("سجّل الحضور للجلسات المكتملة", "Record attendance for completed sessions")}
                         </p>
                       </div>
                       <Link
                         href="/instructor/attendance"
-                        className="px-4 py-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-xl text-xs font-semibold hover:shadow-lg transition-all transform hover:scale-105"
+                        className="px-4 py-2 text-white rounded-xl text-xs font-semibold hover:shadow-lg transition-all transform hover:scale-105"
+                        style={{ background: "linear-gradient(135deg, #feaf00, #f67d00)" }}
                       >
                         {t("تسجيل", "Record")}
                       </Link>
@@ -1052,7 +1098,7 @@ export default function InstructorGroupDetailPage() {
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <h3 className="text-xl font-bold text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
-                          <Layers className="w-5 h-5 text-primary" />
+                          <Layers className="w-5 h-5" style={{ color: "#ff6700" }} />
                           {t("الوحدات والجلسات", "Modules & Sessions")}
                         </h3>
                       </div>
@@ -1061,7 +1107,7 @@ export default function InstructorGroupDetailPage() {
                           key={module.moduleIndex}
                           module={module}
                           isAr={isAr}
-                          lvlGrad={lvlGrad}
+                          lvlStyle={lvlStyle}
                           defaultOpen={i === 0}
                         />
                       ))}
@@ -1080,10 +1126,12 @@ export default function InstructorGroupDetailPage() {
               {/* ── Students Tab ── */}
               {activeTab === "students" && (
                 <div className="space-y-6">
-                  {/* Header card */}
                   <div className="relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d]">
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                      <div
+                        className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg"
+                        style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }}
+                      >
                         <Users className="w-7 h-7 text-white" />
                       </div>
                       <div>
@@ -1096,8 +1144,11 @@ export default function InstructorGroupDetailPage() {
                       </div>
                       <div className="ms-auto h-1 w-32 bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full transition-all duration-1000"
-                          style={{ width: animateStats ? `${Math.min((students.length / group.maxStudents) * 100, 100)}%` : "0%" }}
+                          className="h-full rounded-full transition-all duration-1000"
+                          style={{
+                            width: animateStats ? `${Math.min((students.length / group.maxStudents) * 100, 100)}%` : "0%",
+                            background: "linear-gradient(90deg, #004d59, #ff6437)",
+                          }}
                         />
                       </div>
                     </div>
@@ -1117,20 +1168,20 @@ export default function InstructorGroupDetailPage() {
                           key={student._id}
                           className="group/stu relative bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] p-5 shadow-lg dark:shadow-black/40 hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1"
                         >
-                          <div className="absolute inset-0 rounded-2xl opacity-0 group-hover/stu:opacity-100 transition-opacity duration-300"
-                            style={{ background: "radial-gradient(circle at top right, rgba(140,82,255,0.05), transparent 60%)" }} />
+                          <div
+                            className="absolute inset-0 rounded-2xl opacity-0 group-hover/stu:opacity-100 transition-opacity duration-300 pointer-events-none"
+                            style={{ background: "radial-gradient(circle at top right, #ff670008, transparent 60%)" }}
+                          />
                           <div className="relative z-10 flex items-center gap-3">
-                            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${lvlGrad} flex items-center justify-center font-bold text-white text-lg flex-shrink-0 shadow-lg group-hover/stu:scale-110 transition-transform`}>
+                            <div
+                              className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white text-lg flex-shrink-0 shadow-lg group-hover/stu:scale-110 transition-transform"
+                              style={{ background: lvlStyle.gradient }}
+                            >
                               {(student.name?.[0] || "?").toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate">{student.name}</p>
                               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                {/* {student.phone && (
-                                  <span className="text-xs text-gray-500 dark:text-[#8b949e] flex items-center gap-1">
-                                    <Phone className="w-3 h-3" />{student.phone}
-                                  </span>
-                                )} */}
                                 {student.guardian && (
                                   <span className="text-xs text-gray-500 dark:text-[#8b949e] flex items-center gap-1">
                                     <User className="w-3 h-3" />{student.guardian}
@@ -1145,18 +1196,6 @@ export default function InstructorGroupDetailPage() {
                                   : "bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400"}`}>
                                 {student.status}
                               </span>
-                              {/* {student.credits !== null && (
-                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1
-                                  ${student.credits <= 0
-                                    ? "bg-gray-100 dark:bg-[#21262d] text-gray-500"
-                                    : student.credits <= 2
-                                    ? "bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400"
-                                    : student.credits <= 5
-                                    ? "bg-yellow-100 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                                    : "bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400"}`}>
-                                  <CreditCard className="w-2.5 h-2.5" />{student.credits} {t("ساعة", "hrs")}
-                                </span>
-                              )} */}
                             </div>
                           </div>
                         </div>
@@ -1168,7 +1207,7 @@ export default function InstructorGroupDetailPage() {
 
               {/* ── Course Tab ── */}
               {activeTab === "course" && course && (
-                <CourseFullView course={course} group={group} lvlGrad={lvlGrad} isAr={isAr} />
+                <CourseFullView course={course} group={group} lvlStyle={lvlStyle} isAr={isAr} />
               )}
             </>
           )}

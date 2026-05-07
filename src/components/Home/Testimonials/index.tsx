@@ -82,16 +82,15 @@ const Testimonials = () => {
     fetchTestimonials();
   }, []);
 
-  // إعدادات السلايدر الأساسية مع التمرير التلقائي
   const settings = {
     dots: false,
     infinite: testimonials.length > 1,
-    speed: 1000, // زيادة السرعة للحصول على تحول أكثر سلاسة
+    speed: 1000,
     slidesToShow: 1,
     slidesToScroll: 1,
-    autoplay: true, // ✅ تمكين التشغيل التلقائي
-    autoplaySpeed: 3000, // ✅ التمرير كل 3 ثوانٍ
-    pauseOnHover: true, // إيقاف التمرير عند التحويم
+    autoplay: true,
+    autoplaySpeed: 3000,
+    pauseOnHover: true,
     rtl: isArabic,
     arrows: false,
     swipe: true,
@@ -107,10 +106,8 @@ const Testimonials = () => {
     },
   };
 
-  // بدء التمرير التلقائي عند تحميل المكون
   useEffect(() => {
     if (sliderRef.current && testimonials.length > 1) {
-      // إعادة تشغيل السلايدر للتأكد من أن التمرير التلقائي يعمل
       setTimeout(() => {
         if (sliderRef.current) {
           sliderRef.current.slickPlay();
@@ -136,7 +133,6 @@ const Testimonials = () => {
   return (
     <section className="bg-IcyBreeze dark:bg-darklight testimonial">
       <div className="container space-y-8">
-        {/* إضافة ستايل للتأكد من أن السلايدر شغال */}
         <style jsx>{`
           .testimonials-slider {
             position: relative;
@@ -156,19 +152,13 @@ const Testimonials = () => {
           .slide-item {
             outline: none !important;
           }
-          
-          /* تحسينات للحركة السلسة */
           .slick-slide {
             transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
           }
         `}</style>
 
-
-
         <Slider ref={sliderRef} {...settings}>
           {testimonials.map((testimonial, index) => {
-            console.log(`Rendering testimonial ${index}:`, testimonial);
-
             const imgRaw = testimonial.studentImage;
             let studentImageFallback = "/images/hero/john.png";
 
@@ -182,7 +172,6 @@ const Testimonials = () => {
 
             const finalImageSrc = studentSrc || studentImageFallback;
 
-            // decorative big image corner radii mirrored for RTL
             const decorativeStyle = isArabic
               ? {
                 borderTopRightRadius: "200px",
@@ -199,7 +188,6 @@ const Testimonials = () => {
                 height: "450px",
               };
 
-            // content spacing depending on RTL/LTR
             const contentSpacingClass = isArabic
               ? "md:mr-20 mr-0 text-right"
               : "md:ml-20 ml-0 text-left";
@@ -207,7 +195,6 @@ const Testimonials = () => {
             return (
               <div key={testimonial._id || testimonial.id || index} className="slide-item">
                 <div className="grid md:grid-cols-12 grid-cols-1 items-center gap-6">
-                  {/* Big decorative image - hidden on mobile */}
                   <div
                     className={`col-span-4 relative hidden lg:block overflow-hidden bg-LightSkyBlue ${isArabic ? "md:order-2" : "md:order-1"
                       }`}
@@ -225,7 +212,6 @@ const Testimonials = () => {
                     />
                   </div>
 
-                  {/* Content */}
                   <div
                     className={`col-span-8 ${isArabic ? "md:order-1" : "md:order-2"
                       } ${contentSpacingClass}`}
@@ -234,16 +220,14 @@ const Testimonials = () => {
                       {t("testimonials.heading")}
                     </h2>
 
-                    <p className="text-lg font-normal text-SlateBlueText dark:text-opacity-80 py-5 ">
+                    <p className="text-lg font-normal text-black dark:text-[#eee] dark:text-opacity-80 py-5 ">
                       "{testimonial.comment || t("testimonials.noComment")}"
                     </p>
-
 
                     <div
                       className={`flex items-center gap-6 ${isArabic ? "justify-end" : "justify-start"
                         }`}
                     >
-                      {/* Small profile image */}
                       <div
                         className="rounded-full overflow-hidden bg-gray-200 flex items-center justify-center"
                         style={{
@@ -278,7 +262,7 @@ const Testimonials = () => {
                           }).map((_, i) => (
                             <svg
                               key={i}
-                              className={`w-4 h-4 text-yellow-500 ${isArabic ? "me-1" : "ms-1"
+                              className={`w-4 h-4 text-primary ${isArabic ? "me-1" : "ms-1"
                                 }`}
                               xmlns="http://www.w3.org/2000/svg"
                               fill="currentColor"
@@ -306,7 +290,6 @@ const Testimonials = () => {
         </Slider>
       </div>
 
-      {/* نقاط التنقل (اختياري) */}
       {testimonials.length > 1 && (
         <div className="flex justify-center gap-2 mb-6">
           {testimonials.map((_, index) => (
@@ -318,7 +301,7 @@ const Testimonials = () => {
                 }
               }}
               className={`w-2 h-2 rounded-full transition-all duration-300 ${currentSlide === index
-                  ? 'bg-[#8c52ff] w-6'
+                  ? 'bg-primary w-6'
                   : 'bg-gray-300 hover:bg-gray-400'
                 }`}
               aria-label={`Go to slide ${index + 1}`}

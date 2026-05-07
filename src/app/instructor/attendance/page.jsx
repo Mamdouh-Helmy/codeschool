@@ -54,7 +54,6 @@ const STATUS_CONFIG = {
 
 const STATUS_ORDER  = ["pre_absent", "present", "absent", "late", "excused"];
 const SEND_STATUSES = ["absent", "late", "excused"];
-// pre_absent مش في SEND_STATUSES — مش بيبعت رسائل ومش بيتحسب
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const t = (ar, en, isAr) => (isAr ? ar : en);
@@ -322,7 +321,9 @@ function MessagePreviewModal({
         <div className="flex-1 overflow-y-auto p-4">
           {loading && (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg">
+              {/* ✅ brand gradient بدل البنفسجي */}
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
+                style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
                 <Loader2 className="w-7 h-7 text-white animate-spin" />
               </div>
               <p className="text-sm text-gray-400 dark:text-[#8b949e]">{t("جاري تحميل القالب...", "Loading template...", isAr)}</p>
@@ -339,7 +340,9 @@ function MessagePreviewModal({
           {!loading && !error && renderedContent && (
             <>
               <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d]">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center shadow-sm">
+                {/* ✅ brand gradient بدل البنفسجي */}
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm"
+                  style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }}>
                   <User className="w-4 h-4 text-white" />
                 </div>
                 <div>
@@ -436,7 +439,6 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
                   {student.absenceCount}x {t("غياب", "absent", isAr)}
                 </span>
               )}
-              {/* ── بادج "غياب أولي" تحذيري ────────────────────────────── */}
               {isPreAbsent && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-50 dark:bg-orange-900/20 text-xs text-orange-600 dark:text-orange-400 font-bold border border-orange-200 dark:border-orange-800/30 animate-pulse">
                   <AlertTriangle className="w-3 h-3" />
@@ -479,17 +481,17 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
           })}
         </div>
 
-        {/* ── زرار معاينة الرسالة (فقط للـ statuses النهائية) ─────────── */}
+        {/* ── زرار معاينة الرسالة ─────────────────────────────────────── */}
         {isSet && SEND_STATUSES.includes(currentStatus) && (
           <button
             onClick={(e) => { e.stopPropagation(); onPreview(student, currentStatus); }}
-            className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold bg-gray-50 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] border border-gray-100 dark:border-[#30363d] hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all group/preview">
+            className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold bg-gray-50 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] border border-gray-100 dark:border-[#30363d] hover:border-[#ff6700]/40 hover:text-[#ff6700] hover:bg-[#ff6700]/5 transition-all group/preview">
             <Eye className="w-3.5 h-3.5 group-hover/preview:scale-110 transition-transform" />
             {t("معاينة رسالة ولي الأمر", "Preview Parent Message", isAr)}
           </button>
         )}
 
-        {/* ── تنبيه للغياب الأولي ────────────────────────────────────── */}
+        {/* ── تنبيه للغياب الأولي ──────────────────────────────────────── */}
         {isPreAbsent && (
           <div className="mt-3 flex items-center gap-2 p-2.5 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-200 dark:border-orange-800/30">
             <Info className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
@@ -509,7 +511,6 @@ function StudentCard({ student, attendance, onSetStatus, onPreview, isAr, submit
 
 // ─── Summary Bar ─────────────────────────────────────────────────────────────
 function SummaryBar({ attendance, total, isAr, animateProgress }) {
-  // ── pre_absent مش بيتحسب في الإحصائيات ──────────────────────────────────
   const counts = { present: 0, absent: 0, late: 0, excused: 0 };
   Object.values(attendance).forEach((s) => {
     if (s !== "pre_absent" && counts[s] !== undefined) counts[s]++;
@@ -517,7 +518,6 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
   const filled = Object.values(counts).reduce((a, b) => a + b, 0);
   const pct    = total > 0 ? (filled / total) * 100 : 0;
 
-  // عدد الغياب الأولي منفصل
   const preAbsentCount = Object.values(attendance).filter(s => s === "pre_absent").length;
 
   const statItems = [
@@ -531,7 +531,9 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
     <div className="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] p-5 shadow-lg dark:shadow-black/40">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-md">
+          {/* ✅ brand gradient */}
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md"
+            style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
             <BarChart3 className="w-4 h-4 text-white" />
           </div>
           <div>
@@ -539,7 +541,7 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
             <p className="text-xs text-gray-500 dark:text-[#8b949e]">{filled}/{total} {t("طالب", "students", isAr)}</p>
           </div>
         </div>
-        <div className={`text-xl font-black ${filled === total && total > 0 ? "text-emerald-500" : "text-primary"}`}>
+        <div className={`text-xl font-black ${filled === total && total > 0 ? "text-emerald-500" : "text-[#ff6700]"}`}>
           {filled === total && total > 0
             ? <span className="flex items-center gap-1 text-sm"><CheckCheck className="w-4 h-4" />{t("مكتمل", "Complete", isAr)}</span>
             : `${Math.round(pct)}%`
@@ -547,10 +549,11 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
         </div>
       </div>
 
+      {/* ✅ brand gradient progress bar */}
       <div className="h-2.5 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden mb-5">
         <div
-          className="h-full bg-gradient-to-r from-primary to-purple-600 rounded-full relative overflow-hidden transition-all duration-700"
-          style={{ width: `${pct}%` }}>
+          className="h-full rounded-full relative overflow-hidden transition-all duration-700"
+          style={{ width: `${pct}%`, background: "linear-gradient(90deg, #004d59, #ff6700)" }}>
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer" />
         </div>
       </div>
@@ -574,7 +577,6 @@ function SummaryBar({ attendance, total, isAr, animateProgress }) {
         ))}
       </div>
 
-      {/* ── بادج الغياب الأولي في الأسفل ────────────────────────────────── */}
       {preAbsentCount > 0 && (
         <div className="mt-4 flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-200 dark:border-orange-800/30">
           <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
@@ -625,7 +627,6 @@ export default function InstructorAttendancePage() {
 
   const savedStatusRef = useRef({});
 
-  // ── Fetch DB template variables ───────────────────────────────────────────
   useEffect(() => {
     fetch("/api/whatsapp/template-variables")
       .then((r) => r.json())
@@ -693,7 +694,6 @@ export default function InstructorAttendancePage() {
   }, []);
 
   const handleSubmit = async () => {
-    // ── استبعد pre_absent من أي عملية حفظ ───────────────────────────────
     const finalAttendance = Object.fromEntries(
       Object.entries(attendance).filter(([, status]) => status !== "pre_absent")
     );
@@ -754,13 +754,11 @@ export default function InstructorAttendancePage() {
     return matchSearch && matchFilter;
   });
 
-  // ── changedCount يستبعد pre_absent ───────────────────────────────────────
   const changedCount = Object.entries(attendance).filter(([studentId, status]) => {
     if (status === "pre_absent") return false;
     return (savedStatusRef.current[studentId] || null) !== status;
   }).length;
 
-  // ── filledCount يستبعد pre_absent ────────────────────────────────────────
   const filledCount  = Object.entries(attendance).filter(([, s]) => s !== "pre_absent").length;
   const allFilled    = filledCount === students.length && students.length > 0;
   const preAbsentCount = Object.values(attendance).filter(s => s === "pre_absent").length;
@@ -775,7 +773,8 @@ export default function InstructorAttendancePage() {
           </div>
           <h3 className="text-lg font-bold text-gray-900 dark:text-[#e6edf3] mb-2">لم يتم تحديد جلسة</h3>
           <button onClick={() => router.push("/instructor/sessions")}
-            className="mt-2 px-6 py-3 bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all hover:scale-105">
+            className="mt-2 px-6 py-3 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all hover:scale-105"
+            style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
             العودة للجلسات
           </button>
         </div>
@@ -815,13 +814,15 @@ export default function InstructorAttendancePage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/instructor/sessions")}
-              className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 hover:text-primary hover:bg-primary/10 transition-all flex-shrink-0 group">
+              className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 hover:text-[#ff6700] hover:bg-[#ff6700]/10 transition-all flex-shrink-0 group">
               {isAr
                 ? <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
                 : <ChevronLeft  className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />}
             </button>
 
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
+            {/* ✅ brand gradient */}
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md"
+              style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
               <ClipboardList className="w-4 h-4 text-white" />
             </div>
 
@@ -847,12 +848,14 @@ export default function InstructorAttendancePage() {
 
             {!loading && (
               <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-xl border border-primary/20">
-                  <Users className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-black text-primary">{students.length}</span>
+                {/* ✅ brand color للعداد */}
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border"
+                  style={{ background: "#ff670015", borderColor: "#ff670025" }}>
+                  <Users className="w-4 h-4" style={{ color: "#ff6700" }} />
+                  <span className="text-sm font-black" style={{ color: "#ff6700" }}>{students.length}</span>
                 </div>
                 <button onClick={() => fetchData()}
-                  className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 hover:text-primary transition-all">
+                  className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 hover:text-[#ff6700] transition-all">
                   <RefreshCw className="w-4 h-4" />
                 </button>
               </div>
@@ -865,18 +868,30 @@ export default function InstructorAttendancePage() {
       {sessionData && !loading && (
         <div className="max-w-4xl mx-auto px-4 pt-5">
           <div className="relative group">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary via-purple-600 to-pink-600 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500" />
-            <div className="relative bg-gradient-to-br from-primary via-purple-600 to-pink-600 rounded-3xl p-5 overflow-hidden shadow-lg">
-              <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl animate-pulse" />
-              <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl" />
+            {/* ✅ brand gradient بدل البنفسجي والبينكي */}
+            <div className="absolute inset-0 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500"
+              style={{ background: "linear-gradient(135deg, #004d59, #ff6700, #feaf00)" }} />
+            <div className="relative rounded-3xl p-5 overflow-hidden shadow-lg"
+              style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}>
+
+              {/* dot pattern — زي InstructorDashboard */}
+              <div className="absolute inset-0 opacity-10"
+                style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+              <div className="absolute top-0 right-0 w-48 h-48 rounded-full blur-3xl animate-pulse"
+                style={{ background: "#feaf00", opacity: 0.15 }} />
+              <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full blur-3xl"
+                style={{ background: "#ff6437", opacity: 0.1 }} />
+
               <div className="relative z-10 flex items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
-                    <span className="text-yellow-300 font-medium text-xs">{t("تسجيل الحضور", "Attendance Recording", isAr)}</span>
+                    <Sparkles className="w-4 h-4 text-[#feaf00] animate-pulse" />
+                    <span className="font-medium text-xs" style={{ color: "#feaf00" }}>
+                      {t("تسجيل الحضور", "Attendance Recording", isAr)}
+                    </span>
                   </div>
                   <h2 className="text-xl font-black text-white mb-1">{sessionData.title}</h2>
-                  <p className="text-blue-100 text-sm">
+                  <p className="text-white/70 text-sm">
                     {sessionData.group?.name} · {fmtTime(sessionData.startTime, isAr)} – {fmtTime(sessionData.endTime, isAr)}
                   </p>
                 </div>
@@ -926,7 +941,8 @@ export default function InstructorAttendancePage() {
             {/* Quick mark all */}
             <div className="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] p-4 shadow-lg dark:shadow-black/40">
               <p className="text-xs font-bold text-gray-500 dark:text-[#8b949e] mb-3 flex items-center gap-2">
-                <Zap className="w-3.5 h-3.5 text-primary" />
+                {/* ✅ brand color للأيقونة */}
+                <Zap className="w-3.5 h-3.5" style={{ color: "#ff6700" }} />
                 {t("تحديد الكل كـ:", "Mark all as:", isAr)}
               </p>
               <div className="grid grid-cols-5 gap-2">
@@ -956,13 +972,14 @@ export default function InstructorAttendancePage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t("ابحث عن طالب...", "Search student...", isAr)}
-                  className={`w-full bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl ${isAr ? "pr-9 pl-4" : "pl-9 pr-4"} py-2.5 text-sm text-gray-900 dark:text-[#e6edf3] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/60 shadow-sm transition-all`}
+                  className={`w-full bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl ${isAr ? "pr-9 pl-4" : "pl-9 pr-4"} py-2.5 text-sm text-gray-900 dark:text-[#e6edf3] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-[#ff6700]/60 shadow-sm transition-all`}
+                  style={{ "--tw-ring-color": "#ff670050" }}
                 />
               </div>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl px-3 py-2.5 text-sm text-gray-700 dark:text-[#8b949e] focus:outline-none focus:ring-2 focus:ring-primary/30 shadow-sm">
+                className="bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-xl px-3 py-2.5 text-sm text-gray-700 dark:text-[#8b949e] focus:outline-none shadow-sm">
                 <option value="all">{t("الكل", "All", isAr)}</option>
                 <option value="unset">{t("لم يُحدد", "Unset", isAr)}</option>
                 {STATUS_ORDER.map((s) => (
@@ -999,7 +1016,6 @@ export default function InstructorAttendancePage() {
             <div className="sticky bottom-0 pt-3 pb-4">
               <div className="bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-[#30363d] p-4 shadow-xl">
 
-                {/* تحذير الغياب الأولي */}
                 {preAbsentCount > 0 && (
                   <div className="flex items-center gap-2 mb-3 p-2.5 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-200 dark:border-orange-800/30">
                     <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
@@ -1017,7 +1033,7 @@ export default function InstructorAttendancePage() {
                   <div className="flex-1">
                     <p className="text-sm font-bold text-gray-900 dark:text-[#e6edf3]">
                       {changedCount > 0
-                        ? <span className="text-primary">{changedCount} {t("تغيير جديد", "new change(s)", isAr)}</span>
+                        ? <span style={{ color: "#ff6700" }}>{changedCount} {t("تغيير جديد", "new change(s)", isAr)}</span>
                         : <span className="text-gray-400 dark:text-[#6e7681]">{t("لا توجد تغييرات", "No changes", isAr)}</span>
                       }
                     </p>
@@ -1030,32 +1046,36 @@ export default function InstructorAttendancePage() {
                     )}
                   </div>
 
-                  {/* Mini progress ring */}
+                  {/* ✅ Progress ring بـ brand colors */}
                   <div className="relative w-10 h-10 flex-shrink-0">
                     <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                       <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" className="text-gray-100 dark:text-[#21262d]" />
-                      <circle cx="18" cy="18" r="15" fill="none" stroke="url(#grad)" strokeWidth="3"
+                      <circle cx="18" cy="18" r="15" fill="none" stroke="url(#brandGrad)" strokeWidth="3"
                         strokeDasharray={`${students.length > 0 ? (filledCount / students.length) * 94 : 0} 94`}
                         strokeLinecap="round" />
                       <defs>
-                        <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%"   stopColor="#8c52ff" />
-                          <stop offset="100%" stopColor="#a855f7" />
+                        <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%"   stopColor="#004d59" />
+                          <stop offset="100%" stopColor="#ff6700" />
                         </linearGradient>
                       </defs>
                     </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-[8px] font-black text-primary">
+                    <span className="absolute inset-0 flex items-center justify-center text-[8px] font-black" style={{ color: "#ff6700" }}>
                       {students.length > 0 ? Math.round((filledCount / students.length) * 100) : 0}%
                     </span>
                   </div>
 
+                  {/* ✅ Submit button بـ brand gradient */}
                   <button
                     onClick={handleSubmit}
                     disabled={filledCount === 0 || submitting}
                     className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black text-white shadow-lg transition-all
                       ${filledCount > 0 && !submitting
-                        ? "bg-gradient-to-r from-primary to-purple-600 hover:shadow-xl hover:scale-[1.02]"
-                        : "bg-gray-300 dark:bg-[#30363d] cursor-not-allowed"}`}>
+                        ? "hover:shadow-xl hover:scale-[1.02]"
+                        : "bg-gray-300 dark:bg-[#30363d] cursor-not-allowed"}`}
+                    style={filledCount > 0 && !submitting
+                      ? { background: "linear-gradient(135deg, #004d59, #ff6700)" }
+                      : {}}>
                     {submitting ? (
                       <><Loader2 className="w-4 h-4 animate-spin" />{t("جاري الحفظ...", "Saving...", isAr)}</>
                     ) : (

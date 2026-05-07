@@ -7,15 +7,17 @@ function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
-// GET
+// ─── GET ────────────────────────────────────────────────────────────────────
 export async function GET(request, { params }) {
   try {
     await connectDB();
     const { id } = await params;
-    if (!isValidId(id)) return NextResponse.json({ success: false, message: "معرف غير صالح" }, { status: 400 });
+    if (!isValidId(id))
+      return NextResponse.json({ success: false, message: "معرف غير صالح" }, { status: 400 });
 
     const record = await SectionImageHero.findById(id);
-    if (!record) return NextResponse.json({ success: false, message: "السجل غير موجود" }, { status: 404 });
+    if (!record)
+      return NextResponse.json({ success: false, message: "السجل غير موجود" }, { status: 404 });
 
     return NextResponse.json({ success: true, data: record, timestamp: new Date().toISOString() });
   } catch (error) {
@@ -23,26 +25,29 @@ export async function GET(request, { params }) {
   }
 }
 
-// PUT — تحديث كامل، لا قيود على أي حقل
+// ─── PUT ────────────────────────────────────────────────────────────────────
 export async function PUT(request, { params }) {
   try {
     await connectDB();
     const { id } = await params;
-    if (!isValidId(id)) return NextResponse.json({ success: false, message: "معرف غير صالح" }, { status: 400 });
+    if (!isValidId(id))
+      return NextResponse.json({ success: false, message: "معرف غير صالح" }, { status: 400 });
 
     const body = await request.json();
 
     const existing = await SectionImageHero.findById(id);
-    if (!existing) return NextResponse.json({ success: false, message: "السجل غير موجود" }, { status: 404 });
+    if (!existing)
+      return NextResponse.json({ success: false, message: "السجل غير موجود" }, { status: 404 });
 
     const clean = (v) => (typeof v === "string" ? v.trim() : v);
 
-    // بناء كائن التحديث — كل الحقول اختيارية
-    const update = {};
     const fields = [
+      // لا يُعدَّل language بعد الإنشاء (محمي في الـ form)
       "imageUrl", "secondImageUrl", "imageAlt", "secondImageAlt",
-      "heroTitleAr", "heroDescriptionAr", "instructor1Ar", "instructor1RoleAr", "instructor2Ar", "instructor2RoleAr",
-      "heroTitleEn", "heroDescriptionEn", "instructor1En", "instructor1RoleEn", "instructor2En", "instructor2RoleEn",
+      "heroTitleAr", "heroDescriptionAr", "instructor1Ar", "instructor1RoleAr",
+      "instructor2Ar", "instructor2RoleAr",
+      "heroTitleEn", "heroDescriptionEn", "instructor1En", "instructor1RoleEn",
+      "instructor2En", "instructor2RoleEn",
       "welcomeTitleAr", "welcomeSubtitle1Ar", "welcomeSubtitle2Ar",
       "welcomeFeature1Ar", "welcomeFeature2Ar", "welcomeFeature3Ar",
       "welcomeFeature4Ar", "welcomeFeature5Ar", "welcomeFeature6Ar",
@@ -52,6 +57,7 @@ export async function PUT(request, { params }) {
       "discount", "happyParents", "graduates", "isActive", "displayOrder",
     ];
 
+    const update = {};
     for (const f of fields) {
       if (body[f] !== undefined) update[f] = clean(body[f]);
     }
@@ -78,20 +84,22 @@ export async function PUT(request, { params }) {
   }
 }
 
-// PATCH — تحديث جزئي (نفس PUT)
+// ─── PATCH ───────────────────────────────────────────────────────────────────
 export async function PATCH(request, { params }) {
   return PUT(request, { params });
 }
 
-// DELETE
+// ─── DELETE ──────────────────────────────────────────────────────────────────
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
     const { id } = await params;
-    if (!isValidId(id)) return NextResponse.json({ success: false, message: "معرف غير صالح" }, { status: 400 });
+    if (!isValidId(id))
+      return NextResponse.json({ success: false, message: "معرف غير صالح" }, { status: 400 });
 
     const deleted = await SectionImageHero.findByIdAndDelete(id);
-    if (!deleted) return NextResponse.json({ success: false, message: "السجل غير موجود" }, { status: 404 });
+    if (!deleted)
+      return NextResponse.json({ success: false, message: "السجل غير موجود" }, { status: 404 });
 
     return NextResponse.json({
       success: true,
