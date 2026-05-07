@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import StudentSidebar from "./StudentSidebar";
-import StudentHeader from "./StudentHeader";
+import InstructorSidebar from "./InstructorSidebar";
+import InstructorHeader from "./InstructorHeader";
 import {
   Calendar,
   BookOpen,
@@ -19,43 +19,40 @@ import {
   CheckCircle,
   Bell,
   TrendingUp,
-  Target,
   Sparkles,
-  Star,
-  Zap,
-  Brain,
-  Rocket,
   BarChart3,
   X,
-  GraduationCap,
+  ClipboardList,
+  Star,
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
-import { useI18n } from "@/i18n/I18nProvider";
 
-// ============ Type Definitions ============
-interface StudentUser {
-  _id: string;
+// ── Types ──────────────────────────────────────────────
+
+interface InstructorUser {
+  id: string;
   name: string;
   email: string;
   role: string;
-  studentId?: string;
-  image?: string | null;
 }
 
 interface Stats {
-  totalSessions?: number;
-  completedSessions?: number;
-  remainingSessions?: number;
-  attendedSessions?: number;
-  absentSessions?: number;
-  lateSessions?: number;
-  excusedSessions?: number;
-  attendanceRate?: number;
-  progressPercentage?: number;
-  totalGroups?: number;
-  activeGroups?: number;
-  pendingAssignments?: number;
-  completedCourses?: number;
+  totalTeachingHours: number;
+  totalGroups: number;
+  activeGroups: number;
+  completedGroups: number;
+  totalStudents: number;
+  totalSessions: number;
+  completedSessions: number;
+  scheduledSessions: number;
+  cancelledSessions: number;
+  postponedSessions: number;
+  overallAttendanceRate: number;
+  progressPercentage: number;
+  totalPresent: number;
+  totalAbsent: number;
+  totalLate: number;
+  totalExcused: number;
 }
 
 interface ProgressStage {
@@ -81,24 +78,22 @@ interface ProgressSummaryCard {
   borderColor: string;
 }
 
-interface Course {
+interface GroupProgress {
   _id: string;
-  title: string;
-  description: string;
+  name: string;
+  code: string;
+  status: string;
+  courseTitle: string;
+  courseLevel: string;
+  courseThumbnail: string;
+  currentStudentsCount: number;
+  maxStudents: number;
+  schedule?: any;
+  totalSessions: number;
+  completedSessions: number;
+  remainingSessions: number;
   progress: number;
-  totalSessions?: number;
-  completedSessions?: number;
-  remainingSessions?: number;
-  totalLessons?: number;
-  hoursLeft?: number;
-  gradient: string;
-  icon: string;
-  instructor?: string;
-  nextLesson?: string;
-  groupName?: string;
-  groupCode?: string;
-  level?: string;
-  status?: string;
+  myTeachingHours: number;
 }
 
 interface UpcomingEvent {
@@ -108,8 +103,6 @@ interface UpcomingEvent {
   endTime: string;
   date?: string;
   formattedDate?: string;
-  type?: string;
-  location?: string;
   groupName?: string;
 }
 
@@ -120,32 +113,31 @@ interface NextSession {
   time: string;
   isToday: boolean;
   meetingLink?: string;
-  groupId?: string;
-  sessionId?: string;
   groupName?: string;
 }
 
-interface Notification {
-  id?: string;
+interface RecentSession {
+  _id?: string;
   title: string;
-  titleAr?: string;
-  message?: string;
+  date: string;
   time: string;
-  type?: string;
-  isRead?: boolean;
+  groupName?: string;
+  presentCount: number;
+  absentCount: number;
+  totalAttendance: number;
 }
 
 interface DashboardData {
-  user: StudentUser;
-  stats?: Stats;
-  progressData?: {
+  user: InstructorUser;
+  stats: Stats;
+  progressData: {
     stages: ProgressStage[];
     summaryCards: ProgressSummaryCard[];
   };
   nextSession?: NextSession;
-  currentCourses?: Course[];
-  upcomingEvents?: UpcomingEvent[];
-  notifications?: Notification[];
+  currentGroups: GroupProgress[];
+  upcomingEvents: UpcomingEvent[];
+  recentSessions: RecentSession[];
 }
 
 interface ApiResponse {
@@ -155,7 +147,8 @@ interface ApiResponse {
   error?: string;
 }
 
-// ============ Animated Counter ============
+// ── Animated Counter ──
+
 const AnimatedCounter = ({ value, duration = 1800 }: { value: number; duration?: number }) => {
   const [count, setCount] = useState(0);
   useEffect(() => {
@@ -174,7 +167,8 @@ const AnimatedCounter = ({ value, duration = 1800 }: { value: number; duration?:
   return <span>{count.toLocaleString()}</span>;
 };
 
-// ============ Skeleton ============
+// ── Skeleton ──
+
 const DashboardSkeleton = ({ isRTL }: { isRTL: boolean }) => (
   <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17]">
     <div className="flex">
@@ -220,9 +214,9 @@ const DashboardSkeleton = ({ isRTL }: { isRTL: boolean }) => (
   </div>
 );
 
-// ============ Main Component ============
-export default function StudentDashboard() {
-  const { t } = useI18n();
+// ── Main Component ──
+
+export default function InstructorDashboard() {
   const { locale } = useLocale();
   const isRTL = locale === "ar";
   const router = useRouter();
@@ -245,7 +239,7 @@ export default function StudentDashboard() {
       else setLoading(true);
       setError("");
 
-      const res = await fetch("/api/student/dashboard", {
+      const res = await fetch("/api/instructor/dashboard", {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
       });
@@ -272,42 +266,31 @@ export default function StudentDashboard() {
 
   const getStageIcon = (iconName: string): any => {
     const icons: Record<string, any> = {
-      Play, BookOpen, Award, CheckCircle, Brain, Rocket,
+      Play, BookOpen, Award, CheckCircle, BarChart3, ClipboardList,
     };
     return icons[iconName] || BookOpen;
   };
 
   const getStatIcon = (iconName: string): any => {
     const icons: Record<string, any> = {
-      CheckCircle, Clock, Award, TrendingUp, Target, Star, X, BarChart3,
+      CheckCircle, Clock, Award, TrendingUp, Star, X, BarChart3, ClipboardList,
     };
     return icons[iconName] || CheckCircle;
   };
 
-  const getCourseIcon = (iconType: string): React.ReactNode => {
-    const icons: Record<string, React.ReactNode> = {
-      code: (
-        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-        </svg>
-      ),
-      design: (
-        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-        </svg>
-      ),
-      database: (
-        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-        </svg>
-      ),
-      smartphone: (
-        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-        </svg>
-      ),
-    };
-    return icons[iconType] || icons.code;
+  const getLevelGradient = (level: string) => {
+    if (level === "advanced") return "from-[#ff6700] to-[#f67d00]";
+    if (level === "intermediate") return "from-[#004d59] to-[#ff6437]";
+    return "from-[#004d59] to-[#004d59]/70";
+  };
+
+  const getLevelLabel = (level: string) => {
+    if (isRTL) {
+      if (level === "advanced") return "متقدم";
+      if (level === "intermediate") return "متوسط";
+      return "مبتدئ";
+    }
+    return level.charAt(0).toUpperCase() + level.slice(1);
   };
 
   const getGreeting = () => {
@@ -355,64 +338,13 @@ export default function StudentDashboard() {
     stats,
     progressData,
     nextSession,
-    currentCourses = [],
+    currentGroups = [],
     upcomingEvents = [],
-    notifications = [],
-  } = dashboardData || {};
+    recentSessions = [],
+  } = dashboardData!;
 
-  const currentUser = user || { _id: "", name: isRTL ? "طالب" : "Student", email: "", role: "student", image: null };
-  
-  const attendedSessionsCount = stats?.attendedSessions || 0;
-  const absentSessionsCount = stats?.absentSessions || 0;
-  const totalSessionsCount = stats?.totalSessions || 1;
-  const completedSessionsCount = stats?.completedSessions || 0;
-  const achievementsCount = Math.min(Math.floor(completedSessionsCount / 5), 20);
-  const progressPercentage = stats?.progressPercentage || 
-    (totalSessionsCount > 0 ? Math.round((completedSessionsCount / totalSessionsCount) * 100) : 0);
-
-  const progressStages = progressData?.stages || [
-    {
-      id: "start",
-      label: "Start",
-      labelAr: "البداية",
-      percentage: 100,
-      status: "completed",
-      icon: "Play",
-      gradient: "from-[#004d59] to-[#ff6700]",
-      color: "green"
-    },
-    {
-      id: "current",
-      label: "Current Level",
-      labelAr: "المستوى الحالي",
-      percentage: progressPercentage,
-      status: progressPercentage >= 100 ? "completed" : progressPercentage >= 80 ? "almost_there" : "active",
-      icon: "BookOpen",
-      gradient: "from-[#ff6700] to-[#feaf00]",
-      color: "blue",
-      isActive: progressPercentage < 100
-    },
-    {
-      id: "target",
-      label: "Next Target",
-      labelAr: "الهدف التالي",
-      percentage: Math.min(progressPercentage + 25, 100),
-      status: progressPercentage >= 75 ? "almost_there" : "pending",
-      icon: "Award",
-      gradient: "from-[#004d59] to-[#ff6437]",
-      color: "purple"
-    },
-    {
-      id: "completion",
-      label: "Completion",
-      labelAr: "الإكمال",
-      percentage: progressPercentage >= 100 ? 100 : 0,
-      status: progressPercentage >= 100 ? "completed" : "pending",
-      icon: "CheckCircle",
-      gradient: "from-[#004d59] to-[#004d59]/70",
-      color: "gray"
-    }
-  ];
+  const progressStages = progressData?.stages || [];
+  const progressPercentage = stats?.progressPercentage || 0;
 
   return (
     <div
@@ -442,14 +374,14 @@ export default function StudentDashboard() {
           ${sidebarOpen ? "translate-x-0" : (isRTL ? "translate-x-full" : "-translate-x-full") + " lg:translate-x-0"}
           flex-shrink-0`}
       >
-        <StudentSidebar user={currentUser} onLogout={handleLogout} />
+        <InstructorSidebar user={user} onLogout={handleLogout} />
       </div>
 
       {/* Main */}
       <main className="flex-1 min-w-0 transition-all duration-300">
-        <StudentHeader
-          user={currentUser}
-          notifications={notifications}
+        <InstructorHeader
+          user={user}
+          notifications={[]}
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
           sidebarOpen={sidebarOpen}
           onRefresh={() => fetchData(true)}
@@ -481,27 +413,27 @@ export default function StudentDashboard() {
                       <div className="flex items-center gap-2 justify-center lg:justify-start mb-2">
                         <Sparkles className="w-4 h-4 text-[#feaf00] animate-pulse" />
                         <span className="text-[#feaf00] font-bold text-sm">
-                          {getGreeting()}, {currentUser?.name?.split(" ")[0] || (isRTL ? "طالب" : "Student")}!
+                          {getGreeting()}, {user?.name?.split(" ")[0] || (isRTL ? "مدرس" : "Instructor")}!
                         </span>
                       </div>
 
                       <h2 className="text-2xl lg:text-3xl font-black text-white mb-3">
-                        {isRTL ? "رحلتك التعليمية" : "Your Learning Journey"}
+                        {isRTL ? "رحلتك التعليمية" : "Your Teaching Journey"}
                       </h2>
 
                       <p className="text-white/70 mb-6 text-base">
                         {isRTL
-                          ? `لديك ${stats?.totalSessions || 0} جلسة إجمالية و ${stats?.attendedSessions || 0} جلسة حضرتها`
-                          : `You have ${stats?.totalSessions || 0} total sessions and attended ${stats?.attendedSessions || 0}`}
+                          ? `لديك ${stats?.scheduledSessions || 0} جلسة قادمة و ${stats?.totalStudents || 0} طالب`
+                          : `You have ${stats?.scheduledSessions || 0} upcoming sessions and ${stats?.totalStudents || 0} students`}
                       </p>
 
                       <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
                         <Link
-                          href="/dashboard/sessions"
+                          href="/instructor/sessions"
                           className="group/btn relative px-6 py-3 bg-white rounded-xl font-black hover:bg-orange-50 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-1 overflow-hidden text-sm"
                           style={{ color: "#ff6700" }}
                         >
-                          <span className="relative z-10">{isRTL ? "جلساتي" : "My Sessions"}</span>
+                          <span className="relative z-10">{isRTL ? "الجلسات" : "My Sessions"}</span>
                         </Link>
                       </div>
                     </div>
@@ -509,7 +441,7 @@ export default function StudentDashboard() {
                     <div className="relative w-40 h-40 lg:w-48 lg:h-48 hidden lg:block group-hover:scale-105 transition-transform duration-500">
                       <img
                         src="https://storage.googleapis.com/uxpilot-auth.appspot.com/cc128e889c-1e79b7c5933da33a6e8e.png"
-                        alt="Learning"
+                        alt="Teaching"
                         className="w-full h-full object-contain drop-shadow-lg animate-float"
                       />
                     </div>
@@ -517,10 +449,10 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              {/* Stats Cards: Attended, Absent, Achievements */}
+              {/* Stats Cards: Teaching Hours, Students, Attendance Rate */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
 
-                {/* Attended Sessions */}
+                {/* Teaching Hours */}
                 <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
                   <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4"
                     style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }} />
@@ -528,55 +460,54 @@ export default function StudentDashboard() {
                     <div className="flex items-center justify-between mb-4">
                       <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300"
                         style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
-                        <CheckCircle className="w-7 h-7 text-white" />
+                        <Clock className="w-7 h-7 text-white" />
                       </div>
                       <span className="px-3 py-1 rounded-full text-xs font-bold"
                         style={{ background: "#ff670015", color: "#ff6700", border: "1px solid #ff670025" }}>
-                        {isRTL ? "حضور" : "Attended"}
+                        {isRTL ? "ساعات" : "Hours"}
                       </span>
                     </div>
                     <h3 className="text-3xl font-black text-gray-900 dark:text-[#e6edf3] mb-1">
-                      <AnimatedCounter value={attendedSessionsCount} />
+                      <AnimatedCounter value={stats?.totalTeachingHours || 0} />
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                      {isRTL ? "الجلسات التي حضرتها" : "Sessions Attended"}
+                      {isRTL ? "إجمالي ساعات التدريس" : "Total Teaching Hours"}
                     </p>
                     <div className="mt-4 h-1.5 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full"
-                        style={{ width: `${(attendedSessionsCount / totalSessionsCount) * 100}%`, background: "linear-gradient(90deg, #004d59, #ff6700)" }} />
+                      <div className="h-full rounded-full w-3/4"
+                        style={{ background: "linear-gradient(90deg, #004d59, #ff6700)" }} />
                     </div>
                   </div>
                 </div>
 
-                {/* Absent Sessions */}
+                {/* Total Students */}
                 <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
                   <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4"
-                    style={{ background: "linear-gradient(135deg, #ef4444, #f87171)" }} />
+                    style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }} />
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-4">
                       <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300"
-                        style={{ background: "linear-gradient(135deg, #ef4444, #f87171)" }}>
-                        <X className="w-7 h-7 text-white" />
+                        style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }}>
+                        <Users className="w-7 h-7 text-white" />
                       </div>
                       <span className="px-3 py-1 rounded-full text-xs font-bold"
-                        style={{ background: "#ef444415", color: "#ef4444", border: "1px solid #ef444425" }}>
-                        {isRTL ? "غياب" : "Absent"}
+                        style={{ background: "#004d5915", color: "#004d59", border: "1px solid #004d5925" }}>
+                        {isRTL ? "طلاب" : "Students"}
                       </span>
                     </div>
                     <h3 className="text-3xl font-black text-gray-900 dark:text-[#e6edf3] mb-1">
-                      <AnimatedCounter value={absentSessionsCount} />
+                      <AnimatedCounter value={stats?.totalStudents || 0} />
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                      {isRTL ? "الجلسات التي غاب عنها" : "Sessions Absent"}
+                      {isRTL ? "إجمالي الطلاب" : "Total Students"}
                     </p>
                     <div className="mt-4 h-1.5 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full"
-                        style={{ width: `${(absentSessionsCount / totalSessionsCount) * 100}%`, background: "linear-gradient(90deg, #ef4444, #f87171)" }} />
+                      <div className="h-full rounded-full" style={{ width: `${Math.min((stats?.totalStudents || 0) * 4, 100)}%`, background: "linear-gradient(90deg, #004d59, #ff6437)" }} />
                     </div>
                   </div>
                 </div>
 
-                {/* Achievements */}
+                {/* Attendance Rate */}
                 <div className="group/stats relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden">
                   <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4"
                     style={{ background: "linear-gradient(135deg, #feaf00, #f67d00)" }} />
@@ -584,22 +515,21 @@ export default function StudentDashboard() {
                     <div className="flex items-center justify-between mb-4">
                       <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg group-hover/stats:scale-110 transition-transform duration-300"
                         style={{ background: "linear-gradient(135deg, #feaf00, #f67d00)" }}>
-                        <Award className="w-7 h-7 text-white" />
+                        <CheckCircle className="w-7 h-7 text-white" />
                       </div>
                       <span className="px-3 py-1 rounded-full text-xs font-bold"
                         style={{ background: "#feaf0015", color: "#f67d00", border: "1px solid #feaf0030" }}>
-                        {isRTL ? "إنجازات" : "Achievements"}
+                        {isRTL ? "حضور" : "Attendance"}
                       </span>
                     </div>
                     <h3 className="text-3xl font-black text-gray-900 dark:text-[#e6edf3] mb-1">
-                      <AnimatedCounter value={achievementsCount} />
+                      <AnimatedCounter value={stats?.overallAttendanceRate || 0} />%
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                      {isRTL ? "الإنجازات التي حققتها" : "Achievements Earned"}
+                      {isRTL ? "معدل الحضور الإجمالي" : "Overall Attendance Rate"}
                     </p>
                     <div className="mt-4 h-1.5 w-full bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full"
-                        style={{ width: `${(achievementsCount / 20) * 100}%`, background: "linear-gradient(90deg, #feaf00, #f67d00)" }} />
+                      <div className="h-full rounded-full" style={{ width: `${stats?.overallAttendanceRate || 0}%`, background: "linear-gradient(90deg, #feaf00, #f67d00)" }} />
                     </div>
                   </div>
                 </div>
@@ -612,10 +542,10 @@ export default function StudentDashboard() {
                     <div>
                       <h3 className="text-2xl font-black text-gray-900 dark:text-[#e6edf3] mb-2 flex items-center gap-2">
                         <TrendingUp className="w-6 h-6" style={{ color: "#ff6700" }} />
-                        {isRTL ? "تقدم التعلم" : "Learning Progress"}
+                        {isRTL ? "تقدم التدريس" : "Teaching Progress"}
                       </h3>
                       <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                        {isRTL ? "تتبع إنجازاتك التعليمية" : "Track your learning achievements"}
+                        {isRTL ? "تتبع إنجازاتك التعليمية" : "Track your teaching achievements"}
                       </p>
                     </div>
                   </div>
@@ -639,6 +569,7 @@ export default function StudentDashboard() {
                           lineProgress = cur > 0 && nxt > 0 ? Math.min((cur / nxt) * 100, 100) : 0;
                         }
 
+                        // Brand-aligned stage styles
                         const stageStyle = isCompleted
                           ? { background: "linear-gradient(135deg, #004d59, #ff6700)" }
                           : isActive
@@ -789,25 +720,25 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              {/* Current Courses */}
+              {/* My Groups */}
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-2xl font-black text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
-                      <BookOpen className="w-6 h-6" style={{ color: "#ff6700" }} />
-                      {isRTL ? "دوراتي الحالية" : "My Current Courses"}
+                      <Users className="w-6 h-6" style={{ color: "#ff6700" }} />
+                      {isRTL ? "مجموعاتي" : "My Groups"}
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-[#8b949e] mt-1">
-                      {isRTL ? "الدورات التي تدرسها حالياً" : "Your current enrolled courses"}
+                      {isRTL ? "المجموعات النشطة الخاصة بك" : "Your active teaching groups"}
                     </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-                  {currentCourses && currentCourses.length > 0 ? (
-                    currentCourses.map((course) => (
+                  {currentGroups && currentGroups.length > 0 ? (
+                    currentGroups.map((group) => (
                       <div
-                        key={course._id}
+                        key={group._id}
                         className="group/card relative bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d] hover:shadow-xl dark:hover:border-[#3d444d] transition-all duration-300 transform hover:-translate-y-1 cursor-pointer overflow-hidden"
                       >
                         <div className="absolute -top-4 -right-4 w-24 h-24 rounded-full blur-2xl opacity-0 group-hover/card:opacity-100 transition-opacity duration-500"
@@ -816,28 +747,33 @@ export default function StudentDashboard() {
                         <div className="relative z-10">
                           <div className="flex items-start justify-between mb-4">
                             <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover/card:scale-110 transition-transform`}
-                              style={{ background: `linear-gradient(135deg, ${course.gradient})` }}>
-                              {getCourseIcon(course.icon)}
+                              style={{ background: `linear-gradient(135deg, ${group.courseLevel === "advanced" ? "#ff6700, #f67d00" : group.courseLevel === "intermediate" ? "#004d59, #ff6437" : "#004d59, #004d59aa"})` }}>
+                              <BookOpen className="w-7 h-7 text-white" />
                             </div>
-                            <span className="px-3 py-1 rounded-full text-xs font-black bg-cyan-100 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400">
-                              {isRTL ? "قيد التقدم" : "In Progress"}
-                            </span>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className={`px-3 py-1 rounded-full text-xs font-black ${
+                                group.status === "active"
+                                  ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                  : "bg-gray-100 dark:bg-gray-500/10 text-gray-700 dark:text-gray-400"
+                              }`}>
+                                {group.status === "active" ? (isRTL ? "نشط" : "Active") : group.status}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black text-white"
+                                style={{ background: `linear-gradient(135deg, ${group.courseLevel === "advanced" ? "#ff6700, #f67d00" : group.courseLevel === "intermediate" ? "#004d59, #ff6437" : "#004d59, #004d59aa"})` }}>
+                                {getLevelLabel(group.courseLevel)}
+                              </span>
+                            </div>
                           </div>
 
                           <h4 className="text-lg font-black text-gray-900 dark:text-[#e6edf3] mb-1 transition-colors line-clamp-1"
+                            style={{ color: undefined }}
                             onMouseEnter={e => (e.currentTarget.style.color = "#ff6700")}
                             onMouseLeave={e => (e.currentTarget.style.color = "")}>
-                            {course.title}
+                            {group.courseTitle}
                           </h4>
-                          <p className="text-sm text-gray-500 dark:text-[#8b949e] mb-4 line-clamp-2">
-                            {course.description}
+                          <p className="text-sm text-gray-500 dark:text-[#8b949e] mb-4">
+                            {group.name} · <span className="font-mono text-xs">{group.code}</span>
                           </p>
-
-                          {course.instructor && (
-                            <p className="text-xs text-gray-400 dark:text-[#6e7681] mb-3">
-                              {isRTL ? "المدرس" : "Instructor"}: {course.instructor}
-                            </p>
-                          )}
 
                           {/* Progress bar */}
                           <div className="mb-4">
@@ -846,15 +782,15 @@ export default function StudentDashboard() {
                                 {isRTL ? "التقدم" : "Progress"}
                               </span>
                               <span className="font-black text-gray-900 dark:text-[#e6edf3]">
-                                {course.progress}%
+                                {group.progress}%
                               </span>
                             </div>
                             <div className="w-full h-2.5 bg-gray-200 dark:bg-[#21262d] rounded-full overflow-hidden">
                               <div
                                 className="h-full rounded-full relative overflow-hidden"
                                 style={{
-                                  width: `${course.progress}%`,
-                                  background: `linear-gradient(90deg, ${course.gradient})`,
+                                  width: `${group.progress}%`,
+                                  background: `linear-gradient(90deg, ${group.courseLevel === "advanced" ? "#ff6700, #f67d00" : group.courseLevel === "intermediate" ? "#004d59, #ff6437" : "#004d59, #004d59aa"})`,
                                 }}
                               >
                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer" />
@@ -865,38 +801,76 @@ export default function StudentDashboard() {
                           {/* Stats row */}
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-1.5 text-gray-500 dark:text-[#8b949e]">
+                              <Users className="w-4 h-4" />
+                              <span>{group.currentStudentsCount}/{group.maxStudents}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-gray-500 dark:text-[#8b949e]">
                               <BookOpen className="w-4 h-4" />
-                              <span>{course.completedSessions || 0}/{course.totalSessions || 0} {isRTL ? "جلسة" : "sessions"}</span>
+                              <span>{group.completedSessions}/{group.totalSessions} {isRTL ? "جلسة" : "sessions"}</span>
                             </div>
                             <div className="flex items-center gap-1.5 font-black" style={{ color: "#ff6700" }}>
                               <Clock className="w-4 h-4" />
-                              <span>{course.hoursLeft || 0}{isRTL ? "ساعة متبقية" : "h left"}</span>
+                              <span>{group.myTeachingHours}h</span>
                             </div>
                           </div>
-
-                          {course.nextLesson && (
-                            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-[#30363d]">
-                              <p className="text-xs text-gray-500 dark:text-[#8b949e] flex items-center gap-1">
-                                <Play className="w-3 h-3" style={{ color: "#ff6700" }} />
-                                {isRTL ? "التالي" : "Next"}: {course.nextLesson}
-                              </p>
-                            </div>
-                          )}
                         </div>
                       </div>
                     ))
                   ) : (
                     <div className="col-span-full text-center py-12">
                       <div className="w-24 h-24 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
-                        <BookOpen className="w-12 h-12 text-gray-400 dark:text-[#6e7681]" />
+                        <Users className="w-12 h-12 text-gray-400 dark:text-[#6e7681]" />
                       </div>
                       <p className="text-gray-500 dark:text-[#8b949e]">
-                        {isRTL ? "لا توجد دورات حالية" : "No current courses"}
+                        {isRTL ? "لا توجد مجموعات نشطة" : "No active groups"}
                       </p>
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* Recent Sessions */}
+              {recentSessions && recentSessions.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-black text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
+                      <ClipboardList className="w-5 h-5" style={{ color: "#ff6700" }} />
+                      {isRTL ? "الجلسات الأخيرة" : "Recent Sessions"}
+                    </h3>
+                  </div>
+                  <div className="space-y-3">
+                    {recentSessions.map((session) => (
+                      <div
+                        key={session._id}
+                        className="flex items-center gap-4 p-4 bg-white dark:bg-[#161b22] rounded-xl border border-gray-100 dark:border-[#30363d] hover:shadow-md transition-all"
+                      >
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+                          <CheckCircle className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-sm text-gray-900 dark:text-[#e6edf3] truncate">
+                            {session.title}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-[#8b949e]">
+                            {session.groupName} · {session.date}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="flex items-center gap-1 font-black" style={{ color: "#004d59" }}>
+                            <CheckCircle className="w-3 h-3" />
+                            {session.presentCount}
+                          </span>
+                          <span className="flex items-center gap-1 text-red-500 font-black">
+                            <X className="w-3 h-3" />
+                            {session.absentCount}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── Right Column ── */}
@@ -958,7 +932,7 @@ export default function StudentDashboard() {
                   <div className="space-y-3">
                     <h4 className="text-sm font-black text-gray-700 dark:text-[#8b949e] flex items-center gap-2">
                       <span className="w-1 h-4 rounded-full" style={{ background: "#ff6700" }} />
-                      {isRTL ? "الأحداث القادمة" : "Upcoming Events"}
+                      {isRTL ? "الجلسات القادمة" : "Upcoming Sessions"}
                     </h4>
 
                     {upcomingEvents && upcomingEvents.length > 0 ? (
@@ -999,7 +973,7 @@ export default function StudentDashboard() {
                       <div className="text-center py-6">
                         <Calendar className="w-12 h-12 text-gray-300 dark:text-[#6e7681] mx-auto mb-2" />
                         <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                          {isRTL ? "لا توجد أحداث قادمة" : "No upcoming events"}
+                          {isRTL ? "لا توجد جلسات قادمة" : "No upcoming sessions"}
                         </p>
                       </div>
                     )}
@@ -1037,14 +1011,18 @@ export default function StudentDashboard() {
                                 className="inline-flex items-center gap-2 text-sm text-white px-4 py-2 rounded-xl font-black hover:shadow-lg transition-all transform hover:scale-105"
                                 style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
                               >
-                                {isRTL ? "انضمام" : "Join Session"}
+                                {isRTL ? "بدء الجلسة" : "Start Session"}
                                 {isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                               </a>
                             ) : (
-                              <p className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
-                                <Clock className="w-3 h-3 animate-pulse" />
-                                {isRTL ? "رابط الجلسة قريباً" : "Meeting link coming soon"}
-                              </p>
+                              <Link
+                                href="/instructor/attendance"
+                                className="inline-flex items-center gap-2 text-sm text-white px-4 py-2 rounded-xl font-black hover:shadow-lg transition-all"
+                                style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }}
+                              >
+                                <ClipboardList className="w-4 h-4" />
+                                {isRTL ? "تسجيل الحضور" : "Take Attendance"}
+                              </Link>
                             )}
                           </div>
                         )}
@@ -1054,41 +1032,65 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              {/* Notifications */}
-              {notifications && notifications.length > 0 && (
-                <div className="bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d]">
-                  <h4 className="font-black text-gray-900 dark:text-[#e6edf3] mb-4 flex items-center gap-2 text-base">
-                    <Bell className="w-5 h-5" style={{ color: "#ff6700" }} />
-                    {isRTL ? "الإشعارات" : "Notifications"}
-                  </h4>
+              {/* Attendance breakdown */}
+              <div className="bg-white dark:bg-[#161b22] rounded-2xl p-6 shadow-lg dark:shadow-black/40 border border-gray-100 dark:border-[#30363d]">
+                <h4 className="font-black text-gray-900 dark:text-[#e6edf3] mb-4 flex items-center gap-2 text-base">
+                  <BarChart3 className="w-5 h-5" style={{ color: "#ff6700" }} />
+                  {isRTL ? "إحصائيات الحضور" : "Attendance Overview"}
+                </h4>
 
-                  <div className="space-y-3">
-                    {notifications.slice(0, 3).map((note, idx) => (
-                      <div key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-[#1c2128]">
-                        <div className="w-8 h-8 rounded-lg bg-[#ff6700]/10 flex items-center justify-center flex-shrink-0">
-                          <Bell className="w-4 h-4 text-[#ff6700]" />
+                <div className="space-y-3">
+                  {[
+                    {
+                      label: isRTL ? "حاضر" : "Present",
+                      value: stats?.totalPresent || 0,
+                      barBg: "linear-gradient(90deg, #004d59, #ff6700)",
+                      textColor: "#004d59",
+                    },
+                    {
+                      label: isRTL ? "غائب" : "Absent",
+                      value: stats?.totalAbsent || 0,
+                      barBg: "linear-gradient(90deg, #ef4444, #f87171)",
+                      textColor: "#ef4444",
+                    },
+                    {
+                      label: isRTL ? "متأخر" : "Late",
+                      value: stats?.totalLate || 0,
+                      barBg: "linear-gradient(90deg, #feaf00, #f67d00)",
+                      textColor: "#f67d00",
+                    },
+                    {
+                      label: isRTL ? "معذور" : "Excused",
+                      value: stats?.totalExcused || 0,
+                      barBg: "linear-gradient(90deg, #ff6437, #ff6700)",
+                      textColor: "#ff6437",
+                    },
+                  ].map((item) => {
+                    const total = (stats?.totalPresent || 0) + (stats?.totalAbsent || 0) + (stats?.totalLate || 0) + (stats?.totalExcused || 0);
+                    const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                    return (
+                      <div key={item.label} className="flex items-center gap-3">
+                        <span className="text-xs font-black w-16 flex-shrink-0" style={{ color: item.textColor }}>{item.label}</span>
+                        <div className="flex-1 h-2 bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-1000"
+                            style={{ width: animateProgress ? `${pct}%` : "0%", background: item.barBg }}
+                          />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] truncate">
-                            {isRTL ? (note.titleAr || note.title) : note.title}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-[#8b949e] mt-0.5">
-                            {note.time}
-                          </p>
-                        </div>
+                        <span className="text-xs font-black w-8 text-right flex-shrink-0" style={{ color: item.textColor }}>{item.value}</span>
                       </div>
-                    ))}
-                  </div>
-
-                  <Link
-                    href="/dashboard/messages"
-                    className="mt-4 block text-center text-sm text-white px-4 py-2.5 rounded-xl font-black hover:shadow-lg transition-all hover:scale-105"
-                    style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
-                  >
-                    {isRTL ? "عرض كل الإشعارات" : "View All Notifications"}
-                  </Link>
+                    );
+                  })}
                 </div>
-              )}
+
+                <Link
+                  href="/instructor/reports"
+                  className="mt-4 block text-center text-sm text-white px-4 py-2.5 rounded-xl font-black hover:shadow-lg transition-all hover:scale-105"
+                  style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+                >
+                  {isRTL ? "تقارير مفصلة" : "Detailed Reports"}
+                </Link>
+              </div>
             </div>
           </div>
         </div>
