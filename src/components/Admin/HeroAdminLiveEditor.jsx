@@ -25,7 +25,7 @@ const C = {
 };
 
 const DEFAULT = {
-  language:       "ar",   // ← الإضافة المهمة
+  language:       "ar",
   imageUrl:       "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=400&h=500&fit=crop",
   secondImageUrl: "https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=400&h=500&fit=crop",
   imageAlt: "مدرب البرمجة", secondImageAlt: "الصورة الثانية",
@@ -52,6 +52,40 @@ const DEFAULT = {
   discount: 30, happyParents: "250", graduates: "130",
   isActive: true, displayOrder: 0,
 };
+
+/* ════════════════════════════════════════════════
+   ── ضغط الصورة قبل الإرسال
+   maxWidth: العرض الأقصى بالبكسل
+   quality:  جودة الـ JPEG (0 → 1)
+════════════════════════════════════════════════ */
+function compressImage(file, maxWidth = 1200, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      try {
+        const scale  = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      } catch (err) {
+        URL.revokeObjectURL(url);
+        reject(err);
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("فشل تحميل الصورة"));
+    };
+
+    img.src = url;
+  });
+}
 
 /* ── Editable ── */
 function Editable({ fieldKey, value, onChange, tag: Tag = "span", multiline = false,
@@ -374,7 +408,6 @@ export default function HeroAdminLiveEditor() {
         const res  = await fetch("/api/section-images-hero?activeOnly=false");
         const json = await res.json();
         if (json.success && json.data?.length > 0) {
-          // دمج DEFAULT مع بيانات الداتابيز (بيانات الداتابيز تكسب)
           setData({ ...DEFAULT, ...json.data[0] });
         }
       } catch {
@@ -386,42 +419,79 @@ export default function HeroAdminLiveEditor() {
 
   const set = useCallback((field, val) => setData(p => ({ ...p, [field]: val })), []);
 
-  const notify = (msg, type="ok") => {
+  const notify = (msg, type = "ok") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3200);
   };
 
+  /* ════════════════════════════════════════════════
+     ── رفع الصورة مع ضغط مسبق
+     ✅ لا يُخزَّن base64 في الـ state إطلاقاً
+     ✅ يُرسَل base64 مضغوط فقط للـ API
+     ✅ يُحفَظ في الـ state URL من Cloudinary فقط
+  ════════════════════════════════════════════════ */
   const uploadImage = async (e, isSecond) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5*1024*1024) { notify("حجم الصورة > 5MB","err"); return; }
+
+    // رفع حد الحجم إلى 10MB (بعد الضغط سيكون أصغر بكثير)
+    if (file.size > 10 * 1024 * 1024) {
+      notify("حجم الصورة يتجاوز 10MB", "err");
+      return;
+    }
+
     const key = isSecond ? "img2" : "img1";
-    setUploading(u => ({ ...u, [key]:true }));
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      const b64 = ev.target.result;
-      try {
-        const res  = await fetch("/api/upload-image", {
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ image:b64, folder:"section-images-hero" }),
-        });
-        const json = await res.json();
-        set(isSecond?"secondImageUrl":"imageUrl", json.success?json.imageUrl:b64);
-        if (json.success) notify("✓ تم رفع الصورة بنجاح");
-      } catch {
-        set(isSecond?"secondImageUrl":"imageUrl", b64);
-      } finally {
-        setUploading(u => ({ ...u, [key]:false }));
+    setUploading(u => ({ ...u, [key]: true }));
+
+    try {
+      // ── ضغط الصورة أولاً (يقلل الحجم ~70-85%) ──
+      const b64Compressed = await compressImage(file, 1200, 0.82);
+
+      // ── رفع الـ base64 المضغوط للـ API ──
+      const res  = await fetch("/api/upload-image", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          image:  b64Compressed,
+          folder: "section-images-hero",
+        }),
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        // ✅ نحفظ URL من Cloudinary فقط — لا base64
+        set(isSecond ? "secondImageUrl" : "imageUrl", json.imageUrl);
+        notify("✓ تم رفع الصورة بنجاح");
+      } else {
+        // ❌ لا نضع base64 في الـ state عند الفشل
+        notify(json.message || "فشل رفع الصورة", "err");
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      // ❌ لا نضع base64 في الـ state عند الخطأ
+      notify("✗ خطأ في الاتصال أثناء رفع الصورة", "err");
+      console.error("Upload error:", err);
+    } finally {
+      setUploading(u => ({ ...u, [key]: false }));
+      // إعادة تعيين قيمة الـ input حتى يمكن اختيار نفس الملف مجدداً
+      e.target.value = "";
+    }
   };
 
-  // ── الحفظ — مع ضمان language دايماً ──
+  // ── الحفظ ──
   const save = async () => {
-    if (!data.imageUrl) { notify("رابط الصورة الأولى مطلوب","err"); return; }
+    if (!data.imageUrl) { notify("رابط الصورة الأولى مطلوب", "err"); return; }
 
-    // ضمان وجود language قبل الإرسال
+    // ✅ تأكد أن imageUrl ليس base64 قبل الإرسال
+    if (data.imageUrl.startsWith("data:")) {
+      notify("الصورة الأولى لم تُرفع بعد — انتظر اكتمال الرفع", "err");
+      return;
+    }
+    if (data.secondImageUrl?.startsWith("data:")) {
+      notify("الصورة الثانية لم تُرفع بعد — انتظر اكتمال الرفع", "err");
+      return;
+    }
+
     const payload = {
       ...data,
       language: data.language || "ar",
@@ -442,7 +512,6 @@ export default function HeroAdminLiveEditor() {
       const json = await res.json();
 
       if (json.success) {
-        // احفظ الـ _id الجديد عشان المرة الجاية يعمل PUT مش POST
         if (json.data?._id) setData(p => ({ ...p, _id: json.data._id }));
         notify("✓ تم الحفظ بنجاح!");
       } else {
@@ -495,7 +564,7 @@ export default function HeroAdminLiveEditor() {
             </div>
           )}
 
-          {/* Language Switcher — يغير الـ language في الداتا */}
+          {/* Language Switcher */}
           <div style={{ display:"flex",alignItems:"center",background:"rgba(255,255,255,.1)",borderRadius:8,padding:3,gap:2 }}>
             {[{id:"ar",flag:"🇸🇦"},{id:"en",flag:"🇺🇸"}].map(({id,flag})=>(
               <button key={id} onClick={()=>{ set("language",id); setPLang(id); }}
@@ -537,7 +606,7 @@ export default function HeroAdminLiveEditor() {
           ))}
         </div>
 
-        {/* Lang preview pills — للمعاينة فقط (لا تغير الـ language المحفوظة) */}
+        {/* Lang preview pills */}
         <div style={{ display:"flex",alignItems:"center",background:dark?C.dark_input:"#f1f0f5",borderRadius:10,padding:3,gap:2,border:`0.5px solid ${borderClr}`,flexWrap:"wrap" }}>
           {[
             { id:"ar", flag:"🇸🇦", label:"عربي" },

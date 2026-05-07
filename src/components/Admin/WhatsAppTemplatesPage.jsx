@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from "react"; // useRef still needed in main page
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   MessageCircle, Eye, Save, RefreshCw, Send, User, Users, Globe,
   Loader2, Zap, CheckCircle, XCircle, AlertCircle, Sparkles,
@@ -17,33 +17,32 @@ import { useI18n } from "@/i18n/I18nProvider";
 const SINGLE_CONTENT_TEMPLATES = ["student_welcome", "guardian_notification"];
 
 const TEMPLATE_TYPES = [
-  { id: "student_welcome",               label: "ترحيب الطالب",                icon: User,         color: "violet",  emoji: "🎓", category: "basic",      type: "student_only",           api: "whatsapp" },
-  { id: "guardian_notification",          label: "إشعار ولي الأمر",             icon: Users,        color: "blue",    emoji: "👨‍👩‍👧", category: "basic",      type: "guardian_only",          api: "whatsapp" },
+  { id: "student_welcome",               label: "ترحيب الطالب",                icon: User,         color: "primary",  emoji: "🎓", category: "basic",      type: "student_only",           api: "whatsapp" },
+  { id: "guardian_notification",          label: "إشعار ولي الأمر",             icon: Users,        color: "secondary",    emoji: "👨‍👩‍👧", category: "basic",      type: "guardian_only",          api: "whatsapp" },
   { id: "language_confirmation",          label: "تأكيد اللغة",                 icon: Globe,        color: "emerald", emoji: "🌍", category: "basic",      type: "student_only",           api: "whatsapp" },
-  { id: "guardian_language_notification", label: "إشعار اللغة لولي الأمر",      icon: Bell,         color: "orange",  emoji: "📢", category: "basic",      type: "guardian_only",          api: "whatsapp" },
+  { id: "guardian_language_notification", label: "إشعار اللغة لولي الأمر",      icon: Bell,         color: "accent",  emoji: "📢", category: "basic",      type: "guardian_only",          api: "whatsapp" },
   { id: "group_student_welcome_student",  label: "ترحيب الطالب بالمجموعة",      icon: UserPlus,     color: "indigo",  emoji: "➕", category: "group",      type: "student_with_group",     api: "group",   isNew: true },
   { id: "group_student_welcome_guardian", label: "إشعار ولي الأمر بالمجموعة",   icon: Users,        color: "indigo",  emoji: "👨‍👩‍👧", category: "group",      type: "guardian_with_group",    api: "group",   isNew: true },
   { id: "instructor_group_activation",    label: "إشعار تفعيل مجموعة للمدرب",   icon: UserCog,      color: "amber",   emoji: "👨‍🏫", category: "instructor", type: "instructor_only",        api: "instructor", isNew: true },
   { id: "reminder_24h_student",           label: "تذكير الطالب 24 ساعة",        icon: Clock,        color: "sky",     emoji: "⏰", category: "reminder",   type: "student_with_session",   api: "message" },
   { id: "reminder_24h_guardian",          label: "تذكير ولي الأمر 24 ساعة",     icon: Clock,        color: "sky",     emoji: "⏰", category: "reminder",   type: "guardian_with_session",  api: "message" },
-  { id: "reminder_1h_student",            label: "تذكير الطالب قبل ساعة",       icon: Clock,        color: "amber",   emoji: "⏳", category: "reminder",   type: "student_with_session",   api: "message" },
-  { id: "reminder_1h_guardian",           label: "تذكير ولي الأمر قبل ساعة",    icon: Clock,        color: "amber",   emoji: "⏳", category: "reminder",   type: "guardian_with_session",  api: "message" },
+  { id: "reminder_1h_student",            label: "تذكير الطالب قبل ساعة",       icon: Clock,        color: "accent",   emoji: "⏳", category: "reminder",   type: "student_with_session",   api: "message" },
+  { id: "reminder_1h_guardian",           label: "تذكير ولي الأمر قبل ساعة",    icon: Clock,        color: "accent",   emoji: "⏳", category: "reminder",   type: "guardian_with_session",  api: "message" },
   { id: "session_cancelled_student",      label: "إلغاء حصة - الطالب",          icon: XCircle,      color: "rose",    emoji: "❌", category: "session",    type: "student_with_session",   api: "message" },
   { id: "session_cancelled_guardian",     label: "إلغاء حصة - ولي الأمر",       icon: XCircle,      color: "rose",    emoji: "❌", category: "session",    type: "guardian_with_session",  api: "message" },
-  { id: "session_postponed_student",      label: "تأجيل حصة - الطالب",          icon: Calendar,     color: "orange",  emoji: "🔄", category: "session",    type: "student_with_session",   api: "message" },
-  { id: "session_postponed_guardian",     label: "تأجيل حصة - ولي الأمر",       icon: Calendar,     color: "orange",  emoji: "🔄", category: "session",    type: "guardian_with_session",  api: "message" },
+  { id: "session_postponed_student",      label: "تأجيل حصة - الطالب",          icon: Calendar,     color: "accent",  emoji: "🔄", category: "session",    type: "student_with_session",   api: "message" },
+  { id: "session_postponed_guardian",     label: "تأجيل حصة - ولي الأمر",       icon: Calendar,     color: "accent",  emoji: "🔄", category: "session",    type: "guardian_with_session",  api: "message" },
   { id: "absence_notification",           label: "إشعار غياب - ولي الأمر",      icon: AlertCircle,  color: "rose",    emoji: "📋", category: "attendance", type: "guardian_with_session",  api: "message" },
-  { id: "late_notification",              label: "إشعار تأخير - ولي الأمر",     icon: Clock,        color: "orange",  emoji: "⏰", category: "attendance", type: "guardian_with_session",  api: "message" },
-  { id: "excused_notification",           label: "إشعار غياب بعذر - ولي الأمر", icon: FileText,     color: "blue",    emoji: "📝", category: "attendance", type: "guardian_with_session",  api: "message" },
-  { id: "group_completion_student",       label: "إكمال المجموعة - الطالب",     icon: Award,        color: "emerald", emoji: "🎉", category: "completion", type: "student_with_group",     api: "message" },
-  { id: "group_completion_guardian",      label: "إكمال المجموعة - ولي الأمر",  icon: Award,        color: "emerald", emoji: "🎉", category: "completion", type: "guardian_with_group",    api: "message" },
-  { id: "evaluation_pass",                label: "تقييم: ممتاز",                icon: Star,         color: "emerald", emoji: "✅", category: "evaluation", type: "guardian_with_session",  api: "message" },
-  { id: "evaluation_review",              label: "تقييم: يحتاج مراجعة",         icon: FileText,     color: "amber",   emoji: "⚠️", category: "evaluation", type: "guardian_with_session",  api: "message" },
+  { id: "late_notification",              label: "إشعار تأخير - ولي الأمر",     icon: Clock,        color: "accent",  emoji: "⏰", category: "attendance", type: "guardian_with_session",  api: "message" },
+  { id: "excused_notification",           label: "إشعار غياب بعذر - ولي الأمر", icon: FileText,     color: "secondary",    emoji: "📝", category: "attendance", type: "guardian_with_session",  api: "message" },
+  { id: "group_completion_student",       label: "إكمال المجموعة - الطالب",     icon: Award,        color: "secondary", emoji: "🎉", category: "completion", type: "student_with_group",     api: "message" },
+  { id: "group_completion_guardian",      label: "إكمال المجموعة - ولي الأمر",  icon: Award,        color: "secondary", emoji: "🎉", category: "completion", type: "guardian_with_group",    api: "message" },
+  { id: "evaluation_pass",                label: "تقييم: ممتاز",                icon: Star,         color: "primary", emoji: "✅", category: "evaluation", type: "guardian_with_session",  api: "message" },
+  { id: "evaluation_review",              label: "تقييم: يحتاج مراجعة",         icon: FileText,     color: "accent",   emoji: "⚠️", category: "evaluation", type: "guardian_with_session",  api: "message" },
   { id: "evaluation_repeat",              label: "تقييم: يحتاج دعم إضافي",      icon: RotateCcw,    color: "rose",    emoji: "🔄", category: "evaluation", type: "guardian_with_session",  api: "message" },
   { id: "session_recording",              label: "رابط التسجيل",                icon: Video,        color: "sky",     emoji: "🎥", category: "evaluation", type: "guardian_with_session",  api: "message" },
-  // ✅ القالبان الجديدان
-  { id: "learning_supervisor_intro",      label: "تقديم المشرف الأكاديمي",      icon: User,         color: "indigo",  emoji: "👨‍🏫", category: "basic",      type: "guardian_only",          api: "message", isNew: true },
-  { id: "module_overview",                label: "نظرة عامة على الموديول",      icon: BookOpen,     color: "sky",     emoji: "📚", category: "basic",      type: "guardian_only",          api: "message", isNew: true },
+  { id: "learning_supervisor_intro",      label: "تقديم المشرف الأكاديمي",      icon: User,         color: "primary",  emoji: "👨‍🏫", category: "basic",      type: "guardian_only",          api: "message", isNew: true },
+  { id: "module_overview",                label: "نظرة عامة على الموديول",      icon: BookOpen,     color: "secondary",     emoji: "📚", category: "basic",      type: "guardian_only",          api: "message", isNew: true },
 ];
 
 const CATEGORIES = {
@@ -79,24 +78,20 @@ const TEMPLATE_VARS = {
   group_student_welcome_guardian:["guardianSalutation_ar","guardianSalutation_en","childTitle","studentName","courseName","groupName","startDate","timeTo","timeFrom","instructor","firstMeetingLink"],
   instructor_group_activation:   ["salutation","courseName","groupName","startDate","timeTo","timeFrom","instructorName","studentCount"],
   
-  // ✅ التذكيرات - تم استبدال studentSalutation بـ salutation_ar و salutation_en
   reminder_24h_student:          ["salutation_ar", "salutation_en", "sessionName", "date", "time", "meetingLink", "guardianSalutation", "studentName", "guardianName", "childTitle", "enrollmentNumber"],
   reminder_24h_guardian:         ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
   reminder_1h_student:           ["salutation_ar", "salutation_en", "sessionName", "time", "meetingLink", "guardianSalutation", "studentName", "childTitle", "enrollmentNumber"],
   reminder_1h_guardian:          ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
   
-  // ✅ الحصص - تم استبدال studentSalutation بـ salutation_ar و salutation_en
   session_cancelled_student:     ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
   session_cancelled_guardian:    ["guardianSalutation", "salutation_ar", "salutation_en", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
   session_postponed_student:     ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
   session_postponed_guardian:    ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
   
-  // ✅ الحضور - تم استبدال studentSalutation بـ salutation_ar و salutation_en
   absence_notification:          ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
   late_notification:             ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
   excused_notification:          ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
   
-  // ✅ الإكمال - تم استبدال studentSalutation بـ salutation_ar و salutation_en
   group_completion_student:      ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
   group_completion_guardian:     ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
   
@@ -105,7 +100,6 @@ const TEMPLATE_VARS = {
   evaluation_repeat:             ["guardianSalutation","sessionDate","sessionNumber","attendanceStatus","starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation","instructorComment","completedSessions","recordingLink"],
   session_recording:             ["guardianSalutation","guardianName","childTitle","studentName","sessionName","recordingLink"],
   
-  // ✅ القالبان الجديدان
   learning_supervisor_intro:     ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
   module_overview:               ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "supervisorName"],
 };
@@ -135,61 +129,30 @@ const FRONTEND_FALLBACKS = {
     ar: `{guardianSalutation}،\n\n🎥 رابط تسجيل جلسة "{sessionName}" لـ{childTitle} *{studentName}*:\n\n{recordingLink}\n\nيمكن مراجعة التسجيل في أي وقت للمذاكرة والمراجعة.\nفريق Code School 💻`,
     en: `{guardianSalutation},\n\n🎥 Recording for "{sessionName}" — {childTitle} *{studentName}*:\n\n{recordingLink}\n\nThe recording can be reviewed anytime for study and revision.\nCode School Team 💻`,
   },
-  // ✅ القالبان الجديدان
   learning_supervisor_intro: {
-    ar: `{guardianSalutation} 👋
-أنا {supervisorName}، الـ Learning Supervisor الخاص بـ {childTitle} **{studentName}** في Code School ✨
-حبيت أعرف حضرتك بنفسي، لأنني هكون معاكم في المتابعة الأكاديمية خلال الفترة الجاية، وهشارك مع حضرتك التقييمات الدورية، وكمان في بداية كل Module هبعت لحضرتك نظرة بسيطة على اللي {childTitle} هيتعلمه خلالها 🌟
-هدفي إن المتابعة تكون واضحة ومريحة، وإن حضرتك تبقى مطّمن على رحلة {studentName} التعليمية خطوة بخطوة 🤍
-وأي وقت تحب تستفسر عن أي حاجة تخص المستوى أو التقدم، أنا موجود مع حضرتك.
-{supervisorName} ✨
-Learning Supervisor`,
-    en: `{guardianSalutation} 👋
-I am {supervisorName}, your Learning Supervisor for {childTitle} **{studentName}** at Code School ✨
-I wanted to introduce myself, as I will be following up on the academic progress during the coming period. I will share periodic evaluations with you, and at the beginning of each Module, I will send you a brief overview of what {childTitle} will be learning 🌟
-My goal is to make follow-up clear and comfortable, and to keep you reassured about {studentName}'s educational journey step by step 🤍
-Anytime you would like to inquire about anything regarding the level or progress, I am here for you.
-{supervisorName} ✨
-Learning Supervisor`,
+    ar: `{guardianSalutation} 👋\nأنا {supervisorName}، الـ Learning Supervisor الخاص بـ {childTitle} **{studentName}** في Code School ✨\nحبيت أعرف حضرتك بنفسي، لأنني هكون معاكم في المتابعة الأكاديمية خلال الفترة الجاية، وهشارك مع حضرتك التقييمات الدورية، وكمان في بداية كل Module هبعت لحضرتك نظرة بسيطة على اللي {childTitle} هيتعلمه خلالها 🌟\nهدفي إن المتابعة تكون واضحة ومريحة، وإن حضرتك تبقى مطّمن على رحلة {studentName} التعليمية خطوة بخطوة 🤍\nوأي وقت تحب تستفسر عن أي حاجة تخص المستوى أو التقدم، أنا موجود مع حضرتك.\n{supervisorName} ✨\nLearning Supervisor`,
+    en: `{guardianSalutation} 👋\nI am {supervisorName}, your Learning Supervisor for {childTitle} **{studentName}** at Code School ✨\nI wanted to introduce myself, as I will be following up on the academic progress during the coming period. I will share periodic evaluations with you, and at the beginning of each Module, I will send you a brief overview of what {childTitle} will be learning 🌟\nMy goal is to make follow-up clear and comfortable, and to keep you reassured about {studentName}'s educational journey step by step 🤍\nAnytime you would like to inquire about anything regarding the level or progress, I am here for you.\n{supervisorName} ✨\nLearning Supervisor`,
   },
   module_overview: {
-    ar: `{guardianSalutation} 👋
-حابب أشارك مع حضرتك لمحة سريعة عن الـ Module الجديد اللي هيبدأه {childTitle} **{studentName}** ✨
-
-**Module Title:** {moduleTitle}
-
-خلال الـ Module ده، {studentName} هياخد فكرة ممتعة وبسيطة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱
-وهيركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعده يفهم الفكرة خطوة بخطوة بشكل سهل ومناسب لسنه 🌟
-
-وأنا هكون متابع مع حضرتك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.
-
-{supervisorName} ✨
-Learning Supervisor`,
-    en: `{guardianSalutation} 👋
-I would like to share with you a quick overview of the new Module that {childTitle} **{studentName}** will be starting ✨
-
-**Module Title:** {moduleTitle}
-
-During this Module, {studentName} will get a fun and simple idea about how the applications we use in our daily lives are built and tailored for users 📱
-He will also focus on building simple screens similar to mobile applications, with practical training to help him understand the concept step by step in an easy and age-appropriate way 🌟
-
-I will be following up with you during the Module and will share any important notes or noticeable progress with you, God willing.
-
-{supervisorName} ✨
-Learning Supervisor`,
+    ar: `{guardianSalutation} 👋\nحابب أشارك مع حضرتك لمحة سريعة عن الـ Module الجديد اللي هيبدأه {childTitle} **{studentName}** ✨\n\n**Module Title:** {moduleTitle}\n\nخلال الـ Module ده، {studentName} هياخد فكرة ممتعة وبسيطة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱\nوهيركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعده يفهم الفكرة خطوة بخطوة بشكل سهل ومناسب لسنه 🌟\n\nوأنا هكون متابع مع حضرتك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.\n\n{supervisorName} ✨\nLearning Supervisor`,
+    en: `{guardianSalutation} 👋\nI would like to share with you a quick overview of the new Module that {childTitle} **{studentName}** will be starting ✨\n\n**Module Title:** {moduleTitle}\n\nDuring this Module, {studentName} will get a fun and simple idea about how the applications we use in our daily lives are built and tailored for users 📱\nHe will also focus on building simple screens similar to mobile applications, with practical training to help him understand the concept step by step in an easy and age-appropriate way 🌟\n\nI will be following up with you during the Module and will share any important notes or noticeable progress with you, God willing.\n\n{supervisorName} ✨\nLearning Supervisor`,
   },
 };
 
+// ── Color map with brand colors ──
 const C_MAP = {
-  violet:  { bg: "bg-violet-500",  text: "text-violet-600 dark:text-violet-400",   light: "bg-violet-50 dark:bg-violet-900/20",   border: "border-violet-200 dark:border-violet-800",   ring: "ring-violet-500/30",   activePill: "bg-violet-500 text-white" },
-  blue:    { bg: "bg-blue-500",    text: "text-blue-600 dark:text-blue-400",        light: "bg-blue-50 dark:bg-blue-900/20",        border: "border-blue-200 dark:border-blue-800",        ring: "ring-blue-500/30",     activePill: "bg-blue-500 text-white" },
-  emerald: { bg: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400",  light: "bg-emerald-50 dark:bg-emerald-900/20",  border: "border-emerald-200 dark:border-emerald-800",  ring: "ring-emerald-500/30",  activePill: "bg-emerald-500 text-white" },
-  orange:  { bg: "bg-orange-500",  text: "text-orange-600 dark:text-orange-400",    light: "bg-orange-50 dark:bg-orange-900/20",    border: "border-orange-200 dark:border-orange-800",    ring: "ring-orange-500/30",   activePill: "bg-orange-500 text-white" },
-  amber:   { bg: "bg-amber-500",   text: "text-amber-600 dark:text-amber-400",      light: "bg-amber-50 dark:bg-amber-900/20",      border: "border-amber-200 dark:border-amber-800",      ring: "ring-amber-500/30",    activePill: "bg-amber-500 text-white" },
-  indigo:  { bg: "bg-indigo-500",  text: "text-indigo-600 dark:text-indigo-400",    light: "bg-indigo-50 dark:bg-indigo-900/20",    border: "border-indigo-200 dark:border-indigo-800",    ring: "ring-indigo-500/30",   activePill: "bg-indigo-500 text-white" },
-  sky:     { bg: "bg-sky-500",     text: "text-sky-600 dark:text-sky-400",          light: "bg-sky-50 dark:bg-sky-900/20",          border: "border-sky-200 dark:border-sky-800",          ring: "ring-sky-500/30",      activePill: "bg-sky-500 text-white" },
-  rose:    { bg: "bg-rose-500",    text: "text-rose-600 dark:text-rose-400",        light: "bg-rose-50 dark:bg-rose-900/20",        border: "border-rose-200 dark:border-rose-800",        ring: "ring-rose-500/30",     activePill: "bg-rose-500 text-white" },
-  slate:   { bg: "bg-slate-500",   text: "text-slate-600 dark:text-slate-400",      light: "bg-slate-50 dark:bg-slate-900/20",      border: "border-slate-200 dark:border-slate-800",      ring: "ring-slate-500/30",    activePill: "bg-slate-500 text-white" },
+  primary:   { bg: "bg-[#ff6700]",  text: "text-[#ff6700]",   light: "bg-[#ff6700]/10",   border: "border-[#ff6700]/20",   ring: "ring-[#ff6700]/30",   activePill: "bg-[#ff6700] text-white" },
+  secondary: { bg: "bg-[#004d59]",  text: "text-[#004d59]",   light: "bg-[#004d59]/10",   border: "border-[#004d59]/20",   ring: "ring-[#004d59]/30",   activePill: "bg-[#004d59] text-white" },
+  accent:    { bg: "bg-[#feaf00]",  text: "text-[#feaf00]",   light: "bg-[#feaf00]/10",   border: "border-[#feaf00]/20",   ring: "ring-[#feaf00]/30",   activePill: "bg-[#feaf00] text-white" },
+  violet:    { bg: "bg-[#ff6700]",  text: "text-[#ff6700]",   light: "bg-[#ff6700]/10",   border: "border-[#ff6700]/20",   ring: "ring-[#ff6700]/30",   activePill: "bg-[#ff6700] text-white" },
+  blue:      { bg: "bg-[#004d59]",    text: "text-[#004d59]",        light: "bg-[#004d59]/10",        border: "border-[#004d59]/20",        ring: "ring-[#004d59]/30",     activePill: "bg-[#004d59] text-white" },
+  emerald:   { bg: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400",  light: "bg-emerald-50 dark:bg-emerald-900/20",  border: "border-emerald-200 dark:border-emerald-800",  ring: "ring-emerald-500/30",  activePill: "bg-emerald-500 text-white" },
+  orange:    { bg: "bg-[#ff6700]",  text: "text-[#ff6700]",    light: "bg-[#ff6700]/10",    border: "border-[#ff6700]/20",    ring: "ring-[#ff6700]/30",   activePill: "bg-[#ff6700] text-white" },
+  amber:     { bg: "bg-[#feaf00]",   text: "text-[#feaf00]",      light: "bg-[#feaf00]/10",      border: "border-[#feaf00]/20",      ring: "ring-[#feaf00]/30",    activePill: "bg-[#feaf00] text-white" },
+  indigo:    { bg: "bg-[#004d59]",  text: "text-[#004d59]",    light: "bg-[#004d59]/10",    border: "border-[#004d59]/20",    ring: "ring-[#004d59]/30",   activePill: "bg-[#004d59] text-white" },
+  sky:       { bg: "bg-sky-500",     text: "text-sky-600 dark:text-sky-400",          light: "bg-sky-50 dark:bg-sky-900/20",          border: "border-sky-200 dark:border-sky-800",          ring: "ring-sky-500/30",      activePill: "bg-sky-500 text-white" },
+  rose:      { bg: "bg-rose-500",    text: "text-rose-600 dark:text-rose-400",        light: "bg-rose-50 dark:bg-rose-900/20",        border: "border-rose-200 dark:border-rose-800",        ring: "ring-rose-500/30",     activePill: "bg-rose-500 text-white" },
+  slate:     { bg: "bg-slate-500",   text: "text-slate-600 dark:text-slate-400",      light: "bg-slate-50 dark:bg-slate-900/20",      border: "border-slate-200 dark:border-slate-800",      ring: "ring-slate-500/30",    activePill: "bg-slate-500 text-white" },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -217,14 +180,14 @@ function GenderContextSelector({ genderContext, setGenderContext }) {
   const { studentGender, guardianType, instructorGender } = genderContext;
 
   const btnBase = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border";
-  const active   = "bg-violet-500 text-white border-violet-500 shadow-sm";
-  const inactive = "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-700";
+  const active   = "bg-[#ff6700] text-white border-[#ff6700] shadow-sm";
+  const inactive = "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-[#ff6700]/30";
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-l from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 border border-violet-200 dark:border-violet-800/40 rounded-2xl mb-4 flex-wrap">
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-l from-[#ff6700]/10 to-[#004d59]/10 border border-[#ff6700]/20 rounded-2xl mb-4 flex-wrap">
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-        <span className="text-[11px] font-bold text-violet-700 dark:text-violet-300">معاينة حسب:</span>
+        <Sparkles className="w-3.5 h-3.5 text-[#ff6700]" />
+        <span className="text-[11px] font-bold text-[#ff6700]">معاينة حسب:</span>
       </div>
 
       <div className="flex items-center gap-1 flex-shrink-0">
@@ -252,7 +215,9 @@ function GenderContextSelector({ genderContext, setGenderContext }) {
   );
 }
 
-// Standalone so React never remounts it during VariableRow re-renders
+// ─────────────────────────────────────────────────────────────
+// FIELD COMPONENT
+// ─────────────────────────────────────────────────────────────
 function Field({ label, field, dir, vals, onChange }) {
   return (
     <div>
@@ -262,7 +227,7 @@ function Field({ label, field, dir, vals, onChange }) {
         onChange={(e) => onChange(field, e.target.value)}
         dir={dir}
         rows={vals[field]?.length > 60 ? 2 : 1}
-        className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 dark:text-slate-100 resize-none transition-all"
+        className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:text-slate-100 resize-none transition-all"
       />
     </div>
   );
@@ -271,10 +236,6 @@ function Field({ label, field, dir, vals, onChange }) {
 // ─────────────────────────────────────────────────────────────
 // VARIABLE ROW
 // ─────────────────────────────────────────────────────────────
-// Fully uncontrolled: state is initialized once from props and never
-// synced again. The parent MUST pass key={variable.key} so React
-// remounts this component when switching to a different variable.
-// This is the only correct way to avoid resetting the input while typing.
 function VariableRow({ variable, onSave, saving }) {
   const [editing, setEditing] = useState(false);
   const [dirty,   setDirty]   = useState(false);
@@ -302,23 +263,22 @@ function VariableRow({ variable, onSave, saving }) {
 
   const genderBadge = variable.hasGender
     ? genderType === "guardian"
-      ? <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold">أب/أم</span>
+      ? <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20 font-bold">أب/أم</span>
       : genderType === "instructor"
-        ? <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 font-bold">ذ/أ مدرب</span>
-        : <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800 font-bold">ذكر/أنثى</span>
+        ? <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20 font-bold">ذ/أ مدرب</span>
+        : <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20 font-bold">ذكر/أنثى</span>
     : null;
 
   const rowBg = editing
-    ? "border-violet-300 dark:border-violet-700 shadow-sm"
+    ? "border-[#ff6700]/30 dark:border-[#ff6700]/50 shadow-sm"
     : "border-slate-200 dark:border-slate-700";
 
   const headerBg = editing
-    ? "bg-violet-50 dark:bg-violet-900/20"
+    ? "bg-[#ff6700]/5 dark:bg-[#ff6700]/10"
     : "bg-white dark:bg-[#161b27] hover:bg-slate-50 dark:hover:bg-slate-800/50";
 
   return (
     <div className={`border rounded-xl overflow-hidden transition-all ${rowBg}`}>
-      {/* Header */}
       <div
         className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer select-none ${headerBg}`}
         onClick={() => !isSaving && setEditing(p => !p)}
@@ -327,7 +287,7 @@ function VariableRow({ variable, onSave, saving }) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <code className="text-[10px] font-mono font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-1.5 py-0.5 rounded">
+            <code className="text-[10px] font-mono font-bold text-[#ff6700] bg-[#ff6700]/10 px-1.5 py-0.5 rounded">
               {`{${variable.key}}`}
             </code>
             <span className="text-xs text-slate-600 dark:text-slate-300 font-medium truncate">{variable.labelAr}</span>
@@ -375,9 +335,9 @@ function VariableRow({ variable, onSave, saving }) {
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {dirty && !editing && <span className="w-2 h-2 rounded-full bg-amber-400" />}
+          {dirty && !editing && <span className="w-2 h-2 rounded-full bg-[#feaf00]" />}
           {isSaving
-            ? <Loader2 className="w-3.5 h-3.5 text-violet-500 animate-spin" />
+            ? <Loader2 className="w-3.5 h-3.5 text-[#ff6700] animate-spin" />
             : editing
               ? <ChevronUp   className="w-3.5 h-3.5 text-slate-400" />
               : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -385,7 +345,6 @@ function VariableRow({ variable, onSave, saving }) {
         </div>
       </div>
 
-      {/* Expanded fields */}
       {editing && (
         <div className="px-3 pb-3 pt-2 bg-white dark:bg-[#161b27] border-t border-slate-100 dark:border-slate-800 space-y-3">
           {variable.hasGender ? (
@@ -441,7 +400,7 @@ function VariableRow({ variable, onSave, saving }) {
               className={`flex items-center gap-1 px-4 py-1.5 rounded-lg text-xs font-bold transition-all
                 ${isSaving || !dirty
                   ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
-                  : "bg-violet-500 hover:bg-violet-600 text-white shadow-sm active:scale-95"}`}
+                  : "bg-[#ff6700] hover:bg-[#f67d00] text-white shadow-sm active:scale-95"}`}
             >
               {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
               {isSaving ? "جاري الحفظ..." : "حفظ"}
@@ -499,24 +458,23 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
 
   if (loadingVars) return (
     <div className="flex flex-col items-center justify-center py-20 gap-3">
-      <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+      <Loader2 className="w-8 h-8 text-[#ff6700] animate-spin" />
       <p className="text-sm text-slate-400">جاري تحميل المتغيرات...</p>
     </div>
   );
 
   return (
     <div className="p-3 sm:p-4 lg:p-5">
-      <div className="flex items-start gap-3 px-4 py-3 rounded-2xl border border-blue-200 dark:border-blue-800/40 bg-blue-50 dark:bg-blue-900/10 mb-4">
-        <Settings className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 px-4 py-3 rounded-2xl border border-[#ff6700]/20 bg-[#ff6700]/5 mb-4">
+        <Settings className="w-4 h-4 text-[#ff6700] flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-xs font-bold text-blue-700 dark:text-blue-300">⚙️ إدارة قيم المتغيرات</p>
-          <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
+          <p className="text-xs font-bold text-[#ff6700]">⚙️ إدارة قيم المتغيرات</p>
+          <p className="text-[11px] text-[#004d59] mt-0.5">
             المتغيرات التي تدعم <strong>الجنس</strong> لها حقول منفصلة: <strong>ذكر/أنثى</strong> للطالب والمدرب، و<strong>أب/أم</strong> لولي الأمر.
           </p>
         </div>
       </div>
 
-      {/* Search + group filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
         <div className="relative flex-1 min-w-0">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -524,13 +482,13 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
             value={searchVars}
             onChange={e => setSearchVars(e.target.value)}
             placeholder="بحث في المتغيرات..."
-            className="w-full pr-9 pl-3 py-2 text-xs bg-white dark:bg-[#161b27] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 dark:text-slate-200 placeholder-slate-400"
+            className="w-full pr-9 pl-3 py-2 text-xs bg-white dark:bg-[#161b27] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:text-slate-200 placeholder-slate-400"
           />
         </div>
         <div className="flex gap-1 flex-wrap">
           <button
             onClick={() => setActiveGroup("all")}
-            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${activeGroup === "all" ? "bg-violet-500 text-white shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"}`}
+            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${activeGroup === "all" ? "bg-[#ff6700] text-white shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"}`}
           >
             الكل ({dbVars.length})
           </button>
@@ -541,7 +499,7 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
               <button
                 key={key}
                 onClick={() => setActiveGroup(key)}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${activeGroup === key ? "bg-violet-500 text-white shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"}`}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${activeGroup === key ? "bg-[#ff6700] text-white shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"}`}
               >
                 <span>{grp.emoji}</span>
                 <span className="hidden sm:inline">{grp.label}</span>
@@ -552,10 +510,9 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
         </div>
       </div>
 
-      {/* Grouped variable rows */}
       <div className="space-y-5">
         {Object.entries(grouped).map(([groupKey, vars]) => {
-          const grp            = VAR_GROUPS[groupKey] || { label: groupKey, emoji: "📌" };
+          const grp = VAR_GROUPS[groupKey] || { label: groupKey, emoji: "📌" };
           const genderVarCount = vars.filter(v => v.hasGender).length;
           return (
             <div key={groupKey}>
@@ -564,7 +521,7 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
                 <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{grp.label}</span>
                 <span className="text-[10px] text-slate-400">({vars.length})</span>
                 {genderVarCount > 0 && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800 font-bold">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20 font-bold">
                     ⚧ {genderVarCount} يدعم الجنس
                   </span>
                 )}
@@ -594,9 +551,9 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────
 export default function WhatsAppTemplatesPage() {
-  useI18n(); // locale consumed elsewhere
+  useI18n();
 
-  const [activeTab,    setActiveTab]    = useState("learning_supervisor_intro"); // ✅ changed default to new template
+  const [activeTab,    setActiveTab]    = useState("learning_supervisor_intro");
   const [templates,    setTemplates]    = useState({});
   const [loading,      setLoading]      = useState(true);
   const [saving,       setSaving]       = useState(false);
@@ -621,12 +578,10 @@ export default function WhatsAppTemplatesPage() {
   const hintsRef    = useRef(null);
   const [hintsPos, setHintsPos] = useState({ top: 0, left: 0, right: 0 });
 
-  // ── Sync language when switching to a single-content template ──
   useEffect(() => {
     if (SINGLE_CONTENT_TEMPLATES.includes(activeTab)) setTestLanguage("ar");
   }, [activeTab]);
 
-  // ── Update hints dropdown position on scroll / resize ──────────
   useEffect(() => {
     if (!showHints) return;
     const update = () => {
@@ -648,7 +603,6 @@ export default function WhatsAppTemplatesPage() {
     };
   }, [showHints]);
 
-  // ── Data fetching ───────────────────────────────────────────────
   const fetchTemplates = async () => {
     setLoading(true);
     try {
@@ -725,9 +679,8 @@ export default function WhatsAppTemplatesPage() {
     }
   }, []);
 
-  useEffect(() => { fetchTemplates(); fetchVariables(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchTemplates(); fetchVariables(); }, []);
 
-  // ── Variable resolution with gender context ─────────────────────
   const resolveVarValue = useCallback((v, lang) => {
     if (!v.hasGender) return lang === "ar" ? v.valueAr : v.valueEn;
 
@@ -769,12 +722,11 @@ export default function WhatsAppTemplatesPage() {
     }).filter(Boolean);
   }, [dbVars, resolveVarValue]);
 
-  // ── Template content helpers ────────────────────────────────────
   const isSingleContent    = SINGLE_CONTENT_TEMPLATES.includes(activeTab);
   const isLangConfirmation = ["language_confirmation", "guardian_language_notification"].includes(activeTab);
   const curTemplate        = templates[activeTab];
   const activeType         = TEMPLATE_TYPES.find(t => t.id === activeTab);
-  const C                  = C_MAP[activeType?.color || "violet"];
+  const C                  = C_MAP[activeType?.color || "primary"];
 
   const textVal = isSingleContent
     ? (curTemplate?.content || "")
@@ -813,7 +765,6 @@ export default function WhatsAppTemplatesPage() {
     return text;
   };
 
-  // ── Save template ───────────────────────────────────────────────
   const saveTemplate = async () => {
     const cur = templates[activeTab];
     if (!cur) return;
@@ -871,7 +822,6 @@ export default function WhatsAppTemplatesPage() {
     }
   };
 
-  // ── Variable insertion ──────────────────────────────────────────
   const allVars = getVariablesForTemplate(activeTab, testLanguage);
 
   const insertVariable = (variable) => {
@@ -912,7 +862,6 @@ export default function WhatsAppTemplatesPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── Test send ───────────────────────────────────────────────────
   const sendTest = async () => {
     if (!testPhone) { toast.error("أدخل رقم الهاتف"); return; }
     setTesting(true);
@@ -928,34 +877,30 @@ export default function WhatsAppTemplatesPage() {
     }
   };
 
-  // ── Category / template lists ───────────────────────────────────
   const filtered    = TEMPLATE_TYPES.filter(t => !searchQ || t.label.includes(searchQ));
   const byCategory  = filtered.reduce((acc, t) => { if (!acc[t.category]) acc[t.category] = []; acc[t.category].push(t); return acc; }, {});
 
-  // ── Loading screen ──────────────────────────────────────────────
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
       <div className="relative">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#ff6700] to-[#004d59] flex items-center justify-center shadow-xl">
           <MessageCircle className="w-7 h-7 text-white" />
         </div>
-        <div className="absolute -inset-1 rounded-3xl border-2 border-violet-500/30 animate-ping" />
+        <div className="absolute -inset-1 rounded-3xl border-2 border-[#ff6700]/30 animate-ping" />
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 animate-pulse">جاري تحميل القوالب...</p>
     </div>
   );
 
-  // ── Render ──────────────────────────────────────────────────────
   return (
     <div className="flex flex-col bg-slate-50 dark:bg-[#0f1117] min-h-screen" dir="rtl">
 
-      {/* ── Header ─────────────────────────────────────────────── */}
+      {/* ── Header ── */}
       <header className="sticky top-0 z-40 bg-white dark:bg-[#161b27] border-b border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="flex items-center gap-3 px-4 h-14">
 
-          {/* Logo */}
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#004d59] flex items-center justify-center shadow-lg">
               <MessageCircle className="w-4 h-4 text-white" />
             </div>
             <div className="hidden sm:block">
@@ -966,7 +911,6 @@ export default function WhatsAppTemplatesPage() {
 
           <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          {/* Main tab switcher */}
           <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 flex-shrink-0">
             {[
               { id: "templates", icon: MessageCircle, label: "القوالب" },
@@ -980,7 +924,7 @@ export default function WhatsAppTemplatesPage() {
                 <Icon className="w-3 h-3" />
                 <span>{label}</span>
                 {badge !== undefined && (
-                  <span className={`text-[9px] px-1 py-0.5 rounded-full font-bold ${mainTab === id ? "bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300" : "bg-slate-200 dark:bg-slate-700 text-slate-400"}`}>
+                  <span className={`text-[9px] px-1 py-0.5 rounded-full font-bold ${mainTab === id ? "bg-[#ff6700]/10 text-[#ff6700]" : "bg-slate-200 dark:bg-slate-700 text-slate-400"}`}>
                     {badge}
                   </span>
                 )}
@@ -988,7 +932,6 @@ export default function WhatsAppTemplatesPage() {
             ))}
           </div>
 
-          {/* Category pills + language switcher (templates tab only) */}
           {mainTab === "templates" && (
             <>
               <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
@@ -1032,7 +975,6 @@ export default function WhatsAppTemplatesPage() {
             </>
           )}
 
-          {/* Refresh */}
           <button
             onClick={() => { fetchTemplates(); fetchVariables(); }}
             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 flex-shrink-0 mr-auto"
@@ -1041,14 +983,13 @@ export default function WhatsAppTemplatesPage() {
           </button>
         </div>
 
-        {/* Template sub-tabs */}
         {mainTab === "templates" && (
           <div className="border-t border-slate-100 dark:border-slate-800/80 px-4 py-1.5 overflow-x-auto no-scrollbar">
             <div className="flex gap-1">
               {(byCategory[activeCat] || []).map(tmpl => {
                 const Icon     = tmpl.icon;
                 const isActive = activeTab === tmpl.id;
-                const tc       = C_MAP[tmpl.color] || C_MAP.slate;
+                const tc       = C_MAP[tmpl.color] || C_MAP.primary;
                 const hasData  = !!(templates[tmpl.id]?.contentAr || templates[tmpl.id]?.content);
                 return (
                   <button
@@ -1058,8 +999,8 @@ export default function WhatsAppTemplatesPage() {
                   >
                     <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? tc.text : "text-slate-400"}`} />
                     <span>{tmpl.emoji} {tmpl.label}</span>
-                    {tmpl.isNew && <span className="bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">NEW</span>}
-                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hasData ? "bg-emerald-400" : "bg-slate-300 dark:bg-slate-600"}`} />
+                    {tmpl.isNew && <span className="bg-[#ff6700] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">NEW</span>}
+                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hasData ? "bg-[#004d59]" : "bg-slate-300 dark:bg-slate-600"}`} />
                   </button>
                 );
               })}
@@ -1070,7 +1011,7 @@ export default function WhatsAppTemplatesPage() {
                   value={searchQ}
                   onChange={e => setSearchQ(e.target.value)}
                   placeholder="بحث..."
-                  className="pr-7 pl-3 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-slate-300 dark:focus:border-slate-600 rounded-xl focus:outline-none dark:text-slate-200 placeholder-slate-400 w-28 focus:w-40 transition-all"
+                  className="pr-7 pl-3 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-[#ff6700]/50 rounded-xl focus:outline-none dark:text-slate-200 placeholder-slate-400 w-28 focus:w-40 transition-all"
                 />
               </div>
             </div>
@@ -1078,16 +1019,13 @@ export default function WhatsAppTemplatesPage() {
         )}
       </header>
 
-      {/* ── Variables Tab ───────────────────────────────────────── */}
       {mainTab === "variables" && (
         <VariablesTab dbVars={dbVars} setDbVars={setDbVars} loadingVars={loadingVars} />
       )}
 
-      {/* ── Templates Tab ───────────────────────────────────────── */}
       {mainTab === "templates" && (
         <div className="flex-1 p-3 sm:p-4 lg:p-5">
 
-          {/* Template info banner */}
           {activeType && (
             <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border mb-4 ${C.light} ${C.border}`}>
               <div className={`w-10 h-10 rounded-xl ${C.bg} flex items-center justify-center shadow-md flex-shrink-0`}>
@@ -1096,17 +1034,16 @@ export default function WhatsAppTemplatesPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-bold text-slate-900 dark:text-white">{activeType.emoji} {activeType.label}</span>
-                  {activeType.isNew            && <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEW</span>}
-                  {curTemplate?.isFrontendFallback && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-800">⚡ Default — لم يُحفظ بعد</span>}
-                  {isSingleContent             && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700">🌐 رسالة ثنائية اللغة</span>}
-                  {isLangConfirmation          && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-800">🌍 باللغة المختارة فقط</span>}
+                  {activeType.isNew && <span className="bg-[#ff6700] text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEW</span>}
+                  {templates[activeTab]?.isFrontendFallback && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#feaf00]/20 text-[#feaf00] font-bold border border-[#feaf00]/20">⚡ Default — لم يُحفظ بعد</span>}
+                  {isSingleContent && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700">🌐 رسالة ثنائية اللغة</span>}
                 </div>
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   {activeType.type.includes("student")    && <span className={`text-[10px] px-2 py-0.5 rounded-full ${C.light} ${C.text} border ${C.border}`}>👤 للطالب</span>}
-                  {activeType.type.includes("guardian")   && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">👨‍👩‍👧 لولي الأمر</span>}
-                  {activeType.type.includes("instructor") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">👨‍🏫 للمدرب</span>}
-                  {activeType.type.includes("group")      && <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">👥 بيانات المجموعة</span>}
-                  {activeType.type.includes("session")    && <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800">📅 بيانات الحصة</span>}
+                  {activeType.type.includes("guardian")   && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">👨‍👩‍👧 لولي الأمر</span>}
+                  {activeType.type.includes("instructor") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20">👨‍🏫 للمدرب</span>}
+                  {activeType.type.includes("group")      && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">👥 بيانات المجموعة</span>}
+                  {activeType.type.includes("session")    && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">📅 بيانات الحصة</span>}
                   <span className="text-[10px] text-slate-400">{allVars.length} متغير</span>
                 </div>
               </div>
@@ -1116,21 +1053,20 @@ export default function WhatsAppTemplatesPage() {
           <GenderContextSelector genderContext={genderContext} setGenderContext={setGenderContext} />
 
           {isLangConfirmation && (
-            <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10 mb-4">
-              <Globe className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-secondary/20 bg-secondary/10 mb-4">
+              <Globe className="w-4 h-4 text-secondary flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">🌍 قالب باللغة المختارة فقط</p>
-                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">هذا القالب بيتبعت <strong>باللغة اللي اختارها الطالب فعلاً</strong>.</p>
+                <p className="text-xs font-bold text-secondary">🌍 قالب باللغة المختارة فقط</p>
+                <p className="text-[11px] text-secondary/80 mt-0.5">هذا القالب بيتبعت <strong>باللغة اللي اختارها الطالب فعلاً</strong>.</p>
               </div>
             </div>
           )}
 
           <div className="grid xl:grid-cols-3 lg:grid-cols-2 gap-4">
 
-            {/* ── Editor column ─────────────────────────────────── */}
+            {/* Editor column */}
             <div className="xl:col-span-2 space-y-4">
 
-              {/* Textarea card */}
               <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className={`flex items-center justify-between px-4 py-2.5 border-b ${C.light} ${C.border}`}>
                   <div className="flex items-center gap-2">
@@ -1154,10 +1090,9 @@ export default function WhatsAppTemplatesPage() {
                     onClick={e => setCursorPos(e.target.selectionStart)}
                     dir="ltr"
                     placeholder={testLanguage === "ar" ? "اكتب الرسالة... اكتب @ لإدراج قيمة مثال" : "Write your message... type @ to insert example value"}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 dark:focus:border-violet-600 dark:text-slate-100 resize-none h-52 sm:h-64 lg:h-80 text-sm font-mono leading-loose transition-all placeholder-slate-400"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:focus:border-[#ff6700] dark:text-slate-100 resize-none h-52 sm:h-64 lg:h-80 text-sm font-mono leading-loose transition-all placeholder-slate-400"
                   />
 
-                  {/* Variable hints dropdown */}
                   {showHints && allVars.length > 0 && (
                     <div
                       ref={hintsRef}
@@ -1184,7 +1119,7 @@ export default function WhatsAppTemplatesPage() {
                               <div className="mt-0.5 flex items-center gap-1">
                                 <span className="text-[9px] text-slate-400">يُدرج:</span>
                                 <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${C.light} ${C.text} font-mono`}>{v.example}</span>
-                                {v.hasGender && <span className="text-[9px] px-1 py-0.5 rounded bg-violet-50 dark:bg-violet-900/30 text-violet-500 dark:text-violet-400 border border-violet-200 dark:border-violet-800">⚧</span>}
+                                {v.hasGender && <span className="text-[9px] px-1 py-0.5 rounded bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">⚧</span>}
                               </div>
                             </div>
                           </button>
@@ -1212,7 +1147,6 @@ export default function WhatsAppTemplatesPage() {
                 </div>
               </div>
 
-              {/* Quick-insert chips */}
               {allVars.length > 0 && (
                 <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -1236,10 +1170,9 @@ export default function WhatsAppTemplatesPage() {
                 </div>
               )}
 
-              {/* Test send */}
               <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 rounded-lg bg-emerald-500 flex items-center justify-center">
+                  <div className="w-6 h-6 rounded-lg bg-[#004d59] flex items-center justify-center">
                     <Send className="w-3 h-3 text-white" />
                   </div>
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300">اختبار الإرسال</span>
@@ -1251,12 +1184,12 @@ export default function WhatsAppTemplatesPage() {
                     onChange={e => setTestPhone(e.target.value)}
                     placeholder="+201234567890"
                     dir="ltr"
-                    className="flex-1 px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 dark:text-slate-100 placeholder-slate-400"
+                    className="flex-1 px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#004d59]/20 focus:border-[#004d59] dark:text-slate-100 placeholder-slate-400"
                   />
                   <button
                     onClick={sendTest}
                     disabled={testing}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md disabled:opacity-50 whitespace-nowrap"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#004d59] to-[#ff6437] hover:from-[#003540] hover:to-[#ff6437] text-white rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md disabled:opacity-50 whitespace-nowrap"
                   >
                     {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                     {testing ? "جاري..." : "إرسال تجريبي"}
@@ -1265,10 +1198,9 @@ export default function WhatsAppTemplatesPage() {
               </div>
             </div>
 
-            {/* ── Preview + variables column ─────────────────────── */}
+            {/* Preview column */}
             <div className="space-y-4">
 
-              {/* WhatsApp preview */}
               <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                 <div className={`flex items-center gap-2 px-4 py-2.5 border-b ${C.light} ${C.border}`}>
                   <Eye className={`w-3.5 h-3.5 ${C.text}`} />
@@ -1281,13 +1213,13 @@ export default function WhatsAppTemplatesPage() {
                 <div className="p-3">
                   <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                     <span className="text-[9px] text-slate-400">المعاينة لـ:</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800 font-bold">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20 font-bold">
                       {genderContext.studentGender === "male" ? "♂ طالب" : "♀ طالبة"}
                     </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20 font-bold">
                       {genderContext.guardianType === "father" ? "👨 أب" : "👩 أم"}
                     </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 font-bold">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20 font-bold">
                       {genderContext.instructorGender === "male" ? "♂ مدرب" : "♀ مدربة"}
                     </span>
                   </div>
@@ -1315,7 +1247,6 @@ export default function WhatsAppTemplatesPage() {
                 </div>
               </div>
 
-              {/* Variables list */}
               {allVars.length > 0 && (
                 <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                   <div className={`flex items-center justify-between gap-2 px-4 py-2.5 border-b ${C.light} ${C.border}`}>
@@ -1323,7 +1254,7 @@ export default function WhatsAppTemplatesPage() {
                       <Zap className={`w-3.5 h-3.5 ${C.text}`} />
                       <span className={`text-xs font-bold ${C.text}`}>متغيرات هذا القالب</span>
                     </div>
-                    <button onClick={() => setMainTab("variables")} className="text-[10px] text-violet-500 hover:text-violet-700 dark:hover:text-violet-300 font-bold flex items-center gap-1 transition-colors">
+                    <button onClick={() => setMainTab("variables")} className="text-[10px] text-[#ff6700] hover:text-[#f67d00] dark:hover:text-[#ff6700] font-bold flex items-center gap-1 transition-colors">
                       <Settings className="w-3 h-3" /> تعديل القيم
                     </button>
                   </div>
@@ -1339,7 +1270,7 @@ export default function WhatsAppTemplatesPage() {
                           <div className="flex items-center justify-between gap-1">
                             <span className={`text-[10px] font-mono font-bold ${C.text}`}>{v.key}</span>
                             <div className="flex items-center gap-1">
-                              {v.hasGender && <span className="text-[8px] text-violet-400">⚧</span>}
+                              {v.hasGender && <span className="text-[8px] text-[#ff6700]">⚧</span>}
                               <span className="text-[9px] text-slate-400 truncate">{v.label}</span>
                             </div>
                           </div>
@@ -1354,13 +1285,12 @@ export default function WhatsAppTemplatesPage() {
                 </div>
               )}
 
-              {/* Tips */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border border-blue-200 dark:border-blue-800/40 rounded-2xl p-3">
+              <div className="bg-gradient-to-br from-[#ff6700]/10 to-[#004d59]/10 border border-[#ff6700]/20 rounded-2xl p-3">
                 <div className="flex items-start gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <Sparkles className="w-3.5 h-3.5 text-[#ff6700] flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 mb-1">💡 نصائح</p>
-                    <ul className="text-[10px] text-blue-600 dark:text-blue-400 space-y-0.5">
+                    <p className="text-[10px] font-bold text-[#ff6700] mb-1">💡 نصائح</p>
+                    <ul className="text-[10px] text-[#004d59] space-y-0.5">
                       <li>• اكتب @ لعرض المتغيرات — القيم من الداتابيز</li>
                       <li>• المتغيرات برمز ⚧ تتغير حسب الجنس المختار أعلاه</li>
                       <li>• غيّر الطالب (ذكر/أنثى)، ولي الأمر (أب/أم)، المدرب لرؤية المعاينة الصحيحة</li>
