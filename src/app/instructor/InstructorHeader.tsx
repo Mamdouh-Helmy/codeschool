@@ -15,10 +15,14 @@ import {
   Sun,
   ChevronDown,
   Search,
-  ChevronLeft,
-  ChevronRight,
   Sparkles,
 } from "lucide-react";
+
+// ─── Brand colors — same as InstructorSidebar ────────────────────────────────
+// #004d59  deep teal    (primary dark)
+// #ff6700  vivid orange (primary accent)
+// #feaf00  golden amber (highlight)
+// #ff6437  coral        (warning / secondary)
 
 interface InstructorUser {
   _id?: string;
@@ -49,15 +53,15 @@ export default function InstructorHeader({
   const { locale, toggleLocale } = useLocale();
   const isArabic = locale === "ar";
 
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu]           = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isScrolled, setIsScrolled] = useState(false);
+  const [showMobileSearch, setShowMobileSearch]   = useState(false);
+  const [searchQuery, setSearchQuery]             = useState("");
+  const [isScrolled, setIsScrolled]               = useState(false);
 
   const notificationsRef = useRef<HTMLDivElement>(null);
-  const userMenuRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const userMenuRef      = useRef<HTMLDivElement>(null);
+  const searchRef        = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -93,7 +97,8 @@ export default function InstructorHeader({
   const getUserInitial = () =>
     user?.name?.length > 0 ? user.name.charAt(0).toUpperCase() : (isArabic ? "م" : "I");
 
-  const getFirstName = () => (user?.name || (isArabic ? "مدرس" : "Instructor")).split(" ")[0];
+  const getFirstName = () =>
+    (user?.name || (isArabic ? "مدرس" : "Instructor")).split(" ")[0];
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -110,6 +115,7 @@ export default function InstructorHeader({
     }
   };
 
+  // ─── Dropdown base class ─────────────────────────────────────────────────
   const dropdownClass = `
     absolute mt-2 z-50 overflow-hidden rounded-xl shadow-2xl
     bg-white dark:bg-[#161b22]
@@ -117,6 +123,14 @@ export default function InstructorHeader({
     transform transition-all duration-200
     ${isArabic ? "left-0 origin-top-left" : "right-0 origin-top-right"}
     w-[calc(100vw-2rem)] sm:w-auto max-w-[360px]
+  `;
+
+  // ─── Icon button base class ──────────────────────────────────────────────
+  const iconBtn = `
+    relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl
+    hover:bg-gray-100 dark:hover:bg-[#21262d]
+    transition-all flex items-center justify-center
+    group flex-shrink-0
   `;
 
   return (
@@ -131,48 +145,69 @@ export default function InstructorHeader({
       <div className="px-3 sm:px-4 lg:px-6 xl:px-8 py-2 sm:py-3 lg:py-4">
         <div className="flex items-center justify-between gap-2 sm:gap-3 lg:gap-4">
 
-          {/* Left: menu + greeting */}
+          {/* ── Left: menu + greeting ── */}
           <div className={`flex items-center gap-2 sm:gap-3 ${isArabic ? "order-3" : "order-1"} flex-shrink-0`}>
+
+            {/* Mobile menu toggle */}
             <button
               onClick={onMenuClick}
               className="lg:hidden w-8 h-8 sm:w-9 sm:h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all flex items-center justify-center"
             >
               {sidebarOpen ? (
-                <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-[#8b949e]" />
+                <X    className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-[#8b949e]" />
               ) : (
                 <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-[#8b949e]" />
               )}
             </button>
 
+            {/* Desktop greeting */}
             <div className="hidden lg:block flex-shrink-0">
               <h1 className="text-xl xl:text-2xl font-bold flex items-center gap-2">
-                <span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                {/* ✅ Brand gradient: #004d59 → #ff6700 (matches Sidebar Dashboard item) */}
+                <span
+                  className="bg-clip-text text-transparent"
+                  style={{ backgroundImage: "linear-gradient(135deg, #004d59, #ff6700)" }}
+                >
                   {isArabic ? `أهلاً، ${getFirstName()}!` : `Hello, ${getFirstName()}!`}
                 </span>
                 <span className="text-2xl animate-wave">👨‍🏫</span>
               </h1>
               <p className="text-xs xl:text-sm text-gray-500 dark:text-[#8b949e] mt-1 flex items-center gap-2">
-                <Sparkles className="w-3 h-3 text-yellow-400" />
-                {isArabic ? "لوحة تحكم المدرس - رحلتك التعليمية" : "Instructor Dashboard — Your teaching journey"}
+                {/* ✅ #feaf00 — matches Sidebar Sessions item highlight */}
+                <Sparkles className="w-3 h-3" style={{ color: "#feaf00" }} />
+                {isArabic
+                  ? "لوحة تحكم المدرس - رحلتك التعليمية"
+                  : "Instructor Dashboard — Your teaching journey"}
               </p>
             </div>
           </div>
 
-          {/* Center: mobile title */}
+          {/* ── Center: mobile title ── */}
           <div className="lg:hidden text-center flex-1 min-w-0 px-2">
-            <div className="inline-flex items-center gap-1.5 bg-gradient-to-r from-primary/10 to-purple-600/10 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full">
-              <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-yellow-400" />
-              <span className="text-[10px] sm:text-xs font-medium text-primary truncate">
+            {/* ✅ Brand pill: #004d59/10 → #ff6700/10 */}
+            <div
+              className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full"
+              style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }}
+            >
+              <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3" style={{ color: "#feaf00" }} />
+              <span
+                className="text-[10px] sm:text-xs font-medium truncate"
+                style={{ color: "#004d59" }}
+              >
                 {getGreeting()}
               </span>
             </div>
-            <h1 className="text-sm sm:text-base font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent mt-0.5 truncate">
+            <h1
+              className="text-sm sm:text-base font-bold bg-clip-text text-transparent mt-0.5 truncate"
+              style={{ backgroundImage: "linear-gradient(135deg, #004d59, #ff6700)" }}
+            >
               {isArabic ? `أهلاً ${getFirstName()}!` : `Hi ${getFirstName()}!`}
             </h1>
           </div>
 
-          {/* Right: action buttons */}
-          <div className={`flex items-center gap-1 sm:gap-2 order-3 flex-shrink-0`}>
+          {/* ── Right: action buttons ── */}
+          <div className="flex items-center gap-1 sm:gap-2 order-3 flex-shrink-0">
+
             {/* Desktop search */}
             <div className="relative hidden xl:block group">
               <form onSubmit={handleSearchSubmit}>
@@ -182,10 +217,14 @@ export default function InstructorHeader({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={isArabic ? "البحث..." : "Search..."}
                   className={`w-56 2xl:w-72 px-4 ${isArabic ? "pr-10" : "pl-10"} py-2 text-sm rounded-xl
-                    bg-gray-100 dark:bg-[#0d1117] border border-gray-200 dark:border-[#30363d]
-                    text-gray-900 dark:text-[#e6edf3] placeholder:text-gray-400 dark:placeholder:text-[#6e7681]
-                    focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
-                    transition-all`}
+                    bg-gray-100 dark:bg-[#0d1117]
+                    border border-gray-200 dark:border-[#30363d]
+                    text-gray-900 dark:text-[#e6edf3]
+                    placeholder:text-gray-400 dark:placeholder:text-[#6e7681]
+                    outline-none transition-all
+                    focus:ring-2 focus:border-[#ff6700]`}
+                  // ✅ focus ring brand color
+                  style={{ "--tw-ring-color": "#ff670030" } as React.CSSProperties}
                 />
                 <Search
                   className={`absolute ${isArabic ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`}
@@ -196,19 +235,19 @@ export default function InstructorHeader({
             {/* Mobile search toggle */}
             <button
               onClick={() => setShowMobileSearch(!showMobileSearch)}
-              className="xl:hidden relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all flex items-center justify-center group flex-shrink-0"
+              className={`${iconBtn} xl:hidden`}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
+              {/* ✅ hover glow: #004d59 → #ff6700 */}
+              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }} />
               <Search className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-[#8b949e] group-hover:scale-110 transition-transform" />
             </button>
 
             {/* Refresh */}
             {onRefresh && (
-              <button
-                onClick={onRefresh}
-                className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all flex items-center justify-center group flex-shrink-0"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
+              <button onClick={onRefresh} className={iconBtn}>
+                <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }} />
                 <svg
                   className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-[#8b949e] group-hover:rotate-180 transition-transform duration-500"
                   fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -219,51 +258,67 @@ export default function InstructorHeader({
               </button>
             )}
 
-            {/* Language */}
-            <button
-              onClick={toggleLocale}
-              className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all flex items-center justify-center text-xs sm:text-sm font-medium text-gray-700 dark:text-[#8b949e] group flex-shrink-0"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
-              <span className="relative z-10">{isArabic ? "EN" : "عربي"}</span>
+            {/* Language toggle */}
+            <button onClick={toggleLocale} className={iconBtn}>
+              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }} />
+              <span className="relative z-10 text-xs sm:text-sm font-medium text-gray-700 dark:text-[#8b949e] group-hover:text-[#ff6700] transition-colors">
+                {isArabic ? "EN" : "عربي"}
+              </span>
             </button>
 
-            {/* Theme */}
+            {/* Theme toggle */}
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all flex items-center justify-center group flex-shrink-0"
+              className={iconBtn}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
+              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }} />
+              {/* ✅ #feaf00 for sun — matches Sessions/amber highlight */}
               {theme === "dark" ? (
-                <Sun className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 group-hover:rotate-90 transition-transform duration-500" />
+                <Sun className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 group-hover:rotate-90 transition-transform duration-500"
+                  style={{ color: "#feaf00" }} />
               ) : (
                 <Moon className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 text-gray-700 dark:text-[#8b949e] group-hover:scale-110 transition-transform" />
               )}
             </button>
 
-            {/* Notifications */}
+            {/* ── Notifications ── */}
             <div className="relative" ref={notificationsRef}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all flex items-center justify-center group flex-shrink-0"
+                className={iconBtn}
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/0 to-purple-600/0 group-hover:from-primary/10 group-hover:to-purple-600/10 rounded-xl transition-all duration-300" />
+                <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }} />
                 <Bell className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-[#8b949e] group-hover:scale-110 transition-transform" />
+
                 {notifications.length > 0 && (
                   <>
-                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-gradient-to-r from-primary to-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold px-1 shadow-lg shadow-primary/40 animate-pulse">
+                    {/* ✅ Badge: #ff6437 → #ff6700 (coral → orange, matches Sidebar Reports item) */}
+                    <span
+                      className="absolute -top-1 -right-1 min-w-[18px] h-[18px] text-white text-[10px] rounded-full flex items-center justify-center font-bold px-1 shadow-lg animate-pulse"
+                      style={{ background: "linear-gradient(135deg, #ff6437, #ff6700)" }}
+                    >
                       {notifications.length > 9 ? "9+" : notifications.length}
                     </span>
-                    <span className="absolute -top-1 -right-1 w-[18px] h-[18px] bg-primary rounded-full animate-ping opacity-75" />
+                    <span
+                      className="absolute -top-1 -right-1 w-[18px] h-[18px] rounded-full animate-ping opacity-75"
+                      style={{ background: "#ff6437" }}
+                    />
                   </>
                 )}
               </button>
 
               {showNotifications && (
                 <div className={`${dropdownClass} sm:w-80 animate-slide-down`}>
-                  <div className="px-4 py-3 border-b border-gray-100 dark:border-[#30363d] bg-gradient-to-r from-primary/5 to-purple-600/5">
+                  {/* ✅ Header: brand teal tint */}
+                  <div
+                    className="px-4 py-3 border-b border-gray-100 dark:border-[#30363d]"
+                    style={{ background: "linear-gradient(135deg, #004d5908, #ff670008)" }}
+                  >
                     <h3 className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
-                      <Bell className="w-4 h-4 text-primary" />
+                      <Bell className="w-4 h-4" style={{ color: "#ff6700" }} />
                       {isArabic ? "الإشعارات" : "Notifications"}
                     </h3>
                   </div>
@@ -279,31 +334,45 @@ export default function InstructorHeader({
               )}
             </div>
 
-            {/* User Menu */}
+            {/* ── User Menu ── */}
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-1 sm:gap-2 p-1 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all group flex-shrink-0"
               >
                 <div className="relative">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-xs sm:text-sm ring-2 ring-white dark:ring-[#161b22] shadow-lg group-hover:scale-105 transition-transform">
+                  {/* ✅ Avatar: #004d59 → #ff6700 (matches Sidebar logo gradient) */}
+                  <div
+                    className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm ring-2 ring-white dark:ring-[#161b22] shadow-lg group-hover:scale-105 transition-transform"
+                    style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+                  >
                     {getUserInitial()}
                   </div>
                   <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-[#161b22]" />
                 </div>
-                <span className="hidden lg:block text-xs xl:text-sm font-medium text-gray-700 dark:text-[#e6edf3] group-hover:text-primary transition-colors max-w-[100px] truncate">
+                <span className="hidden lg:block text-xs xl:text-sm font-medium text-gray-700 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors max-w-[100px] truncate">
                   {getFirstName()}
                 </span>
                 <ChevronDown
-                  className={`hidden lg:block w-3 h-3 text-gray-400 group-hover:text-primary transition-all duration-300 ${showUserMenu ? "rotate-180" : ""}`}
+                  className={`hidden lg:block w-3 h-3 text-gray-400 group-hover:text-[#ff6700] transition-all duration-300 ${showUserMenu ? "rotate-180" : ""}`}
                 />
               </button>
 
               {showUserMenu && (
                 <div className={`${dropdownClass} w-64 sm:w-72 animate-slide-down`}>
-                  <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#1c2128] dark:to-[#21262d] border-b border-gray-100 dark:border-[#30363d]">
+                  {/* ✅ User card header: brand teal gradient */}
+                  <div
+                    className="p-4 border-b border-gray-100 dark:border-[#30363d]"
+                    style={{ background: "linear-gradient(135deg, #004d5908, #ff670008)" }}
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-lg ring-2 ring-white dark:ring-[#1c2128] shadow-lg shadow-primary/30">
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ring-2 ring-white dark:ring-[#161b22] shadow-lg"
+                        style={{
+                          background: "linear-gradient(135deg, #004d59, #ff6700)",
+                          boxShadow: "0 4px 14px #ff670030",
+                        }}
+                      >
                         {getUserInitial()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -313,7 +382,11 @@ export default function InstructorHeader({
                         <p className="text-xs text-gray-500 dark:text-[#8b949e] truncate mt-0.5">
                           {user.email}
                         </p>
-                        <span className="inline-block text-[10px] font-medium bg-gradient-to-r from-primary to-purple-600 text-white px-2 py-0.5 rounded-full mt-1 shadow-sm">
+                        {/* ✅ Role badge: #004d59 → #ff6700 */}
+                        <span
+                          className="inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded-full mt-1 shadow-sm"
+                          style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+                        >
                           {isArabic ? "مدرس" : "Instructor"}
                         </span>
                       </div>
@@ -336,7 +409,7 @@ export default function InstructorHeader({
           </div>
         </div>
 
-        {/* Mobile search expandable */}
+        {/* ── Mobile search expandable ── */}
         <div
           className={`xl:hidden overflow-hidden transition-all duration-300 ${
             showMobileSearch ? "max-h-20 opacity-100 mt-3" : "max-h-0 opacity-0"
@@ -350,9 +423,12 @@ export default function InstructorHeader({
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={isArabic ? "البحث..." : "Search..."}
               className={`w-full px-4 ${isArabic ? "pr-10" : "pl-10"} py-2.5 text-sm rounded-xl
-                bg-gray-100 dark:bg-[#0d1117] border border-gray-200 dark:border-[#30363d]
-                text-gray-900 dark:text-[#e6edf3] placeholder:text-gray-400
-                focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all`}
+                bg-gray-100 dark:bg-[#0d1117]
+                border border-gray-200 dark:border-[#30363d]
+                text-gray-900 dark:text-[#e6edf3]
+                placeholder:text-gray-400
+                outline-none transition-all
+                focus:ring-2 focus:border-[#ff6700]`}
             />
             <Search
               className={`absolute ${isArabic ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`}
@@ -362,9 +438,16 @@ export default function InstructorHeader({
       </div>
 
       <style jsx>{`
-        @keyframes wave { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(15deg); } 75% { transform: rotate(-15deg); } }
-        @keyframes slideDown { 0% { opacity: 0; transform: translateY(-10px); } 100% { opacity: 1; transform: translateY(0); } }
-        .animate-wave { animation: wave 2s ease-in-out infinite; display: inline-block; }
+        @keyframes wave {
+          0%, 100% { transform: rotate(0deg); }
+          25%       { transform: rotate(15deg); }
+          75%       { transform: rotate(-15deg); }
+        }
+        @keyframes slideDown {
+          0%   { opacity: 0; transform: translateY(-10px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-wave       { animation: wave 2s ease-in-out infinite; display: inline-block; }
         .animate-slide-down { animation: slideDown 0.2s ease-out; }
       `}</style>
     </header>
