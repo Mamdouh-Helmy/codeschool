@@ -62,10 +62,7 @@ export default function InstructorNotificationModal({
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // resolveVar — gender-aware (same pattern as StudentForm)
-  //
-  // For instructors we use genderType: "instructor"
-  // genderContext: { instructorGender: "male"|"female" }
+  // resolveVar — gender-aware
   // ─────────────────────────────────────────────────────────────────────────
   const resolveVar = useCallback((key, lang = "ar", genderContext = {}) => {
     const v = dbVars[key];
@@ -85,27 +82,25 @@ export default function InstructorNotificationModal({
   }, [dbVars]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Build replacements map for one instructor + language
+  // ✅ buildReplacementsMap — أضفنا {firstMeetingLink}
   // ─────────────────────────────────────────────────────────────────────────
   const buildReplacementsMap = useCallback((instructor, lang = "ar") => {
     if (!instructor || !groupData) return {};
 
-    // instructor gender comes from their record (if stored), default male
     const instructorGender = (instructor.gender || "male").toLowerCase();
     const genderCtx        = { instructorGender };
 
     const instructorNick     = instructor.name?.split(" ")[0] || instructor.name || "";
     const instructorFullName = instructor.name || "";
 
-    // ── Salutation from DB (key: "salutation" — group: group/instructor) ──
-    // DB field stores e.g. valueAr = "أهلا يا", valueMaleAr = "أهلا يا" for instructors
+    // ── Salutation from DB ────────────────────────────────────────────────
     const greetingBase = resolveVar("salutation", lang, genderCtx)
       || resolveVar("instructorSalutation", lang, genderCtx)
       || (lang === "ar" ? "أهلا يا" : "Dear");
 
     const fullSalutation = `${greetingBase} ${instructorNick}`;
 
-    // ── Instructor title from DB ───────────────────────────────────────────
+    // ── Instructor title from DB ──────────────────────────────────────────
     const instructorTitle = resolveVar("instructorTitle", lang, genderCtx)
       || (lang === "ar" ? "الأستاذ" : "Mr.");
 
@@ -124,6 +119,9 @@ export default function InstructorNotificationModal({
     const timeFrom     = groupData.schedule?.timeFrom || "";
     const timeTo       = groupData.schedule?.timeTo   || "";
 
+    // ✅ FIX: جلب firstMeetingLink من groupData
+    const firstMeetingLink = groupData.firstMeetingLink || "";
+
     return {
       "{salutation}":          fullSalutation,
       "{instructorName}":      instructorNick,
@@ -136,11 +134,13 @@ export default function InstructorNotificationModal({
       "{timeFrom}":            timeFrom,
       "{timeTo}":              timeTo,
       "{studentCount}":        studentCount.toString(),
+      // ✅ FIX: المتغير الجديد
+      "{firstMeetingLink}":    firstMeetingLink,
     };
   }, [groupData, resolveVar]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // replaceVariables — uses buildReplacementsMap
+  // replaceVariables
   // ─────────────────────────────────────────────────────────────────────────
   const replaceVariables = useCallback((messageTemplate, instructor, lang = "ar") => {
     if (!instructor || !groupData) return messageTemplate;
@@ -153,7 +153,7 @@ export default function InstructorNotificationModal({
   }, [buildReplacementsMap, groupData]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Hint variables — examples from buildReplacementsMap
+  // ✅ getInstructorVariables — أضفنا {firstMeetingLink} للـ hints
   // ─────────────────────────────────────────────────────────────────────────
   const getInstructorVariables = useCallback((instructor, lang = "ar") => {
     const map   = buildReplacementsMap(instructor, lang);
@@ -171,6 +171,8 @@ export default function InstructorNotificationModal({
       { key: "{timeFrom}",           label: isAr ? "وقت البداية"              : "Time From",             icon: "⏰", description: isAr ? "وقت بدء الحصة"                    : "Session start time",                   example: map["{timeFrom}"]           },
       { key: "{timeTo}",             label: isAr ? "وقت النهاية"              : "Time To",               icon: "⏰", description: isAr ? "وقت نهاية الحصة"                  : "Session end time",                     example: map["{timeTo}"]             },
       { key: "{studentCount}",       label: isAr ? "عدد الطلاب"               : "Student Count",         icon: "👨‍🎓", description: isAr ? "عدد الطلاب المسجلين"            : "Enrolled students",                    example: map["{studentCount}"]       },
+      // ✅ FIX: أضفنا المتغير الجديد للـ hints
+      { key: "{firstMeetingLink}",   label: isAr ? "لينك أول سيشن"            : "First Meeting Link",    icon: "🔗", description: isAr ? "رابط أول جلسة في المجموعة"        : "First session meeting link",           example: map["{firstMeetingLink}"] || (isAr ? "لم يُعيَّن بعد" : "Not assigned yet") },
     ];
   }, [buildReplacementsMap]);
 
@@ -203,7 +205,7 @@ export default function InstructorNotificationModal({
   }, [isOpen]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Initialise per-instructor state when instructors + template are ready
+  // Initialise per-instructor state
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!instructors?.length || (!templateAr && !templateEn)) return;
@@ -314,10 +316,10 @@ export default function InstructorNotificationModal({
 
   const handleKeyDown = (e, instructorId, variables) => {
     if (!showHints[instructorId]) return;
-    if (e.key === "ArrowDown")                  { e.preventDefault(); setSelectedHintIndex(prev => ({ ...prev, [instructorId]: (prev[instructorId] + 1) % variables.length })); }
-    else if (e.key === "ArrowUp")               { e.preventDefault(); setSelectedHintIndex(prev => ({ ...prev, [instructorId]: (prev[instructorId] - 1 + variables.length) % variables.length })); }
+    if (e.key === "ArrowDown")                     { e.preventDefault(); setSelectedHintIndex(prev => ({ ...prev, [instructorId]: (prev[instructorId] + 1) % variables.length })); }
+    else if (e.key === "ArrowUp")                  { e.preventDefault(); setSelectedHintIndex(prev => ({ ...prev, [instructorId]: (prev[instructorId] - 1 + variables.length) % variables.length })); }
     else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertVariable(variables[selectedHintIndex[instructorId]], instructorId); }
-    else if (e.key === "Escape")                { e.preventDefault(); setShowHints(prev => ({ ...prev, [instructorId]: false })); }
+    else if (e.key === "Escape")                   { e.preventDefault(); setShowHints(prev => ({ ...prev, [instructorId]: false })); }
   };
 
   useEffect(() => {
@@ -411,6 +413,26 @@ export default function InstructorNotificationModal({
                 <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-primary" /><span>{groupData?.schedule?.timeFrom} - {groupData?.schedule?.timeTo}</span></div>
                 <div className="flex items-center gap-2"><Users className="w-4 h-4 text-primary" /><span>{groupData?.currentStudentsCount || 0} طالب</span></div>
               </div>
+              {/* ✅ FIX: عرض firstMeetingLink في الـ Group Info */}
+              {groupData?.firstMeetingLink && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-500">🔗 لينك أول سيشن:</span>
+                  <a
+                    href={groupData.firstMeetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline truncate max-w-xs"
+                  >
+                    {groupData.firstMeetingLink}
+                  </a>
+                </div>
+              )}
+              {!groupData?.firstMeetingLink && (
+                <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-lg">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>لا يوجد لينك لأول سيشن بعد — {"{firstMeetingLink}"} ستظهر فارغة في الرسالة</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -568,6 +590,8 @@ export default function InstructorNotificationModal({
                 <p>{"{startDate}"} — تاريخ البدء / Start date</p>
                 <p>{"{timeFrom}"} / {"{timeTo}"} — أوقات الحصة / Session times</p>
                 <p>{"{studentCount}"} — عدد الطلاب / Student count</p>
+                {/* ✅ FIX: أضفنا المتغير الجديد في الـ reference */}
+                <p>{"{firstMeetingLink}"} — رابط أول جلسة / First session meeting link</p>
               </div>
             </div>
           </div>

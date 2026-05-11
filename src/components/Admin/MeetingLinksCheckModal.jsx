@@ -289,7 +289,7 @@ function SessionsTable({ sessionRows, showAll, onToggleShow }) {
 }
 
 // ── المودال الرئيسي ───────────────────────────────────────────────────────────
-// ✅ onConfirm(forceActivate, releaseReserved, selectedLinkIds)
+// ✅ onConfirm(forceActivate, releaseReserved, selectedLinkIds, availableLinks)
 export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onConfirm }) {
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
@@ -358,7 +358,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
   const totalSessions  = allSessions.length;
   const hasNoLinks     = (rawData?.totalLinks ?? 0) === 0;
 
-  // اللينكات المختارة فعلياً
+  // اللينكات المختارة فعلياً (كاملة — مش IDs بس)
   const chosenLinks = availableLinks.filter(
     (l) => selectedIds.has(l._id?.toString() || l.id?.toString())
   );
@@ -489,7 +489,8 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
 
             {hasNoLinks || chosenLinks.length === 0 ? (
               <button
-                onClick={() => onConfirm(true, false, [])}
+                // ✅ مرّر availableLinks كـ param رابع
+                onClick={() => onConfirm(true, false, [], availableLinks)}
                 className="flex-1 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
               >
                 <AlertTriangle className="w-4 h-4" />
@@ -497,7 +498,8 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
               </button>
             ) : (
               <button
-                onClick={() => onConfirm(false, false, chosenLinkIds)}
+                // ✅ مرّر availableLinks كـ param رابع
+                onClick={() => onConfirm(false, false, chosenLinkIds, availableLinks)}
                 className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
               >
                 <CheckCircle className="w-4 h-4" />

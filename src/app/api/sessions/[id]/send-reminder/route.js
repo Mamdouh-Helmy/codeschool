@@ -1,4 +1,3 @@
-// /src/app/api/sessions/[id]/send-reminder/route.js
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { requireAdmin } from '@/utils/authMiddleware';
@@ -14,7 +13,6 @@ export async function POST(req, { params }) {
 
     const { id } = await params;
 
-    // ── Parse body بأمان ────────────────────────────────────────────────────
     let body = {};
     try {
       const text = await req.text();
@@ -28,14 +26,12 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ FIX: استقبال metadata الصح من الفرونت
-    // الفرونت بيبعت: { reminderType, metadata: { studentMessages, guardianMessages } }
     const { reminderType = '24hours', metadata = {} } = body;
 
-    // ── Validation ──────────────────────────────────────────────────────────
-    if (!['24hours', '1hour'].includes(reminderType)) {
+    // ✅ بيقبل 24hours و 15min و 1hour (للتوافق مع القديم)
+    if (!['24hours', '15min', '1hour'].includes(reminderType)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid reminder type. Use 24hours or 1hour' },
+        { success: false, error: 'Invalid reminder type. Use 24hours, 15min, or 1hour' },
         { status: 400 }
       );
     }
@@ -47,7 +43,6 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ── Logging ──────────────────────────────────────────────────────────────
     const studentMsgsCount  = metadata?.studentMessages
       ? Object.keys(metadata.studentMessages).length
       : 0;
@@ -60,14 +55,11 @@ export async function POST(req, { params }) {
     console.log(`📝 Per-student messages:  ${studentMsgsCount}`);
     console.log(`📝 Per-guardian messages: ${guardianMsgsCount}`);
 
-    // ── Send ─────────────────────────────────────────────────────────────────
-    // ✅ metadata بيوصل كامل لـ sendManualSessionReminder
-    // اللي بيقرأ منه: metadata.studentMessages[studentId] و metadata.guardianMessages[studentId]
     const result = await sendManualSessionReminder(
       id,
       reminderType,
-      null,       // customMessage — مش بنستخدمه لأن عندنا per-student messages
-      metadata    // ✅ { studentMessages: { [sid]: renderedMsg }, guardianMessages: { [sid]: renderedMsg } }
+      null,
+      metadata
     );
 
     if (!result.success) {
@@ -81,14 +73,14 @@ export async function POST(req, { params }) {
       success: true,
       message: `${reminderType} reminders sent successfully`,
       data: {
-        totalStudents:        result.totalStudents,
-        successCount:         result.successCount,
-        failCount:            result.failCount,
-        reminderType:         result.reminderType,
-        customMessageUsed:    result.customMessageUsed,
-        studentMessagesCount: studentMsgsCount,
+        totalStudents:         result.totalStudents,
+        successCount:          result.successCount,
+        failCount:             result.failCount,
+        reminderType:          result.reminderType,
+        customMessageUsed:     result.customMessageUsed,
+        studentMessagesCount:  studentMsgsCount,
         guardianMessagesCount: guardianMsgsCount,
-        notificationResults:  result.notificationResults,
+        notificationResults:   result.notificationResults,
       }
     });
 

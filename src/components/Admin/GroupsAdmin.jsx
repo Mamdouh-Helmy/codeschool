@@ -42,7 +42,7 @@ export default function GroupsAdmin() {
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState(null);
-    
+
     const [viewDetailsModal, setViewDetailsModal] = useState({
         open: false,
         groupId: null
@@ -59,11 +59,12 @@ export default function GroupsAdmin() {
         groupId: null
     });
 
-    // ✅ أضفنا selectedLinkIds للـ pendingActivation
     const [pendingActivation, setPendingActivation] = useState({
         forceActivate: false,
         releaseReserved: false,
         selectedLinkIds: [],
+        // ✅ أضفنا: نحفظ اللينك الأول المختار عشان نمرره لـ groupData
+        firstMeetingLink: "",
     });
 
     const [addStudentsModalOpen, setAddStudentsModalOpen] = useState(false);
@@ -235,14 +236,20 @@ export default function GroupsAdmin() {
         setMeetingLinksModal({ open: true, groupId });
     };
 
-    // ✅ استقبل selectedLinkIds من المودال
-    const onMeetingLinksCheckConfirmed = async (forceActivate, releaseReserved, selectedLinkIds = []) => {
+    // ✅ استقبل selectedLinkIds + availableLinks من المودال
+    const onMeetingLinksCheckConfirmed = async (forceActivate, releaseReserved, selectedLinkIds = [], availableLinks = []) => {
         const groupId = meetingLinksModal.groupId;
-        
+
         setMeetingLinksModal({ open: false, groupId: null });
 
-        // ✅ خزّن selectedLinkIds في الـ state
-        setPendingActivation({ forceActivate, releaseReserved, selectedLinkIds });
+        // ✅ استخرج لينك أول سيشن من اللينكات المختارة
+        const firstSelectedLink = availableLinks.find(
+            (l) => selectedLinkIds.includes(l._id?.toString() || l.id?.toString())
+        );
+        const firstMeetingLink = firstSelectedLink?.link || "";
+
+        // ✅ خزّن كل البيانات بما فيها firstMeetingLink
+        setPendingActivation({ forceActivate, releaseReserved, selectedLinkIds, firstMeetingLink });
 
         try {
             const res = await fetch(`/api/groups/${groupId}`, {
@@ -255,9 +262,15 @@ export default function GroupsAdmin() {
             const json = await res.json();
 
             if (json.success && json.data) {
+                // ✅ أضف firstMeetingLink لـ groupData قبل فتح الـ InstructorNotificationModal
+                const groupDataWithLink = {
+                    ...json.data,
+                    firstMeetingLink: firstMeetingLink || json.data.firstMeetingLink || "",
+                };
+
                 setInstructorNotificationModal({
                     open: true,
-                    groupData: json.data,
+                    groupData: groupDataWithLink,
                     instructors: json.data.instructors || []
                 });
             } else {
@@ -287,7 +300,6 @@ export default function GroupsAdmin() {
                     instructorMessages,
                     forceActivate:   pendingActivation.forceActivate,
                     releaseReserved: pendingActivation.releaseReserved,
-                    // ✅ أرسل الـ IDs المختارة للـ API
                     selectedLinkIds: pendingActivation.selectedLinkIds,
                 })
             });
@@ -298,7 +310,7 @@ export default function GroupsAdmin() {
                 await loadGroups();
                 toast.success(t("groups.activate.success"), { id: loadingToast, position: 'top-center' });
                 setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
-                setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [] });
+                setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "" });
             } else {
                 toast.error(result.error || t("groups.activate.failed"), { id: loadingToast, position: 'top-center' });
             }
@@ -564,6 +576,7 @@ export default function GroupsAdmin() {
                 <AddStudentsToGroup groupId={selectedGroupForStudents} onClose={() => { setAddStudentsModalOpen(false); setSelectedGroupForStudents(null); }} onStudentAdded={() => loadGroups()} />
             </Modal>
 
+            {/* ✅ MeetingLinksCheckModal — مرّر availableLinks في onConfirm */}
             <MeetingLinksCheckModal
                 isOpen={meetingLinksModal.open}
                 groupId={meetingLinksModal.groupId}
@@ -573,7 +586,10 @@ export default function GroupsAdmin() {
 
             <InstructorNotificationModal
                 isOpen={instructorNotificationModal.open}
-                onClose={() => { setInstructorNotificationModal({ open: false, groupData: null, instructors: [] }); setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [] }); }}
+                onClose={() => {
+                    setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
+                    setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "" });
+                }}
                 instructors={instructorNotificationModal.instructors}
                 groupData={instructorNotificationModal.groupData}
                 onSendNotifications={handleActivateAndNotify}
