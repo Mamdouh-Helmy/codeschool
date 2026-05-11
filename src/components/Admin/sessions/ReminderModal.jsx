@@ -16,6 +16,29 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// extractSessionShortName — بياخد الجزء المهم من عنوان الجلسة
+// مثال: "Introduction to Computer Basics - Session 1: Getting Started with Computers & Getting Started with Computers"
+// النتيجة: "Getting Started with Computers"
+// ─────────────────────────────────────────────────────────────────────────────
+function extractSessionShortName(title) {
+  if (!title) return "";
+
+  if (title.includes(":")) {
+    const afterColon = title.split(":").slice(1).join(":").trim();
+    if (afterColon.includes("&")) {
+      return afterColon.split("&")[0].trim();
+    }
+    return afterColon;
+  }
+
+  if (title.includes(" - ")) {
+    return title.split(" - ").slice(1).join(" - ").trim();
+  }
+
+  return title;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // resolveVar — gender-aware value from a DB TemplateVariable object
 // ─────────────────────────────────────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
@@ -23,14 +46,14 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
   if (!v) return null;
 
   const { studentGender = "male", guardianType = "father" } = genderContext;
-  const isMale   = String(studentGender).toLowerCase() !== "female";
-  const isFather = String(guardianType).toLowerCase()  !== "mother";
+  const isMale = String(studentGender).toLowerCase() !== "female";
+  const isFather = String(guardianType).toLowerCase() !== "mother";
 
   if (v.hasGender) {
     if (v.genderType === "student") {
       return lang === "ar"
-        ? (isMale ? v.valueMaleAr   : v.valueFemaleAr) || v.valueAr || null
-        : (isMale ? v.valueMaleEn   : v.valueFemaleEn) || v.valueEn || null;
+        ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
+        : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
     }
     if (v.genderType === "guardian") {
       return lang === "ar"
@@ -53,27 +76,27 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 function buildVariables(student, session, dbVars = {}) {
   if (!student) return {};
 
-  const lang         = (student.communicationPreferences?.preferredLanguage || "ar").toLowerCase();
-  const gender       = (student.personalInfo?.gender       || "male").toLowerCase().trim();
+  const lang = (student.communicationPreferences?.preferredLanguage || "ar").toLowerCase();
+  const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
   const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
-  const isMale       = gender !== "female";
-  const isFather     = relationship !== "mother";
-  const genderCtx    = { studentGender: gender, guardianType: relationship };
+  const isMale = gender !== "female";
+  const isFather = relationship !== "mother";
+  const genderCtx = { studentGender: gender, guardianType: relationship };
 
   // ── Names ────────────────────────────────────────────────────────────────
   const studentFirstName =
     lang === "ar"
-      ? student.personalInfo?.nickname?.ar?.trim()  ||
-        student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
-      : student.personalInfo?.nickname?.en?.trim()  ||
-        student.personalInfo?.fullName?.split(" ")[0] || "Student";
+      ? student.personalInfo?.nickname?.ar?.trim() ||
+      student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
+      : student.personalInfo?.nickname?.en?.trim() ||
+      student.personalInfo?.fullName?.split(" ")[0] || "Student";
 
   const guardianFirstName =
     lang === "ar"
-      ? student.guardianInfo?.nickname?.ar?.trim()  ||
-        student.guardianInfo?.name?.split(" ")[0]   || "ولي الأمر"
-      : student.guardianInfo?.nickname?.en?.trim()  ||
-        student.guardianInfo?.name?.split(" ")[0]   || "Guardian";
+      ? student.guardianInfo?.nickname?.ar?.trim() ||
+      student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر"
+      : student.guardianInfo?.nickname?.en?.trim() ||
+      student.guardianInfo?.name?.split(" ")[0] || "Guardian";
 
   // ── DB vars → fallback ───────────────────────────────────────────────────
   const salutationBase_ar =
@@ -103,59 +126,57 @@ function buildVariables(student, session, dbVars = {}) {
   // ── Composed salutations ─────────────────────────────────────────────────
   const guardianSalutation_ar = `${guardianSalBase_ar} ${guardianFirstName}`;
   const guardianSalutation_en = `${guardianSalBase_en} ${guardianFirstName}`;
-  const guardianSalutation    = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
+  const guardianSalutation = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
 
-  const studentSalutation_ar  = `${salutationBase_ar} ${studentFirstName}`;
-  const studentSalutation_en  = `${salutationBase_en} ${studentFirstName}`;
-  const studentSalutation     = lang === "ar" ? studentSalutation_ar : studentSalutation_en;
+  const studentSalutation_ar = `${salutationBase_ar} ${studentFirstName}`;
+  const studentSalutation_en = `${salutationBase_en} ${studentFirstName}`;
+  const studentSalutation = lang === "ar" ? studentSalutation_ar : studentSalutation_en;
 
   const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
 
   // ── Session data ─────────────────────────────────────────────────────────
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
-        lang === "ar" ? "ar-EG" : "en-US",
-        { weekday: "long", year: "numeric", month: "long", day: "numeric" }
-      )
+      lang === "ar" ? "ar-EG" : "en-US",
+      { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+    )
     : "";
 
   return {
     // ── تحيات الطالب ─────────────────────────────────────────────────────
-    studentSalutation,          // يستخدم حسب لغة الطالب (ar أو en)
-    studentSalutation_ar,       // دائماً العربي  → {studentSalutation_ar}
-    studentSalutation_en,       // دائماً الإنجليزي → {studentSalutation_en}
+    studentSalutation,
+    studentSalutation_ar,
+    studentSalutation_en,
 
     // ── تحيات ولي الأمر ───────────────────────────────────────────────────
-    guardianSalutation,         // يستخدم حسب لغة الطالب → {guardianSalutation}
-    guardianSalutation_ar,      // دائماً العربي  → {guardianSalutation_ar}
-    guardianSalutation_en,      // دائماً الإنجليزي → {guardianSalutation_en}
+    guardianSalutation,
+    guardianSalutation_ar,
+    guardianSalutation_en,
 
-    // ── ✅ FIX: المتغيرات اللي كانت مفقودة ──────────────────────────────
-    // {salutation_ar} في قوالب الطالب → تحية الطالب بالعربي
+    // ── المتغيرات المُصلحة ────────────────────────────────────────────────
     salutation_ar: studentSalutation_ar,
-    // {salutation_en} في قوالب الطالب → تحية الطالب بالإنجليزي
     salutation_en: studentSalutation_en,
 
-    // ── alias مشترك (للتوافق مع القوالب القديمة) ─────────────────────────
-    // {salutation} → تحية ولي الأمر حسب لغة الطالب (الأكثر استخداماً في قوالب الولي)
+    // ── alias مشترك ───────────────────────────────────────────────────────
     salutation: guardianSalutation,
 
     // ── أسماء ────────────────────────────────────────────────────────────
-    studentName:      studentFirstName,
-    studentFullName:  student.personalInfo?.fullName || "",
-    guardianName:     guardianFirstName,
+    studentName: studentFirstName,
+    studentFullName: student.personalInfo?.fullName || "",
+    guardianName: guardianFirstName,
     guardianFullName: student.guardianInfo?.name || "",
 
     // ── childTitle ────────────────────────────────────────────────────────
     childTitle,
 
     // ── بيانات الجلسة ────────────────────────────────────────────────────
-    sessionName:      session?.title       || "",
-    date:             sessionDate,
-    time:             `${session?.startTime || ""} - ${session?.endTime || ""}`,
-    meetingLink:      session?.meetingLink  || "",
-    groupCode:        session?.groupId?.code || "",
-    groupName:        session?.groupId?.name || "",
+    // ✅ extractSessionShortName بتاخد الجزء المهم بس من العنوان
+    sessionName: extractSessionShortName(session?.title) || "",
+    date: sessionDate,
+    time: `${session?.startTime || ""} - ${session?.endTime || ""}`,
+    meetingLink: session?.meetingLink || "",
+    groupCode: session?.groupId?.code || "",
+    groupName: session?.groupId?.name || "",
     enrollmentNumber: student.enrollmentNumber || "",
   };
 }
@@ -187,37 +208,37 @@ export default function ReminderModal({
   t,
 }) {
   // ── Template content shown in the editors ─────────────────────────────────
-  const [currentStudentMessage,  setCurrentStudentMessage]  = useState("");
+  const [currentStudentMessage, setCurrentStudentMessage] = useState("");
   const [currentGuardianMessage, setCurrentGuardianMessage] = useState("");
 
   // ── Raw templates per student (fetched from API) ──────────────────────────
-  const [studentTemplates,  setStudentTemplates]  = useState({});
+  const [studentTemplates, setStudentTemplates] = useState({});
   const [guardianTemplates, setGuardianTemplates] = useState({});
 
   // ── Per-student manual edits ──────────────────────────────────────────────
-  const [editedStudentTemplates,  setEditedStudentTemplates]  = useState({});
+  const [editedStudentTemplates, setEditedStudentTemplates] = useState({});
   const [editedGuardianTemplates, setEditedGuardianTemplates] = useState({});
 
   // ── Preview (rendered) ────────────────────────────────────────────────────
-  const [previewStudentMessage,  setPreviewStudentMessage]  = useState("");
+  const [previewStudentMessage, setPreviewStudentMessage] = useState("");
   const [previewGuardianMessage, setPreviewGuardianMessage] = useState("");
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [showHints,               setShowHints]               = useState({ student: false, guardian: false });
-  const [cursorPosition,          setCursorPosition]          = useState({ student: 0, guardian: 0 });
-  const [selectedHintIndex,       setSelectedHintIndex]       = useState({ student: 0, guardian: 0 });
+  const [showHints, setShowHints] = useState({ student: false, guardian: false });
+  const [cursorPosition, setCursorPosition] = useState({ student: 0, guardian: 0 });
+  const [selectedHintIndex, setSelectedHintIndex] = useState({ student: 0, guardian: 0 });
   const [selectedStudentForPreview, setSelectedStudentForPreview] = useState(null);
-  const [loadingTemplates,        setLoadingTemplates]        = useState(false);
-  const [manuallyEdited,          setManuallyEdited]          = useState({ student: false, guardian: false });
-  const [savingTemplate,          setSavingTemplate]          = useState({ student: false, guardian: false });
-  const [sending,                 setSending]                 = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [manuallyEdited, setManuallyEdited] = useState({ student: false, guardian: false });
+  const [savingTemplate, setSavingTemplate] = useState({ student: false, guardian: false });
+  const [sending, setSending] = useState(false);
 
   // ── DB template variables ─────────────────────────────────────────────────
   const [dbVars, setDbVars] = useState({});
 
-  const studentTextareaRef  = useRef(null);
+  const studentTextareaRef = useRef(null);
   const guardianTextareaRef = useRef(null);
-  const hintsRef            = useRef({ student: null, guardian: null });
+  const hintsRef = useRef({ student: null, guardian: null });
 
   // ── Fetch DB template variables on mount ──────────────────────────────────
   useEffect(() => {
@@ -236,7 +257,7 @@ export default function ReminderModal({
   // ── Close hints on outside click ──────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
-      if (hintsRef.current.student  && !hintsRef.current.student.contains(e.target))
+      if (hintsRef.current.student && !hintsRef.current.student.contains(e.target))
         setShowHints((prev) => ({ ...prev, student: false }));
       if (hintsRef.current.guardian && !hintsRef.current.guardian.contains(e.target))
         setShowHints((prev) => ({ ...prev, guardian: false }));
@@ -263,10 +284,10 @@ export default function ReminderModal({
 
         const results = await Promise.all(
           groupStudents.map(async (student) => {
-            const res  = await fetch(`/api/sessions/${session.id}/templates`, {
-              method:  "POST",
+            const res = await fetch(`/api/sessions/${session.id}/templates`, {
+              method: "POST",
               headers: { "Content-Type": "application/json" },
-              body:    JSON.stringify({
+              body: JSON.stringify({
                 eventType,
                 studentId: student._id,
                 extraData: { meetingLink: session.meetingLink },
@@ -276,8 +297,8 @@ export default function ReminderModal({
 
             if (json.success) {
               return {
-                studentId:       student._id,
-                studentTemplate:  json.data.student?.rawContent  || json.data.student?.content  || "",
+                studentId: student._id,
+                studentTemplate: json.data.student?.rawContent || json.data.student?.content || "",
                 guardianTemplate: json.data.guardian?.rawContent || json.data.guardian?.content || "",
               };
             }
@@ -285,12 +306,12 @@ export default function ReminderModal({
           })
         );
 
-        const newStudentTemplates  = {};
+        const newStudentTemplates = {};
         const newGuardianTemplates = {};
 
         results.forEach((r) => {
           if (r) {
-            newStudentTemplates[r.studentId]  = r.studentTemplate;
+            newStudentTemplates[r.studentId] = r.studentTemplate;
             newGuardianTemplates[r.studentId] = r.guardianTemplate;
           }
         });
@@ -299,7 +320,7 @@ export default function ReminderModal({
         setGuardianTemplates(newGuardianTemplates);
 
         if (groupStudents[0]) {
-          setCurrentStudentMessage(newStudentTemplates[groupStudents[0]._id]  || "");
+          setCurrentStudentMessage(newStudentTemplates[groupStudents[0]._id] || "");
           setCurrentGuardianMessage(newGuardianTemplates[groupStudents[0]._id] || "");
         }
       } catch (err) {
@@ -317,7 +338,7 @@ export default function ReminderModal({
   useEffect(() => {
     if (!selectedStudentForPreview) return;
     const vars = buildVariables(selectedStudentForPreview, session, dbVars);
-    setPreviewStudentMessage(renderTemplate(currentStudentMessage,  vars));
+    setPreviewStudentMessage(renderTemplate(currentStudentMessage, vars));
     setPreviewGuardianMessage(renderTemplate(currentGuardianMessage, vars));
   }, [currentStudentMessage, currentGuardianMessage, selectedStudentForPreview, session, dbVars]);
 
@@ -329,7 +350,7 @@ export default function ReminderModal({
 
       const sid = student._id;
       setCurrentStudentMessage(
-        editedStudentTemplates[sid]  ?? studentTemplates[sid]  ?? ""
+        editedStudentTemplates[sid] ?? studentTemplates[sid] ?? ""
       );
       setCurrentGuardianMessage(
         editedGuardianTemplates[sid] ?? guardianTemplates[sid] ?? ""
@@ -346,81 +367,83 @@ export default function ReminderModal({
       setSavingTemplate((prev) => ({ ...prev, [type]: true }));
 
       try {
+        // ✅ FIX: templateType صح للـ 15 دقيقة
         const templateType =
           reminderType === "24hours"
             ? type === "student" ? "reminder_24h_student" : "reminder_24h_guardian"
-            : type === "student" ? "reminder_1h_student"  : "reminder_1h_guardian";
+            : type === "student" ? "reminder_15min_student" : "reminder_15min_guardian";
 
         const recipientType = type === "student" ? "student" : "guardian";
-        const studentLang   =
+        const studentLang =
           selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
 
         const templateName =
           reminderType === "24hours"
             ? type === "student" ? "24h Reminder - Student" : "24h Reminder - Guardian"
-            : type === "student" ? "1h Reminder - Student"  : "1h Reminder - Guardian";
+            : type === "student" ? "15min Reminder - Student" : "15min Reminder - Guardian";
 
-        const searchRes  = await fetch(
+        // ✅ FIX: الـ endpoint الصح
+        const searchRes = await fetch(
           `/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`
         );
         const searchJson = await searchRes.json();
 
-        if (searchJson.success && searchJson.data.length > 0) {
+        if (searchJson.success && searchJson.data?.length > 0) {
           const existing = searchJson.data[0];
 
           const updateData = {
-            id:        existing._id,
-            name:      templateName,
+            id: existing._id,
+            name: templateName,
             isDefault: true,
-            updatedAt: new Date(),
             ...(studentLang === "ar"
-              ? { contentAr: content,       contentEn: existing.contentEn || "" }
-              : { contentEn: content,       contentAr: existing.contentAr || "" }),
+              ? { contentAr: content, contentEn: existing.contentEn || " " }
+              : { contentEn: content, contentAr: existing.contentAr || " " }),
           };
 
-          const res  = await fetch("/api/message-templates", {
-            method:  "PUT",
+          const res = await fetch("/api/message-templates", {
+            method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify(updateData),
+            body: JSON.stringify(updateData),
           });
           const json = await res.json();
           if (!json.success) throw new Error(json.error || "Update failed");
+
         } else {
           const newTemplate = {
             templateType,
             recipientType,
-            name:        templateName,
-            description: `${reminderType === "24hours" ? "24 hours" : "1 hour"} reminder for ${recipientType}`,
-            isDefault:   true,
-            isActive:    true,
+            name: templateName,
+            description: `${reminderType === "24hours" ? "24 hours" : "15 minutes"} reminder for ${recipientType}`,
+            isDefault: true,
+            isActive: true,
+            // ✅ FIX: مش فاضيين خالص — space بدل empty string
+            contentAr: studentLang === "ar" ? content : " ",
+            contentEn: studentLang === "en" ? content : " ",
             variables: [
-              { key: "guardianSalutation",    label: "Guardian Salutation"    },
+              { key: "guardianSalutation", label: "Guardian Salutation" },
               { key: "guardianSalutation_ar", label: "Guardian Salutation AR" },
               { key: "guardianSalutation_en", label: "Guardian Salutation EN" },
-              { key: "studentSalutation",     label: "Student Salutation"     },
-              { key: "studentSalutation_ar",  label: "Student Salutation AR"  },
-              { key: "studentSalutation_en",  label: "Student Salutation EN"  },
-              { key: "salutation_ar",         label: "Salutation AR"          },
-              { key: "salutation_en",         label: "Salutation EN"          },
-              { key: "salutation",            label: "Salutation"             },
-              { key: "studentName",           label: "Student Name"           },
-              { key: "guardianName",          label: "Guardian Name"          },
-              { key: "childTitle",            label: "Son/Daughter"           },
-              { key: "sessionName",           label: "Session Name"           },
-              { key: "date",                  label: "Date"                   },
-              { key: "time",                  label: "Time"                   },
-              { key: "meetingLink",           label: "Meeting Link"           },
-              { key: "enrollmentNumber",      label: "Enrollment Number"      },
+              { key: "studentSalutation", label: "Student Salutation" },
+              { key: "studentSalutation_ar", label: "Student Salutation AR" },
+              { key: "studentSalutation_en", label: "Student Salutation EN" },
+              { key: "salutation_ar", label: "Salutation AR" },
+              { key: "salutation_en", label: "Salutation EN" },
+              { key: "salutation", label: "Salutation" },
+              { key: "studentName", label: "Student Name" },
+              { key: "guardianName", label: "Guardian Name" },
+              { key: "childTitle", label: "Son/Daughter" },
+              { key: "sessionName", label: "Session Name" },
+              { key: "date", label: "Date" },
+              { key: "time", label: "Time" },
+              { key: "meetingLink", label: "Meeting Link" },
+              { key: "enrollmentNumber", label: "Enrollment Number" },
             ],
-            ...(studentLang === "ar"
-              ? { contentAr: content, contentEn: "" }
-              : { contentEn: content, contentAr: "" }),
           };
 
-          const res  = await fetch("/api/message-templates", {
-            method:  "POST",
+          const res = await fetch("/api/message-templates", {
+            method: "POST",
             headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify(newTemplate),
+            body: JSON.stringify(newTemplate),
           });
           const json = await res.json();
           if (!json.success) throw new Error(json.error || "Creation failed");
@@ -438,6 +461,7 @@ export default function ReminderModal({
         } else {
           setGuardianTemplates((prev) => ({ ...prev, [sid]: content }));
         }
+
       } catch (err) {
         console.error("Error saving template:", err);
         toast.error(
@@ -456,24 +480,24 @@ export default function ReminderModal({
   const handleSend = useCallback(async () => {
     setSending(true);
     try {
-      const studentMessages  = {};
+      const studentMessages = {};
       const guardianMessages = {};
 
       groupStudents.forEach((student) => {
-        const sid  = student._id.toString();
+        const sid = student._id.toString();
         const vars = buildVariables(student, session, dbVars);
 
-        const rawStudent  = editedStudentTemplates[sid]  ?? studentTemplates[sid]  ?? "";
+        const rawStudent = editedStudentTemplates[sid] ?? studentTemplates[sid] ?? "";
         const rawGuardian = editedGuardianTemplates[sid] ?? guardianTemplates[sid] ?? "";
 
-        studentMessages[sid]  = renderTemplate(rawStudent,  vars);
+        studentMessages[sid] = renderTemplate(rawStudent, vars);
         guardianMessages[sid] = renderTemplate(rawGuardian, vars);
       });
 
       const res = await fetch(`/api/sessions/${session.id}/send-reminder`, {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
+        body: JSON.stringify({
           reminderType,
           metadata: {
             studentMessages,
@@ -514,28 +538,23 @@ export default function ReminderModal({
   // ── Available variables for hints dropdown ────────────────────────────────
   const availableVariables = useMemo(
     () => [
-      // تحيات الطالب
-      { key: "{studentSalutation}",     label: isRTL ? "تحية الطالب (حسب اللغة)"     : "Student Salutation",        icon: "👶" },
-      { key: "{studentSalutation_ar}",  label: isRTL ? "تحية الطالب - عربي"           : "Student Salutation (AR)",    icon: "👶" },
-      { key: "{studentSalutation_en}",  label: isRTL ? "تحية الطالب - إنجليزي"        : "Student Salutation (EN)",    icon: "👶" },
-      // ✅ المتغيرات المُصلحة
-      { key: "{salutation_ar}",         label: isRTL ? "التحية - عربي"                : "Salutation (AR)",            icon: "👋" },
-      { key: "{salutation_en}",         label: isRTL ? "التحية - إنجليزي"             : "Salutation (EN)",            icon: "👋" },
-      // تحيات ولي الأمر
-      { key: "{guardianSalutation}",    label: isRTL ? "تحية ولي الأمر (حسب اللغة)"  : "Guardian Salutation",        icon: "👤" },
-      { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي"        : "Guardian Salutation (AR)",   icon: "👤" },
-      { key: "{guardianSalutation_en}", label: isRTL ? "تحية ولي الأمر - إنجليزي"    : "Guardian Salutation (EN)",   icon: "👤" },
-      { key: "{salutation}",            label: isRTL ? "التحية العامة (ولي الأمر)"    : "Salutation (guardian alias)", icon: "👋" },
-      // أسماء
-      { key: "{studentName}",           label: isRTL ? "اسم الطالب"                   : "Student Name",               icon: "👶" },
-      { key: "{guardianName}",          label: isRTL ? "اسم ولي الأمر"               : "Guardian Name",              icon: "👤" },
-      { key: "{childTitle}",            label: isRTL ? "ابنك/ابنتك"                   : "Son/Daughter",               icon: "👪" },
-      // بيانات الجلسة
-      { key: "{sessionName}",           label: isRTL ? "اسم الجلسة"                   : "Session Name",               icon: "📘" },
-      { key: "{date}",                  label: isRTL ? "التاريخ"                       : "Date",                       icon: "📅" },
-      { key: "{time}",                  label: isRTL ? "الوقت"                         : "Time",                       icon: "⏰" },
-      { key: "{meetingLink}",           label: isRTL ? "رابط الاجتماع"               : "Meeting Link",               icon: "🔗" },
-      { key: "{enrollmentNumber}",      label: isRTL ? "الرقم التعريفي"              : "Enrollment No.",             icon: "🔢" },
+      { key: "{studentSalutation}", label: isRTL ? "تحية الطالب (حسب اللغة)" : "Student Salutation", icon: "👶" },
+      { key: "{studentSalutation_ar}", label: isRTL ? "تحية الطالب - عربي" : "Student Salutation (AR)", icon: "👶" },
+      { key: "{studentSalutation_en}", label: isRTL ? "تحية الطالب - إنجليزي" : "Student Salutation (EN)", icon: "👶" },
+      { key: "{salutation_ar}", label: isRTL ? "التحية - عربي" : "Salutation (AR)", icon: "👋" },
+      { key: "{salutation_en}", label: isRTL ? "التحية - إنجليزي" : "Salutation (EN)", icon: "👋" },
+      { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (حسب اللغة)" : "Guardian Salutation", icon: "👤" },
+      { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي" : "Guardian Salutation (AR)", icon: "👤" },
+      { key: "{guardianSalutation_en}", label: isRTL ? "تحية ولي الأمر - إنجليزي" : "Guardian Salutation (EN)", icon: "👤" },
+      { key: "{salutation}", label: isRTL ? "التحية العامة (ولي الأمر)" : "Salutation (guardian alias)", icon: "👋" },
+      { key: "{studentName}", label: isRTL ? "اسم الطالب" : "Student Name", icon: "👶" },
+      { key: "{guardianName}", label: isRTL ? "اسم ولي الأمر" : "Guardian Name", icon: "👤" },
+      { key: "{childTitle}", label: isRTL ? "ابنك/ابنتك" : "Son/Daughter", icon: "👪" },
+      { key: "{sessionName}", label: isRTL ? "اسم الجلسة" : "Session Name", icon: "📘" },
+      { key: "{date}", label: isRTL ? "التاريخ" : "Date", icon: "📅" },
+      { key: "{time}", label: isRTL ? "الوقت" : "Time", icon: "⏰" },
+      { key: "{meetingLink}", label: isRTL ? "رابط الاجتماع" : "Meeting Link", icon: "🔗" },
+      { key: "{enrollmentNumber}", label: isRTL ? "الرقم التعريفي" : "Enrollment No.", icon: "🔢" },
     ],
     [isRTL]
   );
@@ -543,10 +562,10 @@ export default function ReminderModal({
   // ── Generic insert variable helper ────────────────────────────────────────
   const insertVariable = useCallback(
     (type, variable) => {
-      const isStudent   = type === "student";
-      const textarea    = isStudent ? studentTextareaRef.current : guardianTextareaRef.current;
-      const currentVal  = isStudent ? currentStudentMessage      : currentGuardianMessage;
-      const cursorPos   = isStudent ? cursorPosition.student     : cursorPosition.guardian;
+      const isStudent = type === "student";
+      const textarea = isStudent ? studentTextareaRef.current : guardianTextareaRef.current;
+      const currentVal = isStudent ? currentStudentMessage : currentGuardianMessage;
+      const cursorPos = isStudent ? cursorPosition.student : cursorPosition.guardian;
 
       if (!textarea) return;
 
@@ -555,10 +574,10 @@ export default function ReminderModal({
 
       let newValue, newCursor;
       if (lastAt !== -1) {
-        newValue  = currentVal.substring(0, lastAt) + variable.key + currentVal.substring(cursorPos);
+        newValue = currentVal.substring(0, lastAt) + variable.key + currentVal.substring(cursorPos);
         newCursor = lastAt + variable.key.length;
       } else {
-        newValue  = currentVal.substring(0, cursorPos) + variable.key + currentVal.substring(cursorPos);
+        newValue = currentVal.substring(0, cursorPos) + variable.key + currentVal.substring(cursorPos);
         newCursor = cursorPos + variable.key.length;
       }
 
@@ -600,7 +619,7 @@ export default function ReminderModal({
   // ── Textarea input handlers ───────────────────────────────────────────────
   const handleInput = useCallback(
     (e, type) => {
-      const value     = e.target.value;
+      const value = e.target.value;
       const cursorPos = e.target.selectionStart;
       const isStudent = type === "student";
 
@@ -628,8 +647,8 @@ export default function ReminderModal({
 
       const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
       if (lastAt !== -1 && lastAt === cursorPos - 1) {
-        setShowHints((prev)         => ({ ...prev, [type]: true }));
-        setSelectedHintIndex((prev) => ({ ...prev, [type]: 0   }));
+        setShowHints((prev) => ({ ...prev, [type]: true }));
+        setSelectedHintIndex((prev) => ({ ...prev, [type]: 0 }));
       } else {
         setShowHints((prev) => ({ ...prev, [type]: false }));
       }
@@ -689,11 +708,10 @@ export default function ReminderModal({
             key={v.key}
             type="button"
             onClick={() => insertVariable(type, v)}
-            className={`w-full px-3 py-2 text-right hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-2 ${
-              i === selectedHintIndex[type]
+            className={`w-full px-3 py-2 text-right hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-2 ${i === selectedHintIndex[type]
                 ? "bg-purple-100 dark:bg-purple-900/40"
                 : ""
-            }`}
+              }`}
           >
             <span>{v.icon}</span>
             <div className="flex-1 flex items-center justify-between">
@@ -714,34 +732,34 @@ export default function ReminderModal({
 
   // ── Textarea + preview block ──────────────────────────────────────────────
   const renderMessageEditor = (type) => {
-    const isStudent       = type === "student";
-    const currentMessage  = isStudent ? currentStudentMessage  : currentGuardianMessage;
-    const previewMessage  = isStudent ? previewStudentMessage  : previewGuardianMessage;
-    const isSaving        = savingTemplate[type];
-    const isManual        = manuallyEdited[type];
-    const studentLang     =
+    const isStudent = type === "student";
+    const currentMessage = isStudent ? currentStudentMessage : currentGuardianMessage;
+    const previewMessage = isStudent ? previewStudentMessage : previewGuardianMessage;
+    const isSaving = savingTemplate[type];
+    const isManual = manuallyEdited[type];
+    const studentLang =
       selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar";
-    const color           = isStudent ? "purple" : "blue";
+    const color = isStudent ? "purple" : "blue";
 
     const colorMap = {
       purple: {
-        bg:      "bg-purple-50 dark:bg-purple-900/20",
-        border:  "border-purple-200 dark:border-purple-800",
-        textarea:"border-purple-200 dark:border-purple-700 focus:ring-purple-500",
+        bg: "bg-purple-50 dark:bg-purple-900/20",
+        border: "border-purple-200 dark:border-purple-800",
+        textarea: "border-purple-200 dark:border-purple-700 focus:ring-purple-500",
         preview: "border-purple-200 dark:border-purple-700",
         previewHeader: "bg-purple-50 dark:bg-purple-900/30",
-        previewText:   "text-purple-700 dark:text-purple-300",
-        label:   "text-purple-600 dark:text-purple-400",
+        previewText: "text-purple-700 dark:text-purple-300",
+        label: "text-purple-600 dark:text-purple-400",
         divider: "border-purple-200 dark:border-purple-800",
       },
       blue: {
-        bg:      "bg-blue-50 dark:bg-blue-900/20",
-        border:  "border-blue-200 dark:border-blue-800",
-        textarea:"border-blue-200 dark:border-blue-700 focus:ring-blue-500",
+        bg: "bg-blue-50 dark:bg-blue-900/20",
+        border: "border-blue-200 dark:border-blue-800",
+        textarea: "border-blue-200 dark:border-blue-700 focus:ring-blue-500",
         preview: "border-blue-200 dark:border-blue-700",
         previewHeader: "bg-blue-50 dark:bg-blue-900/30",
-        previewText:   "text-blue-700 dark:text-blue-300",
-        label:   "text-blue-600 dark:text-blue-400",
+        previewText: "text-blue-700 dark:text-blue-300",
+        label: "text-blue-600 dark:text-blue-400",
         divider: "border-blue-200 dark:border-blue-800",
       },
     }[color];
@@ -850,7 +868,7 @@ export default function ReminderModal({
               <Clock className="w-5 h-5 text-primary" />
               {reminderType === "24hours"
                 ? isRTL ? "تذكير قبل 24 ساعة" : "24-Hour Reminder"
-                : isRTL ? "تذكير قبل ساعة"    : "1-Hour Reminder"}
+                : isRTL ? "تذكير قبل 15 دقيقة" : "15-Minute Reminder"}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               {session?.title} ·{" "}
@@ -883,27 +901,26 @@ export default function ReminderModal({
             </h3>
             <div className="flex flex-wrap gap-2">
               {groupStudents.map((student) => {
-                const sid        = student._id;
+                const sid = student._id;
                 const isSelected =
                   selectedStudentForPreview?._id?.toString() === sid?.toString();
-                const lang       =
+                const lang =
                   student.communicationPreferences?.preferredLanguage || "ar";
-                const gender     =
+                const gender =
                   (student.personalInfo?.gender || "male").toLowerCase();
-                const rel        =
+                const rel =
                   (student.guardianInfo?.relationship || "father").toLowerCase();
-                const hasEdited  =
+                const hasEdited =
                   editedStudentTemplates[sid] || editedGuardianTemplates[sid];
 
                 return (
                   <button
                     key={sid}
                     onClick={() => handleSelectStudentForPreview(student)}
-                    className={`px-3 py-1.5 text-xs rounded-full border transition-all flex items-center gap-1.5 ${
-                      isSelected
+                    className={`px-3 py-1.5 text-xs rounded-full border transition-all flex items-center gap-1.5 ${isSelected
                         ? "bg-primary text-white border-primary"
                         : "border-gray-300 dark:border-gray-600 hover:border-primary/50 text-gray-700 dark:text-gray-300"
-                    }`}
+                      }`}
                   >
                     <span>{gender === "female" ? "👧" : "👦"}</span>
                     <span>{student.personalInfo?.fullName?.split(" ")[0]}</span>
@@ -949,10 +966,17 @@ export default function ReminderModal({
                   {salutationPreview.childTitle}
                 </span>
               </p>
-              {/* ✅ عرض salutation_ar في الكارت للتأكد */}
               <p>
                 <span className="font-medium text-gray-500 dark:text-gray-400">
-                  {isRTL ? "salutation_ar: " : "salutation_ar: "}
+                  {isRTL ? "اسم الجلسة: " : "Session name: "}
+                </span>
+                <span className="text-primary font-semibold">
+                  {salutationPreview.sessionName}
+                </span>
+              </p>
+              <p>
+                <span className="font-medium text-gray-500 dark:text-gray-400">
+                  salutation_ar:{" "}
                 </span>
                 <span className="text-primary font-semibold">
                   {salutationPreview.salutation_ar}
@@ -1010,6 +1034,7 @@ export default function ReminderModal({
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );

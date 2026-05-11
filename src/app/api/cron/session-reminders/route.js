@@ -27,13 +27,12 @@ export async function GET(req) {
     const now = new Date();
     const results = {
       timestamp: now.toISOString(),
-      reminder24h: { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [] },
-      reminder1h:  { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [] },
+      reminder24h:  { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [] },
+      reminder15min: { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [] },
     };
 
     // ============================================================
-    // ✅ نجيب sessions في نافذة 2 يوم (اليوم + بكرا) ونفلتر بالوقت
-    // لأن scheduledDate بيتخزن كـ 00:00 بدون وقت
+    // ✅ نافذة يومين عشان scheduledDate بيتخزن كـ 00:00 بدون وقت
     // ============================================================
     const dayStart = new Date(now);
     dayStart.setHours(0, 0, 0, 0);
@@ -93,52 +92,55 @@ export async function GET(req) {
     }
 
     // ============================================================
-    // ✅ 2) تذكير 1 ساعة
+    // ✅ 2) تذكير 15 دقيقة (بديل الـ 1 ساعة)
+    //    نافذة: من 10 دقايق لـ 20 دقيقة قبل الحصة
+    //    يعني لو الـ cron بيشتغل كل 5 دقايق، هيلتقطه مرة واحدة بس
     // ============================================================
-    const sessions1h = await Session.find({
+    const sessions15min = await Session.find({
       status: 'scheduled',
       isDeleted: false,
       scheduledDate: { $gte: dayStart, $lte: dayEnd },
-      'automationEvents.reminder1hSent': { $ne: true },
+      'automationEvents.reminder15minSent': { $ne: true },
     }).lean();
 
-    results.reminder1h.checked = sessions1h.length;
-    console.log(`\n⏰ [1h] Candidates: ${sessions1h.length}`);
+    results.reminder15min.checked = sessions15min.length;
+    console.log(`\n⏰ [15min] Candidates: ${sessions15min.length}`);
 
-    for (const session of sessions1h) {
+    for (const session of sessions15min) {
       try {
         const sessionDateTime = buildSessionDateTime(session);
         const diffMinutes = (sessionDateTime - now) / (1000 * 60);
 
         console.log(`   Session: ${session.title} | diff: ${diffMinutes.toFixed(1)}min`);
 
-        if (diffMinutes < 30 || diffMinutes > 120) {
-          results.reminder1h.skipped++;
+        // نافذة 10-20 دقيقة قبل الحصة
+        if (diffMinutes < 10 || diffMinutes > 20) {
+          results.reminder15min.skipped++;
           continue;
         }
 
         const result = await sendManualSessionReminder(
           session._id.toString(),
-          '1hour',
+          '15min',
           null,
-          { automatedCron: true }
+          { automatedCron: true, reminderType: '15min' }
         );
 
         if (result.success) {
-          results.reminder1h.sent++;
-          results.reminder1h.sessions.push({
+          results.reminder15min.sent++;
+          results.reminder15min.sessions.push({
             id: session._id,
             title: session.title,
             scheduledDate: session.scheduledDate,
             studentsNotified: result.successCount,
           });
-          console.log(`✅ 1h sent: ${result.successCount} students`);
+          console.log(`✅ 15min sent: ${result.successCount} students`);
         } else {
-          results.reminder1h.failed++;
+          results.reminder15min.failed++;
         }
       } catch (err) {
-        results.reminder1h.failed++;
-        console.error(`❌ 1h error for ${session._id}:`, err.message);
+        results.reminder15min.failed++;
+        console.error(`❌ 15min error for ${session._id}:`, err.message);
       }
     }
 
@@ -153,7 +155,7 @@ export async function GET(req) {
 
 function buildSessionDateTime(session) {
   // scheduledDate محفوظ كـ 00:00 UTC
-  // startTime محفوظ كـ "08:00" بتوقيت القاهرة (UTC+2)
+  // startTime محفوظ كـ "18:00" بتوقيت القاهرة (UTC+2)
   // فلازم نطرح 2 ساعة عشان نحوله لـ UTC
 
   const date = new Date(session.scheduledDate);

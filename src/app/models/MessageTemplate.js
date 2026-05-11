@@ -19,16 +19,16 @@ const MessageTemplateSchema = new mongoose.Schema(
         "session_postponed_guardian",
         "reminder_24h_student",
         "reminder_24h_guardian",
-        "reminder_1h_student",
-        "reminder_1h_guardian",
+        "reminder_15min_student",
+        "reminder_15min_guardian",
         "group_completion_student",
         "group_completion_guardian",
         "evaluation_pass",
         "evaluation_review",
         "evaluation_repeat",
         "session_recording",
-        "learning_supervisor_intro",  // ✅ جديد
-        "module_overview",            // ✅ جديد
+        "learning_supervisor_intro", // ✅ جديد
+        "module_overview", // ✅ جديد
       ],
     },
 
@@ -109,7 +109,7 @@ MessageTemplateSchema.pre("save", async function () {
   if (this.isDefault) {
     await this.constructor.updateMany(
       {
-        templateType:  this.templateType,
+        templateType: this.templateType,
         recipientType: this.recipientType,
         isDefault: true,
         _id: { $ne: this._id },
@@ -124,7 +124,10 @@ MessageTemplateSchema.methods.getContent = function (language = "ar") {
   return language === "ar" ? this.contentAr : this.contentEn;
 };
 
-MessageTemplateSchema.methods.render = function (variables = {}, language = "ar") {
+MessageTemplateSchema.methods.render = function (
+  variables = {},
+  language = "ar",
+) {
   let content = this.getContent(language);
   Object.entries(variables).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
@@ -136,43 +139,57 @@ MessageTemplateSchema.methods.render = function (variables = {}, language = "ar"
 
 MessageTemplateSchema.methods.getExample = function (language = "ar") {
   const examples = {
-    guardianSalutation:  language === "ar" ? "عزيزي الأستاذ محمد"     : "Dear Mr. Mohamed",
-    childTitle:          language === "ar" ? "ابنك"                    : "your son",
-    studentName:         language === "ar" ? "أحمد"                    : "Ahmed",
-    guardianName:        language === "ar" ? "محمد"                    : "Mohamed",
-    sessionName:         language === "ar" ? "الجلسة الأولى"           : "Session 1",
-    sessionDate:         language === "ar" ? "30/12/2025"              : "12/30/2025",
-    sessionNumber:       "1",
-    attendanceStatus:    language === "ar" ? "حاضر"                    : "Present",
-    starsCommitment:     "⭐⭐⭐⭐⭐",
-    starsUnderstanding:  "⭐⭐⭐⭐",
-    starsTaskExecution:  "⭐⭐⭐⭐",
-    starsParticipation:  "⭐⭐⭐⭐",
-    instructorComment:   language === "ar" ? "أداء ممتاز، استمر هكذا!" : "Excellent performance, keep it up!",
-    completedSessions:   "2",
-    date:                language === "ar" ? "30/12/2025"              : "12/30/2025",
-    time:                "5:00 PM - 7:00 PM",
-    meetingLink:         "https://meet.google.com/xxx",
-    groupName:           language === "ar" ? "المجموعة أ"              : "Group A",
-    groupCode:           "GRP-001",
-    courseName:          language === "ar" ? "برمجة بايثون"            : "Python Programming",
-    enrollmentNumber:    "STU001",
-    recordingLink:       "🎥 رابط التسجيل: https://drive.google.com/xxx",
-    decision:            language === "ar" ? "ممتاز"                   : "Excellent",
-    supervisorName:      language === "ar" ? "أحمد علي"                : "Ahmed Ali",
-    moduleTitle:         language === "ar" ? "Real-Life Mobile Solutions" : "Real-Life Mobile Solutions",
+    guardianSalutation:
+      language === "ar" ? "عزيزي الأستاذ محمد" : "Dear Mr. Mohamed",
+    childTitle: language === "ar" ? "ابنك" : "your son",
+    studentName: language === "ar" ? "أحمد" : "Ahmed",
+    guardianName: language === "ar" ? "محمد" : "Mohamed",
+    sessionName: language === "ar" ? "الجلسة الأولى" : "Session 1",
+    sessionDate: language === "ar" ? "30/12/2025" : "12/30/2025",
+    sessionNumber: "1",
+    attendanceStatus: language === "ar" ? "حاضر" : "Present",
+    starsCommitment: "⭐⭐⭐⭐⭐",
+    starsUnderstanding: "⭐⭐⭐⭐",
+    starsTaskExecution: "⭐⭐⭐⭐",
+    starsParticipation: "⭐⭐⭐⭐",
+    instructorComment:
+      language === "ar"
+        ? "أداء ممتاز، استمر هكذا!"
+        : "Excellent performance, keep it up!",
+    completedSessions: "2",
+    date: language === "ar" ? "30/12/2025" : "12/30/2025",
+    time: "5:00 PM - 7:00 PM",
+    meetingLink: "https://meet.google.com/xxx",
+    groupName: language === "ar" ? "المجموعة أ" : "Group A",
+    groupCode: "GRP-001",
+    courseName: language === "ar" ? "برمجة بايثون" : "Python Programming",
+    enrollmentNumber: "STU001",
+    recordingLink: "🎥 رابط التسجيل: https://drive.google.com/xxx",
+    decision: language === "ar" ? "ممتاز" : "Excellent",
+    supervisorName: language === "ar" ? "أحمد علي" : "Ahmed Ali",
+    moduleTitle:
+      language === "ar"
+        ? "Real-Life Mobile Solutions"
+        : "Real-Life Mobile Solutions",
   };
   return this.render(examples, language);
 };
 
 // ─── Static: getOrFallback ────────────────────────────────────────────────────
-MessageTemplateSchema.statics.getOrFallback = async function (templateType, language = "ar") {
-  const doc = await this.findOne({ templateType, isDefault: true, isActive: true }).lean();
+MessageTemplateSchema.statics.getOrFallback = async function (
+  templateType,
+  language = "ar",
+) {
+  const doc = await this.findOne({
+    templateType,
+    isDefault: true,
+    isActive: true,
+  }).lean();
   if (doc) {
     return {
-      content:    language === "ar" ? doc.contentAr : doc.contentEn,
+      content: language === "ar" ? doc.contentAr : doc.contentEn,
       isFallback: false,
-      variables:  doc.variables || [],
+      variables: doc.variables || [],
     };
   }
 
@@ -181,39 +198,60 @@ MessageTemplateSchema.statics.getOrFallback = async function (templateType, lang
   if (!fb) return { content: "", isFallback: true, variables: [] };
 
   return {
-    content:    language === "ar" ? fb.ar : fb.en,
+    content: language === "ar" ? fb.ar : fb.en,
     isFallback: true,
-    variables:  fb.variables || [],
+    variables: fb.variables || [],
   };
 };
 
 // ─── Fallback hardcoded templates ────────────────────────────────────────────
 function getFallbackTemplates() {
-
   // ── المتغيرات المشتركة بين templates التقييم الثلاثة ──────────────────────
   const evalVariables = [
-    { key: "guardianSalutation",  label: "تحية ولي الأمر",          example: "عزيزي الأستاذ محمد" },
-    { key: "childTitle",          label: "صلة القرابة",             example: "ابنك" },
-    { key: "studentName",         label: "اسم الطالب",              example: "أحمد" },
-    { key: "sessionDate",         label: "تاريخ الجلسة",            example: "30/12/2025" },
-    { key: "sessionNumber",       label: "رقم الجلسة",              example: "1" },
-    { key: "attendanceStatus",    label: "حالة الحضور",             example: "حاضر" },
-    { key: "starsCommitment",     label: "نجوم الالتزام والتركيز",  example: "⭐⭐⭐⭐⭐" },
-    { key: "starsUnderstanding",  label: "نجوم مستوى الاستيعاب",   example: "⭐⭐⭐⭐" },
-    { key: "starsTaskExecution",  label: "نجوم تنفيذ المهام",       example: "⭐⭐⭐⭐" },
-    { key: "starsParticipation",  label: "نجوم المشاركة",           example: "⭐⭐⭐⭐" },
-    { key: "instructorComment",   label: "تعليق المدرس",            example: "أداء ممتاز، استمر هكذا!" },
-    { key: "completedSessions",   label: "عدد الحصص المنتهية",      example: "2" },
-    { key: "recordingLink",       label: "رابط التسجيل",            example: "🎥 رابط التسجيل: https://..." },
+    {
+      key: "guardianSalutation",
+      label: "تحية ولي الأمر",
+      example: "عزيزي الأستاذ محمد",
+    },
+    { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+    { key: "studentName", label: "اسم الطالب", example: "أحمد" },
+    { key: "sessionDate", label: "تاريخ الجلسة", example: "30/12/2025" },
+    { key: "sessionNumber", label: "رقم الجلسة", example: "1" },
+    { key: "attendanceStatus", label: "حالة الحضور", example: "حاضر" },
+    {
+      key: "starsCommitment",
+      label: "نجوم الالتزام والتركيز",
+      example: "⭐⭐⭐⭐⭐",
+    },
+    {
+      key: "starsUnderstanding",
+      label: "نجوم مستوى الاستيعاب",
+      example: "⭐⭐⭐⭐",
+    },
+    {
+      key: "starsTaskExecution",
+      label: "نجوم تنفيذ المهام",
+      example: "⭐⭐⭐⭐",
+    },
+    { key: "starsParticipation", label: "نجوم المشاركة", example: "⭐⭐⭐⭐" },
+    {
+      key: "instructorComment",
+      label: "تعليق المدرس",
+      example: "أداء ممتاز، استمر هكذا!",
+    },
+    { key: "completedSessions", label: "عدد الحصص المنتهية", example: "2" },
+    {
+      key: "recordingLink",
+      label: "رابط التسجيل",
+      example: "🎥 رابط التسجيل: https://...",
+    },
   ];
 
   return {
-
     // ── evaluation_pass ──────────────────────────────────────────────────────
     evaluation_pass: {
       variables: evalVariables,
-      ar:
-`{guardianSalutation}،
+      ar: `{guardianSalutation}،
 
 تقرير الحصة 📃✨
 📆 التاريخ : {sessionDate}
@@ -231,8 +269,7 @@ function getFallbackTemplates() {
 {recordingLink}
 🙏 نشكركم على ثقتكم في Code School
 📞 للتواصل : +2 011 40 474 129`,
-      en:
-`{guardianSalutation},
+      en: `{guardianSalutation},
 
 Session Report 📃✨
 📆 Date : {sessionDate}
@@ -255,8 +292,7 @@ Session Report 📃✨
     // ── evaluation_review ────────────────────────────────────────────────────
     evaluation_review: {
       variables: evalVariables,
-      ar:
-`{guardianSalutation}،
+      ar: `{guardianSalutation}،
 
 تقرير الحصة 📃✨
 📆 التاريخ : {sessionDate}
@@ -274,8 +310,7 @@ Session Report 📃✨
 {recordingLink}
 🙏 نشكركم على ثقتكم في Code School
 📞 للتواصل : +2 011 40 474 129`,
-      en:
-`{guardianSalutation},
+      en: `{guardianSalutation},
 
 Session Report 📃✨
 📆 Date : {sessionDate}
@@ -298,8 +333,7 @@ Session Report 📃✨
     // ── evaluation_repeat ────────────────────────────────────────────────────
     evaluation_repeat: {
       variables: evalVariables,
-      ar:
-`{guardianSalutation}،
+      ar: `{guardianSalutation}،
 
 تقرير الحصة 📃✨
 📆 التاريخ : {sessionDate}
@@ -317,8 +351,7 @@ Session Report 📃✨
 {recordingLink}
 🙏 نشكركم على ثقتكم في Code School
 📞 للتواصل : +2 011 40 474 129`,
-      en:
-`{guardianSalutation},
+      en: `{guardianSalutation},
 
 Session Report 📃✨
 📆 Date : {sessionDate}
@@ -341,14 +374,21 @@ Session Report 📃✨
     // ── session_recording ────────────────────────────────────────────────────
     session_recording: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر",   example: "عزيزي الأستاذ محمد" },
-        { key: "childTitle",         label: "صلة القرابة",      example: "ابنك" },
-        { key: "studentName",        label: "اسم الطالب",       example: "أحمد" },
-        { key: "sessionName",        label: "اسم الجلسة",       example: "الجلسة الأولى" },
-        { key: "recordingLink",      label: "رابط التسجيل",     example: "https://drive.google.com/xxx" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "أحمد" },
+        { key: "sessionName", label: "اسم الجلسة", example: "الجلسة الأولى" },
+        {
+          key: "recordingLink",
+          label: "رابط التسجيل",
+          example: "https://drive.google.com/xxx",
+        },
       ],
-      ar:
-`{guardianSalutation}،
+      ar: `{guardianSalutation}،
 
 🎥 رابط تسجيل جلسة "{sessionName}" لـ{childTitle} *{studentName}*:
 
@@ -356,8 +396,7 @@ Session Report 📃✨
 
 يمكن مراجعة التسجيل في أي وقت للمذاكرة والمراجعة.
 فريق Code School 💻`,
-      en:
-`{guardianSalutation},
+      en: `{guardianSalutation},
 
 🎥 Recording for "{sessionName}" — {childTitle} *{studentName}*:
 
@@ -370,21 +409,23 @@ Code School Team 💻`,
     // ─── NEW: Learning Supervisor Intro ───────────────────────────────────────
     learning_supervisor_intro: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ أحمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ أحمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "يوسف" },
         { key: "supervisorName", label: "اسم المشرف", example: "أحمد علي" },
       ],
-      ar:
-`{guardianSalutation} 👋
+      ar: `{guardianSalutation} 👋
 أنا {supervisorName}، الـ Learning Supervisor الخاص بـ {childTitle} **{studentName}** في Code School ✨
 حبيت أعرف حضرتك بنفسي، لأنني هكون معاكم في المتابعة الأكاديمية خلال الفترة الجاية، وهشارك مع حضرتك التقييمات الدورية، وكمان في بداية كل Module هبعت لحضرتك نظرة بسيطة على اللي {childTitle} هيتعلمه خلالها 🌟
 هدفي إن المتابعة تكون واضحة ومريحة، وإن حضرتك تبقى مطّمن على رحلة {studentName} التعليمية خطوة بخطوة 🤍
 وأي وقت تحب تستفسر عن أي حاجة تخص المستوى أو التقدم، أنا موجود مع حضرتك.
 {supervisorName} ✨
 Learning Supervisor`,
-      en:
-`{guardianSalutation} 👋
+      en: `{guardianSalutation} 👋
 I am {supervisorName}, your Learning Supervisor for {childTitle} **{studentName}** at Code School ✨
 I wanted to introduce myself, as I will be following up on the academic progress during the coming period. I will share periodic evaluations with you, and at the beginning of each Module, I will send you a brief overview of what {childTitle} will be learning 🌟
 My goal is to make follow-up clear and comfortable, and to keep you reassured about {studentName}'s educational journey step by step 🤍
@@ -396,14 +437,21 @@ Learning Supervisor`,
     // ─── NEW: Module Overview ─────────────────────────────────────────────────
     module_overview: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ أحمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ أحمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "يوسف" },
-        { key: "moduleTitle", label: "عنوان الموديول", example: "Real-Life Mobile Solutions" },
+        {
+          key: "moduleTitle",
+          label: "عنوان الموديول",
+          example: "Real-Life Mobile Solutions",
+        },
         { key: "supervisorName", label: "اسم المشرف", example: "أحمد علي" },
       ],
-      ar:
-`{guardianSalutation} 👋
+      ar: `{guardianSalutation} 👋
 حابب أشارك مع حضرتك لمحة سريعة عن الـ Module الجديد اللي هيبدأه {childTitle} **{studentName}** ✨
 
 **Module Title:** {moduleTitle}
@@ -415,8 +463,7 @@ Learning Supervisor`,
 
 {supervisorName} ✨
 Learning Supervisor`,
-      en:
-`{guardianSalutation} 👋
+      en: `{guardianSalutation} 👋
 I would like to share with you a quick overview of the new Module that {childTitle} **{studentName}** will be starting ✨
 
 **Module Title:** {moduleTitle}
@@ -430,6 +477,52 @@ I will be following up with you during the Module and will share any important n
 Learning Supervisor`,
     },
 
+    // ── reminder_15min_student ───────────────────────────────────────────────────
+    reminder_15min_student: {
+      variables: [
+        {
+          key: "salutation_ar",
+          label: "تحية الطالب عربي",
+          example: "عزيزي الطالب ممدوح",
+        },
+        {
+          key: "salutation_en",
+          label: "تحية الطالب إنجليزي",
+          example: "Dear student Mamdouh",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "time", label: "وقت الحصة", example: "07:00 - 08:30 مساءً" },
+        {
+          key: "meetingLink",
+          label: "رابط الحصة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{salutation_ar}،\n\n⏳ تذكير: حصتك *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
+      en: `{salutation_en},\n\n⏳ Reminder: Your session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
+    },
+
+    // ── reminder_15min_guardian ──────────────────────────────────────────────────
+    reminder_15min_guardian: {
+      variables: [
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "time", label: "وقت الحصة", example: "07:00 - 08:30 مساءً" },
+        {
+          key: "meetingLink",
+          label: "رابط الحصة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{guardianSalutation}،\n\n⏳ تذكير: حصة {childTitle} *{studentName}* - *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
+      en: `{guardianSalutation},\n\n⏳ Reminder: {childTitle} *{studentName}*'s session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
+    },
   };
 }
 

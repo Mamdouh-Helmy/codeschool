@@ -17,91 +17,91 @@ import { useI18n } from "@/i18n/I18nProvider";
 const SINGLE_CONTENT_TEMPLATES = ["student_welcome", "guardian_notification"];
 
 const TEMPLATE_TYPES = [
-  { id: "student_welcome",               label: "ترحيب الطالب",                icon: User,         color: "primary",  emoji: "🎓", category: "basic",      type: "student_only",           api: "whatsapp" },
-  { id: "guardian_notification",          label: "إشعار ولي الأمر",             icon: Users,        color: "secondary",    emoji: "👨‍👩‍👧", category: "basic",      type: "guardian_only",          api: "whatsapp" },
-  { id: "language_confirmation",          label: "تأكيد اللغة",                 icon: Globe,        color: "emerald", emoji: "🌍", category: "basic",      type: "student_only",           api: "whatsapp" },
-  { id: "guardian_language_notification", label: "إشعار اللغة لولي الأمر",      icon: Bell,         color: "accent",  emoji: "📢", category: "basic",      type: "guardian_only",          api: "whatsapp" },
-  { id: "group_student_welcome_student",  label: "ترحيب الطالب بالمجموعة",      icon: UserPlus,     color: "indigo",  emoji: "➕", category: "group",      type: "student_with_group",     api: "group",   isNew: true },
-  { id: "group_student_welcome_guardian", label: "إشعار ولي الأمر بالمجموعة",   icon: Users,        color: "indigo",  emoji: "👨‍👩‍👧", category: "group",      type: "guardian_with_group",    api: "group",   isNew: true },
-  { id: "instructor_group_activation",    label: "إشعار تفعيل مجموعة للمدرب",   icon: UserCog,      color: "amber",   emoji: "👨‍🏫", category: "instructor", type: "instructor_only",        api: "instructor", isNew: true },
-  { id: "reminder_24h_student",           label: "تذكير الطالب 24 ساعة",        icon: Clock,        color: "sky",     emoji: "⏰", category: "reminder",   type: "student_with_session",   api: "message" },
-  { id: "reminder_24h_guardian",          label: "تذكير ولي الأمر 24 ساعة",     icon: Clock,        color: "sky",     emoji: "⏰", category: "reminder",   type: "guardian_with_session",  api: "message" },
-  { id: "reminder_1h_student",            label: "تذكير الطالب قبل ساعة",       icon: Clock,        color: "accent",   emoji: "⏳", category: "reminder",   type: "student_with_session",   api: "message" },
-  { id: "reminder_1h_guardian",           label: "تذكير ولي الأمر قبل ساعة",    icon: Clock,        color: "accent",   emoji: "⏳", category: "reminder",   type: "guardian_with_session",  api: "message" },
-  { id: "session_cancelled_student",      label: "إلغاء حصة - الطالب",          icon: XCircle,      color: "rose",    emoji: "❌", category: "session",    type: "student_with_session",   api: "message" },
-  { id: "session_cancelled_guardian",     label: "إلغاء حصة - ولي الأمر",       icon: XCircle,      color: "rose",    emoji: "❌", category: "session",    type: "guardian_with_session",  api: "message" },
-  { id: "session_postponed_student",      label: "تأجيل حصة - الطالب",          icon: Calendar,     color: "accent",  emoji: "🔄", category: "session",    type: "student_with_session",   api: "message" },
-  { id: "session_postponed_guardian",     label: "تأجيل حصة - ولي الأمر",       icon: Calendar,     color: "accent",  emoji: "🔄", category: "session",    type: "guardian_with_session",  api: "message" },
-  { id: "absence_notification",           label: "إشعار غياب - ولي الأمر",      icon: AlertCircle,  color: "rose",    emoji: "📋", category: "attendance", type: "guardian_with_session",  api: "message" },
-  { id: "late_notification",              label: "إشعار تأخير - ولي الأمر",     icon: Clock,        color: "accent",  emoji: "⏰", category: "attendance", type: "guardian_with_session",  api: "message" },
-  { id: "excused_notification",           label: "إشعار غياب بعذر - ولي الأمر", icon: FileText,     color: "secondary",    emoji: "📝", category: "attendance", type: "guardian_with_session",  api: "message" },
-  { id: "group_completion_student",       label: "إكمال المجموعة - الطالب",     icon: Award,        color: "secondary", emoji: "🎉", category: "completion", type: "student_with_group",     api: "message" },
-  { id: "group_completion_guardian",      label: "إكمال المجموعة - ولي الأمر",  icon: Award,        color: "secondary", emoji: "🎉", category: "completion", type: "guardian_with_group",    api: "message" },
-  { id: "evaluation_pass",                label: "تقييم: ممتاز",                icon: Star,         color: "primary", emoji: "✅", category: "evaluation", type: "guardian_with_session",  api: "message" },
-  { id: "evaluation_review",              label: "تقييم: يحتاج مراجعة",         icon: FileText,     color: "accent",   emoji: "⚠️", category: "evaluation", type: "guardian_with_session",  api: "message" },
-  { id: "evaluation_repeat",              label: "تقييم: يحتاج دعم إضافي",      icon: RotateCcw,    color: "rose",    emoji: "🔄", category: "evaluation", type: "guardian_with_session",  api: "message" },
-  { id: "session_recording",              label: "رابط التسجيل",                icon: Video,        color: "sky",     emoji: "🎥", category: "evaluation", type: "guardian_with_session",  api: "message" },
-  { id: "learning_supervisor_intro",      label: "تقديم المشرف الأكاديمي",      icon: User,         color: "primary",  emoji: "👨‍🏫", category: "basic",      type: "guardian_only",          api: "message", isNew: true },
-  { id: "module_overview",                label: "نظرة عامة على الموديول",      icon: BookOpen,     color: "secondary",     emoji: "📚", category: "basic",      type: "guardian_only",          api: "message", isNew: true },
+  { id: "student_welcome", label: "ترحيب الطالب", icon: User, color: "primary", emoji: "🎓", category: "basic", type: "student_only", api: "whatsapp" },
+  { id: "guardian_notification", label: "إشعار ولي الأمر", icon: Users, color: "secondary", emoji: "👨‍👩‍👧", category: "basic", type: "guardian_only", api: "whatsapp" },
+  { id: "language_confirmation", label: "تأكيد اللغة", icon: Globe, color: "emerald", emoji: "🌍", category: "basic", type: "student_only", api: "whatsapp" },
+  { id: "guardian_language_notification", label: "إشعار اللغة لولي الأمر", icon: Bell, color: "accent", emoji: "📢", category: "basic", type: "guardian_only", api: "whatsapp" },
+  { id: "group_student_welcome_student", label: "ترحيب الطالب بالمجموعة", icon: UserPlus, color: "indigo", emoji: "➕", category: "group", type: "student_with_group", api: "group", isNew: true },
+  { id: "group_student_welcome_guardian", label: "إشعار ولي الأمر بالمجموعة", icon: Users, color: "indigo", emoji: "👨‍👩‍👧", category: "group", type: "guardian_with_group", api: "group", isNew: true },
+  { id: "instructor_group_activation", label: "إشعار تفعيل مجموعة للمدرب", icon: UserCog, color: "amber", emoji: "👨‍🏫", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
+  { id: "reminder_24h_student", label: "تذكير الطالب 24 ساعة", icon: Clock, color: "sky", emoji: "⏰", category: "reminder", type: "student_with_session", api: "message" },
+  { id: "reminder_24h_guardian", label: "تذكير ولي الأمر 24 ساعة", icon: Clock, color: "sky", emoji: "⏰", category: "reminder", type: "guardian_with_session", api: "message" },
+  { id: "reminder_15min_student", label: "تذكير الطالب قبل 15 دقيقة", icon: Clock, color: "accent", emoji: "⏳", category: "reminder", type: "student_with_session", api: "message" },
+  { id: "reminder_15min_guardian", label: "تذكير ولي الأمر قبل 15 دقيقة", icon: Clock, color: "accent", emoji: "⏳", category: "reminder", type: "guardian_with_session", api: "message" },
+  { id: "session_cancelled_student", label: "إلغاء حصة - الطالب", icon: XCircle, color: "rose", emoji: "❌", category: "session", type: "student_with_session", api: "message" },
+  { id: "session_cancelled_guardian", label: "إلغاء حصة - ولي الأمر", icon: XCircle, color: "rose", emoji: "❌", category: "session", type: "guardian_with_session", api: "message" },
+  { id: "session_postponed_student", label: "تأجيل حصة - الطالب", icon: Calendar, color: "accent", emoji: "🔄", category: "session", type: "student_with_session", api: "message" },
+  { id: "session_postponed_guardian", label: "تأجيل حصة - ولي الأمر", icon: Calendar, color: "accent", emoji: "🔄", category: "session", type: "guardian_with_session", api: "message" },
+  { id: "absence_notification", label: "إشعار غياب - ولي الأمر", icon: AlertCircle, color: "rose", emoji: "📋", category: "attendance", type: "guardian_with_session", api: "message" },
+  { id: "late_notification", label: "إشعار تأخير - ولي الأمر", icon: Clock, color: "accent", emoji: "⏰", category: "attendance", type: "guardian_with_session", api: "message" },
+  { id: "excused_notification", label: "إشعار غياب بعذر - ولي الأمر", icon: FileText, color: "secondary", emoji: "📝", category: "attendance", type: "guardian_with_session", api: "message" },
+  { id: "group_completion_student", label: "إكمال المجموعة - الطالب", icon: Award, color: "secondary", emoji: "🎉", category: "completion", type: "student_with_group", api: "message" },
+  { id: "group_completion_guardian", label: "إكمال المجموعة - ولي الأمر", icon: Award, color: "secondary", emoji: "🎉", category: "completion", type: "guardian_with_group", api: "message" },
+  { id: "evaluation_pass", label: "تقييم: ممتاز", icon: Star, color: "primary", emoji: "✅", category: "evaluation", type: "guardian_with_session", api: "message" },
+  { id: "evaluation_review", label: "تقييم: يحتاج مراجعة", icon: FileText, color: "accent", emoji: "⚠️", category: "evaluation", type: "guardian_with_session", api: "message" },
+  { id: "evaluation_repeat", label: "تقييم: يحتاج دعم إضافي", icon: RotateCcw, color: "rose", emoji: "🔄", category: "evaluation", type: "guardian_with_session", api: "message" },
+  { id: "session_recording", label: "رابط التسجيل", icon: Video, color: "sky", emoji: "🎥", category: "evaluation", type: "guardian_with_session", api: "message" },
+  { id: "learning_supervisor_intro", label: "تقديم المشرف الأكاديمي", icon: User, color: "primary", emoji: "👨‍🏫", category: "basic", type: "guardian_only", api: "message", isNew: true },
+  { id: "module_overview", label: "نظرة عامة على الموديول", icon: BookOpen, color: "secondary", emoji: "📚", category: "basic", type: "guardian_only", api: "message", isNew: true },
 ];
 
 const CATEGORIES = {
-  basic:      { label: "أساسية",     emoji: "📌" },
-  group:      { label: "المجموعات", emoji: "👥" },
-  instructor: { label: "المدربين",  emoji: "👨‍🏫" },
-  reminder:   { label: "التذكيرات", emoji: "⏰" },
-  session:    { label: "الحصص",     emoji: "📅" },
-  attendance: { label: "الحضور",    emoji: "📋" },
-  completion: { label: "الإكمال",   emoji: "🎉" },
-  evaluation: { label: "التقييم",   emoji: "⭐" },
+  basic: { label: "أساسية", emoji: "📌" },
+  group: { label: "المجموعات", emoji: "👥" },
+  instructor: { label: "المدربين", emoji: "👨‍🏫" },
+  reminder: { label: "التذكيرات", emoji: "⏰" },
+  session: { label: "الحصص", emoji: "📅" },
+  attendance: { label: "الحضور", emoji: "📋" },
+  completion: { label: "الإكمال", emoji: "🎉" },
+  evaluation: { label: "التقييم", emoji: "⭐" },
 };
 
 const VAR_GROUPS = {
-  student:    { label: "الطالب",       emoji: "👤" },
-  guardian:   { label: "ولي الأمر",   emoji: "👨‍👩‍👧" },
-  instructor: { label: "المدرب",      emoji: "👨‍🏫" },
-  group:      { label: "المجموعة",    emoji: "👥" },
-  session:    { label: "الحصة",       emoji: "📅" },
-  attendance: { label: "الحضور",      emoji: "📋" },
-  reminder:   { label: "التذكيرات",   emoji: "⏰" },
-  completion: { label: "الإكمال",     emoji: "🎉" },
-  evaluation: { label: "التقييم",     emoji: "⭐" },
-  common:     { label: "عامة",        emoji: "📌" },
+  student: { label: "الطالب", emoji: "👤" },
+  guardian: { label: "ولي الأمر", emoji: "👨‍👩‍👧" },
+  instructor: { label: "المدرب", emoji: "👨‍🏫" },
+  group: { label: "المجموعة", emoji: "👥" },
+  session: { label: "الحصة", emoji: "📅" },
+  attendance: { label: "الحضور", emoji: "📋" },
+  reminder: { label: "التذكيرات", emoji: "⏰" },
+  completion: { label: "الإكمال", emoji: "🎉" },
+  evaluation: { label: "التقييم", emoji: "⭐" },
+  common: { label: "عامة", emoji: "📌" },
 };
 
 const TEMPLATE_VARS = {
-  student_welcome:               ["salutation_ar","salutation_en","welcome_ar","name_ar","name_en","fullName","you_ar"],
-  guardian_notification:         ["guardianSalutation_ar","studentGender_ar","studentName_ar","studentName_en","relationship_ar","fullStudentName"],
-  language_confirmation:         ["salutation_ar","salutation_en","name_ar","name_en","selectedLanguage_ar","selectedLanguage_en"],
-  guardian_language_notification:["guardianSalutation_ar","guardianSalutation_en","studentGender_ar","studentGender_en","studentName_ar","studentName_en","selectedLanguage_ar","selectedLanguage_en"],
-  group_student_welcome_student: ["salutation_ar","salutation_en","courseName","groupName","startDate","timeTo","timeFrom","instructor","firstMeetingLink","studentName"],
-  group_student_welcome_guardian:["guardianSalutation_ar","guardianSalutation_en","childTitle","studentName","courseName","groupName","startDate","timeTo","timeFrom","instructor","firstMeetingLink"],
-  instructor_group_activation:   ["salutation","courseName","groupName","startDate","timeTo","timeFrom","instructorName","studentCount"],
-  
-  reminder_24h_student:          ["salutation_ar", "salutation_en", "sessionName", "date", "time", "meetingLink", "guardianSalutation", "studentName", "guardianName", "childTitle", "enrollmentNumber"],
-  reminder_24h_guardian:         ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
-  reminder_1h_student:           ["salutation_ar", "salutation_en", "sessionName", "time", "meetingLink", "guardianSalutation", "studentName", "childTitle", "enrollmentNumber"],
-  reminder_1h_guardian:          ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
-  
-  session_cancelled_student:     ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
-  session_cancelled_guardian:    ["guardianSalutation", "salutation_ar", "salutation_en", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
-  session_postponed_student:     ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
-  session_postponed_guardian:    ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
-  
-  absence_notification:          ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
-  late_notification:             ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
-  excused_notification:          ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
-  
-  group_completion_student:      ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
-  group_completion_guardian:     ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
-  
-  evaluation_pass:               ["guardianSalutation","sessionDate","sessionNumber","attendanceStatus","starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation","instructorComment","completedSessions","recordingLink"],
-  evaluation_review:             ["guardianSalutation","sessionDate","sessionNumber","attendanceStatus","starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation","instructorComment","completedSessions","recordingLink"],
-  evaluation_repeat:             ["guardianSalutation","sessionDate","sessionNumber","attendanceStatus","starsCommitment","starsUnderstanding","starsTaskExecution","starsParticipation","instructorComment","completedSessions","recordingLink"],
-  session_recording:             ["guardianSalutation","guardianName","childTitle","studentName","sessionName","recordingLink"],
-  
-  learning_supervisor_intro:     ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
-  module_overview:               ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "supervisorName"],
+  student_welcome: ["salutation_ar", "salutation_en", "welcome_ar", "name_ar", "name_en", "fullName", "you_ar"],
+  guardian_notification: ["guardianSalutation_ar", "studentGender_ar", "studentName_ar", "studentName_en", "relationship_ar", "fullStudentName"],
+  language_confirmation: ["salutation_ar", "salutation_en", "name_ar", "name_en", "selectedLanguage_ar", "selectedLanguage_en"],
+  guardian_language_notification: ["guardianSalutation_ar", "guardianSalutation_en", "studentGender_ar", "studentGender_en", "studentName_ar", "studentName_en", "selectedLanguage_ar", "selectedLanguage_en"],
+  group_student_welcome_student: ["salutation_ar", "salutation_en", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructor", "firstMeetingLink", "studentName"],
+  group_student_welcome_guardian: ["guardianSalutation_ar", "guardianSalutation_en", "childTitle", "studentName", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructor", "firstMeetingLink"],
+  instructor_group_activation: ["salutation", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructorName", "studentCount"],
+
+  reminder_24h_student: ["salutation_ar", "salutation_en", "sessionName", "date", "time", "meetingLink", "guardianSalutation", "studentName", "guardianName", "childTitle", "enrollmentNumber"],
+  reminder_24h_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
+  reminder_15min_student: ["salutation_ar", "salutation_en", "sessionName", "time", "meetingLink", "guardianSalutation", "studentName", "childTitle", "enrollmentNumber"],
+  reminder_15min_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
+
+  session_cancelled_student: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
+  session_cancelled_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
+  session_postponed_student: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
+  session_postponed_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
+
+  absence_notification: ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
+  late_notification: ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
+  excused_notification: ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
+
+  group_completion_student: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
+  group_completion_guardian: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
+
+  evaluation_pass: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
+  evaluation_review: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
+  evaluation_repeat: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
+  session_recording: ["guardianSalutation", "guardianName", "childTitle", "studentName", "sessionName", "recordingLink"],
+
+  learning_supervisor_intro: ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
+  module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "supervisorName"],
 };
 
 const FRONTEND_FALLBACKS = {
@@ -137,22 +137,30 @@ const FRONTEND_FALLBACKS = {
     ar: `{guardianSalutation} 👋\nحابب أشارك مع حضرتك لمحة سريعة عن الـ Module الجديد اللي هيبدأه {childTitle} **{studentName}** ✨\n\n**Module Title:** {moduleTitle}\n\nخلال الـ Module ده، {studentName} هياخد فكرة ممتعة وبسيطة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱\nوهيركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعده يفهم الفكرة خطوة بخطوة بشكل سهل ومناسب لسنه 🌟\n\nوأنا هكون متابع مع حضرتك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.\n\n{supervisorName} ✨\nLearning Supervisor`,
     en: `{guardianSalutation} 👋\nI would like to share with you a quick overview of the new Module that {childTitle} **{studentName}** will be starting ✨\n\n**Module Title:** {moduleTitle}\n\nDuring this Module, {studentName} will get a fun and simple idea about how the applications we use in our daily lives are built and tailored for users 📱\nHe will also focus on building simple screens similar to mobile applications, with practical training to help him understand the concept step by step in an easy and age-appropriate way 🌟\n\nI will be following up with you during the Module and will share any important notes or noticeable progress with you, God willing.\n\n{supervisorName} ✨\nLearning Supervisor`,
   },
+  reminder_15min_student: {
+    ar: `{salutation_ar}،\n\n⏳ تذكير: حصتك *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
+    en: `{salutation_en},\n\n⏳ Reminder: Your session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
+  },
+  reminder_15min_guardian: {
+    ar: `{guardianSalutation}،\n\n⏳ تذكير: حصة {childTitle} *{studentName}* - *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
+    en: `{guardianSalutation},\n\n⏳ Reminder: {childTitle} *{studentName}*'s session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
+  },
 };
 
 // ── Color map with brand colors ──
 const C_MAP = {
-  primary:   { bg: "bg-[#ff6700]",  text: "text-[#ff6700]",   light: "bg-[#ff6700]/10",   border: "border-[#ff6700]/20",   ring: "ring-[#ff6700]/30",   activePill: "bg-[#ff6700] text-white" },
-  secondary: { bg: "bg-[#004d59]",  text: "text-[#004d59]",   light: "bg-[#004d59]/10",   border: "border-[#004d59]/20",   ring: "ring-[#004d59]/30",   activePill: "bg-[#004d59] text-white" },
-  accent:    { bg: "bg-[#feaf00]",  text: "text-[#feaf00]",   light: "bg-[#feaf00]/10",   border: "border-[#feaf00]/20",   ring: "ring-[#feaf00]/30",   activePill: "bg-[#feaf00] text-white" },
-  violet:    { bg: "bg-[#ff6700]",  text: "text-[#ff6700]",   light: "bg-[#ff6700]/10",   border: "border-[#ff6700]/20",   ring: "ring-[#ff6700]/30",   activePill: "bg-[#ff6700] text-white" },
-  blue:      { bg: "bg-[#004d59]",    text: "text-[#004d59]",        light: "bg-[#004d59]/10",        border: "border-[#004d59]/20",        ring: "ring-[#004d59]/30",     activePill: "bg-[#004d59] text-white" },
-  emerald:   { bg: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400",  light: "bg-emerald-50 dark:bg-emerald-900/20",  border: "border-emerald-200 dark:border-emerald-800",  ring: "ring-emerald-500/30",  activePill: "bg-emerald-500 text-white" },
-  orange:    { bg: "bg-[#ff6700]",  text: "text-[#ff6700]",    light: "bg-[#ff6700]/10",    border: "border-[#ff6700]/20",    ring: "ring-[#ff6700]/30",   activePill: "bg-[#ff6700] text-white" },
-  amber:     { bg: "bg-[#feaf00]",   text: "text-[#feaf00]",      light: "bg-[#feaf00]/10",      border: "border-[#feaf00]/20",      ring: "ring-[#feaf00]/30",    activePill: "bg-[#feaf00] text-white" },
-  indigo:    { bg: "bg-[#004d59]",  text: "text-[#004d59]",    light: "bg-[#004d59]/10",    border: "border-[#004d59]/20",    ring: "ring-[#004d59]/30",   activePill: "bg-[#004d59] text-white" },
-  sky:       { bg: "bg-sky-500",     text: "text-sky-600 dark:text-sky-400",          light: "bg-sky-50 dark:bg-sky-900/20",          border: "border-sky-200 dark:border-sky-800",          ring: "ring-sky-500/30",      activePill: "bg-sky-500 text-white" },
-  rose:      { bg: "bg-rose-500",    text: "text-rose-600 dark:text-rose-400",        light: "bg-rose-50 dark:bg-rose-900/20",        border: "border-rose-200 dark:border-rose-800",        ring: "ring-rose-500/30",     activePill: "bg-rose-500 text-white" },
-  slate:     { bg: "bg-slate-500",   text: "text-slate-600 dark:text-slate-400",      light: "bg-slate-50 dark:bg-slate-900/20",      border: "border-slate-200 dark:border-slate-800",      ring: "ring-slate-500/30",    activePill: "bg-slate-500 text-white" },
+  primary: { bg: "bg-[#ff6700]", text: "text-[#ff6700]", light: "bg-[#ff6700]/10", border: "border-[#ff6700]/20", ring: "ring-[#ff6700]/30", activePill: "bg-[#ff6700] text-white" },
+  secondary: { bg: "bg-[#004d59]", text: "text-[#004d59]", light: "bg-[#004d59]/10", border: "border-[#004d59]/20", ring: "ring-[#004d59]/30", activePill: "bg-[#004d59] text-white" },
+  accent: { bg: "bg-[#feaf00]", text: "text-[#feaf00]", light: "bg-[#feaf00]/10", border: "border-[#feaf00]/20", ring: "ring-[#feaf00]/30", activePill: "bg-[#feaf00] text-white" },
+  violet: { bg: "bg-[#ff6700]", text: "text-[#ff6700]", light: "bg-[#ff6700]/10", border: "border-[#ff6700]/20", ring: "ring-[#ff6700]/30", activePill: "bg-[#ff6700] text-white" },
+  blue: { bg: "bg-[#004d59]", text: "text-[#004d59]", light: "bg-[#004d59]/10", border: "border-[#004d59]/20", ring: "ring-[#004d59]/30", activePill: "bg-[#004d59] text-white" },
+  emerald: { bg: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400", light: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800", ring: "ring-emerald-500/30", activePill: "bg-emerald-500 text-white" },
+  orange: { bg: "bg-[#ff6700]", text: "text-[#ff6700]", light: "bg-[#ff6700]/10", border: "border-[#ff6700]/20", ring: "ring-[#ff6700]/30", activePill: "bg-[#ff6700] text-white" },
+  amber: { bg: "bg-[#feaf00]", text: "text-[#feaf00]", light: "bg-[#feaf00]/10", border: "border-[#feaf00]/20", ring: "ring-[#feaf00]/30", activePill: "bg-[#feaf00] text-white" },
+  indigo: { bg: "bg-[#004d59]", text: "text-[#004d59]", light: "bg-[#004d59]/10", border: "border-[#004d59]/20", ring: "ring-[#004d59]/30", activePill: "bg-[#004d59] text-white" },
+  sky: { bg: "bg-sky-500", text: "text-sky-600 dark:text-sky-400", light: "bg-sky-50 dark:bg-sky-900/20", border: "border-sky-200 dark:border-sky-800", ring: "ring-sky-500/30", activePill: "bg-sky-500 text-white" },
+  rose: { bg: "bg-rose-500", text: "text-rose-600 dark:text-rose-400", light: "bg-rose-50 dark:bg-rose-900/20", border: "border-rose-200 dark:border-rose-800", ring: "ring-rose-500/30", activePill: "bg-rose-500 text-white" },
+  slate: { bg: "bg-slate-500", text: "text-slate-600 dark:text-slate-400", light: "bg-slate-50 dark:bg-slate-900/20", border: "border-slate-200 dark:border-slate-800", ring: "ring-slate-500/30", activePill: "bg-slate-500 text-white" },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -160,10 +168,10 @@ const C_MAP = {
 // ─────────────────────────────────────────────────────────────
 function buildVals(variable) {
   return {
-    valueAr:       variable.valueAr       ?? "",
-    valueEn:       variable.valueEn       ?? "",
-    valueMaleAr:   variable.valueMaleAr   ?? "",
-    valueMaleEn:   variable.valueMaleEn   ?? "",
+    valueAr: variable.valueAr ?? "",
+    valueEn: variable.valueEn ?? "",
+    valueMaleAr: variable.valueMaleAr ?? "",
+    valueMaleEn: variable.valueMaleEn ?? "",
     valueFemaleAr: variable.valueFemaleAr ?? "",
     valueFemaleEn: variable.valueFemaleEn ?? "",
     valueFatherAr: variable.valueFatherAr ?? "",
@@ -180,7 +188,7 @@ function GenderContextSelector({ genderContext, setGenderContext }) {
   const { studentGender, guardianType, instructorGender } = genderContext;
 
   const btnBase = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border";
-  const active   = "bg-[#ff6700] text-white border-[#ff6700] shadow-sm";
+  const active = "bg-[#ff6700] text-white border-[#ff6700] shadow-sm";
   const inactive = "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-[#ff6700]/30";
 
   return (
@@ -192,7 +200,7 @@ function GenderContextSelector({ genderContext, setGenderContext }) {
 
       <div className="flex items-center gap-1 flex-shrink-0">
         <span className="text-[10px] text-slate-400 ml-1">👤 الطالب:</span>
-        <button onClick={() => setGenderContext(p => ({ ...p, studentGender: "male" }))}   className={`${btnBase} ${studentGender === "male"   ? active : inactive}`}>♂ ذكر</button>
+        <button onClick={() => setGenderContext(p => ({ ...p, studentGender: "male" }))} className={`${btnBase} ${studentGender === "male" ? active : inactive}`}>♂ ذكر</button>
         <button onClick={() => setGenderContext(p => ({ ...p, studentGender: "female" }))} className={`${btnBase} ${studentGender === "female" ? active : inactive}`}>♀ أنثى</button>
       </div>
 
@@ -208,7 +216,7 @@ function GenderContextSelector({ genderContext, setGenderContext }) {
 
       <div className="flex items-center gap-1 flex-shrink-0">
         <span className="text-[10px] text-slate-400 ml-1">👨‍🏫 المدرب:</span>
-        <button onClick={() => setGenderContext(p => ({ ...p, instructorGender: "male" }))}   className={`${btnBase} ${instructorGender === "male"   ? active : inactive}`}>♂ ذكر</button>
+        <button onClick={() => setGenderContext(p => ({ ...p, instructorGender: "male" }))} className={`${btnBase} ${instructorGender === "male" ? active : inactive}`}>♂ ذكر</button>
         <button onClick={() => setGenderContext(p => ({ ...p, instructorGender: "female" }))} className={`${btnBase} ${instructorGender === "female" ? active : inactive}`}>♀ أنثى</button>
       </div>
     </div>
@@ -238,8 +246,8 @@ function Field({ label, field, dir, vals, onChange }) {
 // ─────────────────────────────────────────────────────────────
 function VariableRow({ variable, onSave, saving }) {
   const [editing, setEditing] = useState(false);
-  const [dirty,   setDirty]   = useState(false);
-  const [vals,    setVals]    = useState(() => buildVals(variable));
+  const [dirty, setDirty] = useState(false);
+  const [vals, setVals] = useState(() => buildVals(variable));
 
   const handleChange = (field, value) => {
     setVals(prev => ({ ...prev, [field]: value }));
@@ -258,7 +266,7 @@ function VariableRow({ variable, onSave, saving }) {
     setDirty(false);
   };
 
-  const isSaving   = saving === variable.key;
+  const isSaving = saving === variable.key;
   const genderType = variable.genderType;
 
   const genderBadge = variable.hasGender
@@ -339,7 +347,7 @@ function VariableRow({ variable, onSave, saving }) {
           {isSaving
             ? <Loader2 className="w-3.5 h-3.5 text-[#ff6700] animate-spin" />
             : editing
-              ? <ChevronUp   className="w-3.5 h-3.5 text-slate-400" />
+              ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
               : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           }
         </div>
@@ -352,22 +360,22 @@ function VariableRow({ variable, onSave, saving }) {
               {genderType === "guardian" ? (
                 <>
                   <div className="grid grid-cols-2 gap-2">
-                    <Field label="👨 أب — عربي"     field="valueFatherAr" dir="rtl" vals={vals} onChange={handleChange} />
-                    <Field label="👨 أب — إنجليزي"  field="valueFatherEn" dir="ltr" vals={vals} onChange={handleChange} />
+                    <Field label="👨 أب — عربي" field="valueFatherAr" dir="rtl" vals={vals} onChange={handleChange} />
+                    <Field label="👨 أب — إنجليزي" field="valueFatherEn" dir="ltr" vals={vals} onChange={handleChange} />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <Field label="👩 أم — عربي"     field="valueMotherAr" dir="rtl" vals={vals} onChange={handleChange} />
-                    <Field label="👩 أم — إنجليزي"  field="valueMotherEn" dir="ltr" vals={vals} onChange={handleChange} />
+                    <Field label="👩 أم — عربي" field="valueMotherAr" dir="rtl" vals={vals} onChange={handleChange} />
+                    <Field label="👩 أم — إنجليزي" field="valueMotherEn" dir="ltr" vals={vals} onChange={handleChange} />
                   </div>
                 </>
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-2">
-                    <Field label="♂ ذكر — عربي"     field="valueMaleAr"   dir="rtl" vals={vals} onChange={handleChange} />
-                    <Field label="♂ ذكر — إنجليزي"  field="valueMaleEn"   dir="ltr" vals={vals} onChange={handleChange} />
+                    <Field label="♂ ذكر — عربي" field="valueMaleAr" dir="rtl" vals={vals} onChange={handleChange} />
+                    <Field label="♂ ذكر — إنجليزي" field="valueMaleEn" dir="ltr" vals={vals} onChange={handleChange} />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <Field label="♀ أنثى — عربي"    field="valueFemaleAr" dir="rtl" vals={vals} onChange={handleChange} />
+                    <Field label="♀ أنثى — عربي" field="valueFemaleAr" dir="rtl" vals={vals} onChange={handleChange} />
                     <Field label="♀ أنثى — إنجليزي" field="valueFemaleEn" dir="ltr" vals={vals} onChange={handleChange} />
                   </div>
                 </>
@@ -375,15 +383,15 @@ function VariableRow({ variable, onSave, saving }) {
               <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
                 <p className="text-[9px] text-slate-400 mb-1.5">القيمة الافتراضية (fallback)</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="🇸🇦 افتراضي عربي"     field="valueAr" dir="rtl" vals={vals} onChange={handleChange} />
-                  <Field label="🇬🇧 افتراضي إنجليزي"  field="valueEn" dir="ltr" vals={vals} onChange={handleChange} />
+                  <Field label="🇸🇦 افتراضي عربي" field="valueAr" dir="rtl" vals={vals} onChange={handleChange} />
+                  <Field label="🇬🇧 افتراضي إنجليزي" field="valueEn" dir="ltr" vals={vals} onChange={handleChange} />
                 </div>
               </div>
             </>
           ) : (
             <>
-              <Field label="🇸🇦 القيمة العربية"     field="valueAr" dir="rtl" vals={vals} onChange={handleChange} />
-              <Field label="🇬🇧 القيمة الإنجليزية"  field="valueEn" dir="ltr" vals={vals} onChange={handleChange} />
+              <Field label="🇸🇦 القيمة العربية" field="valueAr" dir="rtl" vals={vals} onChange={handleChange} />
+              <Field label="🇬🇧 القيمة الإنجليزية" field="valueEn" dir="ltr" vals={vals} onChange={handleChange} />
             </>
           )}
 
@@ -416,17 +424,17 @@ function VariableRow({ variable, onSave, saving }) {
 // VARIABLES TAB
 // ─────────────────────────────────────────────────────────────
 function VariablesTab({ dbVars, setDbVars, loadingVars }) {
-  const [savingKey,   setSavingKey]  = useState(null);
-  const [searchVars,  setSearchVars] = useState("");
+  const [savingKey, setSavingKey] = useState(null);
+  const [searchVars, setSearchVars] = useState("");
   const [activeGroup, setActiveGroup] = useState("all");
 
   const handleSaveVar = useCallback(async (key, vals) => {
     setSavingKey(key);
     try {
-      const res  = await fetch("/api/whatsapp/template-variables", {
-        method:  "PUT",
+      const res = await fetch("/api/whatsapp/template-variables", {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ key, ...vals }),
+        body: JSON.stringify({ key, ...vals }),
       });
       const data = await res.json();
       if (data.success) {
@@ -443,8 +451,8 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
   }, [setDbVars]);
 
   const filtered = dbVars.filter(v => {
-    const matchGroup  = activeGroup === "all" || v.group === activeGroup;
-    const q           = searchVars.toLowerCase();
+    const matchGroup = activeGroup === "all" || v.group === activeGroup;
+    const q = searchVars.toLowerCase();
     const matchSearch = !q || v.key.toLowerCase().includes(q) || v.labelAr.includes(q) || v.valueAr.includes(q) || v.valueEn.toLowerCase().includes(q);
     return matchGroup && matchSearch;
   });
@@ -553,29 +561,29 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
 export default function WhatsAppTemplatesPage() {
   useI18n();
 
-  const [activeTab,    setActiveTab]    = useState("learning_supervisor_intro");
-  const [templates,    setTemplates]    = useState({});
-  const [loading,      setLoading]      = useState(true);
-  const [saving,       setSaving]       = useState(false);
-  const [testing,      setTesting]      = useState(false);
-  const [testPhone,    setTestPhone]    = useState("");
+  const [activeTab, setActiveTab] = useState("learning_supervisor_intro");
+  const [templates, setTemplates] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testPhone, setTestPhone] = useState("");
   const [testLanguage, setTestLanguage] = useState("ar");
-  const [showHints,    setShowHints]    = useState(false);
+  const [showHints, setShowHints] = useState(false);
   const [selectedHint, setSelectedHint] = useState(0);
-  const [cursorPos,    setCursorPos]    = useState(0);
-  const [searchQ,      setSearchQ]      = useState("");
-  const [activeCat,    setActiveCat]    = useState("basic");
-  const [mainTab,      setMainTab]      = useState("templates");
-  const [dbVars,       setDbVars]       = useState([]);
-  const [loadingVars,  setLoadingVars]  = useState(false);
+  const [cursorPos, setCursorPos] = useState(0);
+  const [searchQ, setSearchQ] = useState("");
+  const [activeCat, setActiveCat] = useState("basic");
+  const [mainTab, setMainTab] = useState("templates");
+  const [dbVars, setDbVars] = useState([]);
+  const [loadingVars, setLoadingVars] = useState(false);
   const [genderContext, setGenderContext] = useState({
-    studentGender:    "male",
-    guardianType:     "father",
+    studentGender: "male",
+    guardianType: "father",
     instructorGender: "male",
   });
 
   const textareaRef = useRef(null);
-  const hintsRef    = useRef(null);
+  const hintsRef = useRef(null);
   const [hintsPos, setHintsPos] = useState({ top: 0, left: 0, right: 0 });
 
   useEffect(() => {
@@ -586,11 +594,11 @@ export default function WhatsAppTemplatesPage() {
     if (!showHints) return;
     const update = () => {
       if (!textareaRef.current) return;
-      const r          = textareaRef.current.getBoundingClientRect();
+      const r = textareaRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - r.bottom;
       setHintsPos({
-        top:   spaceBelow > 280 ? r.bottom + 4 : Math.max(8, r.top - 284),
-        left:  Math.max(8, r.left),
+        top: spaceBelow > 280 ? r.bottom + 4 : Math.max(8, r.top - 284),
+        left: Math.max(8, r.left),
         right: Math.max(8, window.innerWidth - r.right),
       });
     };
@@ -637,7 +645,7 @@ export default function WhatsAppTemplatesPage() {
       const gd = await gRes.json();
       if (gd.success && gd.data) {
         const d = gd.data;
-        if (!map["group_student_welcome_student"])  map["group_student_welcome_student"]  = { ...d, templateType: "group_student_welcome_student",  content: d.studentContentAr  || d.content || "", contentAr: d.studentContentAr  || "", contentEn: d.studentContentEn  || "" };
+        if (!map["group_student_welcome_student"]) map["group_student_welcome_student"] = { ...d, templateType: "group_student_welcome_student", content: d.studentContentAr || d.content || "", contentAr: d.studentContentAr || "", contentEn: d.studentContentEn || "" };
         if (!map["group_student_welcome_guardian"]) map["group_student_welcome_guardian"] = { ...d, templateType: "group_student_welcome_guardian", content: d.guardianContentAr || d.content || "", contentAr: d.guardianContentAr || "", contentEn: d.guardianContentEn || "" };
       }
 
@@ -668,7 +676,7 @@ export default function WhatsAppTemplatesPage() {
   const fetchVariables = useCallback(async () => {
     setLoadingVars(true);
     try {
-      const res  = await fetch("/api/whatsapp/template-variables");
+      const res = await fetch("/api/whatsapp/template-variables");
       const data = await res.json();
       if (data.success) setDbVars(data.data);
       else toast.error("فشل تحميل المتغيرات");
@@ -712,21 +720,21 @@ export default function WhatsAppTemplatesPage() {
       const dbVar = dbVars.find(v => v.key === k);
       if (!dbVar) return null;
       return {
-        key:        `{${k}}`,
-        label:      lang === "ar" ? dbVar.labelAr : dbVar.labelEn,
-        icon:       dbVar.icon,
-        example:    resolveVarValue(dbVar, lang),
-        hasGender:  dbVar.hasGender,
+        key: `{${k}}`,
+        label: lang === "ar" ? dbVar.labelAr : dbVar.labelEn,
+        icon: dbVar.icon,
+        example: resolveVarValue(dbVar, lang),
+        hasGender: dbVar.hasGender,
         genderType: dbVar.genderType,
       };
     }).filter(Boolean);
   }, [dbVars, resolveVarValue]);
 
-  const isSingleContent    = SINGLE_CONTENT_TEMPLATES.includes(activeTab);
+  const isSingleContent = SINGLE_CONTENT_TEMPLATES.includes(activeTab);
   const isLangConfirmation = ["language_confirmation", "guardian_language_notification"].includes(activeTab);
-  const curTemplate        = templates[activeTab];
-  const activeType         = TEMPLATE_TYPES.find(t => t.id === activeTab);
-  const C                  = C_MAP[activeType?.color || "primary"];
+  const curTemplate = templates[activeTab];
+  const activeType = TEMPLATE_TYPES.find(t => t.id === activeTab);
+  const C = C_MAP[activeType?.color || "primary"];
 
   const textVal = isSingleContent
     ? (curTemplate?.content || "")
@@ -744,7 +752,7 @@ export default function WhatsAppTemplatesPage() {
         ...p,
         [activeTab]: {
           ...cur,
-          content:   val,
+          content: val,
           contentAr: testLanguage === "ar" ? val : cur.contentAr,
           contentEn: testLanguage === "en" ? val : cur.contentEn,
         },
@@ -774,20 +782,20 @@ export default function WhatsAppTemplatesPage() {
 
       if (activeTab === "instructor_group_activation") {
         endpoint = "/api/whatsapp/instructor-templates";
-        payload  = { id: cur._id, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn, setAsDefault: true };
+        payload = { id: cur._id, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn, setAsDefault: true };
 
       } else if (activeTab.startsWith("group_student_welcome")) {
         endpoint = "/api/whatsapp/group-templates";
         const base = templates["group_student_welcome_student"];
         payload = { id: base?._id || cur._id, setAsDefault: true };
         if (activeTab === "group_student_welcome_student") { payload.studentContentAr = cur.contentAr || cur.content; payload.studentContentEn = cur.contentEn; }
-        else                                              { payload.guardianContentAr = cur.contentAr || cur.content; payload.guardianContentEn = cur.contentEn; }
+        else { payload.guardianContentAr = cur.contentAr || cur.content; payload.guardianContentEn = cur.contentEn; }
 
       } else if (isLangConfirmation) {
         endpoint = "/api/whatsapp/templates";
         const dbType = activeTab === "language_confirmation" ? "student_language_confirmation" : "guardian_language_confirmation";
         if (cur.isFrontendFallback || !cur._id) {
-          const res  = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateType: dbType, name: activeTab === "language_confirmation" ? "تأكيد اللغة للطالب" : "تأكيد اللغة لولي الأمر", content: cur.contentAr || cur.content, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn || "", description: "", isDefault: true, isActive: true, setAsDefault: true }) });
+          const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateType: dbType, name: activeTab === "language_confirmation" ? "تأكيد اللغة للطالب" : "تأكيد اللغة لولي الأمر", content: cur.contentAr || cur.content, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn || "", description: "", isDefault: true, isActive: true, setAsDefault: true }) });
           const data = await res.json();
           if (data.success) { await fetchTemplates(); toast.success("✅ تم حفظ القالب"); }
           else toast.error(data.message || data.error || "فشل الحفظ");
@@ -798,20 +806,37 @@ export default function WhatsAppTemplatesPage() {
       } else if (cur.isMessageTemplate) {
         endpoint = "/api/whatsapp/message-templates";
         if (cur.isFrontendFallback || !cur._messageTemplateId) {
-          const res  = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateType: activeTab, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn || "", recipientType: "guardian", name: activeTab, isDefault: true, isActive: true }) });
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateType: activeTab,
+              contentAr: cur.contentAr || cur.content,
+              contentEn: cur.contentEn || "",
+              recipientType: activeTab.includes("student") ? "student" : "guardian", // ✅
+              name: activeTab,
+              isDefault: true,
+              isActive: true,
+            }),
+          });
           const data = await res.json();
           if (data.success) { await fetchTemplates(); toast.success("✅ تم حفظ القالب"); }
           else toast.error(data.message || data.error || "فشل الحفظ");
           return;
         }
-        payload = { _id: cur._messageTemplateId || cur._id, templateType: activeTab, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn };
-
+        payload = {
+          _id: cur._messageTemplateId || cur._id,
+          templateType: activeTab,
+          contentAr: cur.contentAr || cur.content,
+          contentEn: cur.contentEn,
+          recipientType: activeTab.includes("student") ? "student" : "guardian", // ✅
+        };
       } else {
         endpoint = "/api/whatsapp/templates";
-        payload  = { id: cur._id, content: cur.content, setAsDefault: true };
+        payload = { id: cur._id, content: cur.content, setAsDefault: true };
       }
 
-      const res  = await fetch(endpoint, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const res = await fetch(endpoint, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (data.success) { await fetchTemplates(); toast.success("✅ تم حفظ القالب"); }
       else toast.error(data.message || data.error || "فشل الحفظ");
@@ -825,12 +850,12 @@ export default function WhatsAppTemplatesPage() {
   const allVars = getVariablesForTemplate(activeTab, testLanguage);
 
   const insertVariable = (variable) => {
-    const before   = textVal.substring(0, cursorPos);
-    const lastAt   = before.lastIndexOf("@");
-    const text     = variable.key;
+    const before = textVal.substring(0, cursorPos);
+    const lastAt = before.lastIndexOf("@");
+    const text = variable.key;
     let newVal, newPos;
     if (lastAt !== -1) { newVal = textVal.substring(0, lastAt) + text + textVal.substring(cursorPos); newPos = lastAt + text.length; }
-    else               { newVal = textVal.substring(0, cursorPos) + text + textVal.substring(cursorPos); newPos = cursorPos + text.length; }
+    else { newVal = textVal.substring(0, cursorPos) + text + textVal.substring(cursorPos); newPos = cursorPos + text.length; }
     updateContent(newVal);
     setShowHints(false);
     setCursorPos(newPos);
@@ -838,8 +863,8 @@ export default function WhatsAppTemplatesPage() {
   };
 
   const handleInput = (e) => {
-    const val  = e.target.value;
-    const pos  = e.target.selectionStart;
+    const val = e.target.value;
+    const pos = e.target.selectionStart;
     updateContent(val);
     setCursorPos(pos);
     const before = val.substring(0, pos);
@@ -850,8 +875,8 @@ export default function WhatsAppTemplatesPage() {
 
   const handleKeyDown = (e) => {
     if (!showHints) return;
-    if      (e.key === "ArrowDown") { e.preventDefault(); setSelectedHint(p => (p + 1) % allVars.length); }
-    else if (e.key === "ArrowUp")   { e.preventDefault(); setSelectedHint(p => (p - 1 + allVars.length) % allVars.length); }
+    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedHint(p => (p + 1) % allVars.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setSelectedHint(p => (p - 1 + allVars.length) % allVars.length); }
     else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertVariable(allVars[selectedHint]); }
     else if (e.key === "Escape") { e.preventDefault(); setShowHints(false); }
   };
@@ -866,7 +891,7 @@ export default function WhatsAppTemplatesPage() {
     if (!testPhone) { toast.error("أدخل رقم الهاتف"); return; }
     setTesting(true);
     try {
-      const res  = await fetch("/api/whatsapp/test-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phoneNumber: testPhone, messageContent: getPreview(), messageType: activeTab, language: testLanguage }) });
+      const res = await fetch("/api/whatsapp/test-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phoneNumber: testPhone, messageContent: getPreview(), messageType: activeTab, language: testLanguage }) });
       const data = await res.json();
       if (data.success) toast.success(`✅ تم الإرسال إلى ${testPhone}`);
       else toast.error(data.message || "فشل الإرسال");
@@ -877,8 +902,8 @@ export default function WhatsAppTemplatesPage() {
     }
   };
 
-  const filtered    = TEMPLATE_TYPES.filter(t => !searchQ || t.label.includes(searchQ));
-  const byCategory  = filtered.reduce((acc, t) => { if (!acc[t.category]) acc[t.category] = []; acc[t.category].push(t); return acc; }, {});
+  const filtered = TEMPLATE_TYPES.filter(t => !searchQ || t.label.includes(searchQ));
+  const byCategory = filtered.reduce((acc, t) => { if (!acc[t.category]) acc[t.category] = []; acc[t.category].push(t); return acc; }, {});
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
@@ -914,7 +939,7 @@ export default function WhatsAppTemplatesPage() {
           <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 flex-shrink-0">
             {[
               { id: "templates", icon: MessageCircle, label: "القوالب" },
-              { id: "variables", icon: Settings,      label: "المتغيرات", badge: dbVars.length },
+              { id: "variables", icon: Settings, label: "المتغيرات", badge: dbVars.length },
             ].map(({ id, icon: Icon, label, badge }) => (
               <button
                 key={id}
@@ -938,10 +963,10 @@ export default function WhatsAppTemplatesPage() {
               <div className="flex-1 min-w-0 overflow-hidden">
                 <div className="flex gap-1 overflow-x-auto no-scrollbar">
                   {Object.entries(CATEGORIES).map(([key, cat]) => {
-                    const items      = byCategory[key] || [];
+                    const items = byCategory[key] || [];
                     if (!items.length) return null;
                     const isCatActive = items.some(t => t.id === activeTab);
-                    const pill        = C_MAP[items[0]?.color || "slate"]?.activePill || "bg-slate-500 text-white";
+                    const pill = C_MAP[items[0]?.color || "slate"]?.activePill || "bg-slate-500 text-white";
                     return (
                       <button
                         key={key}
@@ -987,10 +1012,10 @@ export default function WhatsAppTemplatesPage() {
           <div className="border-t border-slate-100 dark:border-slate-800/80 px-4 py-1.5 overflow-x-auto no-scrollbar">
             <div className="flex gap-1">
               {(byCategory[activeCat] || []).map(tmpl => {
-                const Icon     = tmpl.icon;
+                const Icon = tmpl.icon;
                 const isActive = activeTab === tmpl.id;
-                const tc       = C_MAP[tmpl.color] || C_MAP.primary;
-                const hasData  = !!(templates[tmpl.id]?.contentAr || templates[tmpl.id]?.content);
+                const tc = C_MAP[tmpl.color] || C_MAP.primary;
+                const hasData = !!(templates[tmpl.id]?.contentAr || templates[tmpl.id]?.content);
                 return (
                   <button
                     key={tmpl.id}
@@ -1039,11 +1064,11 @@ export default function WhatsAppTemplatesPage() {
                   {isSingleContent && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700">🌐 رسالة ثنائية اللغة</span>}
                 </div>
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {activeType.type.includes("student")    && <span className={`text-[10px] px-2 py-0.5 rounded-full ${C.light} ${C.text} border ${C.border}`}>👤 للطالب</span>}
-                  {activeType.type.includes("guardian")   && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">👨‍👩‍👧 لولي الأمر</span>}
+                  {activeType.type.includes("student") && <span className={`text-[10px] px-2 py-0.5 rounded-full ${C.light} ${C.text} border ${C.border}`}>👤 للطالب</span>}
+                  {activeType.type.includes("guardian") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">👨‍👩‍👧 لولي الأمر</span>}
                   {activeType.type.includes("instructor") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20">👨‍🏫 للمدرب</span>}
-                  {activeType.type.includes("group")      && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">👥 بيانات المجموعة</span>}
-                  {activeType.type.includes("session")    && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">📅 بيانات الحصة</span>}
+                  {activeType.type.includes("group") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">👥 بيانات المجموعة</span>}
+                  {activeType.type.includes("session") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">📅 بيانات الحصة</span>}
                   <span className="text-[10px] text-slate-400">{allVars.length} متغير</span>
                 </div>
               </div>

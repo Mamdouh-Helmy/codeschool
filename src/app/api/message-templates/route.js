@@ -86,23 +86,31 @@ export async function POST(req) {
     }
 
     // التحقق من صحة templateType
-    const validTypes = [
-      "student_welcome",
-      "guardian_notification",
-      "absence_notification",
-      "late_notification",
-      "excused_notification",
-      "session_cancelled_student",
-      "session_cancelled_guardian",
-      "session_postponed_student",
-      "session_postponed_guardian",
-      "reminder_24h_student",
-      "reminder_24h_guardian",
-      "reminder_1h_student",
-      "reminder_1h_guardian",
-      "group_completion_student",
-      "group_completion_guardian",
-    ];
+   const validTypes = [
+  "student_welcome",
+  "guardian_notification",
+  "absence_notification",
+  "late_notification",
+  "excused_notification",
+  "session_cancelled_student",
+  "session_cancelled_guardian",
+  "session_postponed_student",
+  "session_postponed_guardian",
+  "reminder_24h_student",
+  "reminder_24h_guardian",
+  "reminder_15min_student",   // ✅ جديد
+  "reminder_15min_guardian",  // ✅ جديد
+  "reminder_1h_student",      // ✅ للتوافق مع القديم
+  "reminder_1h_guardian",     // ✅ للتوافق مع القديم
+  "group_completion_student",
+  "group_completion_guardian",
+  "evaluation_pass",
+  "evaluation_review",
+  "evaluation_repeat",
+  "session_recording",
+  "learning_supervisor_intro",
+  "module_overview",
+];
 
     if (!validTypes.includes(templateType)) {
       return NextResponse.json(
