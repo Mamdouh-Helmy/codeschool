@@ -43,6 +43,28 @@ const TEMPLATE_TYPES = [
   { id: "session_recording", label: "رابط التسجيل", icon: Video, color: "sky", emoji: "🎥", category: "evaluation", type: "guardian_with_session", api: "message" },
   { id: "learning_supervisor_intro", label: "تقديم المشرف الأكاديمي", icon: User, color: "primary", emoji: "👨‍🏫", category: "basic", type: "guardian_only", api: "message", isNew: true },
   { id: "module_overview", label: "نظرة عامة على الموديول", icon: BookOpen, color: "secondary", emoji: "📚", category: "basic", type: "guardian_only", api: "message", isNew: true },
+  {
+    id: "instructor_reminder_24h",
+    label: "تذكير المدرب 24 ساعة",
+    icon: Clock,
+    color: "sky",
+    emoji: "⏰",
+    category: "instructor",
+    type: "instructor_only",
+    api: "instructor",
+    isNew: true
+  },
+  {
+    id: "instructor_reminder_15min",
+    label: "تذكير المدرب 15 دقيقة",
+    icon: Clock,
+    color: "accent",
+    emoji: "⏳",
+    category: "instructor",
+    type: "instructor_only",
+    api: "instructor",
+    isNew: true
+  },
 ];
 
 const CATEGORIES = {
@@ -78,10 +100,29 @@ const TEMPLATE_VARS = {
   group_student_welcome_guardian: ["guardianSalutation_ar", "guardianSalutation_en", "childTitle", "studentName", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructor", "firstMeetingLink"],
   instructor_group_activation: ["salutation", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructorName", "studentCount"],
 
-  reminder_24h_student: ["salutation_ar", "salutation_en", "sessionName", "date", "time", "meetingLink", "guardianSalutation", "studentName", "guardianName", "childTitle", "enrollmentNumber"],
-  reminder_24h_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
-  reminder_15min_student: ["salutation_ar", "salutation_en", "sessionName", "time", "meetingLink", "guardianSalutation", "studentName", "childTitle", "enrollmentNumber"],
-  reminder_15min_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
+  reminder_24h_student: [
+    "salutation_ar", "salutation_en", "sessionName", "sessionDescription",
+    "date", "time", "meetingLink", "guardianSalutation", "studentName",
+    "guardianName", "childTitle", "enrollmentNumber"
+  ],
+
+  reminder_24h_guardian: [
+    "guardianSalutation", "salutation_ar", "salutation_en", "studentName",
+    "guardianName", "childTitle", "sessionDescription", "groupName",
+    "groupCode", "courseName", "enrollmentNumber", "feedbackLink"
+  ],
+
+  reminder_15min_student: [
+    "salutation_ar", "salutation_en", "sessionName", "sessionDescription",
+    "time", "meetingLink", "guardianSalutation", "studentName",
+    "childTitle", "enrollmentNumber"
+  ],
+
+  reminder_15min_guardian: [
+    "guardianSalutation", "salutation_ar", "salutation_en", "studentName",
+    "guardianName", "childTitle", "sessionName", "sessionDescription",
+    "date", "time", "meetingLink", "enrollmentNumber"
+  ],
 
   session_cancelled_student: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
   session_cancelled_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
@@ -95,13 +136,39 @@ const TEMPLATE_VARS = {
   group_completion_student: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
   group_completion_guardian: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
 
-  evaluation_pass: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
-  evaluation_review: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
-  evaluation_repeat: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
+  // ✅ تم إضافة supervisorName و moduleTitle و moduleDescription لقوالب التقييم التلاتة
+  evaluation_pass: [
+    "guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus",
+    "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation",
+    "instructorComment", "completedSessions", "recordingLink",
+    "supervisorName", "moduleTitle", "moduleDescription",
+  ],
+  evaluation_review: [
+    "guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus",
+    "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation",
+    "instructorComment", "completedSessions", "recordingLink",
+    "supervisorName", "moduleTitle", "moduleDescription",
+  ],
+  evaluation_repeat: [
+    "guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus",
+    "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation",
+    "instructorComment", "completedSessions", "recordingLink",
+    "supervisorName", "moduleTitle", "moduleDescription",
+  ],
+
   session_recording: ["guardianSalutation", "guardianName", "childTitle", "studentName", "sessionName", "recordingLink"],
+  instructor_reminder_24h: [
+    "instructorSalutation", "sessionName", "sessionDescription",
+    "date", "time", "meetingLink", "username", "password",
+    "groupName", "studentCount"
+  ],
+  instructor_reminder_15min: [
+    "instructorSalutation", "sessionName", "sessionDescription",
+    "time", "meetingLink", "username", "password", "groupName"
+  ],
 
   learning_supervisor_intro: ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
-  module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "supervisorName"],
+  module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "moduleDescription", "supervisorName"],
 };
 
 const FRONTEND_FALLBACKS = {
@@ -144,6 +211,14 @@ const FRONTEND_FALLBACKS = {
   reminder_15min_guardian: {
     ar: `{guardianSalutation}،\n\n⏳ تذكير: حصة {childTitle} *{studentName}* - *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
     en: `{guardianSalutation},\n\n⏳ Reminder: {childTitle} *{studentName}*'s session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
+  },
+  instructor_reminder_24h: {
+    ar: `{instructorSalutation} 👋\nحبيت أفكرك إن ميعادنا بكرة إن شاء الله ✨\n\n📘 الـ Session: {sessionName}\n📝 وصف السيشن: {sessionDescription}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 لينك الحصة:\n{meetingLink}\n\n🔐 بيانات الدخول:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 المجموعة: {groupName}\n🔢 عدد الطلاب: {studentCount}\n\nمتحمسين نشوفك بكرة 💻🚀\nفريق Code School`,
+    en: `{instructorSalutation} 👋\nJust a reminder that our session is tomorrow, God willing ✨\n\n📘 Session: {sessionName}\n📝 Session Overview: {sessionDescription}\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n🔐 Login Details:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 Group: {groupName}\n🔢 Students: {studentCount}\n\nCan't wait to see you tomorrow 💻🚀\nCode School Team`,
+  },
+  instructor_reminder_15min: {
+    ar: `{instructorSalutation} 👋\nحبيت أفكرك إن ميعادنا هيبدأ خلال *15 دقيقة* إن شاء الله ✨\n\n📘 الـ Session: {sessionName}\n📝 وصف السيشن: {sessionDescription}\n⏰ الوقت: {time}\n🔗 لينك الحصة:\n{meetingLink}\n\n🔐 بيانات الدخول:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 المجموعة: {groupName}\n\nمتحمسين نشوفك دلوقتي 💻🚀\nفريق Code School`,
+    en: `{instructorSalutation} 👋\nJust a reminder that our session starts in *15 minutes*, God willing ✨\n\n📘 Session: {sessionName}\n📝 Session Overview: {sessionDescription}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n🔐 Login Details:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 Group: {groupName}\n\nCan't wait to see you now 💻🚀\nCode School Team`,
   },
 };
 
@@ -638,8 +713,23 @@ export default function WhatsAppTemplatesPage() {
 
       const id = await iRes.json();
       if (id.success && id.data) {
-        const d = id.data;
-        if (!map["instructor_group_activation"]) map["instructor_group_activation"] = { ...d, content: d.contentAr || d.content || "", contentAr: d.contentAr || d.content || "", contentEn: d.contentEn || "" };
+        const list = Array.isArray(id.data) ? id.data : [id.data];
+        const typeMap = {
+          group_activation: "instructor_group_activation",
+          reminder_24h: "instructor_reminder_24h",
+          reminder_15min: "instructor_reminder_15min",
+        };
+        list.forEach(d => {
+          const uiKey = typeMap[d.templateType];
+          if (uiKey && !map[uiKey]) {
+            map[uiKey] = {
+              ...d,
+              content: d.contentAr || d.content || "",
+              contentAr: d.contentAr || d.content || "",
+              contentEn: d.contentEn || "",
+            };
+          }
+        });
       }
 
       const gd = await gRes.json();
@@ -780,9 +870,45 @@ export default function WhatsAppTemplatesPage() {
     try {
       let endpoint, payload;
 
-      if (activeTab === "instructor_group_activation") {
+      if (
+        activeTab === "instructor_group_activation" ||
+        activeTab === "instructor_reminder_24h" ||
+        activeTab === "instructor_reminder_15min"
+      ) {
         endpoint = "/api/whatsapp/instructor-templates";
-        payload = { id: cur._id, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn, setAsDefault: true };
+
+        const typeMap = {
+          instructor_group_activation: "group_activation",
+          instructor_reminder_24h: "reminder_24h",
+          instructor_reminder_15min: "reminder_15min",
+        };
+
+        if (cur.isFrontendFallback || !cur._id) {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateType: typeMap[activeTab],
+              name: activeType?.label || activeTab,
+              contentAr: cur.contentAr || cur.content,
+              contentEn: cur.contentEn || "",
+              isDefault: true,
+              isActive: true,
+            }),
+          });
+          const data = await res.json();
+          if (data.success) { await fetchTemplates(); toast.success("✅ تم حفظ القالب"); }
+          else toast.error(data.message || data.error || "فشل الحفظ");
+          return;
+        }
+
+        payload = {
+          id: cur._id,
+          templateType: typeMap[activeTab],
+          contentAr: cur.contentAr || cur.content,
+          contentEn: cur.contentEn || "",
+          setAsDefault: true,
+        };
 
       } else if (activeTab.startsWith("group_student_welcome")) {
         endpoint = "/api/whatsapp/group-templates";
@@ -813,7 +939,7 @@ export default function WhatsAppTemplatesPage() {
               templateType: activeTab,
               contentAr: cur.contentAr || cur.content,
               contentEn: cur.contentEn || "",
-              recipientType: activeTab.includes("student") ? "student" : "guardian", // ✅
+              recipientType: activeTab.includes("student") ? "student" : "guardian",
               name: activeTab,
               isDefault: true,
               isActive: true,
@@ -829,7 +955,7 @@ export default function WhatsAppTemplatesPage() {
           templateType: activeTab,
           contentAr: cur.contentAr || cur.content,
           contentEn: cur.contentEn,
-          recipientType: activeTab.includes("student") ? "student" : "guardian", // ✅
+          recipientType: activeTab.includes("student") ? "student" : "guardian",
         };
       } else {
         endpoint = "/api/whatsapp/templates";

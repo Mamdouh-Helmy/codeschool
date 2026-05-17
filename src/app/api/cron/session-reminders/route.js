@@ -3,7 +3,10 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Session from '../../../models/Session';
-import { sendManualSessionReminder } from '../../../services/groupAutomation';
+import {
+  sendManualSessionReminder,
+  sendInstructorSessionReminder,
+} from '../../../services/groupAutomation';
 
 const CRON_SECRET = process.env.CRON_SECRET || 'your-secret-key-change-this';
 
@@ -31,8 +34,8 @@ export async function GET(req) {
     const results = {
       timestamp:     now.toISOString(),
       cairoTime:     now.toLocaleString('en-EG', { timeZone: 'Africa/Cairo' }),
-      reminder24h:   { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [] },
-      reminder15min: { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [] },
+      reminder24h:   { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [], instructorsSent: 0 },
+      reminder15min: { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [], instructorsSent: 0 },
     };
 
     // ── نافذة 3 أيام ─────────────────────────────────────────────────────
@@ -65,15 +68,12 @@ export async function GET(req) {
         console.log(`   sessionDateTime (UTC): ${sessionDateTime.toISOString()}`);
         console.log(`   diff: ${diffHours.toFixed(2)}h`);
 
-        // ✅ خارج النافذة — skip بدون flag
         if (diffHours < 23 || diffHours > 25) {
           results.reminder24h.skipped++;
           console.log(`   ⏭️ Skipped (outside 23-25h window)`);
           continue;
         }
 
-        // ✅ داخل النافذة — نعمل flag أولاً عشان نضمن إرسال مرة واحدة بس
-        // حتى لو فشل الإرسال مش هيبعت تاني
         await Session.findByIdAndUpdate(session._id, {
           $set: {
             'automationEvents.reminder24hSent':   true,
@@ -82,6 +82,7 @@ export async function GET(req) {
         });
         console.log(`   🔒 Marked reminder24hSent = true`);
 
+        // ── طلاب وأولياء الأمور ──
         const result = await sendManualSessionReminder(
           session._id.toString(),
           '24hours',
@@ -97,9 +98,8 @@ export async function GET(req) {
             scheduledDate:    session.scheduledDate,
             studentsNotified: result.successCount,
           });
-          console.log(`   ✅ 24h sent: ${result.successCount} students`);
+          console.log(`   ✅ 24h students sent: ${result.successCount}`);
 
-          // ✅ بنحدث عدد الطلاب اللي اتبعتلهم
           await Session.findByIdAndUpdate(session._id, {
             $set: {
               'automationEvents.reminder24hStudentsNotified': result.successCount,
@@ -107,14 +107,25 @@ export async function GET(req) {
           });
         } else {
           results.reminder24h.failed++;
-          console.log(`   ❌ 24h send failed — flag already set, won't retry`);
+          console.log(`   ❌ 24h students send failed`);
+        }
+
+        // ── المدرسين ──
+        try {
+          const instructorResult = await sendInstructorSessionReminder(
+            session._id.toString(),
+            '24hours',
+            { automatedCron: true }
+          );
+          results.reminder24h.instructorsSent += instructorResult.successCount || 0;
+          console.log(`   👨‍🏫 24h instructors sent: ${instructorResult.successCount || 0}`);
+        } catch (instrErr) {
+          console.error(`   ❌ 24h instructor reminder error:`, instrErr.message);
         }
 
       } catch (err) {
         results.reminder24h.failed++;
         console.error(`   ❌ 24h error for ${session._id}:`, err.message);
-
-        // ✅ حتى لو حصل error — الـ flag اتعمل فوق، مش هيبعت تاني
       }
     }
 
@@ -140,25 +151,23 @@ export async function GET(req) {
         console.log(`   sessionDateTime (UTC): ${sessionDateTime.toISOString()}`);
         console.log(`   diff: ${diffMinutes.toFixed(1)}min`);
 
-        // ✅ خارج النافذة — skip بدون flag
         if (diffMinutes < 12 || diffMinutes > 18) {
           results.reminder15min.skipped++;
           console.log(`   ⏭️ Skipped (outside 12-18min window)`);
           continue;
         }
 
-        // ✅ داخل النافذة — نعمل flag أولاً عشان نضمن إرسال مرة واحدة بس
         await Session.findByIdAndUpdate(session._id, {
           $set: {
             'automationEvents.reminder15minSent':   true,
             'automationEvents.reminder15minSentAt': new Date(),
-            // للتوافق مع الكود القديم
-            'automationEvents.reminder1hSent':   true,
-            'automationEvents.reminder1hSentAt': new Date(),
+            'automationEvents.reminder1hSent':      true,
+            'automationEvents.reminder1hSentAt':    new Date(),
           },
         });
         console.log(`   🔒 Marked reminder15minSent = true`);
 
+        // ── طلاب وأولياء الأمور ──
         const result = await sendManualSessionReminder(
           session._id.toString(),
           '15min',
@@ -174,9 +183,8 @@ export async function GET(req) {
             scheduledDate:    session.scheduledDate,
             studentsNotified: result.successCount,
           });
-          console.log(`   ✅ 15min sent: ${result.successCount} students`);
+          console.log(`   ✅ 15min students sent: ${result.successCount}`);
 
-          // ✅ بنحدث عدد الطلاب اللي اتبعتلهم
           await Session.findByIdAndUpdate(session._id, {
             $set: {
               'automationEvents.reminder15minStudentsNotified': result.successCount,
@@ -184,14 +192,25 @@ export async function GET(req) {
           });
         } else {
           results.reminder15min.failed++;
-          console.log(`   ❌ 15min send failed — flag already set, won't retry`);
+          console.log(`   ❌ 15min students send failed`);
+        }
+
+        // ── المدرسين ──
+        try {
+          const instructorResult = await sendInstructorSessionReminder(
+            session._id.toString(),
+            '15min',
+            { automatedCron: true }
+          );
+          results.reminder15min.instructorsSent += instructorResult.successCount || 0;
+          console.log(`   👨‍🏫 15min instructors sent: ${instructorResult.successCount || 0}`);
+        } catch (instrErr) {
+          console.error(`   ❌ 15min instructor reminder error:`, instrErr.message);
         }
 
       } catch (err) {
         results.reminder15min.failed++;
         console.error(`   ❌ 15min error for ${session._id}:`, err.message);
-
-        // ✅ حتى لو حصل error — الـ flag اتعمل فوق، مش هيبعت تاني
       }
     }
 
@@ -206,8 +225,6 @@ export async function GET(req) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // buildSessionDateTime
-// scheduledDate بيتخزن كـ 00:00 UTC
-// startTime بيتخزن كـ "08:40" بتوقيت القاهرة
 // ─────────────────────────────────────────────────────────────────────────────
 function buildSessionDateTime(session) {
   try {
@@ -217,12 +234,10 @@ function buildSessionDateTime(session) {
 
     const [hours, minutes] = session.startTime.split(':').map(Number);
 
-    // ✅ بناخد التاريخ بتوقيت القاهرة
     const cairoDateStr = date.toLocaleDateString('en-CA', {
       timeZone: 'Africa/Cairo',
     });
 
-    // ✅ بنحسب الـ offset الحالي لـ Cairo (UTC+2 شتاء أو UTC+3 صيف)
     const cairoOffset = getCairoUTCOffset();
     const sign        = cairoOffset >= 0 ? '+' : '-';
     const absOffset   = Math.abs(cairoOffset);
@@ -246,7 +261,6 @@ function buildSessionDateTime(session) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // getCairoUTCOffset
-// مصر: UTC+2 شتاء، UTC+3 صيف
 // ─────────────────────────────────────────────────────────────────────────────
 function getCairoUTCOffset() {
   try {
@@ -260,8 +274,8 @@ function getCairoUTCOffset() {
     const diffMs    = cairoDate - utcDate;
     const diffHours = Math.round(diffMs / (1000 * 60 * 60));
 
-    return diffHours; // +2 أو +3
+    return diffHours;
   } catch {
-    return 2; // fallback
+    return 2;
   }
 }

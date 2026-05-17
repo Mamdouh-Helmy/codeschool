@@ -1,4 +1,3 @@
-// models/User.js
 import mongoose from "mongoose";
 
 const UserSchema = new mongoose.Schema(
@@ -43,6 +42,14 @@ const UserSchema = new mongoose.Schema(
         message: "{VALUE} is not a valid gender",
       },
       default: undefined,
+    },
+    language: {
+      type: String,
+      enum: {
+        values: ["ar", "en"],
+        message: "{VALUE} is not a valid language",
+      },
+      default: "ar",
     },
     role: {
       type: String,
@@ -96,7 +103,6 @@ const UserSchema = new mongoose.Schema(
       default: true,
     },
 
-    // ✅ سجل إشعارات المدرب
     notificationHistory: [
       {
         groupId: {
@@ -128,7 +134,6 @@ const UserSchema = new mongoose.Schema(
       },
     ],
 
-    // ✅ metadata
     metadata: {
       lastGroupNotificationSent: { type: Date, default: null },
       lastNotificationGroupId: {
@@ -145,25 +150,21 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// ✅ إنشاء indexes
-UserSchema.index({ email: 1 }, { unique: true });
-UserSchema.index({ username: 1 }, { unique: true, sparse: true });
+// ✅ بدون duplicate indexes — email و username معرّفين unique في الـ schema فوق
 UserSchema.index({ gender: 1 }, { sparse: true });
+UserSchema.index({ language: 1 }, { sparse: true });
 
-// Virtual للحصول على profile URL
 UserSchema.virtual("profileUrl").get(function () {
   return this.username ? `/portfolio/${this.username}` : null;
 });
 
-// Virtual للحصول على النوع بالعربية
 UserSchema.virtual("genderAr").get(function () {
   if (!this.gender) return null;
   return this.gender === "male" ? "ذكر" : "أنثى";
 });
 
-console.log("✅ User Schema loaded successfully (FIXED VERSION)");
+console.log("✅ User Schema loaded successfully");
 
-// ✅ إجبار إعادة تحميل الـ model عند كل تشغيل لتجنب الـ cache القديم
 if (mongoose.models.User) {
   delete mongoose.models.User;
 }

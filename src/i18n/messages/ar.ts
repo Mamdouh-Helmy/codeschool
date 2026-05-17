@@ -4159,32 +4159,32 @@ const ar = {
   "allSessions.total": "إجمالي",
   "allSessions.locked": "مغلقة",
   "allSessions.today": "اليوم",
-  
+
   // Filter tabs
   "allSessions.filters.all": "الكل",
   "allSessions.filters.upcoming": "القادمة",
   "allSessions.filters.completed": "المكتملة",
   "allSessions.filters.locked": "المغلقة",
   "allSessions.filters.today": "اليوم",
-  
+
   // Search
   "allSessions.search": "بحث...",
   "allSessions.searchPlaceholder": "ابحث عن جلسة...",
-  
+
   // View toggle
   "allSessions.view.byDate": "عرض بالتاريخ",
   "allSessions.view.list": "عرض بالقائمة",
-  
+
   // Join now banner
   "allSessions.activeNow": "جلسة نشطة الآن!",
   "allSessions.joinNow": "انضم الآن",
-  
+
   // Session card
   "allSessions.session": "جلسة",
   "allSessions.duration": "ساعتان",
   "allSessions.join": "انضم",
   "allSessions.recording": "تسجيل",
-  
+
   // Session detail modal
   "allSessions.modal.joinMeeting": "انضم للاجتماع الآن",
   "allSessions.modal.watchRecording": "مشاهدة تسجيل الجلسة",
@@ -4194,34 +4194,37 @@ const ar = {
   "allSessions.modal.file": "ملف",
   "allSessions.modal.instructorNotes": "ملاحظات المدرب",
   "allSessions.modal.duration": "120 دقيقة = ساعتان",
-  
+
   // Attendance status
   "allSessions.attendance.present": "حاضر",
   "allSessions.attendance.late": "متأخر",
   "allSessions.attendance.excused": "معذور",
   "allSessions.attendance.absent": "غائب",
-  
+
   // Platforms
   "allSessions.platform.zoom": "Zoom",
   "allSessions.platform.googleMeet": "Meet",
   "allSessions.platform.microsoftTeams": "Teams",
   "allSessions.platform.other": "رابط",
-  
+
   // Date header
   "allSessions.date.today": "اليوم",
   "allSessions.date.sessions": "جلسة",
   "allSessions.date.sessions_plural": "جلسات",
-  
+
   // Empty states
   "allSessions.noSessions": "لا توجد جلسات في هذه الفئة",
   "allSessions.noSessionsFound": "لم يتم العثور على جلسات",
-  
+
   // Loading and error
   "allSessions.loading": "جاري التحميل...",
   "allSessions.error": "حدث خطأ",
   "allSessions.errorMessage": "تعذر تحميل بيانات الجلسات",
   "allSessions.retry": "إعادة المحاولة",
-  "dashboard.overviewPage" : "نظرة عامة"
+  "dashboard.overviewPage": "نظرة عامة",
+
+  "instructors.table.language": "اللغة",
+  "instructors.addFirst": "أضف أول مدرب",
 };
 
 export default ar;

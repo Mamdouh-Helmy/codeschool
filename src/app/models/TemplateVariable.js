@@ -132,13 +132,15 @@ TemplateVariableSchema.statics.seedDefaults = async function () {
   const defaults = getDefaultVariables();
   const results = [];
   for (const variable of defaults) {
-    const existing = await this.findOne({ key: variable.key });
-    if (!existing) {
-      await this.create(variable);
-      results.push({ key: variable.key, action: "created" });
-    } else {
-      results.push({ key: variable.key, action: "exists" });
-    }
+    const result = await this.findOneAndUpdate(
+      { key: variable.key },
+      { $setOnInsert: variable }, // ✅ بيضيف بس لو مش موجود، ومش بيعدل الموجود
+      { upsert: true, new: true },
+    );
+    results.push({
+      key: variable.key,
+      action: result ? "exists" : "created",
+    });
   }
   return results;
 };
@@ -176,6 +178,36 @@ export function getDefaultVariables() {
       icon: "📚",
       valueAr: "Mobile App Development",
       valueEn: "Mobile App Development",
+      hasGender: false,
+      group: "session",
+    },
+    {
+      key: "sessionDescription",
+      labelAr: "وصف الحصة",
+      labelEn: "Session Description",
+      icon: "📝",
+      valueAr: "في الحصة دي هنتكلم عن أساسيات تصميم واجهات المستخدم",
+      valueEn: "In this session we will cover the basics of UI design",
+      hasGender: false,
+      group: "session",
+    },
+    {
+      key: "username",
+      labelAr: "اسم المستخدم (بيانات الدخول)",
+      labelEn: "Username (Login)",
+      icon: "👤",
+      valueAr: "student@codeschool.com",
+      valueEn: "student@codeschool.com",
+      hasGender: false,
+      group: "session",
+    },
+    {
+      key: "password",
+      labelAr: "كلمة المرور (بيانات الدخول)",
+      labelEn: "Password (Login)",
+      icon: "🔑",
+      valueAr: "Code@1234",
+      valueEn: "Code@1234",
       hasGender: false,
       group: "session",
     },
@@ -358,15 +390,26 @@ export function getDefaultVariables() {
       labelAr: "تحية ولي الأمر",
       labelEn: "Guardian Salutation",
       icon: "👋",
-      valueAr: "عزيزي الأستاذ محمد",
-      valueEn: "Dear Mr. Mohamed",
-      valueFatherAr: "عزيزي الأستاذ محمد",
-      valueFatherEn: "Dear Mr. Mohamed",
-      valueMotherAr: "عزيزتي السيدة فاطمة",
-      valueMotherEn: "Dear Mrs. Fatima",
+      valueAr: "مساء الخير {guardianName} 👋",
+      valueEn: "Good evening {guardianName} 👋",
+      valueFatherAr: "مساء الخير {guardianName} 👋",
+      valueFatherEn: "Good evening {guardianName} 👋",
+      valueMotherAr: "مساء الخير {guardianName} 👋",
+      valueMotherEn: "Good evening {guardianName} 👋",
       hasGender: true,
       genderType: "guardian",
       group: "guardian",
+    },
+    {
+      key: "moduleDescription",
+      labelAr: "وصف الموديول",
+      labelEn: "Module Description",
+      icon: "📝",
+      valueAr: "في الموديول ده هنتعلم أساسيات تطوير تطبيقات الموبايل",
+      valueEn:
+        "In this module we will learn the basics of mobile app development",
+      hasGender: false,
+      group: "session",
     },
     {
       key: "guardianName",

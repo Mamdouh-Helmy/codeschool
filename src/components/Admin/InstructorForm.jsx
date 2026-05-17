@@ -12,6 +12,7 @@ import {
   Upload,
   Trash2,
   Loader2,
+  Globe,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -30,6 +31,7 @@ export default function InstructorForm({
     phone: initial?.profile?.phone || "",
     image: initial?.image || "",
     gender: initial?.gender || "",
+    language: initial?.language ?? "ar",
     password: "",
     passwordConfirm: "",
   });
@@ -41,9 +43,6 @@ export default function InstructorForm({
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  /**
-   * رفع الصورة إلى Cloudinary
-   */
   const uploadImageToCloudinary = async (base64Image) => {
     setUploadingImage(true);
     const toastId = toast.loading("جاري رفع الصورة...");
@@ -52,10 +51,7 @@ export default function InstructorForm({
       const response = await fetch("/api/upload-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image: base64Image,
-          folder: "instructors",
-        }),
+        body: JSON.stringify({ image: base64Image, folder: "instructors" }),
       });
 
       const data = await response.json();
@@ -81,14 +77,12 @@ export default function InstructorForm({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // التحقق من نوع الملف
     const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       toast.error("نوع الملف غير مدعوم. يرجى استخدام صورة (JPEG, PNG, WebP)");
       return;
     }
 
-    // التحقق من الحجم (5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error("حجم الملف كبير جداً. الحد الأقصى 5MB");
       return;
@@ -97,15 +91,10 @@ export default function InstructorForm({
     const reader = new FileReader();
     reader.onload = async (e) => {
       const result = e.target?.result;
-
-      // عرض معاينة فورية
       setImagePreview(result);
-
       try {
-        // رفع الصورة إلى Cloudinary
         await uploadImageToCloudinary(result);
       } catch (error) {
-        // إعادة المعاينة للصورة القديمة في حالة الفشل
         setImagePreview(initial?.image || "");
         onChange("image", initial?.image || "");
       }
@@ -122,7 +111,6 @@ export default function InstructorForm({
   const submit = async (e) => {
     e.preventDefault();
 
-    // Validation
     if (!form.name.trim()) {
       toast.error(t("instructorForm.nameRequired"));
       return;
@@ -134,9 +122,7 @@ export default function InstructorForm({
     }
 
     if (isCreating && !form.password) {
-      toast.error(
-        t("instructorForm.passwordRequired") || "Password is required"
-      );
+      toast.error(t("instructorForm.passwordRequired") || "Password is required");
       return;
     }
 
@@ -158,7 +144,6 @@ export default function InstructorForm({
     );
 
     try {
-      // تجهيز البيانات للإرسال
       const payload = {
         name: form.name.trim(),
         ...(isCreating && { email: form.email.trim() }),
@@ -166,15 +151,13 @@ export default function InstructorForm({
         ...(form.phone.trim() && { phone: form.phone.trim() }),
         ...(form.image.trim() && { image: form.image.trim() }),
         ...(form.gender && { gender: form.gender }),
+        language: form.language,
         ...(form.password && { password: form.password }),
       };
 
       console.log("📤 Sending payload:", payload);
 
-      const url = isCreating
-        ? "/api/instructor"
-        : `/api/instructor/${initial._id}`;
-
+      const url = isCreating ? "/api/instructor" : `/api/instructor/${initial._id}`;
       const method = isCreating ? "POST" : "PUT";
 
       const res = await fetch(url, {
@@ -198,8 +181,7 @@ export default function InstructorForm({
       if (result.success) {
         toast.success(
           isCreating
-            ? t("instructorForm.createdSuccess") ||
-                "Instructor created successfully"
+            ? t("instructorForm.createdSuccess") || "Instructor created successfully"
             : t("instructorForm.updatedSuccess"),
           { id: toastId }
         );
@@ -215,9 +197,7 @@ export default function InstructorForm({
       }
     } catch (err) {
       console.error("Error:", err);
-      toast.error(err.message || t("instructorForm.updateError"), {
-        id: toastId,
-      });
+      toast.error(err.message || t("instructorForm.updateError"), { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -258,7 +238,7 @@ export default function InstructorForm({
             />
           </div>
 
-          {/* Gender Field */}
+          {/* Gender */}
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <User className="w-3 h-3" />
@@ -306,6 +286,42 @@ export default function InstructorForm({
             </div>
           </div>
 
+          {/* Language */}
+          <div className="space-y-2">
+            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+              <Globe className="w-3 h-3" />
+              {t("instructorForm.language") || "اللغة"}
+            </label>
+            <div className="flex gap-4 items-center">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="language"
+                  value="ar"
+                  checked={form.language === "ar"}
+                  onChange={(e) => onChange("language", e.target.value)}
+                  className="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
+                />
+                <span className="text-sm text-MidnightNavyText dark:text-white">
+                  🇸🇦 عربي
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="language"
+                  value="en"
+                  checked={form.language === "en"}
+                  onChange={(e) => onChange("language", e.target.value)}
+                  className="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
+                />
+                <span className="text-sm text-MidnightNavyText dark:text-white">
+                  🇬🇧 English
+                </span>
+              </label>
+            </div>
+          </div>
+
           {/* Email */}
           <div className="space-y-2">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
@@ -342,10 +358,7 @@ export default function InstructorForm({
               type="text"
               value={form.username}
               onChange={(e) =>
-                onChange(
-                  "username",
-                  e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")
-                )
+                onChange("username", e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
               }
               placeholder="john_doe"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
@@ -370,7 +383,7 @@ export default function InstructorForm({
             />
           </div>
 
-          {/* Image Section */}
+          {/* Image */}
           <div className="space-y-3">
             <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
               <ImageIcon className="w-3 h-3" />
@@ -379,7 +392,6 @@ export default function InstructorForm({
 
             <div className="flex gap-4 items-start">
               <div className="flex-1 space-y-3">
-                {/* رابط الصورة */}
                 <input
                   type="url"
                   value={form.image}
@@ -389,7 +401,6 @@ export default function InstructorForm({
                   disabled={uploadingImage}
                 />
 
-                {/* أزرار التحكم */}
                 <div className="flex gap-2">
                   <label
                     className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-13 font-medium transition-colors border ${
@@ -436,21 +447,17 @@ export default function InstructorForm({
                 </div>
 
                 <div className="text-11 text-SlateBlueText dark:text-darktext">
-                  {t("instructorForm.imageRequirements") ||
-                    "الحد الأقصى: 5MB • JPEG, PNG, WebP"}
+                  {t("instructorForm.imageRequirements") || "الحد الأقصى: 5MB • JPEG, PNG, WebP"}
                 </div>
               </div>
 
-              {/* معاينة الصورة */}
               {imagePreview && (
                 <div className="w-24 h-24 border-2 border-dashed border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden bg-gray-50 dark:bg-dark_input flex items-center justify-center relative">
                   <img
                     src={imagePreview}
                     alt="Preview"
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.src = "/images/default-avatar.jpg";
-                    }}
+                    onError={(e) => { e.target.src = "/images/default-avatar.jpg"; }}
                   />
                   {uploadingImage && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -478,8 +485,7 @@ export default function InstructorForm({
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
               {isCreating
-                ? t("instructorForm.passwordRequired") ||
-                  "Password is required for new instructor"
+                ? t("instructorForm.passwordRequired") || "Password is required for new instructor"
                 : t("instructorForm.passwordOptional")}
             </p>
           </div>

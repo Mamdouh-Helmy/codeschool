@@ -4,7 +4,7 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
   {
     templateType: {
       type: String,
-      enum: ["group_activation"],
+      enum: ["group_activation", "reminder_24h", "reminder_15min"],
       required: true,
       default: "group_activation",
     },
@@ -14,7 +14,6 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
       trim: true,
       default: "قالب تفعيل المجموعة للمدرب",
     },
-    // ✅ محتوى عربي وإنجليزي منفصلين
     contentAr: {
       type: String,
       required: true,
@@ -23,13 +22,12 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    // ✅ للتوافق مع الكود القديم - سيُحدَّث تلقائياً
     content: {
       type: String,
     },
     description: {
       type: String,
-      default: "رسالة إخطار المدرب عند تفعيل مجموعة جديدة",
+      default: "رسالة إخطار المدرب",
     },
     isActive: {
       type: Boolean,
@@ -64,10 +62,8 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
 WhatsAppTemplateInstructorSchema.index({ templateType: 1, isActive: 1 });
 WhatsAppTemplateInstructorSchema.index({ isDefault: 1 });
 
-// ✅ الحل: async بدل next callback
 WhatsAppTemplateInstructorSchema.pre("save", async function () {
   this.metadata.updatedAt = new Date();
-  // ✅ sync content مع العربي كـ default
   this.content = this.contentAr;
 });
 
@@ -77,7 +73,6 @@ WhatsAppTemplateInstructorSchema.methods.incrementUsage = async function () {
   await this.save();
 };
 
-// ✅ الحل: try/catch بدل || للتحقق من الـ model
 const WhatsAppTemplateInstructor = (() => {
   try {
     return mongoose.model("WhatsAppTemplateInstructor");

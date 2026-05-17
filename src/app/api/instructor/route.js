@@ -109,41 +109,16 @@ async function createDefaultPortfolio(userId, userName, username) {
       title: `${userName}'s Teaching Portfolio`,
       description: `Welcome to ${userName}'s teaching portfolio. Explore my courses, teaching experience, and educational content.`,
       skills: [
-        {
-          name: "Teaching",
-          level: 85,
-          category: "Education",
-          icon: "👨‍🏫",
-        },
-        {
-          name: "Curriculum Design",
-          level: 80,
-          category: "Education",
-          icon: "📚",
-        },
-        {
-          name: "Student Engagement",
-          level: 90,
-          category: "Education",
-          icon: "🎯",
-        },
-        {
-          name: "Assessment",
-          level: 75,
-          category: "Education",
-          icon: "📝",
-        },
+        { name: "Teaching", level: 85, category: "Education", icon: "👨‍🏫" },
+        { name: "Curriculum Design", level: 80, category: "Education", icon: "📚" },
+        { name: "Student Engagement", level: 90, category: "Education", icon: "🎯" },
+        { name: "Assessment", level: 75, category: "Education", icon: "📝" },
       ],
       projects: [
         {
           title: "Interactive Learning Platform",
-          description:
-            "Developed engaging online courses with interactive content and assessments.",
-          technologies: [
-            "Education Technology",
-            "E-Learning",
-            "Student Success",
-          ],
+          description: "Developed engaging online courses with interactive content and assessments.",
+          technologies: ["Education Technology", "E-Learning", "Student Success"],
           status: "completed",
           featured: true,
           startDate: new Date(),
@@ -151,8 +126,7 @@ async function createDefaultPortfolio(userId, userName, username) {
         },
         {
           title: "Student Success Program",
-          description:
-            "Created comprehensive program to improve student outcomes and engagement.",
+          description: "Created comprehensive program to improve student outcomes and engagement.",
           technologies: ["Mentoring", "Academic Support", "Progress Tracking"],
           status: "in-progress",
           featured: false,
@@ -172,10 +146,7 @@ async function createDefaultPortfolio(userId, userName, username) {
       },
       isPublished: true,
       views: 0,
-      settings: {
-        theme: "dark",
-        layout: "standard",
-      },
+      settings: { theme: "dark", layout: "standard" },
     });
 
     console.log("✅ Default portfolio created successfully");
@@ -209,15 +180,12 @@ export async function GET(request) {
     const totalInstructors = await User.countDocuments(query);
 
     const instructors = await User.find(query)
-      .select("_id name email username image gender profile isActive createdAt")
+      .select("_id name email username image gender language profile isActive createdAt")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
 
     console.log("✅ Instructors fetched:", instructors.length);
-    if (instructors.length > 0) {
-      console.log("📊 Sample instructor data:", instructors[0]);
-    }
 
     return NextResponse.json({
       success: true,
@@ -232,15 +200,11 @@ export async function GET(request) {
     });
   } catch (error) {
     console.error("❌ Error fetching instructors:", error);
-
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
-
     return NextResponse.json(
       {
         success: false,
         message: "Failed to fetch instructors",
-        error: errorMessage,
+        error: error instanceof Error ? error.message : "Unknown error occurred",
       },
       { status: 500 }
     );
@@ -253,7 +217,7 @@ export async function POST(request) {
     console.log("🚀 ============ INSTRUCTOR CREATION STARTED ============");
 
     const body = await request.json();
-    const { name, email, password, username, phone, image, gender } = body;
+    const { name, email, password, username, phone, image, gender, language } = body;
 
     console.log("📝 Instructor data received:", {
       name: name || "missing",
@@ -263,6 +227,7 @@ export async function POST(request) {
       phone: phone || "not provided",
       image: image || "default",
       gender: gender || "not specified",
+      language: language || "ar (default)",
     });
 
     // التحقق من البيانات
@@ -270,11 +235,7 @@ export async function POST(request) {
     if (Object.keys(errors).length) {
       console.error("❌ Validation errors:", errors);
       return NextResponse.json(
-        {
-          success: false,
-          message: "Validation failed",
-          errors,
-        },
+        { success: false, message: "Validation failed", errors },
         { status: 400 }
       );
     }
@@ -283,19 +244,13 @@ export async function POST(request) {
     await connectDB();
     console.log("✅ Database connected");
 
-    // التحقق من البريد الإلكتروني الموجود
-    console.log(
-      "🔎 Checking for existing user with email:",
-      email.toLowerCase()
-    );
+    // التحقق من البريد الإلكتروني
+    console.log("🔎 Checking for existing user with email:", email.toLowerCase());
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       console.log("❌ Email already registered");
       return NextResponse.json(
-        {
-          success: false,
-          message: "Email already registered",
-        },
+        { success: false, message: "Email already registered" },
         { status: 409 }
       );
     }
@@ -322,7 +277,7 @@ export async function POST(request) {
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log("✅ Password hashed");
 
-    // توليد username إذا لم يتم توفيره
+    // توليد username
     let finalUsername =
       username && username.trim() !== ""
         ? username.toLowerCase().trim()
@@ -334,21 +289,16 @@ export async function POST(request) {
     let portfolioUrl = "";
 
     try {
-      // إنشاء رابط البورتفليو
       const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
       portfolioUrl = `${baseUrl}/portfolio/${finalUsername}`;
 
       console.log("🔗 Portfolio URL:", portfolioUrl);
       console.log("🎨 Generating QR Code...");
 
-      // توليد QR Code
       qrCodeImage = await QRCode.toDataURL(portfolioUrl, {
         width: 200,
         margin: 2,
-        color: {
-          dark: "#000000",
-          light: "#FFFFFF",
-        },
+        color: { dark: "#000000", light: "#FFFFFF" },
       });
 
       console.log("✅ QR Code generated successfully");
@@ -360,7 +310,6 @@ export async function POST(request) {
     // إنشاء المدرس
     console.log("👨‍🏫 Creating instructor in database...");
 
-    // تجهيز البيانات الأساسية
     const instructorData = {
       name: name.trim(),
       email: email.toLowerCase().trim(),
@@ -369,9 +318,9 @@ export async function POST(request) {
       role: "instructor",
       emailVerified: true,
       isActive: true,
+      language: language === "en" ? "en" : "ar",
     };
 
-    // إضافة الحقول الاختيارية فقط إذا كانت موجودة ولها قيم صحيحة
     if (image && image.trim()) {
       instructorData.image = image.trim();
     }
@@ -385,7 +334,6 @@ export async function POST(request) {
       instructorData.qrCodeData = portfolioUrl;
     }
 
-    // إنشاء profile object
     instructorData.profile = {
       bio: "",
       jobTitle: "Instructor",
@@ -398,27 +346,17 @@ export async function POST(request) {
     console.log("📦 Instructor data to save:", {
       ...instructorData,
       password: "***",
-      profile: instructorData.profile,
     });
 
     const newInstructor = new User(instructorData);
     await newInstructor.save();
 
     console.log("🎉 Instructor created successfully:", newInstructor._id);
-    console.log("📋 Saved data verification:", {
-      gender: newInstructor.gender,
-      image: newInstructor.image,
-      phone: newInstructor.profile?.phone,
-    });
 
-    // إنشاء بورتفليو افتراضي تلقائياً
+    // إنشاء بورتفليو افتراضي
     try {
       console.log("📁 Creating default portfolio...");
-      await createDefaultPortfolio(
-        newInstructor._id,
-        newInstructor.name,
-        newInstructor.username
-      );
+      await createDefaultPortfolio(newInstructor._id, newInstructor.name, newInstructor.username);
       console.log("✅ Default portfolio created");
     } catch (portfolioError) {
       console.error("⚠️ Could not create default portfolio:", portfolioError);
@@ -426,14 +364,11 @@ export async function POST(request) {
 
     // إعادة جلب المدرس للتأكد من جميع البيانات
     const savedInstructor = await User.findById(newInstructor._id)
-      .select(
-        "_id name email username image gender profile isActive createdAt qrCode"
-      )
+      .select("_id name email username image gender language profile isActive createdAt qrCode")
       .lean();
 
     console.log("📋 Saved instructor from DB:", savedInstructor);
 
-    // إعداد رد النجاح
     const instructorResponse = {
       id: savedInstructor._id,
       name: savedInstructor.name,
@@ -442,8 +377,9 @@ export async function POST(request) {
       role: "instructor",
       image: savedInstructor.image,
       gender: savedInstructor.gender,
+      language: savedInstructor.language,
       qrCode: savedInstructor.qrCode,
-      portfolioUrl: portfolioUrl,
+      portfolioUrl,
       profileUrl: `/portfolio/${savedInstructor.username}`,
       profile: savedInstructor.profile,
       isActive: savedInstructor.isActive,
@@ -451,7 +387,6 @@ export async function POST(request) {
     };
 
     console.log("✅ ============ INSTRUCTOR CREATION COMPLETED ============");
-    console.log("📋 Final response data:", instructorResponse);
 
     return NextResponse.json(
       {
@@ -474,14 +409,8 @@ export async function POST(request) {
           ? "Username is already taken"
           : "Email is already registered";
 
-      console.error("❌ Duplicate key error:", { field, message });
-
       return NextResponse.json(
-        {
-          success: false,
-          message,
-          errors: { [field]: message },
-        },
+        { success: false, message, errors: { [field]: message } },
         { status: 409 }
       );
     }

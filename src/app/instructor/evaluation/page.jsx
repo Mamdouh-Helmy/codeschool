@@ -19,7 +19,6 @@ const DECISIONS = {
     descAr: "فاهم المحتوى وأداؤه ممتاز",
     descEn: "Understands content, excellent performance",
     icon: CheckCircle2,
-    // Brand: primary green-teal
     bg: "bg-[#004d59]",
     gradient: "from-[#004d59] to-[#ff6700]",
     light: "bg-[#004d5908] dark:bg-[#004d5915]",
@@ -33,7 +32,6 @@ const DECISIONS = {
     descAr: "أداؤه جيد لكن يحتاج تعزيز",
     descEn: "Good but needs reinforcement",
     icon: BookOpen,
-    // Brand: golden/orange
     bg: "bg-[#feaf00]",
     gradient: "from-[#feaf00] to-[#f67d00]",
     light: "bg-[#feaf0008] dark:bg-[#feaf0015]",
@@ -47,7 +45,6 @@ const DECISIONS = {
     descAr: "يحتاج وقتاً إضافياً لاستيعاب المحتوى",
     descEn: "Needs more time to absorb content",
     icon: RotateCcw,
-    // Brand: coral/orange-red
     bg: "bg-[#ff6437]",
     gradient: "from-[#ff6437] to-[#ff6700]",
     light: "bg-[#ff643708] dark:bg-[#ff643715]",
@@ -66,7 +63,6 @@ const ATTENDANCE_BADGE = {
   null:     { ar: "لم يُسجَّل", en: "N/A",      color: "text-gray-500 bg-gray-50 border-gray-200 dark:bg-[#21262d] dark:border-[#30363d]" },
 };
 
-// ─── RATING CRITERIA ─────────────────────────────────────────────────────────
 const RATING_CRITERIA = [
   { key: "commitment",    labelAr: "الالتزام والتركيز",      labelEn: "Commitment & Focus" },
   { key: "understanding", labelAr: "مستوى الاستيعاب",        labelEn: "Understanding Level" },
@@ -123,7 +119,12 @@ function AnimatedCounter({ value, duration = 800 }) {
 }
 
 // ─── Message Preview Modal ────────────────────────────────────────────────────
-function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onConfirm, ratings, comment, attendanceStatus }) {
+// ✅ استقبل moduleTitle و moduleDescription و supervisorName وابعتهم للـ API
+function MessagePreviewModal({
+  student, decision, sessionId, isAr, onClose, onConfirm,
+  ratings, comment, attendanceStatus,
+  moduleTitle, moduleDescription, supervisorName,
+}) {
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
@@ -143,7 +144,17 @@ function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onCo
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ studentId: student._id, decision, ratings, comment, attendanceStatus }),
+          // ✅ ضيف المتغيرات الجديدة في الـ request
+          body: JSON.stringify({
+            studentId: student._id,
+            decision,
+            ratings,
+            comment,
+            attendanceStatus,
+            moduleTitle:       moduleTitle       || "",
+            moduleDescription: moduleDescription || "",
+            supervisorName:    supervisorName    || "",
+          }),
         });
         const data = await res.json();
         if (data.success) setPreview(data.data);
@@ -151,7 +162,7 @@ function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onCo
       } catch { setError(t("خطأ في الاتصال", "Connection error")); }
       finally { setLoading(false); }
     })();
-  }, [student._id, decision, sessionId, ratings, comment, attendanceStatus]);
+  }, [student._id, decision, sessionId, ratings, comment, attendanceStatus, moduleTitle, moduleDescription, supervisorName]);
 
   const lang = preview?.lang || "ar";
   const msgIsAr = lang === "ar";
@@ -161,7 +172,7 @@ function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onCo
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full sm:max-w-lg max-h-[90vh] bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden">
 
-        {/* Header — brand gradient */}
+        {/* Header */}
         <div className="relative p-5 overflow-hidden flex-shrink-0"
           style={{ background: `linear-gradient(135deg, ${cfg.solidColor}, ${cfg.solidTo})` }}>
           <div className="absolute inset-0 opacity-10"
@@ -229,6 +240,22 @@ function MessagePreviewModal({ student, decision, sessionId, isAr, onClose, onCo
                 </div>
               </div>
 
+              {/* ✅ عرض المتغيرات المستخدمة لو موجودة */}
+              {(moduleTitle || supervisorName) && (
+                <div className="flex flex-col gap-1.5 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d]">
+                  {moduleTitle && (
+                    <p className="text-[11px] text-gray-500 dark:text-[#6e7681]">
+                      📚 {t("الموديول:", "Module:")} <span className="font-bold text-gray-700 dark:text-[#c9d1d9]">{moduleTitle}</span>
+                    </p>
+                  )}
+                  {supervisorName && (
+                    <p className="text-[11px] text-gray-500 dark:text-[#6e7681]">
+                      👨‍🏫 {t("المشرف:", "Supervisor:")} <span className="font-bold text-gray-700 dark:text-[#c9d1d9]">{supervisorName}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
               {preview.isFallback && (
                 <div className="flex items-center gap-2 p-2.5 bg-[#feaf0010] dark:bg-[#feaf0015] rounded-xl border border-[#feaf0040]">
                   <Info className="w-3.5 h-3.5 text-[#f67d00] flex-shrink-0" />
@@ -278,13 +305,11 @@ function StudentEvalCard({
     <div className={`group/card relative bg-white dark:bg-[#161b22] rounded-2xl border overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5
       ${cfg ? `${cfg.border} shadow-lg` : "border-gray-100 dark:border-[#30363d] shadow-sm hover:border-gray-200 dark:hover:border-[#3d444d]"}`}>
 
-      {/* Top gradient bar — brand */}
       {cfg && (
         <div className="h-1 w-full"
           style={{ background: `linear-gradient(90deg, ${cfg.solidColor}, ${cfg.solidTo})` }} />
       )}
 
-      {/* Hover glow */}
       <div className="absolute inset-0 opacity-0 group-hover/card:opacity-5 transition-opacity duration-300 pointer-events-none"
         style={{ background: cfg ? `linear-gradient(135deg, ${cfg.solidColor}, ${cfg.solidTo})` : "linear-gradient(135deg, #004d59, #ff6700)" }} />
 
@@ -342,7 +367,7 @@ function StudentEvalCard({
           })}
         </div>
 
-        {/* ── Star Ratings ── */}
+        {/* Star Ratings */}
         {cfg && (
           <div className="mt-3 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d] space-y-2">
             <p className="text-[10px] font-black text-gray-500 dark:text-[#6e7681] uppercase tracking-wide mb-2">
@@ -364,7 +389,7 @@ function StudentEvalCard({
           </div>
         )}
 
-        {/* ── تعليق المدرس ── */}
+        {/* تعليق المدرس */}
         {cfg && (
           <div className="mt-2.5">
             <textarea
@@ -472,6 +497,11 @@ export default function InstructorEvaluationPage() {
   const [ratings, setRatings]   = useState({});
   const [comments, setComments] = useState({});
 
+  // ✅ state للمتغيرات من DB
+  const [moduleTitle, setModuleTitle]           = useState("");
+  const [moduleDescription, setModuleDescription] = useState("");
+  const [supervisorName, setSupervisorName]     = useState("");
+
   const fetchData = useCallback(async () => {
     if (!sessionId) { setError(t("لم يتم تحديد جلسة", "No session specified")); setLoading(false); return; }
     try {
@@ -481,6 +511,12 @@ export default function InstructorEvaluationPage() {
       if (data.success) {
         setSessionData(data.data.session);
         setStudents(data.data.students || []);
+
+        // ✅ استخرج المتغيرات من الـ response
+        setModuleTitle(data.data.session?.moduleTitle       || "");
+        setModuleDescription(data.data.session?.moduleDescription || "");
+        setSupervisorName(data.data.supervisorName           || "");
+
         const existingDecisions = {};
         const existingRatings   = {};
         const existingComments  = {};
@@ -642,7 +678,6 @@ export default function InstructorEvaluationPage() {
                 : <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />}
             </button>
 
-            {/* Brand icon — matches Dashboard stat card pattern */}
             <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md"
               style={{ background: "linear-gradient(135deg, #feaf00, #f67d00)" }}>
               <Star className="w-4 h-4 text-white" />
@@ -659,7 +694,12 @@ export default function InstructorEvaluationPage() {
                   <h1 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] truncate leading-none mb-0.5">
                     {t("تقييم الطلاب", "Student Evaluation")} — {sessionData.title}
                   </h1>
-                  <p className="text-xs text-gray-400 dark:text-[#6e7681] truncate">{sessionData.group?.name}</p>
+                  <p className="text-xs text-gray-400 dark:text-[#6e7681] truncate">
+                    {sessionData.group?.name}
+                    {/* ✅ عرض اسم الموديول في الـ header لو موجود */}
+                    {moduleTitle && <span className="mx-1 opacity-50">·</span>}
+                    {moduleTitle && <span className="opacity-70">{moduleTitle}</span>}
+                  </p>
                 </>
               ) : (
                 <p className="text-sm text-red-500">{error}</p>
@@ -683,7 +723,7 @@ export default function InstructorEvaluationPage() {
         </div>
       </div>
 
-      {/* Hero Banner — brand gradient */}
+      {/* Hero Banner */}
       {sessionData && !loading && (
         <div className="max-w-4xl mx-auto px-4 pt-5">
           <div className="relative group">
@@ -698,13 +738,25 @@ export default function InstructorEvaluationPage() {
               <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full blur-3xl"
                 style={{ background: "#ff6437", opacity: 0.1 }} />
               <div className="relative z-10 flex items-center justify-between gap-4">
-                <div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
                     <Sparkles className="w-4 h-4 text-[#feaf00] animate-pulse" />
                     <span className="text-[#feaf00] font-medium text-xs">{t("تقييم الأداء", "Performance Evaluation")}</span>
                   </div>
-                  <h2 className="text-xl font-black text-white mb-1">{sessionData.title}</h2>
-                  <p className="text-white/70 text-sm">{sessionData.group?.name}</p>
+                  <h2 className="text-xl font-black text-white mb-1 truncate">{sessionData.title}</h2>
+                  <p className="text-white/70 text-sm truncate">{sessionData.group?.name}</p>
+                  {/* ✅ عرض moduleTitle في الـ hero */}
+                  {moduleTitle && (
+                    <p className="text-white/50 text-xs mt-1 truncate">
+                      📚 {moduleTitle}
+                    </p>
+                  )}
+                  {/* ✅ عرض supervisorName في الـ hero */}
+                  {supervisorName && (
+                    <p className="text-white/50 text-xs truncate">
+                      👨‍🏫 {supervisorName}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 flex-shrink-0">
                   <div className="flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/20">
@@ -746,7 +798,7 @@ export default function InstructorEvaluationPage() {
 
         {!loading && !error && students.length > 0 && (
           <>
-            {/* Progress Summary card — same as Dashboard pattern */}
+            {/* Progress Summary */}
             <div className="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] p-5 shadow-lg dark:shadow-black/40">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md"
@@ -769,7 +821,6 @@ export default function InstructorEvaluationPage() {
                 </div>
               </div>
 
-              {/* Progress bar — brand */}
               <div className="h-2.5 bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden mb-5">
                 <div className="h-full rounded-full relative overflow-hidden transition-all duration-700"
                   style={{
@@ -780,7 +831,6 @@ export default function InstructorEvaluationPage() {
                 </div>
               </div>
 
-              {/* Decision stats — brand per-decision color */}
               <div className="grid grid-cols-3 gap-3">
                 {Object.entries(DECISIONS).map(([key, c], idx) => {
                   const Icon = c.icon;
@@ -873,7 +923,6 @@ export default function InstructorEvaluationPage() {
                   )}
                 </div>
 
-                {/* Progress ring — brand colors */}
                 <div className="relative w-10 h-10 flex-shrink-0">
                   <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" className="text-gray-100 dark:text-[#21262d]" />
@@ -909,7 +958,7 @@ export default function InstructorEvaluationPage() {
         </div>
       )}
 
-      {/* Preview Modal */}
+      {/* ✅ Preview Modal — مع تمرير المتغيرات الجديدة */}
       {previewModal && (
         <MessagePreviewModal
           student={previewModal.student}
@@ -921,6 +970,9 @@ export default function InstructorEvaluationPage() {
           ratings={ratings[previewModal.student._id] || { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 }}
           comment={comments[previewModal.student._id] || ""}
           attendanceStatus={previewModal.student.attendanceStatus}
+          moduleTitle={moduleTitle}
+          moduleDescription={moduleDescription}
+          supervisorName={supervisorName}
         />
       )}
 

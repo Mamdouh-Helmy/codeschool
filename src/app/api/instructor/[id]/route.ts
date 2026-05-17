@@ -18,7 +18,7 @@ export async function GET(
       _id: id,
       role: "instructor",
     }).select(
-      "_id name email username image gender profile isActive createdAt"
+      "_id name email username image gender language profile isActive createdAt"
     );
 
     if (!instructor) {
@@ -59,7 +59,7 @@ export async function PUT(
     const { id } = await params;
 
     const body = await request.json();
-    const { name, phone, image, password, username, gender } = body;
+    const { name, phone, image, password, username, gender, language } = body;
 
     console.log("📝 Update data received:", {
       id,
@@ -67,6 +67,7 @@ export async function PUT(
       phone: phone !== undefined ? phone : "no change",
       image: image !== undefined ? image : "no change",
       gender: gender !== undefined ? gender : "no change",
+      language: language !== undefined ? language : "no change",
       username: username || "no change",
       password: password ? "***" : "no change",
     });
@@ -84,15 +85,15 @@ export async function PUT(
       );
     }
 
-    // تحديث البيانات الأساسية
     const updateData: any = {};
 
+    // الاسم
     if (name && name.trim()) {
       updateData.name = name.trim();
     }
 
+    // username
     if (username && username.trim()) {
-      // التحقق من أن username فريد
       const existingUser = await User.findOne({
         username: username.toLowerCase().trim(),
         _id: { $ne: id },
@@ -108,18 +109,18 @@ export async function PUT(
       updateData.username = username.toLowerCase().trim();
     }
 
-    // تحديث الصورة
+    // الصورة
     if (image !== undefined) {
       updateData.image =
         image && image.trim() ? image.trim() : "/images/default-avatar.jpg";
     }
 
-    // تحديث رقم الهاتف
+    // رقم الهاتف
     if (phone !== undefined) {
       updateData["profile.phone"] = phone && phone.trim() ? phone.trim() : "";
     }
 
-    // تحديث النوع
+    // الجنس
     if (gender !== undefined) {
       if (gender === null || gender === "") {
         updateData.gender = undefined;
@@ -128,7 +129,12 @@ export async function PUT(
       }
     }
 
-    // تحديث كلمة المرور إذا تم إدخالها
+    // اللغة
+    if (language !== undefined) {
+      updateData.language = language === "en" ? "en" : "ar";
+    }
+
+    // كلمة المرور
     if (password && password.trim()) {
       if (password.length < 6) {
         return NextResponse.json(
@@ -151,13 +157,14 @@ export async function PUT(
       id,
       { $set: updateData },
       { new: true, runValidators: true }
-    ).select("_id name email username image gender profile isActive");
+    ).select("_id name email username image gender language profile isActive");
 
     console.log("✅ Instructor updated successfully:", updatedInstructor);
 
     if (updatedInstructor) {
       console.log("📋 Updated data verification:", {
         gender: updatedInstructor.gender,
+        language: updatedInstructor.language,
         image: updatedInstructor.image,
         phone: updatedInstructor.profile?.phone,
       });

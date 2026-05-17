@@ -73,6 +73,12 @@ const Icon = {
       <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>
     </svg>
   ),
+  BookOpen: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+    </svg>
+  ),
 };
 
 // ─── Avatar initials ────────────────────────────────────────────────────────
@@ -103,6 +109,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
   const [students, setStudents] = useState([]);
   const [group, setGroup] = useState(null);
+
+  // NEW: module data from course
+  const [courseModule, setCourseModule] = useState({
+    title: "",
+    description: "",
+  });
+
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
@@ -231,12 +244,18 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     return { lang, studentGender, guardianType, isMale, isFather, studentNick, guardianNick, childTitle, studentSalutation, guardianSalutation, salutationAr, salutationEn, guardianSalutationAr, guardianSalutationEn, childTitleAr, childTitleEn, supervisorNameValue };
   }, [selectedStudent, resolveVar, getGenderFlags, supervisorGender]);
 
+  // UPDATED: buildReplacementsMap — added moduleTitle and moduleDescription from courseModule
   const buildReplacementsMap = useCallback((type) => {
     const ctx = getStudentContext();
     if (!ctx || !group) return {};
     const { lang, isMale, isFather, studentNick, guardianNick, childTitle, salutationAr, salutationEn, guardianSalutationAr, guardianSalutationEn, supervisorNameValue } = ctx;
     const startDate = group.schedule?.startDate ? new Date(group.schedule.startDate).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "";
     const instructorNames = buildInstructorsNames(group.instructors, lang);
+
+    // NEW: use courseModule for moduleTitle and moduleDescription
+    const moduleTitleValue = courseModule.title || group.courseSnapshot?.currentModuleTitle || group.courseSnapshot?.title || "";
+    const moduleDescriptionValue = courseModule.description || "";
+
     const common = {
       "{groupName}": group.name || "",
       "{courseName}": group.courseSnapshot?.title || "",
@@ -245,7 +264,9 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       "{timeTo}": group.schedule?.timeTo || "",
       "{instructor}": instructorNames,
       "{firstMeetingLink}": group.firstMeetingLink || "",
-      "{moduleTitle}": group.courseSnapshot?.currentModuleTitle || group.courseSnapshot?.title || "",
+      // NEW: moduleTitle and moduleDescription from real course
+      "{moduleTitle}": moduleTitleValue,
+      "{moduleDescription}": moduleDescriptionValue,
       "{supervisorName}": supervisorNameValue,
     };
     if (type === "student") {
@@ -265,7 +286,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       "{childTitle}": childTitle,
       ...common,
     };
-  }, [getStudentContext, group]);
+  }, [getStudentContext, group, courseModule]);
 
   const replaceVars = useCallback((msg, type) => {
     if (!msg || !selectedStudent || !group) return msg || "";
@@ -315,10 +336,34 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       { key: "{timeTo}", icon: "⏰", label: lang === "ar" ? "وقت النهاية" : "Time To", example: map["{timeTo}"] },
       { key: "{instructor}", icon: "👨‍🏫", label: lang === "ar" ? "المدرب/المدربين" : "Instructor(s)", example: map["{instructor}"] },
       { key: "{firstMeetingLink}", icon: "🔗", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", example: map["{firstMeetingLink}"] || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") },
-      { key: "{moduleTitle}", icon: "📘", label: lang === "ar" ? "عنوان الموديول" : "Module Title", example: map["{moduleTitle}"] },
+      // NEW: added moduleTitle and moduleDescription in guardian variables
+      { key: "{moduleTitle}", icon: "📘", label: lang === "ar" ? "عنوان الموديول" : "Module Title", example: map["{moduleTitle}"] || (lang === "ar" ? "عنوان الموديول" : "Module Title") },
+      { key: "{moduleDescription}", icon: "📝", label: lang === "ar" ? "وصف الموديول" : "Module Description", example: map["{moduleDescription}"] || (lang === "ar" ? "وصف الموديول" : "Module Description") },
       { key: "{supervisorName}", icon: "🎓", label: lang === "ar" ? "اسم المشرف" : "Supervisor Name", example: map["{supervisorName}"] },
     ];
   }, [getStudentContext, buildReplacementsMap, group]);
+
+  // NEW: getModuleOverviewVariables — variables specific to module overview message
+  const getModuleOverviewVariables = useCallback(() => {
+    const ctx = getStudentContext();
+    if (!ctx || !group) return [];
+    const map = buildReplacementsMap("guardian");
+    const lang = ctx.lang;
+    return [
+      { key: "{guardianSalutation}", icon: "👋", label: lang === "ar" ? "تحية ولي الأمر" : "Guardian Salutation", example: map["{guardianSalutation}"] },
+      { key: "{guardianSalutation_ar}", icon: "👋", label: lang === "ar" ? "تحية ولي الأمر (عربي)" : "Guardian Salutation (AR)", example: map["{guardianSalutation_ar}"] },
+      { key: "{guardianSalutation_en}", icon: "👋", label: lang === "ar" ? "تحية ولي الأمر (إنجليزي)" : "Guardian Salutation (EN)", example: map["{guardianSalutation_en}"] },
+      { key: "{guardianName}", icon: "👤", label: lang === "ar" ? "اسم ولي الأمر" : "Guardian Name", example: map["{guardianName}"] },
+      { key: "{studentName}", icon: "👶", label: lang === "ar" ? "اسم الطالب" : "Student Name", example: map["{studentName}"] },
+      { key: "{childTitle}", icon: "👨‍👦", label: lang === "ar" ? "ابنك/ابنتك" : "Child Title", example: map["{childTitle}"] },
+      // moduleTitle and moduleDescription first because they're most important in module overview
+      { key: "{moduleTitle}", icon: "📘", label: lang === "ar" ? "عنوان الموديول" : "Module Title", example: map["{moduleTitle}"] || courseModule.title || (lang === "ar" ? "عنوان الموديول" : "Module Title") },
+      { key: "{moduleDescription}", icon: "📝", label: lang === "ar" ? "وصف الموديول" : "Module Description", example: map["{moduleDescription}"] || courseModule.description || (lang === "ar" ? "وصف الموديول" : "Module Description") },
+      { key: "{courseName}", icon: "📚", label: lang === "ar" ? "اسم الكورس" : "Course Name", example: map["{courseName}"] },
+      { key: "{groupName}", icon: "👥", label: lang === "ar" ? "اسم المجموعة" : "Group Name", example: map["{groupName}"] },
+      { key: "{supervisorName}", icon: "🎓", label: lang === "ar" ? "اسم المشرف" : "Supervisor Name", example: map["{supervisorName}"] },
+    ];
+  }, [getStudentContext, buildReplacementsMap, group, courseModule]);
 
   const pickTemplateSlot = useCallback((student, type) => {
     if (!student) return { ar: "", en: "" };
@@ -340,13 +385,58 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           fetch(`/api/whatsapp/group-templates?default=true&groupId=${groupId}`),
           fetch(`/api/whatsapp/message-templates?type=module_overview&default=true`),
         ]);
+
         const groupData = await groupRes.json();
-        if (groupData.success) setGroup(groupData.data);
+        if (groupData.success) {
+          setGroup(groupData.data);
+
+          // NEW: extract first module from course
+          const groupInfo = groupData.data;
+          const curriculum =
+            groupInfo?.courseId?.curriculum ||
+            groupInfo?.courseSnapshot?.curriculum ||
+            [];
+
+          if (curriculum.length > 0) {
+            const firstModule = curriculum[0];
+            setCourseModule({
+              title: firstModule?.title || "",
+              description: firstModule?.description || "",
+            });
+            console.log("✅ Course module loaded:", {
+              title: firstModule?.title,
+              description: firstModule?.description?.substring(0, 80),
+            });
+          } else {
+            // Fallback: if no curriculum in group response, fetch from course API
+            const courseId = groupInfo?.courseId?._id || groupInfo?.courseId;
+            if (courseId) {
+              try {
+                const courseRes = await fetch(`/api/courses/${courseId}`);
+                const courseData = await courseRes.json();
+                if (courseData.success && courseData.data?.curriculum?.length > 0) {
+                  const firstModule = courseData.data.curriculum[0];
+                  setCourseModule({
+                    title: firstModule?.title || "",
+                    description: firstModule?.description || "",
+                  });
+                  console.log("✅ Course module loaded from course API:", {
+                    title: firstModule?.title,
+                  });
+                }
+              } catch (courseErr) {
+                console.warn("⚠️ Could not fetch course for module data:", courseErr);
+              }
+            }
+          }
+        }
+
         const studentsData = await studentsRes.json();
         if (studentsData.success) {
           const groupStudentIds = (groupData.data?.students || []).map(s => String(s._id || s.id || s));
           setStudents(studentsData.data.filter(s => !groupStudentIds.includes(String(s._id || s.id))));
         }
+
         if (templateRes.ok) {
           const templateData = await templateRes.json();
           if (templateData.success && templateData.data) {
@@ -366,11 +456,16 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             });
           }
         }
+
         if (moduleOverviewRes.ok) {
           const moData = await moduleOverviewRes.json();
           if (moData.success && moData.data?.length > 0) {
             const mo = moData.data[0];
-            setTemplates(prev => ({ ...prev, moduleOverviewAr: mo.contentAr || "", moduleOverviewEn: mo.contentEn || "" }));
+            setTemplates(prev => ({
+              ...prev,
+              moduleOverviewAr: mo.contentAr || "",
+              moduleOverviewEn: mo.contentEn || "",
+            }));
           }
         }
       } catch (err) {
@@ -395,13 +490,14 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     setModuleOverviewMessage(lang === "ar" ? moduleOverviewSlot.ar : moduleOverviewSlot.en);
   }, [selectedStudent, templates]);
 
+  // UPDATED: preview effect — added courseModule to dependencies
   useEffect(() => {
     if (selectedStudent && group) {
       setStudentPreview(replaceVars(studentMessage, "student"));
       setGuardianPreview(replaceVars(guardianMessage, "guardian"));
       setModuleOverviewPreview(replaceVars(moduleOverviewMessage, "guardian"));
     }
-  }, [studentMessage, guardianMessage, moduleOverviewMessage, selectedStudent, group, replaceVars, supervisorGender]);
+  }, [studentMessage, guardianMessage, moduleOverviewMessage, selectedStudent, group, replaceVars, supervisorGender, courseModule]);
 
   const autoSave = useCallback((type, content) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -455,7 +551,8 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   };
 
   const handleKeyDown = (e, type) => {
-    const variables = type === "student" ? getStudentVariables() : getGuardianVariables();
+    // UPDATED: module overview uses getModuleOverviewVariables
+    const variables = type === "student" ? getStudentVariables() : type === "guardian" ? getGuardianVariables() : getModuleOverviewVariables();
     const show = type === "student" ? showStudentHints : type === "guardian" ? showGuardianHints : showModuleOverviewHints;
     const setShow = type === "student" ? setShowStudentHints : type === "guardian" ? setShowGuardianHints : setShowModuleOverviewHints;
     if (!show) return;
@@ -583,6 +680,25 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
         {/* Card Body */}
         <div className="p-4 space-y-3">
+          {/* Show Module Info Banner for module overview */}
+          {type === "moduleOverview" && courseModule.title && (
+            <div className="mb-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
+              <span className="text-blue-500 mt-0.5 flex-shrink-0"><Icon.BookOpen /></span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                  {lang === "ar" ? "الموديول الحالي:" : "Current Module:"}
+                  {" "}
+                  <span className="font-bold">{courseModule.title}</span>
+                </p>
+                {courseModule.description && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 line-clamp-2">
+                    {courseModule.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <p className="text-xs text-gray-400 flex items-center gap-1.5">
             <Icon.Zap />
             {lang === "ar"
@@ -658,6 +774,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const lang = ctx?.lang || "ar";
   const studentVars = getStudentVariables();
   const guardianVars = getGuardianVariables();
+  const moduleOverviewVars = getModuleOverviewVariables();
   const instructorNamesDisplay = buildInstructorsNames(group.instructors, locale === "ar" ? "ar" : "en");
 
   return (
@@ -927,6 +1044,25 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             </div>
 
             <div className="p-4 space-y-3">
+              {/* Module Info Banner */}
+              {courseModule.title && (
+                <div className="mb-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
+                  <span className="text-blue-500 mt-0.5 flex-shrink-0"><Icon.BookOpen /></span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                      {lang === "ar" ? "الموديول الحالي:" : "Current Module:"}
+                      {" "}
+                      <span className="font-bold">{courseModule.title}</span>
+                    </p>
+                    {courseModule.description && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 line-clamp-2">
+                        {courseModule.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Supervisor Gender Toggle */}
               <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
                 <Icon.School />
@@ -980,7 +1116,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                     : "e.g. {guardianSalutation}, this module covers {moduleTitle}... Supervisor: {supervisorName}"}
                   className="w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-300 dark:focus:border-emerald-600 transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
                 />
-                <HintsDropdown vars={guardianVars} type="moduleOverview" show={showModuleOverviewHints} hintsRef={moduleOverviewHintsRef} />
+                <HintsDropdown vars={moduleOverviewVars} type="moduleOverview" show={showModuleOverviewHints} hintsRef={moduleOverviewHintsRef} />
               </div>
 
               {/* Preview */}

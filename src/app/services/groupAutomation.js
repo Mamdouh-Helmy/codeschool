@@ -1251,6 +1251,7 @@ async function prepareStudentVariables(
     Object.assign(variables, {
       sessionName: sessionShortName || session.title || "",
       sessionFullTitle: session.title || "",
+      sessionDescription: session.description || "",
       sessionNumber: session.sessionNumber || "",
       date: sessionDate,
       time: `${session.startTime || ""} - ${session.endTime || ""}`,
@@ -1268,8 +1269,231 @@ async function prepareStudentVariables(
   if (extra.attendanceStatus) variables.status = extra.attendanceStatus;
   if (extra.attendanceNotes) variables.notes = extra.attendanceNotes;
   if (extra.feedbackLink) variables.feedbackLink = extra.feedbackLink;
+  if (extra.moduleTitle) variables.moduleTitle = extra.moduleTitle;
+  if (extra.moduleDescription)
+    variables.moduleDescription = extra.moduleDescription;
 
   return { variables, language, gender, relationship };
+}
+
+async function prepareInstructorVariables(instructor, group, session = null) {
+  const lang = instructor.language || "ar";
+  const gender = instructor.gender || "male";
+  const isMale = gender !== "female";
+
+  const dbVars = await fetchDbVars({
+    instructorGender: gender,
+    studentGender: "male",
+    guardianType: "father",
+  });
+
+  function resolveVar(key) {
+    const v = dbVars[key];
+    if (!v) return null;
+    if (v.hasGender && v.genderType === "instructor") {
+      return lang === "ar"
+        ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
+        : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
+    }
+    return lang === "ar" ? v.valueAr || null : v.valueEn || null;
+  }
+
+  const instructorFirstName = instructor.name?.split(" ")[0] || "";
+
+  const salutationBase =
+    resolveVar("instructorSalutation") ||
+    (lang === "ar"
+      ? isMale
+        ? "عزيزي الأستاذ"
+        : "عزيزتي الأستاذة"
+      : isMale
+        ? "Dear Mr."
+        : "Dear Ms.");
+
+  const instructorSalutation = `${salutationBase} ${instructorFirstName}`;
+
+  const sessionDate = session?.scheduledDate
+    ? new Date(session.scheduledDate).toLocaleDateString(
+        lang === "ar" ? "ar-EG" : "en-US",
+        { weekday: "long", year: "numeric", month: "long", day: "numeric" },
+      )
+    : "";
+
+  const sessionShortName = session
+    ? extractSessionShortName(session.title)
+    : "";
+
+  const variables = {
+    instructorSalutation,
+    salutation: instructorSalutation,
+    instructorName: instructorFirstName,
+    instructorFullName: instructor.name || "",
+    groupName: group?.name || "",
+    groupCode: group?.code || "",
+    courseName: group?.courseSnapshot?.title || group?.courseId?.title || "",
+    startDate: group?.schedule?.startDate
+      ? new Date(group.schedule.startDate).toLocaleDateString(
+          lang === "ar" ? "ar-EG" : "en-US",
+          { weekday: "long", year: "numeric", month: "long", day: "numeric" },
+        )
+      : "",
+    timeFrom: group?.schedule?.timeFrom || "",
+    timeTo: group?.schedule?.timeTo || "",
+    studentCount: group?.currentStudentsCount || group?.students?.length || 0,
+  };
+
+  if (session) {
+    Object.assign(variables, {
+      sessionName: sessionShortName || session.title || "",
+      sessionFullTitle: session.title || "",
+      sessionDescription: session.description || "",
+      sessionNumber: session.sessionNumber || "",
+      date: sessionDate,
+      time: `${session.startTime || ""} - ${session.endTime || ""}`,
+      meetingLink: session.meetingLink || "",
+      username: session.meetingCredentials?.username || "", // ✅ للمدرب بس
+      password: session.meetingCredentials?.password || "", // ✅ للمدرب بس
+    });
+  }
+
+  return { variables, language: lang, gender };
+}
+
+export async function sendInstructorSessionReminder(
+  sessionId,
+  reminderType,
+  metadata = {},
+) {
+  try {
+    console.log(`\n🎯 Instructor Session Reminder ==========`);
+    console.log(`📋 Session: ${sessionId} | Type: ${reminderType}`);
+
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
+    if (!session) throw new Error("Session not found");
+
+    const group = await Group.findById(session.groupId._id || session.groupId)
+      .populate("instructors.userId", "name email gender language profile")
+      .lean();
+
+    if (!group) throw new Error("Group not found");
+
+    if (!group.instructors || group.instructors.length === 0) {
+      console.log("⚠️ No instructors in group");
+      return { success: false, reason: "no_instructors" };
+    }
+
+    const WhatsAppTemplateInstructor = (
+      await import("../models/WhatsAppTemplateInstructor")
+    ).default;
+
+    const is24h = reminderType === "24hours";
+    const dbTemplateType = is24h ? "reminder_24h" : "reminder_15min";
+
+    const dbTemplate = await WhatsAppTemplateInstructor.findOne({
+      templateType: dbTemplateType,
+      isActive: true,
+    }).lean();
+
+    let successCount = 0;
+    let failCount = 0;
+    const results = [];
+
+    for (const instructorEntry of group.instructors) {
+      const instructor = instructorEntry.userId;
+
+      if (!instructor?._id) {
+        failCount++;
+        continue;
+      }
+
+      const instructorPhone = instructor.profile?.phone?.trim();
+      if (!instructorPhone) {
+        console.log(`⚠️ No phone for instructor ${instructor.name}`);
+        failCount++;
+        results.push({
+          instructorId: instructor._id,
+          status: "skipped",
+          reason: "no_phone",
+        });
+        continue;
+      }
+
+      try {
+        const { variables, language } = await prepareInstructorVariables(
+          instructor,
+          group,
+          session,
+        );
+
+        let messageContent = "";
+
+        if (dbTemplate) {
+          messageContent =
+            language === "ar"
+              ? dbTemplate.contentAr || dbTemplate.content || ""
+              : dbTemplate.contentEn || dbTemplate.contentAr || "";
+        } else {
+          // fallback
+          if (is24h) {
+            messageContent =
+              language === "ar"
+                ? `{instructorSalutation} 👋\nحبيت أفكرك إن ميعادنا بكرة إن شاء الله ✨\n\n📘 الـ Session: {sessionName}\n📝 وصف السيشن: {sessionDescription}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 لينك الحصة:\n{meetingLink}\n\n🔐 بيانات الدخول:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 المجموعة: {groupName}\n🔢 عدد الطلاب: {studentCount}\n\nمتحمسين نشوفك بكرة 💻🚀\nفريق Code School`
+                : `{instructorSalutation} 👋\nJust a reminder that our session is tomorrow, God willing ✨\n\n📘 Session: {sessionName}\n📝 Overview: {sessionDescription}\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n🔐 Login Details:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 Group: {groupName}\n🔢 Students: {studentCount}\n\nCan't wait to see you tomorrow 💻🚀\nCode School Team`;
+          } else {
+            messageContent =
+              language === "ar"
+                ? `{instructorSalutation} 👋\nحبيت أفكرك إن ميعادنا هيبدأ خلال *15 دقيقة* إن شاء الله ✨\n\n📘 الـ Session: {sessionName}\n📝 وصف السيشن: {sessionDescription}\n⏰ الوقت: {time}\n🔗 لينك الحصة:\n{meetingLink}\n\n🔐 بيانات الدخول:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 المجموعة: {groupName}\n\nمتحمسين نشوفك دلوقتي 💻🚀\nفريق Code School`
+                : `{instructorSalutation} 👋\nJust a reminder that our session starts in *15 minutes*, God willing ✨\n\n📘 Session: {sessionName}\n📝 Overview: {sessionDescription}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n🔐 Login Details:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 Group: {groupName}\n\nCan't wait to see you now 💻🚀\nCode School Team`;
+          }
+        }
+
+        const finalMessage = replaceVariables(messageContent, variables);
+
+        const preparedPhone =
+          wapilotService.preparePhoneNumber(instructorPhone);
+        if (!preparedPhone) throw new Error("Invalid phone number");
+
+        const sendResult = await wapilotService.sendTextMessage(
+          preparedPhone,
+          finalMessage,
+        );
+
+        if (sendResult) {
+          successCount++;
+          results.push({
+            instructorId: instructor._id,
+            instructorName: instructor.name,
+            status: "sent",
+            language,
+          });
+          console.log(`✅ Sent to instructor ${instructor.name} [${language}]`);
+        } else {
+          throw new Error("Send failed");
+        }
+      } catch (err) {
+        failCount++;
+        results.push({
+          instructorId: instructor._id,
+          instructorName: instructor.name,
+          status: "failed",
+          reason: err.message,
+        });
+        console.error(`❌ Failed for ${instructor.name}:`, err.message);
+      }
+    }
+
+    return {
+      success: successCount > 0,
+      successCount,
+      failCount,
+      results,
+    };
+  } catch (error) {
+    console.error("❌ Error in sendInstructorSessionReminder:", error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
@@ -1978,6 +2202,7 @@ export async function onStudentAddedToGroup(
   groupId,
   customMessages = { student: null, guardian: null, moduleOverview: null },
   sendWhatsApp = true,
+  moduleData = {}, // ✅ جديد
 ) {
   try {
     console.log(`\n🎯 EVENT: Student Added to Group ==========`);
@@ -2009,9 +2234,15 @@ export async function onStudentAddedToGroup(
       group.automation?.whatsappEnabled &&
       group.automation?.welcomeMessage
     ) {
+      // ✅ مرّر moduleData لـ prepareStudentVariables
       const { variables, language } = await prepareStudentVariables(
         student,
         group,
+        null,
+        {
+          moduleTitle: moduleData.moduleTitle || "",
+          moduleDescription: moduleData.moduleDescription || "",
+        },
       );
 
       if (student.personalInfo?.whatsappNumber) {

@@ -11,25 +11,23 @@ import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
 // ============================================================
-// ✅ HELPER: جلب بيانات المدرسين صح مع gender وphone
+// ✅ HELPER: جلب بيانات المدرسين صح مع gender وphone و language
 // ============================================================
 async function getInstructorsData(instructorsArray) {
   if (!instructorsArray || instructorsArray.length === 0) return [];
 
   try {
-    // ✅ استخرج الـ userId من الهيكل الجديد [{userId, countTime}]
-    const instructorIds = instructorsArray.map((i) => {
-      // لو object جديد → خد userId، لو string/ObjectId قديم → خده مباشرة
-      return i?.userId || i;
-    }).filter(Boolean);
+    const instructorIds = instructorsArray
+      .map((i) => i?.userId || i)
+      .filter(Boolean);
 
     if (instructorIds.length === 0) return [];
 
+    // ✅ FIX: أضفنا language للـ select
     const users = await User.find({
       _id: { $in: instructorIds },
-    }).select("name email gender profile");
+    }).select("name email gender language profile");
 
-    // ✅ استخدام toObject({ getters: true }) لضمان تطبيق الـ getters
     return users.map((user) => {
       const obj = user.toObject({ getters: true });
 
@@ -41,9 +39,12 @@ async function getInstructorsData(instructorsArray) {
         ? String(obj.profile.phone).trim() || null
         : null;
 
-      // ✅ أضف countTime من الـ instructorsArray
+      // ✅ FIX: استخرج language (default: "ar")
+      const language = obj.language || "ar";
+
       const entry = instructorsArray.find(
-        (i) => (i?.userId?.toString() || i?.toString()) === obj._id.toString()
+        (i) =>
+          (i?.userId?.toString() || i?.toString()) === obj._id.toString(),
       );
       const countTime = entry?.countTime || 0;
 
@@ -51,9 +52,10 @@ async function getInstructorsData(instructorsArray) {
         _id: obj._id,
         name: obj.name,
         email: obj.email,
-        gender: gender,
-        phone: phone,
-        countTime: countTime,
+        gender,
+        language,   // ✅ FIX: مضافة
+        phone,
+        countTime,
       };
     });
   } catch (error) {
@@ -99,7 +101,6 @@ export async function GET(req, { params }) {
 
     await connectDB();
 
-    // ✅ Step 1: جلب المجموعة بدون populate للـ instructors
     const group = await Group.findOne({ _id: id, isDeleted: false })
       .populate("courseId", "title level curriculum")
       .populate("students", "personalInfo.fullName enrollmentNumber")
@@ -109,20 +110,17 @@ export async function GET(req, { params }) {
     if (!group) {
       return NextResponse.json(
         { success: false, error: "Group not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // ✅ Step 2: جلب الـ instructors منفصل - مع تمرير الـ array كاملة
     const instructorsArray = group.instructors || [];
     console.log(`📋 Fetching ${instructorsArray.length} instructors separately...`);
     const instructorsData = await getInstructorsData(instructorsArray);
 
-    // ✅ Step 3: جلب رابط أول session
     console.log(`🔗 Fetching first session meeting link...`);
     const firstMeetingLink = await getFirstSessionMeetingLink(id);
 
-    // ✅ Step 4: تجميع البيانات
     const groupObj = {
       ...group,
       instructors: instructorsData,
@@ -135,20 +133,18 @@ export async function GET(req, { params }) {
       console.log(`   Instructor ${i + 1}:`, {
         name: inst.name,
         gender: inst.gender || "NOT SET",
+        language: inst.language,       // ✅ FIX: في الـ log
         phone: inst.phone || "NOT SET",
         countTime: inst.countTime,
       });
     });
 
-    return NextResponse.json({
-      success: true,
-      data: groupObj,
-    });
+    return NextResponse.json({ success: true, data: groupObj });
   } catch (error) {
     console.error("❌ Error fetching group:", error);
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -170,7 +166,7 @@ export async function PUT(req, { params }) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, error: "Invalid group ID format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -180,11 +176,10 @@ export async function PUT(req, { params }) {
     if (!existingGroup) {
       return NextResponse.json(
         { success: false, error: "Group not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // ✅ normalize instructors لو جايين من الفرونت كـ strings
     if (updateData.instructors) {
       updateData.instructors = updateData.instructors.map((i) => ({
         userId: i?.userId || i,
@@ -208,21 +203,20 @@ export async function PUT(req, { params }) {
     const updatedGroup = await Group.findByIdAndUpdate(
       id,
       { $set: updatePayload },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     )
       .populate("courseId", "title level")
-      .populate("instructors.userId", "name email gender profile") // ✅ هيكل جديد
+      .populate("instructors.userId", "name email gender language profile") // ✅ FIX: language
       .populate("students", "personalInfo.fullName enrollmentNumber")
       .lean();
 
     if (!updatedGroup) {
       return NextResponse.json(
         { success: false, error: "Failed to update group" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    // ✅ normalize للرد
     const responseData = {
       ...updatedGroup,
       instructors: (updatedGroup.instructors || []).map((i) => ({
@@ -230,6 +224,7 @@ export async function PUT(req, { params }) {
         name: i.userId?.name || "",
         email: i.userId?.email || "",
         gender: i.userId?.gender || null,
+        language: i.userId?.language || "ar",  // ✅ FIX: language في الـ PUT response
         countTime: i.countTime || 0,
       })),
     };
@@ -248,12 +243,12 @@ export async function PUT(req, { params }) {
         .join("; ");
       return NextResponse.json(
         { success: false, error: "Validation failed", details: messages },
-        { status: 400 }
+        { status: 400 },
       );
     }
     return NextResponse.json(
       { success: false, error: error.message || "Failed to update group" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -274,7 +269,7 @@ export async function DELETE(req, { params }) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, error: "Invalid group ID format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -282,7 +277,7 @@ export async function DELETE(req, { params }) {
     if (!existingGroup) {
       return NextResponse.json(
         { success: false, error: "Group not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -305,7 +300,7 @@ export async function DELETE(req, { params }) {
     console.error("❌ Error deleting group:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to delete group" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

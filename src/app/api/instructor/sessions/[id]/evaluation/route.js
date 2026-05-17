@@ -83,8 +83,7 @@ async function getCompletedSessionsCount(groupId, studentId) {
   } catch { return 0; }
 }
 
-// ─── FIX 2: Build guardian salutation correctly based on lang ────────────────
-// بنبني الـ salutation يدوياً بناءً على اللغة بدل ما نجيبها كاملة من DB
+// ─── Helper: fallback يدوي لـ guardianSalutation لو DB فاضي ─────────────────
 function buildGuardianSalutation(guardianFirstName, isFather, lang) {
   if (lang === 'ar') {
     return isFather
@@ -97,9 +96,25 @@ function buildGuardianSalutation(guardianFirstName, isFather, lang) {
   }
 }
 
-// ─── Build rendered message ───────────────────────────────────────────────────
+// ─── Helper: جيب بيانات الـ module من الـ group ──────────────────────────────
+async function getModuleData(groupId, moduleIndex) {
+  try {
+    const group = await Group.findById(groupId)
+      .populate('courseId', 'curriculum title')
+      .lean();
+    const moduleData = group?.courseId?.curriculum?.[moduleIndex] || {};
+    return {
+      moduleTitle:       moduleData.title       || '',
+      moduleDescription: moduleData.description || '',
+    };
+  } catch (err) {
+    console.warn('⚠️ Could not fetch module data:', err.message);
+    return { moduleTitle: '', moduleDescription: '' };
+  }
+}
+
+// ─── Build rendered evaluation message ───────────────────────────────────────
 async function buildEvaluationMessage(student, decision, session, extra = {}) {
-  // ✅ FIX 2: lang دايماً من الطالب — ده بيحدد كل حاجة
   const lang         = student.communicationPreferences?.preferredLanguage || 'ar';
   const gender       = (student.personalInfo?.gender || 'male').toLowerCase();
   const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase();
@@ -109,29 +124,35 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
 
   const dbVars = await loadDbVars();
 
-  // ✅ اسم الطالب حسب اللغة
+  // ── اسم الطالب حسب اللغة ────────────────────────────────────────────────
   const studentFirstName =
     lang === 'ar'
       ? student.personalInfo?.nickname?.ar?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب'
       : student.personalInfo?.nickname?.en?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'Student';
 
-  // ✅ اسم ولي الأمر حسب اللغة
+  // ── اسم ولي الأمر حسب اللغة ─────────────────────────────────────────────
+  // لازم يتحدد الأول عشان يتستخدم في بناء guardianSalutation
   const guardianFirstName =
     lang === 'ar'
       ? student.guardianInfo?.nickname?.ar?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
       : student.guardianInfo?.nickname?.en?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
 
-  // ✅ FIX 2: بنبني الـ salutation يدوياً بدل ما نجيبها من DB (DB بترجع اسم مبقل مش الاسم الفعلي)
-  const guardianSalutation = buildGuardianSalutation(guardianFirstName, isFather, lang);
+  // ── guardianSalutation من DB أولاً ──────────────────────────────────────
+  // القيمة في DB بتكون: "عزيزي الأستاذ {guardianName}" أو "Dear Mr. {guardianName}"
+  // بعد ما نجيبها نعمل replace بـ guardianFirstName الصح حسب اللغة والجنس
+  const guardianSalutationFromDB = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
+  const guardianSalutation = guardianSalutationFromDB
+    ? guardianSalutationFromDB.replace(/\{guardianName\}/g, guardianFirstName)
+    : buildGuardianSalutation(guardianFirstName, isFather, lang);
 
-  // ✅ childTitle حسب اللغة والجنس
+  // ── childTitle حسب اللغة والجنس ──────────────────────────────────────────
   const childTitle =
     resolveVar(dbVars, 'childTitle', lang, genderCtx) ||
     (lang === 'ar'
       ? (isMale ? 'ابنك' : 'ابنتك')
       : (isMale ? 'your son' : 'your daughter'));
 
-  // ✅ evaluationDecision حسب اللغة والقرار
+  // ── evaluationDecision حسب اللغة والقرار ────────────────────────────────
   const decisionFromDB = resolveVar(dbVars, 'evaluationDecision', lang, genderCtx);
   const decisionText = decisionFromDB || (
     lang === 'ar'
@@ -139,7 +160,12 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
       : (decision === 'pass' ? 'Excellent' : decision === 'review' ? 'Needs Review' : 'Needs Support')
   );
 
-  // ✅ تاريخ الجلسة حسب اللغة
+  // ── supervisorName من DB vars ────────────────────────────────────────────
+  const supervisorName =
+    resolveVar(dbVars, 'supervisorName', lang, genderCtx) ||
+    (lang === 'ar' ? 'المشرف الأكاديمي' : 'Learning Supervisor');
+
+  // ── تاريخ الجلسة حسب اللغة ──────────────────────────────────────────────
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
         lang === 'ar' ? 'ar-EG' : 'en-US',
@@ -156,7 +182,7 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
   const starsParticipation = buildStars(ratings.participation ?? 3);
   const instructorComment  = extra.comment?.trim() || (lang === 'ar' ? '—' : '—');
 
-  // ✅ رابط التسجيل حسب اللغة
+  // ── رابط التسجيل حسب اللغة ──────────────────────────────────────────────
   const recordingLinkText = session?.recordingLink
     ? lang === 'ar'
       ? `🎥 رابط التسجيل: ${session.recordingLink}`
@@ -167,7 +193,18 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     ? await getCompletedSessionsCount(extra.groupId, student._id)
     : 0;
 
-  // ✅ FIX 2: بنمرر lang للـ template — الـ template هيجي بلغة الطالب
+  // ── moduleTitle و moduleDescription ─────────────────────────────────────
+  const moduleTitle =
+    extra.moduleTitle ||
+    resolveVar(dbVars, 'moduleTitle', lang, genderCtx) ||
+    '';
+
+  const moduleDescription =
+    extra.moduleDescription ||
+    resolveVar(dbVars, 'moduleDescription', lang, genderCtx) ||
+    '';
+
+  // ── جيب القالب من DB ─────────────────────────────────────────────────────
   let template   = extra.rawContent;
   let isFallback = false;
 
@@ -177,8 +214,9 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     isFallback = result.isFallback;
   }
 
+  // ── بناء جدول المتغيرات ───────────────────────────────────────────────────
   const variables = {
-    guardianSalutation,
+    guardianSalutation,   // ✅ جاية من DB + replace بالاسم الصح حسب اللغة
     guardianName:        guardianFirstName,
     studentName:         studentFirstName,
     childTitle,
@@ -198,6 +236,9 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     recordingLink:       recordingLinkText,
     evaluationDecision:  decisionText,
     decision:            decisionText,
+    moduleTitle,
+    moduleDescription,
+    supervisorName,
   };
 
   let rendered = template;
@@ -215,7 +256,6 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
 
 // ─── Build recording message ──────────────────────────────────────────────────
 async function buildRecordingMessage(student, session, recordingLink) {
-  // ✅ FIX 2: lang من الطالب دايماً
   const lang         = student.communicationPreferences?.preferredLanguage || 'ar';
   const gender       = (student.personalInfo?.gender || 'male').toLowerCase();
   const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase();
@@ -225,34 +265,34 @@ async function buildRecordingMessage(student, session, recordingLink) {
 
   const dbVars = await loadDbVars();
 
-  // ✅ اسم الطالب حسب اللغة
   const studentFirstName =
     lang === 'ar'
       ? student.personalInfo?.nickname?.ar?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب'
       : student.personalInfo?.nickname?.en?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'Student';
 
-  // ✅ اسم ولي الأمر حسب اللغة
+  // ── اسم ولي الأمر حسب اللغة ─────────────────────────────────────────────
   const guardianFirstName =
     lang === 'ar'
       ? student.guardianInfo?.nickname?.ar?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
       : student.guardianInfo?.nickname?.en?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
 
-  // ✅ FIX 2: نفس الإصلاح هنا — بنبني الـ salutation يدوياً
-  const guardianSalutation = buildGuardianSalutation(guardianFirstName, isFather, lang);
+  // ── guardianSalutation من DB أولاً ──────────────────────────────────────
+  const guardianSalutationFromDB = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
+  const guardianSalutation = guardianSalutationFromDB
+    ? guardianSalutationFromDB.replace(/\{guardianName\}/g, guardianFirstName)
+    : buildGuardianSalutation(guardianFirstName, isFather, lang);
 
-  // ✅ childTitle حسب اللغة والجنس
   const childTitle =
     resolveVar(dbVars, 'childTitle', lang, genderCtx) ||
     (lang === 'ar'
       ? (isMale ? 'ابنك' : 'ابنتك')
       : (isMale ? 'your son' : 'your daughter'));
 
-  // ✅ FIX 2: بنمرر lang للـ template
   const result = await MessageTemplate.getOrFallback('session_recording', lang);
   let rendered = result.content;
 
   const variables = {
-    guardianSalutation,
+    guardianSalutation,   // ✅ نفس الـ pattern — من DB + replace بالاسم الصح
     guardianName:  guardianFirstName,
     studentName:   studentFirstName,
     childTitle,
@@ -348,6 +388,7 @@ export async function GET(req, { params }) {
           startTime:     session.startTime,
           endTime:       session.endTime,
           sessionNumber: session.sessionNumber,
+          moduleIndex:   session.moduleIndex,
           recordingLink: session.recordingLink || '',
           group: { _id: session.groupId?._id, name: session.groupId?.name, code: session.groupId?.code },
         },
@@ -390,14 +431,20 @@ export async function POST(req, { params }) {
     ]);
     if (!student) return NextResponse.json({ success: false, error: 'Student not found' }, { status: 404 });
 
+    const { moduleTitle, moduleDescription } = session?.groupId
+      ? await getModuleData(session.groupId, session.moduleIndex ?? 0)
+      : { moduleTitle: '', moduleDescription: '' };
+
     const { rendered, lang, isFallback, guardianPhone } = await buildEvaluationMessage(
       student, decision, session,
       {
-        rawContent:       customContent || null,
-        ratings:          ratings       || {},
-        comment:          comment       || '',
-        attendanceStatus: attendanceStatus || null,
-        groupId:          session?.groupId,
+        rawContent:        customContent || null,
+        ratings:           ratings       || {},
+        comment:           comment       || '',
+        attendanceStatus:  attendanceStatus || null,
+        groupId:           session?.groupId,
+        moduleTitle,
+        moduleDescription,
       }
     );
 
@@ -418,7 +465,7 @@ export async function POST(req, { params }) {
   }
 }
 
-// ─── PATCH: احفظ التقييمات + ابعت الرسائل من instance التقييم ────────────────
+// ─── PATCH: احفظ التقييمات + ابعت الرسائل ────────────────────────────────────
 export async function PATCH(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -449,6 +496,12 @@ export async function PATCH(req, { params }) {
       if (!isInstructor) return NextResponse.json({ success: false, message: 'مش مدرس هذا الجروب' }, { status: 403 });
     }
 
+    const { moduleTitle, moduleDescription } = session.groupId?._id
+      ? await getModuleData(session.groupId._id, session.moduleIndex ?? 0)
+      : { moduleTitle: '', moduleDescription: '' };
+
+    console.log(`📚 Module data fetched — title: "${moduleTitle}" | desc: "${moduleDescription?.substring(0, 60)}..."`);
+
     const attendanceMap = {};
     (session.attendance || []).forEach((a) => { attendanceMap[a.studentId?.toString()] = a.status; });
 
@@ -463,23 +516,22 @@ export async function PATCH(req, { params }) {
         .lean();
       if (!student) continue;
 
-      // ✅ FIX 2: lang من الطالب دايماً — بيتحدد هنا وبينتشر لكل حاجة
       const lang             = student.communicationPreferences?.preferredLanguage || 'ar';
       const attendanceStatus = attendanceMap[studentId?.toString()] || 'absent';
 
-      // ── بناء رسالة التقييم ────────────────────────────────────────────────
       const { rendered, guardianPhone, isFallback } = await buildEvaluationMessage(
         student, decision, session,
         {
-          rawContent:       null,
-          ratings:          ratings || {},
-          comment:          comment || notes || '',
+          rawContent:        null,
+          ratings:           ratings || {},
+          comment:           comment || notes || '',
           attendanceStatus,
-          groupId:          session.groupId?._id,
+          groupId:           session.groupId?._id,
+          moduleTitle,
+          moduleDescription,
         }
       );
 
-      // ── احفظ في StudentEvaluation ─────────────────────────────────────────
       const attendanceScore = attendanceStatus === 'present' ? 5 : attendanceStatus === 'late' ? 3 : 1;
       const perfScore       = decision === 'pass' ? 4 : decision === 'review' ? 3 : 2;
       const criteria = {
@@ -506,7 +558,6 @@ export async function PATCH(req, { params }) {
         { upsert: true, new: true }
       );
 
-      // ── تحقق من الرصيد ────────────────────────────────────────────────────
       const remainingHours = student.creditSystem?.currentPackage?.remainingHours ?? 0;
       if (remainingHours <= 0) {
         console.log(`🔕 Student ${studentId} has zero balance — skipping messages`);
@@ -521,7 +572,6 @@ export async function PATCH(req, { params }) {
         try {
           const { wapilotService } = await import('../../../../../services/wapilot-service');
 
-          // ✅ رسالة 1: تقرير الحصة — من instance التقييم (instance3806)
           console.log(`📤 [EVAL] Sending evaluation message via ${wapilotService.evalInstanceId} | lang: ${lang}`);
           const evalResult = await wapilotService.sendAndLogEvalMessage({
             studentId,
@@ -537,13 +587,12 @@ export async function PATCH(req, { params }) {
               recipientType:    'guardian',
               remainingHours,
               isFallback,
+              moduleTitle,
             },
           });
           messageSent = evalResult?.success || false;
 
-          // ✅ رسالة 2: رابط التسجيل — من instance الرئيسي (instance2932)
           if (recordingLink?.trim()) {
-            // ✅ بنبني رسالة الـ recording بنفس لغة الطالب
             const { rendered: recRendered } = await buildRecordingMessage(student, session, recordingLink);
 
             console.log(`📤 [MAIN] Sending recording link via ${wapilotService.instanceId} | lang: ${lang}`);
@@ -572,13 +621,11 @@ export async function PATCH(req, { params }) {
       results.push({ studentId, decision, attendanceStatus, messageSent, recordingLinkSent });
     }
 
-    // ✅ FIX 1: احفظ الحالة قبل ما تغيرها — عشان نعرف هل هي completed أصلاً
     const wasAlreadyCompleted = session.status === 'completed';
 
     session.status = 'completed';
     await session.save();
 
-    // ✅ FIX 1: ساعتين بس لو أول مرة تتكمل السيشن — لو رجع وعمل تقييم تاني مش يضيف ساعات
     if (!wasAlreadyCompleted) {
       try {
         const group = await Group.findById(session.groupId?._id || session.groupId);

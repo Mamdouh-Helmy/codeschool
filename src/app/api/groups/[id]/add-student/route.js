@@ -4,30 +4,19 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../../models/Group";
 import Student from "../../../../models/Student";
+import Course from "../../../../models/Course";
 import { onStudentAddedToGroup } from "../../../../services/groupAutomation";
 import { requireAdmin } from "@/utils/authMiddleware";
 
-/**
- * ✅ POST: إضافة طالب إلى مجموعة مع 3 رسائل منفصلة
- */
 export async function POST(req, { params }) {
   try {
-    console.log("🔐 Checking authentication...");
     const authCheck = await requireAdmin(req);
-
-    if (!authCheck.authorized) {
-      console.log("❌ Authentication failed");
-      return authCheck.response;
-    }
-
-    console.log("✅ Authentication successful - User:", authCheck.user?.email || authCheck.user?.userId);
+    if (!authCheck.authorized) return authCheck.response;
 
     await connectDB();
 
     const { id } = await params;
     const groupId = id;
-
-    console.log("📌 Group ID from params:", groupId);
 
     let body;
     try {
@@ -35,53 +24,49 @@ export async function POST(req, { params }) {
     } catch (parseError) {
       return NextResponse.json(
         { success: false, error: "Invalid JSON in request body" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    console.log("\n📥 ADD STUDENT REQUEST ==========");
-    console.log("Group ID:", groupId);
-    console.log("Body keys:", Object.keys(body));
-
     const {
       studentId,
-      sendWhatsApp        = true,
-      studentMessage      = null,
-      guardianMessage     = null,
-      moduleOverviewMessage = null,   // ✅ الرسالة الثالثة
+      sendWhatsApp = true,
+      studentMessage = null,
+      guardianMessage = null,
+      moduleOverviewMessage = null,
     } = body;
 
     if (!studentId) {
       return NextResponse.json(
         { success: false, error: "Student ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Fetch group
+    // ✅ populate courseId مع curriculum كاملاً
     const group = await Group.findById(groupId)
-      .populate("courseId")
+      .populate({
+        path: "courseId",
+        select: "title level curriculum description",
+      })
       .populate("students", "_id");
 
     if (!group) {
       return NextResponse.json(
         { success: false, error: "Group not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // Fetch student
     const student = await Student.findById(studentId);
-
     if (!student) {
       return NextResponse.json(
         { success: false, error: "Student not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // Check if student already in group
-    const studentObjectIds = (group.students || []).map(s => {
+    const studentObjectIds = (group.students || []).map((s) => {
       const sid = s._id || s.id || s;
       return typeof sid === "object" ? sid.toString() : String(sid);
     });
@@ -89,29 +74,71 @@ export async function POST(req, { params }) {
     if (studentObjectIds.includes(studentId.toString())) {
       return NextResponse.json(
         { success: false, error: "Student is already in this group" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Check group capacity
     const currentCount = group.students?.length || 0;
-    const maxStudents  = group.maxStudents || 0;
+    const maxStudents = group.maxStudents || 0;
 
     if (currentCount >= maxStudents) {
       return NextResponse.json(
         { success: false, error: "Group is full", currentCount, maxStudents },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    console.log("\n✅ VALIDATION PASSED ==========");
+    // ✅ استخرج module data من الكورس
+    // أولاً: من courseId المـ populated (أدق مصدر)
+    // ثانياً: من courseSnapshot كـ fallback
+    let moduleTitle = "";
+    let moduleDescription = "";
+
+    const course = group.courseId;
+
+    if (course?.curriculum?.length > 0) {
+      // ✅ جيب أول module من الكورس الحقيقي
+      const firstModule = course.curriculum[0];
+      moduleTitle = firstModule?.title || "";
+      moduleDescription = firstModule?.description || "";
+      console.log(`✅ Module data from courseId.curriculum[0]:`);
+      console.log(`   Title: ${moduleTitle}`);
+      console.log(`   Description: ${moduleDescription?.substring(0, 80)}`);
+    } else if (group.courseSnapshot?.curriculum?.length > 0) {
+      // ✅ Fallback: من courseSnapshot
+      const firstModule = group.courseSnapshot.curriculum[0];
+      moduleTitle = firstModule?.title || "";
+      moduleDescription = firstModule?.description || "";
+      console.log(`✅ Module data from courseSnapshot.curriculum[0] (fallback):`);
+      console.log(`   Title: ${moduleTitle}`);
+    } else {
+      // ✅ Last fallback: لو الـ populate فشل لأي سبب، جيب الكورس مباشرة
+      const courseId = group.courseId?._id || group.courseId;
+      if (courseId) {
+        try {
+          const courseDoc = await Course.findById(courseId)
+            .select("curriculum")
+            .lean();
+          if (courseDoc?.curriculum?.length > 0) {
+            const firstModule = courseDoc.curriculum[0];
+            moduleTitle = firstModule?.title || "";
+            moduleDescription = firstModule?.description || "";
+            console.log(`✅ Module data from direct Course query (last fallback):`);
+            console.log(`   Title: ${moduleTitle}`);
+          }
+        } catch (courseErr) {
+          console.warn(`⚠️ Could not fetch course for module data:`, courseErr.message);
+        }
+      }
+    }
+
+    console.log(`\n✅ VALIDATION PASSED ==========`);
     console.log(`Group: ${group.name} (${group.code})`);
     console.log(`Student: ${student.personalInfo?.fullName}`);
-    console.log(`Preferred Language: ${student.communicationPreferences?.preferredLanguage || "ar"}`);
-    console.log(`Current: ${currentCount}/${maxStudents}`);
-    console.log(`moduleOverviewMessage: ${moduleOverviewMessage ? "✅ provided" : "⚠️ empty"}`);
+    console.log(`moduleTitle: "${moduleTitle}"`);
+    console.log(`moduleDescription: "${moduleDescription?.substring(0, 80)}"`);
 
-    // Add student to group in database
+    // ✅ أضف الطالب للـ group
     await Group.findByIdAndUpdate(
       groupId,
       {
@@ -121,12 +148,9 @@ export async function POST(req, { params }) {
           "metadata.updatedAt": new Date(),
         },
       },
-      { new: true }
+      { new: true },
     );
 
-    console.log("\n✅ STUDENT ADDED TO GROUP DATABASE ==========");
-
-    // Trigger automation with THREE separate messages ✅
     let automationResult = null;
 
     try {
@@ -134,22 +158,31 @@ export async function POST(req, { params }) {
         studentId,
         groupId,
         {
-          student:       studentMessage,
-          guardian:      guardianMessage,
-          moduleOverview: moduleOverviewMessage,  // ✅
+          student: studentMessage,
+          guardian: guardianMessage,
+          moduleOverview: moduleOverviewMessage,
         },
-        sendWhatsApp
+        sendWhatsApp,
+        // ✅ مرّر moduleTitle و moduleDescription للـ automation
+        {
+          moduleTitle,
+          moduleDescription,
+        },
       );
 
-      console.log("\n✅ AUTOMATION COMPLETED ==========");
+      console.log(`\n✅ AUTOMATION COMPLETED ==========`);
       console.log("Messages Sent:", automationResult.messagesSent);
     } catch (automationError) {
-      console.error("\n❌ AUTOMATION ERROR ==========");
+      console.error(`\n❌ AUTOMATION ERROR ==========`);
       console.error(automationError);
       automationResult = {
         success: false,
         error: automationError.message,
-        messagesSent: { student: false, guardian: false, moduleOverview: false },
+        messagesSent: {
+          student: false,
+          guardian: false,
+          moduleOverview: false,
+        },
       };
     }
 
@@ -158,36 +191,42 @@ export async function POST(req, { params }) {
       message: "Student added successfully",
       data: {
         group: {
-          id:                   group._id,
-          name:                 group.name,
-          code:                 group.code,
+          id: group._id,
+          name: group.name,
+          code: group.code,
           currentStudentsCount: currentCount + 1,
-          maxStudents:          group.maxStudents,
+          maxStudents: group.maxStudents,
         },
         student: {
-          id:                      student._id,
-          name:                    student.personalInfo?.fullName,
-          email:                   student.personalInfo?.email,
-          whatsappNumber:          student.personalInfo?.whatsappNumber,
-          guardianWhatsappNumber:  student.guardianInfo?.whatsappNumber,
-          preferredLanguage:       student.communicationPreferences?.preferredLanguage || "ar",
-          gender:                  student.personalInfo?.gender,
-          guardianRelationship:    student.guardianInfo?.relationship,
+          id: student._id,
+          name: student.personalInfo?.fullName,
+          email: student.personalInfo?.email,
+          whatsappNumber: student.personalInfo?.whatsappNumber,
+          guardianWhatsappNumber: student.guardianInfo?.whatsappNumber,
+          preferredLanguage:
+            student.communicationPreferences?.preferredLanguage || "ar",
+          gender: student.personalInfo?.gender,
+          guardianRelationship: student.guardianInfo?.relationship,
+        },
+        // ✅ أرجع module data في الـ response عشان الـ frontend يستخدمها لو احتاج
+        moduleData: {
+          title: moduleTitle,
+          description: moduleDescription,
         },
       },
       automation: automationResult,
     });
-
   } catch (error) {
-    console.error("\n❌ ERROR IN ADD STUDENT ==========");
+    console.error(`\n❌ ERROR IN ADD STUDENT ==========`);
     console.error(error);
     return NextResponse.json(
       {
         success: false,
-        error:   error.message || "Failed to add student to group",
-        details: process.env.NODE_ENV === "development" ? error.toString() : undefined,
+        error: error.message || "Failed to add student to group",
+        details:
+          process.env.NODE_ENV === "development" ? error.toString() : undefined,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

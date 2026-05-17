@@ -18,14 +18,22 @@ export async function GET(req) {
 
     // ── seed ─────────────────────────────────────────────────
     if (seed) {
-      const results = await TemplateVariable.seedDefaults();
-      const created = results.filter((r) => r.action === "created").length;
-      return NextResponse.json({
-        success: true,
-        message: `seed done — ${created} created, ${results.length - created} already exist`,
-        data: results,
-      });
+  const defaults = getDefaultVariables();
+  let created = 0;
+  
+  for (const variable of defaults) {
+    const existing = await TemplateVariable.findOne({ key: variable.key });
+    if (!existing) {
+      await TemplateVariable.create(variable);
+      created++;
     }
+  }
+  
+  return NextResponse.json({
+    success: true,
+    message: `seed done — ${created} created`,
+  });
+}
 
     // ── جلب متغير واحد ───────────────────────────────────────
     if (key) {
