@@ -283,8 +283,13 @@ export default function PortfolioBuilderUI({
           width: 3px; border-radius: 0 3px 3px 0;
           background: var(--brand);
         }
-        .pb-nav-icon { flex-shrink: 0; opacity: .8; }
-        .pb-nav-item.active .pb-nav-icon { opacity: 1; }
+        .pb-nav-icon { flex-shrink: 0; }
+        .pb-nav-item .pb-nav-icon {
+          color: var(--txt-2);
+        }
+        .pb-nav-item.active .pb-nav-icon {
+          color: var(--brand);
+        }
 
         /* ── Sidebar Footer ── */
         .pb-footer {
@@ -572,7 +577,6 @@ export default function PortfolioBuilderUI({
                     <Icon
                       size={16}
                       className="pb-nav-icon"
-                      color={isActive ? "var(--brand)" : "currentColor"}
                     />
                     <span style={{ fontWeight: isActive ? 600 : 400 }}>
                       {t(section.label)}
