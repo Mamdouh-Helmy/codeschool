@@ -102,61 +102,100 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
   return lang === "ar" ? v.valueAr || null : v.valueEn || null;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// استبدل function buildVariables كاملة في page.jsx بالكود ده
+// ══════════════════════════════════════════════════════════════════
+
 function buildVariables(student, status, session, dbVars = {}) {
   if (!student) return {};
 
+  // ── 1. أساسيات من Student schema ─────────────────────────────────────────
   const lang         = (student.preferredLanguage || "ar").toLowerCase();
+  // gender: "male" | "female" | "Male" | "Female" — نعمل lowercase
   const gender       = (student.gender || "male").toLowerCase().trim();
+  // guardianRelationship: "father" | "mother" | "guardian" | "other"
   const relationship = (student.guardianRelationship || "father").toLowerCase().trim();
-  const isMale       = gender !== "female";
-  const isFather     = relationship !== "mother";
-  const genderCtx    = { studentGender: gender, guardianType: relationship };
 
+  const isMale   = gender !== "female";
+  const isFather = relationship === "father" || relationship === "guardian" || relationship === "other";
+  // الأم بس تاخد feminine salutation، أي علاقة تانية تاخد masculine
+  const genderCtx = { studentGender: gender, guardianType: relationship };
+
+  // ── 2. DB variable resolver ───────────────────────────────────────────────
+  // resolveVar موجودة بالفعل في الملف — بتأخذ dbVars + key + lang + genderCtx
   const resolve = (key, fallback = "") => {
     const val = resolveVar(dbVars, key, lang, genderCtx);
-    return val !== null && val !== undefined ? val : fallback;
+    return val !== null && val !== undefined && val !== "" ? val : fallback;
   };
 
+  // ── 3. اسم الطالب ─────────────────────────────────────────────────────────
+  // الأولوية: nickname (ar/en) ← first word of fullName ← fallback
   const studentFirstName =
     lang === "ar"
-      ? student.nicknameAr || student.name?.split(" ")[0] || "الطالب"
-      : student.nicknameEn || student.name?.split(" ")[0] || "Student";
+      ? (student.nicknameAr?.trim() || student.name?.split(" ")[0] || "الطالب")
+      : (student.nicknameEn?.trim() || student.name?.split(" ")[0] || "Student");
 
+  // ── 4. اسم ولي الأمر ──────────────────────────────────────────────────────
+  // الأولوية: nickname (ar/en) ← first word of guardianName ← fallback حسب gender
   const guardianFirstName =
     lang === "ar"
-      ? student.guardianNicknameAr || student.guardianName?.split(" ")[0] || "ولي الأمر"
-      : student.guardianNicknameEn || student.guardianName?.split(" ")[0] || "Guardian";
+      ? (student.guardianNicknameAr?.trim() || student.guardianName?.split(" ")[0] || (isFather ? "أستاذ" : "سيدة"))
+      : (student.guardianNicknameEn?.trim() || student.guardianName?.split(" ")[0] || (isFather ? "Sir" : "Ma'am"));
 
-  const guardianSalBase_ar = resolve("guardianSalutation_ar", isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
-  const guardianSalBase_en = resolve("guardianSalutation_en", isFather ? "Dear Mr." : "Dear Mrs.");
+  // ── 5. guardianSalutation ─────────────────────────────────────────────────
+  // أب  → عزيزي الأستاذ [اسم]   /   Dear Mr. [اسم]
+  // أم  → عزيزتي السيدة [اسم]   /   Dear Mrs. [اسم]
+  // يجيب الـ base من DB vars أولاً، ولو مش موجود يستخدم hardcoded fallback
 
+  const guardianSalBase_ar = resolve(
+    "guardianSalutation_ar",
+    isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة"
+  );
+  const guardianSalBase_en = resolve(
+    "guardianSalutation_en",
+    isFather ? "Dear Mr." : "Dear Mrs."
+  );
+
+  // بنضيف اسم ولي الأمر على الـ base
   const guardianSalutation_ar = `${guardianSalBase_ar.trimEnd()} ${guardianFirstName}`;
   const guardianSalutation_en = `${guardianSalBase_en.trimEnd()} ${guardianFirstName}`;
   const guardianSalutation    = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
 
+  // ── 6. studentSalutation ─────────────────────────────────────────────────
   const studentSalutation = lang === "ar"
     ? `${isMale ? "عزيزي" : "عزيزتي"} ${studentFirstName}`
     : `Dear ${studentFirstName}`;
 
-  const childTitle       = resolve("childTitle",       isMale ? (lang === "ar" ? "ابنك" : "your son") : (lang === "ar" ? "ابنتك" : "your daughter"));
-  const you_ar           = resolve("you_ar",           isMale ? "أنت" : "أنتِ");
-  const welcome_ar       = resolve("welcome_ar",       isMale ? "أهلاً بك" : "أهلاً بكِ");
-  const studentGender_ar = resolve("studentGender_ar", isMale ? "الابن" : "الابنة");
-  const studentGender_en = resolve("studentGender_en", isMale ? "son" : "daughter");
-  const relationship_ar  = resolve("relationship_ar",  isFather ? "الأب" : "الأم");
+  // ── 7. childTitle: ابنك/ابنتك حسب gender الطالب ──────────────────────────
+  // من DB vars (genderType: "student") أو fallback مباشر
+  const childTitle = resolve(
+    "childTitle",
+    isMale
+      ? (lang === "ar" ? "ابنك" : "your son")
+      : (lang === "ar" ? "ابنتك" : "your daughter")
+  );
 
-  const statusMap = {
-    ar: { absent: "غائب", late: "متأخر", excused: "معتذر", present: "حاضر", pre_absent: "غائب أولي" },
-    en: { absent: "absent", late: "late", excused: "excused", present: "present", pre_absent: "pre-absent" },
+  // ── 8. status text: gender-aware (الأهم في الـ 3 templates) ──────────────
+  // غائب/غائبة | متأخر/متأخرة | معذور/معذورة | حاضر/حاضرة
+  const statusTextMap = {
+    ar: {
+      absent:     isMale ? "غائب"    : "غائبة",
+      late:       isMale ? "متأخر"   : "متأخرة",
+      excused:    isMale ? "معذور"   : "معذورة",
+      present:    isMale ? "حاضر"    : "حاضرة",
+      pre_absent: "غياب أولي",
+    },
+    en: {
+      absent:     "Absent",
+      late:       "Late",
+      excused:    "Excused",
+      present:    "Present",
+      pre_absent: "Pre-Absent",
+    },
   };
-  const statusMapFemaleAr = {
-    absent: "غائبة", late: "متأخرة", excused: "معتذرة", present: "حاضرة", pre_absent: "غائبة أولياً",
-  };
+  const statusText = (statusTextMap[lang] || statusTextMap.ar)[status] || status;
 
-  const statusText = lang === "ar" && !isMale
-    ? (statusMapFemaleAr[status] || status)
-    : (statusMap[lang]?.[status] || status);
-
+  // ── 9. بيانات الحصة ───────────────────────────────────────────────────────
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
         lang === "ar" ? "ar-EG" : "en-US",
@@ -164,30 +203,82 @@ function buildVariables(student, status, session, dbVars = {}) {
       )
     : resolve("date", "");
 
-  const sessionTime    = (session?.startTime && session?.endTime)
+  const sessionTime = (session?.startTime && session?.endTime)
     ? `${session.startTime} - ${session.endTime}`
     : resolve("time", "");
-  const sessionNameVal = session?.title          || resolve("sessionName", "");
-  const groupNameVal   = session?.group?.name    || resolve("groupName", "");
-  const groupCodeVal   = session?.group?.code    || resolve("groupCode", "");
-  const meetingLinkVal = session?.meetingLink    || resolve("meetingLink", "");
 
+  const sessionNameVal = session?.title       || resolve("sessionName", "");
+  const groupNameVal   = session?.group?.name || resolve("groupName",   "");
+  const groupCodeVal   = session?.group?.code || resolve("groupCode",   "");
+  const meetingLinkVal = session?.meetingLink || resolve("meetingLink", "");
+
+  // ── 10. متغيرات مساعدة إضافية ────────────────────────────────────────────
+  const you_ar           = resolve("you_ar",           isMale ? "أنت"      : "أنتِ");
+  const welcome_ar       = resolve("welcome_ar",       isMale ? "أهلاً بك" : "أهلاً بكِ");
+  const studentGender_ar = resolve("studentGender_ar", isMale ? "الابن"    : "الابنة");
+  const studentGender_en = resolve("studentGender_en", isMale ? "son"      : "daughter");
+  const relationship_ar  = resolve("relationship_ar",  isFather ? "الأب"   : "الأم");
+
+  // salutation_ar/en (للـ student messages)
+  const salBase_ar    = resolve("salutation_ar", isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
+  const salBase_en    = resolve("salutation_en", "Dear");
+  const salutation_ar = `${salBase_ar.trimEnd()} ${studentFirstName}`;
+  const salutation_en = `${salBase_en.trimEnd()} ${studentFirstName}`;
+
+  // ── 11. النتيجة النهائية ──────────────────────────────────────────────────
   return {
-    guardianSalutation, guardianSalutation_ar, guardianSalutation_en,
-    guardianName: guardianFirstName, guardianFullName: student.guardianName || "",
+    // ── guardian salutation (المتغير الرئيسي في الـ 3 templates) ─────────
+    guardianSalutation,
+    guardianSalutation_ar,
+    guardianSalutation_en,
+    salutation: guardianSalutation,   // alias للتوافق مع templates قديمة
+
+    // ── student salutation ───────────────────────────────────────────────
+    studentSalutation,
+    salutation_ar,
+    salutation_en,
+
+    // ── أسماء الطالب ─────────────────────────────────────────────────────
+    studentName:      studentFirstName,   // الأهم — بيستخدمه الـ 3 templates
+    studentName_ar:   studentFirstName,
+    studentName_en:   studentFirstName,
+    studentFullName:  student.name || "",
+    fullStudentName:  student.name || "",
+    fullName:         student.name || "",
+    name_ar:          studentFirstName,
+    name_en:          studentFirstName,
+
+    // ── أسماء ولي الأمر ──────────────────────────────────────────────────
+    guardianName:     guardianFirstName,
+    guardianFullName: student.guardianName || "",
+
+    // ── علاقة وجنس ───────────────────────────────────────────────────────
+    childTitle,             // ابنك/ابنتك — بيستخدمه الـ 3 templates
+    you_ar,
+    welcome_ar,
+    studentGender_ar,
+    studentGender_en,
     relationship_ar,
-    salutation: guardianSalutation, studentSalutation,
-    studentName: studentFirstName, studentName_ar: studentFirstName, studentName_en: studentFirstName,
-    studentFullName: student.name || "", fullStudentName: student.name || "",
-    fullName: student.name || "", name_ar: studentFirstName, name_en: studentFirstName,
-    childTitle, you_ar, welcome_ar, studentGender_ar, studentGender_en,
-    status: statusText, attendanceStatus: statusText,
-    sessionName: sessionNameVal, date: sessionDate, sessionDate,
-    time: sessionTime, meetingLink: meetingLinkVal,
-    groupName: groupNameVal, groupCode: groupCodeVal,
+
+    // ── حالة الحضور (gender-aware) ────────────────────────────────────────
+    status:           statusText,   // غائب/غائبة — بيستخدمه absence_notification
+    attendanceStatus: statusText,   // alias
+
+    // ── بيانات الحصة ─────────────────────────────────────────────────────
+    sessionName:  sessionNameVal,   // بيستخدمه الـ 3 templates
+    date:         sessionDate,
+    sessionDate,
+    time:         sessionTime,      // بيستخدمه absence_notification + excused_notification
+    meetingLink:  meetingLinkVal,   // بيستخدمه late_notification
+
+    // ── بيانات المجموعة ───────────────────────────────────────────────────
+    groupName:    groupNameVal,
+    groupCode:    groupCodeVal,
+
+    // ── متفرقات ───────────────────────────────────────────────────────────
     enrollmentNumber:    student.enrollmentNumber || resolve("enrollmentNumber", ""),
-    selectedLanguage_ar: lang === "ar" ? "العربية" : "الإنجليزية",
-    selectedLanguage_en: lang === "ar" ? "Arabic"  : "English",
+    selectedLanguage_ar: lang === "ar" ? "العربية"  : "الإنجليزية",
+    selectedLanguage_en: lang === "ar" ? "Arabic"   : "English",
   };
 }
 

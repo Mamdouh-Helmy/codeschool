@@ -33,25 +33,16 @@ async function fetchDbVars(genderContext = {}) {
 // ============================================================
 function extractSessionShortName(title) {
   if (!title) return "";
-
-  // لو فيه ":" خد الجزء اللي بعده
   if (title.includes(":")) {
     const afterColon = title.split(":").slice(1).join(":").trim();
-
-    // لو فيه "&" خد الجزء اللي قبله (بيكون مكرر الاسمين)
     if (afterColon.includes("&")) {
       return afterColon.split("&")[0].trim();
     }
-
     return afterColon;
   }
-
-  // لو مفيش ":" خد الجزء اللي بعد " - " لو موجود
   if (title.includes(" - ")) {
     return title.split(" - ").slice(1).join(" - ").trim();
   }
-
-  // fallback: الـ title كاملاً
   return title;
 }
 
@@ -1207,7 +1198,6 @@ async function prepareStudentVariables(
   const instructorNames = buildInstructorsNames(group?.instructors, language);
   const firstMeetingLink = await getFirstSessionMeetingLink(group?._id);
 
-  // ✅ استخراج اسم الحصة المختصر
   const sessionShortName = session
     ? extractSessionShortName(session.title)
     : "";
@@ -1246,7 +1236,6 @@ async function prepareStudentVariables(
     enrollmentNumber: student.enrollmentNumber || "",
   };
 
-  // ✅ بيانات الجلسة — sessionName بيستخدم الاسم المختصر
   if (session) {
     Object.assign(variables, {
       sessionName: sessionShortName || session.title || "",
@@ -1266,7 +1255,31 @@ async function prepareStudentVariables(
     );
   }
   if (extra.newTime) variables.newTime = extra.newTime;
-  if (extra.attendanceStatus) variables.status = extra.attendanceStatus;
+
+  // ✅ status مع gender-aware
+  if (extra.attendanceStatus) {
+    const statusTextMap = {
+      ar: {
+        absent:  isMale ? "غائب"  : "غائبة",
+        late:    isMale ? "متأخر" : "متأخرة",
+        excused: isMale ? "معذور" : "معذورة",
+        present: isMale ? "حاضر"  : "حاضرة",
+      },
+      en: {
+        absent: "Absent",
+        late: "Late",
+        excused: "Excused",
+        present: "Present",
+      },
+    };
+    const statusText =
+      (statusTextMap[language] || statusTextMap.ar)[extra.attendanceStatus] ||
+      extra.attendanceStatus;
+
+    variables.status = statusText;
+    variables.attendanceStatus = statusText;
+  }
+
   if (extra.attendanceNotes) variables.notes = extra.attendanceNotes;
   if (extra.feedbackLink) variables.feedbackLink = extra.feedbackLink;
   if (extra.moduleTitle) variables.moduleTitle = extra.moduleTitle;

@@ -1,6 +1,10 @@
 "use client";
 import { useState } from "react";
-import { Plus, Trash2, Edit3, ExternalLink, Github, Calendar, Image } from "lucide-react";
+import { Plus, Trash2, Edit3, ExternalLink, Github, Calendar, Image, Check } from "lucide-react";
+import * as Select from "@radix-ui/react-select";
+import * as Checkbox from "@radix-ui/react-checkbox";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import { ChevronDown } from "lucide-react";
 import { PortfolioFormData, Project, ProjectImage } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -9,430 +13,408 @@ interface ProjectsSectionProps {
   onChange: (updates: Partial<PortfolioFormData>) => void;
 }
 
+const EMPTY_PROJECT: Project = {
+  title: "", description: "", technologies: [],
+  demoUrl: "", githubUrl: "", images: [],
+  featured: false, startDate: "", endDate: "", status: "completed",
+};
+
+function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="pf-group">
+      <label className="pf-label">{icon}{label}</label>
+      {children}
+    </div>
+  );
+}
+
 export default function ProjectsSection({ data, onChange }: ProjectsSectionProps) {
   const { t } = useI18n();
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [newProject, setNewProject] = useState<Project>({
-    title: "",
-    description: "",
-    technologies: [],
-    demoUrl: "",
-    githubUrl: "",
-    images: [],
-    featured: false,
-    startDate: "",
-    endDate: "",
-    status: "completed"
-  });
-  const [newTech, setNewTech] = useState<string>("");
+  const [draft, setDraft]           = useState<Project>(EMPTY_PROJECT);
+  const [newTech, setNewTech]       = useState("");
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
 
-  const addProject = (): void => {
-    if (!newProject.title.trim()) return;
-    const updatedProjects = [...(data.projects || []), { ...newProject }];
-    onChange({ projects: updatedProjects });
-    setNewProject({
-      title: "",
-      description: "",
-      technologies: [],
-      demoUrl: "",
-      githubUrl: "",
-      images: [],
-      featured: false,
-      startDate: "",
-      endDate: "",
-      status: "completed"
-    });
+  const projects = data.projects || [];
+
+  const addProject = () => {
+    if (!draft.title.trim()) return;
+    onChange({ projects: [...projects, { ...draft }] });
+    setDraft(EMPTY_PROJECT);
   };
 
-  const updateProject = (index: number, field: keyof Project, value: any): void => {
-    const updatedProjects = [...(data.projects || [])];
-    updatedProjects[index] = { ...updatedProjects[index], [field]: value };
-    onChange({ projects: updatedProjects });
-  };
+  const removeProject = (i: number) =>
+    onChange({ projects: projects.filter((_, idx) => idx !== i) });
 
-  const removeProject = (index: number): void => {
-    const updatedProjects = (data.projects || []).filter((_, i) => i !== index);
-    onChange({ projects: updatedProjects });
-  };
-
-  const addTechnology = (): void => {
+  const addTech = () => {
     if (!newTech.trim()) return;
-    setNewProject(prev => ({
-      ...prev,
-      technologies: [...prev.technologies, newTech.trim()]
-    }));
+    setDraft((p) => ({ ...p, technologies: [...p.technologies, newTech.trim()] }));
     setNewTech("");
   };
 
-  const removeTechnology = (techIndex: number): void => {
-    setNewProject(prev => ({
-      ...prev,
-      technologies: prev.technologies.filter((_, i) => i !== techIndex)
-    }));
-  };
+  const removeTech = (i: number) =>
+    setDraft((p) => ({ ...p, technologies: p.technologies.filter((_, idx) => idx !== i) }));
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, index?: number): void => {
+  const handleImage = (e: React.ChangeEvent<HTMLInputElement>, idx?: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      const newImage: ProjectImage = {
-        url: result,
-        alt: file.name
-      };
-
-      if (index !== undefined) {
-        const updatedProjects = [...(data.projects || [])];
-        updatedProjects[index] = {
-          ...updatedProjects[index],
-          images: [...updatedProjects[index].images, newImage]
-        };
-        onChange({ projects: updatedProjects });
+    reader.onload = (ev) => {
+      const img: ProjectImage = { url: ev.target?.result as string, alt: file.name };
+      if (idx !== undefined) {
+        const next = [...projects];
+        next[idx] = { ...next[idx], images: [...next[idx].images, img] };
+        onChange({ projects: next });
       } else {
-        setNewProject(prev => ({
-          ...prev,
-          images: [...prev.images, newImage]
-        }));
+        setDraft((p) => ({ ...p, images: [...p.images, img] }));
       }
     };
     reader.readAsDataURL(file);
   };
 
-  const removeImage = (projectIndex: number, imageIndex: number): void => {
-    const updatedProjects = [...(data.projects || [])];
-    updatedProjects[projectIndex] = {
-      ...updatedProjects[projectIndex],
-      images: updatedProjects[projectIndex].images.filter((_, i) => i !== imageIndex)
-    };
-    onChange({ projects: updatedProjects });
+  const removeImage = (pi: number, ii: number) => {
+    const next = [...projects];
+    next[pi] = { ...next[pi], images: next[pi].images.filter((_, i) => i !== ii) };
+    onChange({ projects: next });
   };
 
-  const techSuggestions = ["React", "Next.js", "TypeScript", "Node.js", "Python", "MongoDB", "Tailwind CSS"];
+  const techSuggestions = ["React", "Next.js", "TypeScript", "Node.js", "Python", "MongoDB", "Tailwind CSS", "PostgreSQL", "GraphQL"];
 
   return (
-    <div className="space-y-6">
-      {/* Add New Project */}
-      <div className="bg-gray-50 dark:bg-dark_input rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <Plus className="w-5 h-5 text-primary" />
-          {t("portfolio.projects.addNew")}
-        </h3>
-        <div className="space-y-4">
-          {/* Basic Info */}
+    <Tooltip.Provider delayDuration={300}>
+      <div className="space-y-6">
+
+        {/* ── Add New Project ── */}
+        <div className="bg-gray-50 dark:bg-dark_input rounded-xl p-6 space-y-5">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <Plus className="w-5 h-5 text-primary" />
+            {t("portfolio.projects.addNew")}
+          </h3>
+
+          {/* Title + Status */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t("portfolio.projects.title")}
-              </label>
-              <input
-                type="text"
-                value={newProject.title}
-                onChange={(e) => setNewProject(prev => ({ ...prev, title: e.target.value }))}
-                placeholder={t("portfolio.projects.titlePlaceholder")}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-darkmode dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t("portfolio.projects.status")}
-              </label>
-              <select
-                value={newProject.status}
-                onChange={(e) => setNewProject(prev => ({ 
-                  ...prev, 
-                  status: e.target.value as "completed" | "in-progress" | "planned" 
-                }))}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-darkmode dark:text-white"
-              >
-                <option value="completed">{t("portfolio.projects.status.completed")}</option>
-                <option value="in-progress">{t("portfolio.projects.status.inProgress")}</option>
-                <option value="planned">{t("portfolio.projects.status.planned")}</option>
-              </select>
-            </div>
+
+            <Field label={t("portfolio.projects.title")}>
+              <div className="pf-wrap">
+                <div className="pf-surface">
+                  <input
+                    type="text"
+                    value={draft.title}
+                    onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
+                    placeholder={t("portfolio.projects.titlePlaceholder")}
+                    className="pf-input"
+                  />
+                </div>
+              </div>
+            </Field>
+
+            {/* Status — Radix Select */}
+            <Field label={t("portfolio.projects.status")}>
+              <div className="pf-wrap">
+                <div className="pf-surface">
+                  <Select.Root
+                    value={draft.status}
+                    onValueChange={(v) =>
+                      setDraft((p) => ({ ...p, status: v as Project["status"] }))
+                    }
+                  >
+                    <Select.Trigger className="pf-select-trigger" aria-label="Status">
+                      <Select.Value />
+                      <Select.Icon>
+                        <ChevronDown className="pf-select-chevron" />
+                      </Select.Icon>
+                    </Select.Trigger>
+                    <Select.Portal>
+                      <Select.Content className="pf-select-content" position="popper" sideOffset={4}>
+                        <Select.Viewport className="pf-select-viewport">
+                          {[
+                            { value: "completed",   label: t("portfolio.projects.status.completed") },
+                            { value: "in-progress", label: t("portfolio.projects.status.inProgress") },
+                            { value: "planned",     label: t("portfolio.projects.status.planned") },
+                          ].map((opt) => (
+                            <Select.Item key={opt.value} value={opt.value} className="pf-select-item">
+                              <Select.ItemText>
+                                <span className={`pf-status pf-status--${opt.value}`}>
+                                  <span className="pf-status-dot" />
+                                  {opt.label}
+                                </span>
+                              </Select.ItemText>
+                              <Select.ItemIndicator className="pf-select-item-indicator">
+                                <Check size={13} />
+                              </Select.ItemIndicator>
+                            </Select.Item>
+                          ))}
+                        </Select.Viewport>
+                      </Select.Content>
+                    </Select.Portal>
+                  </Select.Root>
+                </div>
+              </div>
+            </Field>
           </div>
 
           {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t("portfolio.projects.description")}
-            </label>
-            <textarea
-              value={newProject.description}
-              onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
-              rows={3}
-              placeholder={t("portfolio.projects.descriptionPlaceholder")}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-darkmode dark:text-white resize-none"
-            />
-          </div>
+          <Field label={t("portfolio.projects.description")}>
+            <div className="pf-wrap">
+              <div className="pf-surface">
+                <textarea
+                  value={draft.description}
+                  onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))}
+                  rows={3}
+                  placeholder={t("portfolio.projects.descriptionPlaceholder")}
+                  className="pf-textarea"
+                />
+              </div>
+            </div>
+          </Field>
 
           {/* Technologies */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t("portfolio.projects.technologies")}
-            </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={newTech}
-                onChange={(e) => setNewTech(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTechnology())}
-                placeholder={`${t("portfolio.projects.addTechnology")} (${t("common.pressEnter")})`}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-darkmode dark:text-white"
-                list="tech-suggestions"
-              />
-              <datalist id="tech-suggestions">
-                {techSuggestions.map(tech => (
-                  <option key={tech} value={tech} />
-                ))}
-              </datalist>
+          <Field label={t("portfolio.projects.technologies")}>
+            <div className="flex gap-2">
+              <div className="pf-wrap flex-1">
+                <div className="pf-surface">
+                  <input
+                    type="text"
+                    value={newTech}
+                    onChange={(e) => setNewTech(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTech())}
+                    placeholder={`${t("portfolio.projects.addTechnology")} (Enter)`}
+                    className="pf-input"
+                    list="tech-list"
+                  />
+                  <datalist id="tech-list">
+                    {techSuggestions.map((s) => <option key={s} value={s} />)}
+                  </datalist>
+                </div>
+              </div>
               <button
-                onClick={addTechnology}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                onClick={addTech}
+                className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex-shrink-0"
               >
                 {t("common.add")}
               </button>
             </div>
-            {newProject.technologies.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {newProject.technologies.map((tech, index) => (
-                  <span key={index} className="flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
+            {draft.technologies.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {draft.technologies.map((tech, i) => (
+                  <span key={i} className="pf-tag">
                     {tech}
-                    <button
-                      onClick={() => removeTechnology(index)}
-                      className="text-primary hover:text-primary/70"
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => removeTech(i)} aria-label={`Remove ${tech}`}>×</button>
                   </span>
                 ))}
               </div>
             )}
-          </div>
+          </Field>
 
-          {/* Links */}
+          {/* GitHub + Demo */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                <Github className="w-4 h-4" />
-                {t("portfolio.projects.githubUrl")}
-              </label>
-              <input
-                type="url"
-                value={newProject.githubUrl}
-                onChange={(e) => setNewProject(prev => ({ ...prev, githubUrl: e.target.value }))}
-                placeholder="https://github.com/username/repo"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-darkmode dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                <ExternalLink className="w-4 h-4" />
-                {t("portfolio.projects.demoUrl")}
-              </label>
-              <input
-                type="url"
-                value={newProject.demoUrl}
-                onChange={(e) => setNewProject(prev => ({ ...prev, demoUrl: e.target.value }))}
-                placeholder="https://your-project.com"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-darkmode dark:text-white"
-              />
-            </div>
+            <Field label={t("portfolio.projects.githubUrl")} icon={<Github size={13} />}>
+              <div className="pf-wrap">
+                <div className="pf-surface">
+                  <input
+                    type="url"
+                    value={draft.githubUrl}
+                    onChange={(e) => setDraft((p) => ({ ...p, githubUrl: e.target.value }))}
+                    placeholder="https://github.com/username/repo"
+                    className="pf-input"
+                  />
+                </div>
+              </div>
+            </Field>
+            <Field label={t("portfolio.projects.demoUrl")} icon={<ExternalLink size={13} />}>
+              <div className="pf-wrap">
+                <div className="pf-surface">
+                  <input
+                    type="url"
+                    value={draft.demoUrl}
+                    onChange={(e) => setDraft((p) => ({ ...p, demoUrl: e.target.value }))}
+                    placeholder="https://your-project.com"
+                    className="pf-input"
+                  />
+                </div>
+              </div>
+            </Field>
           </div>
 
           {/* Dates */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                {t("portfolio.projects.startDate")}
-              </label>
-              <input
-                type="date"
-                value={newProject.startDate as string}
-                onChange={(e) => setNewProject(prev => ({ ...prev, startDate: e.target.value }))}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-darkmode dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                {t("portfolio.projects.endDate")}
-              </label>
-              <input
-                type="date"
-                value={newProject.endDate as string}
-                onChange={(e) => setNewProject(prev => ({ ...prev, endDate: e.target.value }))}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-darkmode dark:text-white"
-              />
-            </div>
+            <Field label={t("portfolio.projects.startDate")} icon={<Calendar size={13} />}>
+              <div className="pf-wrap">
+                <div className="pf-surface">
+                  <input
+                    type="date"
+                    value={draft.startDate as string}
+                    onChange={(e) => setDraft((p) => ({ ...p, startDate: e.target.value }))}
+                    className="pf-input"
+                  />
+                </div>
+              </div>
+            </Field>
+            <Field label={t("portfolio.projects.endDate")} icon={<Calendar size={13} />}>
+              <div className="pf-wrap">
+                <div className="pf-surface">
+                  <input
+                    type="date"
+                    value={draft.endDate as string}
+                    onChange={(e) => setDraft((p) => ({ ...p, endDate: e.target.value }))}
+                    className="pf-input"
+                  />
+                </div>
+              </div>
+            </Field>
           </div>
 
-          {/* Featured Toggle */}
+          {/* Featured — Radix Checkbox */}
           <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
+            <Checkbox.Root
               id="featured"
-              checked={newProject.featured}
-              onChange={(e) => setNewProject(prev => ({ ...prev, featured: e.target.checked }))}
-              className="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded"
-            />
-            <label htmlFor="featured" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              checked={draft.featured}
+              onCheckedChange={(v) => setDraft((p) => ({ ...p, featured: !!v }))}
+              className="pf-checkbox-root"
+            >
+              <Checkbox.Indicator className="pf-checkbox-indicator">
+                <Check size={11} strokeWidth={3} />
+              </Checkbox.Indicator>
+            </Checkbox.Root>
+            <label htmlFor="featured" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none">
               {t("portfolio.projects.featured")}
             </label>
           </div>
 
-          {/* Add Project Button */}
           <button
             onClick={addProject}
-            disabled={!newProject.title.trim()}
-            className="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            disabled={!draft.title.trim()}
+            className="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-lg font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
           >
-            <Plus className="w-4 h-4" />
+            <Plus size={15} />
             {t("portfolio.projects.addNew")}
           </button>
         </div>
-      </div>
 
-      {/* Projects List */}
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {t("portfolio.projects.yourProjects")} ({data.projects?.length || 0})
-        </h3>
-        {(!data.projects || data.projects.length === 0) ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-dark_input rounded-lg">
-            <Image className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>{t("portfolio.projects.noProjects")}</p>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {data.projects.map((project, index) => (
-              <div key={index} className="bg-white dark:bg-darkmode border border-gray-200 dark:border-dark_border rounded-lg p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                      {project.title}
-                      {project.featured && (
-                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded text-xs font-medium">
-                          {t("portfolio.common.featured")}
+        {/* ── Projects List ── */}
+        <div>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4">
+            {t("portfolio.projects.yourProjects")} ({projects.length})
+          </h3>
+
+          {projects.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-dark_input rounded-xl">
+              <Image className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm">{t("portfolio.projects.noProjects")}</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {projects.map((project, i) => (
+                <div key={i} className="bg-white dark:bg-darkmode border border-gray-200 dark:border-dark_border rounded-xl p-5">
+
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0 pr-4">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h4 className="font-semibold text-gray-900 dark:text-white text-sm">
+                          {project.title}
+                        </h4>
+                        {project.featured && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 font-medium">
+                            ★ {t("portfolio.common.featured")}
+                          </span>
+                        )}
+                        <span className={`pf-status pf-status--${project.status}`}>
+                          <span className="pf-status-dot" />
+                          {t(`portfolio.projects.status.${project.status}`)}
                         </span>
-                      )}
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        project.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                        project.status === 'in-progress' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                      }`}>
-                        {t(`portfolio.projects.status.${project.status}`)}
-                      </span>
-                    </h4>
-                    <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm">
-                      {project.description}
-                    </p>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                        {project.description}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <Tooltip.Root>
+                        <Tooltip.Trigger asChild>
+                          <button
+                            onClick={() => setEditingIdx(editingIdx === i ? null : i)}
+                            className="p-2 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/8 transition-colors"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                          <Tooltip.Content className="pf-tooltip-content" side="top" sideOffset={4}>Edit</Tooltip.Content>
+                        </Tooltip.Portal>
+                      </Tooltip.Root>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger asChild>
+                          <button
+                            onClick={() => removeProject(i)}
+                            className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                          <Tooltip.Content className="pf-tooltip-content" side="top" sideOffset={4}>Remove</Tooltip.Content>
+                        </Tooltip.Portal>
+                      </Tooltip.Root>
+                    </div>
                   </div>
-                  <div className="flex gap-2 ml-4">
-                    <button
-                      onClick={() => setEditingIndex(editingIndex === index ? null : index)}
-                      className="p-2 text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary transition-colors"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => removeProject(index)}
-                      className="p-2 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
 
-                {/* Project Details */}
-                <div className="space-y-3">
                   {/* Technologies */}
                   {project.technologies.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {project.technologies.slice(0, 3).map((tech, techIndex) => (
-                        <span key={techIndex} className="px-2 py-1 bg-primary/10 text-primary rounded text-xs">
-                          {tech}
-                        </span>
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {project.technologies.slice(0, 4).map((t, ti) => (
+                        <span key={ti} className="pf-tag" style={{ fontSize: 11 }}>{t}</span>
                       ))}
-                      {project.technologies.length > 3 && (
-                        <span className="px-2 py-1 bg-gray-100 dark:bg-dark_input text-gray-600 dark:text-gray-400 rounded text-xs">
-                          +{project.technologies.length - 3}
+                      {project.technologies.length > 4 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-dark_input text-gray-500">
+                          +{project.technologies.length - 4}
                         </span>
                       )}
                     </div>
                   )}
 
                   {/* Links */}
-                  <div className="flex gap-4 text-sm">
+                  <div className="flex gap-3 text-xs mb-3">
                     {project.githubUrl && (
-                      <a
-                        href={project.githubUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
-                      >
-                        <Github className="w-4 h-4" />
-                        GitHub
+                      <a href={project.githubUrl} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-gray-500 hover:text-primary transition-colors">
+                        <Github size={13} /> GitHub
                       </a>
                     )}
                     {project.demoUrl && (
-                      <a
-                        href={project.demoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        {t("portfolio.projects.demo")}
+                      <a href={project.demoUrl} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-gray-500 hover:text-primary transition-colors">
+                        <ExternalLink size={13} /> {t("portfolio.projects.demo")}
                       </a>
                     )}
                   </div>
 
                   {/* Images */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      {t("portfolio.projects.projectImages")}
+                  <div className="space-y-2">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-dark_input text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-xs font-medium">
+                      <Image size={13} />
+                      {t("portfolio.projects.addImage")}
+                      <input type="file" accept="image/*" onChange={(e) => handleImage(e, i)} className="hidden" />
                     </label>
-                    <div className="flex gap-2 mb-2">
-                      <label className="cursor-pointer px-4 py-2 bg-gray-100 dark:bg-dark_input text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
-                        <Image className="w-4 h-4" />
-                        {t("portfolio.projects.addImage")}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleImageUpload(e, index)}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
                     {project.images.length > 0 && (
-                      <div className="flex gap-2 overflow-x-auto">
-                        {project.images.map((image, imgIndex) => (
-                          <div key={imgIndex} className="relative">
-                            <img
-                              src={image.url}
-                              alt={image.alt}
-                              className="w-20 h-20 object-cover rounded border border-gray-200 dark:border-dark_border"
-                            />
+                      <div className="flex gap-2 flex-wrap">
+                        {project.images.map((img, ii) => (
+                          <div key={ii} className="relative group">
+                            <img src={img.url} alt={img.alt}
+                              className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-dark_border" />
                             <button
-                              onClick={() => removeImage(index, imgIndex)}
-                              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600 transition-colors"
-                            >
-                              ×
-                            </button>
+                              onClick={() => removeImage(i, ii)}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >×</button>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </Tooltip.Provider>
   );
 }

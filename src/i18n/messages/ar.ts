@@ -4225,6 +4225,16 @@ const ar = {
 
   "instructors.table.language": "اللغة",
   "instructors.addFirst": "أضف أول مدرب",
+  "portfolio.builder.openInNewTab": "فتح في علامة تبويب جديدة",
+  "portfolio.builder.previewNote": "عاين البورتفوليو قبل النشر",
+  "portfolio.builder.published": "تم النشر",
+  "portfolio.builder.views": "المشاهدات",
+  "portfolio.builder.basicInfoDesc": "أضف معلوماتك الشخصية والمهنية",
+  "portfolio.builder.skillsDesc": "اعرض مهاراتك التقنية والمهنية",
+  "portfolio.builder.projectsDesc": "اعرض أفضل مشاريعك وإنجازاتك",
+  "portfolio.builder.socialLinksDesc": "أضف روابط حساباتك الاجتماعية والمهنية",
+  "portfolio.builder.settingsDesc": "خصص إعدادات وتفضيلات البورتفوليو الخاص بك",
+  "portfolio.public.letsConnect" : "لنتواصل",
 };
 
 export default ar;

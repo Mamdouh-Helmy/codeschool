@@ -1,225 +1,233 @@
-// components/Portfolio/PublicPortfolio.tsx
 "use client";
-import { useState, useEffect } from "react";
-import { Share2, Eye, Download, Mail, Phone, MapPin, CheckCircle, Calendar } from "lucide-react";
+
+import { useState, useEffect, useCallback } from "react";
+import { Share2, Eye } from "lucide-react";
 import toast from "react-hot-toast";
+
 import Loader from "@/components/Common/Loader";
 import PortfolioHeader from "./public/PortfolioHeader";
 import SkillsShowcase from "./public/SkillsShowcase";
 import ProjectsGallery from "./public/ProjectsGallery";
 import ContactSection from "./public/ContactSection";
 import PortfolioFooter from "./public/PortfolioFooter";
-import { PublicPortfolio as PublicPortfolioType, PortfolioApiResponse } from "@/types/portfolio";
+
+import {
+  PublicPortfolio as PublicPortfolioType,
+  PortfolioApiResponse,
+} from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 import { applyTheme } from "@/utils/portfolioThemes";
 
+/* ─── Types ───────────────────────────────────────────────── */
 interface PublicPortfolioProps {
-    username: string;
+  username: string;
 }
 
-export default function PublicPortfolio({ username }: PublicPortfolioProps) {
-    const { t } = useI18n();
-    const [portfolio, setPortfolio] = useState<PublicPortfolioType | null>(null);
-    const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
+type ThemeColor = "primary" | "secondary" | "muted";
 
-    useEffect(() => {
-        fetchPortfolio();
-    }, [username]);
+/* ─── Theme helpers (pure functions, defined outside component) ── */
+function resolveAccentBase(skillFill: string | undefined): string {
+  if (!skillFill) return "blue";
+  if (skillFill.includes("green")) return "green";
+  if (skillFill.includes("gray")) return "gray";
+  return "blue";
+}
 
-    const fetchPortfolio = async (): Promise<void> => {
-        try {
-            setLoading(true);
-            setError(null);
-            const res = await fetch(`/api/portfolio/${username}`);
-            const data: PortfolioApiResponse = await res.json();
+function makeThemeHelpers(themeStyles: ReturnType<typeof applyTheme>) {
+  const accent = resolveAccentBase(themeStyles?.skillFill);
 
-            if (data.success) {
-                setPortfolio(data.portfolio);
-                console.log("🎨 Portfolio theme:", data.portfolio.settings?.theme);
-            } else {
-                setError(data.message || t("portfolio.public.notFound"));
-                toast.error(data.message || t("portfolio.status.loadFailed"));
-            }
-        } catch (error) {
-            console.error("Error fetching portfolio:", error);
-            setError(t("portfolio.status.loadFailed"));
-            toast.error(t("portfolio.status.loadFailed"));
-        } finally {
-            setLoading(false);
-        }
-    };
+  const textColor = (type: ThemeColor = "primary"): string =>
+    themeStyles.text?.[type] ||
+    {
+      primary: "text-gray-900",
+      secondary: "text-gray-700",
+      muted: "text-gray-500",
+    }[type];
 
-    const handleShare = async (): Promise<void> => {
-        if (!portfolio) return;
+  const iconColor = (): string => `text-${accent}-600`;
 
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: portfolio.title || t("portfolio.public.portfolio"),
-                    text: portfolio.description,
-                    url: window.location.href,
-                });
-            } catch (error) {
-                console.error("Error sharing:", error);
-            }
-        } else {
-            navigator.clipboard.writeText(window.location.href);
-            toast.success(t("portfolio.public.linkCopied"));
-        }
-    };
+  const hoverColor = (): string => `hover:text-${accent}-600`;
 
-    const formatDate = (date: string | Date): string => {
-        const dateObj = new Date(date);
-        if (isNaN(dateObj.getTime())) return "Invalid Date";
+  const primaryButton = (): string =>
+    `bg-${accent}-600 hover:bg-${accent}-700 text-white`;
 
-        return dateObj.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-    };
+  const secondaryButtonHover = (): string =>
+    themeStyles?.background?.secondary
+      ? `hover:${themeStyles.background.secondary}`
+      : "hover:bg-gray-50";
 
-    // تطبيق السمات - مع السمة المظلمة كإعداد افتراضي
-    const themeStyles = applyTheme(
-        portfolio?.settings?.theme || 'dark', // 🔥 السمة المظلمة كإعداد افتراضي
-        portfolio?.settings?.layout || 'standard'
-    );
+  return { textColor, iconColor, hoverColor, primaryButton, secondaryButtonHover };
+}
 
-    const getTextColor = (type: 'primary' | 'secondary' | 'muted' = 'primary'): string => {
-        return themeStyles.text?.[type] ||
-            (type === 'primary' ? 'text-gray-900' :
-                type === 'secondary' ? 'text-gray-700' : 'text-gray-500');
-    };
-
-    const getIconColor = (): string => {
-        if (themeStyles?.skillFill) {
-            const baseColor = themeStyles.skillFill;
-            if (baseColor.includes('blue')) return 'text-blue-600';
-            if (baseColor.includes('green')) return 'text-green-600';
-            if (baseColor.includes('gray')) return 'text-gray-600';
-        }
-        return "text-blue-600";
-    };
-
-    const getHoverColor = (): string => {
-        if (themeStyles?.skillFill) {
-            const baseColor = themeStyles.skillFill;
-            if (baseColor.includes('blue')) return 'hover:text-blue-600';
-            if (baseColor.includes('green')) return 'hover:text-green-600';
-            if (baseColor.includes('gray')) return 'hover:text-gray-600';
-        }
-        return "hover:text-blue-600";
-    };
-
-    const getPrimaryButtonStyle = (): string => {
-        if (themeStyles?.skillFill) {
-            const baseColor = themeStyles.skillFill;
-            if (baseColor.includes('blue')) return 'bg-blue-600 hover:bg-blue-700 text-white';
-            if (baseColor.includes('green')) return 'bg-green-600 hover:bg-green-700 text-white';
-            if (baseColor.includes('gray')) return 'bg-gray-600 hover:bg-gray-700 text-white';
-        }
-        return "bg-blue-600 hover:bg-blue-700 text-white";
-    };
-
-    const getSecondaryButtonHover = (): string => {
-        if (themeStyles?.background.secondary) {
-            return `hover:${themeStyles.background.secondary}`;
-        }
-        return "hover:bg-gray-50";
-    };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <Loader />
-            </div>
-        );
-    }
-
-    if (error || !portfolio) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="text-center">
-                    <div className="w-24 h-24 mx-auto mb-4 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
-                        <Eye className="w-12 h-12 text-red-600 dark:text-red-400" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                        {t("portfolio.public.notFound")}
-                    </h1>
-                    <p className="text-gray-600 dark:text-gray-400 mb-6">
-                        {error || t("portfolio.public.notFoundDescription")}
-                    </p>
-                    <button
-                        onClick={() => window.location.href = "/"}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-                    >
-                        {t("common.goHome")}
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="rounded-md">
-            <div className={`min-h-screen ${themeStyles.container}  rounded-lg`}>
-
-                {/* Action Bar */}
-                {/* <div className={`border-b ${themeStyles.border} ${themeStyles.background.primary}`}>
-                    <div className="container mx-auto px-4 py-3">
-                        <div className="flex justify-between items-center">
-                            <div className={`text-sm ${getTextColor('muted')}`}>
-                                <span className="flex items-center gap-1">
-                                    <Eye className={`w-4 h-4 ${getIconColor()}`} />
-                                    {portfolio.views || 0} {t("portfolio.public.views")}
-                                </span>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={handleShare}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${getPrimaryButtonStyle()}`}
-                                >
-                                    <Share2 className="w-4 h-4" />
-                                    {t("portfolio.public.share")}
-                                </button>
-                                <button
-                                    onClick={() => window.print()}
-                                    className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${
-                                        themeStyles.border
-                                    } ${getTextColor('secondary')} ${getSecondaryButtonHover()}`}
-                                >
-                                    <Download className="w-4 h-4" />
-                                    {t("portfolio.public.export")}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div> */}
-
-                {/* Header Section */}
-                <PortfolioHeader portfolio={portfolio} />
-
-                {/* Skills Section */}
-                {portfolio.skills && portfolio.skills.length > 0 && (
-                    <SkillsShowcase portfolio={{
-                        skillsTitle: portfolio.title || "My Skills",
-                        skillsSubtitle: portfolio.description || "Technical Proficiencies",
-                        skillsDesc: "Here are my technical skills and proficiency levels",
-                        skills: portfolio.skills
-                    }} />
-                )}
-
-                {/* Projects Section */}
-                {portfolio.projects && portfolio.projects.length > 0 && (
-                    <ProjectsGallery projects={portfolio.projects} themeStyles={themeStyles} />
-                )}
-
-                {/* Contact Section */}
-                <ContactSection portfolio={portfolio} themeStyles={themeStyles} />
-
-                <PortfolioFooter portfolio={portfolio} />
-            </div>
+/* ─── PortfolioLoader ─────────────────────────────────────── */
+function PortfolioLoader() {
+  return (
+    <div className="pf-loader-screen" aria-label="Loading portfolio" role="status">
+      <div className="pf-loader-inner">
+        {/* Animated rings */}
+        <div className="pf-loader-rings" aria-hidden="true">
+          <span className="pf-loader-ring pf-loader-ring--1" />
+          <span className="pf-loader-ring pf-loader-ring--2" />
+          <span className="pf-loader-ring pf-loader-ring--3" />
+          <span className="pf-loader-dot" />
         </div>
+
+        {/* Skeleton lines */}
+        <div className="pf-loader-skeleton" aria-hidden="true">
+          <span className="pf-skel pf-skel--title" />
+          <span className="pf-skel pf-skel--sub" />
+          <span className="pf-skel pf-skel--sub pf-skel--short" />
+          <div className="pf-skel-row">
+            <span className="pf-skel pf-skel--chip" />
+            <span className="pf-skel pf-skel--chip" />
+            <span className="pf-skel pf-skel--chip" />
+          </div>
+        </div>
+
+        <p className="pf-loader-label">Building your portfolio…</p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── NotFound ────────────────────────────────────────────── */
+function NotFound({
+  message,
+  label,
+  goHomeLabel,
+}: {
+  message: string;
+  label: string;
+  goHomeLabel: string;
+}) {
+  return (
+    <div className="pf-notfound-screen" role="alert">
+      <div className="pf-notfound-inner">
+        <div className="pf-notfound-icon" aria-hidden="true">
+          <Eye size={40} />
+        </div>
+        <h1 className="pf-notfound-title">{label}</h1>
+        <p className="pf-notfound-message">{message}</p>
+        <button
+          onClick={() => (window.location.href = "/")}
+          className="pf-notfound-btn"
+        >
+          {goHomeLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main Component ──────────────────────────────────────── */
+export default function PublicPortfolio({ username }: PublicPortfolioProps) {
+  const { t } = useI18n();
+
+  const [portfolio, setPortfolio] = useState<PublicPortfolioType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  /* ── Data fetching ── */
+  const fetchPortfolio = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const res = await fetch(`/api/portfolio/${username}`);
+      const data: PortfolioApiResponse = await res.json();
+
+      if (data.success) {
+        setPortfolio(data.portfolio);
+      } else {
+        const msg = data.message || t("portfolio.public.notFound");
+        setError(msg);
+        toast.error(msg);
+      }
+    } catch {
+      const msg = t("portfolio.status.loadFailed");
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [username, t]);
+
+  useEffect(() => {
+    fetchPortfolio();
+  }, [fetchPortfolio]);
+
+  /* ── Share handler ── */
+  const handleShare = useCallback(async () => {
+    if (!portfolio) return;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: portfolio.title || t("portfolio.public.portfolio"),
+          text: portfolio.description,
+          url: window.location.href,
+        });
+      } catch {
+        // user cancelled — no-op
+      }
+    } else {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success(t("portfolio.public.linkCopied"));
+    }
+  }, [portfolio, t]);
+
+  /* ── Theme ── */
+  const themeStyles = applyTheme(
+    portfolio?.settings?.theme ?? "dark",
+    portfolio?.settings?.layout ?? "standard"
+  );
+
+  const theme = makeThemeHelpers(themeStyles);
+
+  /* ── Skills data shape ── */
+  const skillsData = portfolio
+    ? {
+        skillsTitle: portfolio.title ?? "My Skills",
+        skillsSubtitle: portfolio.description ?? "Technical Proficiencies",
+        skillsDesc: "Here are my technical skills and proficiency levels",
+        skills: portfolio.skills,
+      }
+    : null;
+
+  /* ── Render states ── */
+  if (loading) return <PortfolioLoader />;
+
+  if (error || !portfolio) {
+    return (
+      <NotFound
+        message={error || t("portfolio.public.notFoundDescription")}
+        label={t("portfolio.public.notFound")}
+        goHomeLabel={t("common.goHome")}
+      />
     );
+  }
+
+  /* ── Happy path ── */
+  return (
+    <div className="rounded-md">
+      <div className={`min-h-screen ${themeStyles.container} rounded-lg`}>
+        <PortfolioHeader portfolio={portfolio} />
+
+        {portfolio.skills?.length > 0 && skillsData && (
+          <SkillsShowcase portfolio={skillsData} />
+        )}
+
+        {portfolio.projects?.length > 0 && (
+          <ProjectsGallery
+            projects={portfolio.projects}
+            themeStyles={themeStyles}
+          />
+        )}
+
+        <ContactSection portfolio={portfolio} themeStyles={themeStyles} />
+
+        <PortfolioFooter portfolio={portfolio} />
+      </div>
+    </div>
+  );
 }

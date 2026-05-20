@@ -487,10 +487,14 @@ export async function generateSessionsForGroup(
         }
 
         const scheduledDate = sessionDates[sessionIndex];
-        const lessonTitles = sessionGroup.lessons
-          .map((l) => l.title)
-          .join(" & ");
-        const sessionTitle = `${module.title} - Session ${sessionGroup.sessionNumber}: ${lessonTitles}`;
+
+        // ✅ FIX: لو الـ lessons بنفس الاسم اعرضه مرة واحدة بس
+        const uniqueLessonTitles = sessionGroup.lessons?.[0]?.title?.trim()
+          ? [sessionGroup.lessons[0].title.trim()]
+          : [];
+
+        const lessonTitles = uniqueLessonTitles;
+        const sessionTitle = `Session ${sessionGroup.sessionNumber}: ${lessonTitles}`;
 
         // ✅ بناء الـ description من محتوى الـ lessons الفعلي
         const sessionDescription = sessionGroup.lessons[0]?.description || "";

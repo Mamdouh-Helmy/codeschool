@@ -13,6 +13,7 @@ import { LocaleProvider } from "./context/LocaleContext";
 import { I18nProvider } from "@/i18n/I18nProvider";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
+import "./portfolio-forms.css";
 
 const dmsans = DM_Sans({ subsets: ["latin"] });
 

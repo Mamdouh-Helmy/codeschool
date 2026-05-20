@@ -1,32 +1,75 @@
-// components/Portfolio/PortfolioBuilder.tsx
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import PortfolioBuilderUI from "./PortfolioBuilderUI";
-import Loader from "@/components/Common/Loader";
 import { Portfolio, PortfolioFormData } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 
+/* ── Inline branded loader (no external dep) ───────────────────── */
+function PortfolioLoader() {
+  return (
+    <>
+      <style>{`
+        @keyframes pb-spin  { to { transform: rotate(360deg); } }
+        @keyframes pb-pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+        .pb-loader-shell {
+          min-height: 100vh;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          background: #0a0f17; gap: 18px;
+        }
+        .pb-loader-ring {
+          width: 44px; height: 44px;
+          border: 3px solid #30363d;
+          border-top-color: #ff6700;
+          border-radius: 50%;
+          animation: pb-spin .75s linear infinite;
+        }
+        .pb-loader-text {
+          font-size: 13px; color: #8b949e;
+          font-family: system-ui, sans-serif;
+          animation: pb-pulse 1.6s ease-in-out infinite;
+        }
+        .pb-loader-dots { display: inline-flex; gap: 4px; margin-top: 4px; }
+        .pb-loader-dot  {
+          width: 5px; height: 5px; border-radius: 50%;
+          background: #ff6700; animation: pb-pulse 1.2s ease-in-out infinite;
+        }
+        .pb-loader-dot:nth-child(2) { animation-delay: .2s; }
+        .pb-loader-dot:nth-child(3) { animation-delay: .4s; }
+      `}</style>
+      <div className="pb-loader-shell">
+        <div className="pb-loader-ring" />
+        <div>
+          <div className="pb-loader-text">Loading your portfolio</div>
+          <div className="pb-loader-dots">
+            <span className="pb-loader-dot" />
+            <span className="pb-loader-dot" />
+            <span className="pb-loader-dot" />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ── Main component ─────────────────────────────────────────────── */
 export default function PortfolioBuilder() {
   const { t } = useI18n();
-  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [saving, setSaving] = useState<boolean>(false);
-  const [user, setUser] = useState<any>(null);
+  const [portfolio, setPortfolio]   = useState<Portfolio | null>(null);
+  const [loading, setLoading]       = useState<boolean>(true);
+  const [saving, setSaving]         = useState<boolean>(false);
+  const [user, setUser]             = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    
-    if (!token) {
-      router.push("/signin");
-      return;
-    }
-    
+    if (!token) { router.push("/signin"); return; }
     fetchUserWithToken(token);
   }, [router]);
 
+  /* ── Fetch current user ─────────────────────────────────────── */
   const fetchUserWithToken = async (token: string) => {
     try {
       const res = await fetch("/api/users/me", {
@@ -38,8 +81,7 @@ export default function PortfolioBuilder() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        console.error("Fetch user error:", res.status, text);
+        console.error("Fetch user error:", res.status, await res.text());
         localStorage.removeItem("token");
         router.push("/signin");
         return;
@@ -48,7 +90,7 @@ export default function PortfolioBuilder() {
       const data = await res.json();
       if (data?.success && data.user) {
         setUser(data.user);
-        fetchPortfolio(token);
+        fetchPortfolio(token, data.user);
       } else {
         localStorage.removeItem("token");
         router.push("/signin");
@@ -60,85 +102,79 @@ export default function PortfolioBuilder() {
     }
   };
 
-  const fetchPortfolio = async (token?: string): Promise<void> => {
+  /* ── Fetch (or create) portfolio ────────────────────────────── */
+  const fetchPortfolio = async (
+    token?: string,
+    currentUser?: any
+  ): Promise<void> => {
     try {
       const currentToken = token || localStorage.getItem("token");
-      
-      const res = await fetch("/api/portfolio", {
-        headers: {
-          "Authorization": `Bearer ${currentToken}`,
-        },
+      const userData     = currentUser || user;
+
+      const res  = await fetch("/api/portfolio", {
+        headers: { Authorization: `Bearer ${currentToken}` },
       });
-      
       const data = await res.json();
 
-      if (data.success) {
-        setPortfolio(data.portfolio);
+      if (data.success && data.portfolio) {
+        setPortfolio({
+          ...data.portfolio,
+          userId: data.portfolio.userId || userData,
+        });
       } else {
-        // إذا مفيش بورتفليو، ننشئ واحد افتراضي مع السمة المظلمة
-        console.log("🔄 No portfolio found, creating default with dark theme...");
+        /* Build default portfolio */
         const defaultPortfolio: PortfolioFormData = {
           title: t("portfolio.basic.titlePlaceholder"),
           description: "",
           skills: [
-            {
-              name: "JavaScript",
-              level: 75,
-              category: "Frontend",
-              icon: "🟨"
-            },
-            {
-              name: "React",
-              level: 70,
-              category: "Frontend", 
-              icon: "⚛️"
-            }
+            { name: "JavaScript", level: 75, category: "Frontend", icon: "🟨" },
+            { name: "React",      level: 70, category: "Frontend", icon: "⚛️" },
           ],
           projects: [
             {
               title: "Portfolio Website",
-              description: "A modern and responsive portfolio website to showcase my work and skills.",
+              description:
+                "A modern and responsive portfolio website to showcase my work and skills.",
               technologies: ["Next.js", "React", "Tailwind CSS"],
               status: "completed",
               featured: true,
               startDate: new Date(),
-              endDate: new Date(),
-              images: [], // الحقل المطلوب فقط
+              endDate:   new Date(),
+              images: [],
             },
           ],
           socialLinks: {
-            github: `https://github.com/${user?.username}`,
-            linkedin: `https://linkedin.com/in/${user?.username}`
+            github:   `https://github.com/${userData?.username || ""}`,
+            linkedin: `https://linkedin.com/in/${userData?.username || ""}`,
           },
           contactInfo: {},
           isPublished: false,
           views: 0,
-          settings: {
-            theme: "dark", // 🔥 السمة المظلمة كإعداد افتراضي
-            layout: "standard"
-          },
-          userId: user?.id || ""
+          settings: { theme: "dark", layout: "standard" },
+          userId: userData?.id || userData?._id || "",
         };
+
         setPortfolio(defaultPortfolio as Portfolio);
-        
-        // محاولة حفظ البورتفليو الافتراضي
+
+        /* Auto-save default */
         try {
           const saveRes = await fetch("/api/portfolio", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${currentToken}`,
+              Authorization: `Bearer ${currentToken}`,
             },
             body: JSON.stringify(defaultPortfolio),
           });
-          
-          if (saveRes.ok) {
-            const savedData = await saveRes.json();
-            setPortfolio(savedData.portfolio);
-            console.log("✅ Default portfolio saved successfully");
+          const saved = await saveRes.json();
+          if (saved.success && saved.portfolio) {
+            setPortfolio({
+              ...saved.portfolio,
+              userId: saved.portfolio.userId || userData,
+            });
           }
-        } catch (saveError) {
-          console.error("❌ Could not save default portfolio:", saveError);
+        } catch (saveErr) {
+          console.error("Could not save default portfolio:", saveErr);
         }
       }
     } catch (error) {
@@ -149,26 +185,28 @@ export default function PortfolioBuilder() {
     }
   };
 
-  const savePortfolio = async (portfolioData: PortfolioFormData): Promise<boolean> => {
+  /* ── Save portfolio ─────────────────────────────────────────── */
+  const savePortfolio = async (
+    portfolioData: PortfolioFormData
+  ): Promise<boolean> => {
     setSaving(true);
     try {
-      const token = localStorage.getItem("token");
-      const method = portfolio?._id ? "PUT" : "POST";
-      
-      const res = await fetch("/api/portfolio", {
+      const token  = localStorage.getItem("token");
+      const method = (portfolio as any)?._id ? "PUT" : "POST";
+
+      const res  = await fetch("/api/portfolio", {
         method,
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(portfolioData),
       });
-
       const data = await res.json();
-      
+
       if (data.success) {
         toast.success(t("portfolio.status.saved"));
-        setPortfolio(data.portfolio);
+        setPortfolio({ ...data.portfolio, userId: data.portfolio.userId || user });
         return true;
       } else {
         toast.error(data.message || t("portfolio.status.saveFailed"));
@@ -183,19 +221,13 @@ export default function PortfolioBuilder() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader />
-      </div>
-    );
-  }
+  if (loading) return <PortfolioLoader />;
 
   return (
-    <PortfolioBuilderUI 
-      portfolio={portfolio} 
-      onSave={savePortfolio} 
-      saving={saving} 
+    <PortfolioBuilderUI
+      portfolio={portfolio}
+      onSave={savePortfolio}
+      saving={saving}
     />
   );
 }

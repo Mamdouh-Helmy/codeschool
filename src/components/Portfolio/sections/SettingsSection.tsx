@@ -1,5 +1,5 @@
 "use client";
-import { Eye, EyeOff, Palette, Layout } from "lucide-react";
+import { Eye, EyeOff, Palette, Layout, BarChart2, AlertTriangle } from "lucide-react";
 import { PortfolioFormData, PortfolioSettings } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -8,78 +8,79 @@ interface SettingsSectionProps {
   onChange: (updates: Partial<PortfolioFormData>) => void;
 }
 
+const THEMES = [
+  { value: "light", label: "Light", desc: "Clean & professional", swatch: "#f9fafb" },
+  { value: "dark", label: "Dark", desc: "Modern & sleek", swatch: "#1e293b" },
+  { value: "blue", label: "Blue", desc: "Professional accent", swatch: "linear-gradient(135deg,#2563eb,#60a5fa)" },
+  { value: "green", label: "Green", desc: "Fresh & vibrant", swatch: "linear-gradient(135deg,#16a34a,#4ade80)" },
+];
+
+const LAYOUTS = [
+  { value: "standard", label: "Standard", desc: "Traditional layout" },
+  { value: "minimal", label: "Minimal", desc: "Clean & focused" },
+  { value: "creative", label: "Creative", desc: "Modern & dynamic" },
+];
+
 export default function SettingsSection({ data, onChange }: SettingsSectionProps) {
   const { t } = useI18n();
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const portfolioUrl = `${origin}/portfolio/${data.userId}`;
 
-  const updateSettings = (field: keyof PortfolioSettings, value: string): void => {
-    const updatedSettings = { ...data.settings, [field]: value };
-    onChange({ settings: updatedSettings });
-  };
+  const set = (field: keyof PortfolioSettings, value: string) =>
+    onChange({ settings: { ...data.settings, [field]: value } });
 
-  const themes = [
-    { value: 'light', label: 'Light', description: 'Clean and professional light theme' },
-    { value: 'dark', label: 'Dark', description: 'Modern dark theme for better readability' },
-    { value: 'blue', label: 'Blue', description: 'Professional blue accent theme' },
-    { value: 'green', label: 'Green', description: 'Fresh green accent theme' }
-  ];
-
-  const layouts = [
-    { value: 'standard', label: 'Standard', description: 'Traditional portfolio layout' },
-    { value: 'minimal', label: 'Minimal', description: 'Clean and minimal design' },
-    { value: 'creative', label: 'Creative', description: 'Modern and creative layout' }
-  ];
+  const socialCount = Object.values(data.socialLinks || {}).filter(u => u?.trim()).length;
 
   return (
-    <div className="space-y-6">
-      {/* Publishing Settings */}
-      <div className="bg-white dark:bg-darkmode rounded-lg border border-gray-200 dark:border-dark_border p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          {data.isPublished ? (
-            <Eye className="w-5 h-5 text-green-500" />
-          ) : (
-            <EyeOff className="w-5 h-5 text-gray-500" />
+    <div className="space-y-5">
+
+      {/* ── Visibility ─────────────────────────────────────────── */}
+      <div className="pf-section">
+        <div className="pf-section-header">
+          <div className="pf-section-title">
+            <div className="pf-section-title-icon">
+              {data.isPublished ? <Eye size={15} /> : <EyeOff size={15} />}
+            </div>
+            {t("portfolio.settings.visibility")}
+          </div>
+          {data.isPublished && (
+            <span className="pf-live-badge">
+              <span className="pf-live-dot" />
+              Live
+            </span>
           )}
-          {t("portfolio.settings.visibility")}
-        </h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark_input rounded-lg">
+        </div>
+
+        <div className="pf-section-body">
+          <div className={`pf-row ${data.isPublished ? "active" : ""}`}>
             <div>
-              <h4 className="font-medium text-gray-900 dark:text-white">
-                {t("portfolio.settings.public")} {t("portfolio.settings.portfolio")}
-              </h4>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {data.isPublished 
-                  ? t("portfolio.settings.publicDescription") 
-                  : t("portfolio.settings.privateDescription")
-                }
+              <h4 className="pf-row-title">{t("portfolio.settings.public")} {t("portfolio.settings.portfolio")}</h4>
+              <p className="pf-row-desc">
+                {data.isPublished ? t("portfolio.settings.publicDescription") : t("portfolio.settings.privateDescription")}
               </p>
             </div>
-            <button
+            <div
+              className={`sw ${data.isPublished ? "on" : ""}`}
+              role="switch"
+              aria-checked={data.isPublished}
+              tabIndex={0}
               onClick={() => onChange({ isPublished: !data.isPublished })}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                data.isPublished ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
-              }`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                data.isPublished ? 'translate-x-6' : 'translate-x-1'
-              }`} />
-            </button>
+              onKeyDown={(e) => e.key === " " && onChange({ isPublished: !data.isPublished })}
+            />
           </div>
+
           {data.isPublished && data._id && (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <p className="text-sm text-green-700 dark:text-green-300">
-                <strong>{t("portfolio.settings.livePortfolio")}</strong> {t("portfolio.settings.shareLink")}
-              </p>
-              <div className="flex items-center gap-2 mt-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/portfolio/${data.userId}`}
-                  className="flex-1 px-3 py-2 bg-white dark:bg-dark_input border border-green-200 dark:border-green-800 rounded text-sm text-green-700 dark:text-green-300"
-                />
+            <div className="pf-url-block">
+              <p className="pf-url-hint">{t("portfolio.settings.shareLink")}</p>
+              <div className="pf-url-row">
+                <div className="pf-wrap">
+                  <div className="pf-surface">
+                    <input className="pf-input" type="text" readOnly value={portfolioUrl} />
+                  </div>
+                </div>
                 <button
-                  onClick={() => navigator.clipboard.writeText(`${typeof window !== 'undefined' ? window.location.origin : ''}/portfolio/${data.userId}`)}
-                  className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
+                  className="pf-copy-btn"
+                  onClick={() => navigator.clipboard.writeText(portfolioUrl)}
                 >
                   {t("portfolio.settings.copy")}
                 </button>
@@ -89,67 +90,47 @@ export default function SettingsSection({ data, onChange }: SettingsSectionProps
         </div>
       </div>
 
-      {/* Theme Settings */}
-      <div className="bg-white dark:bg-darkmode rounded-lg border border-gray-200 dark:border-dark_border p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <Palette className="w-5 h-5 text-primary" />
-          {t("portfolio.settings.theme")} & {t("portfolio.settings.appearance")}
-        </h3>
-        <div className="space-y-4">
+      {/* ── Theme & Appearance ──────────────────────────────────── */}
+      <div className="pf-section">
+        <div className="pf-section-header">
+          <div className="pf-section-title">
+            <div className="pf-section-title-icon"><Palette size={15} /></div>
+            {t("portfolio.settings.theme")} &amp; {t("portfolio.settings.appearance")}
+          </div>
+        </div>
+
+        <div className="pf-section-body">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              {t("portfolio.settings.colorTheme")}
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {themes.map((theme) => (
+            <span className="pf-label">{t("portfolio.settings.colorTheme")}</span>
+            <div className="pf-theme-grid">
+              {THEMES.map(th => (
                 <button
-                  key={theme.value}
-                  onClick={() => updateSettings('theme', theme.value)}
-                  className={`p-4 border-2 rounded-lg text-left transition-all ${
-                    data.settings.theme === theme.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-gray-200 dark:border-dark_border hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
+                  key={th.value}
+                  onClick={() => set("theme", th.value)}
+                  className={`pf-theme-card ${data.settings.theme === th.value ? "selected" : ""}`}
                 >
-                  <div className={`w-8 h-8 rounded mb-2 ${
-                    theme.value === 'light' ? 'bg-gray-100 border' :
-                    theme.value === 'dark' ? 'bg-gray-800' :
-                    theme.value === 'blue' ? 'bg-blue-500' : 'bg-green-500'
-                  }`} />
-                  <div className="font-medium text-gray-900 dark:text-white text-sm">
-                    {theme.label}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {theme.description}
-                  </div>
+                  <div className="pf-theme-swatch" style={{ background: th.swatch }} />
+                  <div className="pf-theme-label">{th.label}</div>
+                  <div className="pf-theme-desc">{th.desc}</div>
                 </button>
               ))}
             </div>
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              {t("portfolio.settings.layoutStyle")}
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {layouts.map((layout) => (
+            <span className="pf-label">{t("portfolio.settings.layoutStyle")}</span>
+            <div className="pf-layout-grid">
+              {LAYOUTS.map(lo => (
                 <button
-                  key={layout.value}
-                  onClick={() => updateSettings('layout', layout.value)}
-                  className={`p-4 border-2 rounded-lg text-left transition-all ${
-                    data.settings.layout === layout.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-gray-200 dark:border-dark_border hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
+                  key={lo.value}
+                  onClick={() => set("layout", lo.value)}
+                  className={`pf-layout-card ${data.settings.layout === lo.value ? "selected" : ""}`}
                 >
-                  <div className="w-full h-16 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-600 dark:to-gray-700 rounded mb-2 flex items-center justify-center">
-                    <Layout className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                  <div className="pf-layout-preview">
+                    <Layout size={22} style={{ opacity: .45, color: "var(--pf-muted)" }} />
                   </div>
-                  <div className="font-medium text-gray-900 dark:text-white text-sm">
-                    {layout.label}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {layout.description}
-                  </div>
+                  <div className="pf-layout-label">{lo.label}</div>
+                  <div className="pf-layout-desc">{lo.desc}</div>
                 </button>
               ))}
             </div>
@@ -157,71 +138,55 @@ export default function SettingsSection({ data, onChange }: SettingsSectionProps
         </div>
       </div>
 
-      {/* Portfolio Statistics */}
+      {/* ── Statistics ──────────────────────────────────────────── */}
       {data._id && (
-        <div className="bg-white dark:bg-darkmode rounded-lg border border-gray-200 dark:border-dark_border p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            {t("portfolio.settings.statistics")}
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-gray-50 dark:bg-dark_input rounded-lg">
-              <div className="text-2xl font-bold text-primary">{data.views}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                {t("portfolio.settings.totalViews")}
-              </div>
+        <div className="pf-section">
+          <div className="pf-section-header">
+            <div className="pf-section-title">
+              <div className="pf-section-title-icon"><BarChart2 size={15} /></div>
+              {t("portfolio.settings.statistics")}
             </div>
-            <div className="text-center p-4 bg-gray-50 dark:bg-dark_input rounded-lg">
-              <div className="text-2xl font-bold text-primary">{data.skills?.length || 0}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                {t("portfolio.settings.skillsCount")}
-              </div>
-            </div>
-            <div className="text-center p-4 bg-gray-50 dark:bg-dark_input rounded-lg">
-              <div className="text-2xl font-bold text-primary">{data.projects?.length || 0}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                {t("portfolio.settings.projectsCount")}
-              </div>
-            </div>
-            <div className="text-center p-4 bg-gray-50 dark:bg-dark_input rounded-lg">
-              <div className="text-2xl font-bold text-primary">
-                {Object.values(data.socialLinks || {}).filter(url => url && url.trim() !== '').length}
-              </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                {t("portfolio.settings.socialLinksCount")}
-              </div>
+            <span style={{ fontSize: 11, color: "var(--pf-muted)" }}>All time</span>
+          </div>
+          <div className="pf-section-body">
+            <div className="pf-stats-grid">
+              {[
+                { value: data.views, label: t("portfolio.settings.totalViews") },
+                { value: data.skills?.length ?? 0, label: t("portfolio.settings.skillsCount") },
+                { value: data.projects?.length ?? 0, label: t("portfolio.settings.projectsCount") },
+                { value: socialCount, label: t("portfolio.settings.socialLinksCount") },
+              ].map((s, i) => (
+                <div key={i} className="pf-stat">
+                  <div className="pf-stat-value">{s.value}</div>
+                  <div className="pf-stat-label">{s.label}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* Danger Zone */}
-      <div className="bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 p-6">
-        <h3 className="text-lg font-semibold text-red-800 dark:text-red-300 mb-4">
-          {t("portfolio.settings.dangerZone")}
-        </h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-white dark:bg-darkmode rounded-lg border border-red-200 dark:border-red-800">
+      {/* ── Danger Zone ─────────────────────────────────────────── */}
+      <div className="pf-danger-section">
+        <div className="pf-danger-header">
+          <div className="pf-danger-title">
+            <AlertTriangle size={15} />
+            {t("portfolio.settings.dangerZone")}
+          </div>
+        </div>
+        <div className="pf-danger-body">
+          <div className="pf-danger-row">
             <div>
-              <h4 className="font-medium text-red-800 dark:text-red-300">
-                {t("portfolio.settings.reset")}
-              </h4>
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {t("portfolio.settings.resetWarning")}
-              </p>
+              <h4>{t("portfolio.settings.reset")}</h4>
+              <p>{t("portfolio.settings.resetWarning")}</p>
             </div>
             <button
+              className="pf-reset-btn"
               onClick={() => {
                 if (confirm(t("portfolio.settings.resetConfirm"))) {
-                  onChange({
-                    skills: [],
-                    projects: [],
-                    socialLinks: {},
-                    contactInfo: {},
-                    settings: { theme: 'light', layout: 'standard' }
-                  });
+                  onChange({ skills: [], projects: [], socialLinks: {}, contactInfo: {}, settings: { theme: "light", layout: "standard" } });
                 }
               }}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
               {t("portfolio.settings.reset")}
             </button>

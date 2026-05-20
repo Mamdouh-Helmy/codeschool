@@ -1,0 +1,1131 @@
+/* =============================================================
+   portfolio-forms.css
+   Radix UI design system — brand: #ff6700 / #004d59 / #feaf00
+   Import once in globals.css:  @import './portfolio-forms.css';
+   ============================================================= */
+
+/* ── Keyframes ──────────────────────────────────────────────── */
+@keyframes pf-border-flow {
+  0%   { background-position: 0%   50% }
+  50%  { background-position: 100% 50% }
+  100% { background-position: 0%   50% }
+}
+
+@keyframes pf-shimmer {
+  from { background-position: -200% 0 }
+  to   { background-position:  200% 0 }
+}
+
+@keyframes pf-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(254,175,0,.22) }
+  50%       { box-shadow: 0 0 0 7px rgba(254,175,0,.08) }
+}
+
+@keyframes pf-slide-down {
+  from { opacity: 0; transform: translateY(-4px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+
+@keyframes pf-slide-up {
+  from { opacity: 0; transform: translateY(4px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+
+@keyframes pf-fade-in {
+  from { opacity: 0; transform: translateY(5px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+
+/* ── CSS Tokens ─────────────────────────────────────────────── */
+:root {
+  --pf-primary:   #ff6700;
+  --pf-secondary: #004d59;
+  --pf-amber:     #feaf00;
+  --pf-coral:     #ff6437;
+
+  --pf-gradient: linear-gradient(
+    90deg,
+    var(--pf-secondary),
+    var(--pf-primary),
+    var(--pf-amber),
+    var(--pf-coral),
+    var(--pf-primary),
+    var(--pf-secondary)
+  );
+
+  --pf-radius:    10px;
+  --pf-radius-sm: 7px;
+  --pf-dur:       0.3s;
+
+  --pf-bg:        #ffffff;
+  --pf-bg-soft:   #f9fafb;
+  --pf-border:    #e5e7eb;
+  --pf-text:      #111827;
+  --pf-muted:     #6b7280;
+  --pf-placeholder: #9ca3af;
+}
+
+.dark {
+  --pf-bg:        #21262d;
+  --pf-bg-soft:   #161b22;
+  --pf-border:    #30363d;
+  --pf-text:      #f0f6fc;
+  --pf-muted:     #8b949e;
+  --pf-placeholder: #6e7681;
+}
+
+/* ── Field Group & Label ────────────────────────────────────── */
+.pf-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pf-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--pf-muted);
+  transition: color var(--pf-dur);
+  user-select: none;
+  min-height: 22px;
+}
+
+/* Icon wrapper inside label — adds per-platform coloured pill */
+.pf-label__icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(107,114,128,.10);
+  color: var(--pf-muted);
+  flex-shrink: 0;
+  transition: background var(--pf-dur), color var(--pf-dur);
+}
+
+.pf-group:focus-within .pf-label,
+.pf-group--active .pf-label {
+  color: var(--active-color, var(--pf-primary));
+}
+
+.dark .pf-group:focus-within .pf-label,
+.dark .pf-group--active .pf-label {
+  color: var(--active-color-dark, var(--active-color, var(--pf-primary)));
+}
+
+.pf-group:focus-within .pf-label__icon-wrap,
+.pf-group--active .pf-label__icon-wrap {
+  background: color-mix(in srgb, var(--active-color, var(--pf-primary)) 12%, transparent);
+  color: var(--active-color, var(--pf-primary));
+}
+
+.dark .pf-group:focus-within .pf-label__icon-wrap,
+.dark .pf-group--active .pf-label__icon-wrap {
+  background: var(--active-bg-dark, color-mix(in srgb, var(--active-color-dark, var(--active-color, var(--pf-primary))) 12%, transparent));
+  color: var(--active-color-dark, var(--active-color, var(--pf-primary)));
+}
+
+/* Validation states */
+.pf-group--invalid .pf-wrap {
+  background: rgba(220,38,38,.25) !important;
+}
+
+.pf-group--invalid .pf-wrap::before {
+  background: linear-gradient(90deg, #dc2626, #ef4444, #dc2626) !important;
+}
+
+/* Inline validation hint */
+.pf-field-hint {
+  font-size: 11.5px;
+  margin: 0;
+  animation: pf-fade-in .2s ease;
+}
+
+.pf-field-hint--error {
+  color: #dc2626;
+}
+
+/* ── Animated Border Wrapper ────────────────────────────────── */
+.pf-wrap {
+  position: relative;
+  border-radius: calc(var(--pf-radius) + 2px);
+  padding: 1.5px;
+  background: var(--pf-border);
+  transition: background var(--pf-dur);
+}
+
+.pf-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--pf-gradient);
+  background-size: 300% 300%;
+  opacity: 0;
+  transition: opacity var(--pf-dur);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.pf-wrap:hover::before,
+.pf-wrap:focus-within::before {
+  opacity: 1;
+  animation: pf-border-flow 2.8s ease infinite;
+}
+
+.pf-surface {
+  position: relative;
+  z-index: 1;
+  border-radius: var(--pf-radius);
+  background: var(--pf-bg);
+  overflow: hidden;
+}
+
+/* Surface variant with trailing action button */
+.pf-surface--with-action {
+  display: flex;
+  align-items: center;
+}
+
+/* Action link inside input surface (e.g. open external link) */
+.pf-surface__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 100%;
+  min-height: 38px;
+  border-left: 1px solid var(--pf-border);
+  color: var(--pf-muted);
+  text-decoration: none;
+  transition: color var(--pf-dur), background var(--pf-dur);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pf-wrap:focus-within .pf-surface__action,
+.pf-group--active .pf-surface__action {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pf-surface__action:hover {
+  background: rgba(0,0,0,.04);
+}
+
+.dark .pf-surface__action:hover {
+  background: rgba(255,255,255,.06);
+}
+
+/* ── Native Input / Textarea ────────────────────────────────── */
+.pf-input,
+.pf-textarea {
+  display: block;
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--pf-text);
+  font-family: inherit;
+  border-radius: var(--pf-radius);
+}
+
+.pf-input::placeholder,
+.pf-textarea::placeholder {
+  color: var(--pf-placeholder);
+  font-size: 12.5px;
+}
+
+.pf-textarea {
+  resize: none;
+  min-height: 100px;
+}
+
+/* ── Char counter ───────────────────────────────────────────── */
+.pf-count {
+  font-size: 11px;
+  color: var(--pf-placeholder);
+  text-align: right;
+  transition: color .2s;
+}
+.pf-count[data-warn="true"] { color: var(--pf-coral); }
+
+/* ── Progress strip (for SocialLinksSection) ─────────────────── */
+.pf-progress-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.pf-progress-strip__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pf-progress-strip__label {
+  font-size: 12px;
+  color: var(--pf-muted);
+}
+
+.pf-progress-strip__pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pf-primary);
+}
+
+/* ── Progress bar (skills display) ──────────────────────────── */
+.pf-progress-track {
+  width: 100%;
+  height: 7px;
+  background: var(--pf-border);
+  border-radius: 9999px;
+  overflow: visible;
+  position: relative;
+}
+
+.pf-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--pf-secondary), var(--pf-primary), var(--pf-amber));
+  background-size: 200% 100%;
+  animation: pf-shimmer 2.2s linear infinite;
+  transition: width .6s cubic-bezier(.25,.8,.25,1);
+  position: relative;
+}
+
+.pf-progress-fill::after {
+  content: '';
+  position: absolute;
+  right: -1px; top: 50%;
+  transform: translateY(-50%);
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--pf-amber);
+  animation: pf-pulse 1.8s ease-in-out infinite;
+}
+
+/* ── Badge ───────────────────────────────────────────────────── */
+.pf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 9999px;
+}
+
+.pf-badge--primary {
+  background: rgba(255,103,0,.10);
+  color: var(--pf-primary);
+}
+
+.pf-badge--success {
+  background: rgba(22,163,74,.10);
+  color: #16a34a;
+}
+
+.pf-badge__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* ── Social Section Layout ───────────────────────────────────── */
+.pf-social-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pf-social-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pf-social-section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pf-text);
+}
+
+.pf-social-section__badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Social Grid ─────────────────────────────────────────────── */
+.pf-social-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 640px) {
+  .pf-social-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Tip box ─────────────────────────────────────────────────── */
+.pf-tip-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 15px;
+  border-radius: var(--pf-radius);
+  background: rgba(0,77,89,.06);
+  border: 1px solid rgba(0,77,89,.10);
+}
+
+.pf-tip-box__icon {
+  color: var(--pf-secondary);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.pf-tip-box p {
+  font-size: 12.5px;
+  color: var(--pf-secondary);
+  line-height: 1.65;
+  margin: 0;
+}
+
+.pf-tip-box strong {
+  font-weight: 600;
+}
+
+/* ── Preview panel ───────────────────────────────────────────── */
+.pf-preview-panel {
+  background: var(--pf-bg-soft);
+  border: 1px solid var(--pf-border);
+  border-radius: 12px;
+  padding: 15px 16px;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pf-preview-panel__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.pf-preview-panel__empty {
+  font-size: 12.5px;
+  color: var(--pf-placeholder);
+  margin: 0;
+  padding: 4px 0;
+}
+
+.pf-preview-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  animation: pf-fade-in .25s ease;
+}
+
+/* ── Preview chip ────────────────────────────────────────────── */
+.pf-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--chip-color, var(--pf-primary));
+  background: var(--chip-bg, rgba(255,103,0,.08));
+  border: 1px solid color-mix(in srgb, var(--chip-color, var(--pf-primary)) 18%, transparent);
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+  cursor: pointer;
+}
+
+.dark .pf-preview-chip {
+  color: var(--chip-color-dark, var(--chip-color, var(--pf-primary)));
+  background: var(--chip-bg-dark, var(--chip-bg, rgba(255,103,0,.08)));
+  border-color: color-mix(in srgb, var(--chip-color-dark, var(--chip-color, var(--pf-primary))) 25%, transparent);
+}
+
+.pf-preview-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--chip-color, var(--pf-primary)) 20%, transparent);
+  border-color: color-mix(in srgb, var(--chip-color, var(--pf-primary)) 35%, transparent);
+}
+
+/* ── Radix Select ───────────────────────────────────────────── */
+.pf-select-trigger {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--pf-text);
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--pf-radius);
+  transition: color var(--pf-dur);
+}
+
+.pf-select-trigger[data-placeholder] {
+  color: var(--pf-placeholder);
+}
+
+.pf-select-trigger[data-state="open"] .pf-select-chevron {
+  transform: rotate(180deg);
+  color: var(--pf-primary);
+}
+
+.pf-select-chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--pf-muted);
+  transition: transform var(--pf-dur), color var(--pf-dur);
+}
+
+.pf-select-content {
+  background: var(--pf-bg);
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius);
+  box-shadow: 0 8px 24px -4px rgba(0,0,0,.12), 0 2px 8px -2px rgba(0,0,0,.08);
+  overflow: hidden;
+  z-index: 50;
+  min-width: var(--radix-select-trigger-width);
+}
+
+.pf-select-content[data-state="open"] {
+  animation: pf-slide-down .18s ease;
+}
+
+.pf-select-viewport {
+  padding: 4px;
+}
+
+.pf-select-item {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: var(--pf-text);
+  border-radius: var(--pf-radius-sm);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  position: relative;
+}
+
+.pf-select-item[data-highlighted] {
+  background: rgba(255,103,0,.08);
+  color: var(--pf-primary);
+  outline: none;
+}
+
+.pf-select-item[data-state="checked"] {
+  color: var(--pf-primary);
+  font-weight: 500;
+}
+
+.pf-select-item-indicator {
+  margin-left: auto;
+  color: var(--pf-primary);
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Radix Slider ───────────────────────────────────────────── */
+.pf-slider-root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  touch-action: none;
+  width: 100%;
+  height: 20px;
+}
+
+.pf-slider-track {
+  background: var(--pf-border);
+  position: relative;
+  flex-grow: 1;
+  border-radius: 9999px;
+  height: 5px;
+}
+
+.pf-slider-range {
+  position: absolute;
+  background: linear-gradient(90deg, var(--pf-secondary), var(--pf-primary));
+  border-radius: 9999px;
+  height: 100%;
+}
+
+.pf-slider-thumb {
+  all: unset;
+  display: block;
+  width: 20px;
+  height: 20px;
+  background: var(--pf-bg);
+  border: 2.5px solid var(--pf-primary);
+  border-radius: 9999px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  cursor: grab;
+  transition: border-color var(--pf-dur), box-shadow var(--pf-dur), transform .15s;
+}
+
+.pf-slider-thumb:hover {
+  border-color: var(--pf-amber);
+  box-shadow: 0 0 0 6px rgba(255,103,0,.15);
+  transform: scale(1.1);
+}
+
+.pf-slider-thumb:focus-visible {
+  border-color: var(--pf-amber);
+  box-shadow: 0 0 0 6px rgba(255,103,0,.20);
+}
+
+.pf-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.0);
+}
+
+/* ── Radix Switch ────────────────────────────────────────────── */
+.pf-switch-root {
+  all: unset;
+  width: 44px;
+  height: 24px;
+  background: var(--pf-border);
+  border-radius: 9999px;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--pf-dur);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.1);
+}
+
+.pf-switch-root[data-state="checked"] {
+  background: var(--pf-primary);
+}
+
+.pf-switch-root:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255,103,0,.3);
+}
+
+.pf-switch-thumb {
+  display: block;
+  width: 18px; height: 18px;
+  background: #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+  transition: transform var(--pf-dur) cubic-bezier(.34,1.4,.64,1);
+  transform: translateX(3px);
+  will-change: transform;
+}
+
+.pf-switch-root[data-state="checked"] .pf-switch-thumb {
+  transform: translateX(23px);
+}
+
+/* ── Checkbox ────────────────────────────────────────────────── */
+.pf-checkbox-root {
+  all: unset;
+  width: 18px; height: 18px;
+  border: 2px solid var(--pf-border);
+  border-radius: 5px;
+  background: var(--pf-bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color var(--pf-dur), background var(--pf-dur);
+}
+
+.pf-checkbox-root[data-state="checked"] {
+  background: var(--pf-primary);
+  border-color: var(--pf-primary);
+}
+
+.pf-checkbox-root:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255,103,0,.3);
+}
+
+.pf-checkbox-indicator {
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Badge / Tag ─────────────────────────────────────────────── */
+.pf-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(255,103,0,.10);
+  color: var(--pf-primary);
+  transition: background .15s;
+}
+
+.pf-tag button {
+  all: unset;
+  cursor: pointer;
+  line-height: 1;
+  opacity: .7;
+  transition: opacity .15s;
+  font-size: 14px;
+}
+.pf-tag button:hover { opacity: 1; }
+
+/* ── Status badge ────────────────────────────────────────────── */
+.pf-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.pf-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.pf-status--completed { background:#dcfce7; color:#166534; }
+.pf-status--completed .pf-status-dot { background:#16a34a; }
+.pf-status--in-progress { background:#dbeafe; color:#1e40af; }
+.pf-status--in-progress .pf-status-dot { background:#3b82f6; }
+.pf-status--planned { background:#fef9c3; color:#854d0e; }
+.pf-status--planned .pf-status-dot { background:#eab308; }
+.dark .pf-status--completed  { background:rgba(22,163,74,.2);  color:#4ade80; }
+.dark .pf-status--in-progress{ background:rgba(59,130,246,.2); color:#93c5fd; }
+.dark .pf-status--planned    { background:rgba(234,179,8,.2);  color:#fde047; }
+
+/* ── Tooltip (Radix) ─────────────────────────────────────────── */
+.pf-tooltip-content {
+  background: var(--pf-text);
+  color: var(--pf-bg);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  max-width: 260px;
+  word-break: break-all;
+  animation: pf-slide-up .15s ease;
+  z-index: 100;
+}
+
+.pf-tooltip-arrow {
+  fill: var(--pf-text);
+}
+
+/* ── Section Card ────────────────────────────────────────────── */
+.pf-section {
+  background: var(--pf-bg);
+  border-radius: 14px;
+  border: 1px solid var(--pf-border);
+  overflow: hidden;
+}
+.pf-section-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--pf-border);
+}
+.pf-section-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600; color: var(--pf-text);
+}
+.pf-section-title-icon {
+  width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,103,0,.1); color: var(--pf-primary);
+}
+.pf-section-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Toggle Row ──────────────────────────────────────────────── */
+.pf-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px;
+  background: var(--pf-bg-soft);
+  border-radius: var(--pf-radius);
+  border: 1.5px solid transparent;
+  transition: border-color var(--pf-dur), background var(--pf-dur);
+}
+.pf-row.active { border-color: rgba(255,103,0,.25); background: rgba(255,103,0,.04); }
+.pf-row-title { font-size: 13.5px; font-weight: 500; color: var(--pf-text); }
+.pf-row-desc  { font-size: 12px; color: var(--pf-muted); margin-top: 2px; }
+
+/* ── Live badge ──────────────────────────────────────────────── */
+.pf-live-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; padding: 3px 10px;
+  border-radius: 9999px; background: rgba(22,163,74,.1); color: #16a34a;
+}
+.pf-live-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #16a34a;
+  animation: pf-pulse-green 1.8s ease-in-out infinite;
+}
+@keyframes pf-pulse-green {
+  0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,.4); }
+  50%      { box-shadow: 0 0 0 4px rgba(22,163,74,0); }
+}
+
+/* ── URL block ───────────────────────────────────────────────── */
+.pf-url-block {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px;
+  background: rgba(22,163,74,.06);
+  border-radius: var(--pf-radius);
+  border: 1px solid rgba(22,163,74,.2);
+}
+.pf-url-hint { font-size: 12px; font-weight: 500; color: #16a34a; }
+.pf-url-row  { display: flex; gap: 8px; align-items: center; }
+.pf-copy-btn {
+  padding: 9px 14px; border-radius: var(--pf-radius);
+  background: var(--pf-primary); color: #fff;
+  font-size: 12.5px; font-weight: 600; border: none; cursor: pointer;
+  transition: opacity .2s; white-space: nowrap;
+}
+.pf-copy-btn:hover { opacity: .9; }
+
+/* ── Theme / Layout cards ────────────────────────────────────── */
+.pf-theme-grid  { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+.pf-layout-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+.pf-theme-card, .pf-layout-card {
+  padding: 12px; border-radius: var(--pf-radius);
+  border: 1.5px solid var(--pf-border);
+  cursor: pointer; background: var(--pf-bg); text-align: left;
+  transition: border-color var(--pf-dur), background var(--pf-dur);
+}
+.pf-theme-card:hover, .pf-layout-card:hover { border-color: rgba(255,103,0,.35); }
+.pf-theme-card.selected, .pf-layout-card.selected {
+  border-color: var(--pf-primary); background: rgba(255,103,0,.04);
+}
+.pf-theme-swatch {
+  width: 100%; height: 26px; border-radius: 6px;
+  margin-bottom: 8px; border: 1px solid rgba(0,0,0,.08);
+}
+.pf-layout-preview {
+  width: 100%; height: 48px; border-radius: 6px;
+  background: var(--pf-bg-soft); border: 1px solid var(--pf-border);
+  display: flex; align-items: center; justify-content: center; margin-bottom: 8px;
+}
+.pf-theme-label, .pf-layout-label { font-size: 12.5px; font-weight: 500; color: var(--pf-text); }
+.pf-theme-desc,  .pf-layout-desc  { font-size: 11px; color: var(--pf-muted); margin-top: 2px; }
+
+/* ── Statistics ──────────────────────────────────────────────── */
+.pf-stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+.pf-stat { text-align: center; padding: 14px 8px; background: var(--pf-bg-soft); border-radius: var(--pf-radius); }
+.pf-stat-value { font-size: 22px; font-weight: 600; color: var(--pf-primary); }
+.pf-stat-label { font-size: 11px; color: var(--pf-muted); margin-top: 3px; }
+
+/* ── Danger Zone ─────────────────────────────────────────────── */
+.pf-danger-section {
+  background: rgba(220,38,38,.04);
+  border-radius: 14px; border: 1px solid rgba(220,38,38,.18); overflow: hidden;
+}
+.pf-danger-header { padding: 14px 20px 12px; border-bottom: 1px solid rgba(220,38,38,.12); }
+.pf-danger-title  { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #dc2626; }
+.pf-danger-body   { padding: 16px 20px; }
+.pf-danger-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; background: var(--pf-bg);
+  border-radius: var(--pf-radius); border: 1px solid rgba(220,38,38,.15);
+}
+.pf-danger-row h4 { font-size: 13px; font-weight: 500; color: #dc2626; }
+.pf-danger-row p  { font-size: 12px; color: #ef4444; margin-top: 2px; }
+.pf-reset-btn {
+  padding: 9px 16px; border-radius: var(--pf-radius);
+  background: #dc2626; color: #fff;
+  font-size: 12.5px; font-weight: 600; border: none; cursor: pointer;
+  transition: opacity .2s; white-space: nowrap;
+}
+.pf-reset-btn:hover { opacity: .88; }
+
+/* ── Simple CSS switch (non-Radix fallback) ─────────────────── */
+.sw {
+  position: relative; width: 48px; height: 26px; flex-shrink: 0;
+  background: #d1d5db; border-radius: 9999px; cursor: pointer;
+  transition: background 0.22s ease;
+}
+.sw::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: transform 0.22s cubic-bezier(.34,1.4,.64,1);
+}
+.sw.on { background: var(--pf-primary); }
+.sw.on::after { transform: translateX(22px); }
+
+
+/* =============================================================
+   portfolio-public.css
+   Loader + NotFound screens for PublicPortfolio
+   Import in globals.css after portfolio-forms.css
+   ============================================================= */
+
+/* ── Keyframes ──────────────────────────────────────────────── */
+@keyframes pp-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pp-spin-rev {
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes pp-pulse-dot {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.7; }
+  50%       { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+}
+
+@keyframes pp-shimmer {
+  from { background-position: -300% 0; }
+  to   { background-position:  300% 0; }
+}
+
+@keyframes pp-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pp-blink {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; }
+}
+
+/* ── Shared screen shell ─────────────────────────────────────── */
+.pf-loader-screen,
+.pf-notfound-screen {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--pf-bg-soft, #f9fafb);
+  padding: 2rem;
+}
+
+.dark .pf-loader-screen,
+.dark .pf-notfound-screen {
+  background: var(--pf-bg-soft, #161b22);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LOADER
+══════════════════════════════════════════════════════════════ */
+.pf-loader-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  animation: pp-fade-up 0.4s ease both;
+}
+
+/* ── Rings ── */
+.pf-loader-rings {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+
+.pf-loader-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+}
+
+.pf-loader-ring--1 {
+  border-top-color: var(--pf-primary, #ff6700);
+  border-right-color: color-mix(in srgb, var(--pf-primary, #ff6700) 30%, transparent);
+  animation: pp-spin 1.1s linear infinite;
+}
+
+.pf-loader-ring--2 {
+  inset: 10px;
+  border-bottom-color: var(--pf-amber, #feaf00);
+  border-left-color: color-mix(in srgb, var(--pf-amber, #feaf00) 30%, transparent);
+  animation: pp-spin-rev 1.5s linear infinite;
+}
+
+.pf-loader-ring--3 {
+  inset: 20px;
+  border-top-color: var(--pf-secondary, #004d59);
+  border-right-color: color-mix(in srgb, var(--pf-secondary, #004d59) 30%, transparent);
+  animation: pp-spin 2s linear infinite;
+}
+
+.pf-loader-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--pf-primary, #ff6700);
+  transform: translate(-50%, -50%);
+  animation: pp-pulse-dot 1.2s ease-in-out infinite;
+}
+
+/* ── Skeleton lines ── */
+.pf-loader-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 260px;
+}
+
+.pf-skel {
+  display: block;
+  height: 12px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    var(--pf-border, #e5e7eb) 0%,
+    color-mix(in srgb, var(--pf-primary, #ff6700) 12%, var(--pf-border, #e5e7eb)) 50%,
+    var(--pf-border, #e5e7eb) 100%
+  );
+  background-size: 300% 100%;
+  animation: pp-shimmer 1.8s linear infinite;
+}
+
+.pf-skel--title {
+  width: 100%;
+  height: 16px;
+}
+
+.pf-skel--sub {
+  width: 80%;
+}
+
+.pf-skel--short {
+  width: 55%;
+}
+
+.pf-skel-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.pf-skel--chip {
+  width: 68px;
+  height: 26px;
+  border-radius: 9999px;
+}
+
+/* ── Label ── */
+.pf-loader-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pf-muted, #6b7280);
+  letter-spacing: 0.03em;
+  animation: pp-blink 2s ease-in-out infinite;
+  margin: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   NOT FOUND
+══════════════════════════════════════════════════════════════ */
+.pf-notfound-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  max-width: 380px;
+  animation: pp-fade-up 0.4s ease both;
+}
+
+.pf-notfound-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(220, 38, 38, 0.08);
+  color: #dc2626;
+  border: 1.5px solid rgba(220, 38, 38, 0.18);
+  margin-bottom: 4px;
+}
+
+.dark .pf-notfound-icon {
+  background: rgba(220, 38, 38, 0.12);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.25);
+}
+
+.pf-notfound-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--pf-text, #111827);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.pf-notfound-message {
+  font-size: 14px;
+  color: var(--pf-muted, #6b7280);
+  margin: 0;
+  line-height: 1.65;
+}
+
+.pf-notfound-btn {
+  margin-top: 8px;
+  padding: 10px 28px;
+  border-radius: var(--pf-radius, 10px);
+  background: var(--pf-primary, #ff6700);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.pf-notfound-btn:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.pf-notfound-btn:active {
+  transform: translateY(0);
+  opacity: 1;
+}

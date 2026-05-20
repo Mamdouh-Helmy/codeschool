@@ -4097,6 +4097,21 @@ const en = {
 
   "instructors.table.language": "Language",
   "instructors.addFirst": "Add First Instructor",
+  "portfolio.builder.openInNewTab": "Open in New Tab",
+  "portfolio.builder.previewNote": "Preview your portfolio before publishing",
+  "portfolio.builder.published": "Published",
+  "portfolio.builder.views": "Views",
+  "portfolio.builder.basicInfoDesc":
+    "Add your personal and professional information",
+  "portfolio.builder.skillsDesc":
+    "Showcase your technical and professional skills",
+  "portfolio.builder.projectsDesc":
+    "Highlight your best projects and achievements",
+  "portfolio.builder.socialLinksDesc":
+    "Add your social media and professional links",
+  "portfolio.builder.settingsDesc":
+    "Customize your portfolio settings and preferences",
+    "portfolio.public.letsConnect" : "Let's Connect", 
 };
 
 export default en;

@@ -144,7 +144,7 @@ export default function PortfolioHeader({ portfolio }: PortfolioHeaderProps) {
                         {/* Logo */}
                         <div className="flex items-center gap-2">
                             <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/30">
-                                <Image
+                                <img
                                     src={userId?.image || headerImg}
                                     alt={userId?.name || 'User'}
                                     width={40}
@@ -311,8 +311,8 @@ export default function PortfolioHeader({ portfolio }: PortfolioHeaderProps) {
                         {/* Right Column - Image */}
                         <div className="w-full md:w-6/12 xl:w-5/12">
                             <div className="relative">
-                                <Image
-                                    src={userId?.image || headerImg}
+                                <img
+                                    src={headerImg}
                                     alt={userId?.name || 'User'}
                                     className="animate-[updown_3s_linear_infinite] rounded-full mt-10 md:mt-0 w-[200px] h-[200px] md:w-[350px] md:h-[350px] mx-auto"
                                     width={1000}
