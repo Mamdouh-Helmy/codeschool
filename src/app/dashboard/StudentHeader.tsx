@@ -93,7 +93,7 @@ export default function InstructorHeader({
   const getUserInitial = () =>
     user?.name?.length > 0 ? user.name.charAt(0).toUpperCase() : (isArabic ? "م" : "I");
 
-  const getFirstName = () => (user?.name || (isArabic ? "مدرس" : "Instructor")).split(" ")[0];
+  const getFirstName = () => (user?.name || (isArabic ? "طالب" : "Student")).split(" ")[0];
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -156,7 +156,7 @@ export default function InstructorHeader({
               </h1>
               <p className="text-xs xl:text-sm text-gray-500 dark:text-[#8b949e] mt-1 flex items-center gap-2">
                 <Sparkles className="w-3 h-3" style={{ color: "#feaf00" }} />
-                {isArabic ? "لوحة تحكم المدرس - رحلتك التعليمية" : "Instructor Dashboard — Your teaching journey"}
+                {isArabic ? "لوحة تحكم الطالب - رحلتك التعليمية" : "Student Dashboard — Your teaching journey"}
               </p>
             </div>
           </div>
@@ -353,7 +353,7 @@ export default function InstructorHeader({
                           className="inline-block text-[10px] font-medium text-white px-2 py-0.5 rounded-full mt-1 shadow-sm"
                           style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
                         >
-                          {isArabic ? "مدرس" : "Instructor"}
+                          {isArabic ? "طالب" : "Student"}
                         </span>
                       </div>
                     </div>

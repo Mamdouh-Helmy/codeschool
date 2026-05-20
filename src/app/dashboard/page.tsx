@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
 import { useI18n } from "@/i18n/I18nProvider";
+import Spline from '@splinetool/react-spline';
+
 
 // ============ Type Definitions ============
 interface StudentUser {
@@ -56,6 +58,8 @@ interface Stats {
   activeGroups?: number;
   pendingAssignments?: number;
   completedCourses?: number;
+  scheduledSessions?: number;
+  totalStudents?: number;
 }
 
 interface ProgressStage {
@@ -267,7 +271,7 @@ export default function StudentDashboard() {
       await fetch("/api/auth/logout", { method: "POST" });
       localStorage.removeItem("token");
       router.push("/");
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const getStageIcon = (iconName: string): any => {
@@ -361,13 +365,13 @@ export default function StudentDashboard() {
   } = dashboardData || {};
 
   const currentUser = user || { _id: "", name: isRTL ? "طالب" : "Student", email: "", role: "student", image: null };
-  
+
   const attendedSessionsCount = stats?.attendedSessions || 0;
   const absentSessionsCount = stats?.absentSessions || 0;
   const totalSessionsCount = stats?.totalSessions || 1;
   const completedSessionsCount = stats?.completedSessions || 0;
   const achievementsCount = Math.min(Math.floor(completedSessionsCount / 5), 20);
-  const progressPercentage = stats?.progressPercentage || 
+  const progressPercentage = stats?.progressPercentage ||
     (totalSessionsCount > 0 ? Math.round((completedSessionsCount / totalSessionsCount) * 100) : 0);
 
   const progressStages = progressData?.stages || [
@@ -463,78 +467,66 @@ export default function StudentDashboard() {
 
               {/* Hero Banner */}
               <div className="relative group max-w-4xl mx-auto">
+                {/* Enhanced Background Effects - Black & White only */}
                 <div className="absolute inset-0 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500"
-                  style={{ background: "linear-gradient(135deg, #004d59, #ff6700, #feaf00)" }} />
-                <div className="relative rounded-3xl p-6 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
-                  style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}>
+                  style={{ background: "linear-gradient(135deg, #000000, #333333, #666666)" }} />
 
-                  {/* dot pattern */}
-                  <div className="absolute inset-0 opacity-10"
+                <div className="relative rounded-3xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
+                  style={{ height: "400px" }}>
+
+                  {/* Dot Pattern Layer - White dots */}
+                  <div className="absolute inset-0 opacity-10 z-5 pointer-events-none"
                     style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
-                  <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl animate-pulse-slow"
-                    style={{ background: "#feaf00", opacity: 0.15 }} />
-                  <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full blur-3xl animate-pulse-slower"
-                    style={{ background: "#ff6437", opacity: 0.1 }} />
 
-                  <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-6">
-                    <div className="max-w-xl text-center lg:text-right">
-                      <div className="flex items-center gap-2 justify-center lg:justify-start mb-2">
-                        <Sparkles className="w-4 h-4 text-[#feaf00] animate-pulse" />
-                        <span className="text-[#feaf00] font-bold text-sm">
-                          {getGreeting()}, {currentUser?.name?.split(" ")[0] || (isRTL ? "طالب" : "Student")}!
-                        </span>
-                      </div>
+                  {/* Animated Blur Circles - White only */}
+                  <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl z-5 pointer-events-none"
+                    style={{ background: "#ffffff", opacity: 0.1 }} />
+                  <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full blur-3xl z-5 pointer-events-none"
+                    style={{ background: "#cccccc", opacity: 0.08 }} />
 
-                      <h2 className="text-2xl lg:text-3xl font-black text-white mb-3">
-                        {isRTL ? "رحلتك التعليمية" : "Your Learning Journey"}
-                      </h2>
+                  {/* Text Overlay */}
+                  <div className="absolute inset-0 z-10 flex flex-col justify-center p-8 pointer-events-none">
 
-                      <p className="text-white/70 mb-6 text-base">
-                        {isRTL
-                          ? `لديك ${stats?.totalSessions || 0} جلسة إجمالية و ${stats?.attendedSessions || 0} جلسة حضرتها`
-                          : `You have ${stats?.totalSessions || 0} total sessions and attended ${stats?.attendedSessions || 0}`}
-                      </p>
-
-                      <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
-                        <Link
-  href="/dashboard/sessions"
-  className="
-    group/btn relative px-6 py-3 rounded-xl font-black
-    text-white text-sm overflow-hidden
-    transition-all duration-300
-    shadow-[0_10px_30px_rgba(255,103,0,0.25)]
-    hover:shadow-[0_15px_40px_rgba(0,77,89,0.35)]
-    hover:-translate-y-1
-    bg-gradient-to-r from-[#004d59] via-[#ff6700] to-[#feaf00]
-    bg-[length:200%_200%]
-    hover:bg-right
-  "
->
-  {/* Glow Effect */}
-  <span className="absolute inset-0 bg-white/10 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300" />
-
-  {/* Shine Effect */}
-  <span className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover/btn:left-full transition-all duration-700" />
-
-  <span className="relative z-10 flex items-center gap-2">
-    {isRTL ? "جلساتي" : "My Sessions"}
-    <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-  </span>
-</Link>
-                      </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="w-4 h-4 text-white animate-pulse" />
+                      <span className="text-white font-bold text-sm">
+                        {getGreeting()}, {currentUser?.name?.split(" ")[0] || (isRTL ? "طالب" : "Student")}!
+                      </span>
                     </div>
 
-                    <div className="relative w-40 h-40 lg:w-48 lg:h-48 hidden lg:block group-hover:scale-105 transition-transform duration-500">
-                      <img
-                        src="https://storage.googleapis.com/uxpilot-auth.appspot.com/cc128e889c-1e79b7c5933da33a6e8e.png"
-                        alt="Learning"
-                        className="w-full h-full object-contain drop-shadow-lg animate-float"
-                      />
-                    </div>
+                    <h2 className="text-2xl lg:text-3xl font-black text-white mb-3">
+                      {isRTL ? "رحلتك التعليمية" : "Your Learning Journey"}
+                    </h2>
+
+                    <p className="text-white/70 mb-6 text-base">
+                      {isRTL
+                        ? `لديك ${stats?.totalSessions || 0} جلسة إجمالية و ${stats?.attendedSessions || 0} جلسة حضرتها`
+                        : `You have ${stats?.totalSessions || 0} total sessions and attended ${stats?.attendedSessions || 0}`}
+                    </p>
+
+                    <Link
+                      href="/dashboard/sessions"
+                      className="group/btn relative w-fit px-6 py-3 rounded-xl font-black text-sm overflow-hidden transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-1 bg-white text-black pointer-events-auto"
+                    >
+                      <span className="absolute inset-0 bg-black/5 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300" />
+                      <span className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-black/10 to-transparent group-hover/btn:left-full transition-all duration-700" />
+                      <span className="relative z-10 flex items-center gap-2">
+                        {isRTL ? "جلساتي" : "My Sessions"}
+                        <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                      </span>
+                    </Link>
                   </div>
+
+                  {/* Spline 3D */}
+                  <div className="absolute inset-0 z-0">
+                    <Spline
+                      scene="https://prod.spline.design/USb3ytAkb8CmdhNW/scene.splinecode"
+                      style={{ width: "100%", height: "100%", pointerEvents: "all" }}
+                    />
+                  </div>
+
                 </div>
               </div>
-
               {/* Stats Cards: Attended, Absent, Achievements */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
 
@@ -660,10 +652,10 @@ export default function StudentDashboard() {
                         const stageStyle = isCompleted
                           ? { background: "linear-gradient(135deg, #004d59, #ff6700)" }
                           : isActive
-                          ? { background: "linear-gradient(135deg, #ff6700, #feaf00)" }
-                          : isAlmostThere
-                          ? { background: "linear-gradient(135deg, #004d59, #ff6437)", opacity: 0.6 }
-                          : {};
+                            ? { background: "linear-gradient(135deg, #ff6700, #feaf00)" }
+                            : isAlmostThere
+                              ? { background: "linear-gradient(135deg, #004d59, #ff6437)", opacity: 0.6 }
+                              : {};
 
                         return (
                           <div key={stage.id} className={`flex items-center ${index === progressStages.length - 1 ? "flex-none" : "flex-1"}`}>
@@ -710,8 +702,8 @@ export default function StudentDashboard() {
                                   style={{
                                     ...(isCompleted ? { background: "#004d5915", color: "#004d59", border: "1px solid #004d5925" }
                                       : isActive ? { background: "#ff670015", color: "#ff6700", border: "1px solid #ff670025" }
-                                      : isAlmostThere ? { background: "#feaf0015", color: "#f67d00", border: "1px solid #feaf0025" }
-                                      : { background: "#f3f4f6", color: "#9ca3af", border: "1px solid #e5e7eb" }),
+                                        : isAlmostThere ? { background: "#feaf0015", color: "#f67d00", border: "1px solid #feaf0025" }
+                                          : { background: "#f3f4f6", color: "#9ca3af", border: "1px solid #e5e7eb" }),
                                     transitionDelay: `${index * 150 + 100}ms`,
                                   }}
                                 >
