@@ -7,7 +7,6 @@ const portfolioSchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'User ID is required'],
     unique: true
-    // index: true  // تم الإزالة لتجنب التكرار مع portfolioSchema.index
   },
   title: {
     type: String,
@@ -95,6 +94,37 @@ const portfolioSchema = new mongoose.Schema({
       default: 'completed'
     }
   }],
+  certificates: [{
+    title: {
+      type: String,
+      required: [true, 'Certificate title is required'],
+      trim: true,
+      maxlength: [150, 'Title cannot exceed 150 characters']
+    },
+    description: {
+      type: String,
+      maxlength: [500, 'Description cannot exceed 500 characters'],
+      default: ''
+    },
+    image: {
+      url: { type: String, default: '' },
+      alt: { type: String, default: '' }
+    },
+    issuer: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    issueDate: {
+      type: Date,
+      default: null
+    },
+    credentialUrl: {
+      type: String,
+      trim: true,
+      default: ''
+    }
+  }],
   socialLinks: {
     github: {
       type: String,
@@ -172,11 +202,10 @@ const portfolioSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// 📌 Indexes - تم إزالة التكرار
-portfolioSchema.index({ userId: 1 }); // Unique index for userId
-portfolioSchema.index({ isPublished: 1, createdAt: -1 }); // For public queries
-portfolioSchema.index({ 'skills.name': 1 }); // For skill-based search
-portfolioSchema.index({ views: -1 }); // For popular portfolios
+// 📌 Indexes
+portfolioSchema.index({ isPublished: 1, createdAt: -1 });
+portfolioSchema.index({ 'skills.name': 1 });
+portfolioSchema.index({ views: -1 });
 
 // 📌 Virtual field for total projects count
 portfolioSchema.virtual('projectsCount').get(function() {
@@ -186,6 +215,11 @@ portfolioSchema.virtual('projectsCount').get(function() {
 // 📌 Virtual field for total skills count
 portfolioSchema.virtual('skillsCount').get(function() {
   return this.skills?.length || 0;
+});
+
+// 📌 Virtual field for total certificates count
+portfolioSchema.virtual('certificatesCount').get(function() {
+  return this.certificates?.length || 0;
 });
 
 // 📌 Method to increment views
@@ -202,20 +236,21 @@ portfolioSchema.statics.findPublished = function() {
 
 // 📌 Pre-save middleware to validate data
 portfolioSchema.pre('save', function(next) {
-  // Ensure skills don't exceed 50
   if (this.skills && this.skills.length > 50) {
-    next(new Error('Cannot have more than 50 skills'));
+    return next(new Error('Cannot have more than 50 skills'));
   }
-  
-  // Ensure projects don't exceed 100
+
   if (this.projects && this.projects.length > 100) {
-    next(new Error('Cannot have more than 100 projects'));
+    return next(new Error('Cannot have more than 100 projects'));
   }
-  
-  // Trim all string fields
+
+  if (this.certificates && this.certificates.length > 50) {
+    return next(new Error('Cannot have more than 50 certificates'));
+  }
+
   if (this.title) this.title = this.title.trim();
   if (this.description) this.description = this.description.trim();
-  
+
   next();
 });
 

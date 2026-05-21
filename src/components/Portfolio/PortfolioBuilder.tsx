@@ -6,7 +6,7 @@ import PortfolioBuilderUI from "./PortfolioBuilderUI";
 import { Portfolio, PortfolioFormData } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 
-/* ── Inline branded loader (no external dep) ───────────────────── */
+/* ── Inline branded loader ───────────────────────────────────────── */
 function PortfolioLoader() {
   return (
     <>
@@ -54,18 +54,21 @@ function PortfolioLoader() {
   );
 }
 
-/* ── Main component ─────────────────────────────────────────────── */
+/* ── Main component ──────────────────────────────────────────────── */
 export default function PortfolioBuilder() {
   const { t } = useI18n();
-  const [portfolio, setPortfolio]   = useState<Portfolio | null>(null);
-  const [loading, setLoading]       = useState<boolean>(true);
-  const [saving, setSaving]         = useState<boolean>(false);
-  const [user, setUser]             = useState<any>(null);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [loading, setLoading]     = useState<boolean>(true);
+  const [saving, setSaving]       = useState<boolean>(false);
+  const [user, setUser]           = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) { router.push("/signin"); return; }
+    if (!token) {
+      router.push("/signin");
+      return;
+    }
     fetchUserWithToken(token);
   }, [router]);
 
@@ -117,12 +120,15 @@ export default function PortfolioBuilder() {
       const data = await res.json();
 
       if (data.success && data.portfolio) {
+        // ✅ FIX: نتأكد إن certificates موجودة دايماً في الـ object
         setPortfolio({
           ...data.portfolio,
+          certificates: data.portfolio.certificates || [],
           userId: data.portfolio.userId || userData,
         });
       } else {
         /* Build default portfolio */
+        // ✅ FIX: certificates مضاف صريح في الـ default
         const defaultPortfolio: PortfolioFormData = {
           title: t("portfolio.basic.titlePlaceholder"),
           description: "",
@@ -139,10 +145,11 @@ export default function PortfolioBuilder() {
               status: "completed",
               featured: true,
               startDate: new Date(),
-              endDate:   new Date(),
+              endDate: new Date(),
               images: [],
             },
           ],
+          certificates: [], // ✅ صريح هنا
           socialLinks: {
             github:   `https://github.com/${userData?.username || ""}`,
             linkedin: `https://linkedin.com/in/${userData?.username || ""}`,
@@ -170,6 +177,7 @@ export default function PortfolioBuilder() {
           if (saved.success && saved.portfolio) {
             setPortfolio({
               ...saved.portfolio,
+              certificates: saved.portfolio.certificates || [],
               userId: saved.portfolio.userId || userData,
             });
           }
@@ -194,19 +202,30 @@ export default function PortfolioBuilder() {
       const token  = localStorage.getItem("token");
       const method = (portfolio as any)?._id ? "PUT" : "POST";
 
+      // ✅ FIX: نتأكد إن certificates موجودة في الـ payload قبل الإرسال
+      const payload: PortfolioFormData = {
+        ...portfolioData,
+        certificates: portfolioData.certificates || [],
+      };
+
       const res  = await fetch("/api/portfolio", {
         method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(portfolioData),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
 
       if (data.success) {
         toast.success(t("portfolio.status.saved"));
-        setPortfolio({ ...data.portfolio, userId: data.portfolio.userId || user });
+        // ✅ FIX: نحتفظ بـ certificates في الـ state بعد الحفظ
+        setPortfolio({
+          ...data.portfolio,
+          certificates: data.portfolio.certificates || [],
+          userId: data.portfolio.userId || user,
+        });
         return true;
       } else {
         toast.error(data.message || t("portfolio.status.saveFailed"));

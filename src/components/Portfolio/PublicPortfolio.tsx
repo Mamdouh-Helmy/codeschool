@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { Share2, Eye } from "lucide-react";
 import toast from "react-hot-toast";
 
-import Loader from "@/components/Common/Loader";
 import PortfolioHeader from "./public/PortfolioHeader";
 import SkillsShowcase from "./public/SkillsShowcase";
 import ProjectsGallery from "./public/ProjectsGallery";
+import CertificatesGallery from "./public/CertificatesGallery"; // ← جديد
 import ContactSection from "./public/ContactSection";
 import PortfolioFooter from "./public/PortfolioFooter";
 
@@ -25,7 +25,7 @@ interface PublicPortfolioProps {
 
 type ThemeColor = "primary" | "secondary" | "muted";
 
-/* ─── Theme helpers (pure functions, defined outside component) ── */
+/* ─── Theme helpers ───────────────────────────────────────── */
 function resolveAccentBase(skillFill: string | undefined): string {
   if (!skillFill) return "blue";
   if (skillFill.includes("green")) return "green";
@@ -38,19 +38,11 @@ function makeThemeHelpers(themeStyles: ReturnType<typeof applyTheme>) {
 
   const textColor = (type: ThemeColor = "primary"): string =>
     themeStyles.text?.[type] ||
-    {
-      primary: "text-gray-900",
-      secondary: "text-gray-700",
-      muted: "text-gray-500",
-    }[type];
+    { primary: "text-gray-900", secondary: "text-gray-700", muted: "text-gray-500" }[type];
 
   const iconColor = (): string => `text-${accent}-600`;
-
   const hoverColor = (): string => `hover:text-${accent}-600`;
-
-  const primaryButton = (): string =>
-    `bg-${accent}-600 hover:bg-${accent}-700 text-white`;
-
+  const primaryButton = (): string => `bg-${accent}-600 hover:bg-${accent}-700 text-white`;
   const secondaryButtonHover = (): string =>
     themeStyles?.background?.secondary
       ? `hover:${themeStyles.background.secondary}`
@@ -64,15 +56,12 @@ function PortfolioLoader() {
   return (
     <div className="pf-loader-screen" aria-label="Loading portfolio" role="status">
       <div className="pf-loader-inner">
-        {/* Animated rings */}
         <div className="pf-loader-rings" aria-hidden="true">
           <span className="pf-loader-ring pf-loader-ring--1" />
           <span className="pf-loader-ring pf-loader-ring--2" />
           <span className="pf-loader-ring pf-loader-ring--3" />
           <span className="pf-loader-dot" />
         </div>
-
-        {/* Skeleton lines */}
         <div className="pf-loader-skeleton" aria-hidden="true">
           <span className="pf-skel pf-skel--title" />
           <span className="pf-skel pf-skel--sub" />
@@ -83,7 +72,6 @@ function PortfolioLoader() {
             <span className="pf-skel pf-skel--chip" />
           </div>
         </div>
-
         <p className="pf-loader-label">Building your portfolio…</p>
       </div>
     </div>
@@ -181,7 +169,6 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
     portfolio?.settings?.theme ?? "dark",
     portfolio?.settings?.layout ?? "standard"
   );
-
   const theme = makeThemeHelpers(themeStyles);
 
   /* ── Skills data shape ── */
@@ -222,6 +209,11 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
             projects={portfolio.projects}
             themeStyles={themeStyles}
           />
+        )}
+
+        {/* ✅ Certificates — يظهر بس لو في شهادات */}
+        {portfolio.certificates?.length > 0 && (
+          <CertificatesGallery certificates={portfolio.certificates} />
         )}
 
         <ContactSection portfolio={portfolio} themeStyles={themeStyles} />

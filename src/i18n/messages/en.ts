@@ -4111,7 +4111,34 @@ const en = {
     "Add your social media and professional links",
   "portfolio.builder.settingsDesc":
     "Customize your portfolio settings and preferences",
-    "portfolio.public.letsConnect" : "Let's Connect", 
+  "portfolio.public.letsConnect": "Let's Connect",
+  "portfolio.certificates.addNew": "Add Certificate",
+  "portfolio.certificates.title": "Certificate Title",
+  "portfolio.certificates.issuer": "Issuing Organization",
+  "portfolio.certificates.description": "Description",
+  "portfolio.certificates.issueDate": "Issue Date",
+  "portfolio.certificates.credentialUrl": "Credential URL",
+  "portfolio.certificates.image": "Certificate Image",
+  "portfolio.certificates.uploadImage": "Upload Image",
+  "portfolio.certificates.changeImage": "Change Image",
+  "portfolio.certificates.verify": "Verify Credential",
+  "portfolio.certificates.yourCertificates": "Your Certificates",
+  "portfolio.certificates.noCertificates": "No certificates added yet",
+  "portfolio.builder.certificates": "Certificates",
+  "portfolio.builder.certificatesDesc":
+    "Showcase your certificates and professional achievements",
+  "portfolio.certificates.titlePlaceholder": "Enter certificate title",
+  "portfolio.certificates.issuerPlaceholder": "Enter issuing organization",
+  "portfolio.certificates.descriptionPlaceholder":
+    "Enter certificate description",
+  "common.done": "Done",
+  "common.uploading": "Uploading",
+  "portfolio.certificates.plural": "Certificates",
+  "portfolio.certificates.sectionDesc":
+    "Showcase the certificates and courses you have earned",
+  "portfolio.certificates.sectionTitle": "Certificates & Credentials",
+  "portfolio.certificates.sectionBadge": "My Certificates",
+  "nav.certificates": "Certificates",
 };
 
 export default en;

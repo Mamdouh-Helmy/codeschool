@@ -11,13 +11,13 @@ export const metadata: Metadata = {
 export default function CurriculumPage() {
   const breadcrumbLinks = [
     { href: "/", text: "Home" },
-    { href: "/schedules", text: "Schedules" },
+    { href: "/curriculum", text: "Curriculum" },
   ];
   return (
     <>
       <HeroSub
-        title="Event Schedules"
-        description="Discover a wealth of insightful materials meticulously crafted to provide you with a comprehensive."
+        title="Curriculum"
+        description="Discover a wealth of insightful materials meticulously crafted to provide you with a comprehensive understanding of the subject matter."
         breadcrumbLinks={breadcrumbLinks}
       />
       <CurriculumTimeline />

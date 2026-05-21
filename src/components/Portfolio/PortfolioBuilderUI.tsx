@@ -20,13 +20,15 @@ import {
   ChevronRight,
   Loader2,
   Sparkles,
+  Award,
 } from "lucide-react";
 import BasicInfoSection from "./sections/BasicInfoSection";
 import SkillsSection from "./sections/SkillsSection";
 import ProjectsSection from "./sections/ProjectsSection";
 import SocialLinksSection from "./sections/SocialLinksSection";
 import SettingsSection from "./sections/SettingsSection";
-import { Portfolio, PortfolioFormData } from "@/types/portfolio";
+import CertificatesSection from "./sections/CertificatesSection";
+import { Portfolio, PortfolioFormData, Certificate } from "@/types/portfolio"; // ✅ استيراد Certificate
 import { useI18n } from "@/i18n/I18nProvider";
 
 interface PortfolioBuilderUIProps {
@@ -62,6 +64,12 @@ const SECTIONS: Section[] = [
     description: "portfolio.builder.projectsDesc",
   },
   {
+    id: "certificates",
+    label: "portfolio.builder.certificates",
+    icon: Award,
+    description: "portfolio.builder.certificatesDesc",
+  },
+  {
     id: "social",
     label: "portfolio.builder.socialLinks",
     icon: Link2,
@@ -82,11 +90,14 @@ export default function PortfolioBuilderUI({
 }: PortfolioBuilderUIProps) {
   const { t } = useI18n();
   const [activeSection, setActiveSection] = useState<string>("basic");
+
+  // ✅ FIX: certificates مضاف بشكل صريح في الـ initial state
   const [formData, setFormData] = useState<PortfolioFormData>({
     title: t("portfolio.basic.titlePlaceholder"),
     description: "",
     skills: [],
     projects: [],
+    certificates: [],
     socialLinks: {},
     contactInfo: {},
     isPublished: false,
@@ -94,6 +105,7 @@ export default function PortfolioBuilderUI({
     settings: { theme: "dark", layout: "standard" },
     userId: "",
   });
+
   const [showPreview, setShowPreview] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [iframeKey, setIframeKey] = useState<number>(0);
@@ -102,11 +114,13 @@ export default function PortfolioBuilderUI({
 
   useEffect(() => {
     if (portfolio) {
+      // ✅ FIX: استخدام Portfolio.certificates مباشرة (بدون as any) لأن النوع معرّف صح
       setFormData({
         title: portfolio.title || t("portfolio.basic.titlePlaceholder"),
         description: portfolio.description || "",
         skills: portfolio.skills || [],
         projects: portfolio.projects || [],
+        certificates: portfolio.certificates || [],
         socialLinks: portfolio.socialLinks || {},
         contactInfo: portfolio.contactInfo || {},
         isPublished: portfolio.isPublished || false,
@@ -120,6 +134,7 @@ export default function PortfolioBuilderUI({
     }
   }, [portfolio, t]);
 
+  // ✅ FIX: updateFormData يقبل Partial<PortfolioFormData> بشكل صريح يشمل certificates
   const updateFormData = (updates: Partial<PortfolioFormData>): void => {
     setFormData((prev) => ({ ...prev, ...updates }));
   };
@@ -170,12 +185,20 @@ export default function PortfolioBuilderUI({
   const renderSection = (): React.ReactNode => {
     const props = { data: formData, onChange: updateFormData };
     switch (activeSection) {
-      case "basic":    return <BasicInfoSection {...props} />;
-      case "skills":   return <SkillsSection {...props} />;
-      case "projects": return <ProjectsSection {...props} />;
-      case "social":   return <SocialLinksSection {...props} />;
-      case "settings": return <SettingsSection {...props} />;
-      default:         return <BasicInfoSection {...props} />;
+      case "basic":
+        return <BasicInfoSection {...props} />;
+      case "skills":
+        return <SkillsSection {...props} />;
+      case "projects":
+        return <ProjectsSection {...props} />;
+      case "certificates":
+        return <CertificatesSection {...props} />;
+      case "social":
+        return <SocialLinksSection {...props} />;
+      case "settings":
+        return <SettingsSection {...props} />;
+      default:
+        return <BasicInfoSection {...props} />;
     }
   };
 
@@ -284,12 +307,8 @@ export default function PortfolioBuilderUI({
           background: var(--brand);
         }
         .pb-nav-icon { flex-shrink: 0; }
-        .pb-nav-item .pb-nav-icon {
-          color: var(--txt-2);
-        }
-        .pb-nav-item.active .pb-nav-icon {
-          color: var(--brand);
-        }
+        .pb-nav-item .pb-nav-icon { color: var(--txt-2); }
+        .pb-nav-item.active .pb-nav-icon { color: var(--brand); }
 
         /* ── Sidebar Footer ── */
         .pb-footer {
@@ -410,9 +429,7 @@ export default function PortfolioBuilderUI({
           flex-shrink: 0;
         }
         .pb-traffic-lights { display: flex; gap: 5px; align-items: center; }
-        .pb-tl {
-          width: 11px; height: 11px; border-radius: 50%;
-        }
+        .pb-tl { width: 11px; height: 11px; border-radius: 50%; }
         .pb-url-bar {
           flex: 1; margin: 0 10px;
           background: var(--input); border: 1px solid var(--border);
@@ -429,12 +446,8 @@ export default function PortfolioBuilderUI({
         }
 
         /* ── Section wrapper ── */
-        .pb-section-wrap {
-          max-width: 720px; margin: 0 auto; width: 100%;
-        }
-        .pb-section-header {
-          margin-bottom: 28px;
-        }
+        .pb-section-wrap { max-width: 720px; margin: 0 auto; width: 100%; }
+        .pb-section-header { margin-bottom: 28px; }
         .pb-section-badge {
           display: inline-flex; align-items: center; gap: 6px;
           font-size: 11px; font-weight: 600; letter-spacing: .06em;
@@ -574,10 +587,7 @@ export default function PortfolioBuilderUI({
                     }}
                     className={`pb-nav-item ${isActive ? "active" : ""}`}
                   >
-                    <Icon
-                      size={16}
-                      className="pb-nav-icon"
-                    />
+                    <Icon size={16} className="pb-nav-icon" />
                     <span style={{ fontWeight: isActive ? 600 : 400 }}>
                       {t(section.label)}
                     </span>
@@ -701,11 +711,7 @@ export default function PortfolioBuilderUI({
               </div>
 
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
               >
                 {/* Breadcrumb */}
                 <div className="pb-breadcrumb">
@@ -719,11 +725,16 @@ export default function PortfolioBuilderUI({
 
                 {/* Save shortcut (desktop) */}
                 <button
-                  onClick={showPreview ? handleSaveAndRefreshPreview : handleSave}
+                  onClick={
+                    showPreview ? handleSaveAndRefreshPreview : handleSave
+                  }
                   disabled={saving}
                   className={`btn-primary ${saveSuccess ? "success" : ""}`}
-                  style={{ width: "auto", padding: "7px 16px", display: "none" }}
-                  /* hidden on mobile (mobile header has it) — shown on lg */
+                  style={{
+                    width: "auto",
+                    padding: "7px 16px",
+                    display: "none",
+                  }}
                 >
                   {saving ? (
                     <Loader2 size={14} className="spin" />
@@ -747,10 +758,7 @@ export default function PortfolioBuilderUI({
               <div
                 className="pb-editor"
                 style={{
-                  width:
-                    showPreview && previewUrl
-                      ? "50%"
-                      : "100%",
+                  width: showPreview && previewUrl ? "50%" : "100%",
                 }}
               >
                 <div className="pb-section-wrap">
@@ -784,25 +792,18 @@ export default function PortfolioBuilderUI({
                   {/* Preview header */}
                   <div className="pb-preview-header">
                     <div className="pb-traffic-lights">
-                      <div
-                        className="pb-tl"
-                        style={{ background: "#ff5f57" }}
-                      />
-                      <div
-                        className="pb-tl"
-                        style={{ background: "#febc2e" }}
-                      />
-                      <div
-                        className="pb-tl"
-                        style={{ background: "#28c840" }}
-                      />
+                      <div className="pb-tl" style={{ background: "#ff5f57" }} />
+                      <div className="pb-tl" style={{ background: "#febc2e" }} />
+                      <div className="pb-tl" style={{ background: "#28c840" }} />
                     </div>
                     <div className="pb-url-bar">{previewUrl}</div>
                     <div className="pb-preview-actions">
                       <button
                         onClick={handleRefreshPreview}
                         className="btn-ghost"
-                        title={t("portfolio.builder.refreshPreview") || "Refresh"}
+                        title={
+                          t("portfolio.builder.refreshPreview") || "Refresh"
+                        }
                         style={{ padding: "5px 8px" }}
                       >
                         <RefreshCw
@@ -841,11 +842,7 @@ export default function PortfolioBuilderUI({
                     <iframe
                       key={iframeKey}
                       src={previewUrl}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        border: "none",
-                      }}
+                      style={{ width: "100%", height: "100%", border: "none" }}
                       title="Portfolio Live Preview"
                       onLoad={() => setPreviewLoading(false)}
                       onError={() => setPreviewLoading(false)}

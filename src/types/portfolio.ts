@@ -49,7 +49,7 @@ export interface Project {
   featured: boolean;
   startDate?: Date | string;
   endDate?: Date | string;
-  status: 'completed' | 'in-progress' | 'planned';
+  status: "completed" | "in-progress" | "planned";
 }
 
 export interface SocialLinks {
@@ -70,8 +70,21 @@ export interface ContactInfo {
 }
 
 export interface PortfolioSettings {
-  theme: 'light' | 'dark' | 'blue' | 'green';
-  layout: 'standard' | 'minimal' | 'creative';
+  theme: "light" | "dark" | "blue" | "green";
+  layout: "standard" | "minimal" | "creative";
+}
+
+export interface Certificate {
+  _id?: string;
+  title: string;
+  description: string;
+  image: {
+    url: string;
+    alt: string;
+  };
+  issuer: string;
+  issueDate: string | Date | null;
+  credentialUrl: string;
 }
 
 export interface Portfolio {
@@ -81,6 +94,7 @@ export interface Portfolio {
   description?: string;
   skills: Skill[];
   projects: Project[];
+  certificates: Certificate[];
   socialLinks: SocialLinks;
   contactInfo: ContactInfo;
   isPublished: boolean;
@@ -91,16 +105,19 @@ export interface Portfolio {
 }
 
 // النوع الخاص بالعرض العام
-export interface PublicPortfolio extends Omit<Portfolio, 'userId'> {
+export interface PublicPortfolio extends Omit<Portfolio, "userId"> {
   userId: PublicUser;
   _id: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface PortfolioFormData extends Omit<Portfolio, '_id' | 'userId' | 'createdAt' | 'updatedAt'> {
+// ✅ FIX: certificates مضاف صريح عشان يتجنب مشاكل الـ Omit والـ as any
+export interface PortfolioFormData
+  extends Omit<Portfolio, "_id" | "userId" | "createdAt" | "updatedAt"> {
   _id?: string;
-  userId?: string; // Optional for forms
+  userId?: string;
+  certificates: Certificate[]; // ← صريح هنا عشان TypeScript يعرفه بدون as any
 }
 
 export interface PortfolioApiResponse {
@@ -261,7 +278,7 @@ export interface ProjectForm {
   featured: boolean;
   startDate: string;
   endDate: string;
-  status: 'completed' | 'in-progress' | 'planned';
+  status: "completed" | "in-progress" | "planned";
 }
 
 // أنواع للـ state
@@ -294,6 +311,7 @@ export interface CreatePortfolioData {
   description?: string;
   skills?: Skill[];
   projects?: Project[];
+  certificates?: Certificate[];
   socialLinks?: SocialLinks;
   contactInfo?: ContactInfo;
   settings?: PortfolioSettings;
@@ -306,7 +324,7 @@ export interface UpdatePortfolioData extends Partial<CreatePortfolioData> {
 // أنواع للـ filters
 export interface PortfolioFilters {
   search?: string;
-  status?: 'published' | 'draft';
+  status?: "published" | "draft";
   category?: string;
   page?: number;
   limit?: number;
@@ -331,20 +349,20 @@ export interface SocialPlatform {
 
 // أنواع للـ theme options
 export interface ThemeOption {
-  value: PortfolioSettings['theme'];
+  value: PortfolioSettings["theme"];
   label: string;
   description: string;
 }
 
 export interface LayoutOption {
-  value: PortfolioSettings['layout'];
+  value: PortfolioSettings["layout"];
   label: string;
   description: string;
 }
 
 // أنواع للـ status
 export interface ProjectStatus {
-  value: Project['status'];
+  value: Project["status"];
   label: string;
   color: string;
 }
@@ -392,7 +410,7 @@ export interface PortfolioValidationResult {
 // أنواع للـ File Upload
 export interface PortfolioFileUpload {
   file: File;
-  type: 'image' | 'document';
+  type: "image" | "document";
   maxSize: number; // in bytes
   allowedFormats: string[];
 }
@@ -417,13 +435,18 @@ export interface ShareOptions {
   title: string;
   text: string;
   url: string;
-  platforms: ('twitter' | 'linkedin' | 'facebook' | 'whatsapp')[];
+  platforms: ("twitter" | "linkedin" | "facebook" | "whatsapp")[];
 }
 
 // أنواع للـ Export
 export interface ExportOptions {
-  format: 'pdf' | 'json' | 'html';
+  format: "pdf" | "json" | "html";
   includeImages: boolean;
   includeSocialLinks: boolean;
-  theme: PortfolioSettings['theme'];
+  theme: PortfolioSettings["theme"];
+}
+
+export interface CertificatesSectionProps {
+  data: PortfolioFormData;
+  onChange: (updates: Partial<PortfolioFormData>) => void;
 }
