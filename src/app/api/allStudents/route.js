@@ -984,7 +984,7 @@ export async function DELETE(req, context) {
       );
     }
 
-    const deletedStudent = await Student.findOneAndDelete({ _id: id, isDeleted: false });
+const deletedStudent = await Student.findByIdAndDelete(id);
 
     if (!deletedStudent) {
       return NextResponse.json(

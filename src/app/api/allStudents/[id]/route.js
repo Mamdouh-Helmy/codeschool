@@ -343,115 +343,51 @@ export async function PUT(req, context) {
 // ✅ DELETE: حذف طري للطالب
 export async function DELETE(req, context) {
   try {
-    // ✅ await params
     const params = await context.params;
     const { id } = params;
 
-    console.log(`🗑️ Soft deleting student with ID: ${id}`);
-
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      console.log("❌ Admin authorization failed");
-      return authCheck.response;
-    }
+    if (!authCheck.authorized) return authCheck.response;
 
     const adminUser = authCheck.user;
-    console.log(`👤 Admin performing deletion: ${adminUser.email}`);
-
     await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      console.log(`❌ Invalid student ID format: ${id}`);
       return NextResponse.json(
         { success: false, message: "Invalid student ID format" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    const existingStudent = await Student.findOne({
-      _id: id,
-      isDeleted: false,
-    });
-
-    if (!existingStudent) {
-      console.log(`❌ Student not found or already deleted: ${id}`);
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Student not found or has already been deleted",
-          suggestion: "Check student status or restore from trash if needed",
-        },
-        { status: 404 },
-      );
-    }
-
-    const deletedStudent = await Student.findOneAndUpdate(
-      { _id: id, isDeleted: false },
-      {
-        $set: {
-          isDeleted: true,
-          deletedAt: new Date(),
-          "enrollmentInfo.status": "Dropped",
-          "metadata.lastModifiedBy": adminUser.id,
-          "metadata.updatedAt": new Date(),
-        },
-      },
-      {
-        new: true,
-        runValidators: true,
-      },
-    );
+    // ✅ Hard delete — بيمسح من الداتا بيس نهائياً
+    const deletedStudent = await Student.findByIdAndDelete(id);
 
     if (!deletedStudent) {
-      console.log(`❌ Soft delete failed for student: ${id}`);
       return NextResponse.json(
-        { success: false, message: "Failed to delete student" },
-        { status: 500 },
+        { success: false, message: "Student not found" },
+        { status: 404 }
       );
     }
 
-    console.log(
-      `✅ Student soft deleted successfully: ${deletedStudent.enrollmentNumber}`,
-    );
-
-    // ✅ REMOVED: WhatsApp service call
-    // setTimeout(async () => {
-    //   try {
-    //     console.log(`📧 Sending deletion notification for student: ${deletedStudent.enrollmentNumber}`);
-    //     const { whatsappService } = await import("../../../services/whatsappService");
-    //     const result = await whatsappService.sendDeletionNotification(deletedStudent);
-    //     console.log("✅ WhatsApp deletion notification sent:", result);
-    //   } catch (notificationError) {
-    //     console.error("❌ Deletion notification failed:", notificationError);
-    //   }
-    // }, 0);
+    console.log(`✅ Student permanently deleted: ${deletedStudent.enrollmentNumber}`);
 
     return NextResponse.json(
       {
         success: true,
-        message: "Student deleted successfully (soft delete)",
+        message: "Student permanently deleted",
         data: {
           id: deletedStudent._id,
           enrollmentNumber: deletedStudent.enrollmentNumber,
           fullName: deletedStudent.personalInfo.fullName,
-          deletedAt: deletedStudent.deletedAt,
-          status: deletedStudent.enrollmentInfo.status,
-          canBeRestored: true,
-          restorationNote: "Student can be restored within 30 days",
         },
       },
-      { status: 200 },
+      { status: 200 }
     );
   } catch (error) {
     console.error(`❌ Error deleting student:`, error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "Failed to delete student",
-        error: error.message,
-        ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
-      },
-      { status: 500 },
+      { success: false, message: "Failed to delete student", error: error.message },
+      { status: 500 }
     );
   }
 }
