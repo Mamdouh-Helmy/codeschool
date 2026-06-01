@@ -3,12 +3,12 @@ import { NextResponse } from "next/server";
 import Portfolio from "../../../models/Portfolio";
 import User from "../../../models/User";
 import { connectDB } from "@/lib/mongodb";
+import mongoose from "mongoose";
 
 export async function GET(req, context) {
   try {
     await connectDB();
 
-    // استخراج username من params بشكل صحيح
     const { params } = context;
     const { username } = await params;
 
@@ -17,21 +17,25 @@ export async function GET(req, context) {
     if (!username) {
       return NextResponse.json(
         { success: false, message: "Username is required" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    // البحث عن المستخدم باليوزرنيم فقط
-    const user = await User.findOne({
+    // ✅ دور بالـ username الأول، لو مش لاقي دور بالـ _id
+    let user = await User.findOne({
       username: username.toLowerCase().trim(),
     });
+
+    if (!user && mongoose.Types.ObjectId.isValid(username)) {
+      user = await User.findById(username);
+    }
 
     console.log("👤 User found:", user ? user.username : "No user found");
 
     if (!user) {
       return NextResponse.json(
-        { success: false, message: "User not found" },
-        { status: 404 },
+        { success: false, message: "No portfolio found for this user" },
+        { status: 404 }
       );
     }
 
@@ -43,13 +47,11 @@ export async function GET(req, context) {
 
     console.log(
       "📁 Published portfolio found:",
-      portfolio ? portfolio.title : "No published portfolio found",
+      portfolio ? portfolio.title : "No published portfolio found"
     );
 
     if (!portfolio) {
-      // التحقق إذا كان هناك أي بورتفليو غير منشور
       const anyPortfolio = await Portfolio.findOne({ userId: user._id });
-
       return NextResponse.json(
         {
           success: false,
@@ -58,26 +60,22 @@ export async function GET(req, context) {
             : "No portfolio found for this user",
           hasUnpublished: !!anyPortfolio,
         },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
-    // بناء بيانات البورتفليو
     const portfolioData = {
       _id: portfolio._id,
       title: portfolio.title,
       description: portfolio.description,
       skills: portfolio.skills || [],
       projects: portfolio.projects || [],
-      certificates: portfolio.certificates || [], // ← ضيف السطر ده
+      certificates: portfolio.certificates || [],
       socialLinks: portfolio.socialLinks || {},
       contactInfo: portfolio.contactInfo || {},
       isPublished: portfolio.isPublished,
       views: portfolio.views,
-      settings: portfolio.settings || {
-        theme: "light",
-        layout: "standard",
-      },
+      settings: portfolio.settings || { theme: "light", layout: "standard" },
       userId: {
         _id: user._id,
         name: user.name,
@@ -91,24 +89,16 @@ export async function GET(req, context) {
       updatedAt: portfolio.updatedAt,
     };
 
-    // زيادة عدد المشاهدات
     await Portfolio.findByIdAndUpdate(portfolio._id, {
       $inc: { views: 1 },
     });
 
-    return NextResponse.json({
-      success: true,
-      portfolio: portfolioData,
-    });
+    return NextResponse.json({ success: true, portfolio: portfolioData });
   } catch (error) {
     console.error("❌ Get public portfolio error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "Internal server error",
-        error: error.message,
-      },
-      { status: 500 },
+      { success: false, message: "Internal server error", error: error.message },
+      { status: 500 }
     );
   }
 }
