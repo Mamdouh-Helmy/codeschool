@@ -1,4 +1,4 @@
-// app/api/portfolio/[username]/route.js
+// app/api/portfolio/[id]/route.js
 import { NextResponse } from "next/server";
 import Portfolio from "../../../models/Portfolio";
 import User from "../../../models/User";
@@ -10,38 +10,28 @@ export async function GET(req, context) {
     await connectDB();
 
     const { params } = context;
-    const { username } = await params;
+    const { id } = await params;
 
-    console.log("🔍 Searching for user with username:", username);
+    console.log("🔍 Searching for portfolio with id:", id);
 
-    if (!username) {
+    if (!id) {
       return NextResponse.json(
-        { success: false, message: "Username is required" },
+        { success: false, message: "Portfolio ID is required" },
         { status: 400 }
       );
     }
 
-    // ✅ دور بالـ username الأول، لو مش لاقي دور بالـ _id
-    let user = await User.findOne({
-      username: username.toLowerCase().trim(),
-    });
-
-    if (!user && mongoose.Types.ObjectId.isValid(username)) {
-      user = await User.findById(username);
-    }
-
-    console.log("👤 User found:", user ? user.username : "No user found");
-
-    if (!user) {
+    // التأكد إن الـ id صالح ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, message: "No portfolio found for this user" },
-        { status: 404 }
+        { success: false, message: "Invalid portfolio ID" },
+        { status: 400 }
       );
     }
 
-    // البحث عن البورتفليو المنشور
+    // البحث عن البورتفليو المنشور مباشرة بالـ _id
     const portfolio = await Portfolio.findOne({
-      userId: user._id,
+      _id: id,
       isPublished: true,
     }).populate("userId", "name email image username role profile socialLinks");
 
@@ -51,18 +41,20 @@ export async function GET(req, context) {
     );
 
     if (!portfolio) {
-      const anyPortfolio = await Portfolio.findOne({ userId: user._id });
+      const anyPortfolio = await Portfolio.findById(id);
       return NextResponse.json(
         {
           success: false,
           message: anyPortfolio
             ? "Portfolio exists but is not published"
-            : "No portfolio found for this user",
+            : "No portfolio found with this ID",
           hasUnpublished: !!anyPortfolio,
         },
         { status: 404 }
       );
     }
+
+    const user = portfolio.userId;
 
     const portfolioData = {
       _id: portfolio._id,
@@ -89,7 +81,8 @@ export async function GET(req, context) {
       updatedAt: portfolio.updatedAt,
     };
 
-    await Portfolio.findByIdAndUpdate(portfolio._id, {
+    // increment views
+    await Portfolio.findByIdAndUpdate(id, {
       $inc: { views: 1 },
     });
 

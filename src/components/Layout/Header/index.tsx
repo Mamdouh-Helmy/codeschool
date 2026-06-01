@@ -116,7 +116,23 @@ const Header: React.FC = () => {
 
   const [localUser, setLocalUser] = useState<LocalUser | null>(null);
   const [loadingUser, setLoadingUser] = useState(false);
+  const [portfolioId, setPortfolioId] = useState<string | null>(null);
+
   const USER_ENDPOINT = "/api/users/me";
+
+  const fetchPortfolioId = async (token: string) => {
+    try {
+      const res = await fetch("/api/portfolio", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.portfolio?._id) {
+        setPortfolioId(data.portfolio._id);
+      }
+    } catch (err) {
+      console.error("Error fetching portfolio id:", err);
+    }
+  };
 
   const fetchUserWithToken = async (token: string) => {
     try {
@@ -140,6 +156,8 @@ const Header: React.FC = () => {
       const data = await res.json();
       if (data?.success && data.user) {
         setLocalUser(data.user);
+        fetchPortfolioId(token); // ← أضف دي بس
+
       } else {
         setLocalUser(null);
         localStorage.removeItem("token");
@@ -192,11 +210,10 @@ const Header: React.FC = () => {
     <>
       <div className="relative"></div>
       <header
-        className={`fixed h-24 top-0 py-1 z-50 w-full bg-transparent transition-all ${
-          sticky
-            ? "shadow-lg dark:shadow-darkmd bg-white dark:bg-darkmode"
-            : "shadow-none"
-        }`}
+        className={`fixed h-24 top-0 py-1 z-50 w-full bg-transparent transition-all ${sticky
+          ? "shadow-lg dark:shadow-darkmd bg-white dark:bg-darkmode"
+          : "shadow-none"
+          }`}
       >
         <div className="container">
           <div className="flex items-center justify-between py-6">
@@ -239,7 +256,7 @@ const Header: React.FC = () => {
                         </Link>
                         {localUser?.username && (
                           <Link
-                            href={`/portfolio/${localUser.username}`}
+                            href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
                             className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                             onClick={closeAllDropdowns}
                           >
@@ -297,7 +314,7 @@ const Header: React.FC = () => {
                         </Link>
                         {localUser?.username && (
                           <Link
-                            href={`/portfolio/${localUser.username}`}
+                            href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
                             className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                             onClick={closeAllDropdowns}
                           >
@@ -348,7 +365,8 @@ const Header: React.FC = () => {
                         </Link>
                         {localUser?.username && (
                           <Link
-                            href={`/portfolio/${localUser.username}`}
+                            href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
+
                             className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                             onClick={closeAllDropdowns}
                           >
@@ -399,7 +417,8 @@ const Header: React.FC = () => {
                         </Link>
                         {localUser?.username && (
                           <Link
-                            href={`/portfolio/${localUser.username}`}
+                            href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
+
                             className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                             onClick={closeAllDropdowns}
                           >
@@ -424,11 +443,10 @@ const Header: React.FC = () => {
                     <li>
                       <Link
                         href="/portfolio/builder"
-                        className={`text-base font-medium transition-colors duration-200 ${
-                          pathUrl === "/portfolio/builder"
-                            ? "text-primary"
-                            : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
+                        className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/portfolio/builder"
+                          ? "text-primary"
+                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                          }`}
                       >
                         {t("nav.createPortfolio") || "إنشاء بورتفليو"}
                       </Link>
@@ -436,12 +454,11 @@ const Header: React.FC = () => {
                     {localUser?.username && (
                       <li>
                         <Link
-                          href={`/portfolio/${localUser.username}`}
-                          className={`text-base font-medium transition-colors duration-200 ${
-                            pathUrl === `/portfolio/${localUser.username}`
-                              ? "text-primary"
-                              : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                          }`}
+                          href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
+
+                          className={`text-base font-medium transition-colors duration-200 ${pathUrl === `/portfolio/${portfolioId}` ? "text-primary"
+                            : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                            }`}
                         >
                           {t("nav.myPortfolio") || "بورتفليو"}
                         </Link>
@@ -450,11 +467,10 @@ const Header: React.FC = () => {
                     <li>
                       <Link
                         href="/dashboard"
-                        className={`text-base font-medium transition-colors duration-200 ${
-                          pathUrl === "/dashboard"
-                            ? "text-primary"
-                            : "text-gray-600 dark:text-gray-300 hover:text-primary"
-                        }`}
+                        className={`text-base font-medium transition-colors duration-200 ${pathUrl === "/dashboard"
+                          ? "text-primary"
+                          : "text-gray-600 dark:text-gray-300 hover:text-primary"
+                          }`}
                       >
                         {t("nav.dashboard") || "لوحة التحكم"}
                       </Link>
@@ -585,9 +601,8 @@ const Header: React.FC = () => {
         {/* Mobile Menu */}
         <div
           ref={mobileMenuRef}
-          className={`lg:hidden fixed top-0 right-0 h-full w-full bg-white dark:bg-darklight shadow-lg dark:shadow-black/40 transform transition-transform duration-300 max-w-64 ${
-            navbarOpen ? "translate-x-0" : "translate-x-full"
-          } z-50`}
+          className={`lg:hidden fixed top-0 right-0 h-full w-full bg-white dark:bg-darklight shadow-lg dark:shadow-black/40 transform transition-transform duration-300 max-w-64 ${navbarOpen ? "translate-x-0" : "translate-x-full"
+            } z-50`}
         >
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-dark_border">
             <h2 className="text-lg font-bold text-black dark:text-SlateBlueText">
@@ -639,7 +654,8 @@ const Header: React.FC = () => {
                   )}
                   {canAccessPortfolio && localUser?.username && (
                     <Link
-                      href={`/portfolio/${localUser.username}`}
+                      href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
+
                       onClick={() => setNavbarOpen(false)}
                       className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
@@ -681,7 +697,8 @@ const Header: React.FC = () => {
                   )}
                   {canAccessPortfolio && localUser?.username && (
                     <Link
-                      href={`/portfolio/${localUser.username}`}
+                      href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
+
                       onClick={() => setNavbarOpen(false)}
                       className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
@@ -716,7 +733,7 @@ const Header: React.FC = () => {
                   )}
                   {canAccessPortfolio && localUser?.username && (
                     <Link
-                      href={`/portfolio/${localUser.username}`}
+                      href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
                       onClick={() => setNavbarOpen(false)}
                       className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
@@ -751,7 +768,7 @@ const Header: React.FC = () => {
                   )}
                   {canAccessPortfolio && localUser?.username && (
                     <Link
-                      href={`/portfolio/${localUser.username}`}
+                      href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
                       onClick={() => setNavbarOpen(false)}
                       className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                     >
@@ -781,7 +798,7 @@ const Header: React.FC = () => {
                 </Link>
                 {localUser?.username && (
                   <Link
-                    href={`/portfolio/${localUser.username}`}
+                    href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
                     onClick={() => setNavbarOpen(false)}
                     className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                   >
@@ -875,29 +892,26 @@ const Header: React.FC = () => {
 
         {/* Dialogs */}
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
-            authDialog?.isSuccessDialogOpen
-              ? "opacity-100 transform translate-y-0"
-              : "opacity-0 transform -translate-y-4 pointer-events-none"
-          }`}
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isSuccessDialogOpen
+            ? "opacity-100 transform translate-y-0"
+            : "opacity-0 transform -translate-y-4 pointer-events-none"
+            }`}
         >
           <SuccessfullLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
-            authDialog?.isFailedDialogOpen
-              ? "opacity-100 transform translate-y-0"
-              : "opacity-0 transform -translate-y-4 pointer-events-none"
-          }`}
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isFailedDialogOpen
+            ? "opacity-100 transform translate-y-0"
+            : "opacity-0 transform -translate-y-4 pointer-events-none"
+            }`}
         >
           <FailedLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${
-            authDialog?.isUserRegistered
-              ? "opacity-100 transform translate-y-0"
-              : "opacity-0 transform -translate-y-4 pointer-events-none"
-          }`}
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isUserRegistered
+            ? "opacity-100 transform translate-y-0"
+            : "opacity-0 transform -translate-y-4 pointer-events-none"
+            }`}
         >
           <UserRegistered />
         </div>

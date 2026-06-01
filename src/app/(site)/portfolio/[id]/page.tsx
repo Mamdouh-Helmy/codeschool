@@ -1,28 +1,26 @@
-// app/portfolio/[username]/page.tsx
+// app/portfolio/[id]/page.tsx
 import PublicPortfolio from '@/components/Portfolio/PublicPortfolio';
 import { Metadata } from "next";
 
-// تعريف النوع الصحيح لـ params
 interface PageProps {
   params: Promise<{
-    username: string;
+    id: string;
   }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  // استخدم await للحصول على params
-  const { username } = await params;
-  
+  const { id } = await params;
+
   try {
     const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    const res = await fetch(`${baseUrl}/api/portfolio/${username}`, {
+    const res = await fetch(`${baseUrl}/api/portfolio/${id}`, {
       next: { revalidate: 3600 }
     });
-    
+
     if (res.ok) {
       const data = await res.json();
       const portfolio = data.portfolio;
-      
+
       if (portfolio) {
         return {
           title: `${portfolio.title} - Portfolio | Codeschool`,
@@ -38,15 +36,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   } catch (error) {
     console.error('Error generating metadata:', error);
   }
-  
+
   return {
-    title: `${username}'s Portfolio | Codeschool`,
+    title: `Portfolio | Codeschool`,
     description: "Professional portfolio showcase",
   };
 }
 
 export default async function PortfolioPage({ params }: PageProps) {
-  // استخدم await للحصول على params
-  const { username } = await params;
-  return <PublicPortfolio username={username} />;
+  const { id } = await params;
+  // بنبعت id للـ component بدل username
+  return <PublicPortfolio username={id} />;
 }

@@ -13,7 +13,7 @@ export async function POST(req) {
           success: false,
           message: "QR data is required",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -23,30 +23,37 @@ export async function POST(req) {
 
     // 🔥 البحث عن المستخدم باستخدام رابط البورتفليو المخزن في qrCodeData
     let scannedUser = null;
-    
+
     // إذا كان الـ QR data هو رابط بورتفليو
-    if (qrData.includes('/portfolio/')) {
-      const username = qrData.split('/portfolio/')[1];
-      scannedUser = await User.findOne({ username }).select("-password");
-    } 
+    if (qrData.includes("/portfolio/")) {
+      const portfolioId = qrData.split("/portfolio/")[1];
+
+      // جيب الـ portfolio وبعدين الـ user
+      const Portfolio = (await import("../../../models/Portfolio")).default;
+      const portfolio = await Portfolio.findById(portfolioId);
+
+      if (portfolio) {
+        scannedUser = await User.findById(portfolio.userId).select("-password");
+      }
+    }
     // إذا كان الـ QR data لا يزال توكن (للتوافق مع الإصدارات القديمة)
-    else if (qrData.includes('token=')) {
+    else if (qrData.includes("token=")) {
       // معالجة التوكن للتوافق مع الإصدارات القديمة
       const url = new URL(qrData);
-      const token = url.searchParams.get('token');
+      const token = url.searchParams.get("token");
       // يمكنك إضافة فك تشفير التوكن هنا إذا أردت
       return NextResponse.json(
         {
           success: false,
           message: "QR code format outdated. Please generate new QR code.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
     // إذا كان الـ QR data هو username مباشر
     else {
-      scannedUser = await User.findOne({ 
-        qrCodeData: qrData 
+      scannedUser = await User.findOne({
+        qrCodeData: qrData,
       }).select("-password");
     }
 
@@ -57,7 +64,7 @@ export async function POST(req) {
           success: false,
           message: "User not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -83,11 +90,10 @@ export async function POST(req) {
         message: `مرحباً ${scannedUser.name}`,
         user: userInfo,
         portfolioUrl: portfolioUrl,
-        scanType: "portfolio_redirect"
+        scanType: "portfolio_redirect",
       },
-      { status: 200 }
+      { status: 200 },
     );
-
   } catch (error) {
     console.error("💥 Scan QR error:", error);
     return NextResponse.json(
@@ -95,7 +101,7 @@ export async function POST(req) {
         success: false,
         message: "Failed to scan QR code: " + error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
