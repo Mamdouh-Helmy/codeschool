@@ -166,6 +166,8 @@ class WapilotService {
       const result = await response.json();
       if (!response.ok) throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
 
+      console.log('📦 Full wapilot response:', JSON.stringify(result, null, 2));
+
       return {
         success: true,
         messageId: result.message_id || result.id || result.messageId || result.data?.id,
@@ -220,6 +222,8 @@ class WapilotService {
 
       const result = await response.json();
       if (!response.ok) throw new Error(`WhatsApp Eval API error: ${JSON.stringify(result)}`);
+
+      console.log('📦 Full wapilot response:', JSON.stringify(result, null, 2));
 
       return {
         success: true,
@@ -580,6 +584,8 @@ The Code School Team 💻`;
 
       const result = await response.json();
       if (!response.ok) throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
+
+      console.log('📦 Full wapilot response:', JSON.stringify(result, null, 2));
 
       return {
         success: true,

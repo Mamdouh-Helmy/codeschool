@@ -151,13 +151,12 @@ async function handleOutgoingMessage(msg) {
 // ✅ معالجة الرسائل الواردة
 // ============================================================
 async function processIncomingMessage(msg) {
-  const selectedRowID = msg.listResponse?.selectedRowID || null;
-  const phoneRaw      = (msg.from || '').replace(/@.*$/, '').trim();
-  const replyToId     = msg.replyTo?.id || msg.replyToId || null;
+  const selectedRowID  = msg.listResponse?.selectedRowID || null;
+  const phoneRaw       = (msg.from || '').replace(/@.*$/, '').trim();
+  const replyToId      = msg.replyTo?.id || msg.replyToId || null;
 
-  // تحديد اللغة المختارة
+  // ✅ تحديد اللغة المختارة
   let selectedLanguage = null;
-
   if (selectedRowID) {
     const id = selectedRowID.toLowerCase();
     if (ARABIC_TRIGGERS.includes(id))  selectedLanguage = 'ar';
@@ -175,37 +174,66 @@ async function processIncomingMessage(msg) {
 
   console.log(`🌍 Language selected: ${selectedLanguage} | Phone: ${phoneRaw}`);
 
-  // ✅ البحث عن الطالب (4 طرق)
- let student = null;
+  // ✅ البحث عن الطالب
+  let student = null;
 
-// 1. أدق طريقة — رقم الشخص اللي بعت الرسالة
-if (phoneRaw) {
-  student = await Student.findOne({ 'metadata.whatsappChatId': phoneRaw, isDeleted: false });
-  console.log(student ? `✅ Found by chatId` : `⚠️ Not found by chatId`);
-}
+  // 1. بالـ chatId (lid أو رقم)
+  if (phoneRaw) {
+    student = await Student.findOne({
+      'metadata.whatsappChatId': phoneRaw,
+      isDeleted: false,
+    });
+    console.log(student ? `✅ Found by chatId: ${student.personalInfo?.fullName}` : `⚠️ Not found by chatId`);
+  }
 
-// 2. fallback — بحث في أرقام الهاتف
-if (!student) {
-  student = await findStudentByPhone(phoneRaw);
-  if (student) console.log(`✅ Found by phone number`);
-}
+  // 2. بالـ phone number (كل الصيغ)
+  if (!student) {
+    student = await findStudentByPhone(phoneRaw);
+    if (student) {
+      console.log(`✅ Found by phone: ${student.personalInfo?.fullName}`);
+      // ✅ حفظ الـ lid الجديد فوراً
+      await Student.updateOne(
+        { _id: student._id },
+        { $set: { 'metadata.whatsappChatId': phoneRaw } }
+      );
+    }
+  }
 
-// 3. fallback — stanzaId
-if (!student && replyToId) {
-  student = await Student.findOne({ 'metadata.whatsappStanzaId': replyToId, isDeleted: false });
-  console.log(student ? `✅ Found by stanzaId` : `⚠️ Not found by stanzaId`);
-}
+  // 3. بالـ stanzaId
+  if (!student && replyToId) {
+    student = await Student.findOne({
+      'metadata.whatsappStanzaId': replyToId,
+      isDeleted: false,
+    });
+    if (student) {
+      console.log(`✅ Found by stanzaId: ${student.personalInfo?.fullName}`);
+      // ✅ حفظ الـ lid
+      await Student.updateOne(
+        { _id: student._id },
+        { $set: { 'metadata.whatsappChatId': phoneRaw } }
+      );
+    }
+  }
 
-// 4. آخر حل — أحدث طالب لسه مختارش لغة
-if (!student) {
-  student = await Student.findOne({
-    'metadata.whatsappInteractiveSent': true,
-    'metadata.whatsappLanguageSelected': false,
-    isDeleted: false,
-  }).sort({ 'metadata.whatsappSentAt': -1 });
-  if (student) console.log(`✅ Found by pending status: ${student.personalInfo?.fullName}`);
-  else         console.log(`⚠️ Student not found for phone: ${phoneRaw}`);
-}
+  // 4. أحدث طالب لسه مختارش لغة (آخر حل)
+  if (!student) {
+    student = await Student.findOne({
+      'metadata.whatsappInteractiveSent': true,
+      'metadata.whatsappLanguageSelected': false,
+      isDeleted: false,
+    }).sort({ 'metadata.whatsappSentAt': -1 });
+
+    if (student) {
+      console.log(`✅ Found by pending: ${student.personalInfo?.fullName}`);
+      // ✅ حفظ الـ lid
+      await Student.updateOne(
+        { _id: student._id },
+        { $set: { 'metadata.whatsappChatId': phoneRaw } }
+      );
+    } else {
+      console.log(`⚠️ Student not found for phone: ${phoneRaw}`);
+    }
+  }
 
   if (!student) return { success: false, reason: 'student_not_found' };
 
@@ -229,7 +257,6 @@ if (!student) {
 
   console.log(`✅ DB updated - preferredLanguage: ${selectedLanguage}`);
 
-  // ✅ إرسال رسائل التأكيد + رسالة المشرف
   const confirmResult = await sendConfirmationMessages(student, selectedLanguage);
 
   return {
@@ -238,9 +265,9 @@ if (!student) {
     studentName:  student.personalInfo?.fullName,
     selectedLanguage,
     confirmationSent: {
-      student:          confirmResult.student?.success  || false,
-      guardian:         confirmResult.guardian?.success || false,
-      supervisorIntro:  confirmResult.supervisorIntro?.success || false,
+      student:         confirmResult.student?.success  || false,
+      guardian:        confirmResult.guardian?.success || false,
+      supervisorIntro: confirmResult.supervisorIntro?.success || false,
     },
   };
 }

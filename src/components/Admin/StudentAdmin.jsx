@@ -1,928 +1,713 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import toast from "react-hot-toast";
 import {
-  User,
-  Users,
-  Plus,
-  Edit,
-  Trash2,
-  Search,
-  Filter,
-  Download,
-  Mail,
-  Phone,
-  Calendar,
-  GraduationCap,
-  Shield,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Eye,
-  RefreshCw,
-  MoreVertical,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  BookOpen,
-  Star,
-  Target,
-  TrendingUp,
-  Hash,
-  AlertCircle,
-  Info,
-  MoreHorizontal,
-  FileText,
-  UserPlus,
-  Package,
-  Zap,
-  Snowflake,
-  Ban,
-  Award
+  Users, Plus, Edit, Trash2, Search, Download,
+  Phone, Calendar, GraduationCap, CheckCircle,
+  Eye, RefreshCw, ChevronLeft, ChevronRight,
+  ChevronsLeft, ChevronsRight, BookOpen,
+  AlertCircle, MoreHorizontal, UserPlus, Package,
+  Zap, Snowflake, Ban, Award, Hash, User,
+  Filter, X, ChevronDown, Layers, UserCheck, UserX,
+  TrendingUp, Target, BarChart2, SlidersHorizontal
 } from "lucide-react";
 import Modal from "./Modal";
 import StudentForm from "./StudentForm";
 import CreditHoursManager from "./CreditHoursManager";
 import { useI18n } from "@/i18n/I18nProvider";
 
+// ─── Debounce hook ────────────────────────────────────────────────────────────
+function useDebounce(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+// ─── Status / Level badge configs ────────────────────────────────────────────
+const STATUS_CFG = {
+  Active:    { dot: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800" },
+  Suspended: { dot: "bg-amber-400",   badge: "bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-800" },
+  Graduated: { dot: "bg-sky-400",     badge: "bg-sky-50 text-sky-700 ring-1 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-800" },
+  Dropped:   { dot: "bg-rose-400",    badge: "bg-rose-50 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:ring-rose-800" },
+};
+
+const LEVEL_CFG = {
+  Beginner:     "bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:ring-blue-800",
+  Intermediate: "bg-violet-50 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:ring-violet-800",
+  Advanced:     "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-800",
+};
+
+// ─── Credit status helper ─────────────────────────────────────────────────────
+function getCreditInfo(student, t) {
+  const cs = student.creditSystem || {};
+  const pkg = cs.currentPackage;
+  const status = cs.status || "no_package";
+  const remaining = pkg?.remainingHours || 0;
+  const hasFreeze = (cs.exceptions || []).some(e => e.type === "freeze" && e.status === "active");
+
+  if (hasFreeze)              return { Icon: Snowflake, color: "text-sky-500",    bg: "bg-sky-50 dark:bg-sky-900/30",     label: t("credit.status.frozen"),     remaining };
+  if (remaining <= 5 && remaining > 0) return { Icon: AlertCircle, color: "text-rose-500", bg: "bg-rose-50 dark:bg-rose-900/30",  label: t("credit.status.low"),        remaining };
+  if (status === "active" || remaining > 0) return { Icon: Zap,       color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/30", label: t("credit.status.active"), remaining };
+  if (status === "expired")   return { Icon: Ban,       color: "text-rose-500",   bg: "bg-rose-50 dark:bg-rose-900/30",   label: t("credit.status.expired"),    remaining };
+  if (status === "completed") return { Icon: Award,     color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/30", label: t("credit.status.completed"), remaining };
+  return                             { Icon: Package,   color: "text-slate-400",  bg: "bg-slate-50 dark:bg-slate-800",    label: t("credit.status.no_package"), remaining };
+}
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+function StatCard({ icon: Icon, label, value, sub, iconBg, iconColor, onClick, active }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`group relative flex flex-col gap-2 p-4 rounded-2xl border transition-all duration-200 text-left w-full
+        ${active
+          ? "bg-primary/5 border-primary/40 shadow-md shadow-primary/10"
+          : "bg-white dark:bg-darkmode border-PowderBlueBorder dark:border-dark_border hover:border-primary/30 hover:shadow-sm"
+        }`}
+    >
+      <div className="flex items-start justify-between">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${iconBg}`}>
+          <Icon className={`w-4 h-4 ${iconColor}`} />
+        </div>
+        {active && <span className="w-2 h-2 rounded-full bg-primary mt-1" />}
+      </div>
+      <div>
+        <p className="text-2xl font-bold text-MidnightNavyText dark:text-white leading-none">{value}</p>
+        <p className="text-xs text-SlateBlueText dark:text-darktext mt-1 font-medium">{label}</p>
+        {sub && <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>}
+      </div>
+    </button>
+  );
+}
+
+// ─── Filter Chip ──────────────────────────────────────────────────────────────
+function FilterChip({ label, value, options, onChange, icon: Icon }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const active = !!value;
+  const selected = options.find(o => o.value === value);
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-all
+          ${active
+            ? "bg-primary text-white border-primary shadow-sm shadow-primary/30"
+            : "bg-white dark:bg-dark_input border-PowderBlueBorder dark:border-dark_border text-SlateBlueText dark:text-darktext hover:border-primary/40"
+          }`}
+      >
+        {Icon && <Icon className="w-3.5 h-3.5" />}
+        <span>{active ? selected?.label : label}</span>
+        {active
+          ? <X className="w-3 h-3 ml-0.5" onClick={(e) => { e.stopPropagation(); onChange(""); }} />
+          : <ChevronDown className="w-3 h-3 ml-0.5" />
+        }
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1.5 left-0 z-50 min-w-[160px] bg-white dark:bg-darkmode border border-PowderBlueBorder dark:border-dark_border rounded-xl shadow-xl shadow-black/10 overflow-hidden">
+          <div className="py-1">
+            {options.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors
+                  ${value === opt.value
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input"
+                  }`}
+              >
+                {opt.dot && <span className={`w-2 h-2 rounded-full ${opt.dot}`} />}
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Active filter tags ───────────────────────────────────────────────────────
+function ActiveTag({ label, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+      {label}
+      <button onClick={onRemove} className="hover:text-primary/70"><X className="w-3 h-3" /></button>
+    </span>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function StudentAdmin() {
   const { t } = useI18n();
-  const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  // State
+  const [students, setStudents]   = useState([]);
+  const [loading, setLoading]     = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState(null);
+  const [editingStudent, setEditingStudent]   = useState(null);
   const [showCreditManager, setShowCreditManager] = useState(false);
   const [selectedStudentForCredit, setSelectedStudentForCredit] = useState(null);
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput, 350);
+
   const [filters, setFilters] = useState({
-    search: "",
-    status: "",
-    level: "",
-    source: "",
-    creditStatus: "",
-    page: 1,
-    limit: 10
-  });
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    totalStudents: 0,
-    totalPages: 1
+    status: "", level: "", source: "", creditStatus: "", inGroup: "",
+    page: 1, limit: 10,
   });
 
-  // Credit Stats Summary
-  const [creditStats, setCreditStats] = useState({
-    totalWithPackage: 0,
-    totalActive: 0,
-    totalFrozen: 0,
-    totalExpired: 0,
-    totalNoPackage: 0,
-    lowBalance: 0
-  });
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalStudents: 0, totalPages: 1 });
+  const [creditStats, setCreditStats] = useState({ totalWithPackage: 0, totalActive: 0, totalFrozen: 0, totalExpired: 0, totalNoPackage: 0, lowBalance: 0 });
+  const [groupStats, setGroupStats]   = useState({ inGroup: 0, notInGroup: 0 });
 
-  // دالة لتنسيق التاريخ
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return 'N/A';
-    }
-  };
-
-  // Get Credit Status Info
-  const getCreditStatusInfo = (student) => {
-    const creditSystem = student.creditSystem || {};
-    const currentPackage = creditSystem.currentPackage;
-    const status = creditSystem.status || "no_package";
-
-    // ✅ استخدم remainingHours فقط (الاستثناءات مضافة بالفعل)
-    const remainingHours = currentPackage?.remainingHours || 0;
-
-    const hasActiveFreeze = creditSystem.exceptions?.some(
-      e => e.type === "freeze" && e.status === "active"
-    );
-
-    let icon = Package;
-    let color = "gray";
-    let bgColor = "bg-gray-100 dark:bg-gray-800";
-    let textColor = "text-gray-600 dark:text-gray-400";
-    let label = t("credit.status.no_package");
-
-    if (hasActiveFreeze) {
-      icon = Snowflake;
-      color = "blue";
-      bgColor = "bg-blue-100 dark:bg-blue-900/30";
-      textColor = "text-blue-600 dark:text-blue-400";
-      label = t("credit.status.frozen");
-    } else if (status === "active" || remainingHours > 0) {
-      if (remainingHours <= 5 && remainingHours > 0) {
-        icon = AlertCircle;
-        color = "red";
-        bgColor = "bg-red-100 dark:bg-red-900/30";
-        textColor = "text-red-600 dark:text-red-400";
-        label = t("credit.status.low");
-      } else {
-        icon = Zap;
-        color = "green";
-        bgColor = "bg-green-100 dark:bg-green-900/30";
-        textColor = "text-green-600 dark:text-green-400";
-        label = t("credit.status.active");
-      }
-    } else if (status === "expired") {
-      icon = Ban;
-      color = "red";
-      bgColor = "bg-red-100 dark:bg-red-900/30";
-      textColor = "text-red-600 dark:text-red-400";
-      label = t("credit.status.expired");
-    } else if (status === "completed") {
-      icon = Award;
-      color = "purple";
-      bgColor = "bg-purple-100 dark:bg-purple-900/30";
-      textColor = "text-purple-600 dark:text-purple-400";
-      label = t("credit.status.completed");
-    }
-
-    return {
-      icon,
-      color,
-      bgColor,
-      textColor,
-      label,
-      remainingHours, // ✅ الآن ترجع 26 بدلاً من 28
-      hasPackage: !!currentPackage,
-      status
-    };
-  };
-
-  // تحميل الطلاب مع الفلاتر
-  const loadStudents = async () => {
+  // Load
+  const loadStudents = useCallback(async () => {
     setLoading(true);
     try {
-      const queryParams = new URLSearchParams({
-        page: filters.page,
-        limit: filters.limit,
-        ...(filters.search && { search: filters.search }),
-        ...(filters.status && { status: filters.status }),
-        ...(filters.level && { level: filters.level }),
-        ...(filters.source && { source: filters.source }),
-        ...(filters.creditStatus && { creditStatus: filters.creditStatus })
+      const params = new URLSearchParams({
+        page:   filters.page,
+        limit:  filters.limit,
+        ...(debouncedSearch       && { search:       debouncedSearch }),
+        ...(filters.status        && { status:        filters.status }),
+        ...(filters.level         && { level:         filters.level }),
+        ...(filters.source        && { source:        filters.source }),
+        ...(filters.creditStatus  && { creditStatus:  filters.creditStatus }),
+        ...(filters.inGroup !== "" && { inGroup:       filters.inGroup }),
       });
 
-      const res = await fetch(`/api/allStudents?${queryParams}`, {
-        cache: "no-store",
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
-      });
-
+      const res  = await fetch(`/api/allStudents?${params}`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
       const json = await res.json();
-      console.log("API Response:", json);
 
       if (json.success) {
         setStudents(json.data || []);
-
-        // Calculate credit stats
-        const stats = {
-          totalWithPackage: 0,
-          totalActive: 0,
-          totalFrozen: 0,
-          totalExpired: 0,
-          totalNoPackage: 0,
-          lowBalance: 0
-        };
-
-        json.data?.forEach(student => {
-          const creditSystem = student.creditSystem || {};
-          const currentPackage = creditSystem.currentPackage;
-          const status = creditSystem.status || "no_package";
-          const remainingHours = currentPackage?.remainingHours || 0;
-          const hasActiveFreeze = creditSystem.exceptions?.some(
-            e => e.type === "freeze" && e.status === "active"
-          );
-
-          if (currentPackage) stats.totalWithPackage++;
-          if (hasActiveFreeze) stats.totalFrozen++;
-          else if (status === "active") {
-            stats.totalActive++;
-            if (remainingHours <= 5) stats.lowBalance++;
-          }
-          else if (status === "expired") stats.totalExpired++;
-          else if (status === "no_package") stats.totalNoPackage++;
-        });
-
-        setCreditStats(stats);
-
-        if (json.pagination) {
-          setPagination({
-            page: json.pagination.page || 1,
-            limit: json.pagination.limit || 10,
-            totalStudents: json.pagination.totalStudents || (json.data?.length || 0),
-            totalPages: json.pagination.totalPages || 1
-          });
-        } else {
-          setPagination(prev => ({
-            ...prev,
-            totalStudents: json.data?.length || 0
-          }));
-        }
+        if (json.pagination) setPagination(json.pagination);
+        if (json.creditStats)  setCreditStats(json.creditStats);
+        if (json.groupStats)   setGroupStats(json.groupStats);
       } else {
         toast.error(json.message || t("students.loadError"));
       }
     } catch (err) {
-      console.error("Error loading students:", err);
+      console.error(err);
       toast.error(t("students.loadError"));
     } finally {
       setLoading(false);
     }
+  }, [filters, debouncedSearch, t]);
+
+  // Trigger on filter / search changes
+  useEffect(() => { loadStudents(); }, [filters.page, filters.status, filters.level, filters.source, filters.creditStatus, filters.inGroup, debouncedSearch]);
+
+  // When search text changes, reset to page 1
+  useEffect(() => { setFilters(f => ({ ...f, page: 1 })); }, [debouncedSearch]);
+
+  const setFilter = (key, value) => setFilters(f => ({ ...f, [key]: value, page: 1 }));
+
+  // Active filters list
+  const activeFilters = [
+    filters.status       && { key: "status",       label: `Status: ${filters.status}` },
+    filters.level        && { key: "level",        label: `Level: ${filters.level}` },
+    filters.source       && { key: "source",       label: `Source: ${filters.source}` },
+    filters.creditStatus && { key: "creditStatus", label: `Credits: ${filters.creditStatus}` },
+    filters.inGroup !== "" && { key: "inGroup",    label: filters.inGroup === "true" ? "In a Group" : "No Group" },
+    debouncedSearch      && { key: "search",       label: `"${debouncedSearch}"` },
+  ].filter(Boolean);
+
+  const clearAll = () => {
+    setSearchInput("");
+    setFilters({ status: "", level: "", source: "", creditStatus: "", inGroup: "", page: 1, limit: 10 });
   };
 
-  useEffect(() => {
-    loadStudents();
-  }, [filters.page, filters.status, filters.level, filters.source, filters.creditStatus]);
-
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value, page: 1 }));
-  };
-
-  const onSaved = async () => {
-    await loadStudents();
-    toast.success(t("students.savedSuccess"));
-  };
-
-  const onEdit = (student) => {
-    setEditingStudent(student);
-    setModalOpen(true);
-  };
-
+  // Actions
+  const onEdit = (s)    => { setEditingStudent(s); setModalOpen(true); };
   const onView = async (id) => {
     try {
-      const res = await fetch(`/api/allStudents/${id}`);
+      const res  = await fetch(`/api/allStudents/${id}`);
       const json = await res.json();
-
-      if (json.success) {
-        setEditingStudent(json.data);
-        setModalOpen(true);
-      }
-    } catch (err) {
-      console.error("Error viewing student:", err);
-      toast.error(t("students.loadError"));
-    }
+      if (json.success) { setEditingStudent(json.data); setModalOpen(true); }
+    } catch { toast.error(t("students.loadError")); }
   };
 
-  const onDelete = async (id, name) => {
-    toast(
-      (toastInstance) => (
-        <div className="w-404 max-w-full bg-white dark:bg-darkmode rounded-14 shadow-round-box p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold">
-              !
-            </div>
-            <div className="flex-1">
-              <p className="text-16 font-semibold">
-                {t("common.delete")} {t("common.student")}
-              </p>
-              <p className="text-14 mt-1 text-slate-500 dark:text-darktext">
-                {t("students.deleteConfirm")} <strong>{name}</strong>? {t("students.deleteWarning")}
-              </p>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <button
-              className="px-3 py-1 bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white rounded-14 text-15 hover:opacity-90 border border-PeriwinkleBorder/50"
-              onClick={() => toast.dismiss(toastInstance.id)}
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              className="px-3 py-1 bg-red-600 text-white rounded-14 text-15 hover:bg-red-700 shadow-sm"
-              onClick={async () => {
-                toast.dismiss(toastInstance.id);
-                try {
-                  const res = await fetch(`/api/allStudents/${id}`, {
-                    method: "DELETE",
-                  });
-
-                  if (res.ok) {
-                    await loadStudents();
-                    toast.success(t("students.deletedSuccess"));
-                  } else {
-                    const error = await res.json();
-                    toast.error(error.message || t("students.deleteFailed"));
-                  }
-                } catch (err) {
-                  console.error("Error deleting student:", err);
-                  toast.error(t("students.deleteError"));
-                }
-              }}
-            >
-              {t("common.delete")}
-            </button>
+  const onDelete = (id, name) => {
+    toast((toastInstance) => (
+      <div className="w-80 bg-white dark:bg-darkmode rounded-2xl shadow-2xl p-4">
+        <div className="flex gap-3">
+          <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">!</div>
+          <div>
+            <p className="font-semibold text-sm text-MidnightNavyText dark:text-white">{t("common.delete")} {t("common.student")}</p>
+            <p className="text-xs text-slate-500 dark:text-darktext mt-1">
+              {t("students.deleteConfirm")} <strong>{name}</strong>?
+            </p>
           </div>
         </div>
-      ),
-      { duration: Infinity, position: "top-center" }
-    );
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Active': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-      case 'Suspended': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-      case 'Graduated': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-      case 'Dropped': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-    }
-  };
-
-  const getLevelColor = (level) => {
-    switch (level) {
-      case 'Beginner': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-      case 'Intermediate': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
-      case 'Advanced': return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-    }
-  };
-
-  // Safe calculation functions
-  const getActiveStudentsCount = () => {
-    return students.filter(s => s.enrollmentInfo?.status === 'Active').length;
-  };
-
-  const getGraduatedCount = () => {
-    return students.filter(s => s.enrollmentInfo?.status === 'Graduated').length;
-  };
-
-  const getAvgCourses = () => {
-    if (students.length === 0) return 0;
-    const totalCourses = students.reduce((acc, s) =>
-      acc + (s.academicInfo?.currentCourses?.length || 0), 0
-    );
-    return Math.round(totalCourses / students.length);
-  };
-
-  // ✅ دالة لتحديث طالب واحد في القائمة
-  const updateStudentInList = (updatedStudent) => {
-    setStudents(prevStudents =>
-      prevStudents.map(s =>
-        (s._id === updatedStudent._id) ? updatedStudent : s
-      )
-    );
-
-    // تحديث الإحصائيات
-    setCreditStats(prev => {
-      const newStats = { ...prev };
-
-      // إعادة حساب الإحصائيات
-      const stats = {
-        totalWithPackage: 0,
-        totalActive: 0,
-        totalFrozen: 0,
-        totalExpired: 0,
-        totalNoPackage: 0,
-        lowBalance: 0
-      };
-
-      students.forEach(s => {
-        const creditSystem = s.creditSystem || {};
-        const currentPackage = creditSystem.currentPackage;
-        const status = creditSystem.status || "no_package";
-        const remainingHours = currentPackage?.remainingHours || 0;
-        const hasActiveFreeze = creditSystem.exceptions?.some(
-          e => e.type === "freeze" && e.status === "active"
-        );
-
-        if (currentPackage) stats.totalWithPackage++;
-        if (hasActiveFreeze) stats.totalFrozen++;
-        else if (status === "active") {
-          stats.totalActive++;
-          if (remainingHours <= 5) stats.lowBalance++;
-        }
-        else if (status === "expired") stats.totalExpired++;
-        else if (status === "no_package") stats.totalNoPackage++;
-      });
-
-      return stats;
-    });
-  };
-
-  if (loading && students.length === 0) {
-    return (
-      <div className="flex justify-center items-center p-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4 md:space-y-6 p-2 md:p-0">
-      {/* Header Section */}
-      <div className="bg-white dark:bg-darkmode rounded-xl shadow-sm p-4 md:p-6 border border-PowderBlueBorder dark:border-dark_border">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="space-y-1 md:space-y-2">
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Users className="w-5 h-5 md:w-7 md:h-7 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold text-MidnightNavyText dark:text-white">
-                  {t("students.management")}
-                </h1>
-                <p className="text-xs md:text-sm text-SlateBlueText dark:text-darktext">
-                  {t("students.managementDescription")}
-                </p>
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setEditingStudent(null);
-              setModalOpen(true);
-            }}
-            className="bg-primary hover:bg-primary/90 text-white px-4 py-2.5 md:px-6 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 w-full md:w-auto justify-center"
-          >
-            <UserPlus className="w-4 h-4" />
-            {t("students.addNew")}
+        <div className="flex gap-2 mt-4 justify-end">
+          <button onClick={() => toast.dismiss(toastInstance.id)} className="px-3 py-1.5 text-xs rounded-lg border border-PowderBlueBorder dark:border-dark_border text-SlateBlueText dark:text-darktext hover:bg-gray-50 dark:hover:bg-dark_input">
+            {t("common.cancel")}
+          </button>
+          <button onClick={async () => {
+            toast.dismiss(toastInstance.id);
+            try {
+              const res = await fetch(`/api/allStudents/${id}`, { method: "DELETE" });
+              if (res.ok) { await loadStudents(); toast.success(t("students.deletedSuccess")); }
+              else { const e = await res.json(); toast.error(e.message || t("students.deleteFailed")); }
+            } catch { toast.error(t("students.deleteError")); }
+          }} className="px-3 py-1.5 text-xs rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium">
+            {t("common.delete")}
           </button>
         </div>
       </div>
+    ), { duration: Infinity, position: "top-center" });
+  };
 
-      {/* Stats Overview - مع إحصائيات الساعات */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
-        <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                {t("students.stats.total")}
-              </p>
-              <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
-                {pagination.totalStudents || students.length}
-              </p>
-            </div>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <Users className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-            </div>
-          </div>
-        </div>
+  const onSaved = async () => { await loadStudents(); toast.success(t("students.savedSuccess")); };
 
-        <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                {t("students.stats.active")}
-              </p>
-              <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
-                {getActiveStudentsCount()}
-              </p>
-            </div>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-600 dark:text-green-400" />
-            </div>
-          </div>
-        </div>
+  const formatDate = (d) => {
+    if (!d) return "—";
+    try { return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
+    catch { return "—"; }
+  };
 
-        <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                {t("students.stats.graduated")}
-              </p>
-              <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
-                {getGraduatedCount()}
-              </p>
-            </div>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-              <GraduationCap className="w-4 h-4 md:w-5 md:h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-        </div>
+  // Active counts from current page (approximate, server has real totals)
+  const activeCount    = students.filter(s => s.enrollmentInfo?.status === "Active").length;
+  const graduatedCount = students.filter(s => s.enrollmentInfo?.status === "Graduated").length;
 
-        <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                {t("students.stats.avgCourses")}
-              </p>
-              <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
-                {getAvgCourses()}
-              </p>
-            </div>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-              <BookOpen className="w-4 h-4 md:w-5 md:h-5 text-purple-600 dark:text-purple-400" />
-            </div>
-          </div>
-        </div>
+  // ─── Filter option lists ────────────────────────────────────────
+  const statusOptions = [
+    { value: "",          label: "All Statuses" },
+    { value: "Active",    label: "Active",    dot: "bg-emerald-400" },
+    { value: "Suspended", label: "Suspended", dot: "bg-amber-400" },
+    { value: "Graduated", label: "Graduated", dot: "bg-sky-400" },
+    { value: "Dropped",   label: "Dropped",   dot: "bg-rose-400" },
+  ];
+  const levelOptions = [
+    { value: "",             label: "All Levels" },
+    { value: "Beginner",     label: "Beginner" },
+    { value: "Intermediate", label: "Intermediate" },
+    { value: "Advanced",     label: "Advanced" },
+  ];
+  const creditOptions = [
+    { value: "",          label: "All Credits" },
+    { value: "active",    label: "Active" },
+    { value: "low",       label: "Low Balance" },
+    { value: "frozen",    label: "Frozen" },
+    { value: "expired",   label: "Expired" },
+    { value: "completed", label: "Completed" },
+    { value: "no_package",label: "No Package" },
+  ];
+  const groupOptions = [
+    { value: "",      label: "All Students" },
+    { value: "true",  label: "In a Group" },
+    { value: "false", label: "No Group" },
+  ];
 
-        {/* Credit Stats Card */}
-        <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] md:text-xs text-SlateBlueText dark:text-darktext uppercase tracking-wide">
-                {t("credit.withPackage")}
-              </p>
-              <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white mt-0.5">
-                {creditStats.totalWithPackage}
-              </p>
-              <p className="text-[8px] md:text-[10px] text-SlateBlueText dark:text-darktext mt-0.5">
-                ⚠️ {creditStats.lowBalance} {t("credit.lowBalance")}
-              </p>
-            </div>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
-              <Package className="w-4 h-4 md:w-5 md:h-5 text-amber-600 dark:text-amber-400" />
-            </div>
-          </div>
+  // ─── Render ─────────────────────────────────────────────────────
+  return (
+    <div className="space-y-5 p-1 md:p-0">
+
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-MidnightNavyText dark:text-white tracking-tight">
+            {t("students.management")}
+          </h1>
+          <p className="text-sm text-SlateBlueText dark:text-darktext mt-0.5">
+            {t("students.managementDescription")}
+          </p>
         </div>
+        <button
+          onClick={() => { setEditingStudent(null); setModalOpen(true); }}
+          className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl font-semibold text-sm shadow-lg shadow-primary/25 transition-all duration-200 hover:shadow-primary/40 hover:-translate-y-0.5 shrink-0"
+        >
+          <UserPlus className="w-4 h-4" />
+          {t("students.addNew")}
+        </button>
       </div>
 
-      {/* Filters Section */}
-      <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-        <div className="space-y-3 md:space-y-0 md:flex md:items-center md:gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder={t("students.searchPlaceholder")}
-                value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-              />
-            </div>
+      {/* ── Stats Row ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <StatCard icon={Users}        label="Total Students"  value={pagination.totalStudents}       iconBg="bg-primary/10"          iconColor="text-primary"        />
+        <StatCard icon={CheckCircle}  label="Active"          value={creditStats.totalActive || activeCount} iconBg="bg-emerald-100 dark:bg-emerald-900/30" iconColor="text-emerald-600 dark:text-emerald-400" />
+        <StatCard icon={GraduationCap}label="Graduated"       value={graduatedCount}                 iconBg="bg-sky-100 dark:bg-sky-900/30"     iconColor="text-sky-600 dark:text-sky-400" />
+        <StatCard icon={Package}      label="With Package"    value={creditStats.totalWithPackage}   sub={`⚠ ${creditStats.lowBalance} low`}   iconBg="bg-amber-100 dark:bg-amber-900/30"  iconColor="text-amber-600 dark:text-amber-400"
+          onClick={() => setFilter("creditStatus", filters.creditStatus === "no_package" ? "" : "no_package")}
+          active={filters.inGroup === ""} />
+        <StatCard icon={UserCheck}    label="In a Group"      value={groupStats.inGroup}             iconBg="bg-violet-100 dark:bg-violet-900/30" iconColor="text-violet-600 dark:text-violet-400"
+          onClick={() => setFilter("inGroup", filters.inGroup === "true" ? "" : "true")}
+          active={filters.inGroup === "true"} />
+        <StatCard icon={UserX}        label="No Group"        value={groupStats.notInGroup}          iconBg="bg-rose-100 dark:bg-rose-900/30"    iconColor="text-rose-600 dark:text-rose-400"
+          onClick={() => setFilter("inGroup", filters.inGroup === "false" ? "" : "false")}
+          active={filters.inGroup === "false"} />
+      </div>
+
+      {/* ── Filters bar ── */}
+      <div className="bg-white dark:bg-darkmode rounded-2xl border border-PowderBlueBorder dark:border-dark_border shadow-sm p-3 md:p-4 space-y-3">
+        {/* Search + chips */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            {searchInput && (
+              <button onClick={() => setSearchInput("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <input
+              type="text"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder={t("students.searchPlaceholder")}
+              className="w-full pl-9 pr-9 py-2.5 text-sm placeholder:text-white rounded-xl border border-PowderBlueBorder dark:border-dark_border bg-transparent dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all"
+            />
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              <select
-                value={filters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-                className="pl-9 pr-3 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white w-full"
-              >
-                <option value="">{t("students.allStatuses")}</option>
-                <option value="Active">{t("students.status.active")}</option>
-                <option value="Suspended">{t("students.status.suspended")}</option>
-                <option value="Graduated">{t("students.status.graduated")}</option>
-                <option value="Dropped">{t("students.status.dropped")}</option>
-              </select>
-            </div>
-
-            <select
-              value={filters.level}
-              onChange={(e) => handleFilterChange('level', e.target.value)}
-              className="px-3 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-            >
-              <option value="">{t("students.allLevels")}</option>
-              <option value="Beginner">{t("students.level.beginner")}</option>
-              <option value="Intermediate">{t("students.level.intermediate")}</option>
-              <option value="Advanced">{t("students.level.advanced")}</option>
-            </select>
-
-            {/* Credit Status Filter */}
-            <select
-              value={filters.creditStatus}
-              onChange={(e) => handleFilterChange('creditStatus', e.target.value)}
-              className="px-3 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
-            >
-              <option value="">{t("credit.allStatuses")}</option>
-              <option value="active">{t("credit.status.active")}</option>
-              <option value="frozen">{t("credit.status.frozen")}</option>
-              <option value="expired">{t("credit.status.expired")}</option>
-              <option value="completed">{t("credit.status.completed")}</option>
-              <option value="no_package">{t("credit.status.no_package")}</option>
-              <option value="low">{t("credit.status.low")}</option>
-            </select>
+          {/* Filter chips */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <FilterChip label="Status"  value={filters.status}       options={statusOptions} onChange={v => setFilter("status",  v)} icon={Target} />
+            <FilterChip label="Level"   value={filters.level}        options={levelOptions}  onChange={v => setFilter("level",   v)} icon={TrendingUp} />
+            <FilterChip label="Credits" value={filters.creditStatus} options={creditOptions} onChange={v => setFilter("creditStatus", v)} icon={Package} />
+            <FilterChip label="Group"   value={filters.inGroup}      options={groupOptions}  onChange={v => setFilter("inGroup", v)} icon={Layers} />
 
             <button
-              onClick={() => loadStudents()}
-              className="px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg flex items-center gap-2 text-sm"
+              onClick={loadStudents}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-PowderBlueBorder dark:border-dark_border text-SlateBlueText dark:text-darktext hover:border-primary/40 hover:text-primary text-sm transition-colors"
+              title="Refresh"
             >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden md:inline">{t("students.refresh")}</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+              <span className="hidden md:inline">Refresh</span>
             </button>
           </div>
         </div>
+
+        {/* Active tags row */}
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap gap-2 items-center pt-1 border-t border-PowderBlueBorder/50 dark:border-dark_border/50">
+            <span className="text-xs text-SlateBlueText dark:text-darktext font-medium">Active filters:</span>
+            {activeFilters.map(f => (
+              <ActiveTag
+                key={f.key}
+                label={f.label}
+                onRemove={() => {
+                  if (f.key === "search") setSearchInput("");
+                  else setFilter(f.key, "");
+                }}
+              />
+            ))}
+            <button onClick={clearAll} className="text-xs text-rose-500 hover:text-rose-700 font-medium underline underline-offset-2">
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Students Table */}
-      <div className="bg-white dark:bg-darkmode rounded-xl border border-PowderBlueBorder dark:border-dark_border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto -mx-2 md:mx-0">
-          <div className="min-w-full inline-block align-middle">
-            <table className="min-w-full divide-y divide-PowderBlueBorder dark:divide-dark_border">
-              <thead className="bg-gray-50 dark:bg-dark_input">
-                <tr>
-                  <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5" />
-                      {t("students.table.student")}
-                    </div>
-                  </th>
-                  <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5">
-                      <Hash className="w-3.5 h-3.5" />
-                      {t("students.table.enrollment")}
-                    </div>
-                  </th>
-                  <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5">
-                      <Target className="w-3.5 h-3.5" />
-                      {t("students.table.status")}
-                    </div>
-                  </th>
-                  <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      {t("students.table.level")}
-                    </div>
-                  </th>
-                  <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5">
-                      <Package className="w-3.5 h-3.5" />
-                      {t("credit.hours")}
-                    </div>
-                  </th>
-                  <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5">
-                      <Phone className="w-3.5 h-3.5" />
-                      {t("students.table.contact")}
-                    </div>
-                  </th>
-                  <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {t("students.table.enrolled")}
-                    </div>
-                  </th>
-                  <th className="py-2.5 px-3 md:px-4 text-left text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5">
-                      <MoreHorizontal className="w-3.5 h-3.5" />
-                      {t("students.table.actions")}
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-PowderBlueBorder dark:divide-dark_border">
-                {students.map((student) => {
-                  const creditInfo = getCreditStatusInfo(student);
-                  const CreditIcon = creditInfo.icon;
+      {/* ── Table ── */}
+      <div className="bg-white dark:bg-darkmode rounded-2xl border border-PowderBlueBorder dark:border-dark_border shadow-sm overflow-hidden">
+        {/* Loading overlay */}
+        {loading && (
+          <div className="relative">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gray-100 dark:bg-dark_border overflow-hidden rounded-t-2xl">
+              <div className="h-full bg-primary animate-[shimmer_1.2s_ease-in-out_infinite] w-1/3" style={{ animation: "progress 1s ease-in-out infinite" }} />
+            </div>
+          </div>
+        )}
 
-                  return (
-                    <tr key={student.id || student._id} className="hover:bg-gray-50 dark:hover:bg-dark_input transition-colors">
-                      <td className="py-2.5 px-3 md:px-4">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <User className="w-3.5 h-3.5 text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm text-MidnightNavyText dark:text-white truncate max-w-[120px] md:max-w-none">
-                              {student.personalInfo?.fullName || 'N/A'}
-                            </p>
-                            <p className="text-xs text-SlateBlueText dark:text-darktext truncate max-w-[120px] md:max-w-none">
-                              {student.personalInfo?.email || t("students.table.noEmail")}
-                            </p>
-                          </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            {/* Head */}
+            <thead>
+              <tr className="border-b border-PowderBlueBorder dark:border-dark_border bg-slate-50/60 dark:bg-dark_input/40">
+                {[
+                  { icon: User,          label: t("students.table.student") },
+                  { icon: Hash,          label: t("students.table.enrollment") },
+                  { icon: Target,        label: t("students.table.status") },
+                  { icon: TrendingUp,    label: t("students.table.level") },
+                  { icon: Layers,        label: "Group" },
+                  { icon: Package,       label: t("credit.hours") },
+                  { icon: Phone,         label: t("students.table.contact") },
+                  { icon: Calendar,      label: t("students.table.enrolled") },
+                  { icon: MoreHorizontal,label: t("students.table.actions") },
+                ].map(({ icon: Icon, label }) => (
+                  <th key={label} className="px-4 py-3 text-left">
+                    <span className="flex items-center gap-1.5 text-[11px] font-semibold text-SlateBlueText dark:text-darktext uppercase tracking-wider whitespace-nowrap">
+                      <Icon className="w-3 h-3" />
+                      {label}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            {/* Body */}
+            <tbody className="divide-y divide-PowderBlueBorder/60 dark:divide-dark_border/60">
+              {students.map((student, idx) => {
+                const credit = getCreditInfo(student, t);
+                const CreditIcon = credit.Icon;
+                const statusCfg  = STATUS_CFG[student.enrollmentInfo?.status] || { dot: "bg-gray-400", badge: "bg-gray-100 text-gray-600" };
+                const levelCls   = LEVEL_CFG[student.academicInfo?.level] || "bg-gray-100 text-gray-600";
+                const inGroup    = student.inGroup;
+
+                return (
+                  <tr
+                    key={student._id || idx}
+                    className="group hover:bg-slate-50/80 dark:hover:bg-dark_input/40 transition-colors duration-100"
+                  >
+                    {/* Student */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-primary font-bold text-sm uppercase">
+                          {student.personalInfo?.fullName?.[0] || "?"}
                         </div>
-                      </td>
-                      <td className="py-2.5 px-3 md:px-4">
-                        <div className="flex items-center gap-1.5">
-                          <Hash className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                          <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded truncate max-w-[80px] md:max-w-none">
-                            {student.enrollmentNumber || t("students.table.enrollmentNumber")}
-                          </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm text-MidnightNavyText dark:text-white truncate max-w-[150px]">
+                            {student.personalInfo?.fullName || "—"}
+                          </p>
+                          <p className="text-xs text-SlateBlueText dark:text-darktext truncate max-w-[150px]">
+                            {student.personalInfo?.email || t("students.table.noEmail")}
+                          </p>
                         </div>
-                      </td>
-                      <td className="py-2.5 px-3 md:px-4">
-                        <div className="flex items-center gap-1.5">
-                          <div className={`w-2 h-2 rounded-full ${student.enrollmentInfo?.status === 'Active' ? 'bg-green-500' :
-                            student.enrollmentInfo?.status === 'Suspended' ? 'bg-yellow-500' :
-                              student.enrollmentInfo?.status === 'Graduated' ? 'bg-blue-500' :
-                                student.enrollmentInfo?.status === 'Dropped' ? 'bg-red-500' : 'bg-gray-500'
-                            }`} />
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium ${getStatusColor(student.enrollmentInfo?.status)}`}>
-                            {student.enrollmentInfo?.status?.charAt(0) || 'U'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3 md:px-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium ${getLevelColor(student.academicInfo?.level)}`}>
-                          {student.academicInfo?.level?.charAt(0) || 'U'}
+                      </div>
+                    </td>
+
+                    {/* Enrollment # */}
+                    <td className="px-4 py-3">
+                      <code className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-md font-mono">
+                        {student.enrollmentNumber || "—"}
+                      </code>
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${statusCfg.badge}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
+                        {student.enrollmentInfo?.status || "—"}
+                      </span>
+                    </td>
+
+                    {/* Level */}
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${levelCls}`}>
+                        {student.academicInfo?.level || "—"}
+                      </span>
+                    </td>
+
+                    {/* Group */}
+                    <td className="px-4 py-3">
+                      {inGroup ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:ring-violet-800">
+                          <UserCheck className="w-3 h-3" />
+                          {student.groupCount > 1 ? `${student.groupCount} groups` : "1 group"}
                         </span>
-                      </td>
-                      <td className="py-2.5 px-3 md:px-4">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-6 h-6 rounded-lg ${creditInfo.bgColor} flex items-center justify-center`}>
-                            <CreditIcon className={`w-3 h-3 ${creditInfo.textColor}`} />
-                          </div>
-                          <div>
-                            <p className={`text-xs font-medium ${creditInfo.textColor}`}>
-                              {creditInfo.label}
-                            </p>
-                            {creditInfo.hasPackage && (
-                              <p className="text-[10px] text-SlateBlueText dark:text-darktext">
-                                {creditInfo.remainingHours} {t("credit.hours")}
-                              </p>
-                            )}
-                          </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+                          <UserX className="w-3 h-3" />
+                          No group
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Credit */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-7 h-7 rounded-lg ${credit.bg} flex items-center justify-center`}>
+                          <CreditIcon className={`w-3.5 h-3.5 ${credit.color}`} />
                         </div>
-                      </td>
-                      <td className="py-2.5 px-3 md:px-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-xs">
-                            <Phone className="w-3 h-3 flex-shrink-0" />
-                            <span className="truncate max-w-[80px] md:max-w-none">
-                              {student.personalInfo?.phone || t("students.table.noPhone")}
-                            </span>
-                          </div>
-                          {student.personalInfo?.whatsappNumber && (
-                            <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                              <span className="text-xs">✓</span>
-                              <span className="hidden md:inline">WhatsApp</span>
-                              <span className="md:hidden">WA</span>
-                            </div>
+                        <div>
+                          <p className={`text-xs font-semibold ${credit.color}`}>{credit.label}</p>
+                          {student.creditSystem?.currentPackage && (
+                            <p className="text-[10px] text-SlateBlueText dark:text-darktext">
+                              {credit.remaining}h left
+                            </p>
                           )}
                         </div>
-                      </td>
-                      <td className="py-2.5 px-3 md:px-4">
-                        <div className="flex items-center gap-1.5 text-xs text-SlateBlueText dark:text-darktext">
-                          <Calendar className="w-3 h-3 flex-shrink-0" />
-                          <span>
-                            {student.createdAt ? formatDate(student.createdAt) :
-                              student.metadata?.createdAt ? formatDate(student.metadata.createdAt) : 'N/A'}
+                      </div>
+                    </td>
+
+                    {/* Contact */}
+                    <td className="px-4 py-3">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1 text-xs text-MidnightNavyText dark:text-white">
+                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate max-w-[100px]">
+                            {student.personalInfo?.phone || t("students.table.noPhone")}
                           </span>
                         </div>
-                      </td>
-                      <td className="py-2.5 px-3 md:px-4">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => onView(student.id || student._id)}
-                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                            title={t("common.view")}
-                          >
-                            <Eye className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                          </button>
-                          <button
-                            onClick={() => onEdit(student)}
-                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                            title={t("common.edit")}
-                          >
-                            <Edit className="w-3.5 h-3.5 text-primary" />
-                          </button>
-                          {/* Credit Hours Button */}
-                          <button
-                            onClick={() => {
-                              console.log("Selected student for credit:", student);
-                              console.log("Student ID:", student._id || student.id);
-                              setSelectedStudentForCredit(student);
-                              setShowCreditManager(true);
-                            }}
-                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                            title={t("credit.manage")}
-                          >
-                            <Package className="w-3.5 h-3.5 text-amber-500" />
-                          </button>
-                          <button
-                            onClick={() => onDelete(student.id || student._id, student.personalInfo?.fullName || t("common.student"))}
-                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                            title={t("common.delete")}
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        {student.personalInfo?.whatsappNumber && (
+                          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                            WhatsApp
+                          </p>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Date */}
+                    <td className="px-4 py-3">
+                      <span className="text-xs text-SlateBlueText dark:text-darktext whitespace-nowrap">
+                        {formatDate(student.createdAt || student.metadata?.createdAt)}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
+                        <ActionBtn onClick={() => onView(student._id || student.id)} icon={Eye}     color="text-sky-600"   title={t("common.view")} />
+                        <ActionBtn onClick={() => onEdit(student)}                   icon={Edit}    color="text-primary"  title={t("common.edit")} />
+                        <ActionBtn onClick={() => { setSelectedStudentForCredit(student); setShowCreditManager(true); }}
+                          icon={Package} color="text-amber-500" title={t("credit.manage")} />
+                        <ActionBtn onClick={() => onDelete(student._id || student.id, student.personalInfo?.fullName || t("common.student"))}
+                          icon={Trash2}  color="text-rose-500"  title={t("common.delete")} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
-        {/* Empty State */}
-        {students.length === 0 && !loading && (
-          <div className="text-center py-8 md:py-12 px-4">
-            <div className="w-12 h-12 md:w-16 md:h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3 md:mb-4">
-              <Users className="w-6 h-6 md:w-8 md:h-8 text-primary" />
+        {/* Empty state */}
+        {!loading && students.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+              <Users className="w-8 h-8 text-primary" />
             </div>
-            <h3 className="text-base md:text-lg font-bold text-MidnightNavyText dark:text-white mb-1 md:mb-2">
-              {t("students.noStudents")}
+            <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-2">
+              {activeFilters.length > 0 ? "No matching students" : t("students.noStudents")}
             </h3>
-            <p className="text-xs md:text-sm text-SlateBlueText dark:text-darktext mb-4 md:mb-6 max-w-md mx-auto">
-              {filters.search || filters.status || filters.level || filters.source || filters.creditStatus
-                ? t("students.noMatchingResults")
+            <p className="text-sm text-SlateBlueText dark:text-darktext max-w-xs mb-6">
+              {activeFilters.length > 0
+                ? "Try adjusting your filters or search term."
                 : t("students.noStudentsDescription")}
             </p>
-            {!filters.search && !filters.status && !filters.level && !filters.source && !filters.creditStatus && (
-              <button
-                onClick={() => setModalOpen(true)}
-                className="bg-primary hover:bg-primary/90 text-white px-6 py-2.5 md:px-8 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
-              >
-                <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                {t("students.createFirstButton")}
-              </button>
-            )}
+            {activeFilters.length > 0
+              ? <button onClick={clearAll} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-PowderBlueBorder dark:border-dark_border text-sm text-SlateBlueText dark:text-darktext hover:border-primary/40 transition">
+                  <X className="w-3.5 h-3.5" /> Clear filters
+                </button>
+              : <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl font-semibold text-sm shadow-md shadow-primary/20 transition">
+                  <Plus className="w-4 h-4" /> {t("students.createFirstButton")}
+                </button>
+            }
           </div>
         )}
 
-        {/* Pagination */}
+        {/* ── Pagination ── */}
         {pagination.totalPages > 1 && (
-          <div className="px-3 md:px-4 py-3 border-t border-PowderBlueBorder dark:border-dark_border">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
-              <div className="text-xs text-SlateBlueText dark:text-darktext">
-                {t("students.pagination.showing")} <span className="font-medium">{(pagination.page - 1) * pagination.limit + 1}</span> {t("students.pagination.to")}{" "}
-                <span className="font-medium">
-                  {Math.min(pagination.page * pagination.limit, pagination.totalStudents)}
-                </span>{" "}
-                {t("students.pagination.of")} <span className="font-medium">{pagination.totalStudents || students.length}</span> {t("students.pagination.students")}
-              </div>
-              <div className="flex items-center gap-1 md:gap-2">
-                <button
-                  onClick={() => handleFilterChange('page', 1)}
-                  disabled={pagination.page === 1}
-                  className="p-1.5 md:p-2 border border-PowderBlueBorder dark:border-dark_border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark_input"
-                  title="First page"
-                >
-                  <ChevronsLeft className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                </button>
-                <button
-                  onClick={() => handleFilterChange('page', pagination.page - 1)}
-                  disabled={pagination.page === 1}
-                  className="p-1.5 md:p-2 border border-PowderBlueBorder dark:border-dark_border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark_input"
-                  title="Previous page"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                </button>
-                <span className="px-2 md:px-3 py-1 text-xs md:text-sm">
-                  {t("students.pagination.page")} {pagination.page} {t("students.pagination.of")} {pagination.totalPages}
-                </span>
-                <button
-                  onClick={() => handleFilterChange('page', pagination.page + 1)}
-                  disabled={pagination.page === pagination.totalPages}
-                  className="p-1.5 md:p-2 border border-PowderBlueBorder dark:border-dark_border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark_input"
-                  title="Next page"
-                >
-                  <ChevronRight className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                </button>
-                <button
-                  onClick={() => handleFilterChange('page', pagination.totalPages)}
-                  disabled={pagination.page === pagination.totalPages}
-                  className="p-1.5 md:p-2 border border-PowderBlueBorder dark:border-dark_border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark_input"
-                  title="Last page"
-                >
-                  <ChevronsRight className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                </button>
-              </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-PowderBlueBorder dark:border-dark_border bg-slate-50/40 dark:bg-dark_input/20">
+            {/* Info */}
+            <p className="text-xs text-SlateBlueText dark:text-darktext">
+              Showing{" "}
+              <span className="font-semibold text-MidnightNavyText dark:text-white">
+                {(pagination.page - 1) * pagination.limit + 1}
+              </span>{" "}–{" "}
+              <span className="font-semibold text-MidnightNavyText dark:text-white">
+                {Math.min(pagination.page * pagination.limit, pagination.totalStudents)}
+              </span>{" "}
+              of{" "}
+              <span className="font-semibold text-MidnightNavyText dark:text-white">{pagination.totalStudents}</span>{" "}
+              students
+            </p>
+
+            {/* Page controls */}
+            <div className="flex items-center gap-1">
+              <PaginationBtn onClick={() => setFilter("page", 1)}                             disabled={pagination.page === 1}              icon={ChevronsLeft}  />
+              <PaginationBtn onClick={() => setFilter("page", pagination.page - 1)}           disabled={pagination.page === 1}              icon={ChevronLeft}   />
+
+              {/* Page pills */}
+              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                let p;
+                if (pagination.totalPages <= 5) p = i + 1;
+                else if (pagination.page <= 3)  p = i + 1;
+                else if (pagination.page >= pagination.totalPages - 2) p = pagination.totalPages - 4 + i;
+                else p = pagination.page - 2 + i;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setFilter("page", p)}
+                    className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
+                      p === pagination.page
+                        ? "bg-primary text-white shadow-sm shadow-primary/30"
+                        : "text-SlateBlueText dark:text-darktext hover:bg-gray-100 dark:hover:bg-dark_input"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+
+              <PaginationBtn onClick={() => setFilter("page", pagination.page + 1)}           disabled={pagination.page === pagination.totalPages} icon={ChevronRight}  />
+              <PaginationBtn onClick={() => setFilter("page", pagination.totalPages)}          disabled={pagination.page === pagination.totalPages} icon={ChevronsRight} />
             </div>
+
+            {/* Per page */}
+            <select
+              value={filters.limit}
+              onChange={e => setFilters(f => ({ ...f, limit: Number(e.target.value), page: 1 }))}
+              className="text-xs border border-PowderBlueBorder dark:border-dark_border rounded-lg px-2 py-1.5 bg-white dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+            >
+              {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n} / page</option>)}
+            </select>
           </div>
         )}
       </div>
 
-      {/* Modal - Student Form */}
+      {/* ── Modals ── */}
       <Modal
         open={modalOpen}
         title={editingStudent ? t("studentForm.updateStudent") : t("studentForm.createStudent")}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingStudent(null);
-        }}
-        size="xl"         // ← هنا صح
-        
+        onClose={() => { setModalOpen(false); setEditingStudent(null); }}
+        size="xl"
       >
         <StudentForm
           initial={editingStudent}
-          onClose={() => {
-            setModalOpen(false);
-            setEditingStudent(null);
-          }}
+          onClose={() => { setModalOpen(false); setEditingStudent(null); }}
           onSaved={onSaved}
         />
       </Modal>
 
-      {/* Credit Hours Manager Modal */}
       {showCreditManager && selectedStudentForCredit && (
         <CreditHoursManager
           student={selectedStudentForCredit}
-          onClose={() => {
-            setShowCreditManager(false);
-            setSelectedStudentForCredit(null);
-          }}
-          onUpdate={(updatedStudent) => {
-            if (updatedStudent) {
-              // تحديث الطالب في القائمة مباشرة
-              updateStudentInList(updatedStudent);
-
-              // تحديث الطالب المحدد أيضاً
-              setSelectedStudentForCredit(updatedStudent);
+          onClose={() => { setShowCreditManager(false); setSelectedStudentForCredit(null); }}
+          onUpdate={(updated) => {
+            if (updated) {
+              setStudents(prev => prev.map(s => s._id === updated._id ? { ...s, ...updated } : s));
+              setSelectedStudentForCredit(updated);
             } else {
-              // إعادة تحميل كل الطلاب
               loadStudents();
             }
           }}
         />
       )}
     </div>
+  );
+}
+
+// ─── Small helpers ────────────────────────────────────────────────────────────
+function ActionBtn({ onClick, icon: Icon, color, title }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark_input transition-colors ${color}`}
+    >
+      <Icon className="w-3.5 h-3.5" />
+    </button>
+  );
+}
+
+function PaginationBtn({ onClick, disabled, icon: Icon }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-8 h-8 rounded-lg border border-PowderBlueBorder dark:border-dark_border flex items-center justify-center text-SlateBlueText dark:text-darktext hover:bg-gray-100 dark:hover:bg-dark_input disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+    >
+      <Icon className="w-3.5 h-3.5" />
+    </button>
   );
 }
