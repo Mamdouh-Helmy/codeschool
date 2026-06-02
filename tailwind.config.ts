@@ -101,8 +101,8 @@ const config: Config = {
       },
       colors: {
         // ── Brand Palette ──────────────────────────────────
-        primary:    "#ff6700",   // Orange — الأساسي
-        secondary:  "#004d59",   // Deep Teal — الثانوي
+        primary:    "#ff6700",   
+        secondary:  "#004d59",  
 
         // ── Brand Aliases ──────────────────────────────────
         SereneSky:          "#004d59",

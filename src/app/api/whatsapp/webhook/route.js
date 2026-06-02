@@ -257,7 +257,7 @@ async function processIncomingMessage(msg) {
 
   console.log(`✅ DB updated - preferredLanguage: ${selectedLanguage}`);
 
-  const confirmResult = await sendConfirmationMessages(student, selectedLanguage);
+const confirmResult = await sendConfirmationMessages(student, selectedLanguage, phoneRaw);
 
   return {
     success: true,
@@ -344,7 +344,7 @@ function applyVars(content, vars) {
 // ============================================================
 // ✅ إرسال رسائل التأكيد + رسالة المشرف
 // ============================================================
-async function sendConfirmationMessages(student, selectedLanguage) {
+async function sendConfirmationMessages(student, selectedLanguage, senderPhone = null) {
   const results = { student: null, guardian: null, supervisorIntro: null };
 
   // ── بيانات الطالب ─────────────────────────────────────────
@@ -379,7 +379,9 @@ async function sendConfirmationMessages(student, selectedLanguage) {
   // ============================================================
   // 1. رسالة الطالب — mainInstance
   // ============================================================
-  const studentPhone = student.personalInfo?.whatsappNumber || student.personalInfo?.phone;
+  const studentPhone = senderPhone 
+  ? `+${senderPhone}` 
+  : student.personalInfo?.whatsappNumber || student.personalInfo?.phone;
 
   if (studentPhone) {
     const preparedNumber = wapilotService.preparePhoneNumber(studentPhone);
