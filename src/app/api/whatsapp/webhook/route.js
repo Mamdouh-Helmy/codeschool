@@ -176,32 +176,36 @@ async function processIncomingMessage(msg) {
   console.log(`🌍 Language selected: ${selectedLanguage} | Phone: ${phoneRaw}`);
 
   // ✅ البحث عن الطالب (4 طرق)
-  let student = null;
+ let student = null;
 
-  if (replyToId) {
-    student = await Student.findOne({ 'metadata.whatsappStanzaId': replyToId, isDeleted: false });
-    console.log(student ? `✅ Found by stanzaId` : `⚠️ Not found by stanzaId`);
-  }
+// 1. أدق طريقة — رقم الشخص اللي بعت الرسالة
+if (phoneRaw) {
+  student = await Student.findOne({ 'metadata.whatsappChatId': phoneRaw, isDeleted: false });
+  console.log(student ? `✅ Found by chatId` : `⚠️ Not found by chatId`);
+}
 
-  if (!student && phoneRaw) {
-    student = await Student.findOne({ 'metadata.whatsappChatId': phoneRaw, isDeleted: false });
-    console.log(student ? `✅ Found by chatId` : `⚠️ Not found by chatId`);
-  }
+// 2. fallback — بحث في أرقام الهاتف
+if (!student) {
+  student = await findStudentByPhone(phoneRaw);
+  if (student) console.log(`✅ Found by phone number`);
+}
 
-  if (!student) {
-    student = await findStudentByPhone(phoneRaw);
-    if (student) console.log(`✅ Found by phone number`);
-  }
+// 3. fallback — stanzaId
+if (!student && replyToId) {
+  student = await Student.findOne({ 'metadata.whatsappStanzaId': replyToId, isDeleted: false });
+  console.log(student ? `✅ Found by stanzaId` : `⚠️ Not found by stanzaId`);
+}
 
-  if (!student) {
-    student = await Student.findOne({
-      'metadata.whatsappInteractiveSent': true,
-      'metadata.whatsappLanguageSelected': false,
-      isDeleted: false,
-    }).sort({ 'metadata.whatsappSentAt': -1 });
-    if (student) console.log(`✅ Found by pending status: ${student.personalInfo?.fullName}`);
-    else         console.log(`⚠️ Student not found for phone: ${phoneRaw}`);
-  }
+// 4. آخر حل — أحدث طالب لسه مختارش لغة
+if (!student) {
+  student = await Student.findOne({
+    'metadata.whatsappInteractiveSent': true,
+    'metadata.whatsappLanguageSelected': false,
+    isDeleted: false,
+  }).sort({ 'metadata.whatsappSentAt': -1 });
+  if (student) console.log(`✅ Found by pending status: ${student.personalInfo?.fullName}`);
+  else         console.log(`⚠️ Student not found for phone: ${phoneRaw}`);
+}
 
   if (!student) return { success: false, reason: 'student_not_found' };
 

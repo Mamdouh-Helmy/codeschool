@@ -330,15 +330,24 @@ class WapilotService {
   // ✅ logToStudentSchema
   // ============================================================
 
-  async logToStudentSchema(studentId, messageData) {
+async logToStudentSchema(studentId, messageData) {
     try {
       await connectDB();
-      const student = await Student.findById(studentId);
-      if (!student) {
+      const result = await Student.findByIdAndUpdate(
+        studentId,
+        {
+          $push: { whatsappMessages: messageData },
+          $inc: { 'metadata.whatsappTotalMessages': 1 },
+          $set: { 'metadata.whatsappLastInteraction': new Date() }
+        },
+        { new: true }
+      );
+
+      if (!result) {
         console.error(`⚠️ Student ${studentId} not found for logging`);
         return false;
       }
-      await student.logWhatsAppMessage(messageData);
+
       return true;
     } catch (error) {
       console.error(`❌ [LOG] Error logging to student schema:`, error.message);
