@@ -1,46 +1,36 @@
-// app/api/upload-image/route.js
 import { NextResponse } from "next/server";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "10mb",
-    },
-  },
-};
-
 export async function POST(request) {
   try {
-    const { image, folder } = await request.json();
+    const formData = await request.formData();
+    const file = formData.get("file");
+    const folder = formData.get("folder") || "section-images";
 
-    if (!image) {
+    if (!file) {
       return NextResponse.json(
-        { success: false, message: "لا توجد صورة للرفع" },
-        { status: 400 },
+        { success: false, message: "No file provided" },
+        { status: 400 }
       );
     }
 
-    // Upload to Cloudinary
-    const imageUrl = await uploadToCloudinary(
-      image,
-      folder || "section-images-hero",
-    );
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const base64 = `data:${file.type};base64,${buffer.toString("base64")}`;
+
+    // uploadToCloudinary بترجع secure_url زي https://res.cloudinary.com/...
+    const imageUrl = await uploadToCloudinary(base64, folder);
 
     return NextResponse.json({
       success: true,
       imageUrl,
-      message: "تم رفع الصورة بنجاح",
+      message: "Image uploaded successfully",
     });
   } catch (error) {
-    console.error("❌ Error uploading image:", error);
+    console.error("Upload error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "فشل في رفع الصورة",
-        error: error.message,
-      },
-      { status: 500 },
+      { success: false, message: "Failed to upload: " + error.message },
+      { status: 500 }
     );
   }
 }

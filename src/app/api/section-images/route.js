@@ -1,4 +1,4 @@
-// api/section-images/route.js
+// app/api/section-images/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import SectionImage from "../../models/SectionImage";
@@ -22,7 +22,7 @@ export async function GET(req) {
     }
 
     const images = await SectionImage.find(query)
-      .sort({ displayOrder: 1, createdAt: -1 })
+      .sort({ createdAt: -1 })
       .lean();
 
     return NextResponse.json({
@@ -48,13 +48,10 @@ export async function POST(req) {
       sectionName, 
       imageUrl, 
       imageAlt, 
-      secondImageUrl, 
-      secondImageAlt, 
-      description, 
-      displayOrder 
+      description 
     } = body;
 
-    console.log("🔍 POST Request Body:", body); // للتصحيح
+    console.log("🔍 POST Request Body:", body);
 
     // التحقق من الحقول المطلوبة
     if (!sectionName || !imageUrl || !imageAlt) {
@@ -67,37 +64,31 @@ export async function POST(req) {
       );
     }
 
-    // إذا كان hero-section، تحقق من الصورة الثانية
-    if (sectionName === "hero-section") {
-      if (!secondImageUrl || !secondImageAlt) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Both images and their alt texts are required for hero section",
-          },
-          { status: 400 }
-        );
-      }
+    // التحقق من أن القسم صحيح
+    if (!["ticket-section", "event-ticket"].includes(sectionName)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid section name",
+        },
+        { status: 400 }
+      );
     }
 
-    // تحضير بيانات الإنشاء مع جميع الحقول
+    // تحضير بيانات الإنشاء
     const createData = {
       sectionName,
       imageUrl,
       imageAlt,
       description: description || "",
-      displayOrder: displayOrder || 0,
       isActive: true,
-      // إضافة الحقول الجديدة بشكل صريح
-      secondImageUrl: secondImageUrl || "",
-      secondImageAlt: secondImageAlt || "",
     };
 
-    console.log("📝 Creating with data:", createData); // للتصحيح
+    console.log("📝 Creating with data:", createData);
 
     const newImage = await SectionImage.create(createData);
 
-    console.log("✅ Created image:", newImage); // للتصحيح
+    console.log("✅ Created image:", newImage);
 
     return NextResponse.json(
       {
@@ -109,6 +100,15 @@ export async function POST(req) {
     );
   } catch (error) {
     console.error("❌ Create section image error:", error);
+    
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
+      return NextResponse.json(
+        { success: false, message: "Validation error", errors },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: "Failed to create image" },
       { status: 500 }
@@ -126,14 +126,11 @@ export async function PUT(req) {
       sectionName,
       imageUrl,
       imageAlt,
-      secondImageUrl,
-      secondImageAlt,
       description,
-      displayOrder,
       isActive,
     } = body;
 
-    console.log("🔍 PUT Request Body:", body); // للتصحيح
+    console.log("🔍 PUT Request Body:", body);
 
     // التحقق من وجود الـ ID
     if (!id) {
@@ -154,17 +151,15 @@ export async function PUT(req) {
       );
     }
 
-    // إذا كان hero-section، تحقق من الصورة الثانية
-    if (sectionName === "hero-section") {
-      if (!secondImageUrl || !secondImageAlt) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Both images and their alt texts are required for hero section",
-          },
-          { status: 400 }
-        );
-      }
+    // التحقق من أن القسم صحيح
+    if (!["ticket-section", "event-ticket"].includes(sectionName)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid section name",
+        },
+        { status: 400 }
+      );
     }
 
     // البحث عن الصورة الحالية
@@ -176,21 +171,16 @@ export async function PUT(req) {
       );
     }
 
-    // تحضير بيانات التحديث مع جميع الحقول
+    // تحضير بيانات التحديث
     const updateData = {
       sectionName,
       imageUrl,
       imageAlt,
       description: description || "",
-      displayOrder: displayOrder || 0,
       isActive: isActive !== undefined ? isActive : existingImage.isActive,
-      updatedAt: new Date(),
-      // تحديث الحقول الجديدة بشكل صريح
-      secondImageUrl: secondImageUrl || "",
-      secondImageAlt: secondImageAlt || "",
     };
 
-    console.log("📝 Updating with data:", updateData); // للتصحيح
+    console.log("📝 Updating with data:", updateData);
 
     // تحديث الصورة
     const updatedImage = await SectionImage.findByIdAndUpdate(
@@ -199,7 +189,7 @@ export async function PUT(req) {
       { new: true, runValidators: true }
     );
 
-    console.log("✅ Updated image:", updatedImage); // للتصحيح
+    console.log("✅ Updated image:", updatedImage);
 
     return NextResponse.json({
       success: true,
@@ -208,6 +198,15 @@ export async function PUT(req) {
     });
   } catch (error) {
     console.error("❌ Update section image error:", error);
+
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
+      return NextResponse.json(
+        { success: false, message: "Validation error", errors },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: "Failed to update image" },
       { status: 500 }
@@ -277,11 +276,20 @@ export async function PATCH(req) {
       );
     }
 
+    // منع تحديث الحقول غير المسموحة
+    const allowedUpdates = ["imageUrl", "imageAlt", "description", "isActive"];
+    const filteredUpdates = {};
+    for (const key of allowedUpdates) {
+      if (updateFields[key] !== undefined) {
+        filteredUpdates[key] = updateFields[key];
+      }
+    }
+
     // التحديث الجزئي
     const updatedImage = await SectionImage.findByIdAndUpdate(
       id,
       {
-        ...updateFields,
+        ...filteredUpdates,
         updatedAt: new Date(),
       },
       { new: true, runValidators: true }

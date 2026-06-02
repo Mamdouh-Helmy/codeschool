@@ -7,7 +7,7 @@ const SectionImageSchema = new mongoose.Schema(
     sectionName: { 
       type: String, 
       required: true,
-      enum: ["ticket-section", "event-ticket", "hero-section", "about-section", "contact-section"]
+      enum: ["ticket-section", "event-ticket"]
     },
     
     // رابط الصورة الرئيسية
@@ -22,18 +22,6 @@ const SectionImageSchema = new mongoose.Schema(
       required: true 
     },
     
-    // رابط الصورة الثانية (خاص بـ hero-section فقط)
-    secondImageUrl: { 
-      type: String, 
-      default: "" 
-    },
-    
-    // النص البديل للصورة الثانية
-    secondImageAlt: { 
-      type: String, 
-      default: "" 
-    },
-    
     // وصف إضافي (اختياري)
     description: { 
       type: String, 
@@ -44,12 +32,6 @@ const SectionImageSchema = new mongoose.Schema(
     isActive: { 
       type: Boolean, 
       default: true 
-    },
-    
-    // ترتيب العرض
-    displayOrder: { 
-      type: Number, 
-      default: 0 
     }
   },
   { 

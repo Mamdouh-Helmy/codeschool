@@ -4139,6 +4139,18 @@ const en = {
   "portfolio.certificates.sectionTitle": "Certificates & Credentials",
   "portfolio.certificates.sectionBadge": "My Certificates",
   "nav.certificates": "Certificates",
+  "sectionImages.vsLastMonth": "vs last month",
+  "sectionImages.thisWeek": "This Week",
+  "sectionImages.recentlyAdded": "Recently Added",
+  "sectionImages.siteSections": "Site Sections",
+  "sectionImages.totalAssetsDesc": "Total image assets across all sections",
+  "common.showing": "Showing",
+  "sectionImages.all": "All",
+  "common.added": "Added",
+  "sectionImages.table.added": "Added",
+  "sectionImages.table.status": "Status",
+  "sectionImages.table.alt": "Alt Text",
+  "sectionImages.table.image": "Image",
 };
 
 export default en;

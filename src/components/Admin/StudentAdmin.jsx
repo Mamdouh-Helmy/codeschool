@@ -888,7 +888,8 @@ export default function StudentAdmin() {
           setModalOpen(false);
           setEditingStudent(null);
         }}
-        size="lg"
+        size="xl"         // ← هنا صح
+        
       >
         <StudentForm
           initial={editingStudent}

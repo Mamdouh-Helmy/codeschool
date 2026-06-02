@@ -339,7 +339,7 @@ export default function PortfolioHeader({
                                 <img
                                     src={headerImg.src}
                                     alt={userId?.name || "User"}
-                                    className="h-[220px] w-[220px] animate-[updown_3s_linear_infinite] rounded-full object-cover shadow-2xl md:h-[360px] md:w-[360px]"
+                                    className="h-[220px] w-[220px] animate-[updown_3s_linear_infinite] shadow-2xl md:h-[360px] md:w-[360px]"
                                     onError={(e) => {
                                         (
                                             e.target as HTMLImageElement

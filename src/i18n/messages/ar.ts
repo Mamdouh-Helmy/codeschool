@@ -4260,6 +4260,18 @@ const ar = {
   "portfolio.certificates.sectionTitle": "الشهادات والاعتمادات",
   "portfolio.certificates.sectionBadge": "شهاداتي",
   "nav.certificates": "الشهادات",
+  "sectionImages.vsLastMonth": "مقارنة بالشهر الماضي",
+  "sectionImages.thisWeek": "هذا الأسبوع",
+  "sectionImages.recentlyAdded": "المضافة حديثاً",
+  "sectionImages.siteSections": "أقسام الموقع",
+  "sectionImages.totalAssetsDesc": "إجمالي أصول الصور عبر جميع الأقسام",
+  "common.showing": "عرض",
+  "sectionImages.all": "الكل",
+  "common.added": "تمت الإضافة",
+  "sectionImages.table.added": "تاريخ الإضافة",
+  "sectionImages.table.status": "الحالة",
+  "sectionImages.table.alt": "النص البديل",
+  "sectionImages.table.image": "الصورة",
 };
 
 export default ar;

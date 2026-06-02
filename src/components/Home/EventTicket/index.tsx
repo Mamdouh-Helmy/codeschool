@@ -202,13 +202,11 @@ const EventTicket: React.FC = () => {
                   <div className="text-white">Loading image...</div>
                 </div>
               ) : (
-                <Image
+                <img
                   src={sectionImage?.imageUrl || "/images/event-ticket/ticket.png"}
                   alt={sectionImage?.imageAlt || t("eventTicket.ticketAlt")}
-                  width={0}
-                  height={0}
-                  quality={100}
-                  layout="responsive"
+                  width={"80%"}
+                  height={"80%"}
                   sizes="100vh"
                   className="object-cover"
                 />
@@ -247,7 +245,7 @@ const EventTicket: React.FC = () => {
                               <td className="py-4 px-4 text-secondary dark:text-darktext">
                                 {plan.name}
                               </td>
-                              <td className="py-4 px-4 text-SlateBlueText">
+                              <td className="py-4 px-4 text-SlateBlueText dark:text-white">
                                 {plan.billingPeriod}
                               </td>
                               <td className="py-4 px-4">
@@ -275,7 +273,7 @@ const EventTicket: React.FC = () => {
                   <div className="mt-6">
                     <Link
                       href="/subscriptions"
-                      className="block w-full text-center bg-secondary hover:bg-secondary/90 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-300 hover:scale-105"
+                      className="block w-full text-center bg-primary hover:bg-primary/90 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-300 hover:scale-105"
                     >
                       {t("eventTicket.viewAllSubscriptions")}
                     </Link>
