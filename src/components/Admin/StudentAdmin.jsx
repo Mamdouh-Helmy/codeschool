@@ -362,7 +362,7 @@ export default function StudentAdmin() {
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
               placeholder={t("students.searchPlaceholder")}
-              className="w-full pl-9 pr-9 py-2.5 text-sm placeholder:text-white rounded-xl border border-PowderBlueBorder dark:border-dark_border bg-transparent dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all"
+              className="w-full pl-9 pr-9 py-2.5 text-sm  dark:placeholder:text-white rounded-xl border border-PowderBlueBorder dark:border-dark_border bg-transparent dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all"
             />
           </div>
 
