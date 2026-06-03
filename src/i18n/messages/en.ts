@@ -4165,6 +4165,7 @@ const en = {
   "studentForm.createTitle": "Create Student",
   "studentForm.searchByNameOrEmail": "Search by Name or Email",
   "studentForm.fullNamePlaceholder": "Enter Full Name",
+  "common.street": "Street",
 };
 
 export default en;

@@ -40,20 +40,6 @@ const LEVEL_CFG = {
   Advanced:     "bg-teal-900/40 text-teal-400 ring-1 ring-teal-700/50",
 };
 
-// light mode versions
-const STATUS_CFG_LIGHT = {
-  Active:    { dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" },
-  Suspended: { dot: "bg-amber-500",   badge: "bg-amber-50 text-amber-700 ring-1 ring-amber-200" },
-  Graduated: { dot: "bg-teal-500",    badge: "bg-teal-50 text-teal-700 ring-1 ring-teal-200" },
-  Dropped:   { dot: "bg-rose-500",    badge: "bg-rose-50 text-rose-700 ring-1 ring-rose-200" },
-};
-
-const LEVEL_CFG_LIGHT = {
-  Beginner:     "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
-  Intermediate: "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
-  Advanced:     "bg-teal-50 text-teal-700 ring-1 ring-teal-200",
-};
-
 // ─── Credit helper ─────────────────────────────────────────────────────────────
 function getCreditInfo(student, t) {
   const cs        = student.creditSystem || {};
@@ -185,6 +171,7 @@ export default function StudentAdmin() {
   const [showCreditManager, setShowCreditManager]         = useState(false);
   const [selectedStudentForCredit, setSelectedStudentForCredit] = useState(null);
   const [searchInput, setSearchInput] = useState("");
+  const [refreshKey, setRefreshKey]   = useState(0);
   const debouncedSearch = useDebounce(searchInput, 350);
 
   const [filters, setFilters] = useState({
@@ -192,12 +179,16 @@ export default function StudentAdmin() {
     page: 1, limit: 10,
   });
 
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalStudents: 0, totalPages: 1 });
-  const [creditStats, setCreditStats] = useState({ totalWithPackage: 0, totalActive: 0, totalFrozen: 0, totalExpired: 0, totalNoPackage: 0, lowBalance: 0 });
-  const [groupStats, setGroupStats]   = useState({ inGroup: 0, notInGroup: 0 });
+  const [pagination, setPagination] = useState({
+    page: 1, limit: 10, totalStudents: 0, totalPages: 1,
+  });
+  const [creditStats, setCreditStats] = useState({
+    totalWithPackage: 0, totalActive: 0, totalFrozen: 0,
+    totalExpired: 0, totalNoPackage: 0, lowBalance: 0,
+  });
+  const [groupStats, setGroupStats] = useState({ inGroup: 0, notInGroup: 0 });
 
   // ─── Load ──────────────────────────────────────────────────────────────────
-  // ✅ FIX: All filter deps are explicit — no useCallback wrapping that hides deps
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -205,12 +196,12 @@ export default function StudentAdmin() {
     const params = new URLSearchParams({
       page:  String(filters.page),
       limit: String(filters.limit),
-      ...(debouncedSearch        && { search:       debouncedSearch }),
-      ...(filters.status         && { status:        filters.status }),
-      ...(filters.level          && { level:         filters.level }),
-      ...(filters.source         && { source:        filters.source }),
-      ...(filters.creditStatus   && { creditStatus:  filters.creditStatus }),
-      ...(filters.inGroup !== "" && { inGroup:       filters.inGroup }),
+      ...(debouncedSearch        && { search:      debouncedSearch }),
+      ...(filters.status         && { status:       filters.status }),
+      ...(filters.level          && { level:        filters.level }),
+      ...(filters.source         && { source:       filters.source }),
+      ...(filters.creditStatus   && { creditStatus: filters.creditStatus }),
+      ...(filters.inGroup !== "" && { inGroup:      filters.inGroup }),
     });
 
     fetch(`/api/allStudents?${params}`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } })
@@ -231,18 +222,17 @@ export default function StudentAdmin() {
 
     return () => { cancelled = true; };
   }, [
-    // ✅ FIX: filters.limit is now included — changing rows-per-page triggers reload
     filters.page, filters.limit,
     filters.status, filters.level, filters.source,
     filters.creditStatus, filters.inGroup,
-    debouncedSearch,
+    debouncedSearch, refreshKey,
   ]);
 
   // Reset to page 1 when search changes
   useEffect(() => { setFilters(f => ({ ...f, page: 1 })); }, [debouncedSearch]);
 
-  const setFilter  = (key, value) => setFilters(f => ({ ...f, [key]: value, page: 1 }));
-  const loadStudents = () => setFilters(f => ({ ...f })); // triggers useEffect
+  const setFilter    = (key, value) => setFilters(f => ({ ...f, [key]: value, page: 1 }));
+  const loadStudents = () => setRefreshKey(k => k + 1);
 
   // ─── Active filter chips ───────────────────────────────────────────────────
   const activeFilters = [
@@ -312,7 +302,7 @@ export default function StudentAdmin() {
   };
 
   const onSaved = () => {
-    setFilters(f => ({ ...f })); // triggers reload
+    setRefreshKey(k => k + 1);
     toast.success(t("students.savedSuccess"));
   };
 
@@ -362,6 +352,17 @@ export default function StudentAdmin() {
     { icon: Calendar,       label: t("students.table.enrolled") },
     { icon: MoreHorizontal, label: t("students.table.actions") },
   ];
+
+  // ─── Pagination helpers ────────────────────────────────────────────────────
+  const paginationStart = (pagination.page - 1) * pagination.limit + 1;
+  const paginationEnd   = Math.min(pagination.page * pagination.limit, pagination.totalStudents);
+
+  const pageNumbers = Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+    if (pagination.totalPages <= 5)                        return i + 1;
+    if (pagination.page <= 3)                              return i + 1;
+    if (pagination.page >= pagination.totalPages - 2)      return pagination.totalPages - 4 + i;
+    return pagination.page - 2 + i;
+  });
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
@@ -549,8 +550,8 @@ export default function StudentAdmin() {
                 {students.map((student, idx) => {
                   const credit     = getCreditInfo(student, t);
                   const CreditIcon = credit.Icon;
-                  const statusCfg  = STATUS_CFG[student.enrollmentInfo?.status]      || { dot: "bg-gray-400",    badge: "bg-gray-100 dark:bg-gray-800 text-gray-500" };
-                  const levelCls   = LEVEL_CFG[student.academicInfo?.level]          || "bg-gray-100 dark:bg-gray-800 text-gray-500";
+                  const statusCfg  = STATUS_CFG[student.enrollmentInfo?.status] || { dot: "bg-gray-400", badge: "bg-gray-100 dark:bg-gray-800 text-gray-500" };
+                  const levelCls   = LEVEL_CFG[student.academicInfo?.level]     || "bg-gray-100 dark:bg-gray-800 text-gray-500";
                   const inGroup    = student.inGroup;
 
                   return (
@@ -655,8 +656,8 @@ export default function StudentAdmin() {
                       {/* Actions */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                          <ActionBtn onClick={() => onView(student._id || student.id)} icon={Eye}     color="text-sky-500"    title={t("common.view")} />
-                          <ActionBtn onClick={() => onEdit(student)}                   icon={Edit}    color="text-primary"    title={t("common.edit")} />
+                          <ActionBtn onClick={() => onView(student._id || student.id)} icon={Eye}     color="text-sky-500"  title={t("common.view")} />
+                          <ActionBtn onClick={() => onEdit(student)}                   icon={Edit}    color="text-primary"  title={t("common.edit")} />
                           <ActionBtn
                             onClick={() => { setSelectedStudentForCredit(student); setShowCreditManager(true); }}
                             icon={Package} color="text-amber-500" title={t("credit.manage")}
@@ -706,74 +707,88 @@ export default function StudentAdmin() {
             </div>
           )}
 
-          {/* ── Pagination ── */}
-          {pagination.totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-dark_border bg-gray-50 dark:bg-darkmode">
+          {/* ── Pagination Footer — يظهر دايماً ── */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-dark_border bg-gray-50 dark:bg-darkmode">
 
-              {/* Info */}
+            {/* Info */}
+            {pagination.totalStudents > 0 ? (
               <p className="text-xs text-gray-500 dark:text-darkmuted whitespace-nowrap">
                 Showing{" "}
-                <span className="font-semibold text-gray-900 dark:text-white">
-                  {(pagination.page - 1) * pagination.limit + 1}
-                </span>
+                <span className="font-semibold text-gray-900 dark:text-white">{paginationStart}</span>
                 {" "}–{" "}
-                <span className="font-semibold text-gray-900 dark:text-white">
-                  {Math.min(pagination.page * pagination.limit, pagination.totalStudents)}
-                </span>
+                <span className="font-semibold text-gray-900 dark:text-white">{paginationEnd}</span>
                 {" "}of{" "}
-                <span className="font-semibold text-gray-900 dark:text-white">
-                  {pagination.totalStudents}
-                </span>{" "}students
+                <span className="font-semibold text-gray-900 dark:text-white">{pagination.totalStudents}</span>
+                {" "}students
               </p>
+            ) : (
+              <p className="text-xs text-gray-400 dark:text-darksubtle">No students found</p>
+            )}
 
-              {/* Buttons */}
+            {/* Page buttons — بس لو في أكتر من صفحة */}
+            {pagination.totalPages > 1 && (
               <div className="flex items-center gap-1">
-                <PaginationBtn onClick={() => setFilter("page", 1)}                              disabled={pagination.page === 1}                 icon={ChevronsLeft}  label="First page" />
-                <PaginationBtn onClick={() => setFilter("page", pagination.page - 1)}            disabled={pagination.page === 1}                 icon={ChevronLeft}   label="Previous page" />
+                <PaginationBtn
+                  onClick={() => setFilter("page", 1)}
+                  disabled={pagination.page === 1}
+                  icon={ChevronsLeft}
+                  label="First page"
+                />
+                <PaginationBtn
+                  onClick={() => setFilter("page", pagination.page - 1)}
+                  disabled={pagination.page === 1}
+                  icon={ChevronLeft}
+                  label="Previous page"
+                />
 
-                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                  let p;
-                  if (pagination.totalPages <= 5)                         p = i + 1;
-                  else if (pagination.page <= 3)                          p = i + 1;
-                  else if (pagination.page >= pagination.totalPages - 2)  p = pagination.totalPages - 4 + i;
-                  else                                                     p = pagination.page - 2 + i;
-                  return (
-                    <button
-                      key={p}
-                      onClick={() => setFilter("page", p)}
-                      className={`
-                        w-8 h-8 rounded-lg text-xs font-medium transition-all
-                        ${p === pagination.page
-                          ? "bg-primary text-white shadow-brand-sm"
-                          : "text-gray-500 dark:text-darktext hover:bg-gray-100 dark:hover:bg-dark_input hover:text-gray-800 dark:hover:text-white"
-                        }
-                      `}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
+                {pageNumbers.map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setFilter("page", p)}
+                    className={`
+                      w-8 h-8 rounded-lg text-xs font-medium transition-all
+                      ${p === pagination.page
+                        ? "bg-primary text-white shadow-brand-sm"
+                        : "text-gray-500 dark:text-darktext hover:bg-gray-100 dark:hover:bg-dark_input hover:text-gray-800 dark:hover:text-white"
+                      }
+                    `}
+                  >
+                    {p}
+                  </button>
+                ))}
 
-                <PaginationBtn onClick={() => setFilter("page", pagination.page + 1)}            disabled={pagination.page === pagination.totalPages} icon={ChevronRight}  label="Next page" />
-                <PaginationBtn onClick={() => setFilter("page", pagination.totalPages)}           disabled={pagination.page === pagination.totalPages} icon={ChevronsRight} label="Last page" />
+                <PaginationBtn
+                  onClick={() => setFilter("page", pagination.page + 1)}
+                  disabled={pagination.page === pagination.totalPages}
+                  icon={ChevronRight}
+                  label="Next page"
+                />
+                <PaginationBtn
+                  onClick={() => setFilter("page", pagination.totalPages)}
+                  disabled={pagination.page === pagination.totalPages}
+                  icon={ChevronsRight}
+                  label="Last page"
+                />
               </div>
+            )}
 
-              {/* Rows per page */}
-              {/* ✅ FIX: changing limit now triggers reload via useEffect dep */}
-              <select
-                value={filters.limit}
-                onChange={e => setFilters(f => ({ ...f, limit: Number(e.target.value), page: 1 }))}
-                className="
-                  text-xs border border-gray-200 dark:border-dark_border rounded-lg px-2 py-1.5
-                  bg-white dark:bg-dark_input text-gray-600 dark:text-gray-300
-                  focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none
-                  cursor-pointer
-                "
-              >
-                {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n} / page</option>)}
-              </select>
-            </div>
-          )}
+            {/* Rows per page — دايماً ظاهر */}
+            <select
+              value={filters.limit}
+              onChange={e => setFilters(f => ({ ...f, limit: Number(e.target.value), page: 1 }))}
+              className="
+                text-xs border border-gray-200 dark:border-dark_border rounded-lg px-2 py-1.5
+                bg-white dark:bg-dark_input text-gray-600 dark:text-gray-300
+                focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none
+                cursor-pointer
+              "
+            >
+              {[10, 25, 50, 100].map(n => (
+                <option key={n} value={n}>{n} / page</option>
+              ))}
+            </select>
+
+          </div>
         </div>
       </div>
 
@@ -800,7 +815,7 @@ export default function StudentAdmin() {
               setStudents(prev => prev.map(s => s._id === updated._id ? { ...s, ...updated } : s));
               setSelectedStudentForCredit(updated);
             } else {
-              setFilters(f => ({ ...f }));
+              setRefreshKey(k => k + 1);
             }
           }}
         />

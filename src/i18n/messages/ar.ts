@@ -4286,6 +4286,7 @@ const ar = {
   "studentForm.createTitle": "إنشاء طالب",
   "studentForm.searchByNameOrEmail": "ابحث بالاسم أو البريد الإلكتروني",
   "studentForm.fullNamePlaceholder": "أدخل الاسم الكامل",
+  "common.street": "الشارع",
 };
 
 export default ar;

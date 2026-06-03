@@ -12,8 +12,6 @@ export async function GET(req, context) {
     const { params } = context;
     const { id } = await params;
 
-    console.log("🔍 Searching for portfolio with id:", id);
-
     if (!id) {
       return NextResponse.json(
         { success: false, message: "Portfolio ID is required" },
@@ -21,7 +19,6 @@ export async function GET(req, context) {
       );
     }
 
-    // التأكد إن الـ id صالح ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid portfolio ID" },
@@ -29,27 +26,14 @@ export async function GET(req, context) {
       );
     }
 
-    // البحث عن البورتفليو المنشور مباشرة بالـ _id
     const portfolio = await Portfolio.findOne({
       _id: id,
       isPublished: true,
     }).populate("userId", "name email image username role profile socialLinks");
 
-    console.log(
-      "📁 Published portfolio found:",
-      portfolio ? portfolio.title : "No published portfolio found"
-    );
-
     if (!portfolio) {
-      const anyPortfolio = await Portfolio.findById(id);
       return NextResponse.json(
-        {
-          success: false,
-          message: anyPortfolio
-            ? "Portfolio exists but is not published"
-            : "No portfolio found with this ID",
-          hasUnpublished: !!anyPortfolio,
-        },
+        { success: false, message: "Portfolio not found or not published" },
         { status: 404 }
       );
     }
@@ -81,10 +65,7 @@ export async function GET(req, context) {
       updatedAt: portfolio.updatedAt,
     };
 
-    // increment views
-    await Portfolio.findByIdAndUpdate(id, {
-      $inc: { views: 1 },
-    });
+    await Portfolio.findByIdAndUpdate(id, { $inc: { views: 1 } });
 
     return NextResponse.json({ success: true, portfolio: portfolioData });
   } catch (error) {

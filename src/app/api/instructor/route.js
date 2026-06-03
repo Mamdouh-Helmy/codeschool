@@ -10,89 +10,50 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const usernameRegex = /^[a-zA-Z0-9_]+$/;
 
 function validatePayload({ name, email, password, username }) {
-  console.log("🔍 Validating payload:", {
-    name,
-    email,
-    password: password ? "***" : "missing",
-    username,
-  });
-
   const errors = {};
 
   if (!name || typeof name !== "string" || name.trim().length < 2) {
     errors.name = "Name is required and must be at least 2 characters";
   }
-
   if (!email || !emailRegex.test(email)) {
     errors.email = "A valid email is required";
   }
-
   if (!password || typeof password !== "string" || password.length < 6) {
     errors.password = "Password must be at least 6 characters";
   }
-
   if (username && username.trim() !== "") {
     if (username.length < 3 || username.length > 20) {
       errors.username = "Username must be between 3 and 20 characters";
     } else if (!usernameRegex.test(username)) {
-      errors.username =
-        "Username can only contain letters, numbers and underscores";
+      errors.username = "Username can only contain letters, numbers and underscores";
     }
   }
 
   return errors;
 }
 
-async function checkUsernameAvailability(username) {
-  if (!username) return { available: true };
-
-  try {
-    const existingUser = await User.findOne({
-      username: username.toLowerCase().trim(),
-    });
-
-    return {
-      available: !existingUser,
-      existingUser: existingUser ? existingUser.email : null,
-    };
-  } catch (error) {
-    console.error("Error checking username availability:", error);
-    return { available: false, error: error.message };
-  }
-}
-
 async function generateUsernameFromName(name) {
   try {
-    console.log("🔧 Generating username from name:", name);
-
     const baseUsername = name
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "")
       .substring(0, 15);
 
     if (!baseUsername || baseUsername.length < 3) {
-      const fallbackUsername = `instructor${Date.now().toString().slice(-6)}`;
-      console.log("📛 Name too short, using fallback:", fallbackUsername);
-      return fallbackUsername;
+      return `instructor${Date.now().toString().slice(-6)}`;
     }
 
     let username = baseUsername;
-    let counter = 1;
-
-    console.log("🔎 Checking username availability:", username);
+    let counter  = 1;
 
     while (await User.findOne({ username })) {
       username = `${baseUsername}${counter}`;
       counter++;
-
       if (counter > 10) {
-        const uniqueUsername = `instructor${Date.now().toString().slice(-8)}`;
-        console.log("🔄 Too many attempts, using unique:", uniqueUsername);
-        return uniqueUsername;
+        return `instructor${Date.now().toString().slice(-8)}`;
       }
     }
 
-    console.log("✅ Username generated:", username);
     return username;
   } catch (error) {
     console.error("❌ Error generating username:", error);
@@ -100,56 +61,36 @@ async function generateUsernameFromName(name) {
   }
 }
 
-async function createDefaultPortfolio(userId, userName, username) {
+async function createDefaultPortfolio(userId, userName) {
   try {
-    console.log("🔄 Creating default portfolio for instructor:", username);
-
     const defaultPortfolio = await Portfolio.create({
       userId,
-      title: `${userName}'s Teaching Portfolio`,
-      description: `Welcome to ${userName}'s teaching portfolio. Explore my courses, teaching experience, and educational content.`,
+      title:       `${userName}'s Teaching Portfolio`,
+      description: `Welcome to ${userName}'s teaching portfolio.`,
       skills: [
-        { name: "Teaching", level: 85, category: "Education", icon: "👨‍🏫" },
+        { name: "Teaching",          level: 85, category: "Education", icon: "👨‍🏫" },
         { name: "Curriculum Design", level: 80, category: "Education", icon: "📚" },
-        { name: "Student Engagement", level: 90, category: "Education", icon: "🎯" },
-        { name: "Assessment", level: 75, category: "Education", icon: "📝" },
+        { name: "Student Engagement",level: 90, category: "Education", icon: "🎯" },
+        { name: "Assessment",        level: 75, category: "Education", icon: "📝" },
       ],
       projects: [
         {
-          title: "Interactive Learning Platform",
-          description: "Developed engaging online courses with interactive content and assessments.",
+          title:        "Interactive Learning Platform",
+          description:  "Developed engaging online courses with interactive content.",
           technologies: ["Education Technology", "E-Learning", "Student Success"],
-          status: "completed",
-          featured: true,
-          startDate: new Date(),
-          endDate: new Date(),
-        },
-        {
-          title: "Student Success Program",
-          description: "Created comprehensive program to improve student outcomes and engagement.",
-          technologies: ["Mentoring", "Academic Support", "Progress Tracking"],
-          status: "in-progress",
-          featured: false,
-          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          status:       "completed",
+          featured:     true,
+          startDate:    new Date(),
+          endDate:      new Date(),
         },
       ],
-      socialLinks: {
-        github: `https://github.com/${username}`,
-        linkedin: `https://linkedin.com/in/${username}`,
-        twitter: `https://twitter.com/${username}`,
-      },
-      contactInfo: {
-        email: "",
-        phone: "",
-        location: "Add your location",
-      },
-      isPublished: true,
-      views: 0,
-      settings: { theme: "dark", layout: "standard" },
+      socialLinks: {},
+      contactInfo: { email: "", phone: "", location: "" },
+      isPublished:  true,
+      views:        0,
+      settings:     { theme: "dark", layout: "standard" },
     });
 
-    console.log("✅ Default portfolio created successfully");
     return defaultPortfolio;
   } catch (error) {
     console.error("❌ Error creating default portfolio:", error);
@@ -157,35 +98,31 @@ async function createDefaultPortfolio(userId, userName, username) {
   }
 }
 
-// GET - جلب قائمة المدرسين
+// ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(request) {
   try {
     await connectDB();
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const page   = parseInt(searchParams.get("page")  || "1");
+    const limit  = parseInt(searchParams.get("limit") || "10");
 
     const query = { role: "instructor" };
-
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
+        { name:     { $regex: search, $options: "i" } },
+        { email:    { $regex: search, $options: "i" } },
         { username: { $regex: search, $options: "i" } },
       ];
     }
 
     const totalInstructors = await User.countDocuments(query);
-
     const instructors = await User.find(query)
       .select("_id name email username image gender language profile isActive createdAt")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
-
-    console.log("✅ Instructors fetched:", instructors.length);
 
     return NextResponse.json({
       success: true,
@@ -201,214 +138,154 @@ export async function GET(request) {
   } catch (error) {
     console.error("❌ Error fetching instructors:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "Failed to fetch instructors",
-        error: error instanceof Error ? error.message : "Unknown error occurred",
-      },
+      { success: false, message: "Failed to fetch instructors", error: error.message },
       { status: 500 }
     );
   }
 }
 
-// POST - إضافة مدرس جديد
+// ─── POST ─────────────────────────────────────────────────────────────────────
 export async function POST(request) {
   try {
-    console.log("🚀 ============ INSTRUCTOR CREATION STARTED ============");
-
     const body = await request.json();
     const { name, email, password, username, phone, image, gender, language } = body;
 
-    console.log("📝 Instructor data received:", {
-      name: name || "missing",
-      email: email || "missing",
-      password: password ? "***" : "missing",
-      username: username || "auto-generate",
-      phone: phone || "not provided",
-      image: image || "default",
-      gender: gender || "not specified",
-      language: language || "ar (default)",
-    });
-
-    // التحقق من البيانات
+    // ── Validate ───────────────────────────────────────────────────────────
     const errors = validatePayload({ name, email, password, username });
     if (Object.keys(errors).length) {
-      console.error("❌ Validation errors:", errors);
       return NextResponse.json(
         { success: false, message: "Validation failed", errors },
         { status: 400 }
       );
     }
 
-    console.log("🔌 Connecting to database...");
     await connectDB();
-    console.log("✅ Database connected");
 
-    // التحقق من البريد الإلكتروني
-    console.log("🔎 Checking for existing user with email:", email.toLowerCase());
+    // ── Check duplicate email ──────────────────────────────────────────────
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
-      console.log("❌ Email already registered");
       return NextResponse.json(
         { success: false, message: "Email already registered" },
         { status: 409 }
       );
     }
 
-    // التحقق من username إذا تم توفيره
+    // ── Check duplicate username (if provided) ─────────────────────────────
     if (username && username.trim() !== "") {
-      console.log("🔎 Checking username availability:", username);
-      const usernameCheck = await checkUsernameAvailability(username);
-      if (!usernameCheck.available) {
-        console.log("❌ Username already taken");
+      const taken = await User.findOne({ username: username.toLowerCase().trim() });
+      if (taken) {
         return NextResponse.json(
-          {
-            success: false,
-            message: "Username is already taken",
-            errors: { username: "This username is already registered" },
-          },
+          { success: false, message: "Username is already taken", errors: { username: "This username is already registered" } },
           { status: 409 }
         );
       }
     }
 
-    // تشفير كلمة المرور
-    console.log("🔑 Hashing password...");
+    // ── Hash password ──────────────────────────────────────────────────────
     const hashedPassword = await bcrypt.hash(password, 10);
-    console.log("✅ Password hashed");
 
-    // توليد username
-    let finalUsername =
+    // ── Final username ─────────────────────────────────────────────────────
+    const finalUsername =
       username && username.trim() !== ""
         ? username.toLowerCase().trim()
         : await generateUsernameFromName(name);
 
-    console.log("🎯 Final username:", finalUsername);
-
-    let qrCodeImage = "";
-    let portfolioUrl = "";
-
-    try {
-      const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-      portfolioUrl = `${baseUrl}/portfolio/${finalUsername}`;
-
-      console.log("🔗 Portfolio URL:", portfolioUrl);
-      console.log("🎨 Generating QR Code...");
-
-      qrCodeImage = await QRCode.toDataURL(portfolioUrl, {
-        width: 200,
-        margin: 2,
-        color: { dark: "#000000", light: "#FFFFFF" },
-      });
-
-      console.log("✅ QR Code generated successfully");
-    } catch (qrError) {
-      console.error("❌ QR generation failed:", qrError);
-      qrCodeImage = "";
-    }
-
-    // إنشاء المدرس
-    console.log("👨‍🏫 Creating instructor in database...");
-
+    // ── Create instructor first (need _id for portfolio URL) ───────────────
     const instructorData = {
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      username: finalUsername,
-      password: hashedPassword,
-      role: "instructor",
+      name:          name.trim(),
+      email:         email.toLowerCase().trim(),
+      username:      finalUsername,
+      password:      hashedPassword,
+      role:          "instructor",
       emailVerified: true,
-      isActive: true,
-      language: language === "en" ? "en" : "ar",
+      isActive:      true,
+      language:      language === "en" ? "en" : "ar",
+      qrCode:        "",
+      qrCodeData:    "",
+      profile: {
+        bio:      "",
+        jobTitle: "Instructor",
+        company:  "",
+        website:  "",
+        location: "",
+        phone:    phone && phone.trim() ? phone.trim() : "",
+      },
     };
 
     if (image && image.trim()) {
       instructorData.image = image.trim();
     }
-
     if (gender && (gender === "male" || gender === "female")) {
       instructorData.gender = gender;
     }
 
-    if (qrCodeImage) {
-      instructorData.qrCode = qrCodeImage;
-      instructorData.qrCodeData = portfolioUrl;
-    }
-
-    instructorData.profile = {
-      bio: "",
-      jobTitle: "Instructor",
-      company: "",
-      website: "",
-      location: "",
-      phone: phone && phone.trim() ? phone.trim() : "",
-    };
-
-    console.log("📦 Instructor data to save:", {
-      ...instructorData,
-      password: "***",
-    });
-
     const newInstructor = new User(instructorData);
     await newInstructor.save();
 
-    console.log("🎉 Instructor created successfully:", newInstructor._id);
+    // ── Generate QR with _id-based URL ─────────────────────────────────────
+    const baseUrl      = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const portfolioUrl = `${baseUrl}/portfolio/${newInstructor._id}`;  // ✅ _id دايماً
+    let qrCodeImage    = "";
 
-    // إنشاء بورتفليو افتراضي
     try {
-      console.log("📁 Creating default portfolio...");
-      await createDefaultPortfolio(newInstructor._id, newInstructor.name, newInstructor.username);
-      console.log("✅ Default portfolio created");
+      qrCodeImage = await QRCode.toDataURL(portfolioUrl, {
+        width:  200,
+        margin: 2,
+        color:  { dark: "#000000", light: "#FFFFFF" },
+      });
+    } catch (qrError) {
+      console.error("❌ QR generation failed:", qrError);
+    }
+
+    // ── Update instructor with QR ──────────────────────────────────────────
+    newInstructor.qrCode     = qrCodeImage;
+    newInstructor.qrCodeData = portfolioUrl;
+    await newInstructor.save();
+
+    // ── Create default portfolio ───────────────────────────────────────────
+    try {
+      await createDefaultPortfolio(newInstructor._id, newInstructor.name);
     } catch (portfolioError) {
       console.error("⚠️ Could not create default portfolio:", portfolioError);
     }
 
-    // إعادة جلب المدرس للتأكد من جميع البيانات
+    // ── Fetch saved data ───────────────────────────────────────────────────
     const savedInstructor = await User.findById(newInstructor._id)
       .select("_id name email username image gender language profile isActive createdAt qrCode")
       .lean();
 
-    console.log("📋 Saved instructor from DB:", savedInstructor);
-
-    const instructorResponse = {
-      id: savedInstructor._id,
-      name: savedInstructor.name,
-      email: savedInstructor.email,
-      username: savedInstructor.username,
-      role: "instructor",
-      image: savedInstructor.image,
-      gender: savedInstructor.gender,
-      language: savedInstructor.language,
-      qrCode: savedInstructor.qrCode,
-      portfolioUrl,
-      profileUrl: `/portfolio/${savedInstructor.username}`,
-      profile: savedInstructor.profile,
-      isActive: savedInstructor.isActive,
-      createdAt: savedInstructor.createdAt,
-    };
-
-    console.log("✅ ============ INSTRUCTOR CREATION COMPLETED ============");
-
+    // ── Response ───────────────────────────────────────────────────────────
     return NextResponse.json(
       {
         success: true,
         message: "Instructor created successfully with default portfolio",
-        data: instructorResponse,
+        data: {
+          id:           savedInstructor._id,
+          name:         savedInstructor.name,
+          email:        savedInstructor.email,
+          username:     savedInstructor.username,
+          role:         "instructor",
+          image:        savedInstructor.image,
+          gender:       savedInstructor.gender,
+          language:     savedInstructor.language,
+          qrCode:       savedInstructor.qrCode,
+          portfolioUrl: portfolioUrl,
+          profileUrl:   `/portfolio/${savedInstructor._id}`,  // ✅ _id دايماً
+          profile:      savedInstructor.profile,
+          isActive:     savedInstructor.isActive,
+          createdAt:    savedInstructor.createdAt,
+        },
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error("💥 ============ INSTRUCTOR CREATION ERROR ============");
-    console.error("Error name:", error.name);
-    console.error("Error message:", error.message);
-    console.error("Error stack:", error.stack);
+    console.error("💥 INSTRUCTOR CREATION ERROR:", error);
 
     if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      const message =
-        field === "username"
-          ? "Username is already taken"
-          : "Email is already registered";
-
+      const field   = Object.keys(error.keyPattern || {})[0] || "unknown";
+      const message = field === "username"
+        ? "Username is already taken"
+        : "Email is already registered";
       return NextResponse.json(
         { success: false, message, errors: { [field]: message } },
         { status: 409 }
@@ -416,11 +293,7 @@ export async function POST(request) {
     }
 
     return NextResponse.json(
-      {
-        success: false,
-        message: "Internal server error",
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
+      { success: false, message: "Internal server error", error: error.message },
       { status: 500 }
     );
   }
