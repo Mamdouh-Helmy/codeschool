@@ -4272,6 +4272,20 @@ const ar = {
   "sectionImages.table.status": "الحالة",
   "sectionImages.table.alt": "النص البديل",
   "sectionImages.table.image": "الصورة",
+  "studentForm.secureData": "البيانات المؤمنة",
+  "studentForm.optional": "اختياري",
+  "studentForm.shownInSchedules": "يظهر في الجداول",
+  "studentForm.dobHint": "تاريخ الميلاد",
+  "studentForm.editTitle": "تعديل بيانات الطالب",
+  "studentForm.searchHint": "ابحث بالاسم أو البريد الإلكتروني أو رقم الهاتف",
+  "studentForm.searchRegistered": "البحث عن الطلاب المسجلين",
+  "studentForm.orCreateNew": "أو إنشاء طالب جديد",
+  "studentForm.newAccountData": "بيانات الحساب الجديد",
+  "studentForm.emailHint": "أدخل البريد الإلكتروني",
+  "studentForm.channel._id": "معرّف القناة",
+  "studentForm.createTitle": "إنشاء طالب",
+  "studentForm.searchByNameOrEmail": "ابحث بالاسم أو البريد الإلكتروني",
+  "studentForm.fullNamePlaceholder": "أدخل الاسم الكامل",
 };
 
 export default ar;

@@ -4151,6 +4151,20 @@ const en = {
   "sectionImages.table.status": "Status",
   "sectionImages.table.alt": "Alt Text",
   "sectionImages.table.image": "Image",
+  "studentForm.secureData": "Secure Data",
+  "studentForm.optional": "Optional",
+  "studentForm.shownInSchedules": "Shown in Schedules",
+  "studentForm.dobHint": "Date of Birth",
+  "studentForm.editTitle": "Edit Student",
+  "studentForm.searchHint": "Search by name, email, or phone number",
+  "studentForm.searchRegistered": "Search Registered Students",
+  "studentForm.orCreateNew": "Or Create New Student",
+  "studentForm.newAccountData": "New Account Information",
+  "studentForm.emailHint": "Enter Email Address",
+  "studentForm.channel._id": "Channel ID",
+  "studentForm.createTitle": "Create Student",
+  "studentForm.searchByNameOrEmail": "Search by Name or Email",
+  "studentForm.fullNamePlaceholder": "Enter Full Name",
 };
 
 export default en;
