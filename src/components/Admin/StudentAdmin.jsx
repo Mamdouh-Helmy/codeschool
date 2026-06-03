@@ -234,6 +234,23 @@ export default function StudentAdmin() {
   const setFilter    = (key, value) => setFilters(f => ({ ...f, [key]: value, page: 1 }));
   const loadStudents = () => setRefreshKey(k => k + 1);
 
+  // ─── onSaved — called by StudentForm after successful save ────────────────
+  // isNew=true  → طالب جديد  → روح للصفحة الأولى عشان يظهر في الأعلى
+  // isNew=false → تعديل      → رفرش نفس الصفحة
+  const onSaved = useCallback((isNew = false) => {
+    if (isNew) {
+      setFilters(f => ({ ...f, page: 1 }));
+    }
+    setRefreshKey(k => k + 1);
+    toast.success(isNew ? t("students.savedSuccess") : t("students.updatedSuccess") || t("students.savedSuccess"));
+  }, [t]);
+
+  // ─── closeModal — مسؤولة عن إغلاق الـ modal بعد الـ save ─────────────────
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    setEditingStudent(null);
+  }, []);
+
   // ─── Active filter chips ───────────────────────────────────────────────────
   const activeFilters = [
     filters.status         && { key: "status",       label: `Status: ${filters.status}` },
@@ -299,11 +316,6 @@ export default function StudentAdmin() {
         </div>
       </div>
     ), { duration: Infinity, position: "top-center" });
-  };
-
-  const onSaved = () => {
-    setRefreshKey(k => k + 1);
-    toast.success(t("students.savedSuccess"));
   };
 
   const formatDate = (d) => {
@@ -725,21 +737,11 @@ export default function StudentAdmin() {
               <p className="text-xs text-gray-400 dark:text-darksubtle">No students found</p>
             )}
 
-            {/* Page buttons — بس لو في أكتر من صفحة */}
+            {/* Page buttons */}
             {pagination.totalPages > 1 && (
               <div className="flex items-center gap-1">
-                <PaginationBtn
-                  onClick={() => setFilter("page", 1)}
-                  disabled={pagination.page === 1}
-                  icon={ChevronsLeft}
-                  label="First page"
-                />
-                <PaginationBtn
-                  onClick={() => setFilter("page", pagination.page - 1)}
-                  disabled={pagination.page === 1}
-                  icon={ChevronLeft}
-                  label="Previous page"
-                />
+                <PaginationBtn onClick={() => setFilter("page", 1)}                   disabled={pagination.page === 1}                 icon={ChevronsLeft}  label="First page" />
+                <PaginationBtn onClick={() => setFilter("page", pagination.page - 1)} disabled={pagination.page === 1}                 icon={ChevronLeft}   label="Previous page" />
 
                 {pageNumbers.map(p => (
                   <button
@@ -757,18 +759,8 @@ export default function StudentAdmin() {
                   </button>
                 ))}
 
-                <PaginationBtn
-                  onClick={() => setFilter("page", pagination.page + 1)}
-                  disabled={pagination.page === pagination.totalPages}
-                  icon={ChevronRight}
-                  label="Next page"
-                />
-                <PaginationBtn
-                  onClick={() => setFilter("page", pagination.totalPages)}
-                  disabled={pagination.page === pagination.totalPages}
-                  icon={ChevronsRight}
-                  label="Last page"
-                />
+                <PaginationBtn onClick={() => setFilter("page", pagination.page + 1)} disabled={pagination.page === pagination.totalPages} icon={ChevronRight}  label="Next page" />
+                <PaginationBtn onClick={() => setFilter("page", pagination.totalPages)} disabled={pagination.page === pagination.totalPages} icon={ChevronsRight} label="Last page" />
               </div>
             )}
 
@@ -792,17 +784,22 @@ export default function StudentAdmin() {
         </div>
       </div>
 
-      {/* ── Modals ── */}
+      {/* ── Modal ── */}
       <Modal
         open={modalOpen}
         title={editingStudent ? t("studentForm.updateStudent") : t("studentForm.createStudent")}
-        onClose={() => { setModalOpen(false); setEditingStudent(null); }}
+        onClose={closeModal}
         size="xl"
       >
         <StudentForm
           initial={editingStudent}
-          onClose={() => { setModalOpen(false); setEditingStudent(null); }}
-          onSaved={onSaved}
+          onClose={closeModal}
+          onSaved={(isNew) => {
+            // أغلق الـ modal الأول
+            closeModal();
+            // بعدين اعمل refresh — تأخير بسيط يضمن إن الـ modal اتقفل قبل الـ fetch
+            setTimeout(() => onSaved(isNew), 80);
+          }}
         />
       </Modal>
 
