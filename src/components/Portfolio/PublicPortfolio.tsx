@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Share2, Eye } from "lucide-react";
+import { Eye } from "lucide-react";
 import toast from "react-hot-toast";
 
 import PortfolioHeader from "./public/PortfolioHeader";
 import SkillsShowcase from "./public/SkillsShowcase";
 import ProjectsGallery from "./public/ProjectsGallery";
-import CertificatesGallery from "./public/CertificatesGallery"; // ← جديد
+import CertificatesGallery from "./public/CertificatesGallery";
 import ContactSection from "./public/ContactSection";
 import PortfolioFooter from "./public/PortfolioFooter";
 
@@ -18,14 +18,12 @@ import {
 import { useI18n } from "@/i18n/I18nProvider";
 import { applyTheme } from "@/utils/portfolioThemes";
 
-/* ─── Types ───────────────────────────────────────────────── */
 interface PublicPortfolioProps {
-  username: string;
+  id: string;
 }
 
 type ThemeColor = "primary" | "secondary" | "muted";
 
-/* ─── Theme helpers ───────────────────────────────────────── */
 function resolveAccentBase(skillFill: string | undefined): string {
   if (!skillFill) return "blue";
   if (skillFill.includes("green")) return "green";
@@ -51,7 +49,6 @@ function makeThemeHelpers(themeStyles: ReturnType<typeof applyTheme>) {
   return { textColor, iconColor, hoverColor, primaryButton, secondaryButtonHover };
 }
 
-/* ─── PortfolioLoader ─────────────────────────────────────── */
 function PortfolioLoader() {
   return (
     <div className="pf-loader-screen" aria-label="Loading portfolio" role="status">
@@ -78,7 +75,6 @@ function PortfolioLoader() {
   );
 }
 
-/* ─── NotFound ────────────────────────────────────────────── */
 function NotFound({
   message,
   label,
@@ -107,21 +103,19 @@ function NotFound({
   );
 }
 
-/* ─── Main Component ──────────────────────────────────────── */
-export default function PublicPortfolio({ username }: PublicPortfolioProps) {
+export default function PublicPortfolio({ id }: PublicPortfolioProps) {
   const { t } = useI18n();
 
   const [portfolio, setPortfolio] = useState<PublicPortfolioType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  /* ── Data fetching ── */
   const fetchPortfolio = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(`/api/portfolio/${username}`);
+      const res = await fetch(`/api/portfolio/${id}`);
       const data: PortfolioApiResponse = await res.json();
 
       if (data.success) {
@@ -138,13 +132,12 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
     } finally {
       setLoading(false);
     }
-  }, [username, t]);
+  }, [id, t]);
 
   useEffect(() => {
     fetchPortfolio();
   }, [fetchPortfolio]);
 
-  /* ── Share handler ── */
   const handleShare = useCallback(async () => {
     if (!portfolio) return;
 
@@ -156,7 +149,7 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
           url: window.location.href,
         });
       } catch {
-        // user cancelled — no-op
+        // user cancelled
       }
     } else {
       await navigator.clipboard.writeText(window.location.href);
@@ -164,14 +157,12 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
     }
   }, [portfolio, t]);
 
-  /* ── Theme ── */
   const themeStyles = applyTheme(
     portfolio?.settings?.theme ?? "dark",
     portfolio?.settings?.layout ?? "standard"
   );
   const theme = makeThemeHelpers(themeStyles);
 
-  /* ── Skills data shape ── */
   const skillsData = portfolio
     ? {
         skillsTitle: portfolio.title ?? "My Skills",
@@ -181,7 +172,6 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
       }
     : null;
 
-  /* ── Render states ── */
   if (loading) return <PortfolioLoader />;
 
   if (error || !portfolio) {
@@ -194,7 +184,6 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
     );
   }
 
-  /* ── Happy path ── */
   return (
     <div className="rounded-md">
       <div className={`min-h-screen ${themeStyles.container} rounded-lg`}>
@@ -211,7 +200,6 @@ export default function PublicPortfolio({ username }: PublicPortfolioProps) {
           />
         )}
 
-        {/* ✅ Certificates — يظهر بس لو في شهادات */}
         {portfolio.certificates?.length > 0 && (
           <CertificatesGallery certificates={portfolio.certificates} />
         )}

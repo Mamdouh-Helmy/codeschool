@@ -1,11 +1,8 @@
-// app/portfolio/[id]/page.tsx
 import PublicPortfolio from '@/components/Portfolio/PublicPortfolio';
 import { Metadata } from "next";
 
 interface PageProps {
-  params: Promise<{
-    id: string;
-  }>;
+  params: Promise<{ id: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -45,6 +42,5 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function PortfolioPage({ params }: PageProps) {
   const { id } = await params;
-  // بنبعت id للـ component بدل username
-  return <PublicPortfolio username={id} />;
+  return <PublicPortfolio id={id} />;
 }

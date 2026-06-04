@@ -92,7 +92,6 @@ export async function POST(req) {
     }
 
     const userId = await getUserIdFromToken(token);
-    const decoded = jwt.verify(token, JWT_SECRET);
     const body = await req.json();
 
     const existing = await Portfolio.findOne({ userId });
@@ -100,13 +99,10 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: 'Portfolio already exists' }, { status: 400 });
     }
 
-    let userName = decoded.name;
-    if (!userName) {
-      const user = await User.findById(userId);
-      userName = user?.name || 'User';
-    }
+    // ✅ جيب الـ name من DB مباشرة — مش محتاج jwt.verify تاني
+    const user = await User.findById(userId);
+    const userName = user?.name || 'User';
 
-    // معالجة صور الشهادات قبل الحفظ
     const certificates = await processCertificates(body.certificates || []);
 
     const portfolio = await Portfolio.create({

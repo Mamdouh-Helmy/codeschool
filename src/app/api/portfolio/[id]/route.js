@@ -1,7 +1,5 @@
-// app/api/portfolio/[id]/route.js
 import { NextResponse } from "next/server";
 import Portfolio from "../../../models/Portfolio";
-import User from "../../../models/User";
 import { connectDB } from "@/lib/mongodb";
 import mongoose from "mongoose";
 
@@ -26,15 +24,22 @@ export async function GET(req, context) {
       );
     }
 
-    const portfolio = await Portfolio.findOne({
-      _id: id,
-      isPublished: true,
-    }).populate("userId", "name email image username role profile socialLinks");
+    const portfolio = await Portfolio.findById(id).populate(
+      "userId",
+      "name email image username role profile socialLinks"
+    );
 
     if (!portfolio) {
       return NextResponse.json(
-        { success: false, message: "Portfolio not found or not published" },
+        { success: false, message: "Portfolio not found" },
         { status: 404 }
+      );
+    }
+
+    if (!portfolio.isPublished) {
+      return NextResponse.json(
+        { success: false, message: "This portfolio is not published yet" },
+        { status: 403 }
       );
     }
 
@@ -51,7 +56,7 @@ export async function GET(req, context) {
       contactInfo: portfolio.contactInfo || {},
       isPublished: portfolio.isPublished,
       views: portfolio.views,
-      settings: portfolio.settings || { theme: "light", layout: "standard" },
+      settings: portfolio.settings || { theme: "dark", layout: "standard" },
       userId: {
         _id: user._id,
         name: user.name,
@@ -65,7 +70,8 @@ export async function GET(req, context) {
       updatedAt: portfolio.updatedAt,
     };
 
-    await Portfolio.findByIdAndUpdate(id, { $inc: { views: 1 } });
+    // increment views بعد ما نرجع الداتا
+    Portfolio.findByIdAndUpdate(id, { $inc: { views: 1 } }).exec();
 
     return NextResponse.json({ success: true, portfolio: portfolioData });
   } catch (error) {

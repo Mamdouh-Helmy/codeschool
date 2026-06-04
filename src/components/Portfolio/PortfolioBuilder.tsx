@@ -194,51 +194,50 @@ export default function PortfolioBuilder() {
   };
 
   /* ── Save portfolio ─────────────────────────────────────────── */
-  const savePortfolio = async (
-    portfolioData: PortfolioFormData
-  ): Promise<boolean> => {
-    setSaving(true);
-    try {
-      const token  = localStorage.getItem("token");
-      const method = (portfolio as any)?._id ? "PUT" : "POST";
+  const savePortfolio = async (portfolioData: PortfolioFormData): Promise<boolean> => {
+  setSaving(true);
+  try {
+    const token = localStorage.getItem("token");
 
-      // ✅ FIX: نتأكد إن certificates موجودة في الـ payload قبل الإرسال
-      const payload: PortfolioFormData = {
-        ...portfolioData,
-        certificates: portfolioData.certificates || [],
-      };
+    // ✅ بنتأكد من _id أو id عشان نعرف PUT ولا POST
+    const portfolioId = (portfolio as any)?._id || (portfolio as any)?.id;
+    const method = portfolioId ? "PUT" : "POST";
 
-      const res  = await fetch("/api/portfolio", {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
+    const payload: PortfolioFormData = {
+      ...portfolioData,
+      certificates: portfolioData.certificates || [],
+    };
+
+    const res = await fetch("/api/portfolio", {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      toast.success(t("portfolio.status.saved"));
+      setPortfolio({
+        ...data.portfolio,
+        certificates: data.portfolio.certificates || [],
+        userId: data.portfolio.userId || user,
       });
-      const data = await res.json();
-
-      if (data.success) {
-        toast.success(t("portfolio.status.saved"));
-        // ✅ FIX: نحتفظ بـ certificates في الـ state بعد الحفظ
-        setPortfolio({
-          ...data.portfolio,
-          certificates: data.portfolio.certificates || [],
-          userId: data.portfolio.userId || user,
-        });
-        return true;
-      } else {
-        toast.error(data.message || t("portfolio.status.saveFailed"));
-        return false;
-      }
-    } catch (error) {
-      console.error("Error saving portfolio:", error);
-      toast.error(t("portfolio.status.saveFailed"));
+      return true;
+    } else {
+      toast.error(data.message || t("portfolio.status.saveFailed"));
       return false;
-    } finally {
-      setSaving(false);
     }
-  };
+  } catch (error) {
+    console.error("Error saving portfolio:", error);
+    toast.error(t("portfolio.status.saveFailed"));
+    return false;
+  } finally {
+    setSaving(false);
+  }
+};
 
   if (loading) return <PortfolioLoader />;
 
