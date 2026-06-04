@@ -235,24 +235,18 @@ portfolioSchema.statics.findPublished = function() {
 };
 
 // 📌 Pre-save middleware to validate data
-portfolioSchema.pre('save', function(next) {
+portfolioSchema.pre('save', async function() {
   if (this.skills && this.skills.length > 50) {
-    return next(new Error('Cannot have more than 50 skills'));
+    throw new Error('Cannot have more than 50 skills');
   }
-
   if (this.projects && this.projects.length > 100) {
-    return next(new Error('Cannot have more than 100 projects'));
+    throw new Error('Cannot have more than 100 projects');
   }
-
   if (this.certificates && this.certificates.length > 50) {
-    return next(new Error('Cannot have more than 50 certificates'));
+    throw new Error('Cannot have more than 50 certificates');
   }
-
   if (this.title) this.title = this.title.trim();
   if (this.description) this.description = this.description.trim();
-
-  next();
 });
 
-// Export the model (prevent re-compilation in development)
 export default mongoose.models.Portfolio || mongoose.model('Portfolio', portfolioSchema);
