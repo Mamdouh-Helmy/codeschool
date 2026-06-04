@@ -26,6 +26,14 @@ function useDebounce(value, delay) {
   return debounced;
 }
 
+// ─── Smart pagination helper ───────────────────────────────────────────────────
+function smartPages(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  if (current <= 4) return [1, 2, 3, 4, 5, "...", total];
+  if (current >= total - 3) return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
+  return [1, "...", current - 1, current, current + 1, "...", total];
+}
+
 // ─── Badge configs ─────────────────────────────────────────────────────────────
 const STATUS_CFG = {
   Active:    { dot: "bg-emerald-400", badge: "bg-emerald-900/40 text-emerald-800 ring-1 ring-emerald-700/50 dark:bg-emerald-900/40 dark:text-emerald-400" },
@@ -35,7 +43,7 @@ const STATUS_CFG = {
 };
 
 const LEVEL_CFG = {
-  Beginner:     "bg-blue-900/40 text-blue-800 ring-1 ring-blue-700/50 dark:bg-blue-900/40  dark:text-blue-400 ",
+  Beginner:     "bg-blue-900/40 text-blue-800 ring-1 ring-blue-700/50 dark:bg-blue-900/40 dark:text-blue-400",
   Intermediate: "bg-violet-900/40 text-violet-400 ring-1 ring-violet-700/50",
   Advanced:     "bg-teal-900/40 text-teal-400 ring-1 ring-teal-700/50",
 };
@@ -146,14 +154,14 @@ function ActionBtn({ onClick, icon: Icon, color, title }) {
   );
 }
 
-// ─── Pagination Button ─────────────────────────────────────────────────────────
+// ─── Pagination Icon Button ────────────────────────────────────────────────────
 function PaginationBtn({ onClick, disabled, icon: Icon, label }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="w-8 h-8 rounded-lg border border-gray-200 dark:border-dark_border flex items-center justify-center text-gray-400 dark:text-darktext hover:bg-gray-50 dark:hover:bg-dark_input hover:text-gray-700 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      className="w-8 h-8 rounded-lg border border-gray-200 dark:border-dark_border flex items-center justify-center text-gray-400 dark:text-darktext hover:bg-gray-100 dark:hover:bg-dark_input hover:text-gray-700 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
     >
       <Icon className="w-3.5 h-3.5" />
     </button>
@@ -172,6 +180,7 @@ export default function StudentAdmin() {
   const [selectedStudentForCredit, setSelectedStudentForCredit] = useState(null);
   const [searchInput, setSearchInput] = useState("");
   const [refreshKey, setRefreshKey]   = useState(0);
+  const [jumpValue, setJumpValue]     = useState("");
   const debouncedSearch = useDebounce(searchInput, 350);
 
   const [filters, setFilters] = useState({
@@ -234,22 +243,26 @@ export default function StudentAdmin() {
   const setFilter    = (key, value) => setFilters(f => ({ ...f, [key]: value, page: 1 }));
   const loadStudents = () => setRefreshKey(k => k + 1);
 
-  // ─── onSaved — called by StudentForm after successful save ────────────────
-  // isNew=true  → طالب جديد  → روح للصفحة الأولى عشان يظهر في الأعلى
-  // isNew=false → تعديل      → رفرش نفس الصفحة
+  // ─── onSaved ───────────────────────────────────────────────────────────────
   const onSaved = useCallback((isNew = false) => {
-    if (isNew) {
-      setFilters(f => ({ ...f, page: 1 }));
-    }
+    if (isNew) setFilters(f => ({ ...f, page: 1 }));
     setRefreshKey(k => k + 1);
     toast.success(isNew ? t("students.savedSuccess") : t("students.updatedSuccess") || t("students.savedSuccess"));
   }, [t]);
 
-  // ─── closeModal — مسؤولة عن إغلاق الـ modal بعد الـ save ─────────────────
   const closeModal = useCallback(() => {
     setModalOpen(false);
     setEditingStudent(null);
   }, []);
+
+  // ─── Jump to page handler ──────────────────────────────────────────────────
+  const handleJump = () => {
+    const v = parseInt(jumpValue);
+    if (v >= 1 && v <= pagination.totalPages) {
+      setFilters(f => ({ ...f, page: v }));
+      setJumpValue("");
+    }
+  };
 
   // ─── Active filter chips ───────────────────────────────────────────────────
   const activeFilters = [
@@ -368,13 +381,6 @@ export default function StudentAdmin() {
   // ─── Pagination helpers ────────────────────────────────────────────────────
   const paginationStart = (pagination.page - 1) * pagination.limit + 1;
   const paginationEnd   = Math.min(pagination.page * pagination.limit, pagination.totalStudents);
-
-  const pageNumbers = Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-    if (pagination.totalPages <= 5)                        return i + 1;
-    if (pagination.page <= 3)                              return i + 1;
-    if (pagination.page >= pagination.totalPages - 2)      return pagination.totalPages - 4 + i;
-    return pagination.page - 2 + i;
-  });
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
@@ -719,67 +725,162 @@ export default function StudentAdmin() {
             </div>
           )}
 
-          {/* ── Pagination Footer — يظهر دايماً ── */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-dark_border bg-gray-50 dark:bg-darkmode">
+          {/* ── Pagination Footer ── */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3 border-t border-gray-100 dark:border-dark_border bg-white dark:bg-darklight">
 
             {/* Info */}
-            {pagination.totalStudents > 0 ? (
-              <p className="text-xs text-gray-500 dark:text-darkmuted whitespace-nowrap">
-                Showing{" "}
-                <span className="font-semibold text-gray-900 dark:text-white">{paginationStart}</span>
-                {" "}–{" "}
-                <span className="font-semibold text-gray-900 dark:text-white">{paginationEnd}</span>
-                {" "}of{" "}
-                <span className="font-semibold text-gray-900 dark:text-white">{pagination.totalStudents}</span>
-                {" "}students
-              </p>
-            ) : (
-              <p className="text-xs text-gray-400 dark:text-darksubtle">No students found</p>
-            )}
+            <p className="text-xs text-gray-500 dark:text-darkmuted whitespace-nowrap">
+              {pagination.totalStudents > 0 ? (
+                <>
+                  Showing{" "}
+                  <span className="font-medium text-gray-900 dark:text-white">{paginationStart}</span>
+                  {" – "}
+                  <span className="font-medium text-gray-900 dark:text-white">{paginationEnd}</span>
+                  {" of "}
+                  <span className="font-medium text-gray-900 dark:text-white">{pagination.totalStudents}</span>
+                  {" students"}
+                </>
+              ) : (
+                "No students found"
+              )}
+            </p>
 
-            {/* Page buttons */}
+            {/* Smart page numbers */}
             {pagination.totalPages > 1 && (
               <div className="flex items-center gap-1">
-                <PaginationBtn onClick={() => setFilter("page", 1)}                   disabled={pagination.page === 1}                 icon={ChevronsLeft}  label="First page" />
-                <PaginationBtn onClick={() => setFilter("page", pagination.page - 1)} disabled={pagination.page === 1}                 icon={ChevronLeft}   label="Previous page" />
+                {/* First */}
+                <PaginationBtn
+                  onClick={() => setFilters(f => ({ ...f, page: 1 }))}
+                  disabled={pagination.page === 1}
+                  icon={ChevronsLeft}
+                  label="First page"
+                />
+                {/* Prev */}
+                <PaginationBtn
+                  onClick={() => setFilters(f => ({ ...f, page: f.page - 1 }))}
+                  disabled={pagination.page === 1}
+                  icon={ChevronLeft}
+                  label="Previous page"
+                />
 
-                {pageNumbers.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setFilter("page", p)}
-                    className={`
-                      w-8 h-8 rounded-lg text-xs font-medium transition-all
-                      ${p === pagination.page
-                        ? "bg-primary text-white shadow-brand-sm"
-                        : "text-gray-500 dark:text-darktext hover:bg-gray-100 dark:hover:bg-dark_input hover:text-gray-800 dark:hover:text-white"
-                      }
-                    `}
-                  >
-                    {p}
-                  </button>
-                ))}
+                {/* Page buttons with smart ellipsis */}
+                {smartPages(pagination.page, pagination.totalPages).map((p, i) =>
+                  p === "..." ? (
+                    <span
+                      key={`dot-${i}`}
+                      className="w-8 h-8 flex items-center justify-center text-xs text-gray-400 dark:text-darksubtle tracking-widest select-none"
+                    >
+                      ···
+                    </span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setFilters(f => ({ ...f, page: p }))}
+                      className={`
+                        w-8 h-8 rounded-lg text-xs font-medium transition-all
+                        ${p === pagination.page
+                          ? "bg-primary text-white shadow-brand-sm"
+                          : "text-gray-500 dark:text-darktext hover:bg-gray-100 dark:hover:bg-dark_input hover:text-gray-900 dark:hover:text-white"
+                        }
+                      `}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
 
-                <PaginationBtn onClick={() => setFilter("page", pagination.page + 1)} disabled={pagination.page === pagination.totalPages} icon={ChevronRight}  label="Next page" />
-                <PaginationBtn onClick={() => setFilter("page", pagination.totalPages)} disabled={pagination.page === pagination.totalPages} icon={ChevronsRight} label="Last page" />
+                {/* Next */}
+                <PaginationBtn
+                  onClick={() => setFilters(f => ({ ...f, page: f.page + 1 }))}
+                  disabled={pagination.page === pagination.totalPages}
+                  icon={ChevronRight}
+                  label="Next page"
+                />
+                {/* Last */}
+                <PaginationBtn
+                  onClick={() => setFilters(f => ({ ...f, page: pagination.totalPages }))}
+                  disabled={pagination.page === pagination.totalPages}
+                  icon={ChevronsRight}
+                  label="Last page"
+                />
               </div>
             )}
 
-            {/* Rows per page — دايماً ظاهر */}
-            <select
-              value={filters.limit}
-              onChange={e => setFilters(f => ({ ...f, limit: Number(e.target.value), page: 1 }))}
-              className="
-                text-xs border border-gray-200 dark:border-dark_border rounded-lg px-2 py-1.5
-                bg-white dark:bg-dark_input text-gray-600 dark:text-gray-300
-                focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none
-                cursor-pointer
-              "
-            >
-              {[10, 25, 50, 100].map(n => (
-                <option key={n} value={n}>{n} / page</option>
-              ))}
-            </select>
+            {/* Right side controls */}
+            <div className="flex items-center gap-3 flex-wrap">
 
+              {/* Divider */}
+              <div className="hidden sm:block w-px h-5 bg-gray-200 dark:bg-dark_border" />
+
+              {/* Rows per page */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 dark:text-darksubtle whitespace-nowrap">Rows</span>
+                <select
+                  value={filters.limit}
+                  onChange={e => setFilters(f => ({ ...f, limit: Number(e.target.value), page: 1 }))}
+                  className="
+                    h-8 pl-2.5 pr-7 text-xs
+                    border border-gray-200 dark:border-dark_border rounded-lg
+                    bg-white dark:bg-dark_input
+                    text-gray-700 dark:text-gray-300
+                    focus:ring-2 focus:ring-primary/20 focus:border-primary
+                    outline-none cursor-pointer appearance-none
+                  "
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 8px center",
+                  }}
+                >
+                  {[10, 25, 50, 100].map(n => (
+                    <option key={n} value={n}>{n} / page</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Jump to page — only when totalPages > 5 */}
+              {pagination.totalPages > 5 && (
+                <>
+                  {/* Divider */}
+                  <div className="hidden sm:block w-px h-5 bg-gray-200 dark:bg-dark_border" />
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 dark:text-darksubtle whitespace-nowrap">Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={pagination.totalPages}
+                      value={jumpValue}
+                      placeholder="1"
+                      onChange={e => setJumpValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") handleJump(); }}
+                      className="
+                        w-14 h-8 px-2 text-xs text-center
+                        border border-gray-200 dark:border-dark_border rounded-lg
+                        bg-white dark:bg-dark_input
+                        text-gray-700 dark:text-gray-300
+                        focus:ring-2 focus:ring-primary/20 focus:border-primary
+                        outline-none
+                      "
+                    />
+                    <button
+                      onClick={handleJump}
+                      className="
+                        h-8 px-3 text-xs rounded-lg
+                        border border-gray-200 dark:border-dark_border
+                        text-gray-600 dark:text-darktext
+                        bg-gray-50 dark:bg-dark_input
+                        hover:border-primary/40 hover:text-primary
+                        dark:hover:border-primary/40 dark:hover:text-primary
+                        transition-colors whitespace-nowrap
+                      "
+                    >
+                      Go
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -795,9 +896,7 @@ export default function StudentAdmin() {
           initial={editingStudent}
           onClose={closeModal}
           onSaved={(isNew) => {
-            // أغلق الـ modal الأول
             closeModal();
-            // بعدين اعمل refresh — تأخير بسيط يضمن إن الـ modal اتقفل قبل الـ fetch
             setTimeout(() => onSaved(isNew), 80);
           }}
         />
