@@ -165,8 +165,4 @@ UserSchema.virtual("genderAr").get(function () {
 
 console.log("✅ User Schema loaded successfully");
 
-if (mongoose.models.User) {
-  delete mongoose.models.User;
-}
-
-export default mongoose.model("User", UserSchema);
+export default mongoose.models.User || mongoose.model("User", UserSchema);
