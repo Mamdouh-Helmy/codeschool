@@ -4287,6 +4287,8 @@ const ar = {
   "studentForm.searchByNameOrEmail": "ابحث بالاسم أو البريد الإلكتروني",
   "studentForm.fullNamePlaceholder": "أدخل الاسم الكامل",
   "common.street": "الشارع",
+  "portfolio.public.defaultDescription": "الوصف الافتراضي للملف الشخصي",
+  
 };
 
 export default ar;

@@ -82,7 +82,11 @@ export async function POST(req) {
 
     // رابط البورتفليو
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-    const portfolioUrl = `${baseUrl}/portfolio/${scannedUser.username}`;
+    const Portfolio = (await import("../../../models/Portfolio")).default;
+    const portfolio = await Portfolio.findOne({ userId: scannedUser._id });
+    const portfolioUrl = portfolio
+      ? `${baseUrl}/portfolio/${portfolio._id}`
+      : `${baseUrl}/portfolio/${scannedUser.username}`;
 
     return NextResponse.json(
       {

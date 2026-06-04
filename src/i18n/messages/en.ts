@@ -4166,6 +4166,7 @@ const en = {
   "studentForm.searchByNameOrEmail": "Search by Name or Email",
   "studentForm.fullNamePlaceholder": "Enter Full Name",
   "common.street": "Street",
+  "portfolio.public.defaultDescription": "Default portfolio description",
 };
 
 export default en;
