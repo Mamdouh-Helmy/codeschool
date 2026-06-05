@@ -44,7 +44,7 @@ async function uploadImage(file: File, folder = "portfolio-projects"): Promise<s
   formData.append("file", file);
   formData.append("folder", folder);
 
-  const res = await fetch("/api/upload", {
+  const res = await fetch("/api/upload-image", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
