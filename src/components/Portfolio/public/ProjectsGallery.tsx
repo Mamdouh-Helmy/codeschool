@@ -12,11 +12,11 @@ import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // ProjectCard component
-const ProjectCard = ({ 
-  project, 
-  themeStyles 
-}: { 
-  project: any; 
+const ProjectCard = ({
+  project,
+  themeStyles
+}: {
+  project: any;
   themeStyles?: any;
 }) => {
   const [imageError, setImageError] = useState(false);
@@ -26,16 +26,16 @@ const ProjectCard = ({
     if (imageError) {
       return "/images/default-project.jpg";
     }
-    
+
     if (project.images && project.images.length > 0 && project.images[0]?.url) {
       return project.images[0].url;
     }
-    
+
     return projectImage.src;
   };
 
   return (
-    <motion.div 
+    <motion.div
       whileHover={{ y: -5 }}
       className="h-full"
     >
@@ -57,7 +57,7 @@ const ProjectCard = ({
                 setImageError(true);
               }}
             />
-            
+
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
               <h3 className="text-xl font-bold text-white mb-2">
                 {project.title || project.name}
@@ -65,11 +65,11 @@ const ProjectCard = ({
               <p className="text-gray-300 mb-4">
                 {project.description}
               </p>
-              
+
               {project.technologies && project.technologies.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-auto">
                   {project.technologies.slice(0, 4).map((tech: string, index: number) => (
-                    <span 
+                    <span
                       key={index}
                       className="text-xs px-2 py-1 bg-purple-900/50 text-purple-200 rounded-full"
                     >
@@ -78,7 +78,7 @@ const ProjectCard = ({
                   ))}
                 </div>
               )}
-              
+
               <div className="mt-4 flex items-center text-purple-300 group-hover:text-white transition-colors">
                 <span>View Project</span>
                 <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,19 +103,19 @@ interface ProjectsGalleryProps {
   };
 }
 
-export default function ProjectsGallery({ 
-  projects = [], 
-  themeStyles, 
-  portfolio 
+export default function ProjectsGallery({
+  projects = [],
+  themeStyles,
+  portfolio
 }: ProjectsGalleryProps) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState("all");
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const tabsContainerRef = useRef<HTMLDivElement>(null);
-  
+
   console.log("🎯 Projects data:", projects);
-  
+
   const safePortfolio = portfolio || {
     projectsTitle: t("portfolio.public.projectsTitle") || "Our Projects",
     projectsSubtitle: t("portfolio.public.projectsSubtitle") || "Featured Work",
@@ -124,34 +124,46 @@ export default function ProjectsGallery({
 
   const categories = [
     { id: "all", name: "All Projects", projects: projects },
-    { id: "web", name: "Web Development", projects: projects.filter(p => 
-      p.technologies?.some((t: string) => ["React", "Next.js", "Vue", "Angular", "JavaScript", "TypeScript", "HTML", "CSS"].includes(t))
-    )},
-    { id: "mobile", name: "Mobile Apps", projects: projects.filter(p => 
-      p.technologies?.some((t: string) => ["Flutter", "React Native", "iOS", "Android", "Swift", "Kotlin"].includes(t))
-    )},
-    { id: "backend", name: "Backend", projects: projects.filter(p => 
-      p.technologies?.some((t: string) => ["Node.js", "Python", "Java", "PHP", "Ruby", "Go"].includes(t))
-    )},
-    { id: "design", name: "UI/UX Design", projects: projects.filter(p => 
-      p.technologies?.some((t: string) => ["Figma", "Adobe XD", "Sketch", "Photoshop"].includes(t))
-    )},
-    { id: "database", name: "Database", projects: projects.filter(p => 
-      p.technologies?.some((t: string) => ["MongoDB", "MySQL", "PostgreSQL", "Firebase"].includes(t))
-    )},
-    { id: "cloud", name: "Cloud & DevOps", projects: projects.filter(p => 
-      p.technologies?.some((t: string) => ["AWS", "Docker", "Kubernetes", "CI/CD"].includes(t))
-    )}
+    {
+      id: "web", name: "Web Development", projects: projects.filter(p =>
+        p.technologies?.some((t: string) => ["React", "Next.js", "Vue", "Angular", "JavaScript", "TypeScript", "HTML", "CSS"].includes(t))
+      )
+    },
+    {
+      id: "mobile", name: "Mobile Apps", projects: projects.filter(p =>
+        p.technologies?.some((t: string) => ["Flutter", "React Native", "iOS", "Android", "Swift", "Kotlin"].includes(t))
+      )
+    },
+    {
+      id: "backend", name: "Backend", projects: projects.filter(p =>
+        p.technologies?.some((t: string) => ["Node.js", "Python", "Java", "PHP", "Ruby", "Go"].includes(t))
+      )
+    },
+    {
+      id: "design", name: "UI/UX Design", projects: projects.filter(p =>
+        p.technologies?.some((t: string) => ["Figma", "Adobe XD", "Sketch", "Photoshop"].includes(t))
+      )
+    },
+    {
+      id: "database", name: "Database", projects: projects.filter(p =>
+        p.technologies?.some((t: string) => ["MongoDB", "MySQL", "PostgreSQL", "Firebase"].includes(t))
+      )
+    },
+    {
+      id: "cloud", name: "Cloud & DevOps", projects: projects.filter(p =>
+        p.technologies?.some((t: string) => ["AWS", "Docker", "Kubernetes", "CI/CD"].includes(t))
+      )
+    }
   ];
 
-  const filteredProjects = activeTab === "all" 
-    ? projects 
+  const filteredProjects = activeTab === "all"
+    ? projects
     : categories.find(cat => cat.id === activeTab)?.projects || [];
 
   // التحقق مما إذا كان يمكن التمرير
   const checkScrollButtons = () => {
     if (!tabsContainerRef.current) return;
-    
+
     const container = tabsContainerRef.current;
     setCanScrollLeft(container.scrollLeft > 0);
     setCanScrollRight(
@@ -182,15 +194,15 @@ export default function ProjectsGallery({
   // Initialize scroll buttons and add event listener
   useEffect(() => {
     checkScrollButtons();
-    
+
     const handleResize = () => checkScrollButtons();
     window.addEventListener('resize', handleResize);
-    
+
     const container = tabsContainerRef.current;
     if (container) {
       container.addEventListener('scroll', checkScrollButtons);
     }
-    
+
     return () => {
       window.removeEventListener('resize', handleResize);
       if (container) {
@@ -222,11 +234,11 @@ export default function ProjectsGallery({
             <div className="mb-16">
               {/* Tabs Header with Scroll */}
               <div className="relative mb-12">
-                
+
 
                 {/* Tabs Container with Visible Scrollbar */}
                 <div className="flex-1 mx-12">
-                  <div 
+                  <div
                     ref={tabsContainerRef}
                     className="flex gap-4 overflow-x-auto scroll-smooth py-4 pb-6 px-2 hide-scrollbar"
                     style={{
@@ -238,11 +250,10 @@ export default function ProjectsGallery({
                       <button
                         key={category.id}
                         onClick={() => setActiveTab(category.id)}
-                        className={`flex-shrink-0 px-6 py-3 rounded-full font-semibold transition-all whitespace-nowrap ${
-                          activeTab === category.id
+                        className={`flex-shrink-0 px-6 py-3 rounded-full font-semibold transition-all whitespace-nowrap ${activeTab === category.id
                             ? "bg-purple-600 text-white shadow-lg shadow-purple-500/20 transform scale-105"
                             : "text-gray-300 hover:text-white border border-gray-700 hover:border-purple-400 hover:bg-gray-800/50"
-                        }`}
+                          }`}
                       >
                         {category.name}
                       </button>
@@ -250,7 +261,7 @@ export default function ProjectsGallery({
                   </div>
                 </div>
 
-              
+
               </div>
 
               {/* Projects Content */}
@@ -287,7 +298,7 @@ export default function ProjectsGallery({
                         Projects showcasing our {categories.find(cat => cat.id === activeTab)?.name.toLowerCase()} expertise
                       </p>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                       {filteredProjects.length > 0 ? (
                         filteredProjects.map((project, index) => (
@@ -310,9 +321,8 @@ export default function ProjectsGallery({
 
             <img
               className="absolute top-20 right-0 w-1/3 max-w-md z-[-4] opacity-30"
-              src={colorSharp2}
+              src={colorSharp2.src}
               alt="background-shape"
-              priority
             />
           </>
         ) : (
