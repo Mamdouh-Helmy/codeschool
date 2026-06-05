@@ -20,6 +20,7 @@ const ProjectCard = ({
   themeStyles?: any;
 }) => {
   const [imageError, setImageError] = useState(false);
+  console.log(project);
 
   const getImageSrc = () => {
     if (imageError) {
@@ -46,10 +47,9 @@ const ProjectCard = ({
       >
         <div className="relative h-full rounded-xl overflow-hidden shadow-lg transition-all duration-300 border border-gray-800 group-hover:border-purple-500">
           <div className="relative h-64 overflow-hidden">
-            <Image
+            <img
               src={getImageSrc()}
               alt={project.title || project.name || "Project"}
-              fill
               className="object-cover transition-transform duration-500 group-hover:scale-110"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               onError={() => {
