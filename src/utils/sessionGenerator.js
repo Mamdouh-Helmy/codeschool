@@ -130,25 +130,31 @@ function getDayName(dayNumber) {
 }
 
 /**
- * ✅ Calculate day difference between two days in the same week
+ * ✅ Calculate day difference between two days relative to a start day
  */
 function calculateDayDifference(startDay, targetDay) {
-  if (targetDay >= startDay) {
-    return targetDay - startDay;
-  } else {
-    return targetDay + 7 - startDay;
-  }
+  return (targetDay - startDay + 7) % 7;
 }
 
 /**
  * ✅ Create weekly schedule for 1-3 days (FLEXIBLE)
+ * Fix: sort days relative to startDate's day so the first session always falls on startDate
  */
 function createFlexibleWeeklySchedule(baseDate, scheduleDays, totalSessions) {
   const schedule = [];
 
+  const startDate = new Date(baseDate);
+  const startDayNumber = startDate.getDay();
+
+  // Sort days starting from startDate's day, wrapping around the week.
+  // e.g. startDate = Saturday (6) → order: 6, 0, 1 instead of 0, 1, 6
   const dayNumbers = scheduleDays
     .map((day) => dayMap[day])
-    .sort((a, b) => a - b);
+    .sort((a, b) => {
+      const aNorm = (a - startDayNumber + 7) % 7;
+      const bNorm = (b - startDayNumber + 7) % 7;
+      return aNorm - bNorm;
+    });
 
   const daysPerWeek = dayNumbers.length;
 
@@ -157,24 +163,11 @@ function createFlexibleWeeklySchedule(baseDate, scheduleDays, totalSessions) {
   console.log(`  Days per week: ${daysPerWeek}`);
   console.log(`  Schedule days: ${scheduleDays} → ${dayNumbers}`);
 
-  const startDate = new Date(baseDate);
-
-  let adjustedStartDate = new Date(startDate);
-  const currentDay = startDate.getDay();
-  const firstSelectedDay = dayNumbers[0];
-
-  let daysToAdd = firstSelectedDay - currentDay;
-  if (daysToAdd < 0) {
-    daysToAdd += 7;
-  }
-
-  adjustedStartDate.setDate(startDate.getDate() + daysToAdd);
+  // startDate IS already the first selected day — use it directly
+  const adjustedStartDate = new Date(startDate);
 
   console.log(
-    `  Original start date: ${startDate.toISOString().split("T")[0]} (${getDayName(startDate.getDay())})`,
-  );
-  console.log(
-    `  Adjusted start date: ${adjustedStartDate.toISOString().split("T")[0]} (${getDayName(adjustedStartDate.getDay())})`,
+    `  Start date: ${adjustedStartDate.toISOString().split("T")[0]} (${getDayName(adjustedStartDate.getDay())})`,
   );
 
   for (let sessionIndex = 0; sessionIndex < totalSessions; sessionIndex++) {
@@ -182,7 +175,6 @@ function createFlexibleWeeklySchedule(baseDate, scheduleDays, totalSessions) {
     const weeksElapsed = Math.floor(sessionIndex / daysPerWeek);
 
     const sessionDate = new Date(adjustedStartDate);
-
     sessionDate.setDate(adjustedStartDate.getDate() + weeksElapsed * 7);
 
     if (dayInCycle > 0) {

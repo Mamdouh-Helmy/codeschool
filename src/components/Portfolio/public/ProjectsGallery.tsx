@@ -308,7 +308,7 @@ export default function ProjectsGallery({
               </div>
             </div>
 
-            <Image
+            <img
               className="absolute top-20 right-0 w-1/3 max-w-md z-[-4] opacity-30"
               src={colorSharp2}
               alt="background-shape"
@@ -323,8 +323,6 @@ export default function ProjectsGallery({
           </div>
         )}
       </div>
-
-     
     </section>
   );
 }
