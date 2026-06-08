@@ -4167,6 +4167,36 @@ const en = {
   "studentForm.fullNamePlaceholder": "Enter Full Name",
   "common.street": "Street",
   "portfolio.public.defaultDescription": "Default portfolio description",
+
+  "groups.status.full": "Full",
+
+  "groups.filters.allCourses": "All Courses",
+  "groups.filters.allInstructors": "All Instructors",
+  "groups.filters.status": "Status",
+  "groups.filters.capacity": "Capacity",
+  "groups.filters.full": "Full",
+  "groups.filters.available": "Available",
+  "groups.filters.sessions": "Sessions",
+  "groups.filters.generated": "Generated",
+  "groups.filters.notGenerated": "Not Generated",
+  "groups.filters.daysOfWeek": "Days of the Week",
+  "groups.filters.startDate": "Start Date Range",
+  "groups.filters.createdAt": "Creation Date Range",
+  "groups.filters.studentsCount": "Students Count",
+  "groups.filters.studentsMin": "Minimum",
+  "groups.filters.studentsMax": "Maximum",
+  "groups.filters.advanced": "Advanced",
+  "groups.filters.active": "Active",
+  "groups.filters.clearAll": "Clear All",
+
+  "groups.days.sunday": "Sunday",
+  "groups.days.monday": "Monday",
+  "groups.days.tuesday": "Tuesday",
+  "groups.days.wednesday": "Wednesday",
+  "groups.days.thursday": "Thursday",
+  "groups.days.friday": "Friday",
+  "groups.days.saturday": "Saturday",
+  "dashboard.Schedules": "Schedules",
 };
 
 export default en;

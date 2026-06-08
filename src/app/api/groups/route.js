@@ -1,5 +1,6 @@
 // app/api/groups/route.js
 // ✅ متوافق مع هيكل instructors الجديد: [{userId: ObjectId, countTime: Number}]
+// ✅ محسّن بفلاتر متقدمة
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
@@ -27,12 +28,9 @@ async function checkInstructorConflicts(
   const conflicts = [];
 
   for (const instructorId of instructors) {
-    // ✅ الـ instructors الجديدة هي [{userId, countTime}]
-    // فالقيمة الجاية من الفرونت قد تكون string أو object
     const userId = instructorId?.userId || instructorId;
 
     const query = {
-      // ✅ البحث الصح في الهيكل الجديد
       "instructors.userId": userId,
       isDeleted: false,
       status: { $in: ["draft", "active"] },
@@ -47,13 +45,11 @@ async function checkInstructorConflicts(
       const es = existingGroup.schedule;
       if (!es) continue;
 
-      // Day overlap?
       const dayOverlap = scheduleDays.some((day) =>
         es.daysOfWeek?.includes(day),
       );
       if (!dayOverlap) continue;
 
-      // Time overlap?
       const newFrom = timeFrom.replace(":", "");
       const newTo = timeTo.replace(":", "");
       const existFrom = es.timeFrom?.replace(":", "") || "0000";
@@ -61,7 +57,6 @@ async function checkInstructorConflicts(
       const hasTimeConflict = !(newTo <= existFrom || newFrom >= existTo);
       if (!hasTimeConflict) continue;
 
-      // ✅ جيب اسم المدرب من الهيكل الجديد
       const instructorEntry = existingGroup.instructors?.find(
         (i) => (i.userId?._id || i.userId)?.toString() === userId.toString(),
       );
@@ -85,26 +80,51 @@ async function checkInstructorConflicts(
   return conflicts;
 }
 
-// ─── GET: Fetch all groups ────────────────────────────────────────────────────
+// ─── GET: Fetch all groups with advanced filters ─────────────────────────────
 export async function GET(req) {
   try {
-    console.log("🔍 Fetching groups...");
+    console.log("🔍 Fetching groups with advanced filters...");
 
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
 
-    const dbConnection = await connectDB();
+    await connectDB();
 
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
-    const status = searchParams.get("status");
-    const courseId = searchParams.get("courseId");
+    
+    // ✅ الفلاتر الأساسية
     const search = searchParams.get("search");
+    const courseId = searchParams.get("courseId");
+    const instructorId = searchParams.get("instructorId");
+    
+    // ✅ فلتر الحالة (multi-select)
+    const statusParams = searchParams.getAll("status");
+    
+    // ✅ فلتر السعة
+    const capacity = searchParams.get("capacity");
+    
+    // ✅ فلتر الأيام
+    const daysParams = searchParams.getAll("days");
+    
+    // ✅ فلتر التواريخ
+    const startDateFrom = searchParams.get("startDateFrom");
+    const startDateTo = searchParams.get("startDateTo");
+    const createdAtFrom = searchParams.get("createdAtFrom");
+    const createdAtTo = searchParams.get("createdAtTo");
+    
+    // ✅ فلتر عدد الطلاب
+    const studentsMin = searchParams.get("studentsMin");
+    const studentsMax = searchParams.get("studentsMax");
+    
+    // ✅ فلتر السيشنات
+    const sessionsGenerated = searchParams.get("sessionsGenerated");
 
+    // ── Build query ─────────────────────────────────────────────────────────
     const query = { isDeleted: false };
-    if (status) query.status = status;
-    if (courseId) query.courseId = courseId;
+
+    // Search (name or code)
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
@@ -112,13 +132,89 @@ export async function GET(req) {
       ];
     }
 
+    // Course filter
+    if (courseId) {
+      query.courseId = courseId;
+    }
+
+    // Instructor filter
+    if (instructorId) {
+      query["instructors.userId"] = instructorId;
+    }
+
+    // Status filter (multi-select)
+    if (statusParams.length > 0) {
+      query.status = { $in: statusParams };
+    }
+
+    // Capacity filter
+    if (capacity === "full") {
+      query.$expr = { $gte: ["$currentStudentsCount", "$maxStudents"] };
+    } else if (capacity === "available") {
+      query.$expr = { $lt: ["$currentStudentsCount", "$maxStudents"] };
+    }
+
+    // Days of week filter
+    if (daysParams.length > 0) {
+      query["schedule.daysOfWeek"] = { $in: daysParams };
+    }
+
+    // Start date range
+    if (startDateFrom || startDateTo) {
+      query["schedule.startDate"] = {};
+      if (startDateFrom) {
+        query["schedule.startDate"].$gte = new Date(startDateFrom);
+      }
+      if (startDateTo) {
+        // Set to end of day
+        const endDate = new Date(startDateTo);
+        endDate.setHours(23, 59, 59, 999);
+        query["schedule.startDate"].$lte = endDate;
+      }
+    }
+
+    // Created at range
+    if (createdAtFrom || createdAtTo) {
+      query.createdAt = {};
+      if (createdAtFrom) {
+        query.createdAt.$gte = new Date(createdAtFrom);
+      }
+      if (createdAtTo) {
+        const endDate = new Date(createdAtTo);
+        endDate.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = endDate;
+      }
+    }
+
+    // Students count range
+    if (studentsMin || studentsMax) {
+      query.currentStudentsCount = {};
+      if (studentsMin) {
+        query.currentStudentsCount.$gte = parseInt(studentsMin);
+      }
+      if (studentsMax) {
+        query.currentStudentsCount.$lte = parseInt(studentsMax);
+      }
+    }
+
+    // Sessions generated filter
+    if (sessionsGenerated === "true") {
+      query.sessionsGenerated = true;
+    } else if (sessionsGenerated === "false") {
+      query.sessionsGenerated = false;
+    }
+
+    console.log("🔍 Query:", JSON.stringify(query, null, 2));
+
+    // ── Pagination ──────────────────────────────────────────────────────────
     const total = await Group.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
     const skip = (page - 1) * limit;
 
+    // ── Fetch groups ─────────────────────────────────────────────────────────
     const groups = await Group.find(query)
       .populate("courseId", "title level")
-      .populate("instructors.userId", "name email") // ✅ هيكل جديد
+      .populate("instructors.userId", "name email")
       .populate("students", "personalInfo.fullName enrollmentNumber")
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 })
@@ -126,7 +222,7 @@ export async function GET(req) {
       .limit(limit)
       .lean();
 
-    console.log("✅ Groups fetched:", groups.length);
+    console.log("✅ Groups fetched:", groups.length, "of", total);
 
     const formattedGroups = groups.map((group) => ({
       id: group._id,
@@ -138,7 +234,6 @@ export async function GET(req) {
         title: group.courseId?.title,
         level: group.courseId?.level,
       },
-      // ✅ normalize instructors للفرونت - ممكن يحتاج name مباشرة
       instructors: (group.instructors || []).map((i) => ({
         _id: i.userId?._id || i.userId,
         id: i.userId?._id || i.userId,
@@ -159,6 +254,10 @@ export async function GET(req) {
       createdAt: group.createdAt,
       updatedAt: group.updatedAt,
     }));
+
+    // ── Stats (based on same query without pagination) ───────────────────────
+    const statsQuery = { ...query };
+    delete statsQuery.$or; // Remove search for stats to get accurate counts
 
     const stats = {
       total,
@@ -187,8 +286,7 @@ export async function GET(req) {
       {
         success: false,
         error: error.message || "Failed to fetch groups",
-        details:
-          process.env.NODE_ENV === "development" ? error.stack : undefined,
+        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     );
@@ -230,14 +328,12 @@ export async function POST(req) {
       );
     }
 
-    // ✅ Normalize instructors: الفرونت بيبعت array of strings (ObjectId)
-    // نحولها للهيكل الجديد [{userId, countTime: 0}]
+    // ✅ Normalize instructors
     const normalizedInstructors = (instructors || []).map((i) => ({
-      userId: i?.userId || i, // لو جه string أو object
+      userId: i?.userId || i,
       countTime: i?.countTime || 0,
     }));
 
-    // ✅ استخرج userIds بس للفحص
     const instructorUserIds = normalizedInstructors.map((i) => i.userId);
 
     // CHECK 1: Duplicate group name
@@ -366,7 +462,7 @@ export async function POST(req) {
       code: groupCode,
       courseId,
       courseSnapshot,
-      instructors: normalizedInstructors, // ✅ [{userId, countTime: 0}]
+      instructors: normalizedInstructors,
       students: [],
       maxStudents: parseInt(maxStudents),
       currentStudentsCount: 0,
@@ -403,11 +499,10 @@ export async function POST(req) {
 
     const populatedGroup = await Group.findById(group._id)
       .populate("courseId", "title level")
-      .populate("instructors.userId", "name email") // ✅ هيكل جديد
+      .populate("instructors.userId", "name email")
       .populate("createdBy", "name email")
       .lean();
 
-    // ✅ normalize للرد
     const responseData = {
       ...populatedGroup,
       instructors: (populatedGroup.instructors || []).map((i) => ({
@@ -466,8 +561,7 @@ export async function POST(req) {
       {
         success: false,
         error: error.message || "Failed to create group",
-        details:
-          process.env.NODE_ENV === "development" ? error.stack : undefined,
+        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     );
@@ -568,21 +662,21 @@ export async function PUT(req, { params }) {
       }
     }
 
-    // ✅ احتفظ بـ countTime الموجود للمدربين القدامى لو موجودين
+    // ✅ احتفظ بـ countTime الموجود للمدربين القدامى
     const mergedInstructors = normalizedInstructors.map((newInstructor) => {
       const existingEntry = group.instructors?.find(
         (e) => (e.userId?.toString() || e.userId) === (newInstructor.userId?.toString() || newInstructor.userId)
       );
       return {
         userId: newInstructor.userId,
-        countTime: existingEntry?.countTime || 0, // احتفظ بالساعات المتراكمة
+        countTime: existingEntry?.countTime || 0,
       };
     });
 
     const updateData = {
       $set: {
         name,
-        instructors: mergedInstructors, // ✅ هيكل جديد مع الحفاظ على countTime
+        instructors: mergedInstructors,
         maxStudents: parseInt(maxStudents),
         schedule: {
           startDate: new Date(schedule.startDate),
@@ -600,7 +694,7 @@ export async function PUT(req, { params }) {
 
     const updatedGroup = await Group.findByIdAndUpdate(id, updateData, { new: true })
       .populate("courseId", "title level")
-      .populate("instructors.userId", "name email") // ✅ هيكل جديد
+      .populate("instructors.userId", "name email")
       .populate("createdBy", "name email")
       .lean();
 

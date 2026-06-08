@@ -68,6 +68,11 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           href: "/admin/projects",
           icon: "ion:briefcase-outline",
         },
+         {
+          label: t('dashboard.Schedules') || "Schedules",
+          href: "/admin/schedules",
+          icon: "ion:time-outline",
+        },
         {
           label: t('dashboard.blogs') || "Blogs",
           href: "/admin/blogs",

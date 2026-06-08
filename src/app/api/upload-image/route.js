@@ -1,3 +1,4 @@
+//api/upload-image/route.js
 import { NextResponse } from "next/server";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 

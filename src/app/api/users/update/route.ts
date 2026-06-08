@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import User from "@/app/models/User";
+import User from "../../../models/User";
 import { connectDB } from "@/lib/mongodb";
 
 const JWT_SECRET =
@@ -68,6 +68,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    // ── Name ──────────────────────────────────────────────
     if (name !== undefined) {
       if (typeof name !== "string" || name.trim().length < 2) {
         return NextResponse.json(
@@ -78,6 +79,7 @@ export async function PATCH(req: NextRequest) {
       user.name = name.trim();
     }
 
+    // ── Password ──────────────────────────────────────────
     if (password !== undefined && password !== "") {
       if (typeof password !== "string" || password.length < 6) {
         return NextResponse.json(
@@ -88,6 +90,7 @@ export async function PATCH(req: NextRequest) {
       user.password = await bcrypt.hash(password, 10);
     }
 
+    // ── Image ─────────────────────────────────────────────
     if (image !== undefined && image !== null && image !== "") {
       if (typeof image !== "string") {
         return NextResponse.json(
@@ -96,41 +99,51 @@ export async function PATCH(req: NextRequest) {
         );
       }
 
-      const parts = image.split(",");
-      const meta = parts[0] || "";
-      const base64 = parts[1] || parts[0];
-      const mimeTypeMatch = meta.match(/data:([^;]+);base64/);
-      const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : null;
+      // ✅ Cloudinary URL (أو أي external URL)
+      const isUrl =
+        image.startsWith("http://") || image.startsWith("https://");
 
-      const validTypes = ["image/jpeg", "image/png", "image/webp"];
-      if (!mimeType || !validTypes.includes(mimeType)) {
-        return NextResponse.json(
-          { success: false, message: "Image must be JPG, PNG, or WEBP" },
-          { status: 400 }
-        );
+      if (isUrl) {
+        // قبول أي URL مباشرة — Cloudinary بيعمل الـ validation عنده
+        user.image = image;
+      } else {
+        // ── base64 fallback (للتوافق مع الكود القديم) ──
+        const parts = image.split(",");
+        const meta = parts[0] || "";
+        const base64 = parts[1] || parts[0];
+        const mimeTypeMatch = meta.match(/data:([^;]+);base64/);
+        const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : null;
+
+        const validTypes = ["image/jpeg", "image/png", "image/webp"];
+        if (!mimeType || !validTypes.includes(mimeType)) {
+          return NextResponse.json(
+            { success: false, message: "Image must be JPG, PNG, or WEBP" },
+            { status: 400 }
+          );
+        }
+
+        let imageSize = 0;
+        try {
+          const buffer = Buffer.from(base64, "base64");
+          imageSize = buffer.length;
+        } catch (e) {
+          console.warn("Could not decode base64 image for size check", e);
+          return NextResponse.json(
+            { success: false, message: "Invalid image data" },
+            { status: 400 }
+          );
+        }
+
+        const maxSize = 2 * 1024 * 1024;
+        if (imageSize > maxSize) {
+          return NextResponse.json(
+            { success: false, message: "Image size must be less than 2MB" },
+            { status: 400 }
+          );
+        }
+
+        user.image = image;
       }
-
-      let imageSize = 0;
-      try {
-        const buffer = Buffer.from(base64, "base64");
-        imageSize = buffer.length;
-      } catch (e) {
-        console.warn("Could not decode base64 image for size check", e);
-        return NextResponse.json(
-          { success: false, message: "Invalid image data" },
-          { status: 400 }
-        );
-      }
-
-      const maxSize = 2 * 1024 * 1024;
-      if (imageSize > maxSize) {
-        return NextResponse.json(
-          { success: false, message: "Image size must be less than 2MB" },
-          { status: 400 }
-        );
-      }
-
-      user.image = image;
     }
 
     await user.save();

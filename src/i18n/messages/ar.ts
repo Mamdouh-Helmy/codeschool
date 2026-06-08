@@ -4288,7 +4288,37 @@ const ar = {
   "studentForm.fullNamePlaceholder": "أدخل الاسم الكامل",
   "common.street": "الشارع",
   "portfolio.public.defaultDescription": "الوصف الافتراضي للملف الشخصي",
-  
+
+  "groups.status.full": "ممتلئة",
+
+  "groups.filters.allCourses": "جميع الكورسات",
+  "groups.filters.allInstructors": "جميع المدربين",
+  "groups.filters.status": "الحالة",
+  "groups.filters.capacity": "السعة",
+  "groups.filters.full": "ممتلئة",
+  "groups.filters.available": "متاحة",
+  "groups.filters.sessions": "الحصص",
+  "groups.filters.generated": "تم إنشاؤها",
+  "groups.filters.notGenerated": "لم يتم إنشاؤها",
+  "groups.filters.daysOfWeek": "أيام الأسبوع",
+  "groups.filters.startDate": "نطاق تاريخ البدء",
+  "groups.filters.createdAt": "نطاق تاريخ الإنشاء",
+  "groups.filters.studentsCount": "عدد الطلاب",
+  "groups.filters.studentsMin": "الحد الأدنى",
+  "groups.filters.studentsMax": "الحد الأقصى",
+  "groups.filters.advanced": "متقدم",
+  "groups.filters.active": "نشط",
+  "groups.filters.clearAll": "مسح الكل",
+
+  // ─── Days ─────────────────────────────────────────────────
+  "groups.days.sunday": "الأحد",
+  "groups.days.monday": "الإثنين",
+  "groups.days.tuesday": "الثلاثاء",
+  "groups.days.wednesday": "الأربعاء",
+  "groups.days.thursday": "الخميس",
+  "groups.days.friday": "الجمعة",
+  "groups.days.saturday": "السبت",
+  "dashboard.Schedules": "الجداول",
 };
 
 export default ar;

@@ -1,29 +1,14 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
-    Users,
-    Plus,
-    Edit,
-    Trash2,
-    Search,
-    RefreshCw,
-    Eye,
-    ChevronLeft,
-    ChevronRight,
-    ChevronsLeft,
-    ChevronsRight,
-    Calendar,
-    Clock,
-    CheckCircle,
-    XCircle,
-    AlertCircle,
-    UserPlus,
-    PlayCircle,
-    Hash,
-    Target,
-    Info
+    Users, Plus, Edit, Trash2, Search, RefreshCw,
+    ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+    Calendar, Clock, CheckCircle, XCircle, AlertCircle,
+    UserPlus, PlayCircle, Hash, Target, Info, Filter, X,
+    SlidersHorizontal, ChevronDown, CalendarDays, GraduationCap,
+    UserCheck, Layers,
 } from "lucide-react";
 import Modal from "./Modal";
 import GroupForm from "./GroupForm";
@@ -33,265 +18,328 @@ import MeetingLinksCheckModal from "./MeetingLinksCheckModal";
 import GroupDetailsPage from "./GroupDetailsPage";
 import { useI18n } from "@/i18n/I18nProvider";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DAYS_OF_WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const INITIAL_FILTERS = {
+    search: "",
+    status: [],
+    courseId: "",
+    instructorId: "",
+    capacity: "",
+    daysOfWeek: [],
+    startDateFrom: "",
+    startDateTo: "",
+    createdAtFrom: "",
+    createdAtTo: "",
+    studentsCountMin: "",
+    studentsCountMax: "",
+    sessionsGenerated: "",
+    page: 1,
+    limit: 10,
+};
+
+const INITIAL_PAGINATION = { page: 1, limit: 10, total: 0, totalPages: 1 };
+const INITIAL_STATS = { total: 0, active: 0, draft: 0, completed: 0, cancelled: 0 };
+
+const STATUS_COLORS = {
+    active:    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200",
+    draft:     "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 border-gray-200",
+    completed: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200",
+    cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border-red-200",
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const buildQueryParams = (filters) => {
+    const params = new URLSearchParams({
+        page: filters.page,
+        limit: filters.limit,
+    });
+
+    const simpleKeys = {
+        search: "search",
+        courseId: "courseId",
+        instructorId: "instructorId",
+        capacity: "capacity",
+        sessionsGenerated: "sessionsGenerated",
+        startDateFrom: "startDateFrom",
+        startDateTo: "startDateTo",
+        createdAtFrom: "createdAtFrom",
+        createdAtTo: "createdAtTo",
+        studentsCountMin: "studentsMin",
+        studentsCountMax: "studentsMax",
+    };
+
+    Object.entries(simpleKeys).forEach(([filterKey, paramKey]) => {
+        if (filters[filterKey]) params.set(paramKey, filters[filterKey]);
+    });
+
+    filters.status.forEach((s) => params.append("status", s));
+    filters.daysOfWeek.forEach((d) => params.append("days", d));
+
+    return params;
+};
+
+const formatDate = (dateString, locale) => {
+    if (!dateString) return "N/A";
+    try {
+        return new Date(dateString).toLocaleDateString(locale, {
+            year: "numeric", month: "short", day: "numeric",
+        });
+    } catch {
+        return "N/A";
+    }
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function GroupsAdmin() {
     const { t, language } = useI18n();
     const router = useRouter();
     const isRTL = language === "ar";
 
+    // ── State ──────────────────────────────────────────────────────────────────
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [courses, setCourses] = useState([]);
+    const [instructorsList, setInstructorsList] = useState([]);
+    const [filters, setFilters] = useState(INITIAL_FILTERS);
+    const [searchInput, setSearchInput] = useState("");
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+    const [pagination, setPagination] = useState(INITIAL_PAGINATION);
+    const [stats, setStats] = useState(INITIAL_STATS);
+
     const [modalOpen, setModalOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState(null);
-
-    const [viewDetailsModal, setViewDetailsModal] = useState({
-        open: false,
-        groupId: null
-    });
-
-    const [instructorNotificationModal, setInstructorNotificationModal] = useState({
-        open: false,
-        groupData: null,
-        instructors: []
-    });
-
-    const [meetingLinksModal, setMeetingLinksModal] = useState({
-        open: false,
-        groupId: null
-    });
-
-    const [pendingActivation, setPendingActivation] = useState({
-        forceActivate: false,
-        releaseReserved: false,
-        selectedLinkIds: [],
-        // ✅ أضفنا: نحفظ اللينك الأول المختار عشان نمرره لـ groupData
-        firstMeetingLink: "",
-    });
-
+    const [viewDetailsModal, setViewDetailsModal] = useState({ open: false, groupId: null });
     const [addStudentsModalOpen, setAddStudentsModalOpen] = useState(false);
     const [selectedGroupForStudents, setSelectedGroupForStudents] = useState(null);
-
-    const [filters, setFilters] = useState({
-        search: "",
-        status: "",
-        courseId: "",
-        page: 1,
-        limit: 10
+    const [meetingLinksModal, setMeetingLinksModal] = useState({ open: false, groupId: null });
+    const [instructorNotificationModal, setInstructorNotificationModal] = useState({
+        open: false, groupData: null, instructors: [],
+    });
+    const [pendingActivation, setPendingActivation] = useState({
+        forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "",
     });
 
-    const [pagination, setPagination] = useState({
-        page: 1,
-        limit: 10,
-        total: 0,
-        totalPages: 1
-    });
+    const searchTimeoutRef = useRef(null);
 
-    const [stats, setStats] = useState({
-        total: 0,
-        active: 0,
-        draft: 0,
-        completed: 0,
-        cancelled: 0
-    });
+    // ── Memos ──────────────────────────────────────────────────────────────────
+    const dayLabels = useMemo(() => ({
+        Sunday:    isRTL ? "الأحد"     : "Sun",
+        Monday:    isRTL ? "الإثنين"   : "Mon",
+        Tuesday:   isRTL ? "الثلاثاء"  : "Tue",
+        Wednesday: isRTL ? "الأربعاء"  : "Wed",
+        Thursday:  isRTL ? "الخميس"    : "Thu",
+        Friday:    isRTL ? "الجمعة"    : "Fri",
+        Saturday:  isRTL ? "السبت"     : "Sat",
+    }), [isRTL]);
 
-    const loadGroups = async () => {
+    const statusLabels = useMemo(() => ({
+        active:    t("groups.status.active")    || "Active",
+        draft:     t("groups.status.draft")     || "Draft",
+        completed: t("groups.status.completed") || "Completed",
+        cancelled: t("groups.status.cancelled") || "Cancelled",
+    }), [t]);
+
+    const statsConfig = useMemo(() => [
+        { label: t("groups.stats.total")     || "Total",     value: stats.total,     color: "text-MidnightNavyText dark:text-white", icon: <Users      className="w-8 h-8 md:w-10 md:h-10 text-primary"    /> },
+        { label: t("groups.stats.active")    || "Active",    value: stats.active,    color: "text-green-600",                        icon: <CheckCircle className="w-8 h-8 md:w-10 md:h-10 text-green-600" /> },
+        { label: t("groups.stats.draft")     || "Draft",     value: stats.draft,     color: "text-gray-600",                         icon: <AlertCircle className="w-8 h-8 md:w-10 md:h-10 text-gray-600"  /> },
+        { label: t("groups.stats.completed") || "Completed", value: stats.completed, color: "text-blue-600",                         icon: <Target      className="w-8 h-8 md:w-10 md:h-10 text-blue-600"  /> },
+        { label: t("groups.stats.cancelled") || "Cancelled", value: stats.cancelled, color: "text-red-600",                          icon: <XCircle     className="w-8 h-8 md:w-10 md:h-10 text-red-600"   /> },
+    ], [stats, t]);
+
+    const activeFiltersCount = useMemo(() => {
+        let count = 0;
+        if (filters.search)                                    count++;
+        if (filters.status.length > 0)                         count++;
+        if (filters.courseId)                                  count++;
+        if (filters.instructorId)                              count++;
+        if (filters.capacity)                                  count++;
+        if (filters.daysOfWeek.length > 0)                     count++;
+        if (filters.startDateFrom || filters.startDateTo)      count++;
+        if (filters.createdAtFrom || filters.createdAtTo)      count++;
+        if (filters.studentsCountMin || filters.studentsCountMax) count++;
+        if (filters.sessionsGenerated)                         count++;
+        return count;
+    }, [filters]);
+
+    // ── Data Fetching ──────────────────────────────────────────────────────────
+    useEffect(() => {
+        const fetchFilterData = async () => {
+            try {
+                const [coursesRes, instructorsRes] = await Promise.all([
+                    fetch("/api/courses?limit=1000&isActive=true"),
+                    fetch("/api/users?role=instructor&limit=1000"),
+                ]);
+                const [coursesJson, instructorsJson] = await Promise.all([
+                    coursesRes.json(),
+                    instructorsRes.json(),
+                ]);
+                if (coursesJson.success)     setCourses(coursesJson.data || []);
+                if (instructorsJson.success) setInstructorsList(instructorsJson.data || []);
+            } catch (err) {
+                console.error("Error fetching filter data:", err);
+            }
+        };
+        fetchFilterData();
+    }, []);
+
+    const loadGroups = useCallback(async () => {
         setLoading(true);
         try {
-            const queryParams = new URLSearchParams({
-                page: filters.page,
-                limit: filters.limit,
-                ...(filters.search && { search: filters.search }),
-                ...(filters.status && { status: filters.status }),
-                ...(filters.courseId && { courseId: filters.courseId })
-            });
-
+            const queryParams = buildQueryParams(filters);
             const res = await fetch(`/api/groups?${queryParams}`, {
                 cache: "no-store",
-                headers: { 'Cache-Control': 'no-cache' }
+                headers: { "Cache-Control": "no-cache" },
             });
-
             const json = await res.json();
-
             if (json.success) {
                 setGroups(json.data || []);
                 if (json.pagination) setPagination(json.pagination);
-                if (json.stats) setStats(json.stats);
+                if (json.stats)      setStats(json.stats);
             } else {
-                toast.error(json.error || t("groups.load.failed"), { position: 'top-center' });
+                toast.error(json.error || t("groups.load.failed"), { position: "top-center" });
             }
         } catch (err) {
             console.error("Error loading groups:", err);
-            toast.error(t("groups.load.failed"), { position: 'top-center' });
+            toast.error(t("groups.load.failed"), { position: "top-center" });
         } finally {
             setLoading(false);
         }
-    };
+    }, [filters, t]);
 
     useEffect(() => {
         loadGroups();
-    }, [filters.page, filters.status, filters.courseId]);
+    }, [loadGroups]);
 
-    const handleFilterChange = (key, value) => {
-        setFilters(prev => ({ ...prev, [key]: value, page: 1 }));
-    };
+    // cleanup debounce on unmount
+    useEffect(() => () => clearTimeout(searchTimeoutRef.current), []);
 
-    const onSaved = async () => {
+    // ── Filter Handlers ────────────────────────────────────────────────────────
+    const handleFilterChange = useCallback((key, value) => {
+        setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+    }, []);
+
+    const handleSearchChange = useCallback((value) => {
+        setSearchInput(value);
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = setTimeout(() => {
+            setFilters((prev) => ({ ...prev, search: value, page: 1 }));
+        }, 400);
+    }, []);
+
+    const toggleStatus = useCallback((status) => {
+        setFilters((prev) => ({
+            ...prev,
+            page: 1,
+            status: prev.status.includes(status)
+                ? prev.status.filter((s) => s !== status)
+                : [...prev.status, status],
+        }));
+    }, []);
+
+    const toggleDay = useCallback((day) => {
+        setFilters((prev) => ({
+            ...prev,
+            page: 1,
+            daysOfWeek: prev.daysOfWeek.includes(day)
+                ? prev.daysOfWeek.filter((d) => d !== day)
+                : [...prev.daysOfWeek, day],
+        }));
+    }, []);
+
+    const clearAllFilters = useCallback(() => {
+        setSearchInput("");
+        setFilters(INITIAL_FILTERS);
+    }, []);
+
+    // ── Group Actions ──────────────────────────────────────────────────────────
+    const onSaved = useCallback(async () => {
         await loadGroups();
-        toast.success(t("groups.saved.success"), { position: 'top-center' });
-    };
+        toast.success(t("groups.saved.success"), { position: "top-center" });
+    }, [loadGroups, t]);
 
-    const onEdit = (group) => {
+    const onEdit = useCallback((group) => {
         setEditingGroup(group);
         setModalOpen(true);
-    };
+    }, []);
 
-    const onViewDetails = (groupId) => {
+    const onViewDetails = useCallback((groupId) => {
         setViewDetailsModal({ open: true, groupId });
-    };
+    }, []);
 
-    const onView = async (id) => {
+    const onDelete = useCallback(async (id, name) => {
+        const confirmed = window.confirm(
+            `${t("groups.delete.confirm")?.replace("{name}", name) || `Delete "${name}"?`}\n\n${t("groups.delete.warning") || "This action cannot be undone."}`
+        );
+        if (!confirmed) return;
+
+        const loadingToast = toast.loading(t("groups.delete.loading"), { position: "top-center" });
         try {
-            const res = await fetch(`/api/groups/${id}`);
-            const json = await res.json();
-            if (json.success) {
-                setEditingGroup(json.data);
-                setModalOpen(true);
+            const res = await fetch(`/api/groups/${id}`, { method: "DELETE" });
+            if (res.ok) {
+                await loadGroups();
+                toast.success(t("groups.delete.success"), { id: loadingToast, position: "top-center" });
+            } else {
+                const error = await res.json();
+                toast.error(error.error || t("groups.delete.failed"), { id: loadingToast, position: "top-center" });
             }
-        } catch (err) {
-            console.error("Error viewing group:", err);
-            toast.error(t("groups.view.failed"), { position: 'top-center' });
+        } catch {
+            toast.error(t("groups.delete.failed"), { id: loadingToast, position: "top-center" });
         }
-    };
+    }, [loadGroups, t]);
 
-    const onDelete = async (id, name) => {
-        const confirmationModal = document.createElement('div');
-        confirmationModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-        confirmationModal.innerHTML = `
-            <div class="bg-white dark:bg-darkmode rounded-xl shadow-xl max-w-md w-full p-6">
-                <div class="flex items-start gap-4 mb-6">
-                    <div class="flex-shrink-0">
-                        <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                            <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.196 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
-                        </div>
-                    </div>
-                    <div class="flex-1">
-                        <h3 class="text-lg font-bold text-MidnightNavyText dark:text-white mb-2">
-                            ${t("groups.delete.title")}
-                        </h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-300">
-                            ${t("groups.delete.confirm").replace("{name}", name)}
-                        </p>
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-2 font-medium">
-                            ${t("groups.delete.warning")}
-                        </p>
-                    </div>
-                </div>
-                <div class="flex justify-end gap-3">
-                    <button id="cancelDelete" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        ${t("groups.delete.cancel")}
-                    </button>
-                    <button id="confirmDelete" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
-                        ${t("groups.delete.confirmButton")}
-                    </button>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(confirmationModal);
-
-        document.getElementById('cancelDelete').onclick = () => {
-            document.body.removeChild(confirmationModal);
-        };
-
-        document.getElementById('confirmDelete').onclick = async () => {
-            const loadingToast = toast.loading(t("groups.delete.loading"), { position: 'top-center' });
-            try {
-                const res = await fetch(`/api/groups/${id}`, { method: "DELETE" });
-                if (res.ok) {
-                    await loadGroups();
-                    toast.success(t("groups.delete.success"), { id: loadingToast, position: 'top-center' });
-                } else {
-                    const error = await res.json();
-                    toast.error(error.error || t("groups.delete.failed"), { id: loadingToast, position: 'top-center' });
-                }
-            } catch (err) {
-                console.error("Error deleting group:", err);
-                toast.error(t("groups.delete.failed"), { id: loadingToast, position: 'top-center' });
-            } finally {
-                document.body.removeChild(confirmationModal);
-            }
-        };
-
-        confirmationModal.onclick = (e) => {
-            if (e.target === confirmationModal) document.body.removeChild(confirmationModal);
-        };
-    };
-
-    const onActivateWithNotification = async (groupId) => {
+    const onActivateWithNotification = useCallback((groupId) => {
         if (!groupId) {
-            toast.error(t("groups.activate.invalidId"), { position: 'top-center' });
+            toast.error(t("groups.activate.invalidId"), { position: "top-center" });
             return;
         }
         setMeetingLinksModal({ open: true, groupId });
-    };
+    }, [t]);
 
-    // ✅ استقبل selectedLinkIds + availableLinks من المودال
-    const onMeetingLinksCheckConfirmed = async (forceActivate, releaseReserved, selectedLinkIds = [], availableLinks = []) => {
+    const onMeetingLinksCheckConfirmed = useCallback(async (forceActivate, releaseReserved, selectedLinkIds = [], availableLinks = []) => {
         const groupId = meetingLinksModal.groupId;
-
         setMeetingLinksModal({ open: false, groupId: null });
 
-        // ✅ استخرج لينك أول سيشن من اللينكات المختارة
         const firstSelectedLink = availableLinks.find(
             (l) => selectedLinkIds.includes(l._id?.toString() || l.id?.toString())
         );
         const firstMeetingLink = firstSelectedLink?.link || "";
-
-        // ✅ خزّن كل البيانات بما فيها firstMeetingLink
         setPendingActivation({ forceActivate, releaseReserved, selectedLinkIds, firstMeetingLink });
 
         try {
             const res = await fetch(`/api/groups/${groupId}`, {
-                cache: 'no-store',
-                headers: { 'Cache-Control': 'no-cache' }
+                cache: "no-store",
+                headers: { "Cache-Control": "no-cache" },
             });
-
             if (!res.ok) throw new Error(`Failed to fetch group: ${res.status}`);
-
             const json = await res.json();
-
             if (json.success && json.data) {
-                // ✅ أضف firstMeetingLink لـ groupData قبل فتح الـ InstructorNotificationModal
-                const groupDataWithLink = {
-                    ...json.data,
-                    firstMeetingLink: firstMeetingLink || json.data.firstMeetingLink || "",
-                };
-
                 setInstructorNotificationModal({
                     open: true,
-                    groupData: groupDataWithLink,
-                    instructors: json.data.instructors || []
+                    groupData: { ...json.data, firstMeetingLink: firstMeetingLink || json.data.firstMeetingLink || "" },
+                    instructors: json.data.instructors || [],
                 });
             } else {
                 throw new Error(json.error || t("groups.activate.loadError"));
             }
         } catch (err) {
-            console.error("❌ Error loading group:", err);
-            toast.error(err.message || t("groups.activate.loadError"), { position: 'top-center' });
+            toast.error(err.message || t("groups.activate.loadError"), { position: "top-center" });
         }
-    };
+    }, [meetingLinksModal.groupId, t]);
 
-    const handleActivateAndNotify = async (instructorMessages) => {
+    const handleActivateAndNotify = useCallback(async (instructorMessages) => {
         const groupId = instructorNotificationModal?.groupData?._id || instructorNotificationModal?.groupData?.id;
-
         if (!groupId) {
-            toast.error(t("groups.activate.invalidId"), { position: 'top-center' });
+            toast.error(t("groups.activate.invalidId"), { position: "top-center" });
             return;
         }
 
-        const loadingToast = toast.loading(t("groups.activate.loading"), { position: 'top-center' });
-
+        const loadingToast = toast.loading(t("groups.activate.loading"), { position: "top-center" });
         try {
             const res = await fetch(`/api/groups/${groupId}/activate`, {
                 method: "POST",
@@ -301,106 +349,90 @@ export default function GroupsAdmin() {
                     forceActivate:   pendingActivation.forceActivate,
                     releaseReserved: pendingActivation.releaseReserved,
                     selectedLinkIds: pendingActivation.selectedLinkIds,
-                })
+                }),
             });
-
             const result = await res.json();
-
             if (res.ok && result.success) {
                 await loadGroups();
-                toast.success(t("groups.activate.success"), { id: loadingToast, position: 'top-center' });
+                toast.success(t("groups.activate.success"), { id: loadingToast, position: "top-center" });
                 setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
                 setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "" });
             } else {
-                toast.error(result.error || t("groups.activate.failed"), { id: loadingToast, position: 'top-center' });
+                toast.error(result.error || t("groups.activate.failed"), { id: loadingToast, position: "top-center" });
             }
-        } catch (err) {
-            console.error("❌ Network Error:", err);
-            toast.error(t("groups.activate.failed"), { id: loadingToast, position: 'top-center' });
+        } catch {
+            toast.error(t("groups.activate.failed"), { id: loadingToast, position: "top-center" });
         }
-    };
+    }, [instructorNotificationModal, pendingActivation, loadGroups, t]);
 
-    const onAddStudents = (groupId) => {
+    const onAddStudents = useCallback((groupId) => {
         setSelectedGroupForStudents(groupId);
         setAddStudentsModalOpen(true);
-    };
+    }, []);
 
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'active':    return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-            case 'draft':     return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-            case 'completed': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-            case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-            default:          return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-        }
-    };
+    // ── Modal Closers ──────────────────────────────────────────────────────────
+    const closeGroupModal = useCallback(() => {
+        setModalOpen(false);
+        setEditingGroup(null);
+    }, []);
 
-    const getStatusLabel = (status) => {
-        switch (status) {
-            case 'active':    return t("groups.status.active");
-            case 'draft':     return t("groups.status.draft");
-            case 'completed': return t("groups.status.completed");
-            case 'cancelled': return t("groups.status.cancelled");
-            default:          return status;
-        }
-    };
+    const closeViewDetailsModal = useCallback(() => {
+        setViewDetailsModal({ open: false, groupId: null });
+        loadGroups();
+    }, [loadGroups]);
 
-    const formatDate = (dateString) => {
-        if (!dateString) return 'N/A';
-        try {
-            return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
-                year: 'numeric', month: 'short', day: 'numeric'
-            });
-        } catch { return 'N/A'; }
-    };
+    const closeAddStudentsModal = useCallback(() => {
+        setAddStudentsModalOpen(false);
+        setSelectedGroupForStudents(null);
+    }, []);
 
+    const closeInstructorModal = useCallback(() => {
+        setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
+        setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "" });
+    }, []);
+
+    // ── Loading State ──────────────────────────────────────────────────────────
     if (loading && groups.length === 0) {
         return (
             <div className="flex justify-center items-center p-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
             </div>
         );
     }
 
+    // ── Render ─────────────────────────────────────────────────────────────────
     return (
-        <div className={`space-y-4 md:space-y-6 p-2 md:p-0 ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'}>
-            {/* Header */}
+        <div className={`space-y-4 md:space-y-6 p-2 md:p-0 ${isRTL ? "rtl" : "ltr"}`} dir={isRTL ? "rtl" : "ltr"}>
+
+            {/* ── Header ── */}
             <div className="bg-white dark:bg-darkmode rounded-xl shadow-sm p-4 md:p-6 border border-PowderBlueBorder dark:border-dark_border">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="space-y-1 md:space-y-2">
-                        <div className="flex items-center gap-2 md:gap-3">
-                            <div className="p-2 bg-primary/10 rounded-lg">
-                                <Users className="w-5 h-5 md:w-7 md:h-7 text-primary" />
-                            </div>
-                            <div>
-                                <h1 className="text-xl md:text-2xl font-bold text-MidnightNavyText dark:text-white">
-                                    {t("groups.title")}
-                                </h1>
-                                <p className="text-xs md:text-sm text-SlateBlueText dark:text-darktext">
-                                    {t("groups.subtitle")}
-                                </p>
-                            </div>
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                            <Users className="w-5 h-5 md:w-7 md:h-7 text-primary" />
+                        </div>
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-bold text-MidnightNavyText dark:text-white">
+                                {t("groups.title") || "Groups Management"}
+                            </h1>
+                            <p className="text-xs md:text-sm text-SlateBlueText dark:text-darktext">
+                                {t("groups.subtitle") || "Manage your groups and sessions"}
+                            </p>
                         </div>
                     </div>
                     <button
                         onClick={() => { setEditingGroup(null); setModalOpen(true); }}
-                        className="bg-primary hover:bg-primary/90 text-white px-4 py-2.5 md:px-6 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 w-full md:w-auto justify-center"
+                        className="bg-primary hover:bg-primary/90 text-white px-4 py-2.5 md:px-6 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all shadow-md hover:shadow-lg flex items-center gap-2 w-full md:w-auto justify-center"
                     >
                         <Plus className="w-4 h-4" />
-                        {t("groups.create")}
+                        {t("groups.create") || "Create Group"}
                     </button>
                 </div>
             </div>
 
-            {/* Stats */}
+            {/* ── Stats ── */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
-                {[
-                    { label: t("groups.stats.total"),     value: stats.total,     icon: <Users className="w-8 h-8 md:w-10 md:h-10 text-primary" />,          color: "text-MidnightNavyText dark:text-white" },
-                    { label: t("groups.stats.active"),    value: stats.active,    icon: <CheckCircle className="w-8 h-8 md:w-10 md:h-10 text-green-600" />,  color: "text-green-600" },
-                    { label: t("groups.stats.draft"),     value: stats.draft,     icon: <AlertCircle className="w-8 h-8 md:w-10 md:h-10 text-gray-600" />,   color: "text-gray-600" },
-                    { label: t("groups.stats.completed"), value: stats.completed, icon: <Target className="w-8 h-8 md:w-10 md:h-10 text-blue-600" />,        color: "text-blue-600" },
-                    { label: t("groups.stats.cancelled"), value: stats.cancelled, icon: <XCircle className="w-8 h-8 md:w-10 md:h-10 text-red-600" />,        color: "text-red-600" },
-                ].map((stat) => (
+                {statsConfig.map((stat) => (
                     <div key={stat.label} className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
@@ -413,170 +445,341 @@ export default function GroupsAdmin() {
                 ))}
             </div>
 
-            {/* Filters */}
-            <div className="bg-white dark:bg-darkmode rounded-xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
-                <div className="space-y-3 md:space-y-0 md:flex md:items-center md:gap-4">
-                    <div className="flex-1">
-                        <div className="relative">
-                            <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400`} />
-                            <input
-                                type="text"
-                                placeholder={t("groups.filters.search")}
-                                value={filters.search}
-                                onChange={(e) => handleFilterChange('search', e.target.value)}
-                                className={`w-full ${isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary dark:bg-dark_input dark:text-white`}
+            {/* ── Filters ── */}
+            <div className="bg-white dark:bg-darkmode rounded-xl p-4 md:p-6 border border-PowderBlueBorder dark:border-dark_border shadow-sm space-y-4">
+
+                {/* Row 1: Search + Course + Instructor + Advanced Toggle */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+
+                    {/* Search */}
+                    <div className="relative">
+                        <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
+                        <input
+                            type="text"
+                            placeholder={t("groups.filters.search") || "Search by name or code..."}
+                            value={searchInput}
+                            onChange={(e) => handleSearchChange(e.target.value)}
+                            className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary dark:bg-dark_input dark:text-white`}
+                        />
+                    </div>
+
+                    {/* Course */}
+                    <div className="relative">
+                        <GraduationCap className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
+                        <select
+                            value={filters.courseId}
+                            onChange={(e) => handleFilterChange("courseId", e.target.value)}
+                            className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary dark:bg-dark_input dark:text-white appearance-none`}
+                        >
+                            <option value="">{t("groups.filters.allCourses") || "All Courses"}</option>
+                            {courses.map((course) => (
+                                <option key={course.id || course._id} value={course.id || course._id}>
+                                    {course.title}
+                                </option>
+                            ))}
+                        </select>
+                        <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
+                    </div>
+
+                    {/* Instructor */}
+                    <div className="relative">
+                        <UserCheck className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
+                        <select
+                            value={filters.instructorId}
+                            onChange={(e) => handleFilterChange("instructorId", e.target.value)}
+                            className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary dark:bg-dark_input dark:text-white appearance-none`}
+                        >
+                            <option value="">{t("groups.filters.allInstructors") || "All Instructors"}</option>
+                            {instructorsList.map((inst) => (
+                                <option key={inst.id || inst._id} value={inst.id || inst._id}>
+                                    {inst.name}
+                                </option>
+                            ))}
+                        </select>
+                        <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
+                    </div>
+
+                    {/* Advanced Toggle */}
+                    <button
+                        onClick={() => setShowAdvancedFilters((v) => !v)}
+                        className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                            showAdvancedFilters
+                                ? "bg-primary text-white"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                        }`}
+                    >
+                        <SlidersHorizontal className="w-4 h-4" />
+                        {t("groups.filters.advanced") || "Advanced"}
+                        {activeFiltersCount > 0 && (
+                            <span className="px-1.5 py-0.5 bg-white/20 rounded-full text-xs">
+                                {activeFiltersCount}
+                            </span>
+                        )}
+                        <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
+                    </button>
+                </div>
+
+                {/* Advanced Filters Panel */}
+                {showAdvancedFilters && (
+                    <div className="space-y-4 pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
+
+                        {/* Status + Capacity + Sessions */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                            {/* Status chips */}
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+                                    {t("groups.filters.status") || "Status"}
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {["draft", "active", "completed", "cancelled"].map((status) => (
+                                        <button
+                                            key={status}
+                                            onClick={() => toggleStatus(status)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                                                filters.status.includes(status)
+                                                    ? STATUS_COLORS[status]
+                                                    : "bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700"
+                                            }`}
+                                        >
+                                            {statusLabels[status]}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Capacity */}
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+                                    {t("groups.filters.capacity") || "Capacity"}
+                                </label>
+                                <div className="flex gap-2">
+                                    {[
+                                        { value: "",          label: t("groups.filters.all")       || "All"       },
+                                        { value: "full",      label: t("groups.filters.full")      || "Full"      },
+                                        { value: "available", label: t("groups.filters.available") || "Available" },
+                                    ].map((opt) => (
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => handleFilterChange("capacity", opt.value)}
+                                            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                                filters.capacity === opt.value
+                                                    ? "bg-primary text-white"
+                                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                                            }`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Sessions Generated */}
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+                                    {t("groups.filters.sessions") || "Sessions"}
+                                </label>
+                                <div className="flex gap-2">
+                                    {[
+                                        { value: "",      label: t("groups.filters.all")          || "All"           },
+                                        { value: "true",  label: t("groups.filters.generated")    || "Generated"     },
+                                        { value: "false", label: t("groups.filters.notGenerated") || "Not Generated" },
+                                    ].map((opt) => (
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => handleFilterChange("sessionsGenerated", opt.value)}
+                                            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                                filters.sessionsGenerated === opt.value
+                                                    ? "bg-primary text-white"
+                                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                                            }`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Days of Week */}
+                        <div>
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1">
+                                <CalendarDays className="w-3 h-3" />
+                                {t("groups.filters.daysOfWeek") || "Days of Week"}
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {DAYS_OF_WEEK.map((day) => (
+                                    <button
+                                        key={day}
+                                        onClick={() => toggleDay(day)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                            filters.daysOfWeek.includes(day)
+                                                ? "bg-primary text-white shadow-sm"
+                                                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                                        }`}
+                                    >
+                                        {dayLabels[day]}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Date Ranges */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <DateRangeFilter
+                                label={t("groups.filters.startDate") || "Start Date Range"}
+                                icon={<Calendar className="w-3 h-3" />}
+                                fromValue={filters.startDateFrom}
+                                toValue={filters.startDateTo}
+                                onFromChange={(v) => handleFilterChange("startDateFrom", v)}
+                                onToChange={(v) => handleFilterChange("startDateTo", v)}
+                            />
+                            <DateRangeFilter
+                                label={t("groups.filters.createdAt") || "Created Date Range"}
+                                icon={<Clock className="w-3 h-3" />}
+                                fromValue={filters.createdAtFrom}
+                                toValue={filters.createdAtTo}
+                                onFromChange={(v) => handleFilterChange("createdAtFrom", v)}
+                                onToChange={(v) => handleFilterChange("createdAtTo", v)}
                             />
                         </div>
+
+                        {/* Students Count + Actions */}
+                        <div className="flex flex-wrap items-center gap-4">
+                            <div className="flex items-center gap-2 bg-gray-50 dark:bg-dark_input rounded-lg p-3">
+                                <Users className="w-4 h-4 text-gray-400" />
+                                <span className="text-xs text-gray-500">{t("groups.filters.studentsCount") || "Students:"}</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="Min"
+                                    value={filters.studentsCountMin}
+                                    onChange={(e) => handleFilterChange("studentsCountMin", e.target.value)}
+                                    className="w-16 px-2 py-1.5 text-xs border rounded-lg dark:bg-dark_input dark:text-white"
+                                />
+                                <span className="text-gray-400">-</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="Max"
+                                    value={filters.studentsCountMax}
+                                    onChange={(e) => handleFilterChange("studentsCountMax", e.target.value)}
+                                    className="w-16 px-2 py-1.5 text-xs border rounded-lg dark:bg-dark_input dark:text-white"
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-2 ml-auto">
+                                {activeFiltersCount > 0 && (
+                                    <>
+                                        <span className="px-3 py-1.5 bg-primary/10 text-primary text-xs rounded-full font-medium flex items-center gap-1">
+                                            <Filter className="w-3 h-3" />
+                                            {activeFiltersCount} {t("groups.filters.active") || "active"}
+                                        </span>
+                                        <button
+                                            onClick={clearAllFilters}
+                                            className="px-3 py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
+                                        >
+                                            <X className="w-3 h-3" />
+                                            {t("groups.filters.clearAll") || "Clear All"}
+                                        </button>
+                                    </>
+                                )}
+                                <button
+                                    onClick={loadGroups}
+                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg flex items-center gap-2 text-sm font-medium transition-all"
+                                >
+                                    <RefreshCw className="w-4 h-4" />
+                                    {t("groups.filters.refresh") || "Refresh"}
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <select
-                            value={filters.status}
-                            onChange={(e) => handleFilterChange('status', e.target.value)}
-                            className="px-3 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary dark:bg-dark_input dark:text-white"
-                        >
-                            <option value="">{t("groups.filters.all")}</option>
-                            <option value="draft">{t("groups.status.draft")}</option>
-                            <option value="active">{t("groups.status.active")}</option>
-                            <option value="completed">{t("groups.status.completed")}</option>
-                            <option value="cancelled">{t("groups.status.cancelled")}</option>
-                        </select>
-                        <button
-                            onClick={() => loadGroups()}
-                            className="px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg flex items-center gap-2 text-sm"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                            <span className="hidden md:inline">{t("groups.filters.refresh")}</span>
-                        </button>
-                    </div>
-                </div>
+                )}
             </div>
 
-            {/* Groups Table */}
+            {/* ── Table ── */}
             <div className="bg-white dark:bg-darkmode rounded-xl border border-PowderBlueBorder dark:border-dark_border shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-PowderBlueBorder dark:divide-dark_border">
                         <thead className="bg-gray-50 dark:bg-dark_input">
                             <tr>
-                                {[t("groups.table.group"), t("groups.table.course"), t("groups.table.status"),
-                                  t("groups.table.students"), t("groups.table.sessions"), t("groups.table.actions")].map((h) => (
-                                    <th key={h} className="py-3 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase">{h}</th>
+                                {[
+                                    t("groups.table.group")    || "Group",
+                                    t("groups.table.course")   || "Course",
+                                    t("groups.table.status")   || "Status",
+                                    t("groups.table.students") || "Students",
+                                    t("groups.table.sessions") || "Sessions",
+                                    t("groups.table.actions")  || "Actions",
+                                ].map((h) => (
+                                    <th key={h} className={`py-3 px-4 ${isRTL ? "text-right" : "text-left"} text-xs font-semibold text-MidnightNavyText dark:text-white uppercase`}>
+                                        {h}
+                                    </th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-PowderBlueBorder dark:divide-dark_border">
                             {groups.map((group) => (
-                                <tr key={group.id} className="hover:bg-gray-50 dark:hover:bg-dark_input transition-colors">
-                                    <td className="py-3 px-4">
-                                        <p className="font-medium text-sm text-MidnightNavyText dark:text-white">{group.name}</p>
-                                        <p className="text-xs text-SlateBlueText dark:text-darktext flex items-center gap-1">
-                                            <Hash className="w-3 h-3" />{group.code}
-                                        </p>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <p className="text-sm text-MidnightNavyText dark:text-white">{group.course?.title || 'N/A'}</p>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(group.status)}`}>
-                                            {getStatusLabel(group.status)}
-                                        </span>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <div className="flex items-center gap-2">
-                                            <Users className="w-4 h-4 text-gray-400" />
-                                            <span className="text-sm">{group.studentsCount}/{group.maxStudents}</span>
-                                        </div>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        {group.sessionsGenerated ? (
-                                            <span className="text-green-600 flex items-center gap-1 text-sm">
-                                                <CheckCircle className="w-3 h-3" />{group.totalSessions}
-                                            </span>
-                                        ) : (
-                                            <span className="text-gray-400 text-sm">{t("groups.sessions.notGenerated")}</span>
-                                        )}
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <div className="flex items-center gap-1">
-                                            <button onClick={() => onViewDetails(group.id)} className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors" title={t("groups.actions.viewDetails")}>
-                                                <Info className="w-4 h-4 text-blue-600" />
-                                            </button>
-                                            {group.status === 'draft' && (
-                                                <button onClick={() => onActivateWithNotification(group.id)} className="p-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors" title={t("groups.actions.activate")}>
-                                                    <PlayCircle className="w-4 h-4 text-green-600" />
-                                                </button>
-                                            )}
-                                            {group.status === 'active' && !group.isFull && (
-                                                <button onClick={() => onAddStudents(group.id)} className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors" title={t("groups.actions.addStudents")}>
-                                                    <UserPlus className="w-4 h-4 text-blue-600" />
-                                                </button>
-                                            )}
-                                            {group.sessionsGenerated && (
-                                                <button onClick={() => router.push(`/admin/sessions?groupId=${group.id}`)} className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors" title={t("groups.actions.viewSessions")}>
-                                                    <Calendar className="w-4 h-4 text-purple-600" />
-                                                </button>
-                                            )}
-                                            <button onClick={() => onEdit(group)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title={t("groups.actions.edit")}>
-                                                <Edit className="w-4 h-4 text-primary" />
-                                            </button>
-                                            <button onClick={() => onDelete(group.id, group.name)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title={t("groups.actions.delete")}>
-                                                <Trash2 className="w-4 h-4 text-red-600" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
+                                <GroupRow
+                                    key={group.id}
+                                    group={group}
+                                    dayLabels={dayLabels}
+                                    statusLabels={statusLabels}
+                                    t={t}
+                                    onViewDetails={onViewDetails}
+                                    onActivate={onActivateWithNotification}
+                                    onAddStudents={onAddStudents}
+                                    onViewSessions={(id) => router.push(`/admin/sessions?groupId=${id}`)}
+                                    onEdit={onEdit}
+                                    onDelete={onDelete}
+                                />
                             ))}
                         </tbody>
                     </table>
                 </div>
 
+                {/* Empty State */}
                 {groups.length === 0 && !loading && (
                     <div className="text-center py-12 px-4">
                         <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold mb-2">{t("groups.empty.title")}</h3>
-                        <p className="text-sm text-gray-500 mb-6">{t("groups.empty.description")}</p>
-                        <button onClick={() => setModalOpen(true)} className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold flex items-center gap-2 mx-auto">
-                            <Plus className="w-4 h-4" />{t("groups.empty.button")}
+                        <h3 className="text-lg font-bold mb-2">{t("groups.empty.title") || "No Groups Found"}</h3>
+                        <p className="text-sm text-gray-500 mb-6">{t("groups.empty.description") || "Try adjusting your filters or create a new group."}</p>
+                        <button
+                            onClick={() => setModalOpen(true)}
+                            className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-lg font-semibold flex items-center gap-2 mx-auto"
+                        >
+                            <Plus className="w-4 h-4" />
+                            {t("groups.empty.button") || "Create Group"}
                         </button>
                     </div>
                 )}
 
+                {/* Pagination */}
                 {pagination.totalPages > 1 && (
-                    <div className="px-4 py-3 border-t border-PowderBlueBorder dark:border-dark_border">
-                        <div className="flex items-center justify-between">
-                            <div className="text-xs text-SlateBlueText">
-                                {t("groups.pagination.showing")
-                                    .replace("{start}", ((pagination.page - 1) * pagination.limit + 1).toString())
-                                    .replace("{end}", Math.min(pagination.page * pagination.limit, pagination.total).toString())
-                                    .replace("{total}", pagination.total.toString())}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => handleFilterChange('page', 1)} disabled={pagination.page === 1} className="p-2 border rounded disabled:opacity-50"><ChevronsRight className="w-4 h-4" /></button>
-                                <button onClick={() => handleFilterChange('page', pagination.page - 1)} disabled={pagination.page === 1} className="p-2 border rounded disabled:opacity-50"><ChevronRight className="w-4 h-4" /></button>
-                                <span className="px-3 py-1 text-sm">
-                                    {t("groups.pagination.page").replace("{page}", pagination.page.toString()).replace("{pages}", pagination.totalPages.toString())}
-                                </span>
-                                <button onClick={() => handleFilterChange('page', pagination.page + 1)} disabled={pagination.page === pagination.totalPages} className="p-2 border rounded disabled:opacity-50"><ChevronLeft className="w-4 h-4" /></button>
-                                <button onClick={() => handleFilterChange('page', pagination.totalPages)} disabled={pagination.page === pagination.totalPages} className="p-2 border rounded disabled:opacity-50"><ChevronsLeft className="w-4 h-4" /></button>
-                            </div>
-                        </div>
-                    </div>
+                    <Pagination
+                        pagination={pagination}
+                        t={t}
+                        onPageChange={(page) => handleFilterChange("page", page)}
+                    />
                 )}
             </div>
 
-            {/* Modals */}
-            <Modal open={modalOpen} title={editingGroup ? t("groups.edit") : t("groups.createNew")} onClose={() => { setModalOpen(false); setEditingGroup(null); }} size="xl">
-                <GroupForm initial={editingGroup} onClose={() => { setModalOpen(false); setEditingGroup(null); }} onSaved={onSaved} />
+            {/* ── Modals ── */}
+            <Modal open={modalOpen} title={editingGroup ? t("groups.edit") : t("groups.createNew")} onClose={closeGroupModal} size="xl">
+                <GroupForm initial={editingGroup} onClose={closeGroupModal} onSaved={onSaved} />
             </Modal>
 
-            <Modal open={viewDetailsModal.open} title="" onClose={() => setViewDetailsModal({ open: false, groupId: null })} size="full">
-                <GroupDetailsPage groupId={viewDetailsModal.groupId} onClose={() => { setViewDetailsModal({ open: false, groupId: null }); loadGroups(); }} />
+            <Modal open={viewDetailsModal.open} title="" onClose={closeViewDetailsModal} size="full">
+                <GroupDetailsPage groupId={viewDetailsModal.groupId} onClose={closeViewDetailsModal} />
             </Modal>
 
-            <Modal open={addStudentsModalOpen} title={t("groups.actions.addStudents")} onClose={() => { setAddStudentsModalOpen(false); setSelectedGroupForStudents(null); }} size="xl">
-                <AddStudentsToGroup groupId={selectedGroupForStudents} onClose={() => { setAddStudentsModalOpen(false); setSelectedGroupForStudents(null); }} onStudentAdded={() => loadGroups()} />
+            <Modal open={addStudentsModalOpen} title={t("groups.actions.addStudents")} onClose={closeAddStudentsModal} size="xl">
+                <AddStudentsToGroup
+                    groupId={selectedGroupForStudents}
+                    onClose={closeAddStudentsModal}
+                    onStudentAdded={loadGroups}
+                />
             </Modal>
 
-            {/* ✅ MeetingLinksCheckModal — مرّر availableLinks في onConfirm */}
             <MeetingLinksCheckModal
                 isOpen={meetingLinksModal.open}
                 groupId={meetingLinksModal.groupId}
@@ -586,14 +789,190 @@ export default function GroupsAdmin() {
 
             <InstructorNotificationModal
                 isOpen={instructorNotificationModal.open}
-                onClose={() => {
-                    setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
-                    setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "" });
-                }}
+                onClose={closeInstructorModal}
                 instructors={instructorNotificationModal.instructors}
                 groupData={instructorNotificationModal.groupData}
                 onSendNotifications={handleActivateAndNotify}
             />
         </div>
+    );
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function DateRangeFilter({ label, icon, fromValue, toValue, onFromChange, onToChange }) {
+    return (
+        <div className="bg-gray-50 dark:bg-dark_input rounded-lg p-3">
+            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1">
+                {icon}
+                {label}
+            </label>
+            <div className="flex items-center gap-2">
+                <input
+                    type="date"
+                    value={fromValue}
+                    onChange={(e) => onFromChange(e.target.value)}
+                    className="flex-1 px-3 py-2 text-xs border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                />
+                <span className="text-gray-400">→</span>
+                <input
+                    type="date"
+                    value={toValue}
+                    onChange={(e) => onToChange(e.target.value)}
+                    className="flex-1 px-3 py-2 text-xs border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                />
+            </div>
+        </div>
+    );
+}
+
+function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate, onAddStudents, onViewSessions, onEdit, onDelete }) {
+    return (
+        <tr className="hover:bg-gray-50 dark:hover:bg-dark_input transition-colors">
+
+            {/* Group Info */}
+            <td className="py-3 px-4">
+                <p className="font-medium text-sm text-MidnightNavyText dark:text-white">{group.name}</p>
+                <p className="text-xs text-SlateBlueText dark:text-darktext flex items-center gap-1">
+                    <Hash className="w-3 h-3" />{group.code}
+                </p>
+                {group.schedule?.daysOfWeek && (
+                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                        <CalendarDays className="w-3 h-3" />
+                        {group.schedule.daysOfWeek.map((d) => dayLabels[d] || d).join(", ")}
+                        {" · "}{group.schedule.timeFrom}-{group.schedule.timeTo}
+                    </p>
+                )}
+            </td>
+
+            {/* Course */}
+            <td className="py-3 px-4">
+                <p className="text-sm text-MidnightNavyText dark:text-white">{group.course?.title || "N/A"}</p>
+                <p className="text-xs text-SlateBlueText dark:text-darktext">{group.course?.level || ""}</p>
+            </td>
+
+            {/* Status */}
+            <td className="py-3 px-4">
+                <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_COLORS[group.status] || STATUS_COLORS.draft}`}>
+                    {statusLabels[group.status] || group.status}
+                </span>
+            </td>
+
+            {/* Students */}
+            <td className="py-3 px-4">
+                <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-medium">{group.studentsCount}/{group.maxStudents}</span>
+                    {group.isFull && (
+                        <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] rounded font-medium">
+                            {t("groups.status.full") || "FULL"}
+                        </span>
+                    )}
+                </div>
+            </td>
+
+            {/* Sessions */}
+            <td className="py-3 px-4">
+                {group.sessionsGenerated ? (
+                    <span className="text-green-600 flex items-center gap-1 text-sm">
+                        <CheckCircle className="w-3 h-3" />{group.totalSessions}
+                    </span>
+                ) : (
+                    <span className="text-gray-400 text-sm flex items-center gap-1">
+                        <Layers className="w-3 h-3" />
+                        {t("groups.sessions.notGenerated") || "Not generated"}
+                    </span>
+                )}
+            </td>
+
+            {/* Actions */}
+            <td className="py-3 px-4">
+                <div className="flex items-center gap-1">
+                    <ActionButton onClick={() => onViewDetails(group.id)} hoverColor="blue"   title={t("groups.actions.viewDetails") || "View Details"}>
+                        <Info className="w-4 h-4 text-blue-600" />
+                    </ActionButton>
+                    {group.status === "draft" && (
+                        <ActionButton onClick={() => onActivate(group.id)} hoverColor="green" title={t("groups.actions.activate") || "Activate"}>
+                            <PlayCircle className="w-4 h-4 text-green-600" />
+                        </ActionButton>
+                    )}
+                    {group.status === "active" && !group.isFull && (
+                        <ActionButton onClick={() => onAddStudents(group.id)} hoverColor="blue" title={t("groups.actions.addStudents") || "Add Students"}>
+                            <UserPlus className="w-4 h-4 text-blue-600" />
+                        </ActionButton>
+                    )}
+                    {group.sessionsGenerated && (
+                        <ActionButton onClick={() => onViewSessions(group.id)} hoverColor="purple" title={t("groups.actions.viewSessions") || "View Sessions"}>
+                            <Calendar className="w-4 h-4 text-purple-600" />
+                        </ActionButton>
+                    )}
+                    <ActionButton onClick={() => onEdit(group)} hoverColor="gray" title={t("groups.actions.edit") || "Edit"}>
+                        <Edit className="w-4 h-4 text-primary" />
+                    </ActionButton>
+                    <ActionButton onClick={() => onDelete(group.id, group.name)} hoverColor="red" title={t("groups.actions.delete") || "Delete"}>
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                    </ActionButton>
+                </div>
+            </td>
+        </tr>
+    );
+}
+
+function ActionButton({ onClick, hoverColor, title, children }) {
+    const hoverClasses = {
+        blue:   "hover:bg-blue-100 dark:hover:bg-blue-900/30",
+        green:  "hover:bg-green-100 dark:hover:bg-green-900/30",
+        purple: "hover:bg-purple-100 dark:hover:bg-purple-900/30",
+        red:    "hover:bg-red-100 dark:hover:bg-red-900/30",
+        gray:   "hover:bg-gray-100 dark:hover:bg-gray-700",
+    };
+    return (
+        <button onClick={onClick} title={title} className={`p-1.5 rounded transition-colors ${hoverClasses[hoverColor]}`}>
+            {children}
+        </button>
+    );
+}
+
+function Pagination({ pagination, t, onPageChange }) {
+    const { page, totalPages, limit, total } = pagination;
+    const start = (page - 1) * limit + 1;
+    const end   = Math.min(page * limit, total);
+
+    return (
+        <div className="px-4 py-3 border-t border-PowderBlueBorder dark:border-dark_border">
+            <div className="flex items-center justify-between">
+                <p className="text-xs text-SlateBlueText">
+                    {t("groups.pagination.showing")
+                        ?.replace("{start}", start)
+                        ?.replace("{end}", end)
+                        ?.replace("{total}", total)
+                        || `Showing ${start}-${end} of ${total}`}
+                </p>
+                <div className="flex items-center gap-2">
+                    <PaginationButton onClick={() => onPageChange(1)}         disabled={page === 1}>           <ChevronsRight className="w-4 h-4" /></PaginationButton>
+                    <PaginationButton onClick={() => onPageChange(page - 1)}  disabled={page === 1}>           <ChevronRight  className="w-4 h-4" /></PaginationButton>
+                    <span className="px-3 py-1 text-sm font-medium">
+                        {t("groups.pagination.page")
+                            ?.replace("{page}", page)
+                            ?.replace("{pages}", totalPages)
+                            || `${page} / ${totalPages}`}
+                    </span>
+                    <PaginationButton onClick={() => onPageChange(page + 1)}  disabled={page === totalPages}> <ChevronLeft  className="w-4 h-4" /></PaginationButton>
+                    <PaginationButton onClick={() => onPageChange(totalPages)} disabled={page === totalPages}> <ChevronsLeft className="w-4 h-4" /></PaginationButton>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function PaginationButton({ onClick, disabled, children }) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            className="p-2 border rounded disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+            {children}
+        </button>
     );
 }
