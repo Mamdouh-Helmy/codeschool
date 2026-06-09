@@ -8,10 +8,10 @@ import {
 import toast from "react-hot-toast";
 
 const PLATFORM_META = {
-  zoom:            { emoji: "🔷", color: "text-blue-600",   bg: "bg-blue-50 dark:bg-blue-900/20",     label: "Zoom" },
-  google_meet:     { emoji: "🔴", color: "text-red-600",    bg: "bg-red-50 dark:bg-red-900/20",       label: "Meet" },
-  microsoft_teams: { emoji: "🔵", color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-900/20", label: "Teams" },
-  other:           { emoji: "🔗", color: "text-gray-600",   bg: "bg-gray-50 dark:bg-gray-800",        label: "Other" },
+  zoom:            { emoji: "🔷", color: "text-blue-600",   bg: "bg-blue-50 dark:bg-blue-900/20",         label: "Zoom" },
+  google_meet:     { emoji: "🔴", color: "text-red-600",    bg: "bg-red-50 dark:bg-red-900/20",           label: "Meet" },
+  microsoft_teams: { emoji: "🔵", color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-900/20",     label: "Teams" },
+  other:           { emoji: "🔗", color: "text-gray-600",   bg: "bg-gray-50 dark:bg-gray-800",            label: "Other" },
 };
 
 function distributeLinks(sessions, selectedLinks) {
@@ -23,11 +23,12 @@ function distributeLinks(sessions, selectedLinks) {
   }));
 }
 
+/* ─── SummaryCard ─────────────────────────────────────────── */
 function SummaryCard({ label, value, icon, color }) {
   const colors = {
-    blue:   "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800",
-    green:  "bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-100 dark:border-green-800",
-    orange: "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border-orange-100 dark:border-orange-800",
+    blue:   "bg-[#e6f7f4] dark:bg-teal-brand/10 text-teal-brand dark:text-teal-brand border-[#9FE1CB] dark:border-teal-brand/30",
+    green:  "bg-[#e6f7f4] dark:bg-teal-brand/10 text-teal-brand dark:text-teal-brand border-[#9FE1CB] dark:border-teal-brand/30",
+    orange: "bg-[#fff3e0] dark:bg-orange-brand/10 text-orange-brand dark:text-orange-brand border-[#ffd9b3] dark:border-orange-brand/30",
   };
   return (
     <div className={`rounded-xl border p-3 text-center ${colors[color]}`}>
@@ -38,12 +39,13 @@ function SummaryCard({ label, value, icon, color }) {
   );
 }
 
+/* ─── Banner ──────────────────────────────────────────────── */
 function Banner({ type, icon, title, body }) {
   const styles = {
-    success: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300",
+    success: "bg-[#e6f7f4] dark:bg-teal-brand/10 border-[#9FE1CB] dark:border-teal-brand/30 text-teal-brand dark:text-teal-brand",
     error:   "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300",
-    warning: "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300",
-    info:    "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300",
+    warning: "bg-[#fff3e0] dark:bg-orange-brand/10 border-[#ffd9b3] dark:border-orange-brand/30 text-orange-deep dark:text-orange-brand",
+    info:    "bg-[#e6f7f4] dark:bg-teal-brand/10 border-[#9FE1CB] dark:border-teal-brand/30 text-teal-brand dark:text-teal-brand",
   };
   return (
     <div className={`flex items-start gap-3 p-4 rounded-xl border ${styles[type]}`}>
@@ -56,8 +58,10 @@ function Banner({ type, icon, title, body }) {
   );
 }
 
+/* ─── LinkSelector ────────────────────────────────────────── */
 function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, onReleaseReserved, releasing }) {
-  const allAvailableSelected = availableLinks.length > 0 &&
+  const allAvailableSelected =
+    availableLinks.length > 0 &&
     availableLinks.every((l) => selectedIds.has(l._id?.toString() || l.id?.toString()));
 
   const toggleAll = () => {
@@ -70,29 +74,30 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
 
   return (
     <div className="space-y-3">
+      {/* ── Available ── */}
       {availableLinks.length > 0 && (
-        <div className="rounded-xl border border-green-200 dark:border-green-800 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800">
+        <div className="rounded-xl border border-[#9FE1CB] dark:border-teal-brand/30 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-[#e6f7f4] dark:bg-teal-brand/10 border-b border-[#9FE1CB] dark:border-teal-brand/30">
             <div className="flex items-center gap-2">
-              <Unlock className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-semibold text-green-800 dark:text-green-300">
+              <Unlock className="w-4 h-4 text-teal-brand" />
+              <span className="text-sm font-semibold text-teal-brand dark:text-teal-brand">
                 اللينكات المتاحة ({availableLinks.length})
               </span>
             </div>
             <button
               onClick={toggleAll}
-              className="flex items-center gap-1 text-xs text-green-700 dark:text-green-400 hover:text-green-900 transition"
+              className="flex items-center gap-1 text-xs text-teal-brand hover:text-teal-dark transition"
             >
               {allAvailableSelected
                 ? <><CheckSquare className="w-3.5 h-3.5" /> إلغاء تحديد الكل</>
-                : <><Square className="w-3.5 h-3.5" /> تحديد الكل</>
-              }
+                : <><Square className="w-3.5 h-3.5" /> تحديد الكل</>}
             </button>
           </div>
-          <div className="divide-y divide-green-50 dark:divide-green-900/20">
+
+          <div className="divide-y divide-[#e6f7f4] dark:divide-teal-brand/10">
             {availableLinks.map((link) => {
-              const id  = link._id?.toString() || link.id?.toString();
-              const pm  = PLATFORM_META[link.platform] || PLATFORM_META.other;
+              const id      = link._id?.toString() || link.id?.toString();
+              const pm      = PLATFORM_META[link.platform] || PLATFORM_META.other;
               const checked = selectedIds.has(id);
               return (
                 <button
@@ -100,13 +105,14 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
                   onClick={() => onToggle(id, !checked)}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-right transition-colors ${
                     checked
-                      ? "bg-blue-50 dark:bg-blue-900/20"
-                      : "bg-white dark:bg-gray-900 hover:bg-green-50 dark:hover:bg-green-900/10"
+                      ? "bg-[#f0f9ff] dark:bg-teal-brand/5"
+                      : "bg-white dark:bg-gray-900 hover:bg-[#e6f7f4] dark:hover:bg-teal-brand/5"
                   }`}
                 >
+                  {/* Checkbox */}
                   <div className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
                     checked
-                      ? "bg-blue-600 border-blue-600"
+                      ? "bg-teal-brand border-teal-brand"
                       : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
                   }`}>
                     {checked && (
@@ -115,6 +121,7 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
                       </svg>
                     )}
                   </div>
+
                   <div className="flex-1 min-w-0 text-right">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
@@ -124,9 +131,7 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
                         {pm.emoji} {pm.label}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
-                      {link.link}
-                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{link.link}</p>
                   </div>
                 </button>
               );
@@ -135,19 +140,21 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
         </div>
       )}
 
+      {/* ── Reserved ── */}
       {reservedLinks.length > 0 && (
-        <div className="rounded-xl border border-yellow-200 dark:border-yellow-800 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800">
+        <div className="rounded-xl border border-[#fcd34d] dark:border-amber-brand/40 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-[#fffbeb] dark:bg-amber-brand/10 border-b border-[#fcd34d] dark:border-amber-brand/40">
             <div className="flex items-center gap-2">
-              <Lock className="w-4 h-4 text-yellow-600" />
-              <span className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
+              <Lock className="w-4 h-4 text-amber-brand" />
+              <span className="text-sm font-semibold text-orange-deep dark:text-amber-brand">
                 لينكات محجوزة ({reservedLinks.length})
               </span>
             </div>
           </div>
-          <div className="divide-y divide-yellow-50 dark:divide-yellow-900/20">
+
+          <div className="divide-y divide-[#fffbeb] dark:divide-amber-brand/10">
             {reservedLinks.map((link) => {
-              const pm = PLATFORM_META[link.platform] || PLATFORM_META.other;
+              const pm    = PLATFORM_META[link.platform] || PLATFORM_META.other;
               const until = link.reservedUntil
                 ? new Date(link.reservedUntil).toLocaleDateString("ar-EG", {
                     day: "numeric", month: "short",
@@ -156,7 +163,7 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
                 : "—";
               return (
                 <div key={link.id?.toString()} className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900">
-                  <Lock className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                  <Lock className="w-4 h-4 text-amber-brand flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 truncate">
@@ -166,24 +173,22 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
                         {pm.emoji} {pm.label}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                      محجوز حتى: {until}
-                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">محجوز حتى: {until}</p>
                   </div>
                 </div>
               );
             })}
           </div>
-          <div className="px-4 py-3 border-t border-yellow-200 dark:border-yellow-800">
+
+          <div className="px-4 py-3 border-t border-[#fcd34d] dark:border-amber-brand/40 bg-[#fffbeb] dark:bg-amber-brand/10">
             <button
               onClick={onReleaseReserved}
               disabled={releasing}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-yellow-500 hover:bg-yellow-600 text-white transition disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-orange-brand hover:bg-orange-deep text-white transition disabled:opacity-50"
             >
               {releasing
                 ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                : <Unlock className="w-4 h-4" />
-              }
+                : <Unlock className="w-4 h-4" />}
               {releasing ? "جاري الإلغاء..." : "إلغاء حجزها وإتاحتها"}
             </button>
           </div>
@@ -193,6 +198,7 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
   );
 }
 
+/* ─── SessionsTable ───────────────────────────────────────── */
 function SessionsTable({ sessionRows, showAll, onToggleShow }) {
   const total     = sessionRows.length;
   const displayed = showAll ? sessionRows : sessionRows.slice(0, 6);
@@ -201,23 +207,23 @@ function SessionsTable({ sessionRows, showAll, onToggleShow }) {
     <div>
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-blue-500" />
+          <Calendar className="w-4 h-4 text-orange-brand" />
           توزيع اللينكات على الجلسات
         </h3>
         {total > 6 && (
           <button
             onClick={onToggleShow}
-            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+            className="flex items-center gap-1 text-xs text-teal-brand hover:underline"
           >
             {showAll
               ? <><ChevronUp className="w-3 h-3" /> عرض أقل</>
-              : <><ChevronDown className="w-3 h-3" /> عرض الكل ({total})</>
-            }
+              : <><ChevronDown className="w-3 h-3" /> عرض الكل ({total})</>}
           </button>
         )}
       </div>
 
       <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        {/* Head */}
         <div className="grid grid-cols-12 bg-gray-50 dark:bg-gray-800 px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase border-b border-gray-200 dark:border-gray-700">
           <div className="col-span-1 text-center">#</div>
           <div className="col-span-5">الجلسة</div>
@@ -225,6 +231,7 @@ function SessionsTable({ sessionRows, showAll, onToggleShow }) {
           <div className="col-span-3 text-center">اللينك</div>
         </div>
 
+        {/* Rows */}
         <div className="divide-y divide-gray-100 dark:divide-gray-800">
           {displayed.map((row, idx) => {
             const link = row.assignedLink;
@@ -241,7 +248,7 @@ function SessionsTable({ sessionRows, showAll, onToggleShow }) {
                 className={`grid grid-cols-12 px-4 py-3 items-center text-sm ${
                   link
                     ? "bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60"
-                    : "bg-orange-50/60 dark:bg-orange-900/10"
+                    : "bg-[#fff3e0]/60 dark:bg-orange-brand/5"
                 }`}
               >
                 <div className="col-span-1 text-center">
@@ -253,9 +260,7 @@ function SessionsTable({ sessionRows, showAll, onToggleShow }) {
                   <p className="text-gray-800 dark:text-gray-200 font-medium leading-tight truncate text-xs" title={row.title}>
                     {row.title || `جلسة ${idx + 1}`}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {row.startTime} – {row.endTime}
-                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">{row.startTime} – {row.endTime}</p>
                 </div>
                 <div className="col-span-3 text-center text-xs text-gray-500 dark:text-gray-400">
                   {date}
@@ -267,7 +272,7 @@ function SessionsTable({ sessionRows, showAll, onToggleShow }) {
                       <span className="truncate max-w-[60px]">{link.name}</span>
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 font-medium bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-full">
+                    <span className="flex items-center gap-1 text-xs text-orange-brand dark:text-orange-brand font-medium bg-[#fff3e0] dark:bg-orange-brand/10 px-2 py-1 rounded-full">
                       <WifiOff className="w-3 h-3" />
                       لا يوجد
                     </span>
@@ -288,15 +293,14 @@ function SessionsTable({ sessionRows, showAll, onToggleShow }) {
   );
 }
 
-// ── المودال الرئيسي ───────────────────────────────────────────────────────────
-// ✅ onConfirm(forceActivate, releaseReserved, selectedLinkIds, availableLinks)
+/* ─── Modal الرئيسي ───────────────────────────────────────── */
 export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onConfirm }) {
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState(null);
-  const [rawData, setRawData]           = useState(null);
-  const [selectedIds, setSelectedIds]   = useState(new Set());
-  const [showAll, setShowAll]           = useState(false);
-  const [releasing, setReleasing]       = useState(false);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
+  const [rawData, setRawData]         = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showAll, setShowAll]         = useState(false);
+  const [releasing, setReleasing]     = useState(false);
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
@@ -306,7 +310,6 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
       const data = await res.json();
       if (!data.success) { setError(data.error || "حدث خطأ"); return; }
       setRawData(data.data);
-      // اختر كل المتاحة تلقائياً
       const ids = new Set(
         (data.data.availableLinks || []).map((l) => l._id?.toString() || l.id?.toString())
       );
@@ -352,78 +355,99 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
 
   if (!isOpen) return null;
 
-  const availableLinks = rawData?.availableLinks || [];
-  const reservedLinks  = rawData?.reservedLinks  || [];
-  const allSessions    = (rawData?.sessions || []).map((r) => r.session ?? r);
-  const totalSessions  = allSessions.length;
-  const hasNoLinks     = (rawData?.totalLinks ?? 0) === 0;
+  const availableLinks    = rawData?.availableLinks || [];
+  const reservedLinks     = rawData?.reservedLinks  || [];
+  const allSessions       = (rawData?.sessions || []).map((r) => r.session ?? r);
+  const totalSessions     = allSessions.length;
+  const hasNoLinks        = (rawData?.totalLinks ?? 0) === 0;
 
-  // اللينكات المختارة فعلياً (كاملة — مش IDs بس)
-  const chosenLinks = availableLinks.filter(
+  const chosenLinks   = availableLinks.filter(
     (l) => selectedIds.has(l._id?.toString() || l.id?.toString())
   );
-
-  // ✅ IDs المختارة كـ array جاهزة للإرسال
   const chosenLinkIds = Array.from(selectedIds);
 
-  // توزيع اللينكات على الجلسات للمعاينة
   const sessionRows       = distributeLinks(allSessions, chosenLinks);
   const sessionsWithLinks = sessionRows.filter((r) => r.assignedLink).length;
   const sessionsWithout   = totalSessions - sessionsWithLinks;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" dir="rtl">
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      dir="rtl"
+    >
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
 
-        {/* Header */}
-        <div className="bg-gradient-to-l from-blue-700 to-indigo-700 text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
+        {/* ── Header ── */}
+        <div className="bg-teal-brand text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center">
               <Link2 className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-lg font-bold">توزيع لينكات الاجتماعات</h2>
-              <p className="text-xs text-white/70">اختر اللينكات التي ستُوزَّع على الجلسات</p>
+              <p className="text-xs text-white/60">اختر اللينكات التي ستُوزَّع على الجلسات</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/15 rounded-lg transition"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Body */}
+        {/* ── Body ── */}
         <div className="flex-1 overflow-y-auto">
 
+          {/* Loading */}
           {loading && (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-brand" />
               <p className="text-sm text-gray-500">جاري تحليل اللينكات والجلسات...</p>
             </div>
           )}
 
+          {/* Error */}
           {!loading && error && (
             <div className="flex flex-col items-center justify-center py-12 gap-4 px-6">
               <AlertTriangle className="w-12 h-12 text-red-500" />
               <p className="text-sm text-red-600 font-medium text-center">{error}</p>
               <button
                 onClick={fetchStatus}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition"
+                className="flex items-center gap-2 px-4 py-2 bg-teal-brand text-white rounded-lg text-sm hover:bg-teal-dark transition"
               >
                 <RefreshCw className="w-4 h-4" /> إعادة المحاولة
               </button>
             </div>
           )}
 
+          {/* Content */}
           {!loading && !error && rawData && (
             <div className="p-5 space-y-4">
 
-              {/* إحصاءات */}
+              {/* Stats */}
               <div className="grid grid-cols-3 gap-3">
-                <SummaryCard label="إجمالي الجلسات" value={totalSessions}      icon={<Calendar className="w-5 h-5" />}  color="blue" />
-                <SummaryCard label="ستأخذ لينكات"   value={sessionsWithLinks}  icon={<CheckCircle className="w-5 h-5" />} color="green" />
-                <SummaryCard label="بدون لينكات"    value={sessionsWithout}    icon={<WifiOff className="w-5 h-5" />}    color={sessionsWithout > 0 ? "orange" : "green"} />
+                <SummaryCard
+                  label="إجمالي الجلسات"
+                  value={totalSessions}
+                  icon={<Calendar className="w-5 h-5" />}
+                  color="blue"
+                />
+                <SummaryCard
+                  label="ستأخذ لينكات"
+                  value={sessionsWithLinks}
+                  icon={<CheckCircle className="w-5 h-5" />}
+                  color="green"
+                />
+                <SummaryCard
+                  label="بدون لينكات"
+                  value={sessionsWithout}
+                  icon={<WifiOff className="w-5 h-5" />}
+                  color={sessionsWithout > 0 ? "orange" : "green"}
+                />
               </div>
 
+              {/* No links at all */}
               {hasNoLinks && (
                 <Banner
                   type="error"
@@ -433,6 +457,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
                 />
               )}
 
+              {/* Link selector */}
               {!hasNoLinks && (
                 <LinkSelector
                   availableLinks={availableLinks}
@@ -444,6 +469,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
                 />
               )}
 
+              {/* Success banner */}
               {!hasNoLinks && chosenLinks.length > 0 && (
                 <Banner
                   type="success"
@@ -457,6 +483,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
                 />
               )}
 
+              {/* Warning: nothing chosen */}
               {!hasNoLinks && chosenLinks.length === 0 && availableLinks.length > 0 && (
                 <Banner
                   type="warning"
@@ -466,6 +493,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
                 />
               )}
 
+              {/* Sessions table */}
               {totalSessions > 0 && (
                 <SessionsTable
                   sessionRows={sessionRows}
@@ -477,7 +505,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
           )}
         </div>
 
-        {/* Footer */}
+        {/* ── Footer ── */}
         {!loading && !error && rawData && (
           <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-800/60 flex items-center gap-3 flex-shrink-0">
             <button
@@ -489,18 +517,16 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
 
             {hasNoLinks || chosenLinks.length === 0 ? (
               <button
-                // ✅ مرّر availableLinks كـ param رابع
                 onClick={() => onConfirm(true, false, [], availableLinks)}
-                className="flex-1 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-orange-brand hover:bg-orange-deep text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
               >
                 <AlertTriangle className="w-4 h-4" />
                 التفعيل بدون لينكات
               </button>
             ) : (
               <button
-                // ✅ مرّر availableLinks كـ param رابع
                 onClick={() => onConfirm(false, false, chosenLinkIds, availableLinks)}
-                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-teal-brand hover:bg-teal-dark text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
               >
                 <CheckCircle className="w-4 h-4" />
                 متابعة للإشعارات
