@@ -1,17 +1,19 @@
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
 import {
   X, Link2, AlertTriangle, CheckCircle, Calendar,
   Video, WifiOff, RefreshCw, ChevronDown, ChevronUp,
-  Lock, Unlock, Square, CheckSquare,
+  Lock, Unlock, Square, CheckSquare, ArrowRight,
+  Zap, Layers, ExternalLink, Clock
 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const PLATFORM_META = {
-  zoom:            { emoji: "🔷", color: "text-blue-600",   bg: "bg-blue-50 dark:bg-blue-900/20",         label: "Zoom" },
-  google_meet:     { emoji: "🔴", color: "text-red-600",    bg: "bg-red-50 dark:bg-red-900/20",           label: "Meet" },
-  microsoft_teams: { emoji: "🔵", color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-900/20",     label: "Teams" },
-  other:           { emoji: "🔗", color: "text-gray-600",   bg: "bg-gray-50 dark:bg-gray-800",            label: "Other" },
+  zoom: { emoji: "🔷", color: "text-blue-500", bg: "bg-blue-500/10", label: "Zoom" },
+  google_meet: { emoji: "🔴", color: "text-red-500", bg: "bg-red-500/10", label: "Meet" },
+  microsoft_teams: { emoji: "🟣", color: "text-purple-500", bg: "bg-purple-500/10", label: "Teams" },
+  other: { emoji: "🔗", color: "text-gray-400", bg: "bg-gray-500/10", label: "Other" },
 };
 
 function distributeLinks(sessions, selectedLinks) {
@@ -23,46 +25,52 @@ function distributeLinks(sessions, selectedLinks) {
   }));
 }
 
-/* ─── SummaryCard ─────────────────────────────────────────── */
-function SummaryCard({ label, value, icon, color }) {
-  const colors = {
-    blue:   "bg-[#e6f7f4] dark:bg-teal-brand/10 text-teal-brand dark:text-teal-brand border-[#9FE1CB] dark:border-teal-brand/30",
-    green:  "bg-[#e6f7f4] dark:bg-teal-brand/10 text-teal-brand dark:text-teal-brand border-[#9FE1CB] dark:border-teal-brand/30",
-    orange: "bg-[#fff3e0] dark:bg-orange-brand/10 text-orange-brand dark:text-orange-brand border-[#ffd9b3] dark:border-orange-brand/30",
-  };
+/* ─── Modern Stat Card (باستخدام ألوان العلامة التجارية) ─────────── */
+function StatCard({ label, value, icon, trend }) {
   return (
-    <div className={`rounded-xl border p-3 text-center ${colors[color]}`}>
-      <div className="flex justify-center mb-1">{icon}</div>
-      <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs mt-0.5 opacity-80">{label}</p>
-    </div>
-  );
-}
-
-/* ─── Banner ──────────────────────────────────────────────── */
-function Banner({ type, icon, title, body }) {
-  const styles = {
-    success: "bg-[#e6f7f4] dark:bg-teal-brand/10 border-[#9FE1CB] dark:border-teal-brand/30 text-teal-brand dark:text-teal-brand",
-    error:   "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300",
-    warning: "bg-[#fff3e0] dark:bg-orange-brand/10 border-[#ffd9b3] dark:border-orange-brand/30 text-orange-deep dark:text-orange-brand",
-    info:    "bg-[#e6f7f4] dark:bg-teal-brand/10 border-[#9FE1CB] dark:border-teal-brand/30 text-teal-brand dark:text-teal-brand",
-  };
-  return (
-    <div className={`flex items-start gap-3 p-4 rounded-xl border ${styles[type]}`}>
-      {icon}
-      <div>
-        <p className="text-sm font-semibold">{title}</p>
-        {body && <p className="text-xs mt-0.5 opacity-80">{body}</p>}
+    <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-darklight border border-gray-200 dark:border-dark_border shadow-sm hover:shadow-brand-md transition-all duration-300">
+      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-teal-brand/5 to-orange-brand/5 rounded-full blur-2xl" />
+      <div className="relative p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="p-2 rounded-xl bg-gradient-to-br from-teal-brand to-teal-dark text-white shadow-lg shadow-teal-brand/20">
+            {icon}
+          </div>
+          {trend && (
+            <span className="text-xs font-medium text-green-500 bg-green-500/10 px-2 py-1 rounded-full">
+              {trend}
+            </span>
+          )}
+        </div>
+        <p className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{value}</p>
+        <p className="text-xs text-gray-500 dark:text-darktext mt-1 font-medium">{label}</p>
       </div>
     </div>
   );
 }
 
-/* ─── LinkSelector ────────────────────────────────────────── */
+/* ─── Modern Banner (باستخدام ألوان العلامة التجارية) ─────────────── */
+function AlertBanner({ type, icon, title, body, action }) {
+  const styles = {
+    success: "bg-gradient-to-r from-teal-brand/5 to-teal-brand/10 dark:from-teal-brand/10 dark:to-teal-brand/5 border-teal-brand/20 dark:border-teal-brand/30 text-teal-brand dark:text-teal-brand",
+    error: "bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-500/10 dark:to-rose-500/10 border-red-200 dark:border-red-500/30 text-red-800 dark:text-red-300",
+    warning: "bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-300",
+    info: "bg-gradient-to-r from-teal-brand/5 to-teal-brand/10 dark:from-teal-brand/10 dark:to-teal-brand/5 border-teal-brand/20 dark:border-teal-brand/30 text-teal-brand dark:text-teal-brand",
+  };
+  return (
+    <div className={`flex items-start gap-4 p-4 rounded-2xl border backdrop-blur-sm ${styles[type]}`}>
+      <div className="flex-shrink-0">{icon}</div>
+      <div className="flex-1">
+        <p className="text-sm font-bold">{title}</p>
+        {body && <p className="text-xs mt-1 opacity-80 leading-relaxed">{body}</p>}
+      </div>
+      {action && <div className="flex-shrink-0">{action}</div>}
+    </div>
+  );
+}
+
+/* ─── Modern Link Selector (باستخدام ألوان العلامة التجارية) ───────── */
 function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, onReleaseReserved, releasing }) {
-  const allAvailableSelected =
-    availableLinks.length > 0 &&
-    availableLinks.every((l) => selectedIds.has(l._id?.toString() || l.id?.toString()));
+  const allAvailableSelected = availableLinks.length > 0 && availableLinks.every((l) => selectedIds.has(l._id?.toString() || l.id?.toString()));
 
   const toggleAll = () => {
     if (allAvailableSelected) {
@@ -73,57 +81,53 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
   };
 
   return (
-    <div className="space-y-3">
-      {/* ── Available ── */}
+    <div className="space-y-4">
       {availableLinks.length > 0 && (
-        <div className="rounded-xl border border-[#9FE1CB] dark:border-teal-brand/30 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-[#e6f7f4] dark:bg-teal-brand/10 border-b border-[#9FE1CB] dark:border-teal-brand/30">
+        <div className="rounded-2xl bg-white dark:bg-darklight border border-gray-200 dark:border-dark_border overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-gray-50 to-white dark:from-darkhover/30 dark:to-darklight border-b border-gray-200 dark:border-dark_border">
             <div className="flex items-center gap-2">
-              <Unlock className="w-4 h-4 text-teal-brand" />
-              <span className="text-sm font-semibold text-teal-brand dark:text-teal-brand">
-                اللينكات المتاحة ({availableLinks.length})
+              <div className="p-1.5 rounded-lg bg-teal-brand/10 text-teal-brand">
+                <Unlock className="w-4 h-4" />
+              </div>
+              <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+                اللينكات المتاحة <span className="text-teal-brand">({availableLinks.length})</span>
               </span>
             </div>
             <button
               onClick={toggleAll}
-              className="flex items-center gap-1 text-xs text-teal-brand hover:text-teal-dark transition"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-teal-brand hover:bg-teal-brand/10 transition-all"
             >
-              {allAvailableSelected
-                ? <><CheckSquare className="w-3.5 h-3.5" /> إلغاء تحديد الكل</>
-                : <><Square className="w-3.5 h-3.5" /> تحديد الكل</>}
+              {allAvailableSelected ? (
+                <><CheckSquare className="w-3.5 h-3.5" /> إلغاء الكل</>
+              ) : (
+                <><Square className="w-3.5 h-3.5" /> تحديد الكل</>
+              )}
             </button>
           </div>
 
-          <div className="divide-y divide-[#e6f7f4] dark:divide-teal-brand/10">
+          <div className="divide-y divide-gray-100 dark:divide-dark_border/50">
             {availableLinks.map((link) => {
-              const id      = link._id?.toString() || link.id?.toString();
-              const pm      = PLATFORM_META[link.platform] || PLATFORM_META.other;
+              const id = link._id?.toString() || link.id?.toString();
+              const pm = PLATFORM_META[link.platform] || PLATFORM_META.other;
               const checked = selectedIds.has(id);
               return (
                 <button
                   key={id}
                   onClick={() => onToggle(id, !checked)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-right transition-colors ${
+                  className={`w-full flex items-center gap-3 px-5 py-3.5 text-right transition-all duration-200 ${
                     checked
-                      ? "bg-[#f0f9ff] dark:bg-teal-brand/5"
-                      : "bg-white dark:bg-gray-900 hover:bg-[#e6f7f4] dark:hover:bg-teal-brand/5"
+                      ? "bg-teal-brand/5 dark:bg-teal-brand/10 border-r-4 border-teal-brand"
+                      : "hover:bg-gray-50 dark:hover:bg-darkhover/30"
                   }`}
                 >
-                  {/* Checkbox */}
-                  <div className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
-                    checked
-                      ? "bg-teal-brand border-teal-brand"
-                      : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                  <div className={`w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center border-2 transition-all ${
+                    checked ? "bg-teal-brand border-teal-brand shadow-sm" : "border-gray-300 dark:border-gray-600 bg-white dark:bg-darkmid"
                   }`}>
-                    {checked && (
-                      <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
+                    {checked && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                   </div>
 
                   <div className="flex-1 min-w-0 text-right">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
                         {link.name}
                       </span>
@@ -131,8 +135,9 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
                         {pm.emoji} {pm.label}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{link.link}</p>
+                    <p className="text-xs text-gray-400 dark:text-darktext truncate mt-1 font-mono">{link.link}</p>
                   </div>
+                  <ExternalLink className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </button>
               );
             })}
@@ -140,56 +145,54 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
         </div>
       )}
 
-      {/* ── Reserved ── */}
       {reservedLinks.length > 0 && (
-        <div className="rounded-xl border border-[#fcd34d] dark:border-amber-brand/40 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-[#fffbeb] dark:bg-amber-brand/10 border-b border-[#fcd34d] dark:border-amber-brand/40">
-            <div className="flex items-center gap-2">
-              <Lock className="w-4 h-4 text-amber-brand" />
-              <span className="text-sm font-semibold text-orange-deep dark:text-amber-brand">
-                لينكات محجوزة ({reservedLinks.length})
-              </span>
-            </div>
+        <div className="rounded-2xl bg-gradient-to-br from-amber-50/50 to-orange-50/50 dark:from-amber-500/5 dark:to-orange-500/5 border border-amber-brand/30 dark:border-amber-brand/20 overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 bg-amber-brand/10 dark:bg-amber-brand/5 border-b border-amber-brand/20">
+            <Lock className="w-4 h-4 text-amber-brand" />
+            <span className="text-sm font-bold text-orange-deep dark:text-amber-brand">
+              لينكات محجوزة مؤقتاً ({reservedLinks.length})
+            </span>
           </div>
 
-          <div className="divide-y divide-[#fffbeb] dark:divide-amber-brand/10">
+          <div className="divide-y divide-amber-brand/20">
             {reservedLinks.map((link) => {
-              const pm    = PLATFORM_META[link.platform] || PLATFORM_META.other;
+              const pm = PLATFORM_META[link.platform] || PLATFORM_META.other;
               const until = link.reservedUntil
                 ? new Date(link.reservedUntil).toLocaleDateString("ar-EG", {
-                    day: "numeric", month: "short",
-                    hour: "2-digit", minute: "2-digit",
+                    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
                   })
                 : "—";
               return (
-                <div key={link.id?.toString()} className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900">
-                  <Lock className="w-4 h-4 text-amber-brand flex-shrink-0" />
+                <div key={link.id?.toString()} className="flex items-center gap-3 px-5 py-3">
+                  <Clock className="w-4 h-4 text-amber-brand flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 truncate">
                         {link.name}
                       </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${pm.bg} ${pm.color}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${pm.bg} ${pm.color}`}>
                         {pm.emoji} {pm.label}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">محجوز حتى: {until}</p>
+                    <p className="text-xs text-amber-brand/80 dark:text-amber-brand/70 mt-0.5">🕒 محجوز حتى: {until}</p>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="px-4 py-3 border-t border-[#fcd34d] dark:border-amber-brand/40 bg-[#fffbeb] dark:bg-amber-brand/10">
+          <div className="px-5 py-4 border-t border-amber-brand/20 bg-amber-brand/5">
             <button
               onClick={onReleaseReserved}
               disabled={releasing}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-orange-brand hover:bg-orange-deep text-white transition disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-amber-brand to-orange-brand hover:from-orange-brand hover:to-orange-deep text-white transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50"
             >
-              {releasing
-                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                : <Unlock className="w-4 h-4" />}
-              {releasing ? "جاري الإلغاء..." : "إلغاء حجزها وإتاحتها"}
+              {releasing ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Unlock className="w-4 h-4" />
+              )}
+              {releasing ? "جاري الإلغاء..." : "إلغاء الحجز وإتاحة اللينكات"}
             </button>
           </div>
         </div>
@@ -198,93 +201,93 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
   );
 }
 
-/* ─── SessionsTable ───────────────────────────────────────── */
+/* ─── Modern Sessions Table (باستخدام ألوان العلامة التجارية) ──────── */
 function SessionsTable({ sessionRows, showAll, onToggleShow }) {
-  const total     = sessionRows.length;
-  const displayed = showAll ? sessionRows : sessionRows.slice(0, 6);
+  const total = sessionRows.length;
+  const displayed = showAll ? sessionRows : sessionRows.slice(0, 5);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-orange-brand" />
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <div className="p-1 rounded-lg bg-teal-brand/10 text-teal-brand">
+            <Layers className="w-4 h-4" />
+          </div>
           توزيع اللينكات على الجلسات
         </h3>
-        {total > 6 && (
+        {total > 5 && (
           <button
             onClick={onToggleShow}
-            className="flex items-center gap-1 text-xs text-teal-brand hover:underline"
+            className="flex items-center gap-1 text-xs font-medium text-teal-brand hover:text-teal-dark transition-colors"
           >
-            {showAll
-              ? <><ChevronUp className="w-3 h-3" /> عرض أقل</>
-              : <><ChevronDown className="w-3 h-3" /> عرض الكل ({total})</>}
+            {showAll ? (
+              <><ChevronUp className="w-3.5 h-3.5" /> عرض أقل</>
+            ) : (
+              <><ChevronDown className="w-3.5 h-3.5" /> عرض الكل ({total})</>
+            )}
           </button>
         )}
       </div>
 
-      <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        {/* Head */}
-        <div className="grid grid-cols-12 bg-gray-50 dark:bg-gray-800 px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase border-b border-gray-200 dark:border-gray-700">
+      <div className="rounded-2xl bg-white dark:bg-darklight border border-gray-200 dark:border-dark_border overflow-hidden shadow-sm">
+        <div className="grid grid-cols-12 bg-gray-50 dark:bg-darkhover/50 px-5 py-3 text-xs font-bold text-gray-500 dark:text-darktext uppercase border-b border-gray-200 dark:border-dark_border">
           <div className="col-span-1 text-center">#</div>
           <div className="col-span-5">الجلسة</div>
           <div className="col-span-3 text-center">التاريخ</div>
           <div className="col-span-3 text-center">اللينك</div>
         </div>
 
-        {/* Rows */}
-        <div className="divide-y divide-gray-100 dark:divide-gray-800">
+        <div className="divide-y divide-gray-100 dark:divide-dark_border/50">
           {displayed.map((row, idx) => {
             const link = row.assignedLink;
-            const pm   = link ? (PLATFORM_META[link.platform] || PLATFORM_META.other) : null;
+            const pm = link ? (PLATFORM_META[link.platform] || PLATFORM_META.other) : null;
             const date = row.scheduledDate
-              ? new Date(row.scheduledDate).toLocaleDateString("ar-EG", {
-                  day: "numeric", month: "short",
-                })
+              ? new Date(row.scheduledDate).toLocaleDateString("ar-EG", { day: "numeric", month: "short" })
               : "—";
 
             return (
               <div
                 key={idx}
-                className={`grid grid-cols-12 px-4 py-3 items-center text-sm ${
-                  link
-                    ? "bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60"
-                    : "bg-[#fff3e0]/60 dark:bg-orange-brand/5"
+                className={`grid grid-cols-12 px-5 py-3 items-center text-sm transition-colors ${
+                  link ? "hover:bg-gray-50 dark:hover:bg-darkhover/30" : "bg-amber-brand/5 dark:bg-amber-brand/5"
                 }`}
               >
                 <div className="col-span-1 text-center">
-                  <span className="inline-flex w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-xs font-bold items-center justify-center text-gray-500">
+                  <span className="inline-flex w-6 h-6 rounded-full bg-gray-100 dark:bg-darkmid text-xs font-bold items-center justify-center text-gray-500">
                     {idx + 1}
                   </span>
                 </div>
-                <div className="col-span-5 pr-1">
-                  <p className="text-gray-800 dark:text-gray-200 font-medium leading-tight truncate text-xs" title={row.title}>
+                <div className="col-span-5 pr-2">
+                  <p className="text-gray-800 dark:text-gray-200 font-semibold leading-tight truncate text-sm" title={row.title}>
                     {row.title || `جلسة ${idx + 1}`}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">{row.startTime} – {row.endTime}</p>
+                  <p className="text-xs text-gray-400 dark:text-darktext mt-0.5 flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> {row.startTime} – {row.endTime}
+                  </p>
                 </div>
-                <div className="col-span-3 text-center text-xs text-gray-500 dark:text-gray-400">
+                <div className="col-span-3 text-center text-xs text-gray-500 dark:text-darktext">
                   {date}
                 </div>
                 <div className="col-span-3 flex justify-center">
                   {link ? (
-                    <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${pm.bg} ${pm.color}`}>
+                    <div className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${pm.bg} ${pm.color} shadow-sm`}>
                       {pm.emoji}
-                      <span className="truncate max-w-[60px]">{link.name}</span>
-                    </span>
+                      <span className="truncate max-w-[70px]">{link.name}</span>
+                    </div>
                   ) : (
-                    <span className="flex items-center gap-1 text-xs text-orange-brand dark:text-orange-brand font-medium bg-[#fff3e0] dark:bg-orange-brand/10 px-2 py-1 rounded-full">
+                    <div className="flex items-center gap-1.5 text-xs text-amber-brand font-medium bg-amber-brand/10 px-3 py-1 rounded-full">
                       <WifiOff className="w-3 h-3" />
-                      لا يوجد
-                    </span>
+                      بدون
+                    </div>
                   )}
                 </div>
               </div>
             );
           })}
 
-          {!showAll && total > 6 && (
-            <div className="px-4 py-2 text-center text-xs text-gray-400 bg-gray-50 dark:bg-gray-800">
-              + {total - 6} جلسة أخرى
+          {!showAll && total > 5 && (
+            <div className="px-5 py-2 text-center text-xs text-darktext bg-gray-50 dark:bg-darkhover/30 font-medium">
+              + {total - 5} جلسات أخرى
             </div>
           )}
         </div>
@@ -293,20 +296,20 @@ function SessionsTable({ sessionRows, showAll, onToggleShow }) {
   );
 }
 
-/* ─── Modal الرئيسي ───────────────────────────────────────── */
+/* ─── Main Modal (باستخدام ألوان العلامة التجارية بالكامل) ─────────── */
 export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onConfirm }) {
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState(null);
-  const [rawData, setRawData]         = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [rawData, setRawData] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [showAll, setShowAll]         = useState(false);
-  const [releasing, setReleasing]     = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [releasing, setReleasing] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res  = await fetch(`/api/groups/${groupId}/activate`);
+      const res = await fetch(`/api/groups/${groupId}/activate`);
       const data = await res.json();
       if (!data.success) { setError(data.error || "حدث خطأ"); return; }
       setRawData(data.data);
@@ -337,14 +340,14 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
     setReleasing(true);
     try {
       const ids = (rawData?.reservedLinks || []).map((l) => l.id?.toString());
-      const res  = await fetch("/api/groups/release-links", {
+      const res = await fetch("/api/groups/release-links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ linkIds: ids }),
       });
       const data = await res.json();
       if (!data.success) { toast.error(data.error || "فشل الإلغاء"); return; }
-      toast.success(`تم إلغاء حجز ${data.released} لينك وإعادة توفيرهم`);
+      toast.success(`✨ تم إلغاء حجز ${data.released} لينك بنجاح`);
       await fetchStatus();
     } catch {
       toast.error("فشل في التواصل مع الخادم");
@@ -355,109 +358,87 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
 
   if (!isOpen) return null;
 
-  const availableLinks    = rawData?.availableLinks || [];
-  const reservedLinks     = rawData?.reservedLinks  || [];
-  const allSessions       = (rawData?.sessions || []).map((r) => r.session ?? r);
-  const totalSessions     = allSessions.length;
-  const hasNoLinks        = (rawData?.totalLinks ?? 0) === 0;
+  const availableLinks = rawData?.availableLinks || [];
+  const reservedLinks = rawData?.reservedLinks || [];
+  const allSessions = (rawData?.sessions || []).map((r) => r.session ?? r);
+  const totalSessions = allSessions.length;
+  const hasNoLinks = (rawData?.totalLinks ?? 0) === 0;
 
-  const chosenLinks   = availableLinks.filter(
+  const chosenLinks = availableLinks.filter(
     (l) => selectedIds.has(l._id?.toString() || l.id?.toString())
   );
   const chosenLinkIds = Array.from(selectedIds);
-
-  const sessionRows       = distributeLinks(allSessions, chosenLinks);
+  const sessionRows = distributeLinks(allSessions, chosenLinks);
   const sessionsWithLinks = sessionRows.filter((r) => r.assignedLink).length;
-  const sessionsWithout   = totalSessions - sessionsWithLinks;
+  const sessionsWithout = totalSessions - sessionsWithLinks;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      dir="rtl"
-    >
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
-
-        {/* ── Header ── */}
-        <div className="bg-teal-brand text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center">
-              <Link2 className="w-5 h-5" />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4" dir="rtl">
+      <div className="bg-white dark:bg-darkmode rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200/50 dark:border-dark_border/50 animate-in zoom-in-95 duration-300">
+        
+        {/* Header - باستخدام التدرج اللوني للعلامة التجارية */}
+        <div className="relative bg-gradient-to-l from-teal-brand to-teal-dark px-6 py-5 flex items-center justify-between flex-shrink-0 overflow-hidden">
+          <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+          <div className="absolute bottom-0 right-0 w-40 h-40 bg-black/10 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
+          <div className="relative flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm shadow-lg">
+              <Link2 className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold">توزيع لينكات الاجتماعات</h2>
-              <p className="text-xs text-white/60">اختر اللينكات التي ستُوزَّع على الجلسات</p>
+              <h2 className="text-xl font-bold text-white tracking-tight">توزيع لينكات الاجتماعات</h2>
+              <p className="text-sm text-white/70 mt-0.5">اختر اللينكات المناسبة لكل جلسة</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/15 rounded-lg transition"
-          >
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-all duration-200">
+            <X className="w-5 h-5 text-white" />
           </button>
         </div>
 
-        {/* ── Body ── */}
-        <div className="flex-1 overflow-y-auto">
-
-          {/* Loading */}
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
           {loading && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-brand" />
-              <p className="text-sm text-gray-500">جاري تحليل اللينكات والجلسات...</p>
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <div className="relative">
+                <div className="w-12 h-12 border-4 border-teal-brand/20 rounded-full animate-spin border-t-teal-brand" />
+                <Zap className="w-5 h-5 text-teal-brand absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              <p className="text-sm text-gray-500 dark:text-darktext font-medium">جاري تحليل اللينكات والجلسات...</p>
             </div>
           )}
 
-          {/* Error */}
           {!loading && error && (
-            <div className="flex flex-col items-center justify-center py-12 gap-4 px-6">
-              <AlertTriangle className="w-12 h-12 text-red-500" />
-              <p className="text-sm text-red-600 font-medium text-center">{error}</p>
+            <div className="flex flex-col items-center justify-center py-16 gap-5 px-6">
+              <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+              </div>
+              <p className="text-sm text-red-600 dark:text-red-400 font-medium text-center">{error}</p>
               <button
                 onClick={fetchStatus}
-                className="flex items-center gap-2 px-4 py-2 bg-teal-brand text-white rounded-lg text-sm hover:bg-teal-dark transition"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-brand to-teal-dark text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all"
               >
                 <RefreshCw className="w-4 h-4" /> إعادة المحاولة
               </button>
             </div>
           )}
 
-          {/* Content */}
           {!loading && !error && rawData && (
-            <div className="p-5 space-y-4">
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-3">
-                <SummaryCard
-                  label="إجمالي الجلسات"
-                  value={totalSessions}
-                  icon={<Calendar className="w-5 h-5" />}
-                  color="blue"
-                />
-                <SummaryCard
-                  label="ستأخذ لينكات"
-                  value={sessionsWithLinks}
-                  icon={<CheckCircle className="w-5 h-5" />}
-                  color="green"
-                />
-                <SummaryCard
-                  label="بدون لينكات"
-                  value={sessionsWithout}
-                  icon={<WifiOff className="w-5 h-5" />}
-                  color={sessionsWithout > 0 ? "orange" : "green"}
-                />
+            <div className="p-6 space-y-6">
+              {/* Stats Grid */}
+              <div className="grid grid-cols-3 gap-4">
+                <StatCard label="إجمالي الجلسات" value={totalSessions} icon={<Calendar className="w-5 h-5" />} />
+                <StatCard label="ستأخذ لينكات" value={sessionsWithLinks} icon={<CheckCircle className="w-5 h-5" />} trend="✓ جاهزة" />
+                <StatCard label="بدون لينكات" value={sessionsWithout} icon={<WifiOff className="w-5 h-5" />} />
               </div>
 
-              {/* No links at all */}
               {hasNoLinks && (
-                <Banner
+                <AlertBanner
                   type="error"
-                  icon={<AlertTriangle className="w-5 h-5 flex-shrink-0" />}
+                  icon={<AlertTriangle className="w-5 h-5" />}
                   title="لا توجد لينكات في النظام"
-                  body="لم يتم إضافة أي لينكات اجتماعات بعد. ستُنشأ الجلسات بدون لينكات ويمكن إضافتها لاحقاً."
+                  body="لم يتم إضافة أي لينكات اجتماعات بعد. يمكنك إضافتها لاحقاً من إعدادات المجموعة."
                 />
               )}
 
-              {/* Link selector */}
               {!hasNoLinks && (
                 <LinkSelector
                   availableLinks={availableLinks}
@@ -469,48 +450,39 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
                 />
               )}
 
-              {/* Success banner */}
               {!hasNoLinks && chosenLinks.length > 0 && (
-                <Banner
+                <AlertBanner
                   type="success"
-                  icon={<CheckCircle className="w-5 h-5 flex-shrink-0" />}
-                  title={`${chosenLinks.length === 1 ? "لينك واحد مختار" : `${chosenLinks.length} لينكات مختارة`} — كل الجلسات ستحصل على لينك ✓`}
-                  body={
-                    chosenLinks.length === 1
-                      ? `نفس اللينك سيُستخدم لجميع الـ ${totalSessions} جلسة.`
-                      : `سيتوزعون دورياً على الـ ${totalSessions} جلسة.`
-                  }
+                  icon={<CheckCircle className="w-5 h-5" />}
+                  title={`✅ ${chosenLinks.length === 1 ? "لينك واحد مختار" : `${chosenLinks.length} لينكات مختارة`}`}
+                  body={chosenLinks.length === 1
+                    ? `سيتم استخدام نفس اللينك لجميع الجلسات الـ ${totalSessions}`
+                    : `سيتم توزيع اللينكات دورياً على الـ ${totalSessions} جلسة`}
                 />
               )}
 
-              {/* Warning: nothing chosen */}
               {!hasNoLinks && chosenLinks.length === 0 && availableLinks.length > 0 && (
-                <Banner
+                <AlertBanner
                   type="warning"
-                  icon={<AlertTriangle className="w-5 h-5 flex-shrink-0" />}
-                  title="لم تختر أي لينك"
-                  body="ستُنشأ الجلسات بدون لينكات. يمكنك إضافتها لاحقاً."
+                  icon={<AlertTriangle className="w-5 h-5" />}
+                  title="⚠️ لم تختر أي لينك"
+                  body="سيتم إنشاء الجلسات بدون لينكات، يمكنك إضافتها لاحقاً"
                 />
               )}
 
-              {/* Sessions table */}
               {totalSessions > 0 && (
-                <SessionsTable
-                  sessionRows={sessionRows}
-                  showAll={showAll}
-                  onToggleShow={() => setShowAll((p) => !p)}
-                />
+                <SessionsTable sessionRows={sessionRows} showAll={showAll} onToggleShow={() => setShowAll((p) => !p)} />
               )}
             </div>
           )}
         </div>
 
-        {/* ── Footer ── */}
+        {/* Footer */}
         {!loading && !error && rawData && (
-          <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-800/60 flex items-center gap-3 flex-shrink-0">
+          <div className="border-t border-gray-200 dark:border-dark_border px-6 py-5 bg-gray-50/80 dark:bg-darkhover/30 flex items-center gap-3 flex-shrink-0">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-dark_border text-gray-700 dark:text-gray-300 rounded-xl text-sm font-bold hover:bg-gray-100 dark:hover:bg-darkhover transition-all"
             >
               إلغاء
             </button>
@@ -518,17 +490,17 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
             {hasNoLinks || chosenLinks.length === 0 ? (
               <button
                 onClick={() => onConfirm(true, false, [], availableLinks)}
-                className="flex-1 px-4 py-2.5 bg-orange-brand hover:bg-orange-deep text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-brand to-orange-brand hover:from-orange-brand hover:to-orange-deep text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md"
               >
-                <AlertTriangle className="w-4 h-4" />
-                التفعيل بدون لينكات
+                <Zap className="w-4 h-4" />
+                تفعيل بدون لينكات
               </button>
             ) : (
               <button
                 onClick={() => onConfirm(false, false, chosenLinkIds, availableLinks)}
-                className="flex-1 px-4 py-2.5 bg-teal-brand hover:bg-teal-dark text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-teal-brand to-teal-dark hover:from-teal-dark hover:to-teal-deeper text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md"
               >
-                <CheckCircle className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4" />
                 متابعة للإشعارات
               </button>
             )}

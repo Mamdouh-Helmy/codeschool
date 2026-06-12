@@ -466,6 +466,7 @@ export async function POST(req, { params }) {
 }
 
 // ─── PATCH: احفظ التقييمات + ابعت الرسائل ────────────────────────────────────
+// ─── PATCH: احفظ التقييمات + ابعت الرسائل ────────────────────────────────────
 export async function PATCH(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -496,11 +497,12 @@ export async function PATCH(req, { params }) {
       if (!isInstructor) return NextResponse.json({ success: false, message: 'مش مدرس هذا الجروب' }, { status: 403 });
     }
 
+    // ✅ احفظ الحالة القديمة قبل أي تعديل
+    const wasAlreadyCompleted = session.status === 'completed';
+
     const { moduleTitle, moduleDescription } = session.groupId?._id
       ? await getModuleData(session.groupId._id, session.moduleIndex ?? 0)
       : { moduleTitle: '', moduleDescription: '' };
-
-    console.log(`📚 Module data fetched — title: "${moduleTitle}" | desc: "${moduleDescription?.substring(0, 60)}..."`);
 
     const attendanceMap = {};
     (session.attendance || []).forEach((a) => { attendanceMap[a.studentId?.toString()] = a.status; });
@@ -560,7 +562,6 @@ export async function PATCH(req, { params }) {
 
       const remainingHours = student.creditSystem?.currentPackage?.remainingHours ?? 0;
       if (remainingHours <= 0) {
-        console.log(`🔕 Student ${studentId} has zero balance — skipping messages`);
         results.push({ studentId, decision, attendanceStatus, messageSent: false, recordingLinkSent: false, skipped: true });
         continue;
       }
@@ -572,7 +573,6 @@ export async function PATCH(req, { params }) {
         try {
           const { wapilotService } = await import('../../../../../services/wapilot-service');
 
-          console.log(`📤 [EVAL] Sending evaluation message via ${wapilotService.evalInstanceId} | lang: ${lang}`);
           const evalResult = await wapilotService.sendAndLogEvalMessage({
             studentId,
             phoneNumber:    guardianPhone,
@@ -595,7 +595,6 @@ export async function PATCH(req, { params }) {
           if (recordingLink?.trim()) {
             const { rendered: recRendered } = await buildRecordingMessage(student, session, recordingLink);
 
-            console.log(`📤 [MAIN] Sending recording link via ${wapilotService.instanceId} | lang: ${lang}`);
             const linkResult = await wapilotService.sendAndLogMessage({
               studentId,
               phoneNumber:    guardianPhone,
@@ -610,7 +609,6 @@ export async function PATCH(req, { params }) {
               },
             });
             recordingLinkSent = linkResult?.success || false;
-            console.log(`🎥 Recording link sent: ${recordingLinkSent}`);
           }
 
         } catch (err) {
@@ -621,12 +619,12 @@ export async function PATCH(req, { params }) {
       results.push({ studentId, decision, attendanceStatus, messageSent, recordingLinkSent });
     }
 
-    const wasAlreadyCompleted = session.status === 'completed';
-
-    session.status = 'completed';
-    await session.save();
-
+    // ✅ حدّث الـ status بس لو مش completed
     if (!wasAlreadyCompleted) {
+      session.status = 'completed';
+      await session.save();
+
+      // ✅ ضيف ساعتين للمدرس مرة واحدة بس
       try {
         const group = await Group.findById(session.groupId?._id || session.groupId);
         if (group) {
@@ -637,7 +635,7 @@ export async function PATCH(req, { params }) {
         console.error('⚠️ addInstructorHours failed:', err.message);
       }
     } else {
-      console.log(`⏭️ Session was already completed — skipping instructor hours`);
+      console.log(`⏭️ Session already completed — skipping status update and instructor hours`);
     }
 
     const evalSent = results.filter((r) => r.messageSent).length;
@@ -646,7 +644,7 @@ export async function PATCH(req, { params }) {
 
     return NextResponse.json({
       success: true,
-      message: 'تم حفظ التقييمات وإكمال الجلسة بنجاح',
+      message: 'تم حفظ التقييمات بنجاح',
       data: {
         results,
         sessionCompleted: true,
@@ -654,6 +652,7 @@ export async function PATCH(req, { params }) {
         summary: { total: results.length, evalSent, linkSent, skipped },
       },
     });
+
   } catch (error) {
     console.error('❌ [Evaluation PATCH]:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

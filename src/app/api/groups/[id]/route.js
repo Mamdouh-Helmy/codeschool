@@ -283,7 +283,10 @@ export async function DELETE(req, { params }) {
 
     const deletedGroup = await Group.findByIdAndDelete(id);
     await Session.deleteMany({ groupId: id });
-    await Student.updateMany({ groups: id }, { $pull: { groups: id } });
+    await Student.updateMany(
+  { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) },
+  { $pull: { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) } }
+);
 
     console.log(`✅ Group permanently deleted: ${deletedGroup?.code || id}`);
 
