@@ -13,7 +13,6 @@ const STEPS = [
   { id: "basic",       icon: Hash,       color: "violet"  },
   { id: "instructors", icon: User,       color: "blue"    },
   { id: "schedule",    icon: Calendar,   color: "purple"  },
-
   { id: "automation",  icon: Bell,       color: "orange"  },
 ];
 
@@ -21,7 +20,6 @@ const COLOR = {
   violet:  { btn: "from-violet-600 to-purple-600",   dot: "bg-violet-500",   text: "text-violet-600 dark:text-violet-400",   border: "border-violet-200 dark:border-violet-800",   panel: "from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20",   badge: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300",   ring: "ring-violet-400"  },
   blue:    { btn: "from-blue-600 to-indigo-600",     dot: "bg-blue-500",     text: "text-blue-600 dark:text-blue-400",       border: "border-blue-200 dark:border-blue-800",       panel: "from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20",       badge: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",           ring: "ring-blue-400"    },
   purple:  { btn: "from-purple-600 to-fuchsia-600",  dot: "bg-purple-500",   text: "text-purple-600 dark:text-purple-400",   border: "border-purple-200 dark:border-purple-800",   panel: "from-purple-50 to-fuchsia-50 dark:from-purple-900/20 dark:to-fuchsia-900/20", badge: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",   ring: "ring-purple-400"  },
-
   orange:  { btn: "from-orange-500 to-amber-500",   dot: "bg-orange-500",   text: "text-orange-600 dark:text-orange-400",   border: "border-orange-200 dark:border-orange-800",   panel: "from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20",   badge: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",   ring: "ring-orange-400"  },
 };
 
@@ -47,11 +45,13 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   const next = () => goTo(Math.min(step + 1, STEPS.length - 1));
   const prev = () => goTo(Math.max(step - 1, 0));
 
-  // ── form state (unchanged) ──────────────────────────────────────────────────
+  // ── form state ──────────────────────────────────────────────────────────────
   const [form, setForm] = useState({
     name: initial?.name || "",
-    courseId: initial?.courseId?._id || initial?.courseId || "",
-    instructors: initial?.instructors?.map(i => i._id || i) || [],
+    // ✅ FIX: بيدور على courseId في كل الأشكال الممكنة
+    courseId: initial?.courseId?._id || initial?.courseId || initial?.course?.id || initial?.course?._id || "",
+    // ✅ FIX: بيحول كل IDs لـ string عشان المقارنة تشتغل صح
+    instructors: initial?.instructors?.map(i => (i._id || i.id || i)?.toString()) || [],
     maxStudents: initial?.maxStudents || 25,
     schedule: {
       startDate: initial?.schedule?.startDate?.split("T")[0] || "",
@@ -105,7 +105,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     return groups;
   };
 
-  // ── data loading (unchanged) ────────────────────────────────────────────────
+  // ── data loading ────────────────────────────────────────────────────────────
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -141,7 +141,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     loadCurriculum();
   }, [form.courseId, t]);
 
-  // ── handlers (unchanged) ────────────────────────────────────────────────────
+  // ── handlers ────────────────────────────────────────────────────────────────
   const handleStartDateChange = (ds) => {
     const englishDay = getEnglishDayNameFromDate(ds);
     const firstDay = getDayNameFromDate(ds);
@@ -174,12 +174,22 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     });
   };
 
-  const toggleInstructor = (id) => setForm(prev => ({ ...prev, instructors: prev.instructors.includes(id) ? prev.instructors.filter(i => i !== id) : [...prev.instructors, id] }));
+  // ✅ FIX: بيحول الـ id لـ string قبل المقارنة
+  const toggleInstructor = (id) => {
+    const idStr = id?.toString();
+    setForm(prev => ({
+      ...prev,
+      instructors: prev.instructors.includes(idStr)
+        ? prev.instructors.filter(i => i !== idStr)
+        : [...prev.instructors, idStr]
+    }));
+  };
+
   const toggleModuleExpand = (idx) => setExpandedModules(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
   const isDaySelected = (day) => { const idx = daysOfWeek.indexOf(day); return form.schedule.daysOfWeek.includes(englishDays[idx]); };
   const firstDayName = getDayNameFromDate(form.schedule.startDate);
 
-  // ── sub-components (unchanged logic) ───────────────────────────────────────
+  // ── sub-components ──────────────────────────────────────────────────────────
   const ModuleSelection = ({ curriculum, selectedModules, setSelectedModules }) => {
     if (!curriculum?.length) return null;
     return (
@@ -304,7 +314,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     );
   };
 
-  // ── submit (unchanged) ──────────────────────────────────────────────────────
+  // ── submit ──────────────────────────────────────────────────────────────────
   const submit = async () => {
     setLoading(true);
     const toastId = toast.loading(initial ? t("groups.form.messages.updating") : t("groups.form.messages.creating"));
@@ -381,7 +391,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           </div>
 
           {/* ══════════════════════════════════════════ */}
-          {/* STEP 0 — Basic Info */}
+          {/* STEP 0 — Basic Info                       */}
           {/* ══════════════════════════════════════════ */}
           {step === 0 && (
             <div className="space-y-4">
@@ -417,7 +427,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           )}
 
           {/* ══════════════════════════════════════════ */}
-          {/* STEP 1 — Instructors */}
+          {/* STEP 1 — Instructors                      */}
           {/* ══════════════════════════════════════════ */}
           {step === 1 && (
             <div>
@@ -427,20 +437,25 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                   ? <div className="text-center py-8 text-sm text-gray-500">{t("groups.form.noInstructors")}</div>
                   : (
                     <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
-                      {instructors.map(instructor => (
-                        <div key={instructor._id} onClick={() => toggleInstructor(instructor._id)}
-                          className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${form.instructors.includes(instructor._id) ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" : "border-PowderBlueBorder dark:border-dark_border hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
-                          <input type="checkbox" checked={form.instructors.includes(instructor._id)} onChange={() => {}} className="w-4 h-4 text-primary rounded" />
-                          <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                            <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      {instructors.map(instructor => {
+                        // ✅ FIX: نحول الـ id لـ string قبل المقارنة
+                        const instructorId = instructor._id?.toString();
+                        const isSelected = form.instructors.includes(instructorId);
+                        return (
+                          <div key={instructor._id} onClick={() => toggleInstructor(instructorId)}
+                            className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${isSelected ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" : "border-PowderBlueBorder dark:border-dark_border hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
+                            <input type="checkbox" checked={isSelected} onChange={() => {}} className="w-4 h-4 text-primary rounded" />
+                            <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                              <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-MidnightNavyText dark:text-white">{instructor.name}</p>
+                              <p className="text-xs text-SlateBlueText dark:text-darktext">{instructor.email}</p>
+                            </div>
+                            {isSelected && <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />}
                           </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-MidnightNavyText dark:text-white">{instructor.name}</p>
-                            <p className="text-xs text-SlateBlueText dark:text-darktext">{instructor.email}</p>
-                          </div>
-                          {form.instructors.includes(instructor._id) && <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
               {form.instructors.length > 0 && (
@@ -452,7 +467,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           )}
 
           {/* ══════════════════════════════════════════ */}
-          {/* STEP 2 — Schedule */}
+          {/* STEP 2 — Schedule                         */}
           {/* ══════════════════════════════════════════ */}
           {step === 2 && (
             <div className="space-y-5">
@@ -504,7 +519,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           )}
 
           {/* ══════════════════════════════════════════ */}
-          {/* STEP 3 — Automation */}
+          {/* STEP 3 — Automation                       */}
           {/* ══════════════════════════════════════════ */}
           {step === 3 && (
             <div className="space-y-3">

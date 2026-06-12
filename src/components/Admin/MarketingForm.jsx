@@ -36,20 +36,20 @@ export default function MarketingForm({ initial, isCreating, onClose, onSaved })
     };
 
     /**
-     * رفع الصورة إلى Cloudinary
+     * رفع الصورة إلى Cloudinary عبر FormData
      */
-    const uploadImageToCloudinary = async (base64Image) => {
+    const uploadImageToCloudinary = async (file) => {
         setUploadingImage(true);
         const toastId = toast.loading("جاري رفع الصورة...");
 
         try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("folder", "marketing");
+
             const response = await fetch('/api/upload-image', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image: base64Image,
-                    folder: 'marketing' // مجلد خاص بصور التسويق
-                })
+                body: formData
             });
 
             const data = await response.json();
@@ -75,36 +75,25 @@ export default function MarketingForm({ initial, isCreating, onClose, onSaved })
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // التحقق من نوع الملف
         const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
         if (!allowedTypes.includes(file.type)) {
             toast.error("نوع الملف غير مدعوم. يرجى استخدام صورة (JPEG, PNG, WebP)");
             return;
         }
 
-        // التحقق من الحجم (5MB)
         if (file.size > 5 * 1024 * 1024) {
             toast.error("حجم الملف كبير جداً. الحد الأقصى 5MB");
             return;
         }
 
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            const result = e.target?.result;
+        // معاينة فورية بدون FileReader
+        const previewUrl = URL.createObjectURL(file);
+        setImagePreview(previewUrl);
 
-            // عرض معاينة فورية
-            setImagePreview(result);
-
-            try {
-                // رفع الصورة إلى Cloudinary
-                await uploadImageToCloudinary(result);
-            } catch (error) {
-                // إعادة المعاينة للصورة القديمة في حالة الفشل
-                setImagePreview(initial?.image || "");
-                onChange("image", initial?.image || "");
-            }
-        };
-        reader.readAsDataURL(file);
+        uploadImageToCloudinary(file).catch(() => {
+            setImagePreview(initial?.image || "");
+            onChange("image", initial?.image || "");
+        });
     };
 
     useEffect(() => {
@@ -116,7 +105,6 @@ export default function MarketingForm({ initial, isCreating, onClose, onSaved })
     const submit = async (e) => {
         e.preventDefault();
 
-        // Validation
         if (!form.name.trim()) {
             toast.error(t("marketingForm.nameRequired") || "Name is required");
             return;
