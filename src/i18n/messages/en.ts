@@ -4197,6 +4197,10 @@ const en = {
   "groups.days.friday": "Friday",
   "groups.days.saturday": "Saturday",
   "dashboard.Schedules": "Schedules",
+
+  "instructorForm.language": "Language",
+  "instructorForm.addInstructor": "Add Instructor",
+  "instructorForm.uploading": "Uploading...",
 };
 
 export default en;

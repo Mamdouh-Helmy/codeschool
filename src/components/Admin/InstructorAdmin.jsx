@@ -571,7 +571,7 @@ export default function InstructorAdmin() {
                     setEditingInstructor(null);
                     setIsCreating(false);
                 }}
-                size="md"
+                size="xl"
             >
                 <InstructorForm
                     initial={editingInstructor}

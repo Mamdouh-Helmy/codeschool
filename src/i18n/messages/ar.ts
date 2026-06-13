@@ -4319,6 +4319,10 @@ const ar = {
   "groups.days.friday": "الجمعة",
   "groups.days.saturday": "السبت",
   "dashboard.Schedules": "الجداول",
+
+  "instructorForm.language": "اللغة",
+  "instructorForm.addInstructor": "إضافة مدرب",
+  "instructorForm.uploading": "جارٍ الرفع...",
 };
 
 export default ar;

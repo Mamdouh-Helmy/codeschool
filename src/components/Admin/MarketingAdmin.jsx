@@ -520,7 +520,7 @@ export default function MarketingAdmin() {
                     setEditingMarketing(null);
                     setIsCreating(false);
                 }}
-                size="md"
+                size="xl"
             >
                 <MarketingForm
                     initial={editingMarketing}

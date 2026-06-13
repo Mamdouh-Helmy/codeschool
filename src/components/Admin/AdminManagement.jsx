@@ -523,7 +523,7 @@ export default function AdminManagement() {
                     setEditingAdmin(null);
                     setIsCreating(false);
                 }}
-                size="md"
+                size="xl"
             >
                 <AdminForm
                     initial={editingAdmin}
