@@ -53,21 +53,25 @@ export async function PUT(
       );
     }
 
-    const updateData: any = {};
+    // ── تحديث الـ fields مباشرة على الـ document ──────────────────────────
+    if (name && name.trim())    instructor.name     = name.trim();
+    if (language !== undefined) instructor.language = language === "en" ? "en" : "ar";
+    if (image !== undefined)    instructor.image    = image?.trim() || "/images/default-avatar.jpg";
 
-    if (name && name.trim())       updateData.name     = name.trim();
-    if (image !== undefined)       updateData.image    = image && image.trim() ? image.trim() : "/images/default-avatar.jpg";
-    if (language !== undefined)    updateData.language = language === "en" ? "en" : "ar";
-    if (phone !== undefined)       updateData["profile.phone"] = phone && phone.trim() ? phone.trim() : "";
-
-    if (gender !== undefined) {
-      if (gender === null || gender === "") {
-        updateData.gender = undefined;
-      } else if (gender === "male" || gender === "female") {
-        updateData.gender = gender;
-      }
+    // phone جوا profile
+    if (phone !== undefined) {
+      instructor.profile        = instructor.profile || {};
+      instructor.profile.phone  = phone?.trim() || "";
     }
 
+    // gender
+    if (gender === "" || gender === null) {
+      instructor.gender = undefined;
+    } else if (gender === "male" || gender === "female") {
+      instructor.gender = gender;
+    }
+
+    // username
     if (username && username.trim()) {
       const existing = await User.findOne({
         username: username.toLowerCase().trim(),
@@ -79,9 +83,10 @@ export async function PUT(
           { status: 400 }
         );
       }
-      updateData.username = username.toLowerCase().trim();
+      instructor.username = username.toLowerCase().trim();
     }
 
+    // password
     if (password && password.trim()) {
       if (password.length < 6) {
         return NextResponse.json(
@@ -89,14 +94,16 @@ export async function PUT(
           { status: 400 }
         );
       }
-      updateData.password = await bcrypt.hash(password, 10);
+      instructor.password = await bcrypt.hash(password, 10);
     }
 
-    const updatedInstructor = await User.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    ).select("_id name email username image gender language profile isActive");
+    // ── حفظ مباشر بدون runValidators عشان الـ nested fields ──────────────
+    instructor.markModified("profile");
+    await instructor.save({ validateBeforeSave: false });
+
+    // ── جيب البيانات المحدثة ──────────────────────────────────────────────
+    const updatedInstructor = await User.findById(id)
+      .select("_id name email username image gender language profile isActive");
 
     return NextResponse.json({
       success: true,

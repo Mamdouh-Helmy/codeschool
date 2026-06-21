@@ -4201,6 +4201,17 @@ const en = {
   "instructorForm.language": "Language",
   "instructorForm.addInstructor": "Add Instructor",
   "instructorForm.uploading": "Uploading...",
+  "studentForm.newPassword": "New Password",
+  "studentForm.changePasswordHint":
+    "Leave this field empty if you don't want to change the password.",
+  "studentForm.changePassword": "Change Password",
+  "studentForm.emailWillBeUpdated": "The student's email will be updated.",
+  "studentForm.passwordSecure":
+    "The password is securely encrypted and cannot be viewed.",
+  "studentForm.checkingEmail": "Checking email availability...",
+  "studentForm.emailAlreadyTaken": "This email address is already in use.",
+  "studentForm.emailAvailable": "Email address is available.",
+
 };
 
 export default en;

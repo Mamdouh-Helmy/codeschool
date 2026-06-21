@@ -254,12 +254,17 @@ export async function onGroupActivated(groupId, userId, selectedLinkIds = []) {
               endTime.setHours(eh, em, 0, 0);
 
               await link.reserveForSession(
-                lastSession._id,
-                groupId,
-                startTime,
-                endTime,
-                userId,
-              );
+  lastSession._id,
+  groupId,
+  startTime,
+  endTime,
+  userId,
+  {
+    daysOfWeek: group.schedule.daysOfWeek,
+    timeFrom: group.schedule.timeFrom,
+    timeTo: group.schedule.timeTo,
+  },
+);
 
               console.log(
                 `✅ Reserved "${link.name}" — ${sessionsUsingLink.length} sessions` +

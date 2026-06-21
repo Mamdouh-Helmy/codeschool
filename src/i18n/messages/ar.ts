@@ -4323,6 +4323,17 @@ const ar = {
   "instructorForm.language": "اللغة",
   "instructorForm.addInstructor": "إضافة مدرب",
   "instructorForm.uploading": "جارٍ الرفع...",
+  "studentForm.newPassword": "كلمة المرور الجديدة",
+  "studentForm.changePasswordHint":
+    "اترك هذا الحقل فارغًا إذا كنت لا ترغب في تغيير كلمة المرور.",
+  "studentForm.changePassword": "تغيير كلمة المرور",
+  "studentForm.emailWillBeUpdated": "سيتم تحديث البريد الإلكتروني للطالب.",
+  "studentForm.passwordSecure":
+    "يتم تشفير كلمة المرور بشكل آمن ولا يمكن عرضها.",
+  "studentForm.checkingEmail": "جارٍ التحقق من توفر البريد الإلكتروني...",
+  "studentForm.emailAlreadyTaken": "عنوان البريد الإلكتروني هذا مستخدم بالفعل.",
+  "studentForm.emailAvailable": "عنوان البريد الإلكتروني متاح.",
+
 };
 
 export default ar;

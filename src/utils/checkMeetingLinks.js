@@ -111,21 +111,40 @@ async function checkLinkAvailability(link, startTime, endTime) {
   if (link.status === "available") {
     return true;
   }
-  
-  if (link.status === "reserved" && link.currentReservation) {
-    const reservedStart = new Date(link.currentReservation.startTime);
+
+  if (link.status === "reserved" && link.currentReservation?.sessionId) {
     const reservedEnd = new Date(link.currentReservation.endTime);
     const now = new Date();
-    
-    // إذا انتهى الحجز، الرابط متاح
+
+    // إذا انتهى الحجز كليًا، الرابط متاح
     if (reservedEnd < now) {
       return true;
     }
-    
-    // التحقق من عدم التعارض
+
+    const res = link.currentReservation;
+
+    // ✅ FIX: لو فيه بيانات تكرار (الأيام + الوقت) - استخدمها للمقارنة الصحيحة
+    // بدل المقارنة بالتاريخ المطلق اللي كانت بتعتبر أي وقت جوه نطاق
+    // [أول سيشن → آخر سيشن] محجوز، حتى لو يوم/ساعة مختلفين تمامًا
+    if (res.daysOfWeek?.length && res.timeFrom && res.timeTo) {
+      const dayName = startTime.toLocaleDateString("en-US", { weekday: "long" });
+      const dayOverlap = res.daysOfWeek.includes(dayName);
+      if (!dayOverlap) return true; // يوم مختلف - مفيش تعارض
+
+      const newFrom = `${startTime.getHours().toString().padStart(2, "0")}${startTime.getMinutes().toString().padStart(2, "0")}`;
+      const newTo = `${endTime.getHours().toString().padStart(2, "0")}${endTime.getMinutes().toString().padStart(2, "0")}`;
+      const existFrom = res.timeFrom.replace(":", "");
+      const existTo = res.timeTo.replace(":", "");
+
+      const hasTimeConflict = !(newTo <= existFrom || newFrom >= existTo);
+      return !hasTimeConflict;
+    }
+
+    // fallback لحجوزات قديمة بدون بيانات تكرار (قبل التحديث)
+    const reservedStart = new Date(res.startTime);
     return !(startTime < reservedEnd && endTime > reservedStart);
   }
-  
+
   return false;
 }
 

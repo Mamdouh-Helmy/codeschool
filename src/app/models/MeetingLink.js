@@ -2,159 +2,90 @@ import mongoose from "mongoose";
 
 const meetingLinkSchema = new mongoose.Schema(
   {
-    // Basic Information
-    name: {
-      type: String,
-      required: true,
-    },
-    link: {
-      type: String,
-      required: true,
-      unique: true,
-    },
+    name: { type: String, required: true },
+    link: { type: String, required: true, unique: true },
 
-    // Credentials
     credentials: {
       username: String,
       password: String,
     },
 
-    // Platform
     platform: {
       type: String,
       enum: ["zoom", "google_meet", "microsoft_teams", "other"],
       default: "zoom",
     },
 
-    // Status
     status: {
       type: String,
       enum: ["available", "reserved", "in_use", "maintenance", "inactive"],
       default: "available",
     },
 
-    // Settings
-    capacity: {
-      type: Number,
-      default: 100,
-    },
-    durationLimit: {
-      type: Number,
-      default: 120,
-    },
+    capacity: { type: Number, default: 100 },
+    durationLimit: { type: Number, default: 120 },
 
-    // Scheduling
     allowedDays: [
       {
         type: String,
-        enum: [
-          "Sunday",
-          "Monday",
-          "Tuesday",
-          "Wednesday",
-          "Thursday",
-          "Friday",
-          "Saturday",
-        ],
+        enum: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
       },
     ],
-    allowedTimeSlots: [
-      {
-        startTime: String,
-        endTime: String,
-      },
-    ],
+    allowedTimeSlots: [{ startTime: String, endTime: String }],
 
-    // Usage Tracking
     usageHistory: [
       {
-        sessionId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Session",
-        },
-        groupId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Group",
-        },
+        sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
+        groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group" },
         startTime: Date,
         endTime: Date,
         duration: Number,
-        usedAt: {
-          type: Date,
-          default: Date.now,
-        },
+        usedAt: { type: Date, default: Date.now },
       },
     ],
 
-    // Current Reservation
+    // ✅ Current Reservation
+    // startTime/endTime = النطاق الكامل (أول سيشن → آخر سيشن) وده للعرض بس
+    // ("محجوز لحد كذا" في الواجهة) — مش بيُستخدم للفحص الفعلي للتعارض
+    // ✅ الفحص الحقيقي بيعتمد على daysOfWeek + timeFrom/timeTo (الجدول الأسبوعي المتكرر)
     currentReservation: {
-      sessionId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Session",
-      },
-      groupId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Group",
-      },
+      sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
+      groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group" },
       startTime: Date,
       endTime: Date,
-      reservedAt: {
-        type: Date,
-        default: Date.now,
-      },
-      reservedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
+      // ✅ NEW
+      daysOfWeek: [
+        {
+          type: String,
+          enum: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
+        },
+      ],
+      timeFrom: String, // "HH:MM"
+      timeTo: String,   // "HH:MM"
+      reservedAt: { type: Date, default: Date.now },
+      reservedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     },
 
-    // Statistics
     stats: {
-      totalUses: {
-        type: Number,
-        default: 0,
-      },
-      totalHours: {
-        type: Number,
-        default: 0,
-      },
+      totalUses: { type: Number, default: 0 },
+      totalHours: { type: Number, default: 0 },
       lastUsed: Date,
-      averageUsageDuration: {
-        type: Number,
-        default: 0,
-      },
+      averageUsageDuration: { type: Number, default: 0 },
     },
 
-    // Metadata
     metadata: {
-      createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-      createdAt: {
-        type: Date,
-        default: Date.now,
-      },
-      updatedAt: {
-        type: Date,
-        default: Date.now,
-      },
+      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      createdAt: { type: Date, default: Date.now },
+      updatedAt: { type: Date, default: Date.now },
       notes: String,
     },
 
-    // Soft Delete
-    isDeleted: {
-      type: Boolean,
-      default: false,
-    },
+    isDeleted: { type: Boolean, default: false },
     deletedAt: Date,
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// ==================== INDEXES ====================
 meetingLinkSchema.index({ link: 1 }, { unique: true });
 meetingLinkSchema.index({ status: 1 });
 meetingLinkSchema.index({ platform: 1 });
@@ -162,69 +93,76 @@ meetingLinkSchema.index({ isDeleted: 1 });
 meetingLinkSchema.index({ "currentReservation.sessionId": 1 });
 meetingLinkSchema.index({ "currentReservation.endTime": 1 });
 
+// ==================== HELPER ====================
+/**
+ * ✅ مقارنة جدول جديد مع حجز موجود بناءً على التكرار الأسبوعي (يوم + وقت)
+ * مش بناءً على التاريخ المطلق
+ */
+function scheduleOverlaps(newSchedule, reservedDays, reservedFrom, reservedTo) {
+  if (!newSchedule?.daysOfWeek?.length || !newSchedule?.timeFrom || !newSchedule?.timeTo) {
+    return true; // بيانات ناقصة - تعامل بحذر
+  }
+  if (!reservedDays?.length || !reservedFrom || !reservedTo) {
+    // حجز قديم من غير بيانات تكرار (قبل التحديث) - افترض تعارض للأمان
+    return true;
+  }
+
+  const dayOverlap = newSchedule.daysOfWeek.some((d) => reservedDays.includes(d));
+  if (!dayOverlap) return false;
+
+  const newFrom = newSchedule.timeFrom.replace(":", "");
+  const newTo = newSchedule.timeTo.replace(":", "");
+  const existFrom = reservedFrom.replace(":", "");
+  const existTo = reservedTo.replace(":", "");
+
+  return !(newTo <= existFrom || newFrom >= existTo);
+}
+
 // ==================== STATIC METHODS ====================
 
 /**
- * ✅ Find available meeting links for a time slot
+ * ✅ NEW: جلب اللينكات المتاحة فعليًا لجدول جروب جديد
+ * (بيقارن الأيام/الساعات الأسبوعية مش التاريخ الكامل)
  */
-meetingLinkSchema.statics.findAvailableLinks = async function (
-  startTime,
-  endTime,
-  limit = 10
-) {
+meetingLinkSchema.statics.findAvailableLinksForSchedule = async function (newSchedule, limit = 50) {
   try {
     const now = new Date();
-
-    const availableLinks = await this.find({
+    const candidates = await this.find({
       isDeleted: false,
       status: { $in: ["available", "reserved"] },
-      $or: [
-        { "currentReservation.sessionId": { $exists: false } },
-        { "currentReservation.sessionId": null },
-        { "currentReservation.endTime": { $lt: now } },
-      ],
     })
       .sort({ "stats.totalUses": 1 })
-      .limit(limit)
       .lean();
 
-    console.log(`📋 Found ${availableLinks.length} available meeting links`);
+    const available = candidates.filter((link) => {
+      const res = link.currentReservation;
+      if (!res?.sessionId) return true;
+      if (new Date(res.endTime) < now) return true;
+      return !scheduleOverlaps(newSchedule, res.daysOfWeek, res.timeFrom, res.timeTo);
+    });
 
-    return availableLinks;
+    return available.slice(0, limit);
   } catch (error) {
-    console.error("❌ Error finding available links:", error);
+    console.error("❌ Error finding schedule-available links:", error);
     return [];
   }
 };
 
-/**
- * ✅ Get meeting link by ID
- */
 meetingLinkSchema.statics.getById = async function (linkId) {
   try {
-    const link = await this.findOne({
-      _id: linkId,
-      isDeleted: false,
-    });
-
-    return link;
+    return await this.findOne({ _id: linkId, isDeleted: false });
   } catch (error) {
     console.error("❌ Error getting meeting link:", error);
     return null;
   }
 };
 
-/**
- * ✅ Get all active meeting links
- */
 meetingLinkSchema.statics.getAllActive = async function () {
   try {
-    const links = await this.find({
+    return await this.find({
       isDeleted: false,
       status: { $in: ["available", "reserved"] },
     }).sort({ name: 1 });
-
-    return links;
   } catch (error) {
     console.error("❌ Error getting active links:", error);
     return [];
@@ -235,13 +173,15 @@ meetingLinkSchema.statics.getAllActive = async function () {
 
 /**
  * ✅ Reserve this link for a session
+ * scheduleInfo = { daysOfWeek: [...], timeFrom: "HH:MM", timeTo: "HH:MM" }
  */
 meetingLinkSchema.methods.reserveForSession = async function (
   sessionId,
   groupId,
   startTime,
   endTime,
-  userId
+  userId,
+  scheduleInfo = null
 ) {
   try {
     console.log(`🔒 Reserving link ${this.name} for session ${sessionId}`);
@@ -253,30 +193,37 @@ meetingLinkSchema.methods.reserveForSession = async function (
     if (this.currentReservation && this.currentReservation.sessionId) {
       const currentEndTime = new Date(this.currentReservation.endTime);
       if (currentEndTime > new Date()) {
-        if (
-          this.currentReservation.sessionId.toString() !== sessionId.toString()
-        ) {
-          throw new Error("Link is currently reserved for another session");
+        if (this.currentReservation.sessionId.toString() !== sessionId.toString()) {
+          const realConflict = scheduleOverlaps(
+            scheduleInfo,
+            this.currentReservation.daysOfWeek,
+            this.currentReservation.timeFrom,
+            this.currentReservation.timeTo,
+          );
+          if (realConflict) {
+            throw new Error("Link is currently reserved for another session");
+          }
         }
       }
     }
 
     this.currentReservation = {
-      sessionId: sessionId,
-      groupId: groupId,
-      startTime: startTime,
-      endTime: endTime,
+      sessionId,
+      groupId,
+      startTime,
+      endTime,
+      daysOfWeek: scheduleInfo?.daysOfWeek || [],
+      timeFrom: scheduleInfo?.timeFrom || null,
+      timeTo: scheduleInfo?.timeTo || null,
       reservedAt: new Date(),
       reservedBy: userId,
     };
 
     this.status = "reserved";
     this.metadata.updatedAt = new Date();
-
     await this.save();
 
     console.log(`✅ Link reserved successfully`);
-
     return {
       success: true,
       link: this.link,
@@ -293,9 +240,6 @@ meetingLinkSchema.methods.reserveForSession = async function (
   }
 };
 
-/**
- * ✅ Release this link (mark as available again)
- */
 meetingLinkSchema.methods.releaseLink = async function (actualDuration = null) {
   try {
     console.log(`🔓 Releasing link ${this.name}`);
@@ -309,41 +253,29 @@ meetingLinkSchema.methods.releaseLink = async function (actualDuration = null) {
         duration:
           actualDuration ||
           Math.round(
-            (new Date(this.currentReservation.endTime) -
-              new Date(this.currentReservation.startTime)) /
-              60000
+            (new Date(this.currentReservation.endTime) - new Date(this.currentReservation.startTime)) / 60000
           ),
         usedAt: this.currentReservation.reservedAt,
       };
 
       this.usageHistory.push(usageRecord);
-
       this.stats.totalUses += 1;
       this.stats.lastUsed = new Date();
 
       if (actualDuration) {
         this.stats.totalHours += actualDuration / 60;
-
         const totalMinutes = this.stats.totalHours * 60;
-        this.stats.averageUsageDuration = Math.round(
-          totalMinutes / this.stats.totalUses
-        );
+        this.stats.averageUsageDuration = Math.round(totalMinutes / this.stats.totalUses);
       }
     }
 
     this.currentReservation = undefined;
     this.status = "available";
     this.metadata.updatedAt = new Date();
-
     await this.save();
 
     console.log(`✅ Link released and marked as available`);
-
-    return {
-      success: true,
-      message: "Link released successfully",
-      status: this.status,
-    };
+    return { success: true, message: "Link released successfully", status: this.status };
   } catch (error) {
     console.error("❌ Error releasing link:", error);
     throw error;
@@ -351,31 +283,50 @@ meetingLinkSchema.methods.releaseLink = async function (actualDuration = null) {
 };
 
 /**
- * ✅ Check if link is available for a time slot
+ * ✅ NEW: فحص التوفر بناءً على جدول أسبوعي جديد (مش وقت واحد محدد)
  */
-meetingLinkSchema.methods.isAvailableForTimeSlot = function (
-  startTime,
-  endTime
-) {
-  if (this.status !== "available" && this.status !== "reserved") {
-    return false;
-  }
+meetingLinkSchema.methods.isAvailableForSchedule = function (newSchedule) {
+  if (this.status === "maintenance" || this.status === "inactive") return false;
 
-  if (this.currentReservation && this.currentReservation.sessionId) {
-    const reservedStart = new Date(this.currentReservation.startTime);
-    const reservedEnd = new Date(this.currentReservation.endTime);
+  const res = this.currentReservation;
+  if (!res || !res.sessionId) return true;
 
-    if (startTime < reservedEnd && endTime > reservedStart) {
-      return false;
-    }
-  }
+  const now = new Date();
+  if (new Date(res.endTime) < now) return true;
 
-  return true;
+  return !scheduleOverlaps(newSchedule, res.daysOfWeek, res.timeFrom, res.timeTo);
 };
 
 /**
- * ✅ Get usage statistics
+ * (Legacy) فحص توفر لوقت محدد - بقى بياخد بالباله الجدول المتكرر لو موجود
  */
+meetingLinkSchema.methods.isAvailableForTimeSlot = function (startTime, endTime) {
+  if (this.status !== "available" && this.status !== "reserved") return false;
+
+  const res = this.currentReservation;
+  if (!res || !res.sessionId) return true;
+
+  const now = new Date();
+  if (new Date(res.endTime) < now) return true;
+
+  if (res.daysOfWeek?.length && res.timeFrom && res.timeTo) {
+    const dayName = startTime.toLocaleDateString("en-US", { weekday: "long" });
+    if (!res.daysOfWeek.includes(dayName)) return true;
+
+    const newFrom = `${startTime.getHours().toString().padStart(2, "0")}${startTime.getMinutes().toString().padStart(2, "0")}`;
+    const newTo = `${endTime.getHours().toString().padStart(2, "0")}${endTime.getMinutes().toString().padStart(2, "0")}`;
+    const existFrom = res.timeFrom.replace(":", "");
+    const existTo = res.timeTo.replace(":", "");
+
+    return newTo <= existFrom || newFrom >= existTo;
+  }
+
+  // fallback لحجوزات قديمة من غير بيانات تكرار
+  const reservedStart = new Date(res.startTime);
+  const reservedEnd = new Date(res.endTime);
+  return !(startTime < reservedEnd && endTime > reservedStart);
+};
+
 meetingLinkSchema.methods.getUsageStats = function () {
   return {
     totalUses: this.stats.totalUses,
@@ -383,33 +334,23 @@ meetingLinkSchema.methods.getUsageStats = function () {
     averageUsageDuration: this.stats.averageUsageDuration,
     lastUsed: this.stats.lastUsed,
     currentStatus: this.status,
-    isCurrentlyReserved: !!(
-      this.currentReservation && this.currentReservation.sessionId
-    ),
+    isCurrentlyReserved: !!(this.currentReservation && this.currentReservation.sessionId),
   };
 };
 
-// ==================== VIRTUAL PROPERTIES ====================
-
 meetingLinkSchema.virtual("isAvailable").get(function () {
-  if (this.status !== "available" && this.status !== "reserved") {
-    return false;
-  }
-
+  if (this.status !== "available" && this.status !== "reserved") return false;
   if (this.currentReservation && this.currentReservation.sessionId) {
     const now = new Date();
     const reservedEnd = new Date(this.currentReservation.endTime);
     return reservedEnd < now;
   }
-
   return true;
 });
 
 meetingLinkSchema.virtual("displayName").get(function () {
   return `${this.name} (${this.platform})`;
 });
-
-// ==================== JSON TRANSFORM ====================
 
 meetingLinkSchema.set("toJSON", {
   virtuals: true,
@@ -423,15 +364,11 @@ meetingLinkSchema.set("toJSON", {
   },
 });
 
-meetingLinkSchema.set("toObject", {
-  virtuals: true,
-});
+meetingLinkSchema.set("toObject", { virtuals: true });
 
-// Clean model registration
 if (mongoose.models.MeetingLink) {
   delete mongoose.models.MeetingLink;
 }
 
 const MeetingLink = mongoose.model("MeetingLink", meetingLinkSchema);
-
 export default MeetingLink;

@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { Toaster } from "react-hot-toast";
 import PrimarySidebar, { type DashboardNavItem, type CategoryItem } from "./PrimarySidebar";
 import SecondarySidebar from "./SecondarySidebar";
 import TopBar from "./TopBar";
@@ -335,6 +336,24 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
 
   return (
     <div className={`min-h-screen bg-slate-100 text-slate-900 dark:bg-darkmode dark:text-white ${isRTL ? 'rtl' : 'ltr'}`}>
+      <Toaster
+        position="top-center"
+        containerStyle={{ zIndex: 99999 }}
+        toastOptions={{
+          className:
+            "bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none p-3 max-w-404",
+          style: { maxWidth: "25rem", zIndex: 99999 },
+          success: {
+            className:
+              "bg-primary text-white rounded-14 shadow-sm p-3 max-w-404",
+          },
+          error: {
+            className:
+              "bg-red-600 text-white rounded-14 shadow-sm p-3 max-w-404",
+          },
+          duration: 4000,
+        }}
+      />
       <div className="flex min-h-screen w-full">
         {/* Primary Sidebar - Always visible on desktop */}
         <PrimarySidebar

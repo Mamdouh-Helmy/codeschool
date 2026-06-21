@@ -120,19 +120,33 @@ export async function GET(req, { params }) {
     }).lean();
 
     const now = new Date();
+    const newSchedule = group.schedule; // { daysOfWeek, timeFrom, timeTo, ... }
 
-    const availableLinks = allLinks.filter(
-      (l) =>
-        l.status === "available" ||
-        !l.currentReservation?.sessionId ||
-        new Date(l.currentReservation?.endTime) < now,
-    );
+    // ✅ FIX: فحص التعارض الفعلي بناءً على الجدول الأسبوعي (يوم + وقت)
+    // مش بناءً على "هل النطاق الزمني الكامل للحجز انتهى ولا لأ"
+    function hasRealConflict(link) {
+      const res = link.currentReservation;
+      if (!res?.sessionId) return false;
+      if (new Date(res.endTime) < now) return false; // الحجز انتهى خالص
 
-    const reservedLinks = allLinks.filter(
-      (l) =>
-        l.currentReservation?.sessionId &&
-        new Date(l.currentReservation?.endTime) >= now,
-    );
+      if (!res.daysOfWeek?.length || !res.timeFrom || !res.timeTo) {
+        // حجز قديم من غير بيانات تكرار (قبل التحديث) - افترض تعارض للأمان
+        return true;
+      }
+
+      const dayOverlap = newSchedule.daysOfWeek.some((d) => res.daysOfWeek.includes(d));
+      if (!dayOverlap) return false;
+
+      const newFrom = newSchedule.timeFrom.replace(":", "");
+      const newTo = newSchedule.timeTo.replace(":", "");
+      const existFrom = res.timeFrom.replace(":", "");
+      const existTo = res.timeTo.replace(":", "");
+
+      return !(newTo <= existFrom || newFrom >= existTo);
+    }
+
+    const availableLinks = allLinks.filter((l) => !hasRealConflict(l));
+    const reservedLinks = allLinks.filter((l) => hasRealConflict(l));
 
     const sessions = previewSessions(group);
     const totalSessions = sessions.length;
@@ -159,6 +173,10 @@ export async function GET(req, { params }) {
           platform:      l.platform,
           link:          l.link,
           reservedUntil: l.currentReservation?.endTime,
+          reservedDays:  l.currentReservation?.daysOfWeek || [],
+          reservedTime:  l.currentReservation?.timeFrom && l.currentReservation?.timeTo
+            ? `${l.currentReservation.timeFrom} - ${l.currentReservation.timeTo}`
+            : null,
           reservedFor: {
             sessionId: l.currentReservation?.sessionId,
             groupId:   l.currentReservation?.groupId,

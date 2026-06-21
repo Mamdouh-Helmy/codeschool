@@ -23,6 +23,8 @@ const SessionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+
+
 // Module Schema
 const ModuleSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
@@ -118,7 +120,7 @@ CourseSchema.virtual("totalProjects").get(function () {
 
 // Indexes
 CourseSchema.index({ title: "text", description: "text" });
-CourseSchema.index({ level: 1 });
+CourseSchema.index({ level: 1 }); 
 CourseSchema.index({ isActive: 1, featured: 1 });
 CourseSchema.index({ createdAt: -1 });
 

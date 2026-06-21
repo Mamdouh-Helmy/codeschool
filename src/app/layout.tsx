@@ -59,30 +59,32 @@ export default async function RootLayout({
                 >
                   <Aoscompo>
                     <NextTopLoader />
-
-                    <Toaster
-                      position="top-center"
-                      containerStyle={{ zIndex: 99999 }}
-                      toastOptions={{
-                        className:
-                          "bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none p-3 max-w-404",
-                        style: { maxWidth: "25rem", zIndex: 99999 },
-                        success: {
-                          className:
-                            "bg-primary text-white rounded-14 shadow-sm p-3 max-w-404",
-                        },
-                        error: {
-                          className:
-                            "bg-red-600 text-white rounded-14 shadow-sm p-3 max-w-404",
-                        },
-                        duration: 4000,
-                      }}
-                    />
-
                     <SiteWrapper>{children}</SiteWrapper>
-
                     <WelcomePopupManager />
                   </Aoscompo>
+
+                  {/* Moved outside Aoscompo — AOS wrapper's overflow/transform
+                      was clipping the fixed-position Toaster, so toasts (like
+                      the delete confirmation) rendered in the DOM but were
+                      visually clipped/hidden. */}
+                  <Toaster
+                    position="top-center"
+                    containerStyle={{ zIndex: 99999 }}
+                    toastOptions={{
+                      className:
+                        "bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none p-3 max-w-404",
+                      style: { maxWidth: "25rem", zIndex: 99999 },
+                      success: {
+                        className:
+                          "bg-primary text-white rounded-14 shadow-sm p-3 max-w-404",
+                      },
+                      error: {
+                        className:
+                          "bg-red-600 text-white rounded-14 shadow-sm p-3 max-w-404",
+                      },
+                      duration: 4000,
+                    }}
+                  />
 
                   <ScrollToTop />
                 </ThemeProvider>

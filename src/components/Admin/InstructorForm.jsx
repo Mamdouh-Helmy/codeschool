@@ -10,18 +10,18 @@ import { useI18n } from "@/i18n/I18nProvider";
 export default function InstructorForm({ initial, isCreating, onClose, onSaved }) {
   const { t } = useI18n();
   const [form, setForm] = useState({
-    name:            initial?.name             || "",
-    email:           initial?.email            || "",
-    username:        initial?.username         || "",
-    phone:           initial?.profile?.phone   || "",
-    image:           initial?.image            || "",
-    gender:          initial?.gender           || "",
-    language:        initial?.language         ?? "ar",
-    password:        "",
+    name: initial?.name || "",
+    email: initial?.email || "",
+    username: initial?.username || "",
+    phone: initial?.profile?.phone || "",
+    image: initial?.image || "",
+    gender: initial?.gender || "",
+    language: initial?.language ?? "ar",
+    password: "",
     passwordConfirm: "",
   });
-  const [loading,        setLoading]        = useState(false);
-  const [imagePreview,   setImagePreview]   = useState(initial?.image || "");
+  const [loading, setLoading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(initial?.image || "");
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const onChange = (field, value) =>
@@ -103,21 +103,21 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
     );
 
     try {
+      // في InstructorForm.jsx — داخل submit
       const payload = {
         name: form.name.trim(),
-        ...(isCreating && { email: form.email.trim() }),
-        ...(form.username.trim() && { username: form.username.trim() }),
-        ...(form.phone.trim()    && { phone: form.phone.trim() }),
-        ...(form.image.trim()    && { image: form.image.trim() }),
-        ...(form.gender          && { gender: form.gender }),
+        phone: form.phone.trim(),      // دايماً بعت حتى لو فاضي
+        image: form.image.trim(),      // دايماً بعت حتى لو فاضي
+        gender: form.gender || "",      // دايماً بعت حتى لو فاضي
         language: form.language,
-        ...(form.password        && { password: form.password }),
+        ...(form.username.trim() && { username: form.username.trim() }),
+        ...(form.password && { password: form.password }),
       };
 
-      const url    = isCreating ? "/api/instructor" : `/api/instructor/${initial._id}`;
+      const url = isCreating ? "/api/instructor" : `/api/instructor/${initial._id}`;
       const method = isCreating ? "POST" : "PUT";
 
-      const res    = await fetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -234,9 +234,8 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
               type="email" value={form.email}
               onChange={(e) => onChange("email", e.target.value)}
               placeholder="instructor@example.com"
-              className={`w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:text-white ${
-                isCreating ? "dark:bg-dark_input" : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-              }`}
+              className={`w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:text-white ${isCreating ? "dark:bg-dark_input" : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                }`}
               disabled={!isCreating}
               required={isCreating}
             />
@@ -292,11 +291,10 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
                 <div className="flex gap-2">
                   {/* زرار رفع */}
-                  <label className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-13 font-medium transition-colors border ${
-                    uploadingImage
+                  <label className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-13 font-medium transition-colors border ${uploadingImage
                       ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-300"
                       : "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 cursor-pointer"
-                  }`}>
+                    }`}>
                     {uploadingImage ? (
                       <><Loader2 className="w-4 h-4 animate-spin" />{t("instructorForm.uploading") || "جاري الرفع..."}</>
                     ) : (

@@ -153,6 +153,21 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   const [manualStudents,   setManualStudents]   = useState([]);
   const [password,         setPassword]         = useState("");
   const [passwordConfirm,  setPasswordConfirm]  = useState("");
+
+  // ── ✅ NEW: account-edit state for an EXISTING student (linked user) ─────
+  const [editEmail,          setEditEmail]          = useState("");   // الإيميل بعد التعديل لطالب موجود
+  const [newPassword,        setNewPassword]        = useState("");   // باسورد جديد (اختياري) لطالب موجود
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [updatingAccount,    setUpdatingAccount]    = useState(false); // لودينج خاص بتحديث الإيميل/الباسورد بس
+
+  // ── ✅ NEW: real-time email-taken check (debounced) ──────────────────────
+  // "idle"      → لسه مفيش فحص (الحقل فاضي أو لسه نفس الإيميل الأصلي)
+  // "checking"  → جاري الفحص
+  // "taken"     → الإيميل ده مستخدم من حساب تاني
+  // "available" → الإيميل متاح
+  const [emailCheckStatus, setEmailCheckStatus] = useState("idle");
+  const emailCheckAbortRef = useRef(null);
+
   const [templates,        setTemplates]        = useState({ student: null, guardian: null });
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [savingTemplate,   setSavingTemplate]   = useState({ student: false, guardian: false });
@@ -434,15 +449,62 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // ✅ FIX: also seed editEmail with the current account email when an
+  // existing student is loaded into the form (edit mode entry point).
   useEffect(() => {
     if (initial?.authUserId) {
-      const name = initial.personalInfo?.fullName || initial.authUserId?.name || "";
+      const name  = initial.personalInfo?.fullName || initial.authUserId?.name  || "";
+      const email = initial.personalInfo?.email    || initial.authUserId?.email || "";
       setStudentSearch(name);
-      setSelectedStudent({ _id: initial.authUserId._id, name, email: initial.authUserId.email });
+      setSelectedStudent({ _id: initial.authUserId._id, name, email });
+      setEditEmail(email); // ✅ تعبئة حقل الإيميل القابل للتعديل
     } else if (initial && !initial.authUserId) {
       setStudentSearch(initial.personalInfo?.fullName || "");
     }
   }, [initial]);
+
+  // ── ✅ NEW: real-time "email already taken" check ────────────────────────
+  // بيشتغل فقط على إيميل الحساب القابل للتعديل (editEmail) للطالب الموجود
+  // فعليًا، وبعد فترة سكون صغيرة (debounce) عشان مانضربش السيرفر كل ضغطة.
+  useEffect(() => {
+    const isExistingStudent = selectedStudent && !selectedStudent.isManual;
+
+    // مفيش داعي للفحص لو: مفيش طالب موجود، أو الإيميل فاضي، أو هو نفس
+    // الإيميل الأصلي بتاع الحساب (مفيش تغيير فعلي).
+    if (!isExistingStudent || !editEmail.trim() || editEmail.trim().toLowerCase() === (selectedStudent.email || "").toLowerCase()) {
+      setEmailCheckStatus("idle");
+      return;
+    }
+
+    const trimmed = editEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setEmailCheckStatus("idle"); // إيميل غير مكتمل/غير صحيح الصيغة بعد — منعرضش حاجة
+      return;
+    }
+
+    setEmailCheckStatus("checking");
+
+    const controller = new AbortController();
+    emailCheckAbortRef.current?.abort();
+    emailCheckAbortRef.current = controller;
+
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ email: trimmed, excludeUserId: selectedStudent._id });
+        const res  = await fetch(`/api/allStudents/checkEmail?${params}`, { signal: controller.signal });
+        const data = await res.json();
+        if (data.success && data.valid) {
+          setEmailCheckStatus(data.exists ? "taken" : "available");
+        } else {
+          setEmailCheckStatus("idle");
+        }
+      } catch (err) {
+        if (err.name !== "AbortError") setEmailCheckStatus("idle");
+      }
+    }, 500);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [editEmail, selectedStudent]);
 
   // ── student search helpers ───────────────────────────────────────────────
   const addManualStudent = (name) => {
@@ -454,12 +516,19 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     return null;
   };
 
+  // ✅ FIX: keep editEmail / newPassword in sync when a different existing
+  // student is picked from the dropdown, and clear any leftover password
+  // input from a previously selected student.
   const handleStudentSelect = (student) => {
     if (!student.isManual) {
       setSelectedStudent(student);
       onChange("personalInfo.fullName", student.name);
       onChange("personalInfo.email",   student.email);
       onChange("authUserId",           student._id);
+      setEditEmail(student.email || ""); // ✅
+      setNewPassword("");
+      setNewPasswordConfirm("");
+      setEmailCheckStatus("idle"); // ✅ تصفير حالة الفحص عند تبديل الطالب
     } else {
       setSelectedStudent(null);
       onChange("personalInfo.fullName", student.name);
@@ -493,24 +562,66 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   // ── submit ───────────────────────────────────────────────────────────────
   const submit = async (e) => {
     e.preventDefault();
+
+    const isExistingStudent = selectedStudent && !selectedStudent.isManual;
+
+    // ── ✅ NEW: منع الحفظ لو الفحص الفوري أكد إن الإيميل مستخدم ──
+    if (isExistingStudent && emailCheckStatus === "taken") {
+      toast.error(t("studentForm.emailAlreadyTaken") || "هذا البريد الإلكتروني مستخدم من قبل حساب آخر");
+      return;
+    }
+
+    // ── تحقق كلمة المرور لحساب جديد ──
     if (!selectedStudent && form.personalInfo.fullName) {
       if (password !== passwordConfirm) { toast.error(t("studentForm.passwordMismatch")); return; }
       if (password.length < 6)          { toast.error(t("studentForm.passwordLength"));   return; }
     }
+
+    // ── تحقق كلمة المرور الجديدة لطالب موجود (لو حد كتب فيها) ──
+    if (isExistingStudent && (newPassword || newPasswordConfirm)) {
+      if (newPassword !== newPasswordConfirm) { toast.error(t("studentForm.passwordMismatch")); return; }
+      if (newPassword.length < 6)             { toast.error(t("studentForm.passwordLength"));   return; }
+    }
+
     setLoading(true);
     const toastId = toast.loading(initial?.id ? t("common.updating") : t("common.creating"));
     try {
       let userId = form.authUserId;
+
       if (!selectedStudent || selectedStudent.isManual) {
+        // ── طالب جديد: إنشاء يوزر جديد ──
         const userRes  = await fetch("/api/allStudents/createUser", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.personalInfo.fullName, email: form.personalInfo.email, password, role: "student" }) });
         const userData = await userRes.json();
         if (!userRes.ok) throw new Error(userData.message);
         userId = userData.user?.id;
+      } else if (isExistingStudent) {
+        // ── طالب موجود: تحديث الإيميل و/أو الباسورد لو فيه تغيير ──
+        const emailChanged        = editEmail && editEmail.trim().toLowerCase() !== (selectedStudent.email || "").toLowerCase();
+        const wantsPasswordChange = !!newPassword;
+
+        if (emailChanged || wantsPasswordChange) {
+          const updateRes  = await fetch("/api/allStudents/updateUser", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId,
+              ...(emailChanged ? { email: editEmail.trim() } : {}),
+              ...(wantsPasswordChange ? { password: newPassword } : {}),
+            }),
+          });
+          const updateData = await updateRes.json();
+          if (!updateRes.ok) throw new Error(updateData.message || (updateData.errors && Object.values(updateData.errors)[0]));
+        }
       }
+
       // build final ISO from dob state
       const dateOfBirthISO = dobToISO(dob) || null;
 
-      const payload   = { ...form, authUserId: userId, personalInfo: { ...form.personalInfo, dateOfBirth: dateOfBirthISO } };
+      // ✅ FIX: keep Student.personalInfo.email in sync with the (possibly
+      // just-updated) account email when editing an existing student.
+      const finalEmail = isExistingStudent ? editEmail.trim().toLowerCase() : form.personalInfo.email;
+
+      const payload   = { ...form, authUserId: userId, personalInfo: { ...form.personalInfo, email: finalEmail, dateOfBirth: dateOfBirthISO } };
       const studentId = initial?.id || initial?._id;
       const res       = await fetch(studentId ? `/api/allStudents/${studentId}` : "/api/allStudents", {
         method: studentId ? "PUT" : "POST",
@@ -689,14 +800,65 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   </div>
                 </div>
 
+                {/* ── الإيميل ──────────────────────────────────────────────
+                    ✅ FIX: لطالب موجود (مرتبط بيوزر فعلي) الحقل بقى قابل
+                    للتعديل بدل ما يكون disabled — القيمة بتتاخد من editEmail
+                    وبتتحدّث فعليًا عبر /api/allStudents/updateUser في submit.
+                    ✅ NEW: فحص فوري (debounced) لو الإيميل الجديد مستخدم
+                    من حساب تاني قبل حتى ما يدوس حفظ.
+                */}
                 <div className="space-y-2">
                   <label className={labelBase}>{t("common.email") || "البريد الإلكتروني"} <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                    <input type="email" value={form.personalInfo.email} onChange={e => onChange("personalInfo.email", e.target.value)} placeholder="example@domain.com" className={`${inputBase} pl-12 text-right`} disabled={selectedStudent && !selectedStudent.isManual} />
+                    <input
+                      type="email"
+                      value={selectedStudent && !selectedStudent.isManual ? editEmail : form.personalInfo.email}
+                      onChange={e => {
+                        if (selectedStudent && !selectedStudent.isManual) {
+                          setEditEmail(e.target.value);
+                        } else {
+                          onChange("personalInfo.email", e.target.value);
+                        }
+                      }}
+                      placeholder="example@domain.com"
+                      className={`${inputBase} pl-12 text-right ${emailCheckStatus === "taken" ? "border-red-400 focus:border-red-500 focus:ring-red-400" : ""}`}
+                    />
+                    {selectedStudent && !selectedStudent.isManual && emailCheckStatus === "checking" && (
+                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+                    )}
+                    {selectedStudent && !selectedStudent.isManual && emailCheckStatus === "taken" && (
+                      <AlertCircle className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-red-500" />
+                    )}
+                    {selectedStudent && !selectedStudent.isManual && emailCheckStatus === "available" && (
+                      <CheckCircle className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+                    )}
                   </div>
+
+                  {/* رسائل حالة الفحص — بالأولوية: taken > checking > available > "سيتم التحديث" */}
+                  {selectedStudent && !selectedStudent.isManual && emailCheckStatus === "taken" ? (
+                    <div className="flex items-center justify-end gap-1.5 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl border border-red-100 dark:border-red-900">
+                      <span>{t("studentForm.emailAlreadyTaken") || "هذا البريد الإلكتروني مستخدم من قبل حساب آخر"}</span>
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    </div>
+                  ) : selectedStudent && !selectedStudent.isManual && emailCheckStatus === "checking" ? (
+                    <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">
+                      <span>{t("studentForm.checkingEmail") || "جاري التحقق من البريد الإلكتروني..."}</span>
+                    </div>
+                  ) : selectedStudent && !selectedStudent.isManual && emailCheckStatus === "available" ? (
+                    <div className="flex items-center justify-end gap-1.5 text-xs text-emerald-600">
+                      <span>{t("studentForm.emailAvailable") || "هذا البريد الإلكتروني متاح"}</span>
+                      <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    </div>
+                  ) : selectedStudent && !selectedStudent.isManual && editEmail !== selectedStudent.email && (
+                    <div className="flex items-center justify-end gap-1.5 text-xs text-amber-600">
+                      <Info className="w-3.5 h-3.5" />
+                      <span>{t("studentForm.emailWillBeUpdated") || "سيتم تحديث الإيميل عند الحفظ"}</span>
+                    </div>
+                  )}
                 </div>
 
+                {/* ── كلمة مرور لحساب جديد (طالب جديد فقط) ── */}
                 {(!selectedStudent || selectedStudent.isManual) && form.personalInfo.fullName && (
                   <div className="space-y-4 pt-2 border-t border-orange-100 dark:border-orange-900/40">
                     <div className="flex items-center justify-end gap-2 pt-1">
@@ -720,6 +882,61 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                       <div className="flex items-center justify-end gap-1.5 text-xs text-red-600">
                         <span>{t("studentForm.passwordMismatch") || "كلمتا المرور غير متطابقتين"}</span>
                         <AlertCircle className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── ✅ NEW: تغيير كلمة المرور لطالب موجود (اختياري) ──────
+                    يظهر فقط لو فيه طالب موجود فعليًا مرتبط بيوزر. سايبه
+                    فاضي يعني مفيش تغيير، وده بيتفحص ويتبعت عبر updateUser.
+                */}
+                {selectedStudent && !selectedStudent.isManual && (
+                  <div className="space-y-4 pt-2 border-t border-orange-100 dark:border-orange-900/40">
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-white text-right">
+                          {t("studentForm.changePassword") || "تغيير كلمة المرور"}
+                        </p>
+                        <p className="text-xs text-gray-400 text-right">
+                          {t("studentForm.changePasswordHint") || "اتركها فاضية لو مش عاوز تغيّرها"}
+                        </p>
+                      </div>
+                      <Shield className="w-5 h-5 text-primary flex-shrink-0" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className={labelBase}>{t("studentForm.newPassword") || "كلمة مرور جديدة"}</label>
+                        <input
+                          type="password"
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className={`${inputBase} text-right`}
+                          minLength={6}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={labelBase}>{t("common.confirmPassword") || "تأكيد"}</label>
+                        <input
+                          type="password"
+                          value={newPasswordConfirm}
+                          onChange={e => setNewPasswordConfirm(e.target.value)}
+                          placeholder="••••••••"
+                          className={`${inputBase} text-right`}
+                          minLength={6}
+                        />
+                      </div>
+                    </div>
+                    {newPassword && newPasswordConfirm && newPassword !== newPasswordConfirm && (
+                      <div className="flex items-center justify-end gap-1.5 text-xs text-red-600">
+                        <span>{t("studentForm.passwordMismatch") || "كلمتا المرور غير متطابقتين"}</span>
+                        <AlertCircle className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+                    {newPassword && newPassword.length > 0 && newPassword.length < 6 && (
+                      <div className="flex items-center justify-end gap-1.5 text-xs text-red-600">
+                        <span>{t("studentForm.passwordLength") || "يجب أن تكون 6 أحرف على الأقل"}</span>
                       </div>
                     )}
                   </div>
@@ -1204,7 +1421,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
             {step === 0 ? (t("common.cancel") || "إلغاء") : (t("common.back") || "رجوع")}
           </button>
           {isLastStep ? (
-            <button type="button" onClick={submit} disabled={loading || loadingTemplates} className="flex-1 bg-primary hover:bg-orange-600 text-white py-2.5 px-6 rounded-xl font-bold text-sm shadow-sm hover:shadow-md disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
+            <button type="button" onClick={submit} disabled={loading || loadingTemplates || (selectedStudent && !selectedStudent.isManual && emailCheckStatus === "taken")} className="flex-1 bg-primary hover:bg-orange-600 text-white py-2.5 px-6 rounded-xl font-bold text-sm shadow-sm hover:shadow-md disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" />{initial?.id ? t("common.updating") : t("common.creating")}</>
                 : <><Save className="w-4 h-4" />{initial?.id ? (t("common.update") || "تحديث") : (t("common.create") || "إنشاء الطالب")}</>

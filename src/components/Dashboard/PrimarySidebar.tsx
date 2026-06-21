@@ -47,7 +47,7 @@ const PrimarySidebar = ({
     isRTL = false
 }: PrimarySidebarProps) => {
     const { t } = useI18n();
-    
+
     // استخدام SWR للـ real-time updates
     const { data, error, isLoading } = useSWR(
         '/api/admin/stats',
@@ -105,6 +105,7 @@ const PrimarySidebar = ({
                                     <button
                                         key={category.id}
                                         onClick={() => onCategoryClick(category.id)}
+                                        suppressHydrationWarning
                                         className={`group flex w-full items-center justify-between rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 ${isActive
                                                 ? "bg-primary/10 text-primary"
                                                 : "text-SlateBlueText hover:bg-slate-100 hover:text-primary dark:text-darktext dark:hover:bg-darkmode"
@@ -124,7 +125,7 @@ const PrimarySidebar = ({
                                             </span>
                                             <Icon
                                                 icon={isRTL ? "ion:chevron-back" : "ion:chevron-forward"}
-                                                className={`h-4 w-4 transition-transform ${isActive ? (isRTL ? "-rotate-90" : "rotate-90") : ""} text-primary" : "text-slate-400"
+                                                className={`h-4 w-4 transition-transform ${isActive ? (isRTL ? "-rotate-90" : "rotate-90") : ""} ${isActive ? "text-primary" : "text-slate-400"
                                                     }`}
                                             />
                                         </div>
@@ -187,6 +188,7 @@ const PrimarySidebar = ({
                                 <button
                                     key={category.id}
                                     onClick={() => onCategoryClick(category.id)}
+                                    suppressHydrationWarning
                                     className={`group/btn flex w-full items-center justify-between rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200 relative overflow-hidden ${isActive
                                             ? "bg-primary/10 text-primary"
                                             : "text-SlateBlueText hover:bg-slate-100 hover:text-primary dark:text-darktext dark:hover:bg-darkmode"
@@ -197,7 +199,7 @@ const PrimarySidebar = ({
                                     {isActive && (
                                         <div className={`absolute ${isRTL ? 'right-0' : 'left-0'} top-1/2 transform -translate-y-1/2 w-1 h-8 bg-primary rounded-r ${isRTL ? 'rounded-l rounded-r-none' : 'rounded-r rounded-l-none'}`} />
                                     )}
-                                    
+
                                     {/* Icon */}
                                     <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
                                         <Icon
@@ -210,7 +212,7 @@ const PrimarySidebar = ({
                                             {category.label}
                                         </span>
                                     </div>
-                                    
+
                                     {/* Items count and chevron - Hidden by default, shown on sidebar hover */}
                                     <div className={`flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${isRTL ? 'flex-row-reverse' : ''}`}>
                                         <span className="text-xs text-slate-400 dark:text-darktext whitespace-nowrap">
