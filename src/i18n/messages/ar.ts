@@ -4347,6 +4347,7 @@ const ar = {
   "groups.form.reschedule.confirmButton": "تأكيد",
   "groups.form.messages.rescheduled": "تمت إعادة جدولة الموعد بنجاح",
   "groups.form.reschedule.saving": "جارٍ حفظ إعادة الجدولة...",
+  "upcoming.ended": "انتهى",
 };
 
 export default ar;

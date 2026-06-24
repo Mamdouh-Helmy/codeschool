@@ -9,40 +9,36 @@ export const defaultHeaderData: HeaderItem[] = [
     label: "blog",
     href: "/blog",
     submenu: [
-      { label: "blogList", href: "/blog" }, 
-      { label: "latestArticle", href: "/blog/latest" }, 
+      { label: "blogList", href: "/blog" },
+      { label: "latestArticle", href: "/blog/latest" },
     ],
   },
   { label: "contact", href: "/contact" },
   { label: "subscriptions", href: "/subscriptions" },
 ];
 
-export async function getHeaderData(locale: string = 'en'): Promise<HeaderItem[]> {
+export async function getHeaderData(locale: string = "en"): Promise<HeaderItem[]> {
   try {
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/api/blog?limit=3`,
-      {
-        cache: "no-store",
-      }
+      { cache: "no-store" }
     );
 
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
     const data = await res.json();
     const posts = data?.data || [];
 
     const blogSubmenu = [
-      { 
-        label: "blogList", 
-        href: "/blog" 
-      },
+      { label: "blogList", href: "/blog" },
       ...posts.map((post: any) => ({
-        label: post.title_en,
+        // لو locale عربي يستخدم title_ar، لو إنجليزي يستخدم title_en
+        // مع fallback للتاني لو أحدهم مش موجود
+        label: locale === "ar"
+          ? (post.title_ar || post.title_en)
+          : (post.title_en || post.title_ar),
         href: `/blog/${post.slug}`,
-        // إضافة خاصية لتحديد أن هذا عنوان من API ولا يحتاج ترجمة
-        isDynamic: true
+        isDynamic: true,
       })),
     ];
 

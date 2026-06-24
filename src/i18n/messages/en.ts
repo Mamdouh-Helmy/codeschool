@@ -4228,6 +4228,7 @@ const en = {
   "groups.form.messages.rescheduled":
     "The appointment has been rescheduled successfully",
   "groups.form.reschedule.saving": "Saving reschedule...",
+    "upcoming.ended": "Ended",
 };
 
 export default en;
