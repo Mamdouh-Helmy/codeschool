@@ -4333,7 +4333,20 @@ const ar = {
   "studentForm.checkingEmail": "جارٍ التحقق من توفر البريد الإلكتروني...",
   "studentForm.emailAlreadyTaken": "عنوان البريد الإلكتروني هذا مستخدم بالفعل.",
   "studentForm.emailAvailable": "عنوان البريد الإلكتروني متاح.",
-
+  "groups.form.reschedule.warningTitle": "تنبيه إعادة الجدولة",
+  "groups.form.reschedule.warningDesc":
+    "سيتم تطبيق التعديلات على الجدول وفق التاريخ المحدد. تأكد من صحة البيانات قبل الحفظ.",
+  "groups.form.reschedule.effectiveFrom": "التعديل ساري من تاريخ",
+  "groups.form.reschedule.firstDayWillBe": "أول يوم سيكون",
+  "groups.form.reschedule.frozenCount": "عدد الأيام المجمدة",
+  "groups.form.reschedule.affectedCount": "عدد الأيام المتأثرة",
+  "groups.form.reschedule.linksReleased": "تم إتاحة الروابط",
+  "groups.form.reschedule.loadingPreview": "جاري تحميل المعاينة",
+  "groups.form.reschedule.instructorsNotSaved": "لم يتم حفظ بيانات المدرسين",
+  "groups.form.reschedule.automationNotSaved": "لم يتم حفظ التعديلات التلقائية",
+  "groups.form.reschedule.confirmButton": "تأكيد",
+  "groups.form.messages.rescheduled": "تمت إعادة جدولة الموعد بنجاح",
+  "groups.form.reschedule.saving": "جارٍ حفظ إعادة الجدولة...",
 };
 
 export default ar;

@@ -1063,3 +1063,153 @@ export function getModuleSelectionSummary(group) {
     selectedModuleNumbers: moduleSelection.selectedModules.map((i) => i + 1),
   };
 }
+
+// ============================================================
+// PATCH: استبدل الدالة rescheduleGroupSessions الموجودة بالكاملة
+// بالنسخة دي في utils/sessionGenerator.js
+// ============================================================
+
+/**
+ * ✅ Reschedule a group's NON-completed sessions.
+ *
+ * Rules:
+ *  - completed sessions  → untouched (status, date, link — كل حاجة فاضية)
+ *  - scheduled / cancelled / postponed → بيتحدثلهم scheduledDate + startTime + endTime فقط
+ *    اللينكات، الـ meetingLinkId، credentials كلها بتفضل زي ما هي.
+ *  - مفيش حذف، مفيش إنشاء جديد.
+ *
+ * @param {String}   groupId
+ * @param {Object}   group          - populated (needs courseId.curriculum)
+ * @param {Object}   newSchedule    - { effectiveFrom, daysOfWeek, timeFrom, timeTo, timezone? }
+ * @param {String}   userId
+ * @param {String[]} selectedLinkIds - ignored هنا (اللينكات بتفضل زي ما هي)
+ */
+export async function rescheduleGroupSessions(
+  groupId,
+  group,
+  newSchedule,
+  userId,
+  selectedLinkIds = [],   // محتفظين بالـ signature بس مش بنستخدمه
+) {
+  const Session = (await import("../app/models/Session")).default;
+  const Group   = (await import("../app/models/Group")).default;
+
+  console.log(`\n🔄 ========== RESCHEDULING GROUP SESSIONS (DATE-ONLY UPDATE) ==========`);
+  console.log(`Group ID: ${groupId}`);
+
+  const { effectiveFrom, daysOfWeek, timeFrom, timeTo, timezone } = newSchedule;
+
+  if (!effectiveFrom || !daysOfWeek?.length || daysOfWeek.length > 3) {
+    throw new Error("Invalid schedule: effectiveFrom and 1-3 daysOfWeek are required");
+  }
+
+  // نفس فلسفة validateScheduleDays — effectiveFrom لازم يوافق أول يوم في daysOfWeek
+  const scheduleValidation = validateScheduleDays(effectiveFrom, daysOfWeek);
+  if (!scheduleValidation.valid) throw new Error(scheduleValidation.error);
+
+  const uniqueDays = [...new Set(daysOfWeek)];
+  if (uniqueDays.length !== daysOfWeek.length) {
+    throw new Error("Duplicate days are not allowed");
+  }
+
+  const course = group.courseId;
+  if (!course?.curriculum?.length) throw new Error("Course curriculum not found");
+
+  // ── 1. جلب كل السيشن الموجودة ──────────────────────────────────────────────
+  const allSessions = await Session.find({
+    groupId,
+    isDeleted: false,
+  }).sort({ moduleIndex: 1, sessionNumber: 1 });
+
+  const completedSessions = allSessions.filter((s) => s.status === "completed");
+  const toReschedule      = allSessions.filter((s) => s.status !== "completed");
+
+  console.log(`📊 Existing sessions: ${allSessions.length}`);
+  console.log(`  ✅ Completed (frozen): ${completedSessions.length}`);
+  console.log(`  🔄 To reschedule:      ${toReschedule.length}`);
+
+  if (toReschedule.length === 0) {
+    return {
+      success: true,
+      message: "No sessions to reschedule — all sessions are completed",
+      regenerated: 0,
+      frozen: completedSessions.length,
+      linksReleased: 0,
+    };
+  }
+
+  // ── 2. بناء التواريخ الجديدة بنفس ترتيب الـ moduleIndex/sessionNumber ──────
+  // ترتيب toReschedule بالفعل { moduleIndex ASC, sessionNumber ASC }
+  const newDates = createFlexibleWeeklySchedule(
+    effectiveFrom,
+    daysOfWeek,
+    toReschedule.length,
+  );
+
+  console.log(`📅 Generated ${newDates.length} new dates starting ${effectiveFrom}`);
+
+  // ── 3. Update كل سيشن بتاريخها الجديد + الوقت الجديد ──────────────────────
+  // (اللينكات وباقي الحقول بتفضل زي ما هي تماماً)
+  const bulkOps = toReschedule.map((session, i) => ({
+    updateOne: {
+      filter: { _id: session._id },
+      update: {
+        $set: {
+          scheduledDate:          newDates[i],
+          startTime:              timeFrom,
+          endTime:                timeTo,
+          "metadata.updatedAt":   new Date(),
+          "metadata.lastModifiedBy": userId,
+          // لو الـ status كان cancelled/postponed نرجعه scheduled
+          ...(session.status !== "scheduled" ? { status: "scheduled" } : {}),
+        },
+      },
+    },
+  }));
+
+  const bulkResult = await Session.bulkWrite(bulkOps);
+  console.log(`✅ Updated ${bulkResult.modifiedCount} session(s) with new dates`);
+
+  // ── 4. تحديث الـ Group schedule ───────────────────────────────────────────
+  await Group.findByIdAndUpdate(groupId, {
+    $set: {
+      "schedule.daysOfWeek":           daysOfWeek,
+      "schedule.timeFrom":             timeFrom,
+      "schedule.timeTo":               timeTo,
+      ...(timezone ? { "schedule.timezone": timezone } : {}),
+      "metadata.lastModifiedBy":       userId,
+      "metadata.updatedAt":            new Date(),
+      "metadata.lastReschedule": {
+        date:                 new Date(),
+        effectiveFrom:        new Date(effectiveFrom),
+        sessionsRescheduled:  bulkResult.modifiedCount,
+        sessionsFrozen:       completedSessions.length,
+        userId,
+      },
+    },
+  });
+
+  // ── 5. إعداد بيانات الإرجاع ───────────────────────────────────────────────
+  const updatedSessions = await Session.find({
+    _id: { $in: toReschedule.map((s) => s._id) },
+    isDeleted: false,
+  }).sort({ scheduledDate: 1 }).lean();
+
+  const startDate = updatedSessions[0]?.scheduledDate;
+  const endDate   = updatedSessions[updatedSessions.length - 1]?.scheduledDate;
+
+  console.log(`  Start: ${startDate?.toISOString().split("T")[0]}`);
+  console.log(`  End:   ${endDate?.toISOString().split("T")[0]}`);
+  console.log(`========================================\n`);
+
+  return {
+    success:      true,
+    message:      `Rescheduled ${bulkResult.modifiedCount} session(s); ${completedSessions.length} completed session(s) left untouched`,
+    regenerated:  bulkResult.modifiedCount,   // نفس الـ key اللي الـ route بيقرأه
+    frozen:       completedSessions.length,
+    linksReleased: 0,                          // مفيش release في الـ flow ده
+    startDate,
+    endDate,
+    sessions: updatedSessions,
+  };
+}

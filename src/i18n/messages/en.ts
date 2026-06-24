@@ -4211,7 +4211,23 @@ const en = {
   "studentForm.checkingEmail": "Checking email availability...",
   "studentForm.emailAlreadyTaken": "This email address is already in use.",
   "studentForm.emailAvailable": "Email address is available.",
-
+  "groups.form.reschedule.warningTitle": "Reschedule Warning",
+  "groups.form.reschedule.warningDesc":
+    "Changes will be applied to the schedule based on the selected date. Please make sure the data is correct before saving.",
+  "groups.form.reschedule.effectiveFrom": "Effective from date",
+  "groups.form.reschedule.firstDayWillBe": "First day will be",
+  "groups.form.reschedule.frozenCount": "Frozen days count",
+  "groups.form.reschedule.affectedCount": "Affected days count",
+  "groups.form.reschedule.linksReleased": "Links released",
+  "groups.form.reschedule.loadingPreview": "Loading preview",
+  "groups.form.reschedule.instructorsNotSaved":
+    "Instructors changes were not saved",
+  "groups.form.reschedule.automationNotSaved":
+    "Automation changes were not saved",
+  "groups.form.reschedule.confirmButton": "Confirm",
+  "groups.form.messages.rescheduled":
+    "The appointment has been rescheduled successfully",
+  "groups.form.reschedule.saving": "Saving reschedule...",
 };
 
 export default en;
