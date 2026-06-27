@@ -4348,6 +4348,78 @@ const ar = {
   "groups.form.messages.rescheduled": "تمت إعادة جدولة الموعد بنجاح",
   "groups.form.reschedule.saving": "جارٍ حفظ إعادة الجدولة...",
   "upcoming.ended": "انتهى",
+  "dashboard.rescheduleRequests": "طلبات إعادة الجدولة",
+  "reschedule.load.failed": "فشل في تحميل الطلبات.",
+
+  "reschedule.approve.confirm":
+    'هل تريد الموافقة على طلب فتح السيشنات للمجموعة "{group}"؟ سيتم تنفيذ الطلب على {count} سيشن.',
+  "reschedule.approve.loading": "جارٍ الموافقة...",
+  "reschedule.approve.success": "تمت الموافقة على الطلب بنجاح.",
+  "reschedule.approve.failed": "فشل في الموافقة على الطلب.",
+  "reschedule.approve.button": "موافقة",
+
+  "reschedule.reject.loading": "جارٍ الرفض...",
+  "reschedule.reject.success": "تم رفض الطلب بنجاح.",
+  "reschedule.reject.failed": "فشل في رفض الطلب.",
+  "reschedule.reject.title": "رفض الطلب",
+  "reschedule.reject.warning":
+    "سيتم رفض هذا الطلب ولن يحصل المدرس على صلاحية فتح السيشنات المطلوبة.",
+  "reschedule.reject.notesLabel": "سبب الرفض (اختياري)",
+  "reschedule.reject.notesPlaceholder": "اكتب ملاحظة للمدرس...",
+  "reschedule.reject.confirm": "تأكيد الرفض",
+  "reschedule.reject.button": "رفض",
+
+  "reschedule.title": "طلبات فتح السيشنات",
+  "reschedule.subtitle":
+    "راجع طلبات المدرسين لفتح السيشنات خارج موعدها المحدد.",
+  "reschedule.refresh": "تحديث",
+
+  "reschedule.stats.pending": "الطلبات المعلقة",
+  "reschedule.stats.sessions": "السيشنات المتأثرة",
+  "reschedule.stats.single": "سيشن واحدة",
+  "reschedule.stats.withNext": "مع السيشنات التالية",
+
+  "reschedule.retry": "إعادة المحاولة",
+
+  "reschedule.empty.title": "لا توجد طلبات معلقة",
+  "reschedule.empty.description":
+    "لا توجد حالياً أي طلبات انتظار لفتح السيشنات.",
+
+  "reschedule.details.title": "تفاصيل الطلب",
+  "reschedule.details.group": "المجموعة",
+  "reschedule.details.requestedBy": "مقدم الطلب",
+  "reschedule.details.mode": "نوع الفتح",
+  "reschedule.details.shift": "التأجيل",
+  "reschedule.details.days": "أيام",
+  "reschedule.details.explainSingle":
+    "سيتم فتح السيشن المطلوبة فورًا، بينما تظل باقي السيشنات كما هي.",
+  "reschedule.details.explainWithNext":
+    "سيتم فتح السيشن المطلوبة فورًا، بينما تظل السيشنات التالية مغلقة حتى موعدها المحدد.",
+
+  "reschedule.cancel": "إلغاء",
+
+  "reschedule.mode.single": "هذه السيشن فقط",
+  "reschedule.mode.withNext": "هذه السيشن وما بعدها",
+
+  "reschedule.unknownGroup": "مجموعة غير معروفة",
+  "reschedule.sessionsAffected": "سيشن متأثرة",
+  "reschedule.triggerSession": "السيشن المطلوبة",
+
+  "reschedule.hideSessions": "إخفاء السيشنات",
+  "reschedule.showSessions": "عرض السيشنات",
+  "reschedule.viewDetails": "عرض التفاصيل",
+
+  "reschedule.table.session": "السيشن",
+  "reschedule.table.status": "الحالة",
+  "reschedule.table.oldDate": "الموعد الحالي",
+  "reschedule.table.newDate": "موعد الفتح",
+  "reschedule.table.trigger": "المطلوبة",
+  "reschedule.table.module": "الموديول",
+  "reschedule.table.opensNow": "تُفتح فورًا",
+  "credit.subtractHours": "خصم الساعات",
+  "credit.hoursAdded": "تمت إضافة الساعات",
+  "credit.addHours": "إضافة ساعات",
+  "credit.hoursDeducted": "تم خصم الساعات",
 };
 
 export default ar;

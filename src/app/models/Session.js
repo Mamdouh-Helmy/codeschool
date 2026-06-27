@@ -1,4 +1,4 @@
-// models/Session.js - ENHANCED WITH MEETING LINK SUPPORT
+// models/Session.js - ENHANCED WITH MEETING LINK SUPPORT + CASCADE RESCHEDULE REQUESTS
 import mongoose from "mongoose";
 
 const attendanceRecordSchema = new mongoose.Schema(
@@ -22,6 +22,48 @@ const attendanceRecordSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+  },
+  { _id: false }
+);
+
+// ✅ طلب ترحيل السلسلة (cascade reschedule) — السيشن دي + كل اللي بعدها بترحل
+// بمقدار أسبوع. الطلب ده بيتخزن جوه السيشن نفسها (مش في كولكشن منفصلة) وبيفضل
+// "pending" لحد ما الأدمن يوافق أو يرفض. كل السيشنات اللي طُلبت مع بعض في نفس
+// الطلب بتشترك في batchId واحد عشان الأدمن يقدر يوافق/يرفض المجموعة كلها مرة واحدة.
+const pendingRescheduleSchema = new mongoose.Schema(
+  {
+    batchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+    // السيشن اللي المدرس دوس عليها وبدأ منها الطلب (مش كل سيشن في السلسلة هي trigger)
+    triggerSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Session",
+      required: true,
+    },
+    // فتح دي بس / فتح دي واللي بعدها (بيتحكم في canViewDetails بعد الترحيل)
+    // - single:    بعد الموافقة، اللي بعد الـ trigger يفضلوا يتبعوا قاعدة isToday العادية
+    // - withNext:  بعد الموافقة، اللي بعد الـ trigger يبقى عندهم تفاصيل عامة (محتوى/دروس)
+    //              بس من غير meeting link ولا تسجيل حضور لحد ما تاريخهم الجديد يجي فعلاً
+    viewMode: {
+      type: String,
+      enum: ["single", "withNext"],
+      default: "single",
+    },
+    shiftDays: { type: Number, default: 7 },
+    oldScheduledDate: { type: Date, required: true },
+    newScheduledDate: { type: Date, required: true },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    requestedAt: { type: Date, default: Date.now },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    reviewedAt: { type: Date },
+    reviewNotes: { type: String, default: "" },
   },
   { _id: false }
 );
@@ -140,6 +182,25 @@ const SessionSchema = new mongoose.Schema(
     },
     attendance: [attendanceRecordSchema],
 
+    // ✅ Cascade Reschedule Request (embedded — no separate collection)
+    pendingReschedule: {
+      type: pendingRescheduleSchema,
+      default: null,
+    },
+
+    // ✅ Early/Forced Access Window — لما طلب ترحيل يتعمل عليه approve وهو
+    // كان الـ trigger session، السيشن دي تتفتح فورًا (meeting link + حضور)
+    // بغض النظر عن تاريخها المجدول، لغاية ما المدرس يسجل الحضور أو ينتهي
+    // الوقت المسموح. ده فلاج مستقل تمامًا عن isToday.
+    earlyAccess: {
+      enabled: { type: Boolean, default: false },
+      grantedAt: { type: Date },
+      grantedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      batchId: { type: mongoose.Schema.Types.ObjectId },
+      // بيتقفل تلقائيًا أول ما الحضور يتسجل أو لما الأدمن/الكرون يقفله
+      consumedAt: { type: Date },
+    },
+
     // Automation Tracking
     automationEvents: {
       // Reminders
@@ -148,14 +209,14 @@ const SessionSchema = new mongoose.Schema(
         default: false,
       },
       reminderSentAt: Date,
-      
+
       // Absence notifications
       absentNotificationsSent: {
         type: Boolean,
         default: false,
       },
       absentNotificationsSentAt: Date,
-      
+
       // Session updates
       postponeNotificationSent: {
         type: Boolean,
@@ -263,6 +324,13 @@ SessionSchema.index({ meetingLinkId: 1 });
 SessionSchema.index({ meetingPlatform: 1 });
 SessionSchema.index({ "automationEvents.meetingLinkAssigned": 1 });
 
+// ✅ Cascade reschedule indexes — للأدمن (قائمة pending) وللتحقق السريع من التكرار
+SessionSchema.index({ "pendingReschedule.status": 1 });
+SessionSchema.index({ "pendingReschedule.batchId": 1 });
+
+// ✅ Early access index — يساعد في تنظيف/فلترة السيشنات اللي عندها فتح فوري شغال
+SessionSchema.index({ "earlyAccess.enabled": 1 });
+
 // ✅ Unique constraint: one session per group/module/sessionNumber
 SessionSchema.index(
   { groupId: 1, moduleIndex: 1, sessionNumber: 1 },
@@ -274,9 +342,6 @@ SessionSchema.index(
   }
 );
 
-// ==================== MIDDLEWARE ====================
-
-// Update timestamp
 // ==================== MIDDLEWARE ====================
 
 // Update timestamp
@@ -429,12 +494,22 @@ SessionSchema.virtual("meetingPlatformIcon").get(function () {
 // ✅ Get meeting credentials display (masked password)
 SessionSchema.virtual("credentialsDisplay").get(function () {
   if (!this.meetingCredentials) return null;
-  
+
   return {
     username: this.meetingCredentials.username,
     password: this.meetingCredentials.password ? "••••••••" : null,
     hasPassword: !!this.meetingCredentials.password,
   };
+});
+
+// ✅ هل فيه طلب ترحيل قيد المراجعة على السيشن دي دلوقتي؟
+SessionSchema.virtual("hasPendingReschedule").get(function () {
+  return !!(this.pendingReschedule && this.pendingReschedule.status === "pending");
+});
+
+// ✅ هل السيشن دي معندها فتح فوري (early access) شغال دلوقتي؟
+SessionSchema.virtual("hasActiveEarlyAccess").get(function () {
+  return !!(this.earlyAccess?.enabled && !this.earlyAccess?.consumedAt);
 });
 
 // ==================== METHODS ====================
@@ -463,6 +538,12 @@ SessionSchema.methods.isToday = function () {
   const sessionDate = new Date(this.scheduledDate);
 
   return today.toDateString() === sessionDate.toDateString();
+};
+
+// ✅ Check if this session currently qualifies for "today-like" instructor access.
+// True if it's scheduled for today OR it has an active (not yet consumed) early-access grant.
+SessionSchema.methods.isEffectivelyToday = function () {
+  return this.isToday() || this.hasActiveEarlyAccess;
 };
 
 // Get session summary
@@ -555,6 +636,11 @@ SessionSchema.methods.getStatusColor = function () {
 SessionSchema.methods.canTakeAttendance = function () {
   if (this.status !== "scheduled" && this.status !== "completed") {
     return false;
+  }
+
+  // ✅ Early access (immediate-open after admin approval) bypasses the normal time window
+  if (this.hasActiveEarlyAccess) {
+    return true;
   }
 
   const now = new Date();
@@ -668,6 +754,119 @@ SessionSchema.methods.getModuleSessions = async function () {
     .sort({ sessionNumber: 1 });
 
   return moduleSessions;
+};
+
+// ✅ يجيب السيشن دي + كل اللي بعدها بالتسلسل الكامل (moduleIndex ثم sessionNumber)
+// ده الأساس اللي عليه بيتبني طلب ترحيل السلسلة (cascade reschedule request)
+SessionSchema.methods.getChainFromHere = async function () {
+  const allSessions = await mongoose
+    .model("Session")
+    .find({ groupId: this.groupId, isDeleted: false })
+    .sort({ moduleIndex: 1, sessionNumber: 1 });
+
+  const myIndex = allSessions.findIndex(
+    (s) => s._id.toString() === this._id.toString()
+  );
+
+  if (myIndex === -1) return [this];
+
+  return allSessions.slice(myIndex);
+};
+
+// ✅ يبني preview لترحيل السلسلة (السيشن دي + كل اللي بعدها) بمقدار shiftDays
+// من غير ما يحفظ أي حاجة — للعرض على المدرس/الأدمن قبل التقديم/الموافقة
+//
+// 🔐 مهم جدًا: السيشن اللي المدرس دوس عليها (trigger / "this" session) هي اللي
+// هتُفتح فورًا (earlyAccess) بعد الموافقة — يعني تاريخها المجدول مالوش قيمة
+// عملية، ومينفعش يترحل، علشان معندناش سبب نغيره. لو رحّلناه برضو هيبان للمدرس
+// إنه "ترحّل" حتى لو فاتح فورًا، وده مش المطلوب. فبالتالي:
+//   - السيشن trigger (أول عنصر في السلسلة): newScheduledDate = oldScheduledDate (زي ما هي)
+//   - كل اللي بعدها: newScheduledDate = oldScheduledDate + shiftDays (بترحل فعليًا)
+SessionSchema.methods.buildCascadePreview = async function (shiftDays = 7) {
+  const chain = await this.getChainFromHere();
+
+  const affectedSessions = chain.map((session, index) => {
+    const isTrigger = index === 0; // أول عنصر في الـ chain هو دايمًا السيشن اللي بدأنا منها
+    const oldScheduledDate = new Date(session.scheduledDate);
+    const newScheduledDate = new Date(oldScheduledDate);
+    if (!isTrigger) {
+      newScheduledDate.setDate(newScheduledDate.getDate() + shiftDays);
+    }
+
+    return {
+      sessionId: session._id,
+      title: session.title,
+      moduleIndex: session.moduleIndex,
+      sessionNumber: session.sessionNumber,
+      status: session.status,
+      isTrigger,
+      oldScheduledDate,
+      newScheduledDate,
+    };
+  });
+
+  return {
+    shiftDays,
+    totalAffected: affectedSessions.length,
+    completedCount: affectedSessions.filter((s) => s.status === "completed").length,
+    affectedSessions,
+  };
+};
+
+// ✅ يكتب pendingReschedule على كل سيشن في السلسلة (دي + كل اللي بعدها)
+// بنفس batchId عشان الأدمن يقدر يوافق/يرفض المجموعة كلها مرة واحدة.
+//
+// 🔐 قاعدة مهمة: مينفعش يتقدم طلب جديد لو فيه طلب "pending" بالفعل على نفس
+// الجروب (مش بس على نفس السيشن) — ده بيمنع تكدس أكتر من باتش في نفس الوقت.
+SessionSchema.methods.submitCascadeRescheduleRequest = async function (
+  { viewMode = "single", shiftDays = 7 },
+  userId
+) {
+  const Session = mongoose.model("Session");
+
+  const existingPending = await Session.findOne({
+    groupId: this.groupId,
+    isDeleted: false,
+    "pendingReschedule.status": "pending",
+  }).select("_id pendingReschedule.batchId");
+
+  if (existingPending) {
+    const error = new Error("يوجد طلب ترحيل قيد المراجعة لهذا الجروب بالفعل");
+    error.code = "PENDING_REQUEST_EXISTS";
+    error.existingBatchId = existingPending.pendingReschedule?.batchId;
+    throw error;
+  }
+
+  const preview = await this.buildCascadePreview(shiftDays);
+  const batchId = new mongoose.Types.ObjectId();
+  const requestedAt = new Date();
+
+  await Promise.all(
+    preview.affectedSessions.map((item) =>
+      Session.updateOne(
+        { _id: item.sessionId, isDeleted: false },
+        {
+          $set: {
+            pendingReschedule: {
+              batchId,
+              status: "pending",
+              triggerSessionId: this._id,
+              viewMode,
+              shiftDays,
+              oldScheduledDate: item.oldScheduledDate,
+              newScheduledDate: item.newScheduledDate,
+              requestedBy: userId,
+              requestedAt,
+            },
+            "metadata.lastModifiedBy": userId,
+            "metadata.updatedAt": requestedAt,
+          },
+        }
+      )
+    )
+  );
+
+  return { batchId, affectedCount: preview.affectedSessions.length, preview };
 };
 
 // ==================== STATIC METHODS ====================
@@ -917,23 +1116,186 @@ SessionSchema.statics.getAvailableMeetingLinksForSession = async function (
   sessionId
 ) {
   const session = await this.findById(sessionId);
-  
+
   if (!session) {
     throw new Error("Session not found");
   }
 
   const { getAvailableMeetingLinks } = await import("../../utils/sessionGenerator");
-  
+
   // Create date objects for the session time
   const startTime = new Date(session.scheduledDate);
   const [hours, minutes] = session.startTime.split(":").map(Number);
   startTime.setHours(hours, minutes, 0, 0);
-  
+
   const endTime = new Date(startTime);
   const [endHours, endMinutes] = session.endTime.split(":").map(Number);
   endTime.setHours(endHours, endMinutes, 0, 0);
 
   return await getAvailableMeetingLinks(startTime, endTime);
+};
+
+// ✅ Get all pending cascade reschedule requests, grouped by batchId — للأدمن
+SessionSchema.statics.getPendingRescheduleBatches = async function () {
+  const sessions = await this.find({
+    isDeleted: false,
+    "pendingReschedule.status": "pending",
+  })
+    .populate({ path: "groupId", select: "name code" })
+    .populate({ path: "pendingReschedule.requestedBy", select: "name email" })
+    .sort({ "pendingReschedule.requestedAt": -1, moduleIndex: 1, sessionNumber: 1 })
+    .lean();
+
+  const batches = {};
+
+  sessions.forEach((session) => {
+    const batchId = session.pendingReschedule.batchId.toString();
+
+    if (!batches[batchId]) {
+      batches[batchId] = {
+        batchId,
+        groupId: session.groupId?._id || session.groupId,
+        groupName: session.groupId?.name || "",
+        groupCode: session.groupId?.code || "",
+        triggerSessionId: session.pendingReschedule.triggerSessionId,
+        viewMode: session.pendingReschedule.viewMode,
+        shiftDays: session.pendingReschedule.shiftDays,
+        requestedBy: session.pendingReschedule.requestedBy,
+        requestedAt: session.pendingReschedule.requestedAt,
+        sessions: [],
+      };
+    }
+
+    batches[batchId].sessions.push({
+      sessionId: session._id,
+      title: session.title,
+      moduleIndex: session.moduleIndex,
+      sessionNumber: session.sessionNumber,
+      status: session.status,
+      isTrigger:
+        session.pendingReschedule.triggerSessionId?.toString() === session._id.toString(),
+      oldScheduledDate: session.pendingReschedule.oldScheduledDate,
+      newScheduledDate: session.pendingReschedule.newScheduledDate,
+    });
+  });
+
+  return Object.values(batches);
+};
+
+// ✅ موافقة الأدمن على batch كامل:
+//   1. بيحدّث scheduledDate لكل سيشن في الـ batch (دي + كل اللي بعدها)
+//   2. بيمنح السيشن "trigger" (اللي المدرس دوس عليها وقدم الطلب منها) earlyAccess
+//      فوري — تتفتح فورًا (meeting link + حضور) من غير ما ترتبط بتاريخها الجديد.
+//   3. مينفعش يلمس status (غير الإرجاع لـ scheduled في حالة withNext مش لازم)،
+//      ولا attendance، ولا meetingLink بتاع باقي السيشنات — كل ده بيفضل زي ما هو.
+SessionSchema.statics.approveRescheduleBatch = async function (batchId, adminUserId) {
+  const sessions = await this.find({
+    isDeleted: false,
+    "pendingReschedule.batchId": batchId,
+    "pendingReschedule.status": "pending",
+  });
+
+  if (sessions.length === 0) {
+    const error = new Error("لا يوجد طلب ترحيل مطابق لهذا الرقم أو تمت معالجته بالفعل");
+    error.code = "BATCH_NOT_FOUND";
+    throw error;
+  }
+
+  const now = new Date();
+  const results = [];
+  // كل سيشنات الباتش بيشتركوا في نفس triggerSessionId
+  const triggerSessionId = sessions[0].pendingReschedule.triggerSessionId?.toString();
+
+  for (const session of sessions) {
+    const isTrigger = session._id.toString() === triggerSessionId;
+
+    // 🔐 السيشن trigger مينفعش يترحل خالص — هي اللي هتتفتح فورًا (earlyAccess)
+    // بغض النظر عن تاريخها، فمفيش أي سبب نلمس scheduledDate بتاعها. باقي
+    // السيشنات في الباتش (اللي بعد الـ trigger) هي اللي بترحّل فعليًا.
+    if (!isTrigger) {
+      session.scheduledDate = session.pendingReschedule.newScheduledDate;
+    }
+
+    session.pendingReschedule.status = "approved";
+    session.pendingReschedule.reviewedBy = adminUserId;
+    session.pendingReschedule.reviewedAt = now;
+    session.metadata.lastModifiedBy = adminUserId;
+    session.metadata.updatedAt = now;
+
+    // ✅ السيشن اللي المدرس بدأ منها الطلب تتفتح فورًا، بغض النظر عن تاريخها
+    if (isTrigger) {
+      session.earlyAccess = {
+        enabled: true,
+        grantedAt: now,
+        grantedBy: adminUserId,
+        batchId: session.pendingReschedule.batchId,
+        consumedAt: null,
+      };
+    }
+
+    await session.save();
+    results.push({
+      sessionId: session._id,
+      newScheduledDate: session.scheduledDate,
+      isTrigger,
+      earlyAccessGranted: isTrigger,
+    });
+  }
+
+  return { batchId, updatedCount: results.length, sessions: results, triggerSessionId };
+};
+
+// ✅ رفض الأدمن لـ batch كامل: بيقفل pendingReschedule من غير ما يغير scheduledDate
+// ولا يمنح أي earlyAccess — كل حاجة تفضل زي ما هي تمامًا.
+SessionSchema.statics.rejectRescheduleBatch = async function (batchId, adminUserId, reviewNotes = "") {
+  const sessions = await this.find({
+    isDeleted: false,
+    "pendingReschedule.batchId": batchId,
+    "pendingReschedule.status": "pending",
+  });
+
+  if (sessions.length === 0) {
+    const error = new Error("لا يوجد طلب ترحيل مطابق لهذا الرقم أو تمت معالجته بالفعل");
+    error.code = "BATCH_NOT_FOUND";
+    throw error;
+  }
+
+  const now = new Date();
+
+  const result = await this.updateMany(
+    {
+      isDeleted: false,
+      "pendingReschedule.batchId": batchId,
+      "pendingReschedule.status": "pending",
+    },
+    {
+      $set: {
+        "pendingReschedule.status": "rejected",
+        "pendingReschedule.reviewedBy": adminUserId,
+        "pendingReschedule.reviewedAt": now,
+        "pendingReschedule.reviewNotes": reviewNotes,
+        "metadata.lastModifiedBy": adminUserId,
+        "metadata.updatedAt": now,
+      },
+    }
+  );
+
+  return { batchId, updatedCount: result.modifiedCount };
+};
+
+// ✅ يقفل earlyAccess على سيشن بعد ما الحضور يتسجل، أو يدويًا من الأدمن
+SessionSchema.statics.consumeEarlyAccess = async function (sessionId, userId) {
+  const now = new Date();
+  return await this.updateOne(
+    { _id: sessionId, isDeleted: false, "earlyAccess.enabled": true },
+    {
+      $set: {
+        "earlyAccess.consumedAt": now,
+        "metadata.lastModifiedBy": userId,
+        "metadata.updatedAt": now,
+      },
+    }
+  );
 };
 
 // Delete all sessions for a group (soft delete)
@@ -1013,12 +1375,12 @@ SessionSchema.set("toJSON", {
     delete ret.__v;
     delete ret.isDeleted;
     delete ret.deletedAt;
-    
+
     // Remove password from meeting credentials
     if (ret.meetingCredentials && ret.meetingCredentials.password) {
       ret.meetingCredentials.password = "••••••••";
     }
-    
+
     return ret;
   },
 });
@@ -1029,11 +1391,11 @@ SessionSchema.set("toObject", {
     delete ret.__v;
     delete ret.isDeleted;
     delete ret.deletedAt;
-    
+
     if (ret.meetingCredentials && ret.meetingCredentials.password) {
       ret.meetingCredentials.password = "••••••••";
     }
-    
+
     return ret;
   },
 });

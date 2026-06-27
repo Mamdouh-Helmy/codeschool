@@ -1,3 +1,4 @@
+//api/instructor/sessions/[id]/attendance/route.js
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { getUserFromRequest } from '@/lib/auth';
@@ -301,6 +302,20 @@ export async function PATCH(req, { params }) {
     }
 
     session.attendanceTaken = true;
+
+    // ✅ استهلاك "الفتح الفوري" (earlyAccess) بعد تسجيل الحضور بنجاح.
+    //
+    // لو الجلسة دي كانت اتفتحت فورًا بسبب موافقة الأدمن على طلب ترحيل
+    // (Cascade Reschedule Request)، فأول ما المدرس يسجل الحضور فيها فعليًا،
+    // لازم نقفل الفلاج ده — وإلا الجلسة هتفضل "متاحة فورًا" للأبد حتى بعد
+    // ما المدرس خلص غرضه منها، وده سلوك غير مقصود.
+    //
+    // الشرط بيتأكد إن earlyAccess كان شغال أصلاً ولسه مستهلك (consumedAt = null)
+    // قبل ما يكتب أي قيمة، عشان ميعملش save زيادة من غير لزوم.
+    if (session.earlyAccess?.enabled && !session.earlyAccess?.consumedAt) {
+      session.earlyAccess.consumedAt = new Date();
+    }
+
     await session.save();
 
     if (notifyList.length) {

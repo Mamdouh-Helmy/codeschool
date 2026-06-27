@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import toast from "react-hot-toast";
 import {
   Users, Plus, Edit, Trash2, Search,
@@ -9,7 +9,7 @@ import {
   AlertCircle, MoreHorizontal, UserPlus, Package,
   Zap, Snowflake, Ban, Award, Hash, User,
   X, ChevronDown, Layers, UserCheck, UserX,
-  TrendingUp, Target,
+  TrendingUp, Target, Minus, Loader2, Info,
 } from "lucide-react";
 import Modal from "./Modal";
 import StudentForm from "./StudentForm";
@@ -165,6 +165,148 @@ function PaginationBtn({ onClick, disabled, icon: Icon, label }) {
     >
       <Icon className="w-3.5 h-3.5" />
     </button>
+  );
+}
+
+// ─── Credit Quick Adjust (زر + / - بجوار عدد الساعات في الجدول) ────────────────
+function CreditQuickAdjust({ student, hasPackage, onAdjusted, t }) {
+  const [open, setOpen] = useState(null); // "add" | "subtract" | null
+  const [hours, setHours] = useState("1");
+  const [submitting, setSubmitting] = useState(false);
+  const wrapperRef = useRef(null);
+
+  // قفل البوبوفر لو دوس المستخدم برة
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const studentId = student._id || student.id;
+
+  const openPopover = (direction) => {
+    if (!hasPackage) return;
+    setHours("1");
+    setOpen(prev => (prev === direction ? null : direction));
+  };
+
+  const submit = async () => {
+    const hoursValue = Number(hours);
+    if (!hoursValue || hoursValue <= 0) {
+      toast.error(t("credit.invalidHours") || "ادخل عدد ساعات صحيح");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/students/${studentId}/credit-hours/adjust`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          direction: open,
+          hours: hoursValue,
+          reason: open === "add" ? "Quick add from table" : "Quick subtract from table",
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success(
+          open === "add"
+            ? (t("credit.hoursAdded") || "تمت زيادة الساعات بنجاح")
+            : (t("credit.hoursDeducted") || "تم خصم الساعات بنجاح")
+        );
+        onAdjusted(studentId, data.student);
+        setOpen(null);
+      } else {
+        toast.error(data.message || t("common.error"));
+      }
+    } catch {
+      toast.error(t("common.error"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative inline-flex items-center gap-1">
+      <button
+        onClick={() => openPopover("subtract")}
+        disabled={!hasPackage}
+        title={!hasPackage ? (t("credit.addPackageFirst") || "ضيف باكدج الأول") : (t("credit.subtractHours") || "خصم ساعات")}
+        className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors shrink-0 ${
+          !hasPackage
+            ? "bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed"
+            : "bg-rose-50 dark:bg-rose-950/40 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/50"
+        }`}
+      >
+        <Minus className="w-3 h-3" />
+      </button>
+
+      <button
+        onClick={() => openPopover("add")}
+        disabled={!hasPackage}
+        title={!hasPackage ? (t("credit.addPackageFirst") || "ضيف باكدج الأول") : (t("credit.addHours") || "زيادة ساعات")}
+        className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors shrink-0 ${
+          !hasPackage
+            ? "bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed"
+            : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+        }`}
+      >
+        <Plus className="w-3 h-3" />
+      </button>
+
+      {open && (
+        <div
+          className="absolute z-30 top-full mt-1.5 left-0 w-52 bg-white dark:bg-darklight rounded-xl shadow-darkmd border border-gray-200 dark:border-dark_border p-3"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-[11px] font-semibold text-gray-500 dark:text-darktext mb-2 flex items-center gap-1">
+            {open === "add" ? (
+              <><Plus className="w-3 h-3 text-emerald-500" /> {t("credit.addHours") || "زيادة ساعات"}</>
+            ) : (
+              <><Minus className="w-3 h-3 text-rose-500" /> {t("credit.subtractHours") || "خصم ساعات"}</>
+            )}
+          </p>
+
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              min="0.5"
+              step="0.5"
+              autoFocus
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+              className="
+                w-full px-2 py-1.5 text-sm text-center rounded-lg
+                border border-gray-200 dark:border-dark_border
+                bg-gray-50 dark:bg-dark_input
+                text-gray-900 dark:text-white
+                outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary
+              "
+            />
+            <button
+              onClick={submit}
+              disabled={submitting}
+              className={`
+                shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors
+                flex items-center justify-center
+                ${open === "add" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"}
+                disabled:opacity-50
+              `}
+            >
+              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (t("common.confirm") || "تأكيد")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -330,6 +472,20 @@ export default function StudentAdmin() {
       </div>
     ), { duration: Infinity, position: "top-center" });
   };
+
+  // ─── Credit hours quick-adjust callback ────────────────────────────────────
+  // بيستقبل الطالب المحدث من السيرفر ويحدث الـ state المحلي فورًا بدون إعادة تحميل كل الصفحة
+  const onCreditAdjusted = useCallback((studentId, updatedStudentPartial) => {
+    setStudents(prev => prev.map(s => {
+      const sid = s._id || s.id;
+      if (sid !== studentId) return s;
+      return {
+        ...s,
+        creditSystem: updatedStudentPartial?.creditSystem ?? s.creditSystem,
+        creditInfo:   updatedStudentPartial?.creditInfo   ?? s.creditInfo,
+      };
+    }));
+  }, []);
 
   const formatDate = (d) => {
     if (!d) return "—";
@@ -571,6 +727,7 @@ export default function StudentAdmin() {
                   const statusCfg  = STATUS_CFG[student.enrollmentInfo?.status] || { dot: "bg-gray-400", badge: "bg-gray-100 dark:bg-gray-800 text-gray-500" };
                   const levelCls   = LEVEL_CFG[student.academicInfo?.level]     || "bg-gray-100 dark:bg-gray-800 text-gray-500";
                   const inGroup    = student.inGroup;
+                  const hasPackage = !!student.creditSystem?.currentPackage;
 
                   return (
                     <tr
@@ -633,7 +790,7 @@ export default function StudentAdmin() {
 
                       {/* Credit */}
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2.5">
                           <div className={`w-7 h-7 rounded-lg ${credit.bgClass} flex items-center justify-center flex-shrink-0`}>
                             <CreditIcon className={`w-3.5 h-3.5 ${credit.colorClass}`} />
                           </div>
@@ -643,6 +800,14 @@ export default function StudentAdmin() {
                               <p className="text-[10px] text-gray-400 dark:text-darksubtle">{credit.remaining}h left</p>
                             )}
                           </div>
+
+                          {/* ✅ زر تعديل الساعات السريع +/- */}
+                          <CreditQuickAdjust
+                            student={student}
+                            hasPackage={hasPackage}
+                            onAdjusted={onCreditAdjusted}
+                            t={t}
+                          />
                         </div>
                       </td>
 

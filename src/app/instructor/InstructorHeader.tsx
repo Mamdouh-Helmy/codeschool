@@ -53,6 +53,9 @@ export default function InstructorHeader({
   const { locale, toggleLocale } = useLocale();
   const isArabic = locale === "ar";
 
+  // ✅ Fix hydration: next-themes returns undefined on server
+  const [mounted, setMounted] = useState(false);
+
   const [showUserMenu, setShowUserMenu]           = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMobileSearch, setShowMobileSearch]   = useState(false);
@@ -62,6 +65,10 @@ export default function InstructorHeader({
   const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef      = useRef<HTMLDivElement>(null);
   const searchRef        = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -163,7 +170,6 @@ export default function InstructorHeader({
             {/* Desktop greeting */}
             <div className="hidden lg:block flex-shrink-0">
               <h1 className="text-xl xl:text-2xl font-bold flex items-center gap-2">
-                {/* ✅ Brand gradient: #004d59 → #ff6700 (matches Sidebar Dashboard item) */}
                 <span
                   className="bg-clip-text text-transparent"
                   style={{ backgroundImage: "linear-gradient(135deg, #004d59, #ff6700)" }}
@@ -173,7 +179,6 @@ export default function InstructorHeader({
                 <span className="text-2xl animate-wave">👨‍🏫</span>
               </h1>
               <p className="text-xs xl:text-sm text-gray-500 dark:text-[#8b949e] mt-1 flex items-center gap-2">
-                {/* ✅ #feaf00 — matches Sidebar Sessions item highlight */}
                 <Sparkles className="w-3 h-3" style={{ color: "#feaf00" }} />
                 {isArabic
                   ? "لوحة تحكم المدرس - رحلتك التعليمية"
@@ -184,7 +189,6 @@ export default function InstructorHeader({
 
           {/* ── Center: mobile title ── */}
           <div className="lg:hidden text-center flex-1 min-w-0 px-2">
-            {/* ✅ Brand pill: #004d59/10 → #ff6700/10 */}
             <div
               className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full"
               style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }}
@@ -223,7 +227,6 @@ export default function InstructorHeader({
                     placeholder:text-gray-400 dark:placeholder:text-[#6e7681]
                     outline-none transition-all
                     focus:ring-2 focus:border-[#ff6700]`}
-                  // ✅ focus ring brand color
                   style={{ "--tw-ring-color": "#ff670030" } as React.CSSProperties}
                 />
                 <Search
@@ -237,7 +240,6 @@ export default function InstructorHeader({
               onClick={() => setShowMobileSearch(!showMobileSearch)}
               className={`${iconBtn} xl:hidden`}
             >
-              {/* ✅ hover glow: #004d59 → #ff6700 */}
               <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }} />
               <Search className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-[#8b949e] group-hover:scale-110 transition-transform" />
@@ -267,17 +269,22 @@ export default function InstructorHeader({
               </span>
             </button>
 
-            {/* Theme toggle */}
+            {/* ✅ Theme toggle — mounted check يمنع hydration mismatch */}
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className={iconBtn}
+              suppressHydrationWarning
             >
               <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }} />
-              {/* ✅ #feaf00 for sun — matches Sessions/amber highlight */}
-              {theme === "dark" ? (
-                <Sun className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 group-hover:rotate-90 transition-transform duration-500"
-                  style={{ color: "#feaf00" }} />
+              {!mounted ? (
+                // placeholder بنفس الحجم عشان ما يحصلش layout shift
+                <Moon className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 text-gray-700 dark:text-[#8b949e]" />
+              ) : theme === "dark" ? (
+                <Sun
+                  className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 group-hover:rotate-90 transition-transform duration-500"
+                  style={{ color: "#feaf00" }}
+                />
               ) : (
                 <Moon className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 text-gray-700 dark:text-[#8b949e] group-hover:scale-110 transition-transform" />
               )}
@@ -295,7 +302,6 @@ export default function InstructorHeader({
 
                 {notifications.length > 0 && (
                   <>
-                    {/* ✅ Badge: #ff6437 → #ff6700 (coral → orange, matches Sidebar Reports item) */}
                     <span
                       className="absolute -top-1 -right-1 min-w-[18px] h-[18px] text-white text-[10px] rounded-full flex items-center justify-center font-bold px-1 shadow-lg animate-pulse"
                       style={{ background: "linear-gradient(135deg, #ff6437, #ff6700)" }}
@@ -312,7 +318,6 @@ export default function InstructorHeader({
 
               {showNotifications && (
                 <div className={`${dropdownClass} sm:w-80 animate-slide-down`}>
-                  {/* ✅ Header: brand teal tint */}
                   <div
                     className="px-4 py-3 border-b border-gray-100 dark:border-[#30363d]"
                     style={{ background: "linear-gradient(135deg, #004d5908, #ff670008)" }}
@@ -341,7 +346,6 @@ export default function InstructorHeader({
                 className="flex items-center gap-1 sm:gap-2 p-1 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-all group flex-shrink-0"
               >
                 <div className="relative">
-                  {/* ✅ Avatar: #004d59 → #ff6700 (matches Sidebar logo gradient) */}
                   <div
                     className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm ring-2 ring-white dark:ring-[#161b22] shadow-lg group-hover:scale-105 transition-transform"
                     style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
@@ -360,7 +364,6 @@ export default function InstructorHeader({
 
               {showUserMenu && (
                 <div className={`${dropdownClass} w-64 sm:w-72 animate-slide-down`}>
-                  {/* ✅ User card header: brand teal gradient */}
                   <div
                     className="p-4 border-b border-gray-100 dark:border-[#30363d]"
                     style={{ background: "linear-gradient(135deg, #004d5908, #ff670008)" }}
@@ -382,7 +385,6 @@ export default function InstructorHeader({
                         <p className="text-xs text-gray-500 dark:text-[#8b949e] truncate mt-0.5">
                           {user.email}
                         </p>
-                        {/* ✅ Role badge: #004d59 → #ff6700 */}
                         <span
                           className="inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded-full mt-1 shadow-sm"
                           style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}

@@ -16,7 +16,9 @@ import {
   CalendarDays, ListFilter, GraduationCap, Globe,
   Presentation, FolderOpen, BookMarked,
   Layers, Copy, Eye, EyeOff, Lock, User, Link2,
-  TrendingUp, Award, LayoutGrid,
+  TrendingUp, Award, LayoutGrid, Shield,
+  CalendarClock, Hourglass, SkipForward, ArrowRightCircle,
+  Send, BadgeCheck, BadgeAlert,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -43,14 +45,18 @@ function fmtDateFull(d, isAr) {
 }
 function fmtDateKey(d) { return new Date(d).toISOString().split("T")[0]; }
 function getAttendanceRate(session) {
-  const total = session.attendance?.length || 0;
-  if (!total) return null;
+  if (!session.attendance || session.attendance.length === 0) return null;
+  const total = session.attendance.length;
   const present = session.attendance.filter(a => a.status === "present" || a.status === "late").length;
   return Math.round((present / total) * 100);
 }
 function deduplicateLessons(lessons = []) {
   const seen = new Set();
-  return lessons.filter(l => { if (seen.has(l.title)) return false; seen.add(l.title); return true; });
+  return lessons.filter(l => {
+    if (seen.has(l.title)) return false;
+    seen.add(l.title);
+    return true;
+  });
 }
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -98,6 +104,244 @@ function AnimatedCounter({ value, duration = 1200 }) {
   return <span>{count}</span>;
 }
 
+// ─── 🆕 Request Access Modal (replaces the old plain AccessDeniedModal) ───────
+// لما المدرس يدوس على سيشن مش متاحة دلوقتي، بدل الرفض المباشر، نعرض عليه
+// اختيارين لطلب فتحها من الأدمن، أو نعرض حالة الطلب لو فيه طلب pending شغال
+// بالفعل على الجروب ده.
+function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
+  const t = (ar, en) => isAr ? ar : en;
+  const [checking, setChecking] = useState(true);
+  const [pendingInfo, setPendingInfo] = useState(null);
+  const [selectedMode, setSelectedMode] = useState(null); // "single" | "withNext"
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(null);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  // ── Check if this group already has a pending request ──────────────────
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setChecking(true);
+        const res = await fetch(`/api/instructor/sessions/${session._id}/request-reschedule`, {
+          credentials: "include",
+        });
+        const json = await res.json();
+        if (active && json.success) {
+          setPendingInfo(json.data.hasPendingRequest ? json.data : null);
+        }
+      } catch {
+        // fail silently — instructor can still try to submit, server re-validates
+      } finally {
+        if (active) setChecking(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [session._id]);
+
+  const handleSubmit = async (viewMode) => {
+    setSelectedMode(viewMode);
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/instructor/sessions/${session._id}/request-reschedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ viewMode, shiftDays: 7 }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setSuccess(json.data);
+        onSubmitted?.(json.data);
+      } else {
+        setError(json.message || t("حدث خطأ، حاول مرة أخرى", "Something went wrong, please try again"));
+      }
+    } catch {
+      setError(t("فشل الاتصال بالخادم", "Failed to connect to the server"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const hasPending = !!pendingInfo?.hasPendingRequest;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
+
+      <div className="relative w-full sm:max-w-lg max-h-[94vh] overflow-y-auto bg-white dark:bg-[#0d1117] rounded-t-3xl sm:rounded-3xl shadow-2xl border border-gray-100 dark:border-[#21262d]">
+
+        {/* Header */}
+        <div className="relative overflow-hidden flex-shrink-0 p-6" style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)" }}>
+          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+          <div className="relative z-10 flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/20 flex-shrink-0">
+                <CalendarClock className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white leading-snug">
+                  {t("طلب فتح الجلسة", "Request Session Access")}
+                </h3>
+                <p className="text-white/70 text-xs font-medium mt-0.5 truncate max-w-[260px]">
+                  {session.title}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-all border border-white/20 flex-shrink-0">
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+
+          {checking && (
+            <div className="flex items-center justify-center gap-2 py-6 text-gray-400">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span className="text-sm font-medium">{t("جاري التحقق...", "Checking...")}</span>
+            </div>
+          )}
+
+          {!checking && success && (
+            <div className="text-center py-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-4 border border-emerald-200 dark:border-emerald-800/30">
+                <Send className="w-8 h-8 text-emerald-500" />
+              </div>
+              <h4 className="text-base font-black text-gray-900 dark:text-[#e6edf3] mb-2">
+                {t("تم إرسال الطلب", "Request Sent")}
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-[#8b949e] leading-relaxed mb-1">
+                {t(
+                  "طلبك في انتظار موافقة الأدمن. ستظهر الجلسة هنا فور الموافقة.",
+                  "Your request is awaiting admin approval. The session will open as soon as it's approved."
+                )}
+              </p>
+              <p className="text-xs text-gray-400 dark:text-[#6e7681] mb-5">
+                {t(
+                  `سيتم ترحيل ${success.affectedCount} جلسة بمقدار أسبوع`,
+                  `${success.affectedCount} session(s) will shift by one week`
+                )}
+              </p>
+              <button
+                onClick={onClose}
+                className="px-6 py-3 rounded-xl font-black text-white shadow-lg hover:shadow-xl transition-all"
+                style={{ background: "linear-gradient(135deg, #ff6700, #feaf00)" }}
+              >
+                {t("تم", "Got it")}
+              </button>
+            </div>
+          )}
+
+          {!checking && !success && hasPending && (
+            <div className="text-center py-2">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-[#feaf00]/10 dark:bg-[#feaf00]/10 flex items-center justify-center mb-4 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+                <Hourglass className="w-8 h-8 text-[#f67d00] dark:text-[#feaf00]" />
+              </div>
+              <h4 className="text-base font-black text-gray-900 dark:text-[#e6edf3] mb-2">
+                {t("يوجد طلب قيد المراجعة", "A Request Is Already Pending")}
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-[#8b949e] leading-relaxed mb-5">
+                {t(
+                  "يوجد طلب فتح جلسة قيد المراجعة لهذا الجروب بالفعل. برجاء الانتظار حتى يرد الأدمن قبل تقديم طلب جديد.",
+                  "There's already a pending access request for this group. Please wait for the admin's response before submitting a new one."
+                )}
+              </p>
+              <button
+                onClick={onClose}
+                className="px-6 py-3 rounded-xl font-black text-white shadow-lg hover:shadow-xl transition-all"
+                style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+              >
+                {t("فهمت", "Got it")}
+              </button>
+            </div>
+          )}
+
+          {!checking && !success && !hasPending && (
+            <>
+              <p className="text-sm text-gray-500 dark:text-[#8b949e] leading-relaxed">
+                {t(
+                  "هذه الجلسة غير متاحة لأنها ليست في يومها. اختر كيف تريد طلب فتحها — سيتم إرسال طلبك للأدمن للموافقة.",
+                  "This session isn't available because it's not on its scheduled day. Choose how you'd like to request access — your request will be sent to the admin for approval."
+                )}
+              </p>
+
+              {/* Option 1: single */}
+              <button
+                onClick={() => handleSubmit("single")}
+                disabled={submitting}
+                className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#ff6700]/50 dark:hover:border-[#ff6700]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                    {submitting && selectedMode === "single"
+                      ? <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      : <ArrowRightCircle className="w-5 h-5 text-white" />}
+                  </div>
+                  <div className="flex-1">
+                    <h5 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-1">
+                      {t("فتح هذه الجلسة فقط", "Open This Session Only")}
+                    </h5>
+                    <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
+                      {t(
+                        "هذه الجلسة تُفتح فورًا (رابط ميتنج + تسجيل حضور). باقي الجلسات بعدها تترحل أسبوعًا، وتبقى مقفولة حتى يحين معادها الجديد.",
+                        "This session opens immediately (meeting link + attendance). All sessions after it shift by one week and stay locked until their new date arrives."
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Option 2: withNext */}
+              <button
+                onClick={() => handleSubmit("withNext")}
+                disabled={submitting}
+                className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/50 dark:hover:border-[#004d59]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#004d59]/70 flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                    {submitting && selectedMode === "withNext"
+                      ? <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      : <SkipForward className="w-5 h-5 text-white" />}
+                  </div>
+                  <div className="flex-1">
+                    <h5 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-1">
+                      {t("فتح هذه الجلسة وما بعدها", "Open This Session and the Ones After")}
+                    </h5>
+                    <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
+                      {t(
+                        "هذه الجلسة تُفتح فورًا بكل شيء. الجلسات بعدها تترحل أسبوعًا وتظهر تفاصيلها العامة (المحتوى/الدروس)، لكن بدون رابط ميتنج أو تسجيل حضور حتى يحين معادها الجديد فعليًا.",
+                        "This session opens immediately with everything. Sessions after it shift by one week and show general details (content/lessons), but without a meeting link or attendance until their new date actually arrives."
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {error && (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-600 dark:text-red-400 font-medium">{error}</p>
+                </div>
+              )}
+
+              <p className="text-[11px] text-gray-400 dark:text-[#6e7681] text-center pt-1">
+                {t("سيتم إرسال طلبك للأدمن لمراجعته والموافقة عليه", "Your request will be sent to the admin for review and approval")}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Meeting Credentials Card ─────────────────────────────────────────────────
 function MeetingCredentials({ session, isAr }) {
   const [showPass, setShowPass] = useState(false);
@@ -118,7 +362,6 @@ function MeetingCredentials({ session, isAr }) {
 
   return (
     <div className="rounded-2xl overflow-hidden border border-[#ff6700]/30 dark:border-[#ff6700]/20 bg-gradient-to-br from-orange-50/80 to-amber-50/50 dark:from-[#ff6700]/5 dark:to-[#feaf00]/5">
-      {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#ff6700]/20 dark:border-[#ff6700]/10 bg-gradient-to-r from-[#ff6700]/10 to-transparent dark:from-[#ff6700]/10">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md">
           <Video className="w-4 h-4 text-white" />
@@ -134,7 +377,6 @@ function MeetingCredentials({ session, isAr }) {
       </div>
 
       <div className="p-4 space-y-3">
-        {/* Meeting Link */}
         <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-[#161b22]/50 border border-gray-200/60 dark:border-[#30363d]/60">
           <Link2 className="w-4 h-4 text-[#004d59] dark:text-[#ff6437] flex-shrink-0" />
           <a
@@ -156,7 +398,6 @@ function MeetingCredentials({ session, isAr }) {
           </button>
         </div>
 
-        {/* Username */}
         {hasUsername && (
           <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-[#161b22]/50 border border-gray-200/60 dark:border-[#30363d]/60">
             <User className="w-4 h-4 text-[#004d59] dark:text-[#8b949e] flex-shrink-0" />
@@ -174,7 +415,6 @@ function MeetingCredentials({ session, isAr }) {
           </div>
         )}
 
-        {/* Password */}
         {hasPassword && (
           <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-[#161b22]/50 border border-gray-200/60 dark:border-[#30363d]/60">
             <Lock className="w-4 h-4 text-[#004d59] dark:text-[#8b949e] flex-shrink-0" />
@@ -202,14 +442,13 @@ function MeetingCredentials({ session, isAr }) {
           </div>
         )}
 
-        {/* Start Button */}
         <a
           href={session.meetingLink}
           target="_blank"
           rel="noopener noreferrer"
           className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-black text-sm text-white bg-gradient-to-r from-[#ff6700] to-[#feaf00] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
         >
-          <Video className="w-4.5 h-4.5" />
+          <Video className="w-4 h-4" />
           {t("ابدأ الجلسة الآن", "Start Session Now")}
           <ExternalLink className="w-3.5 h-3.5" />
         </a>
@@ -257,7 +496,6 @@ function CourseInfoSection({ session, isAr }) {
 
   return (
     <div className="space-y-3">
-      {/* Course header — replaced indigo/purple with brand palette */}
       <div className="rounded-2xl border border-[#004d59]/20 dark:border-[#004d59]/30 bg-gradient-to-br from-[#004d59]/5 to-[#ff6700]/5 dark:from-[#004d59]/10 dark:to-[#ff6700]/5 overflow-hidden">
         <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#004d59]/15 dark:border-[#004d59]/20">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#004d59] to-[#ff6700] flex items-center justify-center shadow-md">
@@ -299,7 +537,6 @@ function CourseInfoSection({ session, isAr }) {
         </div>
       </div>
 
-      {/* Module info — replaced sky/blue with brand palette */}
       {moduleData && (
         <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#0d1117]/60 overflow-hidden">
           <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-[#30363d]">
@@ -339,7 +576,6 @@ function CourseInfoSection({ session, isAr }) {
         </div>
       )}
 
-      {/* Blog toggle — replaced rose/pink with brand palette */}
       {hasBlog && (
         <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] overflow-hidden">
           <button onClick={() => setShowBlog(!showBlog)}
@@ -361,12 +597,17 @@ function CourseInfoSection({ session, isAr }) {
 }
 
 // ─── Session Detail Modal ─────────────────────────────────────────────────────
+// يعمل في وضعين:
+//  - full mode  (canViewDetails): كل المحتوى زي ما كان (لينك + حضور + كل حاجة)
+//  - partial mode (canViewPartialDetails): نفس المودال بس بدون MeetingCredentials
+//    وبدون زرارات تسجيل الحضور — وبانر يوضح إن الجلسة لسه مقفولة
 function SessionModal({ session, onClose, isAr }) {
   const cfg = STATUS_CFG[session.status] || STATUS_CFG.scheduled;
   const isCompleted = session.status === "completed";
   const attRate = getAttendanceRate(session);
   const t = (ar, en) => isAr ? ar : en;
-  const isActuallyToday = session.isToday;
+  const isActuallyToday = session.isEffectivelyToday ?? session.isToday;
+  const isPartial = !!session.canViewPartialDetails;
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const lessons = deduplicateLessons(session.lessons || []);
 
@@ -377,10 +618,10 @@ function SessionModal({ session, onClose, isAr }) {
 
   const attBreakdown = isCompleted && session.attendance?.length > 0 ? {
     present: session.attendance.filter(a => a.status === "present").length,
-    absent:  session.attendance.filter(a => a.status === "absent").length,
-    late:    session.attendance.filter(a => a.status === "late").length,
+    absent: session.attendance.filter(a => a.status === "absent").length,
+    late: session.attendance.filter(a => a.status === "late").length,
     excused: session.attendance.filter(a => a.status === "excused").length,
-    total:   session.attendance.length,
+    total: session.attendance.length,
   } : null;
 
   return (
@@ -390,10 +631,10 @@ function SessionModal({ session, onClose, isAr }) {
       <div className="relative w-full sm:max-w-2xl max-h-[94vh] overflow-y-auto bg-white dark:bg-[#0d1117] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col border border-gray-100 dark:border-[#21262d]">
 
         {/* ── Modal Header ── */}
-        <div className="relative overflow-hidden flex-shrink-0" style={{background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)"}}>
+        <div className="relative overflow-hidden flex-shrink-0" style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)" }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
-          <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full opacity-20" style={{background: "#feaf00"}} />
-          <div className="absolute top-0 left-1/2 w-32 h-32 rounded-full opacity-10" style={{background: "#ff6437", filter: "blur(20px)"}} />
+          <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full opacity-20" style={{ background: "#feaf00" }} />
+          <div className="absolute top-0 left-1/2 w-32 h-32 rounded-full opacity-10" style={{ background: "#ff6437", filter: "blur(20px)" }} />
 
           <div className="relative z-10 p-6">
             <div className="flex items-start justify-between mb-4">
@@ -402,9 +643,14 @@ function SessionModal({ session, onClose, isAr }) {
                   <span className={`w-2 h-2 rounded-full ${cfg.dot} animate-pulse`} />
                   {isAr ? cfg.labelAr : cfg.labelEn}
                 </span>
-                {isActuallyToday && (
+                {isActuallyToday && !isPartial && (
                   <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40">
                     ✨ {t("اليوم", "Today")}
+                  </span>
+                )}
+                {isPartial && (
+                  <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
+                    <Lock className="w-3 h-3" />{t("معاينة فقط", "Preview Only")}
                   </span>
                 )}
               </div>
@@ -436,20 +682,40 @@ function SessionModal({ session, onClose, isAr }) {
         {/* ── Modal Body ── */}
         <div className="p-5 space-y-4 bg-gray-50/50 dark:bg-[#0d1117]">
 
+          {/* 🔓 Partial-preview notice — يوضح إن الجلسة لسه مقفولة عمليًا */}
+          {isPartial && (
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#004d59]/5 dark:bg-[#004d59]/10 border border-[#004d59]/20 dark:border-[#004d59]/30">
+              <div className="w-9 h-9 rounded-xl bg-[#004d59]/10 dark:bg-[#004d59]/20 flex items-center justify-center flex-shrink-0 border border-[#004d59]/20">
+                <Lock className="w-4 h-4 text-[#004d59] dark:text-teal-400" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-[#004d59] dark:text-teal-400">
+                  {t("هذه معاينة للمحتوى فقط", "This is a content preview only")}
+                </p>
+                <p className="text-xs text-[#004d59]/70 dark:text-teal-400/70 mt-0.5 leading-relaxed">
+                  {t(
+                    "رابط الميتنج وتسجيل الحضور سيكونان متاحين عند حلول معاد الجلسة الجديد فعليًا.",
+                    "The meeting link and attendance will become available once this session's new date actually arrives."
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
+
           <SessionDescriptionCard session={session} isAr={isAr} />
 
-          {isActuallyToday && session.meetingLink && (
+          {!isPartial && isActuallyToday && session.meetingLink && (
             <MeetingCredentials session={session} isAr={isAr} />
           )}
 
-          {isActuallyToday && !session.meetingLink && !session.attendanceTaken && session.status === "scheduled" && (
+          {!isPartial && isActuallyToday && !session.meetingLink && !session.attendanceTaken && session.status === "scheduled" && (
             <Link href={`/instructor/attendance?session=${session._id}`}
               className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
               <ClipboardList className="w-5 h-5" />{t("تسجيل الحضور الآن", "Take Attendance Now")}
             </Link>
           )}
 
-          {isActuallyToday && session.meetingLink && !session.attendanceTaken && session.status === "scheduled" && (
+          {!isPartial && isActuallyToday && session.meetingLink && !session.attendanceTaken && session.status === "scheduled" && (
             <Link href={`/instructor/attendance?session=${session._id}`}
               className="flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all">
               <ClipboardList className="w-4 h-4" />{t("تسجيل الحضور", "Take Attendance")}
@@ -479,10 +745,10 @@ function SessionModal({ session, onClose, isAr }) {
               </div>
               <div className="grid grid-cols-4 divide-x dark:divide-[#30363d] rtl:divide-x-reverse">
                 {[
-                  { key: "present", label: t("حاضر","Present"),  color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50/60 dark:bg-emerald-900/10" },
-                  { key: "absent",  label: t("غائب","Absent"),   color: "text-red-600 dark:text-red-400",         bg: "bg-red-50/60 dark:bg-red-900/10" },
-                  { key: "late",    label: t("متأخر","Late"),    color: "text-[#f67d00] dark:text-[#feaf00]",     bg: "bg-[#feaf00]/10 dark:bg-[#feaf00]/5" },
-                  { key: "excused", label: t("معذور","Excused"), color: "text-[#004d59] dark:text-teal-400",      bg: "bg-[#004d59]/5 dark:bg-[#004d59]/10" },
+                  { key: "present", label: t("حاضر", "Present"), color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50/60 dark:bg-emerald-900/10" },
+                  { key: "absent", label: t("غائب", "Absent"), color: "text-red-600 dark:text-red-400", bg: "bg-red-50/60 dark:bg-red-900/10" },
+                  { key: "late", label: t("متأخر", "Late"), color: "text-[#f67d00] dark:text-[#feaf00]", bg: "bg-[#feaf00]/10 dark:bg-[#feaf00]/5" },
+                  { key: "excused", label: t("معذور", "Excused"), color: "text-[#004d59] dark:text-teal-400", bg: "bg-[#004d59]/5 dark:bg-[#004d59]/10" },
                 ].map(({ key, label, color, bg }) => (
                   <div key={key} className={`p-3 text-center ${bg}`}>
                     <div className={`text-2xl font-black ${color}`}>{attBreakdown[key]}</div>
@@ -519,8 +785,8 @@ function SessionModal({ session, onClose, isAr }) {
                   <div key={i} className="flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50/60 dark:hover:bg-[#0d1117]/30 transition-colors">
                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5 shadow-sm
                       ${isCompleted
-                        ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
-                        : "bg-gradient-to-br from-[#ff6700]/20 to-[#feaf00]/20 text-[#ff6700]"}`}>
+                          ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
+                          : "bg-gradient-to-br from-[#ff6700]/20 to-[#feaf00]/20 text-[#ff6700]"}`}>
                       {i + 1}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -556,7 +822,7 @@ function SessionModal({ session, onClose, isAr }) {
             </div>
           )}
 
-          {session.materials?.length > 0 && (
+          {!isPartial && session.materials?.length > 0 && (
             <div className="space-y-2">
               <h4 className="text-xs font-black text-gray-500 dark:text-[#6e7681] flex items-center gap-1.5 px-1">
                 <FileText className="w-3.5 h-3.5" />{t("المواد التعليمية", "Materials")}
@@ -578,14 +844,21 @@ function SessionModal({ session, onClose, isAr }) {
 }
 
 // ─── Session Row ──────────────────────────────────────────────────────────────
-function SessionRow({ session, onOpen, isAr }) {
+function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   const cfg = STATUS_CFG[session.status] || STATUS_CFG.scheduled;
   const isCompleted = session.status === "completed";
-  const isToday = session.isToday && session.status === "scheduled";
+  const isEffectivelyToday = session.isEffectivelyToday ?? session.isToday;
+  const isToday = isEffectivelyToday && session.status === "scheduled";
   const attRate = getAttendanceRate(session);
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const t = (ar, en) => isAr ? ar : en;
   const sessionNum = (session.moduleIndex ?? 0) * 3 + (session.sessionNumber ?? 1);
+
+  // ── Determine clickability: full access, partial preview, or needs a request ──
+  const canOpenFull = session.canViewDetails;
+  const canOpenPartial = session.canViewPartialDetails;
+  const isClickable = canOpenFull || canOpenPartial;
+  const hasPendingReq = session.pendingReschedule?.status === "pending";
 
   const iconColors = {
     completed: "from-emerald-400 to-teal-500",
@@ -594,11 +867,20 @@ function SessionRow({ session, onOpen, isAr }) {
     postponed: "from-[#feaf00] to-[#f67d00]",
   };
 
+  const handleClick = () => {
+    if (isClickable) {
+      onOpen(session);
+    } else {
+      onRequestAccess(session);
+    }
+  };
+
   return (
     <div
-      onClick={() => onOpen(session)}
+      onClick={handleClick}
       className={`group flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-2xl border bg-white dark:bg-[#161b22]
-        cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg
+        transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg
+        ${isClickable ? "cursor-pointer" : "cursor-pointer opacity-75 hover:opacity-100"}
         ${isToday
           ? "border-[#ff6700]/40 shadow-md shadow-[#ff6700]/10 ring-1 ring-[#ff6700]/20"
           : isCompleted
@@ -621,6 +903,18 @@ function SessionRow({ session, onOpen, isAr }) {
             <span className="text-[10px] font-black text-[#ff6700] flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#ff6700] animate-pulse" />
               {t("اليوم", "Today")}
+            </span>
+          )}
+          {!isToday && canOpenPartial && (
+            <span className="text-[10px] font-black text-[#004d59] dark:text-teal-400 flex items-center gap-1">
+              <Lock className="w-2.5 h-2.5" />
+              {t("معاينة", "Preview")}
+            </span>
+          )}
+          {hasPendingReq && (
+            <span className="text-[10px] font-black text-[#f67d00] dark:text-[#feaf00] flex items-center gap-1">
+              <Hourglass className="w-2.5 h-2.5" />
+              {t("قيد المراجعة", "Pending Review")}
             </span>
           )}
           <h3 className="font-black text-sm truncate text-gray-900 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors duration-200">
@@ -652,7 +946,7 @@ function SessionRow({ session, onOpen, isAr }) {
           <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
-            style={{background: "linear-gradient(135deg, #ff6700, #feaf00)"}}>
+            style={{ background: "linear-gradient(135deg, #ff6700, #feaf00)" }}>
             <Video className="w-3.5 h-3.5" />{t("ابدأ", "Start")}
           </a>
         )}
@@ -668,8 +962,8 @@ function SessionRow({ session, onOpen, isAr }) {
           {isAr ? cfg.labelAr : cfg.labelEn}
         </span>
 
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-[#21262d] group-hover:bg-[#ff6700]/10 transition-colors">
-          <ChevronRight className={`w-4 h-4 text-gray-300 dark:text-[#6e7681] group-hover:text-[#ff6700] transition-colors ${isAr ? "rotate-180" : ""}`} />
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-gray-50 dark:bg-[#21262d] group-hover:bg-[#ff6700]/10">
+          <ChevronRight className="w-4 h-4 transition-colors text-gray-300 dark:text-[#6e7681] group-hover:text-[#ff6700]" />
         </div>
       </div>
     </div>
@@ -688,7 +982,7 @@ function DateHeader({ dateKey, sessions, isAr }) {
         ${isToday
           ? "border-transparent text-white shadow-md"
           : "bg-white dark:bg-[#161b22] border-gray-200 dark:border-[#30363d] text-gray-700 dark:text-[#8b949e]"}`}
-        style={isToday ? {background: "linear-gradient(135deg, #004d59, #ff6700)"} : {}}>
+        style={isToday ? { background: "linear-gradient(135deg, #004d59, #ff6700)" } : {}}>
         <span className="text-sm font-black leading-none">{d.getDate()}</span>
         <span className="text-[9px] leading-none mt-0.5 opacity-80">
           {d.toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "short" })}
@@ -705,7 +999,7 @@ function DateHeader({ dateKey, sessions, isAr }) {
           {d.toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "long", day: "numeric" })} · {sessions.length} {t("جلسة", sessions.length === 1 ? "session" : "sessions")}
         </span>
       </div>
-      <div className="flex-1 h-px" style={{background: "linear-gradient(to right, rgba(0,77,89,0.3), transparent)"}} />
+      <div className="flex-1 h-px" style={{ background: "linear-gradient(to right, rgba(0,77,89,0.3), transparent)" }} />
     </div>
   );
 }
@@ -714,10 +1008,10 @@ function DateHeader({ dateKey, sessions, isAr }) {
 function StatCard({ icon: Icon, value, label, gradient }) {
   return (
     <div className="group relative bg-white dark:bg-[#161b22] rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-[#30363d] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
-      <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4" style={{background: gradient}} />
+      <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4" style={{ background: gradient }} />
       <div className="flex items-center gap-3">
         <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300 flex-shrink-0"
-          style={{background: gradient}}>
+          style={{ background: gradient }}>
           <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
         </div>
         <div>
@@ -737,7 +1031,7 @@ function Skeleton() {
     <div className="space-y-3">
       {[...Array(5)].map((_, i) => (
         <div key={i} className="h-[72px] bg-white dark:bg-[#161b22] rounded-2xl animate-pulse border border-gray-100 dark:border-[#30363d]"
-          style={{opacity: 1 - i * 0.15}} />
+          style={{ opacity: 1 - i * 0.15 }} />
       ))}
     </div>
   );
@@ -750,19 +1044,20 @@ export default function InstructorSessionsPage() {
   const router = useRouter();
   const t = (ar, en) => isAr ? ar : en;
 
-  const [loading, setLoading]           = useState(true);
-  const [refreshing, setRefreshing]     = useState(false);
-  const [error, setError]               = useState("");
-  const [sessions, setSessions]         = useState([]);
-  const [stats, setStats]               = useState(null);
-  const [user, setUser]                 = useState(null);
-  const [sidebarOpen, setSidebarOpen]   = useState(false);
-  const [modal, setModal]               = useState(null);
-  const [filter, setFilter]             = useState("all");
-  const [search, setSearch]             = useState("");
-  const [groupByDate, setGroupByDate]   = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [sessions, setSessions] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [user, setUser] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [modal, setModal] = useState(null);
+  const [requestAccessSession, setRequestAccessSession] = useState(null);
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [groupByDate, setGroupByDate] = useState(true);
   const [selectedGroup, setSelectedGroup] = useState("all");
-  const [groups, setGroups]             = useState([]);
+  const [groups, setGroups] = useState([]);
 
   const fetchData = useCallback(async (showRefresh = false) => {
     try {
@@ -776,7 +1071,9 @@ export default function InstructorSessionsPage() {
         setSessions(sessRes.data.sessions || []);
         setStats(sessRes.data.stats || null);
         const groupMap = {};
-        (sessRes.data.sessions || []).forEach(s => { if (s.group?._id) groupMap[s.group._id] = s.group.name; });
+        (sessRes.data.sessions || []).forEach(s => {
+          if (s.group?._id) groupMap[s.group._id] = s.group.name;
+        });
         setGroups(Object.entries(groupMap).map(([id, name]) => ({ id, name })));
       } else {
         setError(sessRes.message || t("حدث خطأ", "Something went wrong"));
@@ -803,12 +1100,12 @@ export default function InstructorSessionsPage() {
   const filtered = sessions.filter(s => {
     const sDate = fmtDateKey(s.scheduledDate);
     const filterMatch =
-      filter === "all"       ? true :
-      filter === "completed" ? s.status === "completed" :
-      filter === "upcoming"  ? s.status === "scheduled" :
-      filter === "today"     ? sDate === today :
-      filter === "cancelled" ? s.status === "cancelled" || s.status === "postponed" :
-      filter === "needs_att" ? s.status === "completed" && !s.attendanceTaken : true;
+      filter === "all" ? true :
+        filter === "completed" ? s.status === "completed" :
+          filter === "upcoming" ? s.status === "scheduled" :
+            filter === "today" ? sDate === today :
+              filter === "cancelled" ? s.status === "cancelled" || s.status === "postponed" :
+                filter === "needs_att" ? s.status === "completed" && !s.attendanceTaken : true;
     const groupMatch = selectedGroup === "all" || s.group?._id === selectedGroup;
     const searchMatch = !search || s.title?.toLowerCase().includes(search.toLowerCase()) || s.group?.name?.toLowerCase().includes(search.toLowerCase());
     return filterMatch && groupMatch && searchMatch;
@@ -821,27 +1118,36 @@ export default function InstructorSessionsPage() {
   });
 
   const byDate = {};
-  sorted.forEach(s => { const dk = fmtDateKey(s.scheduledDate); if (!byDate[dk]) byDate[dk] = []; byDate[dk].push(s); });
+  sorted.forEach(s => {
+    const dk = fmtDateKey(s.scheduledDate);
+    if (!byDate[dk]) byDate[dk] = [];
+    byDate[dk].push(s);
+  });
   const sortedDates = Object.keys(byDate).sort((a, b) => new Date(a) - new Date(b));
 
   const FILTERS = [
-    { id: "all",       labelAr: "الكل",        labelEn: "All",             count: sessions.length },
-    { id: "upcoming",  labelAr: "القادمة",      labelEn: "Upcoming",        count: sessions.filter(s => s.status === "scheduled").length },
-    { id: "completed", labelAr: "المكتملة",     labelEn: "Completed",       count: sessions.filter(s => s.status === "completed").length },
-    { id: "today",     labelAr: "اليوم",        labelEn: "Today",           count: sessions.filter(s => fmtDateKey(s.scheduledDate) === today).length },
-    { id: "needs_att", labelAr: "تحتاج حضور",  labelEn: "Need Attendance", count: sessions.filter(s => s.status === "completed" && !s.attendanceTaken).length },
-    { id: "cancelled", labelAr: "ملغاة/مؤجلة", labelEn: "Cancelled",       count: sessions.filter(s => s.status === "cancelled" || s.status === "postponed").length },
+    { id: "all", labelAr: "الكل", labelEn: "All", count: sessions.length },
+    { id: "upcoming", labelAr: "القادمة", labelEn: "Upcoming", count: sessions.filter(s => s.status === "scheduled").length },
+    { id: "completed", labelAr: "المكتملة", labelEn: "Completed", count: sessions.filter(s => s.status === "completed").length },
+    { id: "today", labelAr: "اليوم", labelEn: "Today", count: sessions.filter(s => fmtDateKey(s.scheduledDate) === today).length },
+    { id: "needs_att", labelAr: "تحتاج حضور", labelEn: "Need Attendance", count: sessions.filter(s => s.status === "completed" && !s.attendanceTaken).length },
+    { id: "cancelled", labelAr: "ملغاة/مؤجلة", labelEn: "Cancelled", count: sessions.filter(s => s.status === "cancelled" || s.status === "postponed").length },
   ];
 
   const todayJoinable = sessions.filter(s => s.showJoinButton);
   const currentUser = user || { name: isAr ? "مدرس" : "Instructor", email: "", role: "instructor" };
+
+  const handleRequestSubmitted = useCallback(() => {
+    // بعد التقديم بنجاح، نعمل refresh خفيف عشان الـ pendingReschedule badge يظهر فورًا
+    fetchData(true);
+  }, [fetchData]);
 
   return (
     <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17] flex" dir={isAr ? "rtl" : "ltr"}>
 
       {refreshing && (
         <div className={`fixed top-4 ${isAr ? "left-4" : "right-4"} z-50 text-white px-4 py-2 rounded-xl shadow-xl flex items-center gap-2`}
-          style={{background: "linear-gradient(135deg, #004d59, #ff6700)"}}>
+          style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-sm font-bold">{t("جاري التحديث...", "Refreshing...")}</span>
         </div>
@@ -871,7 +1177,7 @@ export default function InstructorSessionsPage() {
             <div className="flex items-center justify-between py-4 gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
-                  style={{background: "linear-gradient(135deg, #004d59, #ff6700)"}}>
+                  style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
                   <Calendar className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -929,9 +1235,9 @@ export default function InstructorSessionsPage() {
                 <button key={id} onClick={() => setFilter(id)}
                   className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black flex-shrink-0 transition-all duration-200
                     ${filter === id
-                      ? "text-white shadow-md"
+                      ? "text-white shadow-lg"
                       : "bg-gray-100 dark:bg-[#161b22] text-gray-600 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#21262d] border border-gray-200 dark:border-[#30363d]"}`}
-                  style={filter === id ? {background: "linear-gradient(135deg, #004d59, #ff6700)", boxShadow: "0 4px 12px rgba(255,103,0,0.25)"} : {}}>
+                  style={filter === id ? { background: "linear-gradient(135deg, #004d59, #ff6700)", boxShadow: "0 4px 12px rgba(255,103,0,0.25)" } : {}}>
                   {isAr ? labelAr : labelEn}
                   <span className={`text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black
                     ${filter === id ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-[#21262d] text-gray-500 dark:text-[#6e7681]"}`}>
@@ -949,17 +1255,17 @@ export default function InstructorSessionsPage() {
           {/* Stat Cards */}
           {!loading && stats && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-              <StatCard icon={Calendar}      value={stats.total}                label={t("إجمالي الجلسات", "Total Sessions")}  gradient="linear-gradient(135deg, #004d59, #004d59aa)" />
-              <StatCard icon={CheckCircle}   value={stats.completed}            label={t("مكتملة", "Completed")}              gradient="linear-gradient(135deg, #10b981, #14b8a6)" />
-              <StatCard icon={Clock}         value={stats.scheduled}            label={t("مجدولة", "Scheduled")}              gradient="linear-gradient(135deg, #ff6700, #feaf00)" />
-              <StatCard icon={ClipboardList} value={stats.needsAttendance || 0} label={t("تحتاج حضور", "Need Attendance")}   gradient="linear-gradient(135deg, #feaf00, #ff6437)" />
+              <StatCard icon={Calendar} value={stats.total} label={t("إجمالي الجلسات", "Total Sessions")} gradient="linear-gradient(135deg, #004d59, #004d59aa)" />
+              <StatCard icon={CheckCircle} value={stats.completed} label={t("مكتملة", "Completed")} gradient="linear-gradient(135deg, #10b981, #14b8a6)" />
+              <StatCard icon={Clock} value={stats.scheduled} label={t("مجدولة", "Scheduled")} gradient="linear-gradient(135deg, #ff6700, #feaf00)" />
+              <StatCard icon={ClipboardList} value={stats.needsAttendance || 0} label={t("تحتاج حضور", "Need Attendance")} gradient="linear-gradient(135deg, #feaf00, #ff6437)" />
             </div>
           )}
 
           {/* Today's Session Banner */}
           {todayJoinable.length > 0 && filter === "all" && (
             <div className="mb-5 rounded-2xl p-4 text-white relative overflow-hidden shadow-lg"
-              style={{background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)"}}>
+              style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}>
               <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
               <div className="absolute -top-8 -right-8 w-32 h-32 bg-[#feaf00]/20 rounded-full blur-2xl" />
               <div className="relative z-10 flex items-center gap-3">
@@ -972,7 +1278,7 @@ export default function InstructorSessionsPage() {
                 </div>
                 <a href={todayJoinable[0].meetingLink} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
-                  style={{color: "#ff6700"}}>
+                  style={{ color: "#ff6700" }}>
                   <Video className="w-4 h-4" />{t("ابدأ الآن", "Start Now")}
                 </a>
               </div>
@@ -1013,7 +1319,7 @@ export default function InstructorSessionsPage() {
               <p className="text-gray-500 mb-4">{error}</p>
               <button onClick={() => fetchData()}
                 className="px-6 py-3 text-white rounded-xl font-black hover:shadow-lg transition-all"
-                style={{background: "linear-gradient(135deg, #004d59, #ff6700)"}}>
+                style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
                 {t("إعادة المحاولة", "Try Again")}
               </button>
             </div>
@@ -1037,14 +1343,30 @@ export default function InstructorSessionsPage() {
                   <div key={dk}>
                     <DateHeader dateKey={dk} sessions={byDate[dk]} isAr={isAr} />
                     <div className="space-y-2.5" style={{ [isAr ? "paddingRight" : "paddingLeft"]: "60px" }}>
-                      {byDate[dk].map(s => <SessionRow key={s._id} session={s} onOpen={setModal} isAr={isAr} />)}
+                      {byDate[dk].map(s => (
+                        <SessionRow
+                          key={s._id}
+                          session={s}
+                          onOpen={setModal}
+                          onRequestAccess={setRequestAccessSession}
+                          isAr={isAr}
+                        />
+                      ))}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="space-y-2.5">
-                {sorted.map(s => <SessionRow key={s._id} session={s} onOpen={setModal} isAr={isAr} />)}
+                {sorted.map(s => (
+                  <SessionRow
+                    key={s._id}
+                    session={s}
+                    onOpen={setModal}
+                    onRequestAccess={setRequestAccessSession}
+                    isAr={isAr}
+                  />
+                ))}
               </div>
             )
           )}
@@ -1052,6 +1374,14 @@ export default function InstructorSessionsPage() {
       </main>
 
       {modal && <SessionModal session={modal} onClose={() => setModal(null)} isAr={isAr} />}
+      {requestAccessSession && (
+        <RequestAccessModal
+          session={requestAccessSession}
+          onClose={() => setRequestAccessSession(null)}
+          onSubmitted={handleRequestSubmitted}
+          isAr={isAr}
+        />
+      )}
     </div>
   );
 }

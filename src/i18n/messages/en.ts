@@ -4228,7 +4228,79 @@ const en = {
   "groups.form.messages.rescheduled":
     "The appointment has been rescheduled successfully",
   "groups.form.reschedule.saving": "Saving reschedule...",
-    "upcoming.ended": "Ended",
+  "upcoming.ended": "Ended",
+  "dashboard.rescheduleRequests": "Reschedule Requests",
+  "reschedule.load.failed": "Failed to load requests",
+
+  "reschedule.approve.confirm":
+    'Approve this session access request for group "{group}"? {count} session(s) will be affected.',
+  "reschedule.approve.loading": "Approving...",
+  "reschedule.approve.success": "Request approved successfully.",
+  "reschedule.approve.failed": "Failed to approve the request.",
+  "reschedule.approve.button": "Approve",
+
+  "reschedule.reject.loading": "Rejecting...",
+  "reschedule.reject.success": "Request rejected successfully.",
+  "reschedule.reject.failed": "Failed to reject the request.",
+  "reschedule.reject.title": "Reject Request",
+  "reschedule.reject.warning":
+    "This request will be rejected and the instructor will not be granted access to the requested session(s).",
+  "reschedule.reject.notesLabel": "Reason (Optional)",
+  "reschedule.reject.notesPlaceholder": "Add a note for the instructor...",
+  "reschedule.reject.confirm": "Reject Request",
+  "reschedule.reject.button": "Reject",
+
+  "reschedule.title": "Session Access Requests",
+  "reschedule.subtitle":
+    "Review instructor requests to open sessions outside their scheduled time.",
+  "reschedule.refresh": "Refresh",
+
+  "reschedule.stats.pending": "Pending Requests",
+  "reschedule.stats.sessions": "Affected Sessions",
+  "reschedule.stats.single": "Single Session",
+  "reschedule.stats.withNext": "With Next Sessions",
+
+  "reschedule.retry": "Retry",
+
+  "reschedule.empty.title": "No Pending Requests",
+  "reschedule.empty.description":
+    "There are currently no pending session access requests.",
+
+  "reschedule.details.title": "Request Details",
+  "reschedule.details.group": "Group",
+  "reschedule.details.requestedBy": "Requested By",
+  "reschedule.details.mode": "Access Mode",
+  "reschedule.details.shift": "Shift",
+  "reschedule.details.days": "days",
+  "reschedule.details.explainSingle":
+    "The requested session will open immediately. Other sessions remain unchanged.",
+  "reschedule.details.explainWithNext":
+    "The requested session will open immediately. Upcoming sessions will remain locked until their scheduled dates.",
+
+  "reschedule.cancel": "Cancel",
+
+  "reschedule.mode.single": "This Session Only",
+  "reschedule.mode.withNext": "This Session + Following Sessions",
+
+  "reschedule.unknownGroup": "Unknown Group",
+  "reschedule.sessionsAffected": "sessions affected",
+  "reschedule.triggerSession": "Requested Session",
+
+  "reschedule.hideSessions": "Hide Sessions",
+  "reschedule.showSessions": "Show Sessions",
+  "reschedule.viewDetails": "View Details",
+
+  "reschedule.table.session": "Session",
+  "reschedule.table.status": "Status",
+  "reschedule.table.oldDate": "Current Date",
+  "reschedule.table.newDate": "Access Date",
+  "reschedule.table.trigger": "Requested",
+  "reschedule.table.module": "Module",
+  "reschedule.table.opensNow": "Opens Immediately",
+  "credit.subtractHours": "Subtract Hours",
+  "credit.hoursAdded": "Hours Added",
+  "credit.addHours": "Add Hours",
+  "credit.hoursDeducted": "Hours Deducted",
 };
 
 export default en;

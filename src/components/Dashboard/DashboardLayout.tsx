@@ -34,12 +34,8 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       setIsMobile(window.innerWidth < 1024);
     };
 
-    // Check on mount
     checkMobile();
-
-    // Add event listener for resize
     window.addEventListener('resize', checkMobile);
-
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -50,6 +46,8 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       setSecondarySidebarOpen(false);
     }
   }, [pathname, isMobile]);
+
+  // ❌ نشيل أي جلب بيانات من هنا - كل صفحة تجيب بياناتها بنفسها
 
   const NAVIGATION_CATEGORIES: CategoryItem[] = useMemo(() => [
     {
@@ -69,7 +67,7 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           href: "/admin/projects",
           icon: "ion:briefcase-outline",
         },
-         {
+        {
           label: t('dashboard.Schedules') || "Schedules",
           href: "/admin/schedules",
           icon: "ion:time-outline",
@@ -120,6 +118,13 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           icon: "ion:school-outline",
           badge: createBadge(t('common.new') || "New"),
         },
+        {
+          label: t('dashboard.rescheduleRequests') || "طلبات الترحيل",
+          href: "/admin/reschedule-requests",
+          icon: "ion:calendar-outline",
+          // ❌ نشيل البادج الديناميكي عشان ميبقاش فيه loop
+          // badge: createBadge(t('common.new') || "New"),
+        },
         // {
         //   label: t('nav.curriculumCourse') || "Curriculum Course",
         //   href: "/admin/curriculumCourse",
@@ -159,35 +164,33 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
         {
           label: t('dashboard.students') || "Students",
           href: "/admin/allStudents",
-          icon: "ion:school-outline", // طلاب
+          icon: "ion:school-outline",
           badge: createBadge(t('common.new') || "New"),
         },
         {
           label: t('dashboard.instructors') || "Instructors",
           href: "/admin/InstructorsPage",
-          icon: "ion:person-circle-outline", // مدرسين
+          icon: "ion:person-circle-outline",
           badge: createBadge(t('common.new') || "New"),
         },
         {
           label: t('dashboard.Marketing') || "Marketing",
           href: "/admin/MarketingPage",
-          icon: "ion:megaphone-outline", // تسويق
+          icon: "ion:megaphone-outline",
           badge: createBadge(t('common.new') || "New"),
         },
         {
           label: t('dashboard.Admin') || "Admin",
           href: "/admin/AdminPage",
-          icon: "ion:shield-checkmark-outline", // إدارة / صلاحيات
+          icon: "ion:shield-checkmark-outline",
           badge: createBadge(t('common.new') || "New"),
         },
-
         {
           label: t('dashboard.overviewPage') || "نظرة عامة",
           href: "/admin/overview",
           icon: "ion:bar-chart-outline",
           badge: createBadge(t('common.new') || "New"),
         },
-
       ]
     },
     {
@@ -290,12 +293,10 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
     return null;
   }, [activePath, NAVIGATION_CATEGORIES]);
 
-  // Set initial active category based on current path - ولكن لا نفتح SecondarySidebar تلقائياً
+  // Set initial active category based on current path
   useEffect(() => {
     if (currentCategory && !isMobile) {
       setActiveCategory(currentCategory);
-      // لا نفتح SecondarySidebar تلقائياً
-      // setSecondarySidebarOpen(true);
     }
   }, [currentCategory, isMobile]);
 
@@ -306,7 +307,6 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       setPrimarySidebarOpen(false);
     } else {
       if (activeCategory === categoryId) {
-        // Toggle if same category clicked
         setSecondarySidebarOpen(!isSecondarySidebarOpen);
         setShowSecondaryOnDesktop(!isSecondarySidebarOpen);
       } else {
