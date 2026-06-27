@@ -12,7 +12,7 @@ import { useLocale } from "@/app/context/LocaleContext";
 const BlogCard = ({ blog }: { blog: Blog }) => {
   const { t } = useI18n();
   const { locale } = useLocale();
-  
+
   // ✅ اختيار البيانات بناءً على اللغة
   const title = locale === 'ar' ? blog.title_ar : blog.title_en;
   const excerpt = locale === 'ar' ? blog.excerpt_ar : blog.excerpt_en;
@@ -60,16 +60,17 @@ const BlogCard = ({ blog }: { blog: Blog }) => {
 
   return (
     <div className="group relative bg-transparent">
-      <div className="mb-8 overflow-hidden rounded-2xl">
+      {/* ✅ حجم ثابت: ارتفاع محدد + object-cover بدل w-full h-auto */}
+      <div className="mb-8 overflow-hidden rounded-2xl h-[230px] sm:h-[250px] md:h-[272px] w-full">
         <Link
           href={`/blog/${slug || "#"}`}
           aria-label={t("blog.cover") || "Blog cover"}
-          className="block"
+          className="block w-full h-full"
         >
           <img
             src={imageSrc}
             alt={title || t("blog.imageAlt") || "Blog image"}
-            className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-110"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
             width={408}
             height={272}
             loading="lazy"

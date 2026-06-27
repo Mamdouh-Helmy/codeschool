@@ -5,6 +5,7 @@ import { useI18n } from "@/i18n/I18nProvider";
 import { Tag, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/app/context/LocaleContext";
+import { getApiUrl } from "@/utils/urlUtils";
 
 interface TagsSystemProps {
   selectedTags: string[];
@@ -13,11 +14,11 @@ interface TagsSystemProps {
   isFilter?: boolean;
 }
 
-export default function TagsSystem({ 
-  selectedTags, 
-  onTagsChange, 
+export default function TagsSystem({
+  selectedTags,
+  onTagsChange,
   allTags = [],
-  isFilter = false
+  isFilter = false,
 }: TagsSystemProps) {
   const { t } = useI18n();
   const { locale } = useLocale();
@@ -30,17 +31,17 @@ export default function TagsSystem({
     const fetchTags = async () => {
       try {
         setLoading(true);
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-        const endpoint = locale === 'ar' ? '/api/blog/tags/ar' : '/api/blog/tags/en';
-        const response = await fetch(`${baseUrl}${endpoint}`);
+        const endpoint = locale === "ar" ? "/api/blog/tags/ar" : "/api/blog/tags/en";
+        const apiUrl = getApiUrl(endpoint);
+        const response = await fetch(apiUrl);
         const data = await response.json();
-        
+
         console.log(`📋 ${locale.toUpperCase()} Tags API Response:`, data);
-        
+
         if (data.success) {
           setAvailableTags(data.tags);
         } else {
-          console.error('Failed to fetch tags:', data.message);
+          console.error("Failed to fetch tags:", data.message);
         }
       } catch (error) {
         console.error("Error fetching tags:", error);
@@ -59,13 +60,16 @@ export default function TagsSystem({
   };
 
   const removeTag = (tagToRemove: string) => {
-    onTagsChange(selectedTags.filter(tag => tag !== tagToRemove));
+    onTagsChange(selectedTags.filter((tag) => tag !== tagToRemove));
   };
 
+  // ✅ الإصلاح الأساسي: دايماً بننده على onTagsChange بدل ما نعمل navigation
+  // مباشر من جوه الكومبوننت. ده بيضمن إن أي parent (BlogPage, PostContent...)
+  // بيكون عنده تحكم كامل وموحّد في كيفية تحديث الـ URL/state بتاعه،
+  // ومنوقعش في تعارض بين router.push من هنا و window.history.pushState من فوق.
   const handleTagClick = (tag: string) => {
     if (isFilter) {
-      console.log(`🎯 Filtering by tag: ${tag}`);
-      router.push(`/blog?tag=${encodeURIComponent(tag)}&lang=${locale}`);
+      onTagsChange([tag]);
     } else {
       addTag(tag);
     }
@@ -121,27 +125,27 @@ export default function TagsSystem({
       {popularTags.length > 0 && (
         <div>
           <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-            {isFilter 
-              ? (t("blog.popularTags") || "Popular Tags")
-              : (t("blog.tags") || "Tags")
-            }:
+            {isFilter ? t("blog.popularTags") || "Popular Tags" : t("blog.tags") || "Tags"}:
           </label>
           <div className="flex flex-wrap gap-2">
-            {popularTags.map((tag, index) => (
-              <button
-                key={index}
-                type="button"
-                onClick={() => handleTagClick(tag)}
-                disabled={!isFilter && selectedTags.includes(tag)}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-200 flex items-center gap-1 ${
-                  !isFilter && selectedTags.includes(tag)
-                    ? "bg-primary text-white cursor-not-allowed"
-                    : "bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white hover:bg-primary hover:text-white cursor-pointer"
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
+            {popularTags.map((tag, index) => {
+              const isActive = selectedTags.includes(tag);
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => handleTagClick(tag)}
+                  disabled={!isFilter && isActive}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-200 flex items-center gap-1 ${
+                    isActive
+                      ? "bg-primary text-white cursor-pointer"
+                      : "bg-PaleCyan dark:bg-dark_input text-MidnightNavyText dark:text-white hover:bg-primary hover:text-white cursor-pointer"
+                  } ${!isFilter && isActive ? "cursor-not-allowed" : ""}`}
+                >
+                  {tag}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

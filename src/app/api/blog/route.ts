@@ -4,7 +4,6 @@ import BlogPost from "../../models/BlogPost";
 
 // ==================== دوال المساعدة ====================
 
-// توليد slug
 function generateSlug(title: string): string {
   if (!title || typeof title !== "string") {
     return `post-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -26,7 +25,6 @@ function generateSlug(title: string): string {
   return slug;
 }
 
-// توليد excerpt
 function generateExcerpt(content: string, maxLength: number = 150): string {
   if (!content || typeof content !== "string") {
     return "";
@@ -42,7 +40,6 @@ function generateExcerpt(content: string, maxLength: number = 150): string {
   }
 }
 
-// حساب وقت القراءة
 function calculateReadTime(content: string): number {
   if (!content || typeof content !== "string") {
     return 5;
@@ -63,21 +60,17 @@ export async function POST(req: Request) {
   console.log("🚀 POST /api/blog - Starting...");
 
   try {
-    // الاتصال بقاعدة البيانات
     await connectDB();
     console.log("✅ Database connected successfully");
 
-    // قراءة البيانات
     let requestData: any;
     try {
       const contentType = req.headers.get("content-type") || "";
 
       if (contentType.includes("multipart/form-data")) {
-        // استقبال FormData
         const formData = await req.formData();
         requestData = Object.fromEntries(formData.entries());
 
-        // تحويل البيانات النصية من JSON إذا كانت
         if (typeof requestData.data === "string") {
           try {
             const parsedData = JSON.parse(requestData.data);
@@ -87,14 +80,13 @@ export async function POST(req: Request) {
           }
         }
       } else {
-        // استقبال JSON مباشرة
         requestData = await req.json();
       }
 
       console.log("📥 Received blog data:", {
         hasViewCount: requestData.viewCount !== undefined,
         viewCount: requestData.viewCount,
-        viewCountType: typeof requestData.viewCount
+        viewCountType: typeof requestData.viewCount,
       });
     } catch (parseError: any) {
       console.error("❌ Failed to parse request:", parseError.message);
@@ -108,7 +100,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ تحليل viewCount بشكل آمن
     let viewCountValue = 0;
     if (requestData.viewCount !== undefined && requestData.viewCount !== null) {
       const parsed = parseInt(requestData.viewCount.toString());
@@ -116,7 +107,6 @@ export async function POST(req: Request) {
     }
     console.log("✅ Parsed viewCount for saving:", viewCountValue);
 
-    // التحقق من البيانات المطلوبة
     if (
       (!requestData.title_ar || requestData.title_ar.trim() === "") &&
       (!requestData.title_en || requestData.title_en.trim() === "")
@@ -143,31 +133,35 @@ export async function POST(req: Request) {
       );
     }
 
-    // إعداد البيانات النهائية
     const titleToUse = requestData.title_en || requestData.title_ar || "Untitled Post";
     const slug = generateSlug(titleToUse);
     console.log("🔗 Generated slug:", slug);
 
-    // تنظيف رابط الصورة
     let imageUrl = (requestData.image || "").toString().trim();
-    if (imageUrl.endsWith('/')) {
+    if (imageUrl.endsWith("/")) {
       imageUrl = imageUrl.slice(0, -1);
     }
-    
-    if (imageUrl === '/uploads/') {
-      imageUrl = '';
+    if (imageUrl === "/uploads/") {
+      imageUrl = "";
       console.log("⚠️ Fixed empty image URL");
     }
 
-    // تنظيف رابط صورة المؤلف
     let authorAvatar = (requestData.author?.avatar || "").toString().trim();
-    if (authorAvatar.endsWith('/')) {
+    if (authorAvatar.endsWith("/")) {
       authorAvatar = authorAvatar.slice(0, -1);
     }
-    
-    if (authorAvatar === '/uploads/') {
-      authorAvatar = '/images/default-avatar.jpg';
+    if (authorAvatar === "/uploads/") {
+      authorAvatar = "/images/default-avatar.jpg";
     }
+
+    // ✅ تنظيف التاجات بشكل موحّد: trim + إزالة الفاضي + إزالة التكرار
+    const cleanTags = (tags: any): string[] => {
+      if (!Array.isArray(tags)) return [];
+      const cleaned = tags
+        .map((tag: any) => tag?.toString().trim())
+        .filter((tag: string) => Boolean(tag));
+      return [...new Set(cleaned)];
+    };
 
     const blogData = {
       title_ar: (requestData.title_ar || "").toString().trim(),
@@ -175,12 +169,10 @@ export async function POST(req: Request) {
       body_ar: (requestData.body_ar || "").toString().trim(),
       body_en: (requestData.body_en || "").toString().trim(),
       excerpt_ar: (
-        requestData.excerpt_ar ||
-        generateExcerpt(requestData.body_ar || "", 150)
+        requestData.excerpt_ar || generateExcerpt(requestData.body_ar || "", 150)
       ).toString().trim(),
       excerpt_en: (
-        requestData.excerpt_en ||
-        generateExcerpt(requestData.body_en || "", 150)
+        requestData.excerpt_en || generateExcerpt(requestData.body_en || "", 150)
       ).toString().trim(),
       imageAlt_ar: (requestData.imageAlt_ar || "").toString().trim(),
       imageAlt_en: (requestData.imageAlt_en || "").toString().trim(),
@@ -197,29 +189,20 @@ export async function POST(req: Request) {
         avatar: authorAvatar,
         role: (requestData.author?.role || "Author").toString().trim(),
       },
-      tags_ar: Array.isArray(requestData.tags_ar)
-        ? requestData.tags_ar
-            .map((tag: any) => tag?.toString().trim())
-            .filter(Boolean)
-        : [],
-      tags_en: Array.isArray(requestData.tags_en)
-        ? requestData.tags_en
-            .map((tag: any) => tag?.toString().trim())
-            .filter(Boolean)
-        : [],
+      tags_ar: cleanTags(requestData.tags_ar),
+      tags_en: cleanTags(requestData.tags_en),
       featured: Boolean(requestData.featured),
       status: requestData.status === "published" ? "published" : "draft",
       slug: slug,
-      readTime: calculateReadTime(
-        requestData.body_ar || requestData.body_en || "",
-      ),
-      // ✅ FIXED: استخدم القيمة المحللة من الطلب بدلاً من 0 ثابت
+      readTime: calculateReadTime(requestData.body_ar || requestData.body_en || ""),
       viewCount: viewCountValue,
     };
 
-    console.log("📝 Creating blog post with viewCount:", blogData.viewCount);
+    console.log("📝 Creating blog post with tags:", {
+      tags_ar: blogData.tags_ar,
+      tags_en: blogData.tags_en,
+    });
 
-    // حفظ المقال في قاعدة البيانات
     const newPost = await BlogPost.create(blogData);
 
     console.log("✅ Blog post created successfully!", {
@@ -242,7 +225,7 @@ export async function POST(req: Request) {
           excerpt_ar: newPost.excerpt_ar,
           excerpt_en: newPost.excerpt_en,
           image: newPost.image,
-          viewCount: newPost.viewCount, // ✅ تأكد من إرجاع القيمة المحفوظة
+          viewCount: newPost.viewCount,
         },
         message: "Blog post created successfully",
       },
@@ -281,33 +264,49 @@ export async function GET(req: Request) {
     await connectDB();
 
     const url = new URL(req.url);
-    const search = url.searchParams.get("search") || "";
-    const tag = url.searchParams.get("tag");
-    const category = url.searchParams.get("category");
+    const search = (url.searchParams.get("search") || "").trim();
+    // ✅ فك الـ encoding وتنظيف الـ tag (مسافات/علامات اقتباس غير مقصودة)
+    const tagParam = url.searchParams.get("tag");
+    const tag = tagParam ? decodeURIComponent(tagParam).trim() : "";
+    const category = (url.searchParams.get("category") || "").trim();
     const status = url.searchParams.get("status") || "published";
     const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = Math.min(
-      parseInt(url.searchParams.get("limit") || "100"),
-      1000,
-    );
+    const limit = Math.min(parseInt(url.searchParams.get("limit") || "100"), 1000);
 
-    // بناء query
-    const query: any = { status: status };
+    // ✅ بناء الـ query بشكل صحيح: كل شرط بييجمع مع الباقي بـ $and
+    // عشان منوقعش في مشكلة إن آخر $or بيمسح اللي قبله
+    const andConditions: any[] = [{ status }];
 
     if (search) {
-      query.$or = [
-        { title_ar: { $regex: search, $options: "i" } },
-        { title_en: { $regex: search, $options: "i" } },
-      ];
+      andConditions.push({
+        $or: [
+          { title_ar: { $regex: search, $options: "i" } },
+          { title_en: { $regex: search, $options: "i" } },
+        ],
+      });
     }
 
     if (tag) {
-      query.$or = [{ tags_ar: { $in: [tag] } }, { tags_en: { $in: [tag] } }];
+      // ✅ مطابقة case-insensitive وتتجاهل أي مسافات زيادة، باستخدام regex بدل $in
+      // ده بيحل مشكلة عدم التطابق الدقيق بين التاج المخزن والتاج القادم من الـ URL
+      const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      andConditions.push({
+        $or: [
+          { tags_ar: { $elemMatch: { $regex: `^${escapedTag}$`, $options: "i" } } },
+          { tags_en: { $elemMatch: { $regex: `^${escapedTag}$`, $options: "i" } } },
+        ],
+      });
     }
 
     if (category) {
-      query.$or = [{ category_ar: category }, { category_en: category }];
+      andConditions.push({
+        $or: [{ category_ar: category }, { category_en: category }],
+      });
     }
+
+    const query: any = andConditions.length > 1 ? { $and: andConditions } : andConditions[0];
+
+    console.log("🔍 Final MongoDB query:", JSON.stringify(query));
 
     const total = await BlogPost.countDocuments(query);
     const posts = await BlogPost.find(query)
@@ -315,7 +314,7 @@ export async function GET(req: Request) {
       .skip((page - 1) * limit)
       .limit(limit);
 
-    console.log(`✅ Found ${posts.length} blog posts`);
+    console.log(`✅ Found ${posts.length} blog posts (tag filter: "${tag || "none"}")`);
 
     return NextResponse.json({
       success: true,
