@@ -141,15 +141,11 @@ export async function GET(req) {
       const sessionEndTime = new Date(sessionDate);
       sessionEndTime.setHours(endH, endM, 0, 0);
 
-      // لو فيه early access، الـ "وقت النهاية" مش له معنى زمني حقيقي تابع
-      // لتاريخ السيشن (لأنها مفتوحة بره معادها) — اعتبرها لسه "خلال الوقت"
-      // لحد ما تُستهلك (تُسجل حضور) أو الأدمن يقفلها.
       const sessionStillActive = hasActiveEarlyAccess ? true : sessionEndTime > now;
 
-      // 🔐 لو الحضور اتسجل بالفعل على السيشن دي، تتقفل فورًا — حتى لو لسه
-      // "اليوم" فعليًا أو لسه جوه نافذة الوقت. المدرس خلص غرضه منها، فمفيش
-      // داعي تفضل مفتوحة. لو عاوز يرجع ليها لازم يطلب من الأدمن زي أي سيشن
-      // تانية مقفولة (نفس مسار الـ Cascade Reschedule Request).
+      // ✅ الـ attendanceTaken دايمًا بياخد قيمته الحقيقية من DB
+      // مش sensitive data — مجرد flag بيقول "الحضور اتسجل"
+      // محتاجه دايمًا في الـ stats وفي الـ session row
       const attendanceAlreadyTaken = !!session.attendanceTaken;
 
       const showJoinButton =
@@ -170,12 +166,6 @@ export async function GET(req) {
         !attendanceAlreadyTaken;
 
       // ── 🔓 Partial details (content/lessons only, no link/attendance) ───
-      // True when this session is part of an APPROVED "withNext" cascade
-      // batch and hasn't reached canViewDetails yet. It lets the instructor
-      // preview the upcoming module/lessons without exposing the live
-      // meeting link or attendance controls ahead of time.
-      // 🔐 لو الحضور اتسجل عليها بالفعل (يعني خلصت فعلاً)، مينفعش ترجع
-      // partial preview تاني — تتقفل خالص زي أي سيشن مكتملة عادية.
       const wasApprovedWithNext =
         session.pendingReschedule?.status === "approved" &&
         session.pendingReschedule?.viewMode === "withNext";
@@ -207,11 +197,20 @@ export async function GET(req) {
         },
       } : null;
 
-      // ── 🔐 SECURITY: Only send sensitive data if canViewDetails is true ──
-      // Build meeting credentials - ONLY if canViewDetails is true
+      // ── 🔐 SECURITY: Sensitive data (link + credentials + roster) ────────
+      // ✅ الـ FIX: attendanceTaken بيتبعت دايمًا بقيمته الحقيقية من DB
+      //            بدل ما كان بيتبعت بـ false لو canViewDetails = false
+      //
+      // الـ sensitive data الحقيقية اللي محتاجة حماية:
+      //   - meetingLink      → رابط الاجتماع
+      //   - meetingCredentials → يوزرنيم وباسورد
+      //   - attendance array → بيانات الطلاب
+      //
+      // الـ attendanceTaken مجرد boolean flag — مش sensitive ومحتاجه
+      // في أي مكان عشان نعرف إيه حالة الجلسة (completed + needsAttendance).
+
       let meetingCredentials = null;
       let attendance = null;
-      let attendanceTaken = false;
       let meetingLink = null;
       let meetingPlatform = null;
 
@@ -228,15 +227,12 @@ export async function GET(req) {
 
         // Only send attendance data for today's (or early-access) sessions
         attendance = session.attendance || [];
-        attendanceTaken = session.attendanceTaken || false;
         meetingLink = session.meetingLink || null;
         meetingPlatform = session.meetingPlatform || null;
-      } else if (canViewPartialDetails) {
-        // 🔓 Partial mode: expose attendanceTaken flag only (read-only info,
-        // no link/credentials/attendance roster) so the UI can show status
-        // without granting access to take attendance or join.
-        attendanceTaken = session.attendanceTaken || false;
       }
+      // ملاحظة: شيلنا الـ else if (canViewPartialDetails) اللي كان بيبعت
+      // attendanceTaken فقط في الـ partial mode — دلوقتي attendanceTaken
+      // بيتبعت دايمًا بقيمته الحقيقية بغض النظر عن الـ mode
 
       return {
         _id: session._id,
@@ -250,8 +246,9 @@ export async function GET(req) {
         moduleName: moduleData.title || `الوحدة ${session.moduleIndex + 1}`,
         sessionNumber: session.sessionNumber,
         lessons,
-        // 🔐 Security: Only send if canViewDetails
-        attendanceTaken,
+        // ✅ دايمًا بقيمته الحقيقية — مش sensitive data
+        attendanceTaken: attendanceAlreadyTaken,
+        // 🔐 Sensitive: null إلا لو canViewDetails
         attendance,
         meetingLink,
         meetingPlatform,
@@ -266,8 +263,7 @@ export async function GET(req) {
         canViewDetails,
         canViewPartialDetails,
         hasActiveEarlyAccess,
-        // 🔄 Reschedule request state (so the frontend can disable buttons,
-        // show a "pending review" badge, etc.)
+        // 🔄 Reschedule request state
         pendingReschedule: session.pendingReschedule
           ? {
               status: session.pendingReschedule.status,
@@ -289,6 +285,7 @@ export async function GET(req) {
     });
 
     // ── 4. Stats ───────────────────────────────────────────────────────────
+    // ✅ دلوقتي needsAttendance هيشتغل صح لأن attendanceTaken بقيمته الحقيقية
     const all = processedSessions;
     const stats = {
       total: all.length,
