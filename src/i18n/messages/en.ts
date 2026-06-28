@@ -4317,6 +4317,8 @@ const en = {
   "reschedule.approve.confirmButton": "Confirm Approval",
   "reschedule.approve.note":
     "Once approved, the reschedule will be applied to the selected sessions and this action cannot be undone.",
+  "groups.form.errors.scheduleConflict":
+    "There is a scheduling conflict. Please choose a different time.",
 };
 
 export default en;
