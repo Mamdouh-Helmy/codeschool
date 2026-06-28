@@ -4311,6 +4311,9 @@ const en = {
     "The reschedule will be applied immediately.",
   "reschedule.details.allSessions": "All Sessions",
     "reschedule.table.shift": "Shift",
+    "reschedule.approve.title": "Approve Reschedule Request",
+  "reschedule.approve.summary": "Review the request details before approving. The changes will be applied to all selected sessions.",
+  "reschedule.approve.confirmButton": "Confirm Approval",
 };
 
 export default en;

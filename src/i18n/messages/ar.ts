@@ -4429,6 +4429,9 @@ const ar = {
   "reschedule.details.stepNowBody": "سيتم تطبيق إعادة الجدولة فورًا.",
   "reschedule.details.allSessions": "جميع الجلسات",
   "reschedule.table.shift": "الإزاحة",
+  "reschedule.approve.title": "الموافقة على طلب إعادة الجدولة",
+  "reschedule.approve.summary": "راجع تفاصيل الطلب قبل الموافقة. سيتم تطبيق التغييرات على جميع الجلسات المحددة.",
+  "reschedule.approve.confirmButton": "تأكيد الموافقة",
 };
 
 export default ar;
