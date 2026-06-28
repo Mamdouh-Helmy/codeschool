@@ -4430,8 +4430,11 @@ const ar = {
   "reschedule.details.allSessions": "جميع الجلسات",
   "reschedule.table.shift": "الإزاحة",
   "reschedule.approve.title": "الموافقة على طلب إعادة الجدولة",
-  "reschedule.approve.summary": "راجع تفاصيل الطلب قبل الموافقة. سيتم تطبيق التغييرات على جميع الجلسات المحددة.",
+  "reschedule.approve.summary":
+    "راجع تفاصيل الطلب قبل الموافقة. سيتم تطبيق التغييرات على جميع الجلسات المحددة.",
   "reschedule.approve.confirmButton": "تأكيد الموافقة",
+  "reschedule.approve.note":
+    "بمجرد الموافقة، سيتم تطبيق إعادة الجدولة على الجلسات المحددة ولا يمكن التراجع عن هذا الإجراء.",
 };
 
 export default ar;

@@ -4310,10 +4310,13 @@ const en = {
   "reschedule.details.stepNowBody":
     "The reschedule will be applied immediately.",
   "reschedule.details.allSessions": "All Sessions",
-    "reschedule.table.shift": "Shift",
-    "reschedule.approve.title": "Approve Reschedule Request",
-  "reschedule.approve.summary": "Review the request details before approving. The changes will be applied to all selected sessions.",
+  "reschedule.table.shift": "Shift",
+  "reschedule.approve.title": "Approve Reschedule Request",
+  "reschedule.approve.summary":
+    "Review the request details before approving. The changes will be applied to all selected sessions.",
   "reschedule.approve.confirmButton": "Confirm Approval",
+  "reschedule.approve.note":
+    "Once approved, the reschedule will be applied to the selected sessions and this action cannot be undone.",
 };
 
 export default en;
