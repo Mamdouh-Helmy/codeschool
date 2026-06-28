@@ -18,7 +18,7 @@ import {
   Layers, Copy, Eye, EyeOff, Lock, User, Link2,
   TrendingUp, Award, LayoutGrid, Shield,
   CalendarClock, Hourglass, SkipForward, ArrowRightCircle,
-  Send, BadgeCheck, BadgeAlert,
+  Send, BadgeCheck, BadgeAlert, MessageSquareWarning,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -107,22 +107,25 @@ function AnimatedCounter({ value, duration = 1200 }) {
 // ─── 🆕 Request Access Modal (replaces the old plain AccessDeniedModal) ───────
 // لما المدرس يدوس على سيشن مش متاحة دلوقتي، بدل الرفض المباشر، نعرض عليه
 // اختيارين لطلب فتحها من الأدمن، أو نعرض حالة الطلب لو فيه طلب pending شغال
-// بالفعل على الجروب ده.
+// بالفعل على الجروب ده، أو سبب رفض آخر طلب لو كان فيه واحد على نفس السيشن.
 function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
   const t = (ar, en) => isAr ? ar : en;
   const [checking, setChecking] = useState(true);
-  const [pendingInfo, setPendingInfo] = useState(null);
+  const [statusInfo, setStatusInfo] = useState(null); // { status: "pending"|"rejected", reviewNotes, ... }
   const [selectedMode, setSelectedMode] = useState(null); // "single" | "withNext"
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState(null);
   const [success, setSuccess] = useState(null);
+  // بعد ما يشوف سبب الرفض، يقدر يضغط "تقديم طلب جديد" فيرجع لاختيار الـ viewMode
+  const [showOptionsAfterRejection, setShowOptionsAfterRejection] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  // ── Check if this group already has a pending request ──────────────────
+  // ── Check current request status for this session/group ────────────────
   useEffect(() => {
     let active = true;
     (async () => {
@@ -133,7 +136,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
         });
         const json = await res.json();
         if (active && json.success) {
-          setPendingInfo(json.data.hasPendingRequest ? json.data : null);
+          setStatusInfo(json.data);
         }
       } catch {
         // fail silently — instructor can still try to submit, server re-validates
@@ -148,6 +151,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
     setSelectedMode(viewMode);
     setSubmitting(true);
     setError("");
+    setErrorCode(null);
     try {
       const res = await fetch(`/api/instructor/sessions/${session._id}/request-reschedule`, {
         method: "POST",
@@ -160,6 +164,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
         setSuccess(json.data);
         onSubmitted?.(json.data);
       } else {
+        setErrorCode(json.code || null);
         setError(json.message || t("حدث خطأ، حاول مرة أخرى", "Something went wrong, please try again"));
       }
     } catch {
@@ -169,7 +174,8 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
     }
   };
 
-  const hasPending = !!pendingInfo?.hasPendingRequest;
+  const hasPending = statusInfo?.status === "pending";
+  const wasRejected = statusInfo?.status === "rejected" && !showOptionsAfterRejection;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
@@ -263,7 +269,59 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
             </div>
           )}
 
-          {!checking && !success && !hasPending && (
+          {/* 🆕 حالة الرفض — تعرض السبب لو موجود، وتسمح بتقديم طلب جديد */}
+          {!checking && !success && wasRejected && (
+            <div className="text-center py-2">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-red-50 dark:bg-red-900/10 flex items-center justify-center mb-4 border border-red-200 dark:border-red-800/30">
+                <BadgeAlert className="w-8 h-8 text-red-500" />
+              </div>
+              <h4 className="text-base font-black text-gray-900 dark:text-[#e6edf3] mb-2">
+                {t("تم رفض طلبك السابق", "Your Previous Request Was Rejected")}
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-[#8b949e] leading-relaxed mb-3">
+                {t(
+                  "راجع الأدمن طلب فتح هذه الجلسة ولم يوافق عليه.",
+                  "The admin reviewed your request to open this session and did not approve it."
+                )}
+              </p>
+
+              {statusInfo?.reviewNotes ? (
+                <div className="text-start flex items-start gap-2.5 p-3.5 rounded-xl bg-red-50/70 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 mb-5">
+                  <MessageSquareWarning className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[11px] font-black text-red-500 mb-0.5">
+                      {t("سبب الرفض", "Rejection reason")}
+                    </p>
+                    <p className="text-sm text-red-700 dark:text-red-400 leading-relaxed">
+                      {statusInfo.reviewNotes}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 dark:text-[#6e7681] mb-5">
+                  {t("لم يترك الأدمن سببًا محددًا للرفض.", "The admin didn't leave a specific reason.")}
+                </p>
+              )}
+
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={onClose}
+                  className="px-5 py-3 rounded-xl font-bold text-gray-600 dark:text-[#8b949e] bg-gray-100 dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] hover:bg-gray-200 dark:hover:bg-[#21262d] transition-all"
+                >
+                  {t("إغلاق", "Close")}
+                </button>
+                <button
+                  onClick={() => setShowOptionsAfterRejection(true)}
+                  className="px-5 py-3 rounded-xl font-black text-white shadow-lg hover:shadow-xl transition-all"
+                  style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
+                >
+                  {t("تقديم طلب جديد", "Submit a New Request")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!checking && !success && !hasPending && !wasRejected && (
             <>
               <p className="text-sm text-gray-500 dark:text-[#8b949e] leading-relaxed">
                 {t(
@@ -324,7 +382,20 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
                 </div>
               </button>
 
-              {error && (
+              {/* 🆕 رسالة خاصة لو الحضور أُخذ فعليًا — مينفعش يطلب فتح خالص */}
+              {error && errorCode === "ATTENDANCE_ALREADY_TAKEN" && (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-gray-50 dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d]">
+                  <Lock className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-gray-600 dark:text-[#8b949e] font-medium leading-relaxed">
+                    {t(
+                      "تم تسجيل الحضور على هذه الجلسة بالفعل، فهي مكتملة ولا يمكن طلب فتحها مرة أخرى.",
+                      "Attendance was already taken for this session — it's complete and can't be reopened."
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {error && errorCode !== "ATTENDANCE_ALREADY_TAKEN" && (
                 <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
                   <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-red-600 dark:text-red-400 font-medium">{error}</p>

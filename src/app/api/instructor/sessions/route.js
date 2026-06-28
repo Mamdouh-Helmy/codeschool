@@ -146,27 +146,41 @@ export async function GET(req) {
       // لحد ما تُستهلك (تُسجل حضور) أو الأدمن يقفلها.
       const sessionStillActive = hasActiveEarlyAccess ? true : sessionEndTime > now;
 
+      // 🔐 لو الحضور اتسجل بالفعل على السيشن دي، تتقفل فورًا — حتى لو لسه
+      // "اليوم" فعليًا أو لسه جوه نافذة الوقت. المدرس خلص غرضه منها، فمفيش
+      // داعي تفضل مفتوحة. لو عاوز يرجع ليها لازم يطلب من الأدمن زي أي سيشن
+      // تانية مقفولة (نفس مسار الـ Cascade Reschedule Request).
+      const attendanceAlreadyTaken = !!session.attendanceTaken;
+
       const showJoinButton =
         session.status === "scheduled" &&
         isEffectivelyToday &&
         sessionStillActive &&
+        !attendanceAlreadyTaken &&
         !!session.meetingLink;
 
       // ── 🔐 SECURITY: Can user view FULL details (link + attendance)? ────
       // True only if the session is effectively "today" (real date today, or
       // an approved early-access grant) AND it has a meeting link AND it's
-      // still within its active window.
-      const canViewDetails = isEffectivelyToday && !!session.meetingLink && sessionStillActive;
+      // still within its active window AND attendance hasn't been taken yet.
+      const canViewDetails =
+        isEffectivelyToday &&
+        !!session.meetingLink &&
+        sessionStillActive &&
+        !attendanceAlreadyTaken;
 
       // ── 🔓 Partial details (content/lessons only, no link/attendance) ───
       // True when this session is part of an APPROVED "withNext" cascade
       // batch and hasn't reached canViewDetails yet. It lets the instructor
       // preview the upcoming module/lessons without exposing the live
       // meeting link or attendance controls ahead of time.
+      // 🔐 لو الحضور اتسجل عليها بالفعل (يعني خلصت فعلاً)، مينفعش ترجع
+      // partial preview تاني — تتقفل خالص زي أي سيشن مكتملة عادية.
       const wasApprovedWithNext =
         session.pendingReschedule?.status === "approved" &&
         session.pendingReschedule?.viewMode === "withNext";
-      const canViewPartialDetails = !canViewDetails && wasApprovedWithNext;
+      const canViewPartialDetails =
+        !canViewDetails && wasApprovedWithNext && !attendanceAlreadyTaken;
 
       // ── Session description from curriculum ────────────────────────────
       const sessionPresentationData = (moduleData.sessions || []).find(

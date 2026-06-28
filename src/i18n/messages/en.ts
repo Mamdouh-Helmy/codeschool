@@ -4301,6 +4301,16 @@ const en = {
   "credit.hoursAdded": "Hours Added",
   "credit.addHours": "Add Hours",
   "credit.hoursDeducted": "Hours Deducted",
+  "reschedule.details.daysShort": "d",
+  "reschedule.details.statusPending": "Pending",
+  "reschedule.details.stepLaterTitleNext": "What Happens Next",
+  "reschedule.details.stepLaterBodyNext":
+    "The reschedule will be processed after an administrator approves the request.",
+  "reschedule.details.stepNowTitle": "Applied Immediately",
+  "reschedule.details.stepNowBody":
+    "The reschedule will be applied immediately.",
+  "reschedule.details.allSessions": "All Sessions",
+    "reschedule.table.shift": "Shift",
 };
 
 export default en;

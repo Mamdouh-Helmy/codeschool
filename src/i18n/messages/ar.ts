@@ -4420,6 +4420,15 @@ const ar = {
   "credit.hoursAdded": "تمت إضافة الساعات",
   "credit.addHours": "إضافة ساعات",
   "credit.hoursDeducted": "تم خصم الساعات",
+  "reschedule.details.daysShort": "ي",
+  "reschedule.details.statusPending": "قيد الانتظار",
+  "reschedule.details.stepLaterTitleNext": "الخطوات التالية",
+  "reschedule.details.stepLaterBodyNext":
+    "سيتم تنفيذ إعادة الجدولة بعد موافقة المسؤول.",
+  "reschedule.details.stepNowTitle": "سيتم التنفيذ الآن",
+  "reschedule.details.stepNowBody": "سيتم تطبيق إعادة الجدولة فورًا.",
+  "reschedule.details.allSessions": "جميع الجلسات",
+  "reschedule.table.shift": "الإزاحة",
 };
 
 export default ar;

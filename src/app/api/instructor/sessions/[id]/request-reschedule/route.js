@@ -89,6 +89,21 @@ export async function POST(req, { params }) {
       );
     }
 
+    // ── 2.5. منع الطلب لو الحضور اتسجل عليها بالفعل، حتى لو status لسه
+    //         "scheduled" (الـ status بيتحول completed بس بعد خطوة التقييم،
+    //         فممكن يكون فيه فترة بينية الحضور فيها مسجل والـ status لسه
+    //         scheduled — السيشن هنا منطقيًا خلصت ومينفعش تتطلب تاني)
+    if (session.attendanceTaken) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "تم تسجيل الحضور لهذه الجلسة بالفعل، لا يمكن طلب فتحها مرة أخرى",
+          code: "ATTENDANCE_ALREADY_TAKEN",
+        },
+        { status: 400 }
+      );
+    }
+
     // ── 3. منطقياً، السيشن دي أصلاً مش لازم تكون "اليوم" — لو هي اليوم
     //      المدرس أصلاً عنده access مباشر بدون أي طلب
     if (session.isEffectivelyToday()) {
@@ -153,8 +168,11 @@ export async function POST(req, { params }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET: المدرس يقدر يتشيك هل فيه طلب pending عالقًا على الجروب بتاع السيشن دي
-// (مفيد عشان الفرونت يعطل الزرارين لو فيه طلب شغال بالفعل)
+// GET: المدرس يقدر يتشيك حالة الطلب الخاصة بالسيشن دي:
+//  1) هل فيه طلب pending عالقًا على الجروب بتاع السيشن دي؟ (يمنع تقديم طلب جديد)
+//  2) لو مفيش pending، هل آخر طلب على *نفس السيشن دي بالتحديد* كان مرفوضًا؟
+//     لو كان، نرجّع سبب الرفض (reviewNotes) عشان نعرضه للمدرس بدل ما يفضل
+//     مش عارف ليه طلبه اترفض.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(req, { params }) {
   try {
@@ -177,24 +195,50 @@ export async function GET(req, { params }) {
 
     await connectDB();
 
-    const session = await Session.findOne({ _id: id, isDeleted: false }).select("groupId");
+    const session = await Session.findOne({ _id: id, isDeleted: false }).select(
+      "groupId pendingReschedule"
+    );
     if (!session) {
       return NextResponse.json({ success: false, message: "الجلسة غير موجودة" }, { status: 404 });
     }
 
+    // ── 1) هل فيه طلب pending على الجروب ده (مش بس على السيشن دي)؟ ─────────
     const pending = await Session.findOne({
       groupId: session.groupId,
       isDeleted: false,
       "pendingReschedule.status": "pending",
     }).select("pendingReschedule");
 
+    if (pending) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          hasPendingRequest: true,
+          status: "pending",
+          batchId: pending.pendingReschedule?.batchId || null,
+          viewMode: pending.pendingReschedule?.viewMode || null,
+          requestedAt: pending.pendingReschedule?.requestedAt || null,
+          reviewNotes: null,
+          reviewedAt: null,
+        },
+      });
+    }
+
+    // ── 2) مفيش pending — هل آخر طلب على *نفس السيشن دي* كان مرفوضًا؟ ──────
+    // (pendingReschedule بيفضل محفوظ على الـ document حتى بعد reject/approve،
+    // لحد ما طلب جديد يستبدله)
+    const wasRejected = session.pendingReschedule?.status === "rejected";
+
     return NextResponse.json({
       success: true,
       data: {
-        hasPendingRequest: !!pending,
-        batchId: pending?.pendingReschedule?.batchId || null,
-        viewMode: pending?.pendingReschedule?.viewMode || null,
-        requestedAt: pending?.pendingReschedule?.requestedAt || null,
+        hasPendingRequest: false,
+        status: wasRejected ? "rejected" : null,
+        batchId: wasRejected ? session.pendingReschedule.batchId : null,
+        viewMode: wasRejected ? session.pendingReschedule.viewMode : null,
+        requestedAt: wasRejected ? session.pendingReschedule.requestedAt : null,
+        reviewNotes: wasRejected ? session.pendingReschedule.reviewNotes || "" : null,
+        reviewedAt: wasRejected ? session.pendingReschedule.reviewedAt : null,
       },
     });
   } catch (error) {
