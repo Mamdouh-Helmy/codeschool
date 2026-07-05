@@ -27,7 +27,11 @@ import {
   Star,
   User,
   Filter,
+  History,
+  ExternalLink,
 } from "lucide-react";
+import StudentHistoryModal from "./StudentHistoryModal";
+import InstructorHistoryModal from "./InstructorHistoryModal";
 
 const SESSION_HOURS = 2;
 
@@ -162,12 +166,37 @@ function HoursBar({ used, total, remaining }) {
 }
 
 // =============================================
+// ✅ HISTORY BUTTON (shared, professional look)
+// =============================================
+
+function HistoryButton({ onClick, label = "السجل الكامل" }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      title={label}
+      className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg
+                 bg-primary/5 hover:bg-primary text-primary hover:text-white
+                 border border-primary/20 hover:border-primary
+                 transition-all duration-200 flex-shrink-0"
+    >
+      <History className="w-3.5 h-3.5 transition-transform group-hover:rotate-[-8deg]" />
+      <span className="text-[11px] font-medium hidden sm:inline whitespace-nowrap">
+        السجل
+      </span>
+    </button>
+  );
+}
+
+// =============================================
 // ✅ STAT CARD
 // =============================================
 
 function StatCard({ label, value, sub, icon: Icon, iconCls, valueCls }) {
   return (
-    <div className="bg-white dark:bg-darkmode rounded-xl p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm">
+    <div className="bg-white dark:bg-darkmode rounded-xl p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm hover:shadow-md transition-shadow duration-200">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[11px] text-SlateBlueText dark:text-darktext uppercase tracking-wide mb-1">
@@ -194,7 +223,7 @@ function StatCard({ label, value, sub, icon: Icon, iconCls, valueCls }) {
 // ✅ INSTRUCTOR ROW (expandable)
 // =============================================
 
-function InstructorRow({ instructor, idx }) {
+function InstructorRow({ instructor, idx, onOpenHistory }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -272,13 +301,16 @@ function InstructorRow({ instructor, idx }) {
         </td>
 
         <td className="py-3 px-4">
-          <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
-            {expanded ? (
-              <ChevronUp className="w-4 h-4 text-primary" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-SlateBlueText dark:text-darktext" />
-            )}
-          </button>
+          <div className="flex items-center justify-end gap-1.5">
+            <HistoryButton onClick={() => onOpenHistory(instructor)} />
+            <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0">
+              {expanded ? (
+                <ChevronUp className="w-4 h-4 text-primary" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-SlateBlueText dark:text-darktext" />
+              )}
+            </button>
+          </div>
         </td>
       </tr>
 
@@ -368,7 +400,7 @@ function InstructorRow({ instructor, idx }) {
 // ✅ STUDENT ROW (expandable)
 // =============================================
 
-function StudentRow({ student, idx }) {
+function StudentRow({ student, idx, onOpenHistory }) {
   const [expanded, setExpanded] = useState(false);
   const c = student.credit;
 
@@ -438,13 +470,16 @@ function StudentRow({ student, idx }) {
         </td>
 
         <td className="py-3 px-4">
-          <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
-            {expanded ? (
-              <ChevronUp className="w-4 h-4 text-primary" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-SlateBlueText dark:text-darktext" />
-            )}
-          </button>
+          <div className="flex items-center justify-end gap-1.5">
+            <HistoryButton onClick={() => onOpenHistory(student)} />
+            <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0">
+              {expanded ? (
+                <ChevronUp className="w-4 h-4 text-primary" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-SlateBlueText dark:text-darktext" />
+              )}
+            </button>
+          </div>
         </td>
       </tr>
 
@@ -452,9 +487,21 @@ function StudentRow({ student, idx }) {
       {expanded && (
         <tr className="bg-amber-50/30 dark:bg-amber-900/10 border-t border-amber-100 dark:border-amber-900/20">
           <td colSpan={6} className="py-3 px-4 pl-14">
-            <p className="text-xs font-medium text-MidnightNavyText dark:text-white mb-2">
-              آخر 5 استخدامات للساعات
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-MidnightNavyText dark:text-white">
+                آخر 5 استخدامات للساعات
+              </p>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenHistory(student);
+                }}
+                className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+              >
+                عرض السجل الكامل
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            </div>
             {c.recentUsage?.length > 0 ? (
               <div className="space-y-1.5">
                 {c.recentUsage.map((u, ui) => (
@@ -516,6 +563,10 @@ export default function OverviewDashboard() {
   const [instSearch, setInstSearch] = useState("");
   const [stuSearch, setStuSearch] = useState("");
   const [stuFilter, setStuFilter] = useState("");
+
+  // ✅ Modal state — السجل الكامل للمدرس/الطالب
+  const [historyInstructor, setHistoryInstructor] = useState(null);
+  const [historyStudent, setHistoryStudent] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -772,13 +823,20 @@ export default function OverviewDashboard() {
                   <th className="py-2.5 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wide">
                     آخر جلسة
                   </th>
-                  <th className="py-2.5 px-4 w-10"></th>
+                  <th className="py-2.5 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wide w-32">
+                    إجراءات
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-PowderBlueBorder dark:divide-dark_border">
                 {filteredInstructors.length > 0 ? (
                   filteredInstructors.map((inst, idx) => (
-                    <InstructorRow key={inst._id} instructor={inst} idx={idx} />
+                    <InstructorRow
+                      key={inst._id}
+                      instructor={inst}
+                      idx={idx}
+                      onOpenHistory={setHistoryInstructor}
+                    />
                   ))
                 ) : (
                   <tr>
@@ -861,13 +919,20 @@ export default function OverviewDashboard() {
                   <th className="py-2.5 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wide">
                     الباقة
                   </th>
-                  <th className="py-2.5 px-4 w-10"></th>
+                  <th className="py-2.5 px-4 text-right text-xs font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wide w-32">
+                    إجراءات
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-PowderBlueBorder dark:divide-dark_border">
                 {filteredStudents.length > 0 ? (
                   filteredStudents.map((stu, idx) => (
-                    <StudentRow key={stu._id} student={stu} idx={idx} />
+                    <StudentRow
+                      key={stu._id}
+                      student={stu}
+                      idx={idx}
+                      onOpenHistory={setHistoryStudent}
+                    />
                   ))
                 ) : (
                   <tr>
@@ -908,6 +973,25 @@ export default function OverviewDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          ✅ HISTORY MODALS
+      ══════════════════════════════════════════ */}
+      {historyInstructor && (
+        <InstructorHistoryModal
+          instructorId={historyInstructor._id}
+          instructorName={historyInstructor.name}
+          onClose={() => setHistoryInstructor(null)}
+        />
+      )}
+
+      {historyStudent && (
+        <StudentHistoryModal
+          studentId={historyStudent._id}
+          studentName={historyStudent.name}
+          onClose={() => setHistoryStudent(null)}
+        />
       )}
     </div>
   );
