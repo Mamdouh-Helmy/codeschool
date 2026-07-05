@@ -1,23 +1,17 @@
 // app/api/admin/fix-instructor-hours/route.js
-// ✅ فحص وتصحيح ساعات المدرسين (countTime) في كل Group
+// ⚠️ TEMPORARY SCRIPT — NO AUTH — امسح الملف ده بعد الاستخدام مباشرة
 //
 // GET  -> تقرير فحص فقط (dry-run)، مفيهوش أي تعديل على الداتابيز
 // POST -> يطبق التصحيح فعليًا (body: { groupId?, instructorId? } اختياري للتحديد)
-//
-// المصدر الرسمي للساعات الصحيحة = عدد السيشنات completed الفعلية في الجروب × 2 ساعة
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
 import User from "../../../models/User";
-import { requireAdmin } from "@/utils/authMiddleware";
 
 const SESSION_HOURS = 2;
 
-// =============================================
-// ✅ بناء تقرير الفروقات (مشتركة بين GET و POST)
-// =============================================
 async function buildMismatchReport({ groupId = null, instructorId = null } = {}) {
   const groupQuery = { isDeleted: false };
   if (groupId) groupQuery._id = groupId;
@@ -90,7 +84,7 @@ async function buildMismatchReport({ groupId = null, instructorId = null } = {})
           completedSessions: completedCount,
           storedHours,
           correctHours,
-          diff, // موجب = محسوب زيادة، سالب = محسوب ناقص
+          diff,
         });
       }
     }
@@ -105,14 +99,8 @@ async function buildMismatchReport({ groupId = null, instructorId = null } = {})
   };
 }
 
-// =============================================
-// ✅ GET — تقرير فحص فقط (Dry-run)
-// =============================================
 export async function GET(req) {
   try {
-    const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) return authCheck.response;
-
     await connectDB();
 
     const { searchParams } = new URL(req.url);
@@ -147,14 +135,8 @@ export async function GET(req) {
   }
 }
 
-// =============================================
-// ✅ POST — تطبيق التصحيح فعليًا
-// =============================================
 export async function POST(req) {
   try {
-    const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) return authCheck.response;
-
     await connectDB();
 
     let body = {};
