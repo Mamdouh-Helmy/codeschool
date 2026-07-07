@@ -4319,6 +4319,9 @@ const en = {
     "Once approved, the reschedule will be applied to the selected sessions and this action cannot be undone.",
   "groups.form.errors.scheduleConflict":
     "There is a scheduling conflict. Please choose a different time.",
+  "reschedule.details.stepLaterTitleSingle": "Reschedule Later",
+  "reschedule.details.stepLaterBodySingle":
+    "A reschedule request will be sent to the administrator for review and approval before the change is applied.",
 };
 
 export default en;

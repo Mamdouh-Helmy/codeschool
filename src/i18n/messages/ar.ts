@@ -4435,7 +4435,11 @@ const ar = {
   "reschedule.approve.confirmButton": "تأكيد الموافقة",
   "reschedule.approve.note":
     "بمجرد الموافقة، سيتم تطبيق إعادة الجدولة على الجلسات المحددة ولا يمكن التراجع عن هذا الإجراء.",
-      "groups.form.errors.scheduleConflict": "يوجد تعارض في الجدول الزمني. يرجى اختيار موعد آخر.",
+  "groups.form.errors.scheduleConflict":
+    "يوجد تعارض في الجدول الزمني. يرجى اختيار موعد آخر.",
+  "reschedule.details.stepLaterTitleSingle": "إعادة الجدولة لاحقًا",
+  "reschedule.details.stepLaterBodySingle":
+    "سيتم إرسال طلب إعادة الجدولة إلى المسؤول للمراجعة والموافقة قبل تطبيق التغيير.",
 };
 
 export default ar;

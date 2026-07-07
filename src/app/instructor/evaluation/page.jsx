@@ -1,14 +1,15 @@
 "use client";
 // src/app/instructor/evaluation/page.jsx
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
-  CheckCircle2, X, AlertCircle, Loader2, Send, Eye,
+  CheckCircle2, X, AlertCircle, Loader2, Send,
   ChevronRight, ChevronLeft, CheckCheck, Users, Star,
-  RotateCcw, BookOpen, Info, Phone, User, CreditCard,
-  MessageCircle, PlayCircle, Zap, RefreshCw, ArrowRight,
-  Video, Sparkles, TrendingUp, BarChart3, ClipboardList,
+  RotateCcw, BookOpen, Info, User,
+  Zap, RefreshCw,
+  Video, Sparkles, TrendingUp, BarChart3,
+  Pencil, MessageSquarePlus, Link2, Check,
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
 
@@ -70,6 +71,8 @@ const RATING_CRITERIA = [
   { key: "participation", labelAr: "المشاركة داخل الحصة",    labelEn: "Class Participation" },
 ];
 
+const MAX_COMMENT_LENGTH = 500;
+
 // ─── Star Rating Component ────────────────────────────────────────────────────
 function StarRating({ value, onChange, disabled, size = "md" }) {
   const [hovered, setHovered] = useState(0);
@@ -118,59 +121,30 @@ function AnimatedCounter({ value, duration = 800 }) {
   return <span>{count}</span>;
 }
 
-// ─── Message Preview Modal ────────────────────────────────────────────────────
-// ✅ استقبل moduleTitle و moduleDescription و supervisorName وابعتهم للـ API
-function MessagePreviewModal({
-  student, decision, sessionId, isAr, onClose, onConfirm,
-  ratings, comment, attendanceStatus,
-  moduleTitle, moduleDescription, supervisorName,
-}) {
-  const [loading, setLoading] = useState(true);
-  const [preview, setPreview] = useState(null);
-  const [error, setError] = useState("");
-  const cfg = DECISIONS[decision];
+// ─── Comment Editor Modal (يفتح لما تدوس على تعليق المدرس) ───────────────────
+function CommentEditorModal({ student, decision, initialValue, isAr, onClose, onSave }) {
+  const [value, setValue] = useState(initialValue || "");
+  const textareaRef = useRef(null);
+  const cfg = DECISIONS[decision] || DECISIONS.pass;
   const t = (ar, en) => isAr ? ar : en;
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
+    const id = setTimeout(() => textareaRef.current?.focus(), 150);
+    return () => { document.body.style.overflow = ""; clearTimeout(id); };
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`/api/instructor/sessions/${sessionId}/evaluation`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          // ✅ ضيف المتغيرات الجديدة في الـ request
-          body: JSON.stringify({
-            studentId: student._id,
-            decision,
-            ratings,
-            comment,
-            attendanceStatus,
-            moduleTitle:       moduleTitle       || "",
-            moduleDescription: moduleDescription || "",
-            supervisorName:    supervisorName    || "",
-          }),
-        });
-        const data = await res.json();
-        if (data.success) setPreview(data.data);
-        else setError(data.error || t("فشل تحميل الرسالة", "Failed to load message"));
-      } catch { setError(t("خطأ في الاتصال", "Connection error")); }
-      finally { setLoading(false); }
-    })();
-  }, [student._id, decision, sessionId, ratings, comment, attendanceStatus, moduleTitle, moduleDescription, supervisorName]);
+  const handleKeyDown = (e) => {
+    if (e.key === "Escape") onClose();
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSave(value.trim()); }
+  };
 
-  const lang = preview?.lang || "ar";
-  const msgIsAr = lang === "ar";
+  const remaining = MAX_COMMENT_LENGTH - value.length;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg max-h-[90vh] bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="relative w-full sm:max-w-lg bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-[slideUp_0.25s_ease-out]">
 
         {/* Header */}
         <div className="relative p-5 overflow-hidden flex-shrink-0"
@@ -180,92 +154,38 @@ function MessagePreviewModal({
           <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
           <div className="relative z-10 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center flex-shrink-0 shadow-lg">
-              <MessageCircle className="w-5 h-5 text-white" />
+              <MessageSquarePlus className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-black text-white">{t("معاينة رسالة التقييم", "Evaluation Message Preview")}</p>
-              <p className="text-xs text-white/70 truncate">{student.name} · {isAr ? cfg.ar : cfg.en}</p>
+              <p className="text-sm font-black text-white">{t("تعليق المدرس", "Instructor Comment")}</p>
+              <p className="text-xs text-white/70 truncate">{student?.name}</p>
             </div>
-            <div className="flex items-center gap-2">
-              {preview && (
-                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/20 text-white border border-white/20">
-                  {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
-                </span>
-              )}
-              <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all">
-                <X className="w-4 h-4 text-white" />
-              </button>
-            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all flex-shrink-0">
+              <X className="w-4 h-4 text-white" />
+            </button>
           </div>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {loading && (
-            <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
-                style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
-                <Loader2 className="w-7 h-7 text-white animate-spin" />
-              </div>
-              <p className="text-sm text-gray-400 dark:text-[#8b949e]">{t("جاري تحميل الرسالة...", "Loading message...")}</p>
-            </div>
-          )}
-          {error && (
-            <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-200 dark:border-red-800/40">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-            </div>
-          )}
-          {!loading && !error && preview && (
-            <>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d]">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm"
-                  style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }}>
-                  <User className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-gray-700 dark:text-[#c9d1d9]">
-                    {t("إلى: ولي الأمر", "To: Guardian")} — {preview.guardianName || preview.guardianPhone}
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-[#dcf8c6] dark:bg-[#1a3a2a] rounded-2xl rounded-tl-sm p-4 shadow-sm border border-[#c5e8a3] dark:border-[#2d5a3d]">
-                <p className="text-[13px] text-gray-800 dark:text-[#d1fae5] leading-relaxed whitespace-pre-wrap font-medium" dir={msgIsAr ? "rtl" : "ltr"}>
-                  {preview.content}
-                </p>
-                <div className="flex items-center justify-end gap-1 mt-2 opacity-60">
-                  <span className="text-[10px] text-gray-500">WhatsApp</span>
-                  <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
-                </div>
-              </div>
-
-              {/* ✅ عرض المتغيرات المستخدمة لو موجودة */}
-              {(moduleTitle || supervisorName) && (
-                <div className="flex flex-col gap-1.5 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d]">
-                  {moduleTitle && (
-                    <p className="text-[11px] text-gray-500 dark:text-[#6e7681]">
-                      📚 {t("الموديول:", "Module:")} <span className="font-bold text-gray-700 dark:text-[#c9d1d9]">{moduleTitle}</span>
-                    </p>
-                  )}
-                  {supervisorName && (
-                    <p className="text-[11px] text-gray-500 dark:text-[#6e7681]">
-                      👨‍🏫 {t("المشرف:", "Supervisor:")} <span className="font-bold text-gray-700 dark:text-[#c9d1d9]">{supervisorName}</span>
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {preview.isFallback && (
-                <div className="flex items-center gap-2 p-2.5 bg-[#feaf0010] dark:bg-[#feaf0015] rounded-xl border border-[#feaf0040]">
-                  <Info className="w-3.5 h-3.5 text-[#f67d00] flex-shrink-0" />
-                  <p className="text-xs text-[#f67d00]">
-                    {t("قالب افتراضي — لا يوجد قالب مخصص في الداتابيز", "Default template — no custom template in DB")}
-                  </p>
-                </div>
-              )}
-            </>
-          )}
+        <div className="p-4">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value.slice(0, MAX_COMMENT_LENGTH))}
+            onKeyDown={handleKeyDown}
+            rows={7}
+            placeholder={t("اكتب تعليقك عن أداء الطالب هنا...", "Write your comment about the student's performance...")}
+            dir={isAr ? "rtl" : "ltr"}
+            className="w-full text-sm rounded-2xl border-2 px-4 py-3.5 resize-none outline-none transition-all bg-gray-50 dark:bg-[#21262d] text-gray-800 dark:text-[#e6edf3] placeholder-gray-400 font-medium leading-relaxed border-gray-100 dark:border-[#30363d] focus:border-[#ff670060]"
+          />
+          <div className="flex items-center justify-between mt-2 px-1">
+            <span className="text-[11px] text-gray-400 dark:text-[#6e7681]">
+              {t("Ctrl/Cmd + Enter للحفظ السريع", "Ctrl/Cmd + Enter to save quickly")}
+            </span>
+            <span className={`text-[11px] font-bold ${remaining < 30 ? "text-[#ff6437]" : "text-gray-400 dark:text-[#6e7681]"}`}>
+              {value.length}/{MAX_COMMENT_LENGTH}
+            </span>
+          </div>
         </div>
 
         {/* Footer */}
@@ -275,25 +195,27 @@ function MessagePreviewModal({
             {t("إلغاء", "Cancel")}
           </button>
           <button
-            onClick={() => onConfirm(student._id, decision)}
-            disabled={loading || !!error}
-            className="flex-1 py-3 rounded-xl text-sm font-black text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => onSave(value.trim())}
+            className="flex-1 py-3 rounded-xl text-sm font-black text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
             style={{ background: `linear-gradient(135deg, ${cfg.solidColor}, ${cfg.solidTo})` }}>
-            <Send className="w-4 h-4" />
-            {t("تأكيد القرار", "Confirm Decision")}
+            <Check className="w-4 h-4" />
+            {t("حفظ التعليق", "Save Comment")}
           </button>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes slideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      `}</style>
     </div>
   );
 }
 
 // ─── Student Eval Card ────────────────────────────────────────────────────────
 function StudentEvalCard({
-  student, decision, onSetDecision, onPreview, submitting,
-  recordingLink, onRecordingLinkChange,
+  student, decision, onSetDecision, submitting,
   ratings, onRatingChange,
-  comment, onCommentChange,
+  comment, onOpenComment,
   isAr,
 }) {
   const cfg = decision ? DECISIONS[decision] : null;
@@ -389,31 +311,23 @@ function StudentEvalCard({
           </div>
         )}
 
-        {/* تعليق المدرس */}
+        {/* تعليق المدرس — يفتح مودال واسع بدل ما يكتب في مكان ضيق */}
         {cfg && (
-          <div className="mt-2.5">
-            <textarea
-              value={comment || ""}
-              onChange={(e) => onCommentChange(student._id, e.target.value)}
-              disabled={submitting}
-              rows={2}
-              placeholder={t("تعليق المدرس (اختياري)...", "Instructor comment (optional)...")}
-              dir={isAr ? "rtl" : "ltr"}
-              className={`w-full text-xs rounded-xl border px-3 py-2.5 resize-none outline-none transition-all bg-gray-50 dark:bg-[#21262d] text-gray-700 dark:text-[#c9d1d9] placeholder-gray-400 font-medium leading-relaxed
-                ${comment?.trim()
-                  ? "border-[#004d5940] dark:border-[#ff670040] bg-[#004d5905] dark:bg-[#ff670005]"
-                  : "border-gray-100 dark:border-[#30363d] focus:border-[#ff670040]"}`}
-            />
-          </div>
-        )}
-
-        {/* Preview button */}
-        {cfg && (student.credits ?? 0) > 0 && (
           <button
-            onClick={(e) => { e.stopPropagation(); onPreview(student, decision); }}
-            className="mt-2.5 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold bg-gray-50 dark:bg-[#21262d] text-gray-600 dark:text-[#8b949e] border border-gray-100 dark:border-[#30363d] hover:border-[#ff670040] hover:text-[#ff6700] hover:bg-[#ff670008] transition-all group/preview">
-            <Eye className="w-3.5 h-3.5 group-hover/preview:scale-110 transition-transform" />
-            {t("معاينة رسالة ولي الأمر", "Preview Parent Message")}
+            type="button"
+            disabled={submitting}
+            onClick={() => onOpenComment(student, decision)}
+            className={`mt-2.5 w-full text-start rounded-xl border px-3 py-2.5 transition-all group/comment disabled:opacity-50
+              ${comment?.trim()
+                ? "border-[#004d5940] dark:border-[#ff670040] bg-[#004d5905] dark:bg-[#ff670005]"
+                : "border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#21262d] hover:border-[#ff670040]"}`}
+          >
+            <div className="flex items-start gap-2">
+              <Pencil className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${comment?.trim() ? "text-[#ff6700]" : "text-gray-400"}`} />
+              <p className={`text-xs leading-relaxed line-clamp-2 flex-1 ${comment?.trim() ? "text-gray-700 dark:text-[#c9d1d9] font-medium" : "text-gray-400 dark:text-[#6e7681]"}`}>
+                {comment?.trim() || t("اضغط لإضافة تعليق المدرس (اختياري)...", "Tap to add instructor comment (optional)...")}
+              </p>
+            </div>
           </button>
         )}
 
@@ -422,38 +336,60 @@ function StudentEvalCard({
             🔕 {t("لن تُرسل رسالة — رصيد صفر", "No message — zero credits")}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
 
-        {/* Recording link input */}
-        {cfg && (student.credits ?? 0) > 0 && (
-          <div className="mt-2.5">
-            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all
-              ${recordingLink
-                ? "border-[#004d5940] dark:border-[#ff670040] bg-[#004d5905] dark:bg-[#ff670005]"
-                : "border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#21262d]"}`}>
-              <Video className={`w-3.5 h-3.5 flex-shrink-0 ${recordingLink ? "text-[#ff6700]" : "text-gray-400"}`} />
-              <input
-                type="url"
-                value={recordingLink || ""}
-                onChange={(e) => onRecordingLinkChange(student._id, e.target.value)}
-                disabled={submitting}
-                placeholder={t("رابط التسجيل (اختياري)", "Recording link (optional)")}
-                dir="ltr"
-                className="flex-1 bg-transparent text-xs text-gray-700 dark:text-[#c9d1d9] placeholder-gray-400 outline-none min-w-0 font-mono"
-              />
-              {recordingLink && (
-                <button
-                  onClick={() => onRecordingLinkChange(student._id, "")}
-                  className="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-[#ff6437] flex-shrink-0">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-            {recordingLink && (
-              <p className="text-[10px] mt-1 px-1" style={{ color: "#ff6700" }}>
-                ✓ {t("سيُرسَل اللينك كرسالة منفصلة بعد رسالة التقييم", "Link will be sent separately after evaluation message")}
-              </p>
-            )}
-          </div>
+// ─── Global Recording Link Card (لينك واحد بيتبعت لكل الطلاب) ────────────────
+function GlobalRecordingLinkCard({ value, onChange, isAr, disabled }) {
+  const t = (ar, en) => isAr ? ar : en;
+  const hasValue = !!value?.trim();
+
+  return (
+    <div className={`bg-white dark:bg-[#161b22] rounded-2xl border p-4 shadow-sm transition-all
+      ${hasValue ? "border-[#004d5940] dark:border-[#ff670040]" : "border-gray-100 dark:border-[#30363d]"}`}>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }}>
+          <Link2 className="w-4 h-4 text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
+            {t("لينك تسجيل الجلسة", "Session Recording Link")}
+          </p>
+          <p className="text-[11px] text-gray-400 dark:text-[#6e7681]">
+            {t("لينك واحد بيتبعت لكل الطلاب المقيَّمين تلقائياً", "One link sent automatically to all evaluated students")}
+          </p>
+        </div>
+        {hasValue && (
+          <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-[#004d5910] dark:bg-[#ff670015] text-[#004d59] dark:text-[#ff6700] border border-[#004d5930] dark:border-[#ff670030] flex-shrink-0">
+            {t("جاهز", "Ready")}
+          </span>
+        )}
+      </div>
+
+      <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all
+        ${hasValue
+          ? "border-[#004d5940] dark:border-[#ff670040] bg-[#004d5905] dark:bg-[#ff670005]"
+          : "border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#21262d]"}`}>
+        <Video className={`w-4 h-4 flex-shrink-0 ${hasValue ? "text-[#ff6700]" : "text-gray-400"}`} />
+        <input
+          type="url"
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          placeholder={t("الصق لينك التسجيل هنا...", "Paste recording link here...")}
+          dir="ltr"
+          className="flex-1 bg-transparent text-sm text-gray-700 dark:text-[#c9d1d9] placeholder-gray-400 outline-none min-w-0 font-mono"
+        />
+        {hasValue && (
+          <button
+            onClick={() => onChange("")}
+            disabled={disabled}
+            className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-[#ff6437] flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
         )}
       </div>
     </div>
@@ -490,14 +426,13 @@ export default function InstructorEvaluationPage() {
   const [sessionData, setSessionData]   = useState(null);
   const [students, setStudents]         = useState([]);
   const [decisions, setDecisions]       = useState({});
-  const [previewModal, setPreviewModal] = useState(null);
-  const [recordingLinks, setRecordingLinks] = useState({});
+  const [commentModal, setCommentModal] = useState(null); // { student, decision }
+  const [recordingLink, setRecordingLink] = useState(""); // لينك واحد للكل
   const [submitSummary, setSubmitSummary]   = useState(null);
   const [animateProgress, setAnimateProgress] = useState(false);
   const [ratings, setRatings]   = useState({});
   const [comments, setComments] = useState({});
 
-  // ✅ state للمتغيرات من DB
   const [moduleTitle, setModuleTitle]           = useState("");
   const [moduleDescription, setModuleDescription] = useState("");
   const [supervisorName, setSupervisorName]     = useState("");
@@ -512,10 +447,11 @@ export default function InstructorEvaluationPage() {
         setSessionData(data.data.session);
         setStudents(data.data.students || []);
 
-        // ✅ استخرج المتغيرات من الـ response
         setModuleTitle(data.data.session?.moduleTitle       || "");
         setModuleDescription(data.data.session?.moduleDescription || "");
         setSupervisorName(data.data.supervisorName           || "");
+
+        setRecordingLink(data.data.session?.recordingLink || "");
 
         const existingDecisions = {};
         const existingRatings   = {};
@@ -561,22 +497,16 @@ export default function InstructorEvaluationPage() {
     }));
   }, []);
 
-  const handleCommentChange = useCallback((studentId, value) => {
-    setComments((prev) => ({ ...prev, [studentId]: value }));
+  const handleOpenComment = useCallback((student, decision) => {
+    setCommentModal({ student, decision });
   }, []);
 
-  const handlePreview = useCallback((student, decision) => {
-    setPreviewModal({ student, decision });
-  }, []);
-
-  const handleRecordingLinkChange = useCallback((studentId, url) => {
-    setRecordingLinks((prev) => ({ ...prev, [studentId]: url }));
-  }, []);
-
-  const handleConfirmFromModal = useCallback((studentId, decision) => {
-    setDecisions((prev) => ({ ...prev, [studentId]: decision }));
-    setPreviewModal(null);
-  }, []);
+  const handleSaveComment = useCallback((value) => {
+    if (commentModal?.student?._id) {
+      setComments((prev) => ({ ...prev, [commentModal.student._id]: value }));
+    }
+    setCommentModal(null);
+  }, [commentModal]);
 
   const handleSubmit = async () => {
     const filled = Object.keys(decisions);
@@ -586,7 +516,7 @@ export default function InstructorEvaluationPage() {
       const evaluations = filled.map((studentId) => ({
         studentId,
         decision:      decisions[studentId],
-        recordingLink: recordingLinks[studentId] || null,
+        recordingLink: recordingLink?.trim() || null,
         ratings:       ratings[studentId] || { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 },
         comment:       comments[studentId] || '',
       }));
@@ -696,7 +626,6 @@ export default function InstructorEvaluationPage() {
                   </h1>
                   <p className="text-xs text-gray-400 dark:text-[#6e7681] truncate">
                     {sessionData.group?.name}
-                    {/* ✅ عرض اسم الموديول في الـ header لو موجود */}
                     {moduleTitle && <span className="mx-1 opacity-50">·</span>}
                     {moduleTitle && <span className="opacity-70">{moduleTitle}</span>}
                   </p>
@@ -745,13 +674,11 @@ export default function InstructorEvaluationPage() {
                   </div>
                   <h2 className="text-xl font-black text-white mb-1 truncate">{sessionData.title}</h2>
                   <p className="text-white/70 text-sm truncate">{sessionData.group?.name}</p>
-                  {/* ✅ عرض moduleTitle في الـ hero */}
                   {moduleTitle && (
                     <p className="text-white/50 text-xs mt-1 truncate">
                       📚 {moduleTitle}
                     </p>
                   )}
-                  {/* ✅ عرض supervisorName في الـ hero */}
                   {supervisorName && (
                     <p className="text-white/50 text-xs truncate">
                       👨‍🏫 {supervisorName}
@@ -852,23 +779,13 @@ export default function InstructorEvaluationPage() {
               </div>
             </div>
 
-            {/* Recording link notice */}
-            {sessionData?.recordingLink && (
-              <div className="flex items-center gap-3 p-4 bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] shadow-sm">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
-                  style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }}>
-                  <PlayCircle className="w-5 h-5 text-white" />
-                </div>
-                <p className="text-xs text-gray-600 dark:text-[#8b949e] flex-1 leading-relaxed">
-                  {t("رابط التسجيل سيُضاف تلقائياً في كل رسالة تلخيص أداء", "Recording link will be added automatically to each message")}
-                </p>
-                <a href={sessionData.recordingLink} target="_blank" rel="noreferrer"
-                  className="text-xs font-bold hover:underline flex-shrink-0 px-2 py-1 rounded-lg transition-all"
-                  style={{ color: "#ff6700" }}>
-                  {t("معاينة", "Preview")}
-                </a>
-              </div>
-            )}
+            {/* Global Recording Link — لينك واحد بيتبعت لكل الطلاب */}
+            <GlobalRecordingLinkCard
+              value={recordingLink}
+              onChange={setRecordingLink}
+              isAr={isAr}
+              disabled={submitting}
+            />
 
             {/* Student cards grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -878,14 +795,11 @@ export default function InstructorEvaluationPage() {
                   student={student}
                   decision={decisions[student._id] || null}
                   onSetDecision={handleSetDecision}
-                  onPreview={handlePreview}
                   submitting={submitting}
-                  recordingLink={recordingLinks[student._id] || ""}
-                  onRecordingLinkChange={handleRecordingLinkChange}
                   ratings={ratings[student._id] || { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 }}
                   onRatingChange={handleRatingChange}
                   comment={comments[student._id] || ""}
-                  onCommentChange={handleCommentChange}
+                  onOpenComment={handleOpenComment}
                   isAr={isAr}
                 />
               ))}
@@ -958,21 +872,15 @@ export default function InstructorEvaluationPage() {
         </div>
       )}
 
-      {/* ✅ Preview Modal — مع تمرير المتغيرات الجديدة */}
-      {previewModal && (
-        <MessagePreviewModal
-          student={previewModal.student}
-          decision={previewModal.decision}
-          sessionId={sessionId}
+      {/* Comment Editor Modal */}
+      {commentModal && (
+        <CommentEditorModal
+          student={commentModal.student}
+          decision={commentModal.decision}
+          initialValue={comments[commentModal.student._id] || ""}
           isAr={isAr}
-          onClose={() => setPreviewModal(null)}
-          onConfirm={handleConfirmFromModal}
-          ratings={ratings[previewModal.student._id] || { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 }}
-          comment={comments[previewModal.student._id] || ""}
-          attendanceStatus={previewModal.student.attendanceStatus}
-          moduleTitle={moduleTitle}
-          moduleDescription={moduleDescription}
-          supervisorName={supervisorName}
+          onClose={() => setCommentModal(null)}
+          onSave={handleSaveComment}
         />
       )}
 
