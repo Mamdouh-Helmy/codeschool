@@ -180,12 +180,20 @@ export async function GET(req) {
         !attendanceAlreadyTaken &&
         !!session.meetingLink;
 
-      // ── 🔐 SECURITY: Can user view FULL details (link + attendance)? ────
+      // ── 🔐 SECURITY: Can user view FULL details (link + credentials + new attendance)? ──
       // True only if the session is effectively "today" (real date today, or
-      // an approved early-access grant) AND it has a meeting link AND it's
-      // still within its active window AND attendance hasn't been taken yet.
+      // an approved early-access grant) AND it's still within its active
+      // window AND attendance hasn't been taken yet. هنا لينك الميتنج
+      // والباسورد لازم يفضلوا مربوطين بـ "اليوم" — ده أمان حقيقي.
       const canViewDetails =
         isEffectivelyToday && sessionStillActive && !attendanceAlreadyTaken;
+
+      // 🆕 ── مراجعة إحصائيات حضور سيشن خلصت بالفعل — مالهاش علاقة بـ "اليوم" ──
+      // ده مختلف تمامًا عن canViewDetails: هنا مفيش لينك ميتنج ولا كريدنشيلز
+      // بنبعتهم، بس المدرس المفروض يقدر يراجع مين حضر ومين غاب في أي سيشن
+      // completed اتسجل عليها حضور، مهما كان تاريخها.
+      const canViewAttendanceHistory =
+        session.status === "completed" && attendanceAlreadyTaken;
 
       // ── 🔓 Partial details (content/lessons only, no link/attendance) ───
       const wasApprovedWithNext =
@@ -222,17 +230,10 @@ export async function GET(req) {
         : null;
 
       // ── 🔐 SECURITY: Sensitive data (link + credentials + roster) ────────
-      // ✅ الـ FIX: attendanceTaken بيتبعت دايمًا بقيمته الحقيقية من DB
-      //            بدل ما كان بيتبعت بـ false لو canViewDetails = false
-      //
-      // الـ sensitive data الحقيقية اللي محتاجة حماية:
-      //   - meetingLink      → رابط الاجتماع
-      //   - meetingCredentials → يوزرنيم وباسورد
-      //   - attendance array → بيانات الطلاب
-      //
-      // الـ attendanceTaken مجرد boolean flag — مش sensitive ومحتاجه
-      // في أي مكان عشان نعرف إيه حالة الجلسة (completed + needsAttendance).
-
+      // meetingLink / meetingCredentials → لازم يفضلوا مقصورين على اليوم فقط.
+      // attendance → ليها مصدرين دلوقتي:
+      //   1) canViewDetails       → سيشن اليوم (أو early access) قبل ما ياخد حضور
+      //   2) canViewAttendanceHistory → سيشن completed خلصت واتاخد فيها حضور بالفعل
       let meetingCredentials = null;
       let attendance = null;
       let meetingLink = null;
@@ -253,14 +254,13 @@ export async function GET(req) {
             }
           : null;
 
-        // Only send attendance data for today's (or early-access) sessions
         attendance = session.attendance || [];
         meetingLink = session.meetingLink || null;
         meetingPlatform = session.meetingPlatform || null;
+      } else if (canViewAttendanceHistory) {
+        // 🆕 مراجعة بس — بيانات الحضور من غير أي لينك أو كريدنشيلز
+        attendance = session.attendance || [];
       }
-      // ملاحظة: شيلنا الـ else if (canViewPartialDetails) اللي كان بيبعت
-      // attendanceTaken فقط في الـ partial mode — دلوقتي attendanceTaken
-      // بيتبعت دايمًا بقيمته الحقيقية بغض النظر عن الـ mode
 
       return {
         _id: session._id,
@@ -276,7 +276,7 @@ export async function GET(req) {
         lessons,
         // ✅ دايمًا بقيمته الحقيقية — مش sensitive data
         attendanceTaken: attendanceAlreadyTaken,
-        // 🔐 Sensitive: null إلا لو canViewDetails
+        // 🔐 Sensitive: null إلا لو canViewDetails أو canViewAttendanceHistory
         attendance,
         meetingLink,
         meetingPlatform,
@@ -290,6 +290,7 @@ export async function GET(req) {
         // 🔐 Access flags for frontend
         canViewDetails,
         canViewPartialDetails,
+        canViewAttendanceHistory,
         hasActiveEarlyAccess,
         // 🔄 Reschedule request state
         pendingReschedule: session.pendingReschedule
