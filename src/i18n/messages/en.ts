@@ -4330,6 +4330,9 @@ const en = {
   "reschedule.focus.banner":
     "You have rescheduled sessions that need your attention.",
   "reschedule.focus.viewAll": "View All",
+  "reschedule.focus.notFoundTitle": "Focus session not found",
+  "reschedule.focus.notFoundDescription":
+    "The requested focus session could not be found. It may have been removed or is no longer available.",
 };
 
 export default en;

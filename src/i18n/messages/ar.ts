@@ -4447,6 +4447,9 @@ const ar = {
   "notifications.new": "جديد",
   "reschedule.focus.banner": "لديك جلسات تمت إعادة جدولتها وتحتاج إلى انتباهك.",
   "reschedule.focus.viewAll": "عرض الكل",
+  "reschedule.focus.notFoundTitle": "لم يتم العثور على جلسة التركيز",
+  "reschedule.focus.notFoundDescription":
+    "تعذر العثور على جلسة التركيز المطلوبة. ربما تم حذفها أو لم تعد متاحة.",
 };
 
 export default ar;
