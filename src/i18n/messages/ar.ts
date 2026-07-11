@@ -4445,6 +4445,8 @@ const ar = {
   "dashboard.search": "بحث",
   "notifications.viewAll": "عرض الكل",
   "notifications.new": "جديد",
+  "reschedule.focus.banner": "لديك جلسات تمت إعادة جدولتها وتحتاج إلى انتباهك.",
+  "reschedule.focus.viewAll": "عرض الكل",
 };
 
 export default ar;

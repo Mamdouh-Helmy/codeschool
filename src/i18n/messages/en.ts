@@ -4327,6 +4327,9 @@ const en = {
   "dashboard.search": "Search",
   "notifications.viewAll": "View All",
   "notifications.new": "New",
+  "reschedule.focus.banner":
+    "You have rescheduled sessions that need your attention.",
+  "reschedule.focus.viewAll": "View All",
 };
 
 export default en;
