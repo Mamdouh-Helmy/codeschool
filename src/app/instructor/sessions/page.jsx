@@ -923,6 +923,7 @@ function SessionModal({ session, onClose, isAr }) {
 }
 
 // ─── Session Row ──────────────────────────────────────────────────────────────
+// ─── Session Row ──────────────────────────────────────────────────────────────
 function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   const cfg = STATUS_CFG[session.status] || STATUS_CFG.scheduled;
   const isCompleted = session.status === "completed";
@@ -936,7 +937,13 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   // ── Determine clickability: full access, partial preview, or needs a request ──
   const canOpenFull = session.canViewDetails;
   const canOpenPartial = session.canViewPartialDetails;
-  const isClickable = canOpenFull || canOpenPartial;
+  // 🆕 السيشن المكتملة أو الملغاة تتفتح عادي دايمًا — مفيش معنى تطلب فتح
+  // سيشن خلصت أو اتلغت أصلاً (الباك إند برضو برفض طلب الترحيل عليها)
+  const isClickable =
+    canOpenFull ||
+    canOpenPartial ||
+    session.status === "completed" ||
+    session.status === "cancelled";
   const hasPendingReq = session.pendingReschedule?.status === "pending";
 
   const iconColors = {
