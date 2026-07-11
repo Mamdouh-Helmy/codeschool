@@ -793,6 +793,14 @@ function SessionModal({ session, onClose, isAr }) {
             </Link>
           )}
 
+          {/* 🆕 سيشن خلص معادها (completed) بس الحضور لسه ما اتسجلش — بغض النظر عن isActuallyToday */}
+          {!isPartial && session.status === "completed" && !session.attendanceTaken && (
+            <Link href={`/instructor/attendance?session=${session._id}`}
+              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+              <ClipboardList className="w-5 h-5" />{t("تسجيل الحضور", "Take Attendance")}
+            </Link>
+          )}
+
           {isCompleted && session.recordingLink && (
             <a href={session.recordingLink} target="_blank" rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border border-[#004d59]/30 dark:border-[#004d59]/30 bg-gradient-to-r from-[#004d59]/10 to-transparent dark:from-[#004d59]/10 text-[#004d59] dark:text-teal-400 hover:from-[#004d59]/15 transition-all">
@@ -856,8 +864,8 @@ function SessionModal({ session, onClose, isAr }) {
                   <div key={i} className="flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50/60 dark:hover:bg-[#0d1117]/30 transition-colors">
                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5 shadow-sm
                       ${isCompleted
-                          ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
-                          : "bg-gradient-to-br from-[#ff6700]/20 to-[#feaf00]/20 text-[#ff6700]"}`}>
+                        ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
+                        : "bg-gradient-to-br from-[#ff6700]/20 to-[#feaf00]/20 text-[#ff6700]"}`}>
                       {i + 1}
                     </div>
                     <div className="flex-1 min-w-0">

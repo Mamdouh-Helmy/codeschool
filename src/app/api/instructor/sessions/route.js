@@ -17,14 +17,18 @@ export async function GET(req) {
     if (!user) {
       return NextResponse.json(
         { success: false, message: "غير مصرح بالوصول", code: "UNAUTHORIZED" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     if (user.role !== "instructor" && user.role !== "admin") {
       return NextResponse.json(
-        { success: false, message: "هذه الصفحة للمدرسين فقط", code: "FORBIDDEN" },
-        { status: 403 }
+        {
+          success: false,
+          message: "هذه الصفحة للمدرسين فقط",
+          code: "FORBIDDEN",
+        },
+        { status: 403 },
       );
     }
 
@@ -36,37 +40,49 @@ export async function GET(req) {
       isDeleted: false,
       status: { $in: ["active", "completed", "draft"] },
     })
-      .populate({ path: "courseId", select: "title level curriculum description grade subject duration" })
+      .populate({
+        path: "courseId",
+        select: "title level curriculum description grade subject duration",
+      })
       .select("_id name code courseId")
       .lean();
 
-    const groupIds = groups.map(g => g._id);
+    const groupIds = groups.map((g) => g._id);
 
     if (groupIds.length === 0) {
       return NextResponse.json({
         success: true,
         data: {
           sessions: [],
-          stats: { total: 0, completed: 0, scheduled: 0, cancelled: 0, postponed: 0, needsAttendance: 0 },
+          stats: {
+            total: 0,
+            completed: 0,
+            scheduled: 0,
+            cancelled: 0,
+            postponed: 0,
+            needsAttendance: 0,
+          },
         },
       });
     }
 
     // Map: groupId → curriculum & group info + full course data
     const groupMap = {};
-    groups.forEach(g => {
+    groups.forEach((g) => {
       groupMap[g._id.toString()] = {
         name: g.name,
         code: g.code,
         curriculum: g.courseId?.curriculum || [],
-        course: g.courseId ? {
-          title: g.courseId.title || "",
-          description: g.courseId.description || "",
-          level: g.courseId.level || "",
-          grade: g.courseId.grade || "",
-          subject: g.courseId.subject || "",
-          duration: g.courseId.duration || "",
-        } : null,
+        course: g.courseId
+          ? {
+              title: g.courseId.title || "",
+              description: g.courseId.description || "",
+              level: g.courseId.level || "",
+              grade: g.courseId.grade || "",
+              subject: g.courseId.subject || "",
+              duration: g.courseId.duration || "",
+            }
+          : null,
       };
     });
 
@@ -82,8 +98,8 @@ export async function GET(req) {
       .populate({ path: "meetingLinkId", select: "credentials platform name" })
       .select(
         "title description status scheduledDate startTime endTime moduleIndex sessionNumber " +
-        "lessonIndexes attendanceTaken attendance meetingLink meetingPlatform meetingCredentials " +
-        "meetingLinkId recordingLink materials instructorNotes groupId pendingReschedule earlyAccess"
+          "lessonIndexes attendanceTaken attendance meetingLink meetingPlatform meetingCredentials " +
+          "meetingLinkId recordingLink materials instructorNotes groupId pendingReschedule earlyAccess",
       )
       .sort({ scheduledDate: 1, startTime: 1 })
       .limit(limit)
@@ -96,26 +112,31 @@ export async function GET(req) {
     const todayEnd = new Date(now);
     todayEnd.setHours(23, 59, 59, 999);
 
-    const processedSessions = allSessions.map(session => {
-      const gid = session.groupId?._id?.toString() || session.groupId?.toString();
+    const processedSessions = allSessions.map((session) => {
+      const gid =
+        session.groupId?._id?.toString() || session.groupId?.toString();
       const grp = groupMap[gid] || {};
       const curriculum = grp.curriculum || [];
       const moduleData = curriculum[session.moduleIndex] || {};
 
       // ── Lessons from curriculum (by sessionNumber) ─────────────────────
-      const bySessionNum = (moduleData.lessons || []).filter(l => l.sessionNumber === session.sessionNumber);
-      const byIndexes = (moduleData.lessons || []).filter(l => (session.lessonIndexes || []).includes(l.order - 1));
+      const bySessionNum = (moduleData.lessons || []).filter(
+        (l) => l.sessionNumber === session.sessionNumber,
+      );
+      const byIndexes = (moduleData.lessons || []).filter((l) =>
+        (session.lessonIndexes || []).includes(l.order - 1),
+      );
       const rawLessons = bySessionNum.length > 0 ? bySessionNum : byIndexes;
 
       // Deduplicate lessons by title
       const seenTitles = new Set();
       const lessons = rawLessons
-        .filter(l => {
+        .filter((l) => {
           if (seenTitles.has(l.title)) return false;
           seenTitles.add(l.title);
           return true;
         })
-        .map(l => ({
+        .map((l) => ({
           title: l.title,
           description: l.description || "",
           duration: l.duration || "",
@@ -137,11 +158,15 @@ export async function GET(req) {
       const isEffectivelyToday = isToday || hasActiveEarlyAccess;
 
       // ── Show join button? ──────────────────────────────────────────────
-      const [endH = 23, endM = 59] = (session.endTime || "23:59").split(":").map(Number);
+      const [endH = 23, endM = 59] = (session.endTime || "23:59")
+        .split(":")
+        .map(Number);
       const sessionEndTime = new Date(sessionDate);
       sessionEndTime.setHours(endH, endM, 0, 0);
 
-      const sessionStillActive = hasActiveEarlyAccess ? true : sessionEndTime > now;
+      const sessionStillActive = hasActiveEarlyAccess
+        ? true
+        : sessionEndTime > now;
 
       // ✅ الـ attendanceTaken دايمًا بياخد قيمته الحقيقية من DB
       // مش sensitive data — مجرد flag بيقول "الحضور اتسجل"
@@ -160,10 +185,7 @@ export async function GET(req) {
       // an approved early-access grant) AND it has a meeting link AND it's
       // still within its active window AND attendance hasn't been taken yet.
       const canViewDetails =
-        isEffectivelyToday &&
-        !!session.meetingLink &&
-        sessionStillActive &&
-        !attendanceAlreadyTaken;
+        isEffectivelyToday && sessionStillActive && !attendanceAlreadyTaken;
 
       // ── 🔓 Partial details (content/lessons only, no link/attendance) ───
       const wasApprovedWithNext =
@@ -174,28 +196,30 @@ export async function GET(req) {
 
       // ── Session description from curriculum ────────────────────────────
       const sessionPresentationData = (moduleData.sessions || []).find(
-        s => s.sessionNumber === session.sessionNumber
+        (s) => s.sessionNumber === session.sessionNumber,
       );
 
       const sessionDescription = session.description || "";
 
       // ── Build courseInfo payload ───────────────────────────────────────
-      const courseInfo = grp.course ? {
-        title: grp.course.title,
-        description: grp.course.description,
-        level: grp.course.level,
-        grade: grp.course.grade,
-        subject: grp.course.subject,
-        duration: grp.course.duration,
-        moduleData: {
-          title: moduleData.title || "",
-          description: moduleData.description || "",
-          blogBodyAr: moduleData.blogBodyAr || "",
-          blogBodyEn: moduleData.blogBodyEn || "",
-          presentationUrl: sessionPresentationData?.presentationUrl || "",
-          projects: moduleData.projects || [],
-        },
-      } : null;
+      const courseInfo = grp.course
+        ? {
+            title: grp.course.title,
+            description: grp.course.description,
+            level: grp.course.level,
+            grade: grp.course.grade,
+            subject: grp.course.subject,
+            duration: grp.course.duration,
+            moduleData: {
+              title: moduleData.title || "",
+              description: moduleData.description || "",
+              blogBodyAr: moduleData.blogBodyAr || "",
+              blogBodyEn: moduleData.blogBodyEn || "",
+              presentationUrl: sessionPresentationData?.presentationUrl || "",
+              projects: moduleData.projects || [],
+            },
+          }
+        : null;
 
       // ── 🔐 SECURITY: Sensitive data (link + credentials + roster) ────────
       // ✅ الـ FIX: attendanceTaken بيتبعت دايمًا بقيمته الحقيقية من DB
@@ -216,14 +240,18 @@ export async function GET(req) {
 
       if (canViewDetails) {
         // Only send credentials for active sessions
-        const rawCreds = (session.meetingCredentials?.username || session.meetingCredentials?.password)
-          ? session.meetingCredentials
-          : session.meetingLinkId?.credentials || null;
+        const rawCreds =
+          session.meetingCredentials?.username ||
+          session.meetingCredentials?.password
+            ? session.meetingCredentials
+            : session.meetingLinkId?.credentials || null;
 
-        meetingCredentials = rawCreds ? {
-          username: rawCreds.username || null,
-          password: rawCreds.password || null,
-        } : null;
+        meetingCredentials = rawCreds
+          ? {
+              username: rawCreds.username || null,
+              password: rawCreds.password || null,
+            }
+          : null;
 
         // Only send attendance data for today's (or early-access) sessions
         attendance = session.attendance || [];
@@ -269,7 +297,8 @@ export async function GET(req) {
               status: session.pendingReschedule.status,
               viewMode: session.pendingReschedule.viewMode,
               isTrigger:
-                session.pendingReschedule.triggerSessionId?.toString() === session._id.toString(),
+                session.pendingReschedule.triggerSessionId?.toString() ===
+                session._id.toString(),
               oldScheduledDate: session.pendingReschedule.oldScheduledDate,
               newScheduledDate: session.pendingReschedule.newScheduledDate,
               requestedAt: session.pendingReschedule.requestedAt,
@@ -289,11 +318,13 @@ export async function GET(req) {
     const all = processedSessions;
     const stats = {
       total: all.length,
-      completed: all.filter(s => s.status === "completed").length,
-      scheduled: all.filter(s => s.status === "scheduled").length,
-      cancelled: all.filter(s => s.status === "cancelled").length,
-      postponed: all.filter(s => s.status === "postponed").length,
-      needsAttendance: all.filter(s => s.status === "completed" && !s.attendanceTaken).length,
+      completed: all.filter((s) => s.status === "completed").length,
+      scheduled: all.filter((s) => s.status === "scheduled").length,
+      cancelled: all.filter((s) => s.status === "cancelled").length,
+      postponed: all.filter((s) => s.status === "postponed").length,
+      needsAttendance: all.filter(
+        (s) => s.status === "completed" && !s.attendanceTaken,
+      ).length,
     };
 
     return NextResponse.json({
@@ -304,7 +335,7 @@ export async function GET(req) {
     console.error("❌ [Instructor Sessions API] Error:", error);
     return NextResponse.json(
       { success: false, message: "فشل في تحميل الجلسات", error: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
