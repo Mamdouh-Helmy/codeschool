@@ -6,6 +6,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
+import AdminNotificationBell from "@/components/Admin/AdminNotificationBell";
 
 type TopBarProps = {
   onMenuClick: () => void;
@@ -168,16 +169,7 @@ const TopBar = ({
           <ThemeToggler />
 
           {/* Notifications - Adjust size for mobile */}
-          <button
-            type="button"
-            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary dark:border-dark_border dark:text-darktext dark:hover:bg-darkmode"
-            aria-label={
-              t("dashboard.viewNotifications") || "View notifications"
-            }
-          >
-            <Icon icon="ion:notifications-outline" className="h-5 w-5" />
-            <span className={`absolute ${isRTL ? 'left-1.5' : 'right-1.5'} top-1.5 inline-flex h-2.5 w-2.5 rounded-full bg-primary`} />
-          </button>
+          <AdminNotificationBell isRTL={isRTL} t={t} locale={locale} />
 
           {/* User Profile - Compact on mobile */}
           <div className={`flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2 dark:border-dark_border dark:bg-darkmode ${isRTL ? 'flex-row-reverse' : ''}`}>

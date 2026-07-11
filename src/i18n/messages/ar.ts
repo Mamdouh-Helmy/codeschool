@@ -4440,6 +4440,11 @@ const ar = {
   "reschedule.details.stepLaterTitleSingle": "إعادة الجدولة لاحقًا",
   "reschedule.details.stepLaterBodySingle":
     "سيتم إرسال طلب إعادة الجدولة إلى المسؤول للمراجعة والموافقة قبل تطبيق التغيير.",
+  "notifications.rescheduleRequests": "طلبات إعادة الجدولة",
+  "notifications.empty": "لا توجد إشعارات",
+  "dashboard.search": "بحث",
+  "notifications.viewAll": "عرض الكل",
+  "notifications.new": "جديد",
 };
 
 export default ar;

@@ -18,19 +18,25 @@ type SidebarProps = {
   activePath?: string | null;
   isOpen: boolean;
   onClose: () => void;
+  isRTL?: boolean;
 };
 
-const Sidebar = ({ items, activePath, isOpen, onClose }: SidebarProps) => {
+const Sidebar = ({ items, activePath, isOpen, onClose, isRTL = false }: SidebarProps) => {
   const { t } = useI18n();
 
   return (
     <>
       <div
-        className={`fixed inset-y-0 left-0 z-40 w-72 transform border-r border-slate-200 bg-white transition-transform duration-300 ease-in-out dark:border-dark_border dark:bg-darklight lg:static lg:translate-x-0 ${
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        dir={isRTL ? "rtl" : "ltr"}
+        className={`fixed inset-y-0 start-0 z-40 w-72 transform border-e border-slate-200 bg-white transition-transform duration-300 ease-in-out dark:border-dark_border dark:bg-darklight lg:static lg:translate-x-0 ${
+          isOpen
+            ? "translate-x-0"
+            : isRTL
+              ? "translate-x-full lg:translate-x-0"
+              : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 lg:justify-center lg:pt-8">
+        <div className={`flex items-center justify-between px-6 pt-6 pb-4 lg:justify-center lg:pt-8 ${isRTL ? "flex-row-reverse" : ""}`}>
           <div className="text-lg font-semibold text-MidnightNavyText dark:text-white">
             {t('dashboard.adminConsole') || "Admin Console"}
           </div>
@@ -53,13 +59,15 @@ const Sidebar = ({ items, activePath, isOpen, onClose }: SidebarProps) => {
                 key={item.href}
                 href={item.href}
                 className={`group flex items-center justify-between rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200 ${
+                  isRTL ? "flex-row-reverse" : ""
+                } ${
                   isActive
                     ? "bg-primary/10 text-primary "
                     : "text-SlateBlueText hover:bg-slate-100 hover:text-primary dark:text-darktext dark:hover:bg-darkmode"
                 }`}
                 onClick={onClose}
               >
-                <span className="flex items-center gap-3">
+                <span className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
                   <Icon
                     icon={item.icon}
                     className={`h-5 w-5 ${

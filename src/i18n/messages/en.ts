@@ -4322,6 +4322,11 @@ const en = {
   "reschedule.details.stepLaterTitleSingle": "Reschedule Later",
   "reschedule.details.stepLaterBodySingle":
     "A reschedule request will be sent to the administrator for review and approval before the change is applied.",
+  "notifications.rescheduleRequests": "Reschedule Requests",
+  "notifications.empty": "No notifications",
+  "dashboard.search": "Search",
+  "notifications.viewAll": "View All",
+  "notifications.new": "New",
 };
 
 export default en;

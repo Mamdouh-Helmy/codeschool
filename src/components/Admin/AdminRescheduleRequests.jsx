@@ -1,12 +1,13 @@
 "use client";
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import {
     CalendarClock, RefreshCw, CheckCircle, XCircle, Clock,
     Users, Hash, ChevronDown, MoreVertical,
     ArrowRightCircle, SkipForward, Loader2, Inbox, Layers,
     User, AlertCircle, BadgeCheck, Info, AlertTriangle, ArrowRight,
-    Lock, Unlock,
+    Lock, Unlock, ListFilter, X,
 } from "lucide-react";
 import Modal from "./Modal";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -51,6 +52,10 @@ export default function AdminRescheduleRequests() {
     const isRTL = language === "ar";
     const locale = isRTL ? "ar-EG" : "en-US";
 
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const focusBatchId = searchParams.get("batchId"); // لو موجود، يبقى جاي من إشعار
+
     const [batches, setBatches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -61,6 +66,8 @@ export default function AdminRescheduleRequests() {
     const [rejectModal, setRejectModal] = useState({ open: false, batch: null });
     const [reviewNotes, setReviewNotes] = useState("");
     const [actionLoading, setActionLoading] = useState(null); // batchId currently being approved/rejected
+
+    const autoOpenedRef = useRef(false);
 
     // ── Data Fetching ──────────────────────────────────────────────────────────
     const loadBatches = useCallback(async (showRefresh = false) => {
@@ -90,6 +97,23 @@ export default function AdminRescheduleRequests() {
         loadBatches();
     }, [loadBatches]);
 
+    // لما الـ batchId في الـ URL يتغيّر (مثلاً دوس على إشعار تاني وهو في نفس الصفحة)
+    // نسمح للـ auto-open يشتغل من جديد للطلب الجديد
+    useEffect(() => {
+        autoOpenedRef.current = false;
+    }, [focusBatchId]);
+
+    // فتح تفاصيل الطلب تلقائي لو جاي من إشعار ولقيناه ضمن الطلبات المعلّقة
+    useEffect(() => {
+        if (!loading && focusBatchId && !autoOpenedRef.current) {
+            const target = batches.find((b) => b.batchId === focusBatchId);
+            if (target) {
+                setDetailsModal({ open: true, batch: target });
+                autoOpenedRef.current = true;
+            }
+        }
+    }, [loading, focusBatchId, batches]);
+
     // ── Memos ──────────────────────────────────────────────────────────────────
     const stats = useMemo(() => {
         const totalSessions = batches.reduce((sum, b) => sum + (b.sessions?.length || 0), 0);
@@ -97,6 +121,18 @@ export default function AdminRescheduleRequests() {
         const withNextCount = batches.filter((b) => b.viewMode === "withNext").length;
         return { totalBatches: batches.length, totalSessions, singleCount, withNextCount };
     }, [batches]);
+
+    // لو جاي من إشعار، نعرض بس الطلب ده. غير كده نعرض كل الطلبات المعلّقة عادي.
+    const visibleBatches = useMemo(() => {
+        if (!focusBatchId) return batches;
+        return batches.filter((b) => b.batchId === focusBatchId);
+    }, [batches, focusBatchId]);
+
+    const focusedNotFound = !loading && !!focusBatchId && visibleBatches.length === 0;
+
+    const clearFocus = useCallback(() => {
+        router.push("/admin/reschedule-requests");
+    }, [router]);
 
     // ── Actions ────────────────────────────────────────────────────────────────
     const openApproveModal = useCallback((batch) => {
@@ -209,6 +245,27 @@ export default function AdminRescheduleRequests() {
                 </div>
             </div>
 
+            {/* ── Focus banner: عرض طلب واحد بس جاي من إشعار ── */}
+            {focusBatchId && !focusedNotFound && (
+                <div className="flex items-center justify-between gap-3 bg-primary/5 dark:bg-primary/10 border border-primary/20 dark:border-primary/25 rounded-xl p-3.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 bg-primary/10 rounded-lg flex-shrink-0">
+                            <ListFilter className="w-4 h-4 text-primary" />
+                        </div>
+                        <p className="text-xs md:text-sm text-primary font-medium truncate">
+                            {t("reschedule.focus.banner") || "Showing the request you opened from your notification."}
+                        </p>
+                    </div>
+                    <button
+                        onClick={clearFocus}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-primary bg-white dark:bg-darkmode border border-primary/20 hover:bg-primary/10 transition-colors flex-shrink-0"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                        {t("reschedule.focus.viewAll") || "View all requests"}
+                    </button>
+                </div>
+            )}
+
             {/* ── Stats ── */}
             {loading && batches.length === 0 ? (
                 <StatsSkeleton />
@@ -284,8 +341,8 @@ export default function AdminRescheduleRequests() {
             {/* ── Loading skeleton for list ── */}
             {loading && batches.length === 0 && <BatchListSkeleton />}
 
-            {/* ── Empty State ── */}
-            {!loading && !error && batches.length === 0 && (
+            {/* ── Empty State: مفيش طلبات معلّقة أصلاً ── */}
+            {!loading && !error && !focusBatchId && batches.length === 0 && (
                 <div className="bg-white dark:bg-darkmode rounded-2xl border border-PowderBlueBorder dark:border-dark_border shadow-sm text-center py-16 px-4">
                     <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center mx-auto mb-4">
                         <Inbox className="w-7 h-7 text-primary/50" />
@@ -299,10 +356,31 @@ export default function AdminRescheduleRequests() {
                 </div>
             )}
 
+            {/* ── Empty State: جاي من إشعار بس الطلب ده اتراجع/اتوافق عليه من حد تاني ── */}
+            {focusedNotFound && (
+                <div className="bg-white dark:bg-darkmode rounded-2xl border border-PowderBlueBorder dark:border-dark_border shadow-sm text-center py-16 px-4">
+                    <div className="w-16 h-16 rounded-2xl bg-[#feaf00]/10 flex items-center justify-center mx-auto mb-4">
+                        <AlertTriangle className="w-7 h-7 text-[#feaf00]" />
+                    </div>
+                    <h3 className="text-base font-bold mb-1.5 text-MidnightNavyText dark:text-white">
+                        {t("reschedule.focus.notFoundTitle") || "This request is no longer pending"}
+                    </h3>
+                    <p className="text-sm text-SlateBlueText dark:text-darktext max-w-sm mx-auto mb-4">
+                        {t("reschedule.focus.notFoundDescription") || "It may have already been approved or rejected by another admin."}
+                    </p>
+                    <button
+                        onClick={clearFocus}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors"
+                    >
+                        {t("reschedule.focus.viewAll") || "View all requests"}
+                    </button>
+                </div>
+            )}
+
             {/* ── Batches List ── */}
-            {!loading && batches.length > 0 && (
+            {!loading && !focusedNotFound && visibleBatches.length > 0 && (
                 <div className="space-y-3">
-                    {batches.map((batch) => (
+                    {visibleBatches.map((batch) => (
                         <BatchCard
                             key={batch.batchId}
                             batch={batch}
