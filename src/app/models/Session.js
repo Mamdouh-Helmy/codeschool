@@ -23,7 +23,7 @@ const attendanceRecordSchema = new mongoose.Schema(
       ref: "User",
     },
   },
-  { _id: false }
+  { _id: false },
 );
 
 // ✅ طلب ترحيل السلسلة (cascade reschedule) — السيشن دي + كل اللي بعدها بترحل
@@ -59,13 +59,17 @@ const pendingRescheduleSchema = new mongoose.Schema(
     shiftDays: { type: Number, default: 7 },
     oldScheduledDate: { type: Date, required: true },
     newScheduledDate: { type: Date, required: true },
-    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    requestedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
     requestedAt: { type: Date, default: Date.now },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },
     reviewNotes: { type: String, default: "" },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const SessionSchema = new mongoose.Schema(
@@ -307,7 +311,7 @@ const SessionSchema = new mongoose.Schema(
   {
     timestamps: true,
     strict: true,
-  }
+  },
 );
 
 // ==================== INDEXES ====================
@@ -338,8 +342,8 @@ SessionSchema.index(
     unique: true,
     name: "unique_session_per_group_module",
     background: true,
-    partialFilterExpression: { isDeleted: false }
-  }
+    partialFilterExpression: { isDeleted: false },
+  },
 );
 
 // ==================== MIDDLEWARE ====================
@@ -362,16 +366,22 @@ SessionSchema.pre("findOne", function () {
 SessionSchema.pre("save", async function () {
   if (this.isModified("isDeleted") && this.isDeleted && this.meetingLinkId) {
     try {
-      const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
+      const { releaseMeetingLink } =
+        await import("../../utils/sessionGenerator");
       await releaseMeetingLink(this._id);
     } catch (error) {
       console.error("❌ Error releasing meeting link on delete:", error);
     }
   }
 
-  if (this.isModified("status") && this.status === "cancelled" && this.meetingLinkId) {
+  if (
+    this.isModified("status") &&
+    this.status === "cancelled" &&
+    this.meetingLinkId
+  ) {
     try {
-      const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
+      const { releaseMeetingLink } =
+        await import("../../utils/sessionGenerator");
       await releaseMeetingLink(this._id);
     } catch (error) {
       console.error("❌ Error releasing meeting link on cancellation:", error);
@@ -391,7 +401,7 @@ SessionSchema.pre("save", async function () {
 
     if (existingSession) {
       const error = new Error(
-        `Session already exists for group ${this.groupId}, module ${this.moduleIndex}, session ${this.sessionNumber}`
+        `Session already exists for group ${this.groupId}, module ${this.moduleIndex}, session ${this.sessionNumber}`,
       );
       error.code = "DUPLICATE_SESSION";
       throw error;
@@ -504,7 +514,9 @@ SessionSchema.virtual("credentialsDisplay").get(function () {
 
 // ✅ هل فيه طلب ترحيل قيد المراجعة على السيشن دي دلوقتي؟
 SessionSchema.virtual("hasPendingReschedule").get(function () {
-  return !!(this.pendingReschedule && this.pendingReschedule.status === "pending");
+  return !!(
+    this.pendingReschedule && this.pendingReschedule.status === "pending"
+  );
 });
 
 // ✅ هل السيشن دي معندها فتح فوري (early access) شغال دلوقتي؟
@@ -634,11 +646,13 @@ SessionSchema.methods.getStatusColor = function () {
 
 // Check if attendance can be taken
 SessionSchema.methods.canTakeAttendance = function () {
-  if (this.status !== "scheduled" && this.status !== "completed") {
+  // ✅ ملغاة/مؤجلة بمعادها الفعلي (بعد أي ترحيل تلقائي أو يدوي) تتعامل
+  // زي "scheduled" عادي — الـ status هنا بيفضل سجل تاريخي بس
+  const allowedStatuses = ["scheduled", "completed", "cancelled", "postponed"];
+  if (!allowedStatuses.includes(this.status)) {
     return false;
   }
 
-  // ✅ Early access (immediate-open after admin approval) bypasses the normal time window
   if (this.hasActiveEarlyAccess) {
     return true;
   }
@@ -648,7 +662,6 @@ SessionSchema.methods.canTakeAttendance = function () {
 
   if (!sessionDateTime) return false;
 
-  // Can take attendance 30 minutes before and up to 2 hours after session
   const thirtyMinutesBefore = new Date(sessionDateTime.getTime() - 30 * 60000);
   const twoHoursAfter = new Date(sessionDateTime.getTime() + 2 * 60 * 60000);
 
@@ -704,9 +717,13 @@ SessionSchema.methods.releaseMeetingLink = async function () {
 };
 
 // ✅ Assign new meeting link
-SessionSchema.methods.assignMeetingLink = async function (meetingLinkId, userId) {
+SessionSchema.methods.assignMeetingLink = async function (
+  meetingLinkId,
+  userId,
+) {
   try {
-    const { manuallyAssignMeetingLink } = await import("../../utils/sessionGenerator");
+    const { manuallyAssignMeetingLink } =
+      await import("../../utils/sessionGenerator");
     return await manuallyAssignMeetingLink(this._id, meetingLinkId, userId);
   } catch (error) {
     console.error("❌ Error assigning meeting link:", error);
@@ -765,7 +782,7 @@ SessionSchema.methods.getChainFromHere = async function () {
     .sort({ moduleIndex: 1, sessionNumber: 1 });
 
   const myIndex = allSessions.findIndex(
-    (s) => s._id.toString() === this._id.toString()
+    (s) => s._id.toString() === this._id.toString(),
   );
 
   if (myIndex === -1) return [this];
@@ -808,7 +825,8 @@ SessionSchema.methods.buildCascadePreview = async function (shiftDays = 7) {
   return {
     shiftDays,
     totalAffected: affectedSessions.length,
-    completedCount: affectedSessions.filter((s) => s.status === "completed").length,
+    completedCount: affectedSessions.filter((s) => s.status === "completed")
+      .length,
     affectedSessions,
   };
 };
@@ -820,7 +838,7 @@ SessionSchema.methods.buildCascadePreview = async function (shiftDays = 7) {
 // الجروب (مش بس على نفس السيشن) — ده بيمنع تكدس أكتر من باتش في نفس الوقت.
 SessionSchema.methods.submitCascadeRescheduleRequest = async function (
   { viewMode = "single", shiftDays = 7 },
-  userId
+  userId,
 ) {
   const Session = mongoose.model("Session");
 
@@ -861,12 +879,105 @@ SessionSchema.methods.submitCascadeRescheduleRequest = async function (
             "metadata.lastModifiedBy": userId,
             "metadata.updatedAt": requestedAt,
           },
-        }
-      )
-    )
+        },
+      ),
+    ),
   );
 
   return { batchId, affectedCount: preview.affectedSessions.length, preview };
+};
+
+// ✅ عند إلغاء سيشن (فعل مباشر من الأدمن — من غير approval workflow):
+//   - السيشن دي (trigger) بتترحل هي كمان أسبوع لقدام (+shiftDays) وتفضل
+//     status = "cancelled" على تاريخها الجديد — يعني بيتسجل إنها اتلغت
+//     وترحلت مع الباقي في نفس الوقت (مش بتفضل واقفة في تاريخها القديم)
+//   - كل السيشنات اللي بعدها في نفس الجروب (بالتسلسل: moduleIndex ثم
+//     sessionNumber) تترحل أسبوع لقدام برضو — كل واحدة من تاريخها هي
+//     +shiftDays (مش تراكمي)، عشان يفضلوا بعيدين عن بعض بنفس المسافة
+//   - السيشنات المكتملة بتتستنى تمامًا — مبتتلمسش خالص (لا status ولا تاريخ)
+//   - أي سيشن في السلسلة ملغية من قبل كده (مش الـ trigger) بتتستنى برضو،
+//     عشان متترحلش مرتين لو حصل إلغاء تاني بعدين
+SessionSchema.statics.cascadeShiftOnCancel = async function (
+  sessionId,
+  userId,
+  shiftDays = 7,
+) {
+  const triggerSession = await this.findById(sessionId);
+  if (!triggerSession) {
+    const error = new Error("Session not found");
+    error.code = "SESSION_NOT_FOUND";
+    throw error;
+  }
+
+  if (triggerSession.status === "completed") {
+    const error = new Error("لا يمكن إلغاء سيشن مكتملة بالفعل");
+    error.code = "SESSION_ALREADY_COMPLETED";
+    throw error;
+  }
+
+  if (triggerSession.status === "cancelled") {
+    const error = new Error("السيشن دي ملغية بالفعل");
+    error.code = "SESSION_ALREADY_CANCELLED";
+    throw error;
+  }
+
+  const chain = await triggerSession.getChainFromHere(); // [trigger, ...بعدها]
+  const now = new Date();
+  const shifted = [];
+  const skipped = [];
+
+  for (const session of chain) {
+    const isTrigger = session._id.toString() === triggerSession._id.toString();
+
+    // ✅ مكتملة → متتلمسش خالص (بما فيها لو هي نفسها الـ trigger لسبب ما)
+    if (session.status === "completed") {
+      skipped.push({
+        sessionId: session._id,
+        title: session.title,
+        reason: "completed",
+      });
+      continue;
+    }
+
+    // ✅ ملغية من قبل كده (مش الـ trigger) → متتلمسش، عشان متترحلش تاني
+    if (!isTrigger && session.status === "cancelled") {
+      skipped.push({
+        sessionId: session._id,
+        title: session.title,
+        reason: "cancelled",
+      });
+      continue;
+    }
+
+    const oldScheduledDate = new Date(session.scheduledDate);
+    const newScheduledDate = new Date(oldScheduledDate);
+    newScheduledDate.setDate(newScheduledDate.getDate() + shiftDays);
+
+    session.scheduledDate = newScheduledDate;
+    if (isTrigger) {
+      session.status = "cancelled"; // ✅ تفضل ملغاة، بس على تاريخها الجديد
+    }
+    session.metadata.lastModifiedBy = userId;
+    session.metadata.updatedAt = now;
+    await session.save(); // pre("save") هيسيب الـ meeting link تلقائيًا لأنها cancelled
+
+    shifted.push({
+      sessionId: session._id,
+      title: session.title,
+      isTrigger,
+      oldScheduledDate,
+      newScheduledDate,
+    });
+  }
+
+  return {
+    triggerSessionId: triggerSession._id,
+    shiftDays,
+    shiftedCount: shifted.length,
+    skippedCount: skipped.length,
+    shifted,
+    skipped,
+  };
 };
 
 // ==================== STATIC METHODS ====================
@@ -886,7 +997,7 @@ SessionSchema.statics.getSessionsByDay = async function (groupId) {
     const dateKey = new Date(session.scheduledDate).toISOString().split("T")[0];
     const dayName = new Date(session.scheduledDate).toLocaleDateString(
       "en-US",
-      { weekday: "long" }
+      { weekday: "long" },
     );
 
     if (!grouped[dateKey]) {
@@ -918,14 +1029,14 @@ SessionSchema.statics.getSessionsByDay = async function (groupId) {
 
   // Convert to array sorted by date
   return Object.values(grouped).sort(
-    (a, b) => new Date(a.date) - new Date(b.date)
+    (a, b) => new Date(a.date) - new Date(b.date),
   );
 };
 
 // Get sessions for a specific day of week
 SessionSchema.statics.getSessionsByDayOfWeek = async function (
   groupId,
-  dayOfWeek
+  dayOfWeek,
 ) {
   const sessions = await this.find({
     groupId,
@@ -1051,7 +1162,7 @@ SessionSchema.statics.getSessionsByModule = async function (groupId) {
 
   // Convert to array and sort by module index
   return Object.values(groupedByModule).sort(
-    (a, b) => a.moduleIndex - b.moduleIndex
+    (a, b) => a.moduleIndex - b.moduleIndex,
   );
 };
 
@@ -1061,12 +1172,12 @@ SessionSchema.statics.getTodaySessions = async function (groupId) {
   const todayStart = new Date(
     today.getFullYear(),
     today.getMonth(),
-    today.getDate()
+    today.getDate(),
   );
   const todayEnd = new Date(
     today.getFullYear(),
     today.getMonth(),
-    today.getDate() + 1
+    today.getDate() + 1,
   );
 
   return await this.find({
@@ -1080,7 +1191,7 @@ SessionSchema.statics.getTodaySessions = async function (groupId) {
 SessionSchema.statics.getSessionsByDateRange = async function (
   groupId,
   startDate,
-  endDate
+  endDate,
 ) {
   return await this.find({
     groupId,
@@ -1092,7 +1203,7 @@ SessionSchema.statics.getSessionsByDateRange = async function (
 // ✅ Get sessions needing meeting links
 SessionSchema.statics.getSessionsNeedingMeetingLinks = async function (
   groupId = null,
-  limit = 50
+  limit = 50,
 ) {
   const query = {
     status: "scheduled",
@@ -1105,15 +1216,12 @@ SessionSchema.statics.getSessionsNeedingMeetingLinks = async function (
     query.groupId = new mongoose.Types.ObjectId(groupId);
   }
 
-  return await this.find(query)
-    .sort({ scheduledDate: 1 })
-    .limit(limit)
-    .lean();
+  return await this.find(query).sort({ scheduledDate: 1 }).limit(limit).lean();
 };
 
 // ✅ Get available meeting links for a session
 SessionSchema.statics.getAvailableMeetingLinksForSession = async function (
-  sessionId
+  sessionId,
 ) {
   const session = await this.findById(sessionId);
 
@@ -1121,7 +1229,8 @@ SessionSchema.statics.getAvailableMeetingLinksForSession = async function (
     throw new Error("Session not found");
   }
 
-  const { getAvailableMeetingLinks } = await import("../../utils/sessionGenerator");
+  const { getAvailableMeetingLinks } =
+    await import("../../utils/sessionGenerator");
 
   // Create date objects for the session time
   const startTime = new Date(session.scheduledDate);
@@ -1143,7 +1252,11 @@ SessionSchema.statics.getPendingRescheduleBatches = async function () {
   })
     .populate({ path: "groupId", select: "name code" })
     .populate({ path: "pendingReschedule.requestedBy", select: "name email" })
-    .sort({ "pendingReschedule.requestedAt": -1, moduleIndex: 1, sessionNumber: 1 })
+    .sort({
+      "pendingReschedule.requestedAt": -1,
+      moduleIndex: 1,
+      sessionNumber: 1,
+    })
     .lean();
 
   const batches = {};
@@ -1173,7 +1286,8 @@ SessionSchema.statics.getPendingRescheduleBatches = async function () {
       sessionNumber: session.sessionNumber,
       status: session.status,
       isTrigger:
-        session.pendingReschedule.triggerSessionId?.toString() === session._id.toString(),
+        session.pendingReschedule.triggerSessionId?.toString() ===
+        session._id.toString(),
       oldScheduledDate: session.pendingReschedule.oldScheduledDate,
       newScheduledDate: session.pendingReschedule.newScheduledDate,
     });
@@ -1188,7 +1302,10 @@ SessionSchema.statics.getPendingRescheduleBatches = async function () {
 //      فوري — تتفتح فورًا (meeting link + حضور) من غير ما ترتبط بتاريخها الجديد.
 //   3. مينفعش يلمس status (غير الإرجاع لـ scheduled في حالة withNext مش لازم)،
 //      ولا attendance، ولا meetingLink بتاع باقي السيشنات — كل ده بيفضل زي ما هو.
-SessionSchema.statics.approveRescheduleBatch = async function (batchId, adminUserId) {
+SessionSchema.statics.approveRescheduleBatch = async function (
+  batchId,
+  adminUserId,
+) {
   const sessions = await this.find({
     isDeleted: false,
     "pendingReschedule.batchId": batchId,
@@ -1196,7 +1313,9 @@ SessionSchema.statics.approveRescheduleBatch = async function (batchId, adminUse
   });
 
   if (sessions.length === 0) {
-    const error = new Error("لا يوجد طلب ترحيل مطابق لهذا الرقم أو تمت معالجته بالفعل");
+    const error = new Error(
+      "لا يوجد طلب ترحيل مطابق لهذا الرقم أو تمت معالجته بالفعل",
+    );
     error.code = "BATCH_NOT_FOUND";
     throw error;
   }
@@ -1204,7 +1323,8 @@ SessionSchema.statics.approveRescheduleBatch = async function (batchId, adminUse
   const now = new Date();
   const results = [];
   // كل سيشنات الباتش بيشتركوا في نفس triggerSessionId
-  const triggerSessionId = sessions[0].pendingReschedule.triggerSessionId?.toString();
+  const triggerSessionId =
+    sessions[0].pendingReschedule.triggerSessionId?.toString();
 
   for (const session of sessions) {
     const isTrigger = session._id.toString() === triggerSessionId;
@@ -1242,12 +1362,21 @@ SessionSchema.statics.approveRescheduleBatch = async function (batchId, adminUse
     });
   }
 
-  return { batchId, updatedCount: results.length, sessions: results, triggerSessionId };
+  return {
+    batchId,
+    updatedCount: results.length,
+    sessions: results,
+    triggerSessionId,
+  };
 };
 
 // ✅ رفض الأدمن لـ batch كامل: بيقفل pendingReschedule من غير ما يغير scheduledDate
 // ولا يمنح أي earlyAccess — كل حاجة تفضل زي ما هي تمامًا.
-SessionSchema.statics.rejectRescheduleBatch = async function (batchId, adminUserId, reviewNotes = "") {
+SessionSchema.statics.rejectRescheduleBatch = async function (
+  batchId,
+  adminUserId,
+  reviewNotes = "",
+) {
   const sessions = await this.find({
     isDeleted: false,
     "pendingReschedule.batchId": batchId,
@@ -1255,7 +1384,9 @@ SessionSchema.statics.rejectRescheduleBatch = async function (batchId, adminUser
   });
 
   if (sessions.length === 0) {
-    const error = new Error("لا يوجد طلب ترحيل مطابق لهذا الرقم أو تمت معالجته بالفعل");
+    const error = new Error(
+      "لا يوجد طلب ترحيل مطابق لهذا الرقم أو تمت معالجته بالفعل",
+    );
     error.code = "BATCH_NOT_FOUND";
     throw error;
   }
@@ -1277,7 +1408,7 @@ SessionSchema.statics.rejectRescheduleBatch = async function (batchId, adminUser
         "metadata.lastModifiedBy": adminUserId,
         "metadata.updatedAt": now,
       },
-    }
+    },
   );
 
   return { batchId, updatedCount: result.modifiedCount };
@@ -1294,7 +1425,7 @@ SessionSchema.statics.consumeEarlyAccess = async function (sessionId, userId) {
         "metadata.lastModifiedBy": userId,
         "metadata.updatedAt": now,
       },
-    }
+    },
   );
 };
 
@@ -1311,7 +1442,10 @@ SessionSchema.statics.deleteGroupSessions = async function (groupId, userId) {
     try {
       await session.releaseMeetingLink();
     } catch (error) {
-      console.error(`⚠️ Failed to release meeting link for session ${session._id}:`, error.message);
+      console.error(
+        `⚠️ Failed to release meeting link for session ${session._id}:`,
+        error.message,
+      );
     }
   }
 
@@ -1329,7 +1463,7 @@ SessionSchema.statics.deleteGroupSessions = async function (groupId, userId) {
         "metadata.lastModifiedBy": userId,
         "metadata.updatedAt": new Date(),
       },
-    }
+    },
   );
 
   return result;
@@ -1401,6 +1535,11 @@ SessionSchema.set("toObject", {
 });
 
 // Create the model
+// بالتعديل ده:
+if (process.env.NODE_ENV !== "production" && mongoose.models.Session) {
+  delete mongoose.models.Session;
+}
+
 const Session =
   mongoose.models.Session || mongoose.model("Session", SessionSchema);
 

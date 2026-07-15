@@ -14,7 +14,13 @@ import {
   Zap,
   Info,
   Calendar,
-  Clock
+  Clock,
+  CheckCircle2,
+  XCircle,
+  CalendarClock,
+  CalendarCheck,
+  ArrowLeftRight,
+  ShieldCheck,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,7 +112,6 @@ function buildVariables(student, session, formData, dbVars = {}) {
   const studentSalutation_ar  = `${salutationBase_ar} ${studentFirstName}`;
   const studentSalutation     = lang === "ar" ? studentSalutation_ar : `Dear ${studentFirstName}`;
 
-  // ✅ المتغيرات الجديدة للقوالب التي تستخدم {salutation_ar} و {salutation_en}
   const salutation_ar = studentSalutation_ar;
   const salutation_en = `Dear ${studentFirstName}`;
 
@@ -131,12 +136,9 @@ function buildVariables(student, session, formData, dbVars = {}) {
   return {
     studentSalutation,
     guardianSalutation,
-    salutation: guardianSalutation, // alias للتوافق مع القوالب القديمة
-    
-    // ✅ المتغيرات الجديدة
-    salutation_ar,   // للقوالب العربية التي تستخدم {salutation_ar}
-    salutation_en,   // للقوالب الإنجليزية التي تستخدم {salutation_en}
-    
+    salutation: guardianSalutation,
+    salutation_ar,
+    salutation_en,
     studentName:      studentFirstName,
     studentFullName:  student.personalInfo?.fullName || "",
     guardianName:     guardianFirstName,
@@ -169,11 +171,233 @@ function renderTemplate(template, variables) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// getShiftedChainPreview — بيحسب محليًا (من غير API) مين هيترحل لو السيشن
+// دي اتلغت، بناءً على allSessions اللي الصفحة الأب محملاها أصلاً.
+// ✅ السيشن نفسها (trigger) بقت بتترحل هي كمان +shiftDays، وبتفضل معلّمة
+//    كـ isTrigger عشان الـ UI يوضحها لوحدها في الشريط.
+// ─────────────────────────────────────────────────────────────────────────────
+function getShiftedChainPreview(allSessions, currentSession, shiftDays = 7) {
+  if (!currentSession || !allSessions?.length) return { shifting: [], skipped: [] };
+
+  const sameGroup = allSessions
+    .filter((s) => {
+      const sGroupId = typeof s.group === "object" ? s.group?.id : s.groupId;
+      const curGroupId = typeof currentSession.group === "object"
+        ? currentSession.group?.id
+        : currentSession.groupId;
+      return (sGroupId || s.groupId) === (curGroupId || currentSession.groupId) || s.group?.id === currentSession.group?.id;
+    })
+    .slice()
+    .sort((a, b) => a.moduleIndex - b.moduleIndex || a.sessionNumber - b.sessionNumber);
+
+  const myIndex = sameGroup.findIndex((s) => s.id === currentSession.id);
+  if (myIndex === -1) return { shifting: [], skipped: [] };
+
+  const chain = sameGroup.slice(myIndex); // ✅ التريجر + كل اللي بعدها
+  const shifting = [];
+  const skipped = [];
+
+  chain.forEach((s, idx) => {
+    const isTrigger = idx === 0;
+
+    if (s.status === "completed") {
+      skipped.push(s);
+      return;
+    }
+    if (!isTrigger && s.status === "cancelled") {
+      skipped.push(s);
+      return;
+    }
+
+    const oldDate = new Date(s.scheduledDate);
+    const newDate = new Date(oldDate);
+    newDate.setDate(newDate.getDate() + shiftDays);
+    shifting.push({ ...s, oldDate, newDate, isTrigger });
+  });
+
+  return { shifting, skipped };
+}
+
+function formatShortDate(date, isRTL) {
+  try {
+    return date.toLocaleDateString(isRTL ? "ar-EG" : "en-US", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATUS PICKER — كروت بصرية بدل الـ <select>
+// ─────────────────────────────────────────────────────────────────────────────
+const STATUS_OPTIONS = [
+  {
+    value: "scheduled",
+    labelAr: "مجدولة",
+    labelEn: "Scheduled",
+    hintAr: "هتفضل زي ما هي",
+    hintEn: "Stays as is",
+    icon: CalendarCheck,
+    ring: "ring-blue-500",
+    activeBg: "bg-blue-50 dark:bg-blue-900/20",
+    activeText: "text-blue-700 dark:text-blue-300",
+    iconBg: "bg-blue-100 dark:bg-blue-900/40",
+  },
+  {
+    value: "completed",
+    labelAr: "مكتملة",
+    labelEn: "Completed",
+    hintAr: "+٢ ساعة للمدرب",
+    hintEn: "+2h to instructor",
+    icon: CheckCircle2,
+    ring: "ring-green-500",
+    activeBg: "bg-green-50 dark:bg-green-900/20",
+    activeText: "text-green-700 dark:text-green-300",
+    iconBg: "bg-green-100 dark:bg-green-900/40",
+  },
+  {
+    value: "postponed",
+    labelAr: "مؤجلة",
+    labelEn: "Postponed",
+    hintAr: "تاريخ جديد + إشعار",
+    hintEn: "New date + notice",
+    icon: CalendarClock,
+    ring: "ring-amber-500",
+    activeBg: "bg-amber-50 dark:bg-amber-900/20",
+    activeText: "text-amber-700 dark:text-amber-300",
+    iconBg: "bg-amber-100 dark:bg-amber-900/40",
+  },
+  {
+    value: "cancelled",
+    labelAr: "ملغاة",
+    labelEn: "Cancelled",
+    hintAr: "الباقي يترحل أسبوع",
+    hintEn: "Rest shifts a week",
+    icon: XCircle,
+    ring: "ring-red-500",
+    activeBg: "bg-red-50 dark:bg-red-900/20",
+    activeText: "text-red-700 dark:text-red-300",
+    iconBg: "bg-red-100 dark:bg-red-900/40",
+  },
+];
+
+function StatusPicker({ value, onChange, isRTL }) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {STATUS_OPTIONS.map((opt) => {
+        const Icon = opt.icon;
+        const isActive = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`relative text-left rtl:text-right p-3 rounded-xl border-2 transition-all ${
+              isActive
+                ? `${opt.activeBg} border-transparent ring-2 ${opt.ring}`
+                : "bg-white dark:bg-dark_input border-PowderBlueBorder dark:border-dark_border hover:border-gray-300 dark:hover:border-gray-600"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${isActive ? opt.iconBg : "bg-gray-100 dark:bg-gray-800"}`}>
+                <Icon className={`w-4 h-4 ${isActive ? opt.activeText : "text-gray-400"}`} />
+              </div>
+              <span className={`text-sm font-semibold ${isActive ? opt.activeText : "text-MidnightNavyText dark:text-white"}`}>
+                {isRTL ? opt.labelAr : opt.labelEn}
+              </span>
+            </div>
+            <p className={`text-[11px] leading-tight ${isActive ? opt.activeText : "text-gray-400"}`}>
+              {isRTL ? opt.hintAr : opt.hintEn}
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CASCADE IMPACT STRIP — بيظهر بس لما الحالة = ملغاة، وبيوضح الأثر قبل الحفظ
+// ✅ أول كارت (لو موجود) بيبقى للـ trigger نفسها، معلّم بشارة "دي اللي هتلغيها"
+// ─────────────────────────────────────────────────────────────────────────────
+function CascadeImpactStrip({ shifting, skipped, isRTL }) {
+  if (shifting.length === 0 && skipped.length === 0) {
+    return (
+      <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-PowderBlueBorder dark:border-dark_border text-xs text-gray-500">
+        <Info className="w-3.5 h-3.5 shrink-0" />
+        {isRTL ? "مفيش سيشنات هتتأثر" : "No sessions will be affected"}
+      </div>
+    );
+  }
+
+  const followingCount = shifting.filter((s) => !s.isTrigger).length;
+
+  return (
+    <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50/60 dark:bg-red-900/10 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 bg-red-100/70 dark:bg-red-900/25 border-b border-red-200 dark:border-red-800/50">
+        <ArrowLeftRight className="w-3.5 h-3.5 text-red-600 dark:text-red-400 shrink-0" />
+        <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+          {isRTL
+            ? `الجلسة هتترحل + ${followingCount} جلسة تالية هتترحلوا أسبوع لقدام`
+            : `This session + ${followingCount} upcoming session(s) will shift forward a week`}
+        </p>
+      </div>
+
+      <div className="p-2.5 flex gap-2 overflow-x-auto">
+        {shifting.map((s) => (
+          <div
+            key={s.id}
+            className={`shrink-0 min-w-[150px] bg-white dark:bg-dark_input rounded-lg border p-2 ${
+              s.isTrigger ? "border-red-400 dark:border-red-600 ring-1 ring-red-300 dark:ring-red-700" : "border-red-200 dark:border-red-800/40"
+            }`}
+          >
+            {s.isTrigger && (
+              <span className="inline-block mb-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-600 text-white">
+                {isRTL ? "دي اللي بتلغيها" : "You're cancelling this"}
+              </span>
+            )}
+            <p className="text-xs font-medium text-MidnightNavyText dark:text-white truncate mb-1">
+              {s.title}
+            </p>
+            <div className="flex items-center gap-1 text-[11px] text-gray-500">
+              <span className="line-through opacity-60">{formatShortDate(s.oldDate, isRTL)}</span>
+              <span className="text-red-500">←</span>
+              <span className="font-semibold text-red-600 dark:text-red-400">
+                {formatShortDate(s.newDate, isRTL)}
+              </span>
+            </div>
+          </div>
+        ))}
+
+        {skipped.map((s) => (
+          <div
+            key={s.id}
+            className="shrink-0 min-w-[150px] bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-700 p-2 opacity-70"
+          >
+            <p className="text-xs font-medium text-gray-500 truncate mb-1">{s.title}</p>
+            <div className="flex items-center gap-1 text-[11px] text-gray-400">
+              <ShieldCheck className="w-3 h-3 shrink-0" />
+              {s.status === "completed"
+                ? (isRTL ? "مكتملة — مش هتتأثر" : "Completed — untouched")
+                : (isRTL ? "ملغاة بالفعل — مش هتتأثر" : "Already cancelled — untouched")}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function EditSessionModal({
   session,
   groupStudents,
+  allSessions = [],
   onClose,
   onRefresh,
   isRTL,
@@ -201,7 +425,6 @@ export default function EditSessionModal({
   const [saving,           setSaving]           = useState(false);
   const [savingTemplate,   setSavingTemplate]   = useState({ student: false, guardian: false });
 
-  // ✅ DB template variables (نفس منطق ReminderModal)
   const [dbVars, setDbVars] = useState({});
 
   const studentTextareaRef  = useRef(null);
@@ -210,6 +433,13 @@ export default function EditSessionModal({
 
   const showReasonField = formData.status === "cancelled" || formData.status === "postponed";
   const isPostponed     = formData.status === "postponed";
+  const isCancelling    = formData.status === "cancelled" && session?.status !== "cancelled";
+
+  // ── Cascade preview (client-side, no extra API call) ───────────────────────
+  const cascadePreview = useMemo(() => {
+    if (!isCancelling) return { shifting: [], skipped: [] };
+    return getShiftedChainPreview(allSessions, session, 7);
+  }, [isCancelling, allSessions, session]);
 
   // ── Fetch DB template variables on mount ──────────────────────────────────
   useEffect(() => {
@@ -271,7 +501,6 @@ export default function EditSessionModal({
 
         const json = await res.json();
         if (json.success) {
-          // ✅ نستخدم rawContent (القالب بدون replace) عشان المستخدم يقدر يعدل المتغيرات
           if (!manuallyEdited.student && json.data.student) {
             setFormData((prev) => ({
               ...prev,
@@ -663,8 +892,6 @@ export default function EditSessionModal({
   };
 
   // ── Save session ──────────────────────────────────────────────────────────
-  // ✅ FIX: بنبعت الرسائل كـ per-student objects جوه metadata
-  // عشان onSessionStatusChanged في groupAutomation يعرف يعمل render صح لكل طالب
   const handleSave = useCallback(async () => {
     if (
       showReasonField &&
@@ -676,8 +903,6 @@ export default function EditSessionModal({
 
     setSaving(true);
     try {
-      // ✅ بنبني per-student rendered messages للباك إند
-      // كل طالب بياخد render بمتغيراته هو
       const studentMessages  = {};
       const guardianMessages = {};
 
@@ -700,9 +925,6 @@ export default function EditSessionModal({
           status:          formData.status,
           newDate:         isPostponed ? formData.newDate : null,
           newTime:         isPostponed ? formData.newTime : null,
-          // ✅ metadata بيحتوي على per-student rendered messages
-          // الباك إند (onSessionStatusChanged) يقرأهم من:
-          // metadata.studentMessages[studentId] و metadata.guardianMessages[studentId]
           metadata: showReasonField
             ? { studentMessages, guardianMessages }
             : {},
@@ -711,7 +933,15 @@ export default function EditSessionModal({
 
       const json = await res.json();
       if (json.success) {
-        toast.success(isRTL ? "تم تحديث الجلسة بنجاح" : "Session updated successfully");
+        if (json.cascade?.shiftedCount > 0) {
+          toast.success(
+            isRTL
+              ? `تم الإلغاء، وترحيل ${json.cascade.shiftedCount} جلسة تالية أسبوعًا لقدام`
+              : `Cancelled — ${json.cascade.shiftedCount} upcoming session(s) shifted forward a week`
+          );
+        } else {
+          toast.success(isRTL ? "تم تحديث الجلسة بنجاح" : "Session updated successfully");
+        }
         onClose();
         onRefresh();
       } else {
@@ -773,25 +1003,29 @@ export default function EditSessionModal({
         {/* ── Body ── */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
-          {/* Status */}
+          {/* Status — visual picker */}
           <div>
             <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
               {isRTL ? "الحالة" : "Status"}
             </label>
-            <select
+            <StatusPicker
               value={formData.status}
-              onChange={(e) => {
-                setFormData((prev) => ({ ...prev, status: e.target.value }));
+              isRTL={isRTL}
+              onChange={(val) => {
+                setFormData((prev) => ({ ...prev, status: val }));
                 setManuallyEdited({ student: false, guardian: false });
               }}
-              className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
-            >
-              <option value="scheduled">{isRTL ? "مجدولة"  : "Scheduled"}</option>
-              <option value="completed">{isRTL ? "مكتملة"  : "Completed"}</option>
-              <option value="cancelled">{isRTL ? "ملغاة"   : "Cancelled"}</option>
-              <option value="postponed">{isRTL ? "مؤجلة"   : "Postponed"}</option>
-            </select>
+            />
           </div>
+
+          {/* ✅ Cascade impact — بيظهر فورًا لما تختار "ملغاة" */}
+          {isCancelling && (
+            <CascadeImpactStrip
+              shifting={cascadePreview.shifting}
+              skipped={cascadePreview.skipped}
+              isRTL={isRTL}
+            />
+          )}
 
           {/* Meeting Link */}
           <div>
@@ -825,30 +1059,40 @@ export default function EditSessionModal({
 
           {/* New Date/Time — Postponed only */}
           {isPostponed && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                  {isRTL ? "التاريخ الجديد" : "New Date"}
-                </label>
-                <input
-                  type="date"
-                  value={formData.newDate}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, newDate: e.target.value }))}
-                  className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
-                  min={new Date().toISOString().split("T")[0]}
-                />
+            <div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                    {isRTL ? "التاريخ الجديد" : "New Date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.newDate}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, newDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                    min={new Date().toISOString().split("T")[0]}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                    {isRTL ? "الوقت الجديد" : "New Time"}
+                  </label>
+                  <input
+                    type="time"
+                    value={formData.newTime}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, newTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                  {isRTL ? "الوقت الجديد" : "New Time"}
-                </label>
-                <input
-                  type="time"
-                  value={formData.newTime}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, newTime: e.target.value }))}
-                  className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
-                />
-              </div>
+              {formData.newDate && (
+                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  {isRTL
+                    ? "هيتحفظ في قاعدة البيانات فورًا بمجرد الحفظ — مدة الجلسة (من-إلى) هتفضل زي ما هي"
+                    : "Will be saved to the database immediately — session duration stays the same"}
+                </p>
+              )}
             </div>
           )}
 

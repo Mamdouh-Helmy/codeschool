@@ -173,8 +173,9 @@ export async function GET(req) {
       // محتاجه دايمًا في الـ stats وفي الـ session row
       const attendanceAlreadyTaken = !!session.attendanceTaken;
 
+      // ✅ ملغاة/مؤجلة بمعادها الفعلي (بعد أي ترحيل) تتعامل زي "scheduled" عادي
       const showJoinButton =
-        session.status === "scheduled" &&
+        ["scheduled", "cancelled", "postponed"].includes(session.status) &&
         isEffectivelyToday &&
         sessionStillActive &&
         !attendanceAlreadyTaken &&

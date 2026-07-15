@@ -7,7 +7,6 @@ import Highlight from '@/components/Home/YearHighlight/page';
 import Upcoming from '@/components/Home/Upcoming';
 import Testimonials from '@/components/Home/Testimonials';
 
-// تم نقل generateMetadata إلى ملف layout.tsx
 export default function Home() {
   return (
     <main>
@@ -17,9 +16,7 @@ export default function Home() {
       <EventTicket />
       <Highlight />
       <Upcoming />
-      {/* <DynamicPricing /> */}
       <Testimonials />
-      {/* <TicketSection /> */}
     </main>
   );
 }

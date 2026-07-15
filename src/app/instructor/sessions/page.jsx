@@ -677,7 +677,10 @@ function SessionModal({ session, onClose, isAr }) {
   const isCompleted = session.status === "completed";
   const attRate = getAttendanceRate(session);
   const t = (ar, en) => isAr ? ar : en;
+  // بعد
   const isActuallyToday = session.isEffectivelyToday ?? session.isToday;
+  // ✅ نفس القاعدة بالظبط: مؤجلة/ملغاة = زي مجدولة بس لو معادها النهارده
+  const isOpenToday = isActuallyToday && ["scheduled", "cancelled", "postponed"].includes(session.status);
   const isPartial = !!session.canViewPartialDetails;
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const lessons = deduplicateLessons(session.lessons || []);
@@ -775,18 +778,18 @@ function SessionModal({ session, onClose, isAr }) {
 
           <SessionDescriptionCard session={session} isAr={isAr} />
 
-          {!isPartial && isActuallyToday && session.meetingLink && (
+          {!isPartial && isOpenToday && session.meetingLink && (
             <MeetingCredentials session={session} isAr={isAr} />
           )}
 
-          {!isPartial && isActuallyToday && !session.meetingLink && !session.attendanceTaken && session.status === "scheduled" && (
+          {!isPartial && isOpenToday && !session.meetingLink && !session.attendanceTaken && (
             <Link href={`/instructor/attendance?session=${session._id}`}
               className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
               <ClipboardList className="w-5 h-5" />{t("تسجيل الحضور الآن", "Take Attendance Now")}
             </Link>
           )}
 
-          {!isPartial && isActuallyToday && session.meetingLink && !session.attendanceTaken && session.status === "scheduled" && (
+          {!isPartial && isOpenToday && session.meetingLink && !session.attendanceTaken && (
             <Link href={`/instructor/attendance?session=${session._id}`}
               className="flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all">
               <ClipboardList className="w-4 h-4" />{t("تسجيل الحضور", "Take Attendance")}
@@ -927,8 +930,10 @@ function SessionModal({ session, onClose, isAr }) {
 function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   const cfg = STATUS_CFG[session.status] || STATUS_CFG.scheduled;
   const isCompleted = session.status === "completed";
+  // بعد
   const isEffectivelyToday = session.isEffectivelyToday ?? session.isToday;
-  const isToday = isEffectivelyToday && session.status === "scheduled";
+  // ✅ مؤجلة/ملغاة تتعامل زي مجدولة بس لو معادها الفعلي (بعد الترحيل) = النهارده
+  const isToday = isEffectivelyToday && ["scheduled", "cancelled", "postponed"].includes(session.status);
   const attRate = getAttendanceRate(session);
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const t = (ar, en) => isAr ? ar : en;
@@ -939,11 +944,12 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   const canOpenPartial = session.canViewPartialDetails;
   // 🆕 السيشن المكتملة أو الملغاة تتفتح عادي دايمًا — مفيش معنى تطلب فتح
   // سيشن خلصت أو اتلغت أصلاً (الباك إند برضو برفض طلب الترحيل عليها)
+  // بعد
   const isClickable =
     canOpenFull ||
     canOpenPartial ||
     session.status === "completed" ||
-    session.status === "cancelled";
+    isToday; // ✅ ملغاة/مؤجلة تتفتح بس لو النهارده معادها، مش دايمًا
   const hasPendingReq = session.pendingReschedule?.status === "pending";
 
   const iconColors = {

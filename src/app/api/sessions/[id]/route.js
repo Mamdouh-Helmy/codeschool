@@ -62,6 +62,9 @@ export async function GET(req) {
         status:          session.status,
         meetingLink:     session.meetingLink,
         meetingPlatform: session.meetingPlatform,
+        // ✅ FIX: كانت ناقصة تمامًا من الـ response — عشان كده الأدمن كان
+        // شايف اللينك بس من غير اليوزرنيم/الباسورد، لأي سيشن مش بس الملغاة
+        meetingCredentials: session.meetingCredentials || null,
         recordingLink:   session.recordingLink,
         attendanceTaken: session.attendanceTaken,
         attendance: {
@@ -195,6 +198,23 @@ export async function POST(req) {
 // ============================================================
 // PUT
 // ============================================================
+
+// ✅ يحسب endTime جديد بيحافظ على نفس مدة السيشن الأصلية بعد تغيير startTime
+function shiftTimeByDuration(oldStart, oldEnd, newStart) {
+  const toMinutes = (t) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const toTimeStr = (mins) => {
+    const normalized = ((mins % 1440) + 1440) % 1440;
+    const h = Math.floor(normalized / 60);
+    const m = normalized % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  };
+  const durationMin = toMinutes(oldEnd) - toMinutes(oldStart);
+  return toTimeStr(toMinutes(newStart) + durationMin);
+}
+
 export async function PUT(req, { params }) {
   try {
     const { id } = await params;
@@ -220,27 +240,78 @@ export async function PUT(req, { params }) {
     const oldStatus = existingSession.status;
     const newStatus = updateData.status;
 
-    // ── Build update payload ───────────────────────────────────────────────
-    const updatePayload = {
+    const isNewlyCancelled    = newStatus === "cancelled" && oldStatus !== "cancelled";
+    const isPostponedWithDate = newStatus === "postponed" && !!updateData.newDate;
+
+    // ── Build base update payload (بدون status/scheduledDate لسه) ──────────
+    const basePayload = {
       meetingLink:      updateData.meetingLink      || "",
       recordingLink:    updateData.recordingLink    || "",
       instructorNotes:  updateData.instructorNotes  || "",
-      status:           newStatus,
       "metadata.updatedBy": adminUser.id,
       "metadata.updatedAt": new Date(),
     };
 
     // ✅ حفظ metadata في الـ DB (studentMessages, guardianMessages) للـ audit trail
     if (updateData.metadata && Object.keys(updateData.metadata).length > 0) {
-      updatePayload["metadata.lastNotificationMessages"] = updateData.metadata;
+      basePayload["metadata.lastNotificationMessages"] = updateData.metadata;
     }
 
-    const updatedSession = await Session.findByIdAndUpdate(id, updatePayload, {
-      new:            true,
-      runValidators:  true,
-    })
-      .populate("groupId",  "name code automation courseSnapshot instructors")
-      .populate("courseId", "title");
+    let cascadeResult = null;
+    let updatedSession = null;
+
+    if (isNewlyCancelled) {
+      // ✅ الإلغاء + ترحيل كل اللي بعدها أسبوع لقدام (ما عدا المكتملة/الملغية)
+      // status بتتظبط جوه cascadeShiftOnCancel نفسها — هنا بس باقي الحقول
+      try {
+        cascadeResult = await Session.cascadeShiftOnCancel(id, adminUser.id, 7);
+        console.log(
+          `🔁 Cascade cancel: shifted ${cascadeResult.shiftedCount} session(s), skipped ${cascadeResult.skippedCount}`
+        );
+      } catch (cascadeError) {
+        console.error("❌ Error cascading cancel:", cascadeError);
+        return NextResponse.json(
+          { success: false, error: cascadeError.message || "فشل إلغاء السيشن وترحيل الباقي" },
+          { status: 400 }
+        );
+      }
+
+      updatedSession = await Session.findByIdAndUpdate(id, basePayload, {
+        new:           true,
+        runValidators: true,
+      })
+        .populate("groupId",  "name code automation courseSnapshot instructors")
+        .populate("courseId", "title");
+
+    } else if (isPostponedWithDate) {
+      // ✅ تأجيل بتاريخ/وقت جديد — بيتحفظ فعليًا في scheduledDate/startTime/endTime
+      const oldStart = existingSession.startTime;
+      const oldEnd   = existingSession.endTime;
+      const newStart = updateData.newTime || oldStart;
+
+      basePayload.status        = newStatus;
+      basePayload.scheduledDate = new Date(updateData.newDate);
+      basePayload.startTime     = newStart;
+      basePayload.endTime       = shiftTimeByDuration(oldStart, oldEnd, newStart);
+
+      updatedSession = await Session.findByIdAndUpdate(id, basePayload, {
+        new:           true,
+        runValidators: true,
+      })
+        .populate("groupId",  "name code automation courseSnapshot instructors")
+        .populate("courseId", "title");
+
+    } else {
+      // باقي الحالات (scheduled / completed / تعديل عادي من غير تغيير تاريخ)
+      basePayload.status = newStatus;
+
+      updatedSession = await Session.findByIdAndUpdate(id, basePayload, {
+        new:           true,
+        runValidators: true,
+      })
+        .populate("groupId",  "name code automation courseSnapshot instructors")
+        .populate("courseId", "title");
+    }
 
     console.log(`✅ Session updated: ${updatedSession.title} | ${oldStatus} → ${newStatus}`);
 
@@ -299,6 +370,7 @@ export async function PUT(req, { params }) {
         message: "Session updated successfully",
         data:    updatedSession,
         instructorHours: instructorHoursResult,
+        cascade: cascadeResult,
         automation: {
           triggered: true,
           action:    `Sending ${newStatus} notifications`,
@@ -313,6 +385,7 @@ export async function PUT(req, { params }) {
       message: "Session updated successfully",
       data:    updatedSession,
       instructorHours: instructorHoursResult,
+      cascade: cascadeResult,
     });
 
   } catch (error) {
@@ -324,6 +397,7 @@ export async function PUT(req, { params }) {
 // ============================================================
 // DELETE
 // ============================================================
+
 export async function DELETE(req, { params }) {
   try {
     const { id } = await params;

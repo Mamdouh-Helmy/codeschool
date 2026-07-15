@@ -21,16 +21,14 @@ import WelcomePopupManager from "@/components/Common/WelcomePopupManager";
 import "./globals.css";
 import "./portfolio-forms.css";
 
-// ── Font ──────────────────────────────────────────────────────────────────────
 const dmsans = DM_Sans({ subsets: ["latin"] });
 
-// ── Metadata ──────────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
   title: "CodeSchool",
   description: "منصة تعليمية لتعليم البرمجة للأطفال والمبتدئين",
 };
 
-// ── Layout ────────────────────────────────────────────────────────────────────
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
@@ -63,10 +61,6 @@ export default async function RootLayout({
                     <WelcomePopupManager />
                   </Aoscompo>
 
-                  {/* Moved outside Aoscompo — AOS wrapper's overflow/transform
-                      was clipping the fixed-position Toaster, so toasts (like
-                      the delete confirmation) rendered in the DOM but were
-                      visually clipped/hidden. */}
                   <Toaster
                     position="top-center"
                     containerStyle={{ zIndex: 99999 }}

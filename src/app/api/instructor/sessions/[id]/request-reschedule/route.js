@@ -25,21 +25,25 @@ export async function POST(req, { params }) {
     if (!user) {
       return NextResponse.json(
         { success: false, message: "غير مصرح بالوصول", code: "UNAUTHORIZED" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     if (user.role !== "instructor" && user.role !== "admin") {
       return NextResponse.json(
-        { success: false, message: "هذه الصفحة للمدرسين فقط", code: "FORBIDDEN" },
-        { status: 403 }
+        {
+          success: false,
+          message: "هذه الصفحة للمدرسين فقط",
+          code: "FORBIDDEN",
+        },
+        { status: 403 },
       );
     }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, message: "رقم السيشن غير صالح" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -48,8 +52,12 @@ export async function POST(req, { params }) {
 
     if (!["single", "withNext"].includes(viewMode)) {
       return NextResponse.json(
-        { success: false, message: "نوع الطلب غير صالح", code: "INVALID_VIEW_MODE" },
-        { status: 400 }
+        {
+          success: false,
+          message: "نوع الطلب غير صالح",
+          code: "INVALID_VIEW_MODE",
+        },
+        { status: 400 },
       );
     }
 
@@ -60,7 +68,7 @@ export async function POST(req, { params }) {
     if (!session) {
       return NextResponse.json(
         { success: false, message: "الجلسة غير موجودة" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -72,20 +80,28 @@ export async function POST(req, { params }) {
 
     if (!group && user.role !== "admin") {
       return NextResponse.json(
-        { success: false, message: "غير مصرح لك بإدارة جلسات هذا الجروب", code: "FORBIDDEN" },
-        { status: 403 }
+        {
+          success: false,
+          message: "غير مصرح لك بإدارة جلسات هذا الجروب",
+          code: "FORBIDDEN",
+        },
+        { status: 403 },
       );
     }
 
-    // ── 2. منع الطلب على سيشن مكتملة أو ملغاة ────────────────────────────────
-    if (["completed", "cancelled"].includes(session.status)) {
+    // ✅ بس "completed" هي اللي تمنع الطلب — السيشن خلصت فعليًا واتاخد فيها حضور
+    // (الفحص بتاع attendanceTaken تحت ده بيغطي الحالة دي أصلاً بشكل أدق، لكن
+    // سايبين الفحص ده كطبقة حماية إضافية زي ما كان).
+    // ✅ "cancelled" بقت زي "postponed" بالظبط — تقدر تطلب فتحها لما تترحل
+    // لمعادها الجديد، بالظبط زي أي سيشن مؤجلة
+    if (session.status === "completed") {
       return NextResponse.json(
         {
           success: false,
-          message: "لا يمكن طلب فتح جلسة مكتملة أو ملغاة",
+          message: "لا يمكن طلب فتح جلسة مكتملة",
           code: "INVALID_SESSION_STATUS",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -97,10 +113,11 @@ export async function POST(req, { params }) {
       return NextResponse.json(
         {
           success: false,
-          message: "تم تسجيل الحضور لهذه الجلسة بالفعل، لا يمكن طلب فتحها مرة أخرى",
+          message:
+            "تم تسجيل الحضور لهذه الجلسة بالفعل، لا يمكن طلب فتحها مرة أخرى",
           code: "ATTENDANCE_ALREADY_TAKEN",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -113,7 +130,7 @@ export async function POST(req, { params }) {
           message: "هذه الجلسة متاحة لك بالفعل اليوم، لا حاجة لطلب فتح",
           code: "ALREADY_ACCESSIBLE",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -121,7 +138,7 @@ export async function POST(req, { params }) {
     try {
       const result = await session.submitCascadeRescheduleRequest(
         { viewMode, shiftDays },
-        user.id
+        user.id,
       );
 
       return NextResponse.json({
@@ -150,10 +167,11 @@ export async function POST(req, { params }) {
         return NextResponse.json(
           {
             success: false,
-            message: "يوجد طلب فتح جلسة قيد المراجعة لهذا الجروب بالفعل، يرجى الانتظار حتى يرد الأدمن",
+            message:
+              "يوجد طلب فتح جلسة قيد المراجعة لهذا الجروب بالفعل، يرجى الانتظار حتى يرد الأدمن",
             code: "PENDING_REQUEST_EXISTS",
           },
-          { status: 409 }
+          { status: 409 },
         );
       }
       throw err;
@@ -161,8 +179,12 @@ export async function POST(req, { params }) {
   } catch (error) {
     console.error("❌ [Request Reschedule API] Error:", error);
     return NextResponse.json(
-      { success: false, message: "فشل في إرسال طلب فتح الجلسة", error: error.message },
-      { status: 500 }
+      {
+        success: false,
+        message: "فشل في إرسال طلب فتح الجلسة",
+        error: error.message,
+      },
+      { status: 500 },
     );
   }
 }
@@ -182,24 +204,27 @@ export async function GET(req, { params }) {
     if (!user) {
       return NextResponse.json(
         { success: false, message: "غير مصرح بالوصول" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, message: "رقم السيشن غير صالح" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     await connectDB();
 
     const session = await Session.findOne({ _id: id, isDeleted: false }).select(
-      "groupId pendingReschedule"
+      "groupId pendingReschedule",
     );
     if (!session) {
-      return NextResponse.json({ success: false, message: "الجلسة غير موجودة" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "الجلسة غير موجودة" },
+        { status: 404 },
+      );
     }
 
     // ── 1) هل فيه طلب pending على الجروب ده (مش بس على السيشن دي)؟ ─────────
@@ -237,15 +262,21 @@ export async function GET(req, { params }) {
         batchId: wasRejected ? session.pendingReschedule.batchId : null,
         viewMode: wasRejected ? session.pendingReschedule.viewMode : null,
         requestedAt: wasRejected ? session.pendingReschedule.requestedAt : null,
-        reviewNotes: wasRejected ? session.pendingReschedule.reviewNotes || "" : null,
+        reviewNotes: wasRejected
+          ? session.pendingReschedule.reviewNotes || ""
+          : null,
         reviewedAt: wasRejected ? session.pendingReschedule.reviewedAt : null,
       },
     });
   } catch (error) {
     console.error("❌ [Check Pending Reschedule API] Error:", error);
     return NextResponse.json(
-      { success: false, message: "فشل في التحقق من حالة الطلب", error: error.message },
-      { status: 500 }
+      {
+        success: false,
+        message: "فشل في التحقق من حالة الطلب",
+        error: error.message,
+      },
+      { status: 500 },
     );
   }
 }

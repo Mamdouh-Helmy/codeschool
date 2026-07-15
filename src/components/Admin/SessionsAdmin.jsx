@@ -545,6 +545,7 @@ export default function SessionsAdmin() {
         <EditSessionModal
           session={selectedSession}
           groupStudents={groupStudents}
+          allSessions={sessions}
           onClose={() => setEditModalOpen(false)}
           onRefresh={loadSessions}
           isRTL={isRTL}
@@ -586,7 +587,6 @@ export default function SessionsAdmin() {
         />
       )}
 
-      {/* ✅ Group Completion Modal - مع تمرير groupId بشكل صريح */}
       {completionModalOpen && (
         <GroupCompletionModal
           group={group || {
