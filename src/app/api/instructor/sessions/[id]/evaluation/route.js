@@ -569,51 +569,80 @@ export async function PATCH(req, { params }) {
       let recordingLinkSent = false;
 
       if (guardianPhone && rendered) {
-        try {
-          const { wapilotService } = await import('../../../../../services/wapilot-service');
+  console.log("========== EVAL DEBUG ==========");
+  console.log("studentId:", studentId);
+  console.log("guardianPhone:", guardianPhone);
+  console.log("rendered exists:", !!rendered);
 
-          const evalResult = await wapilotService.sendAndLogEvalMessage({
-            studentId,
-            phoneNumber:    guardianPhone,
-            messageContent: rendered,
-            messageType:    `evaluation_${decision}`,
-            language:       lang,
-            metadata: {
-              sessionId:        id,
-              sessionTitle:     session.title,
-              decision,
-              attendanceStatus,
-              recipientType:    'guardian',
-              remainingHours,
-              isFallback,
-              moduleTitle,
-            },
-          });
-          messageSent = evalResult?.success || false;
+  let evalResult = null;
 
-          if (recordingLink?.trim()) {
-            const { rendered: recRendered } = await buildRecordingMessage(student, session, recordingLink);
+  try {
+    console.log("🔥 ENTERED SEND BLOCK");
 
-            const linkResult = await wapilotService.sendAndLogMessage({
-              studentId,
-              phoneNumber:    guardianPhone,
-              messageContent: recRendered,
-              messageType:    'session_recording',
-              language:       lang,
-              metadata: {
-                sessionId:     id,
-                sessionTitle:  session.title,
-                recipientType: 'guardian',
-                remainingHours,
-              },
-            });
-            recordingLinkSent = linkResult?.success || false;
-          }
+    const { wapilotService } = await import(
+      "../../../../../services/wapilot-service"
+    );
 
-        } catch (err) {
-          console.error(`⚠️ Eval messages failed (non-blocking):`, err.message);
-        }
-      }
+    console.log("🔥 CALLING sendAndLogEvalMessage");
+
+    evalResult = await wapilotService.sendAndLogEvalMessage({
+      studentId,
+      phoneNumber: guardianPhone,
+      messageContent: rendered,
+      messageType: `evaluation_${decision}`,
+      language: lang,
+      metadata: {
+        sessionId: id,
+        sessionTitle: session.title,
+        decision,
+        attendanceStatus,
+        recipientType: "guardian",
+        remainingHours,
+        isFallback,
+        moduleTitle,
+      },
+    });
+
+    console.log("🔥 RESULT:", JSON.stringify(evalResult, null, 2));
+
+    messageSent = evalResult?.success || false;
+
+    if (recordingLink?.trim()) {
+      console.log("🔥 Sending recording link");
+
+      const { rendered: recRendered } = await buildRecordingMessage(
+        student,
+        session,
+        recordingLink
+      );
+
+      const linkResult = await wapilotService.sendAndLogMessage({
+        studentId,
+        phoneNumber: guardianPhone,
+        messageContent: recRendered,
+        messageType: "session_recording",
+        language: lang,
+        metadata: {
+          sessionId: id,
+          sessionTitle: session.title,
+          recipientType: "guardian",
+          remainingHours,
+        },
+      });
+
+      console.log("🔥 Recording Result:", JSON.stringify(linkResult, null, 2));
+
+      recordingLinkSent = linkResult?.success || false;
+    }
+  } catch (err) {
+    console.error("❌ SEND ERROR:");
+    console.error(err);
+  }
+} else {
+  console.log("⛔ SEND BLOCK SKIPPED");
+  console.log("guardianPhone:", guardianPhone);
+  console.log("rendered exists:", !!rendered);
+}
 
       results.push({ studentId, decision, attendanceStatus, messageSent, recordingLinkSent });
     }
