@@ -1,14 +1,29 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import {
-  User, Mail, Phone, Save, X, Lock,
-  Image as ImageIcon, Hash, Upload, Trash2, Loader2, Globe,
+  User,
+  Mail,
+  Phone,
+  Save,
+  X,
+  Lock,
+  Image as ImageIcon,
+  Hash,
+  Upload,
+  Trash2,
+  Loader2,
+  Globe,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+
 export default function InstructorForm({ initial, isCreating, onClose, onSaved }) {
   const { t } = useI18n();
+
   const [form, setForm] = useState({
     name: initial?.name || "",
     email: initial?.email || "",
@@ -20,36 +35,38 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
     password: "",
     passwordConfirm: "",
   });
+
   const [loading, setLoading] = useState(false);
-  const [imagePreview, setImagePreview] = useState(initial?.image || "");
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState(initial?.image || "");
 
-  const onChange = (field, value) =>
-    setForm((prev) => ({ ...prev, [field]: value }));
+  const onChange = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
-  // ✅ رفع الـ file مباشرة بدون base64
+  // Keep preview in sync when image URL is typed/cleared manually
+  useEffect(() => {
+    if (form.image && form.image !== imagePreview) {
+      setImagePreview(form.image);
+    }
+  }, [form.image]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const uploadImageToCloudinary = async (file) => {
     setUploadingImage(true);
     const toastId = toast.loading("جاري رفع الصورة...");
+
     try {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folder", "instructors");
 
-      const response = await fetch("/api/upload-image", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/upload-image", { method: "POST", body: formData });
+      const data = await res.json();
 
-      const data = await response.json();
-      if (data.success) {
-        onChange("image", data.imageUrl);
-        setImagePreview(data.imageUrl);
-        toast.success("تم رفع الصورة بنجاح!", { id: toastId });
-        return data.imageUrl;
-      } else {
-        throw new Error(data.message || "فشل رفع الصورة");
-      }
+      if (!data.success) throw new Error(data.message || "فشل رفع الصورة");
+
+      onChange("image", data.imageUrl);
+      setImagePreview(data.imageUrl);
+      toast.success("تم رفع الصورة بنجاح!", { id: toastId });
+      return data.imageUrl;
     } catch (error) {
       console.error("Upload error:", error);
       toast.error(error.message || "حدث خطأ أثناء رفع الصورة", { id: toastId });
@@ -63,17 +80,15 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       toast.error("نوع الملف غير مدعوم. يرجى استخدام صورة (JPEG, PNG, WebP)");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_IMAGE_SIZE) {
       toast.error("حجم الملف كبير جداً. الحد الأقصى 5MB");
       return;
     }
 
-    // ✅ preview فوري من الملف مباشرة
     setImagePreview(URL.createObjectURL(file));
 
     uploadImageToCloudinary(file).catch(() => {
@@ -82,20 +97,50 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
     });
   };
 
-  useEffect(() => {
-    if (form.image && form.image !== imagePreview) {
-      setImagePreview(form.image);
+  const removeImage = () => {
+    onChange("image", "");
+    setImagePreview("");
+  };
+
+  const validate = () => {
+    if (!form.name.trim()) {
+      toast.error(t("instructorForm.nameRequired"));
+      return false;
     }
-  }, [form.image]);
+    if (isCreating && !form.email.trim()) {
+      toast.error(t("instructorForm.emailRequired") || "Email is required");
+      return false;
+    }
+    if (isCreating && !form.password) {
+      toast.error(t("instructorForm.passwordRequired") || "Password is required");
+      return false;
+    }
+    if (form.password && form.password !== form.passwordConfirm) {
+      toast.error(t("instructorForm.passwordMismatch"));
+      return false;
+    }
+    if (form.password && form.password.length < 6) {
+      toast.error(t("instructorForm.passwordTooShort"));
+      return false;
+    }
+    return true;
+  };
+
+  const buildPayload = () => ({
+    name: form.name.trim(),
+    phone: form.phone.trim(),
+    image: form.image.trim(),
+    gender: form.gender || "",
+    language: form.language,
+    // Email is only sent (and only required) on creation — it's read-only on update
+    ...(isCreating && { email: form.email.trim() }),
+    ...(form.username.trim() && { username: form.username.trim() }),
+    ...(form.password && { password: form.password }),
+  });
 
   const submit = async (e) => {
     e.preventDefault();
-
-    if (!form.name.trim()) { toast.error(t("instructorForm.nameRequired")); return; }
-    if (isCreating && !form.email.trim()) { toast.error(t("instructorForm.emailRequired") || "Email is required"); return; }
-    if (isCreating && !form.password) { toast.error(t("instructorForm.passwordRequired") || "Password is required"); return; }
-    if (form.password && form.password !== form.passwordConfirm) { toast.error(t("instructorForm.passwordMismatch")); return; }
-    if (form.password && form.password.length < 6) { toast.error(t("instructorForm.passwordTooShort")); return; }
+    if (!validate()) return;
 
     setLoading(true);
     const toastId = toast.loading(
@@ -103,39 +148,30 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
     );
 
     try {
-      // في InstructorForm.jsx — داخل submit
-      const payload = {
-        name: form.name.trim(),
-        phone: form.phone.trim(),      // دايماً بعت حتى لو فاضي
-        image: form.image.trim(),      // دايماً بعت حتى لو فاضي
-        gender: form.gender || "",      // دايماً بعت حتى لو فاضي
-        language: form.language,
-        ...(form.username.trim() && { username: form.username.trim() }),
-        ...(form.password && { password: form.password }),
-      };
-
       const url = isCreating ? "/api/instructor" : `/api/instructor/${initial._id}`;
       const method = isCreating ? "POST" : "PUT";
 
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(buildPayload()),
       });
       const result = await res.json();
 
-      if (!res.ok) throw new Error(result.message || (isCreating ? t("instructorForm.createFailed") : t("instructorForm.updateFailed")));
-
-      if (result.success) {
-        toast.success(
-          isCreating ? t("instructorForm.createdSuccess") || "Instructor created successfully" : t("instructorForm.updatedSuccess"),
-          { id: toastId }
+      if (!res.ok || !result.success) {
+        throw new Error(
+          result.message || (isCreating ? t("instructorForm.createFailed") : t("instructorForm.updateFailed"))
         );
-        onSaved();
-        onClose();
-      } else {
-        throw new Error(result.message || (isCreating ? t("instructorForm.createFailed") : t("instructorForm.updateFailed")));
       }
+
+      toast.success(
+        isCreating
+          ? t("instructorForm.createdSuccess") || "Instructor created successfully"
+          : t("instructorForm.updatedSuccess"),
+        { id: toastId }
+      );
+      onSaved();
+      onClose();
     } catch (err) {
       console.error("Error:", err);
       toast.error(err.message || t("instructorForm.updateError"), { id: toastId });
@@ -146,7 +182,6 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
   return (
     <form onSubmit={submit} className="space-y-6">
-
       {/* ── Basic Info ── */}
       <div className="space-y-4 bg-white dark:bg-darkmode rounded-xl p-5 border border-PowderBlueBorder dark:border-dark_border">
         <div className="flex items-center gap-3">
@@ -154,20 +189,25 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
             <User className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">{t("instructorForm.basicInfo")}</h3>
-            <p className="text-12 text-SlateBlueText dark:text-darktext">{t("instructorForm.basicInfoDescription")}</p>
+            <h3 className="text-15 font-semibold text-MidnightNavyText dark:text-white">
+              {t("instructorForm.basicInfo")}
+            </h3>
+            <p className="text-12 text-SlateBlueText dark:text-darktext">
+              {t("instructorForm.basicInfoDescription")}
+            </p>
           </div>
         </div>
 
         <div className="space-y-4">
-
           {/* Name */}
           <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <User className="w-3 h-3" />{t("instructorForm.name")} *
+            <label className="flex items-center gap-2 text-13 font-medium text-MidnightNavyText dark:text-white">
+              <User className="w-3 h-3" />
+              {t("instructorForm.name")} *
             </label>
             <input
-              type="text" value={form.name}
+              type="text"
+              value={form.name}
               onChange={(e) => onChange("name", e.target.value)}
               placeholder={t("instructorForm.namePlaceholder")}
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
@@ -177,16 +217,18 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
           {/* Gender */}
           <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
+            <label className="flex items-center gap-2 text-13 font-medium text-MidnightNavyText dark:text-white">
               <User className="w-3 h-3" />
               {t("instructorForm.gender") || "Gender"}
               <span className="text-xs text-gray-500 font-normal">({t("common.optional") || "اختياري"})</span>
             </label>
-            <div className="flex gap-4 items-center">
+            <div className="flex items-center gap-4">
               {["male", "female"].map((g) => (
                 <label key={g} className="flex items-center gap-2 cursor-pointer">
                   <input
-                    type="radio" name="gender" value={g}
+                    type="radio"
+                    name="gender"
+                    value={g}
                     checked={form.gender === g}
                     onChange={(e) => onChange("gender", e.target.value)}
                     className="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
@@ -197,8 +239,11 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
                 </label>
               ))}
               {form.gender && (
-                <button type="button" onClick={() => onChange("gender", "")}
-                  className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 underline">
+                <button
+                  type="button"
+                  onClick={() => onChange("gender", "")}
+                  className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 underline"
+                >
                   {t("common.clear") || "مسح"}
                 </button>
               )}
@@ -207,14 +252,20 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
           {/* Language */}
           <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <Globe className="w-3 h-3" />{t("instructorForm.language") || "اللغة"}
+            <label className="flex items-center gap-2 text-13 font-medium text-MidnightNavyText dark:text-white">
+              <Globe className="w-3 h-3" />
+              {t("instructorForm.language") || "اللغة"}
             </label>
-            <div className="flex gap-4 items-center">
-              {[{ value: "ar", label: "🇸🇦 عربي" }, { value: "en", label: "🇬🇧 English" }].map((lang) => (
+            <div className="flex items-center gap-4">
+              {[
+                { value: "ar", label: "🇸🇦 عربي" },
+                { value: "en", label: "🇬🇧 English" },
+              ].map((lang) => (
                 <label key={lang.value} className="flex items-center gap-2 cursor-pointer">
                   <input
-                    type="radio" name="language" value={lang.value}
+                    type="radio"
+                    name="language"
+                    value={lang.value}
                     checked={form.language === lang.value}
                     onChange={(e) => onChange("language", e.target.value)}
                     className="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
@@ -227,15 +278,18 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
           {/* Email */}
           <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <Mail className="w-3 h-3" />{t("instructorForm.email")} {isCreating && "*"}
+            <label className="flex items-center gap-2 text-13 font-medium text-MidnightNavyText dark:text-white">
+              <Mail className="w-3 h-3" />
+              {t("instructorForm.email")} {isCreating && "*"}
             </label>
             <input
-              type="email" value={form.email}
+              type="email"
+              value={form.email}
               onChange={(e) => onChange("email", e.target.value)}
               placeholder="instructor@example.com"
-              className={`w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:text-white ${isCreating ? "dark:bg-dark_input" : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                }`}
+              className={`w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:text-white ${
+                isCreating ? "dark:bg-dark_input" : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+              }`}
               disabled={!isCreating}
               required={isCreating}
             />
@@ -246,11 +300,13 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
           {/* Username */}
           <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <Hash className="w-3 h-3" />{t("instructorForm.username")}
+            <label className="flex items-center gap-2 text-13 font-medium text-MidnightNavyText dark:text-white">
+              <Hash className="w-3 h-3" />
+              {t("instructorForm.username")}
             </label>
             <input
-              type="text" value={form.username}
+              type="text"
+              value={form.username}
               onChange={(e) => onChange("username", e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
               placeholder="john_doe"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
@@ -260,11 +316,13 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
           {/* Phone */}
           <div className="space-y-2">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <Phone className="w-3 h-3" />{t("instructorForm.phone")}
+            <label className="flex items-center gap-2 text-13 font-medium text-MidnightNavyText dark:text-white">
+              <Phone className="w-3 h-3" />
+              {t("instructorForm.phone")}
             </label>
             <input
-              type="tel" value={form.phone}
+              type="tel"
+              value={form.phone}
               onChange={(e) => onChange("phone", e.target.value)}
               placeholder="+201234567890"
               className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
@@ -273,16 +331,16 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
 
           {/* Image Upload */}
           <div className="space-y-3">
-            <label className="block text-13 font-medium text-MidnightNavyText dark:text-white flex items-center gap-2">
-              <ImageIcon className="w-3 h-3" />{t("instructorForm.imageUrl")}
+            <label className="flex items-center gap-2 text-13 font-medium text-MidnightNavyText dark:text-white">
+              <ImageIcon className="w-3 h-3" />
+              {t("instructorForm.imageUrl")}
             </label>
 
-            <div className="flex gap-4 items-start">
+            <div className="flex items-start gap-4">
               <div className="flex-1 space-y-3">
-
-                {/* رابط يدوي */}
                 <input
-                  type="url" value={form.image}
+                  type="url"
+                  value={form.image}
                   onChange={(e) => onChange("image", e.target.value)}
                   placeholder="أو أدخل رابط الصورة مباشرة"
                   className="w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white"
@@ -290,32 +348,41 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
                 />
 
                 <div className="flex gap-2">
-                  {/* زرار رفع */}
-                  <label className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-13 font-medium transition-colors border ${uploadingImage
-                      ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-300"
-                      : "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 cursor-pointer"
-                    }`}>
+                  <label
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-13 font-medium transition-colors border ${
+                      uploadingImage
+                        ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed border-gray-300"
+                        : "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 cursor-pointer"
+                    }`}
+                  >
                     {uploadingImage ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" />{t("instructorForm.uploading") || "جاري الرفع..."}</>
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {t("instructorForm.uploading") || "جاري الرفع..."}
+                      </>
                     ) : (
-                      <><Upload className="w-4 h-4" />{form.image ? t("instructorForm.changeImage") || "تغيير الصورة" : t("instructorForm.uploadImage") || "رفع صورة"}</>
+                      <>
+                        <Upload className="w-4 h-4" />
+                        {form.image ? t("instructorForm.changeImage") || "تغيير الصورة" : t("instructorForm.uploadImage") || "رفع صورة"}
+                      </>
                     )}
                     <input
                       type="file"
-                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      accept={ALLOWED_IMAGE_TYPES.join(",")}
                       onChange={handleImageUpload}
                       className="hidden"
                       disabled={uploadingImage || loading}
                     />
                   </label>
 
-                  {/* زرار حذف */}
                   {form.image && !uploadingImage && (
                     <button
                       type="button"
-                      onClick={() => { onChange("image", ""); setImagePreview(""); }}
-                      className="inline-flex items-center gap-2 px-3 py-2.5 bg-red-500/10 text-red-500 rounded-lg text-13 font-medium hover:bg-red-500/20 transition-colors">
-                      <Trash2 className="w-3 h-3" />{t("instructorForm.removeImage") || "حذف"}
+                      onClick={removeImage}
+                      className="inline-flex items-center gap-2 px-3 py-2.5 bg-red-500/10 text-red-500 rounded-lg text-13 font-medium hover:bg-red-500/20 transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      {t("instructorForm.removeImage") || "حذف"}
                     </button>
                   )}
                 </div>
@@ -325,13 +392,15 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
                 </p>
               </div>
 
-              {/* Preview */}
               {imagePreview && (
-                <div className="w-24 h-24 border-2 border-dashed border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden bg-gray-50 dark:bg-dark_input flex items-center justify-center relative">
+                <div className="relative w-24 h-24 border-2 border-dashed border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden bg-gray-50 dark:bg-dark_input flex items-center justify-center">
                   <img
-                    src={imagePreview} alt="Preview"
+                    src={imagePreview}
+                    alt="Preview"
                     className="w-full h-full object-cover"
-                    onError={(e) => { e.target.src = "/images/default-avatar.jpg"; }}
+                    onError={(e) => {
+                      e.target.src = "/images/default-avatar.jpg";
+                    }}
                   />
                   {uploadingImage && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -342,7 +411,6 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
               )}
             </div>
           </div>
-
         </div>
       </div>
 
@@ -357,18 +425,21 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
               {isCreating ? t("instructorForm.setPassword") || "Set Password" : t("instructorForm.changePassword")}
             </h3>
             <p className="text-12 text-SlateBlueText dark:text-darktext">
-              {isCreating ? t("instructorForm.passwordRequired") || "Password is required for new instructor" : t("instructorForm.passwordOptional")}
+              {isCreating
+                ? t("instructorForm.passwordRequired") || "Password is required for new instructor"
+                : t("instructorForm.passwordOptional")}
             </p>
           </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="block text-13 font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-13 font-medium text-gray-700 dark:text-gray-300">
               {isCreating ? t("instructorForm.password") || "Password" : t("instructorForm.newPassword")} {isCreating && "*"}
             </label>
             <input
-              type="password" value={form.password}
+              type="password"
+              value={form.password}
               onChange={(e) => onChange("password", e.target.value)}
               placeholder="••••••••"
               className="w-full px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white bg-white/50"
@@ -376,11 +447,12 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
             />
           </div>
           <div className="space-y-2">
-            <label className="block text-13 font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-13 font-medium text-gray-700 dark:text-gray-300">
               {t("instructorForm.confirmPassword")} {isCreating && "*"}
             </label>
             <input
-              type="password" value={form.passwordConfirm}
+              type="password"
+              value={form.passwordConfirm}
               onChange={(e) => onChange("passwordConfirm", e.target.value)}
               placeholder="••••••••"
               className="w-full px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark_input dark:text-white bg-white/50"
@@ -402,24 +474,33 @@ export default function InstructorForm({ initial, isCreating, onClose, onSaved }
       <div className="sticky bottom-0 bg-white dark:bg-darkmode pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
         <div className="flex gap-3">
           <button
-            type="button" onClick={onClose}
+            type="button"
+            onClick={onClose}
             disabled={loading || uploadingImage}
-            className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-            <X className="w-4 h-4" />{t("common.cancel")}
+            className="flex-1 bg-white dark:bg-dark_input border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white py-3 px-4 rounded-lg font-semibold text-13 hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <X className="w-4 h-4" />
+            {t("common.cancel")}
           </button>
           <button
             type="submit"
             disabled={loading || uploadingImage}
-            className="flex-1 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white py-3 px-4 rounded-lg font-semibold text-13 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200">
+            className="flex-1 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white py-3 px-4 rounded-lg font-semibold text-13 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200"
+          >
             {loading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" />{isCreating ? t("instructorForm.creating") || "Creating..." : t("instructorForm.updating")}</>
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {isCreating ? t("instructorForm.creating") || "Creating..." : t("instructorForm.updating")}
+              </>
             ) : (
-              <><Save className="w-4 h-4" />{isCreating ? t("instructorForm.create") || "Create Instructor" : t("instructorForm.saveChanges")}</>
+              <>
+                <Save className="w-4 h-4" />
+                {isCreating ? t("instructorForm.create") || "Create Instructor" : t("instructorForm.saveChanges")}
+              </>
             )}
           </button>
         </div>
       </div>
-
     </form>
   );
 }
