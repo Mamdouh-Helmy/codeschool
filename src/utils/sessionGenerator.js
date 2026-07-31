@@ -1213,3 +1213,296 @@ export async function rescheduleGroupSessions(
     sessions: updatedSessions,
   };
 }
+
+// ============================================================
+// ✅ FIX: resyncGroupModuleSessions — استبدل بيها الفانكشن اللي بنفس الاسم
+// في utils/sessionGenerator.js. باقي الملف (الـ imports، createFlexibleWeeklySchedule،
+// releaseMeetingLink، MeetingLink، mongoose... إلخ) يفضل زي ما هو من غير أي تعديل،
+// الفانكشن دي بتستخدمهم زي الأول.
+//
+// ايه اللي اتصلح بالظبط:
+//   السبب الأصلي للمشكلة: زرار "🔄 مزامنة السيشنز" في الفرونت (GroupForm.jsx)
+//   بيبعت moduleSelection بس، من غير selectedLinkIds خالص. فكان selectedLinkIds
+//   بيوصل هنا دايمًا [] (فاضي)، وبالتالي allAvailableLinks كانت بتفضل فاضية
+//   دايمًا — فأي "سلوت جديد تمامًا" (زي موديول 1 لما ترجع تضيفه بعد ما كنت
+//   بادئ بموديول 2 بس) كان بياخد سيشن من غير meetingLink خالص.
+//
+//   الحل: لو selectedLinkIds مبعتش صراحة، الفانكشن دلوقتي بتجيب اللينكات
+//   اللي الجروب أصلًا بيستخدمها في باقي سيشناته (اللي مش هتتشال دلوقتي)
+//   وتعيد استخدامها للسلوتات الجديدة، بنفس منطق التوزيع (modulo) اللي كان
+//   موجود أصلاً. باقي المنطق (kept-in-place, removed, completed untouched)
+//   متلمسش خالص.
+// ============================================================
+export async function resyncGroupModuleSessions(
+  groupId,
+  group,
+  newModuleSelection,
+  userId,
+  selectedLinkIds = [],
+) {
+  const Session = (await import("../app/models/Session")).default;
+  const Group   = (await import("../app/models/Group")).default;
+
+  console.log(`\n🔁 ========== RESYNCING GROUP MODULE SELECTION (v2) ==========`);
+  console.log(`Group ID: ${groupId}`);
+
+  if (!group.sessionsGenerated) {
+    throw new Error("الجروب لسه معندوش سيشنز متولدة — استخدم التوليد العادي الأول");
+  }
+
+  const course = group.courseId;
+  if (!course?.curriculum?.length) throw new Error("Course curriculum not found");
+
+  const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
+  if (!daysOfWeek?.length) throw new Error("جدول الجروب ناقصه أيام");
+  if (!startDate) throw new Error("جدول الجروب ناقصه تاريخ البداية");
+
+  // ── هدف الموديولات — مرتبة تصاعديًا دايمًا، ده أساس ضمان الترتيب الصحيح ──
+  const targetModuleIndexes =
+    newModuleSelection.mode === "all"
+      ? course.curriculum.map((_, idx) => idx)
+      : [...new Set(newModuleSelection.selectedModules || [])].sort((a, b) => a - b);
+
+  if (targetModuleIndexes.length === 0) {
+    throw new Error("لازم تختار موديول واحد على الأقل");
+  }
+
+  // ── كل السيشنز الحالية ─────────────────────────────────────────────────
+  const allSessions = await Session.find({ groupId, isDeleted: false });
+
+  const completedSessions    = allSessions.filter((s) => s.status === "completed");
+  const nonCompletedSessions = allSessions.filter((s) => s.status !== "completed");
+
+  // ✅ (moduleIndex-sessionNumber) لأي سيشن مكتملة — ثابتة للأبد، بره أي منطق تاني
+  const completedKeys = new Set(
+    completedSessions.map((s) => `${s.moduleIndex}-${s.sessionNumber}`),
+  );
+
+  // ✅ خريطة (moduleIndex-sessionNumber) → السيشن الغير مكتملة الموجودة حاليًا،
+  // عشان لو نفس السلوت هيفضل مطلوب، نقدر ننقل لينكها ونحافظ على نفس الـ _id
+  const nonCompletedByKey = new Map();
+  nonCompletedSessions.forEach((s) => {
+    nonCompletedByKey.set(`${s.moduleIndex}-${s.sessionNumber}`, s);
+  });
+
+  // ── قائمة السلوتات المطلوبة (غير المكتملة) — بترتيب module ثم sessionNumber ──
+  const requiredSlots = [];
+  for (const moduleIndex of targetModuleIndexes) {
+    const module = course.curriculum[moduleIndex];
+    if (!module?.lessons || module.lessons.length !== 6) {
+      console.warn(`⚠️ Module ${moduleIndex + 1} skipped — لازم 6 دروس بالظبط`);
+      continue;
+    }
+    for (const sessionNumber of [1, 2, 3]) {
+      const key = `${moduleIndex}-${sessionNumber}`;
+      if (completedKeys.has(key)) continue; // ✅ مكتملة بالفعل — متتلمسش
+
+      const lessonIndexes =
+        sessionNumber === 1 ? [0, 1] : sessionNumber === 2 ? [2, 3] : [4, 5];
+
+      requiredSlots.push({
+        moduleIndex,
+        sessionNumber,
+        lessonIndexes,
+        existing: nonCompletedByKey.get(key) || null,
+      });
+    }
+  }
+
+  const requiredKeys = new Set(
+    requiredSlots.map((s) => `${s.moduleIndex}-${s.sessionNumber}`),
+  );
+
+  // ── سيشنز غير مكتملة موجودة دلوقتي بس موديولها اتشال من الاختيار الجديد ──
+  const sessionsToRemove = nonCompletedSessions.filter(
+    (s) => !requiredKeys.has(`${s.moduleIndex}-${s.sessionNumber}`),
+  );
+
+  console.log(
+    `📊 Completed: ${completedSessions.length} | Required slots: ${requiredSlots.length} | To remove: ${sessionsToRemove.length}`,
+  );
+
+  // ── تواريخ جديدة لكل الـ requiredSlots سوا — بترتيبها الصحيح، بادئة دايمًا
+  // من startDate الأصلي بتاع الجروب (مش من "آخر تاريخ مستخدم") ─────────────
+  const newDates = createFlexibleWeeklySchedule(startDate, daysOfWeek, requiredSlots.length);
+
+  // ── فك حجز لينكات السيشنز اللي هتتشال فعلاً (موديولها بره الاختيار الجديد) ──
+  for (const s of sessionsToRemove) {
+    if (s.meetingLinkId) {
+      try {
+        await releaseMeetingLink(s._id);
+      } catch (e) {
+        console.error("⚠️ release link failed:", e.message);
+      }
+    }
+  }
+
+  if (sessionsToRemove.length > 0) {
+    await Session.updateMany(
+      { _id: { $in: sessionsToRemove.map((s) => s._id) } },
+      { $set: { isDeleted: true, deletedAt: new Date(), status: "cancelled" } },
+    );
+  }
+
+  // ── لينكات جديدة للسلوتات الجديدة تمامًا ──────────────────────────────
+  // ✅ FIX: لو مفيش selectedLinkIds اتبعتت صراحة (زي زرار "مزامنة السيشنز"
+  // اللي مفيهوش UI لاختيار لينكات أصلاً)، بدل ما نسيب السلوتات الجديدة من
+  // غير أي لينك، بنجيب اللينكات اللي الجروب أصلًا بيستخدمها في باقي سيشناته
+  // (اللي مش هتتشال) ونعيد استخدامها بنفس ترتيب ظهورها.
+  const sessionsToRemoveIds = new Set(sessionsToRemove.map((s) => s._id.toString()));
+
+  let allAvailableLinks = [];
+  if (selectedLinkIds.length > 0) {
+    allAvailableLinks = await MeetingLink.find({
+      _id: { $in: selectedLinkIds },
+      isDeleted: false,
+    }).lean();
+    allAvailableLinks.sort(
+      (a, b) =>
+        selectedLinkIds.indexOf(a._id.toString()) -
+        selectedLinkIds.indexOf(b._id.toString()),
+    );
+  } else {
+    const usedLinkIds = [
+      ...new Set(
+        allSessions
+          .filter((s) => s.meetingLinkId && !sessionsToRemoveIds.has(s._id.toString()))
+          .map((s) => s.meetingLinkId.toString()),
+      ),
+    ];
+
+    if (usedLinkIds.length > 0) {
+      allAvailableLinks = await MeetingLink.find({
+        _id: { $in: usedLinkIds },
+        isDeleted: false,
+      }).lean();
+      allAvailableLinks.sort(
+        (a, b) => usedLinkIds.indexOf(a._id.toString()) - usedLinkIds.indexOf(b._id.toString()),
+      );
+      console.log(`📋 مفيش لينكات محددة — بنعيد استخدام ${allAvailableLinks.length} لينك مستخدم بالفعل في الجروب`);
+    } else {
+      console.log(`📋 مفيش لينكات محددة ولا لينكات مستخدمة بالفعل في الجروب — السلوتات الجديدة هتتعمل من غير لينك`);
+    }
+  }
+  let freshLinkCursor = 0;
+
+  const bulkUpdateExisting = [];
+  const newSessionsToInsert = [];
+
+  requiredSlots.forEach((slot, i) => {
+    const module = course.curriculum[slot.moduleIndex];
+    const lessonTitle = module.lessons[slot.lessonIndexes[0]]?.title?.trim() || "";
+    const title = `Session ${slot.sessionNumber}: ${lessonTitle}`;
+    const description = module.lessons[slot.lessonIndexes[0]]?.description || "";
+    const newDate = newDates[i];
+
+    if (slot.existing) {
+      // ✅ سيشن موجودة بالفعل لنفس (module, sessionNumber) — نحدّث بس تاريخها/
+      // وقتها/عنوانها، ومنلمسش اللينك ولا الـ _id بتاعها خالص
+      bulkUpdateExisting.push({
+        updateOne: {
+          filter: { _id: slot.existing._id },
+          update: {
+            $set: {
+              scheduledDate: newDate,
+              startTime: timeFrom,
+              endTime: timeTo,
+              title,
+              description,
+              status: "scheduled",
+              "metadata.updatedAt": new Date(),
+              "metadata.lastModifiedBy": userId,
+            },
+          },
+        },
+      });
+      return;
+    }
+
+    // ✅ سلوت جديد تمامًا — سيشن جديدة، ولينك من allAvailableLinks لو موجود
+    const base = {
+      _id: new mongoose.Types.ObjectId(),
+      groupId: group._id,
+      courseId: course._id,
+      moduleIndex: slot.moduleIndex,
+      sessionNumber: slot.sessionNumber,
+      lessonIndexes: slot.lessonIndexes,
+      title,
+      description,
+      scheduledDate: newDate,
+      startTime: timeFrom,
+      endTime: timeTo,
+      status: "scheduled",
+      attendanceTaken: false,
+      attendance: [],
+      automationEvents: {
+        reminderSent: false,
+        absentNotificationsSent: false,
+        postponeNotificationSent: false,
+        cancelNotificationSent: false,
+        meetingLinkAssigned: false,
+      },
+      metadata: { createdBy: userId, createdAt: new Date(), updatedAt: new Date() },
+      isDeleted: false,
+    };
+
+    if (allAvailableLinks.length > 0) {
+      const link = allAvailableLinks[freshLinkCursor % allAvailableLinks.length];
+      freshLinkCursor++;
+      newSessionsToInsert.push({
+        ...base,
+        meetingLink: link.link,
+        meetingCredentials: {
+          username: link.credentials?.username,
+          password: link.credentials?.password,
+        },
+        meetingLinkId: link._id,
+        meetingPlatform: link.platform,
+        automationEvents: {
+          ...base.automationEvents,
+          meetingLinkAssigned: true,
+          meetingLinkAssignedAt: new Date(),
+        },
+      });
+    } else {
+      newSessionsToInsert.push(base);
+    }
+  });
+
+  if (bulkUpdateExisting.length > 0) {
+    await Session.bulkWrite(bulkUpdateExisting);
+  }
+  if (newSessionsToInsert.length > 0) {
+    await Session.insertMany(newSessionsToInsert);
+  }
+
+  // ── تحديث بيانات الجروب ──────────────────────────────────────────────────
+  const finalCount = await Session.countDocuments({ groupId, isDeleted: false });
+
+  await Group.findByIdAndUpdate(groupId, {
+    $set: {
+      moduleSelection: newModuleSelection,
+      totalSessionsCount: finalCount,
+      "metadata.lastModifiedBy": userId,
+      "metadata.updatedAt": new Date(),
+    },
+  });
+
+  const linksReleased = sessionsToRemove.filter((s) => s.meetingLinkId).length;
+
+  console.log(
+    `✅ Resync v2 done: required=${requiredSlots.length} (kept-in-place=${bulkUpdateExisting.length}, new=${newSessionsToInsert.length}), removed=${sessionsToRemove.length} (links released=${linksReleased}), completed untouched=${completedSessions.length}`,
+  );
+  console.log(`========================================\n`);
+
+  return {
+    success: true,
+    message: `تمت المزامنة: ${requiredSlots.length} سيشن بالترتيب الصحيح، اتشال ${sessionsToRemove.length}، اللينكات المرتبطة اتنقلت زي ما هي`,
+    totalRequired: requiredSlots.length,
+    keptInPlaceCount: bulkUpdateExisting.length,
+    addedCount: newSessionsToInsert.length,
+    removedCount: sessionsToRemove.length,
+    completedCount: completedSessions.length,
+    linksReleased,
+  };
+}

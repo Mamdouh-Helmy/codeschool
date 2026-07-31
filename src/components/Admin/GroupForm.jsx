@@ -78,7 +78,10 @@ function buildInitialForm(initial) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t }) {
+// ✅ sessionsGenerated + groupId عشان نقدر نستدعي مزامنة السيشنز مع الاختيار الجديد
+function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, groupId, sessionsGenerated }) {
+  const [syncing, setSyncing] = useState(false);
+
   if (!curriculum?.length) return null;
 
   const toggle = (idx) => {
@@ -89,6 +92,43 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t })
 
   const totalSessionsAll = curriculum.reduce((s, m) => s + (m.totalSessions || 3), 0);
   const selectedSessions  = (selectedModules?.selectedModules || []).reduce((s, i) => s + (curriculum[i]?.totalSessions || 3), 0);
+
+  // ✅ مزامنة السيشنز الفعلية مع اختيار الموديولات الجديد
+  // - أي سيشن Scheduled/Cancelled/Postponed لموديول اتشال من الاختيار → بتتلغي
+  // - الموديولات الجديدة اللي معندهاش سيشنز → بتتولد على المواعيد اللي فضيت (أو بعدها لو مش كفاية)
+  // - أي سيشن Completed منلمسهوش خالص
+  const handleSync = async () => {
+    if (!groupId) return;
+
+    if (selectedModules?.mode === "specific" && !selectedModules?.selectedModules?.length) {
+      toast.error(t("groups.form.errors.noModulesSelected"));
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "هيتم حذف أي سيشن لسه Scheduled لموديولات اتشالت من الاختيار، وإضافة سيشنز جديدة للموديولات الجديدة على المواعيد المتاحة. السيشنز المكتملة (Completed) مش هتتأثر خالص. تكمل؟"
+    );
+    if (!confirmed) return;
+
+    setSyncing(true);
+    const toastId = toast.loading("جاري مزامنة السيشنز...");
+    try {
+      const res = await fetch(`/api/groups/${groupId}/sync-modules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ moduleSelection: selectedModules }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || result.message || "فشلت المزامنة");
+      }
+      toast.success(result.message, { id: toastId });
+    } catch (err) {
+      toast.error(err.message || "فشلت المزامنة", { id: toastId });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
@@ -161,6 +201,30 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t })
           </p>
         )}
       </div>
+
+      {/* زرار مزامنة السيشنز — بيظهر بس لو الجروب عنده سيشنز متولدة بالفعل */}
+      {sessionsGenerated && groupId && (
+        <div className="mt-3 flex flex-col items-end gap-1.5">
+          <button
+            type="button"
+            onClick={handleSync}
+            disabled={syncing}
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium text-xs transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {syncing ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                جاري المزامنة...
+              </>
+            ) : (
+              <>🔄 مزامنة السيشنز مع الاختيار الجديد</>
+            )}
+          </button>
+          <p className="text-[10px] text-orange-700 dark:text-orange-400 text-right">
+            هيتنفذ فورًا: هيلغي أي سيشن Scheduled لموديولات اتشالت، ويضيف سيشنز للموديولات الجديدة. السيشنز المكتملة مش هتتأثر.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -363,7 +427,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   const [previewLoading,   setPreviewLoading]   = useState(false);
   const [scheduleConflicts, setScheduleConflicts] = useState([]);
   const [loading,          setLoading]          = useState(false);
-  const [rescheduling,     setRescheduling]     = useState(false);
 
   const isRescheduleMode = useMemo(
     () => isActiveWithSessions && !!effectiveFrom,
@@ -472,79 +535,111 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     []
   );
 
-  // ── Submit: create / regular update ─────────────────────────────────────────
-  const submit = async () => {
+  // ── Submit موحّد ───────────────────────────────────────────────────────────
+  // ✅ الفكرة: بيانات الجروب الأساسية (اسم، مدرسين، موديولات، أوتوميشن) بتتحفظ
+  // دايمًا هنا بغض النظر عن حالة الترحيل. لو فيه effectiveFrom متحدد (يعني
+  // المستخدم فعلاً عاوز يرحّل الميعاد)، بعد حفظ البيانات الأساسية بننفذ طلب
+  // الترحيل كخطوة منفصلة. بالشكل ده تغيير المدرسين بيتحفظ دايمًا.
+  const handleSubmit = async () => {
     if (!form.name || !form.courseId || !form.maxStudents) {
       toast.error(t("groups.form.errors.requiredFields")); return;
-    }
-    if (!form.schedule.daysOfWeek.length) {
-      toast.error(t("groups.form.errors.atLeastOneDay")); return;
-    }
-    if (!form.schedule.daysOfWeek.includes(firstEnglishDay)) {
-      toast.error(t("groups.form.errors.firstDayRequired", { day: getLocalDay(form.schedule.startDate) })); return;
     }
     if (form.moduleSelection.mode === "specific" && !form.moduleSelection.selectedModules?.length) {
       toast.error(t("groups.form.errors.noModulesSelected")); return;
     }
 
+    // الجدول العادي (مش الترحيل) بيتفحص بس لو لسه ينفع نعدله عادي
+    if (!isActiveWithSessions) {
+      if (!form.schedule.daysOfWeek.length) {
+        toast.error(t("groups.form.errors.atLeastOneDay")); return;
+      }
+      if (!form.schedule.daysOfWeek.includes(firstEnglishDay)) {
+        toast.error(t("groups.form.errors.firstDayRequired", { day: getLocalDay(form.schedule.startDate) })); return;
+      }
+    }
+
+    // لو فيه ترحيل ميعاد مطلوب فعلاً، نتأكد من صحة بياناته هو كمان
+    if (isRescheduleMode) {
+      if (!form.schedule.daysOfWeek.length) {
+        toast.error(t("groups.form.errors.atLeastOneDay")); return;
+      }
+      if (!form.schedule.daysOfWeek.includes(getEnglishDay(effectiveFrom))) {
+        toast.error(t("groups.form.errors.firstDayRequired", { day: getLocalDay(effectiveFrom) })); return;
+      }
+    }
+
     setLoading(true);
     const toastId = toast.loading(initial ? t("groups.form.messages.updating") : t("groups.form.messages.creating"));
+
     try {
+      // ── 1) حفظ بيانات الجروب الأساسية — دايمًا، بما فيها المدرسين ─────────
+      const basePayload = {
+        name: form.name,
+        courseId: form.courseId,
+        maxStudents: parseInt(form.maxStudents),
+        instructors: form.instructors,
+        moduleSelection: form.moduleSelection,
+        automation: form.automation,
+      };
+
+      // الجدول بيتبعت هنا بس لو الجروب لسه ينفع نعدل جدوله عادي
+      // (لو active وعنده سيشنز، الجدول بيتغير بس عن طريق الترحيل تحت)
+      if (!isActiveWithSessions) {
+        basePayload.schedule = form.schedule;
+      }
+
       const url    = initial?.id ? `/api/groups/${initial.id}` : "/api/groups";
       const method = initial?.id ? "PUT" : "POST";
-      const res    = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, maxStudents: parseInt(form.maxStudents) }) });
+
+      const res    = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(basePayload),
+      });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || t("groups.form.errors.saveFailed"));
+
+      // ── 2) لو فيه ترحيل ميعاد مطلوب، ننفذه بعد ما البيانات الأساسية اتحفظت ──
+      if (isRescheduleMode) {
+        const rres = await fetch(`/api/groups/${initial.id}/reschedule`, {
+          method:  "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            effectiveFrom,
+            daysOfWeek: form.schedule.daysOfWeek,
+            timeFrom:   form.schedule.timeFrom,
+            timeTo:     form.schedule.timeTo,
+            timezone:   form.schedule.timezone,
+          }),
+        });
+        const rresult = await rres.json();
+
+        if (rres.status === 409 && rresult.conflicts?.length) {
+          // ✅ بيانات الجروب الأساسية (المدرسين وغيرها) اتحفظت بالفعل فوق —
+          // بس الترحيل نفسه وقف على تعارض؛ نسيب المودال مفتوح يعدّل الميعاد
+          toast.error(t("groups.form.errors.scheduleConflict"), { id: toastId });
+          setScheduleConflicts(rresult.conflicts);
+          setLoading(false);
+          return;
+        }
+
+        if (!rres.ok) throw new Error(rresult.error || t("groups.form.errors.rescheduleFailed"));
+
+        toast.success(
+          t("groups.form.messages.rescheduled", { regenerated: rresult.data.regeneratedCount, frozen: rresult.data.frozenCount }),
+          { id: toastId },
+        );
+        onSaved(); onClose();
+        return;
+      }
+
       toast.success(initial ? t("groups.form.messages.updated") : t("groups.form.messages.created"), { id: toastId });
       onSaved(); onClose();
     } catch (err) {
       toast.error(err.message || t("groups.form.errors.saveFailed"), { id: toastId });
-    } finally { setLoading(false); }
-  };
-
-  // ── Submit: reschedule active group ─────────────────────────────────────────
-  const submitReschedule = async () => {
-    if (!effectiveFrom) { toast.error(t("groups.form.errors.effectiveFromRequired")); return; }
-    if (!form.schedule.daysOfWeek.length) { toast.error(t("groups.form.errors.atLeastOneDay")); return; }
-    if (!form.schedule.daysOfWeek.includes(getEnglishDay(effectiveFrom))) {
-      toast.error(t("groups.form.errors.firstDayRequired", { day: getLocalDay(effectiveFrom) })); return;
+    } finally {
+      setLoading(false);
     }
-
-    setRescheduling(true);
-    setScheduleConflicts([]);
-    const toastId = toast.loading(t("groups.form.messages.rescheduling"));
-
-    try {
-      const res    = await fetch(`/api/groups/${initial.id}/reschedule`, {
-        method:  "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          effectiveFrom,
-          daysOfWeek: form.schedule.daysOfWeek,
-          timeFrom:   form.schedule.timeFrom,
-          timeTo:     form.schedule.timeTo,
-          timezone:   form.schedule.timezone,
-        }),
-      });
-      const result = await res.json();
-
-      if (res.status === 409 && result.conflicts?.length) {
-        // عرض التعارضات في الفورم بدون إغلاقه
-        toast.error(t("groups.form.errors.scheduleConflict"), { id: toastId });
-        setScheduleConflicts(result.conflicts);
-        return;
-      }
-
-      if (!res.ok) throw new Error(result.error || t("groups.form.errors.rescheduleFailed"));
-
-      toast.success(
-        t("groups.form.messages.rescheduled", { regenerated: result.data.regeneratedCount, frozen: result.data.frozenCount }),
-        { id: toastId },
-      );
-      onSaved(); onClose();
-    } catch (err) {
-      toast.error(err.message || t("groups.form.errors.rescheduleFailed"), { id: toastId });
-    } finally { setRescheduling(false); }
   };
 
   // ── Render helpers ──────────────────────────────────────────────────────────
@@ -631,8 +726,14 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                 )}
                 {curriculum && (
                   <>
-                    <ModuleSelection curriculum={curriculum} selectedModules={form.moduleSelection}
-                      setSelectedModules={v => onChange("moduleSelection", v)} t={t} />
+                    <ModuleSelection
+                      curriculum={curriculum}
+                      selectedModules={form.moduleSelection}
+                      setSelectedModules={v => onChange("moduleSelection", v)}
+                      t={t}
+                      groupId={initial?.id}
+                      sessionsGenerated={initial?.sessionsGenerated}
+                    />
                     <CurriculumView curriculum={curriculum} moduleSelection={form.moduleSelection}
                       expandedModules={expandedModules} onToggleExpand={toggleModuleExpand}
                       initial={initial} onClose={onClose} t={t} />
@@ -677,13 +778,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                   <p className="text-xs font-medium">{t("groups.form.selectedInstructors")}: {form.instructors.length}</p>
                 </div>
               )}
-
-              {isRescheduleMode && (
-                <div className="mt-4 p-3 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-800 dark:text-amber-300">{t("groups.form.reschedule.instructorsNotSaved")}</p>
-                </div>
-              )}
             </div>
           )}
 
@@ -703,10 +797,13 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                   </div>
 
                   <div>
-                    <label className={labelCls}>{t("groups.form.reschedule.effectiveFrom")} *</label>
+                    <label className={labelCls}>{t("groups.form.reschedule.effectiveFrom")}</label>
                     <input type="date" value={effectiveFrom}
                       onChange={e => { setEffectiveFrom(e.target.value); setScheduleConflicts([]); }}
                       min={new Date().toISOString().split("T")[0]} className={inputCls} />
+                    <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-1">
+                      سيب الحقل ده فاضي لو مش عاوز تغيّر الميعاد — باقي البيانات (زي المدرسين) هتتحفظ عادي.
+                    </p>
                     {effectiveFrom && (
                       <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
                         {t("groups.form.reschedule.firstDayWillBe", { day: getLocalDay(effectiveFrom) })}
@@ -838,13 +935,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                     min="1" max="168" className={inputCls} />
                 </div>
               )}
-
-              {isRescheduleMode && (
-                <div className="mt-3 p-3 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-800 dark:text-amber-300">{t("groups.form.reschedule.automationNotSaved")}</p>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -854,12 +944,12 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       <div className="sticky bottom-0 bg-white dark:bg-darkmode border-t border-PowderBlueBorder dark:border-dark_border px-5 py-4">
         <div className="flex gap-3">
           {step === 0 ? (
-            <button type="button" onClick={onClose} disabled={loading || rescheduling}
+            <button type="button" onClick={onClose} disabled={loading}
               className="flex-1 border border-PowderBlueBorder dark:border-dark_border py-2.5 px-4 rounded-xl font-semibold text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center gap-2 disabled:opacity-50 transition-all text-14">
               <X className="w-4 h-4" />{t("groups.form.cancel")}
             </button>
           ) : (
-            <button type="button" onClick={prev} disabled={loading || rescheduling}
+            <button type="button" onClick={prev} disabled={loading}
               className="flex-1 border border-PowderBlueBorder dark:border-dark_border py-2.5 px-4 rounded-xl font-semibold text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center gap-2 disabled:opacity-50 transition-all text-14">
               {isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
               {t("common.back")}
@@ -867,10 +957,10 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           )}
 
           {isLastStep ? (
-            <button type="button" onClick={isRescheduleMode ? submitReschedule : submit}
-              disabled={loading || rescheduling}
+            <button type="button" onClick={handleSubmit}
+              disabled={loading}
               className={`flex-1 bg-gradient-to-r ${c.btn} text-white py-2.5 px-4 rounded-xl font-semibold shadow-md hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 transition-all text-14`}>
-              {loading || rescheduling ? (
+              {loading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   {isRescheduleMode ? t("groups.form.reschedule.saving") : initial ? t("groups.form.updating") : t("groups.form.creating")}

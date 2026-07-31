@@ -4333,6 +4333,7 @@ const en = {
   "reschedule.focus.notFoundTitle": "Focus session not found",
   "reschedule.focus.notFoundDescription":
     "The requested focus session could not be found. It may have been removed or is no longer available.",
+  "groups.form.messages.rescheduling": "Rescheduling sessions...",
 };
 
 export default en;

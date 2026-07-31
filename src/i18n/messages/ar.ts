@@ -4450,6 +4450,7 @@ const ar = {
   "reschedule.focus.notFoundTitle": "لم يتم العثور على جلسة التركيز",
   "reschedule.focus.notFoundDescription":
     "تعذر العثور على جلسة التركيز المطلوبة. ربما تم حذفها أو لم تعد متاحة.",
+  "groups.form.messages.rescheduling": "جارٍ إعادة جدولة الجلسات...",
 };
 
 export default ar;
