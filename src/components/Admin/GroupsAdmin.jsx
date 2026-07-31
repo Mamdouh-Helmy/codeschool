@@ -220,8 +220,16 @@ export default function GroupsAdmin() {
     useEffect(() => () => clearTimeout(searchTimeoutRef.current), []);
 
     // ── Filter Handlers ────────────────────────────────────────────────────────
+    // ⚠️ لأي فلتر (search, status, course...) بنرجّع الصفحة لـ 1 لأن نتايج الفلتر اتغيرت
     const handleFilterChange = useCallback((key, value) => {
         setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+    }, []);
+
+    // ✅ FIX: دالة منفصلة لتغيير رقم الصفحة بس - من غير ما تعمل reset لباقي الفلاتر
+    // (المشكلة القديمة كانت إن أزرار الـ pagination بتنادي handleFilterChange("page", page)
+    // واللي كانت دايمًا بترجع page لـ 1 تاني بسبب الـ `page: 1` الثابتة في نهاية الـ object)
+    const handlePageChange = useCallback((page) => {
+        setFilters((prev) => ({ ...prev, page }));
     }, []);
 
     const handleSearchChange = useCallback((value) => {
@@ -758,7 +766,8 @@ export default function GroupsAdmin() {
                     <Pagination
                         pagination={pagination}
                         t={t}
-                        onPageChange={(page) => handleFilterChange("page", page)}
+                        isRTL={isRTL}
+                        onPageChange={handlePageChange}
                     />
                 )}
             </div>
@@ -933,44 +942,136 @@ function ActionButton({ onClick, hoverColor, title, children }) {
     );
 }
 
-function Pagination({ pagination, t, onPageChange }) {
+// ─── Pagination (redesigned) ──────────────────────────────────────────────────
+// ✅ FIX applied: onPageChange now points to handlePageChange, which does NOT
+//    reset the page back to 1 (that was the original bug).
+// ✅ New design: real page-number buttons with ellipsis, RTL-correct icons,
+//    unified square buttons matching the rest of the admin UI.
+
+function Pagination({ pagination, t, isRTL, onPageChange }) {
     const { page, totalPages, limit, total } = pagination;
     const start = (page - 1) * limit + 1;
     const end   = Math.min(page * limit, total);
 
+    const pageNumbers = useMemo(() => {
+        const delta = 1; // كام رقم يظهر حوالين الصفحة الحالية
+        const range = [];
+        const rangeWithDots = [];
+        let l;
+
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= page - delta && i <= page + delta)) {
+                range.push(i);
+            }
+        }
+
+        for (const i of range) {
+            if (l) {
+                if (i - l === 2) {
+                    rangeWithDots.push(l + 1);
+                } else if (i - l > 2) {
+                    rangeWithDots.push("...");
+                }
+            }
+            rangeWithDots.push(i);
+            l = i;
+        }
+
+        return rangeWithDots;
+    }, [page, totalPages]);
+
+    // في LTR: رجوع = يسار، قدام = يمين. في RTL: العكس.
+    const PrevIcon  = isRTL ? ChevronRight  : ChevronLeft;
+    const NextIcon  = isRTL ? ChevronLeft   : ChevronRight;
+    const FirstIcon = isRTL ? ChevronsRight : ChevronsLeft;
+    const LastIcon  = isRTL ? ChevronsLeft  : ChevronsRight;
+
     return (
-        <div className="px-4 py-3 border-t border-PowderBlueBorder dark:border-dark_border">
-            <div className="flex items-center justify-between">
-                <p className="text-xs text-SlateBlueText">
+        <div className="px-4 py-3.5 border-t border-PowderBlueBorder dark:border-dark_border bg-gray-50/50 dark:bg-dark_input/30">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+
+                {/* عدد النتائج */}
+                <p className="text-xs text-SlateBlueText dark:text-darktext order-2 sm:order-1">
                     {t("groups.pagination.showing")
                         ?.replace("{start}", start)
                         ?.replace("{end}", end)
                         ?.replace("{total}", total)
                         || `Showing ${start}-${end} of ${total}`}
                 </p>
-                <div className="flex items-center gap-2">
-                    <PaginationButton onClick={() => onPageChange(1)}         disabled={page === 1}>           <ChevronsRight className="w-4 h-4" /></PaginationButton>
-                    <PaginationButton onClick={() => onPageChange(page - 1)}  disabled={page === 1}>           <ChevronRight  className="w-4 h-4" /></PaginationButton>
-                    <span className="px-3 py-1 text-sm font-medium">
-                        {t("groups.pagination.page")
-                            ?.replace("{page}", page)
-                            ?.replace("{pages}", totalPages)
-                            || `${page} / ${totalPages}`}
-                    </span>
-                    <PaginationButton onClick={() => onPageChange(page + 1)}  disabled={page === totalPages}> <ChevronLeft  className="w-4 h-4" /></PaginationButton>
-                    <PaginationButton onClick={() => onPageChange(totalPages)} disabled={page === totalPages}> <ChevronsLeft className="w-4 h-4" /></PaginationButton>
+
+                {/* الأزرار */}
+                <div className="flex items-center gap-1 order-1 sm:order-2">
+                    <PaginationButton
+                        onClick={() => onPageChange(1)}
+                        disabled={page === 1}
+                        title={t("groups.pagination.first") || "First"}
+                    >
+                        <FirstIcon className="w-4 h-4" />
+                    </PaginationButton>
+
+                    <PaginationButton
+                        onClick={() => onPageChange(page - 1)}
+                        disabled={page === 1}
+                        title={t("groups.pagination.prev") || "Previous"}
+                    >
+                        <PrevIcon className="w-4 h-4" />
+                    </PaginationButton>
+
+                    {/* أرقام الصفحات */}
+                    <div className="flex items-center gap-1 mx-1">
+                        {pageNumbers.map((p, idx) =>
+                            p === "..." ? (
+                                <span
+                                    key={`dots-${idx}`}
+                                    className="w-8 h-8 flex items-center justify-center text-xs text-gray-400"
+                                >
+                                    …
+                                </span>
+                            ) : (
+                                <button
+                                    key={p}
+                                    onClick={() => onPageChange(p)}
+                                    aria-current={p === page ? "page" : undefined}
+                                    className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
+                                        p === page
+                                            ? "bg-primary text-white shadow-sm"
+                                            : "text-MidnightNavyText dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    }`}
+                                >
+                                    {p}
+                                </button>
+                            )
+                        )}
+                    </div>
+
+                    <PaginationButton
+                        onClick={() => onPageChange(page + 1)}
+                        disabled={page === totalPages}
+                        title={t("groups.pagination.next") || "Next"}
+                    >
+                        <NextIcon className="w-4 h-4" />
+                    </PaginationButton>
+
+                    <PaginationButton
+                        onClick={() => onPageChange(totalPages)}
+                        disabled={page === totalPages}
+                        title={t("groups.pagination.last") || "Last"}
+                    >
+                        <LastIcon className="w-4 h-4" />
+                    </PaginationButton>
                 </div>
             </div>
         </div>
     );
 }
 
-function PaginationButton({ onClick, disabled, children }) {
+function PaginationButton({ onClick, disabled, title, children }) {
     return (
         <button
             onClick={onClick}
             disabled={disabled}
-            className="p-2 border rounded disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            title={title}
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
         >
             {children}
         </button>
