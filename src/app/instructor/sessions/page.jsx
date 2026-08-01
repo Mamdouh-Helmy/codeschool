@@ -19,6 +19,7 @@ import {
   TrendingUp, Award, LayoutGrid, Shield,
   CalendarClock, Hourglass, SkipForward, ArrowRightCircle,
   Send, BadgeCheck, BadgeAlert, MessageSquareWarning,
+  Repeat,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -104,20 +105,25 @@ function AnimatedCounter({ value, duration = 1200 }) {
   return <span>{count}</span>;
 }
 
-// ─── 🆕 Request Access Modal (replaces the old plain AccessDeniedModal) ───────
-// لما المدرس يدوس على سيشن مش متاحة دلوقتي، بدل الرفض المباشر، نعرض عليه
-// اختيارين لطلب فتحها من الأدمن، أو نعرض حالة الطلب لو فيه طلب pending شغال
-// بالفعل على الجروب ده، أو سبب رفض آخر طلب لو كان فيه واحد على نفس السيشن.
+// ─── 🔓 Request Access Modal ───────────────────────────────────────────────────
+// لما المدرس يدوس على سيشن مش متاحة دلوقتي (أو يطلب إعادة فتح سيشن مكتملة)،
+// بدل الرفض المباشر، نعرض عليه:
+//  - لو فيه سيشن "اليوم فعليًا" في نفس الجروب → واجهة "استبدال" (زرار واحد):
+//    السيشن المطلوبة تتفتح فورًا، وسيشن اليوم تترحل أسبوع مكانها.
+//  - لو مفيش → الخيارين العاديين (فتح دي بس / فتح دي واللي بعدها).
+//  - أو نعرض حالة الطلب لو فيه طلب pending شغال بالفعل على الجروب ده، أو
+//    سبب رفض آخر طلب لو كان فيه واحد على نفس السيشن.
+// ✅ كل ده شغال بغض النظر عن status/attendanceTaken بتاع السيشن — حتى لو
+// completed واتاخد فيها حضور قبل كده، تقدر تطلب فتحها/استبدالها تاني عادي.
 function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
   const t = (ar, en) => isAr ? ar : en;
   const [checking, setChecking] = useState(true);
-  const [statusInfo, setStatusInfo] = useState(null); // { status: "pending"|"rejected", reviewNotes, ... }
-  const [selectedMode, setSelectedMode] = useState(null); // "single" | "withNext"
+  const [statusInfo, setStatusInfo] = useState(null); // { status, reviewNotes, swapCandidate, ... }
+  const [selectedMode, setSelectedMode] = useState(null); // "single" | "withNext" | "swap"
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [errorCode, setErrorCode] = useState(null);
   const [success, setSuccess] = useState(null);
-  // بعد ما يشوف سبب الرفض، يقدر يضغط "تقديم طلب جديد" فيرجع لاختيار الـ viewMode
+  // بعد ما يشوف سبب الرفض، يقدر يضغط "تقديم طلب جديد" فيرجع لاختيار الوضع
   const [showOptionsAfterRejection, setShowOptionsAfterRejection] = useState(false);
 
   useEffect(() => {
@@ -147,12 +153,14 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
     return () => { active = false; };
   }, [session._id]);
 
-  const handleSubmit = async (viewMode) => {
-    setSelectedMode(viewMode);
+  const handleSubmit = async (mode) => {
+    setSelectedMode(mode);
     setSubmitting(true);
     setError("");
-    setErrorCode(null);
     try {
+      // ✅ الباك إند بيقرر لوحده لو الحالة دي "استبدال" (لو فيه سيشن اليوم)
+      // بغض النظر عن الـ viewMode المبعوت — فالقيمة هنا مجرد افتراضي آمن.
+      const viewMode = mode === "withNext" ? "withNext" : "single";
       const res = await fetch(`/api/instructor/sessions/${session._id}/request-reschedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -164,7 +172,6 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
         setSuccess(json.data);
         onSubmitted?.(json.data);
       } else {
-        setErrorCode(json.code || null);
         setError(json.message || t("حدث خطأ، حاول مرة أخرى", "Something went wrong, please try again"));
       }
     } catch {
@@ -176,6 +183,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
 
   const hasPending = statusInfo?.status === "pending";
   const wasRejected = statusInfo?.status === "rejected" && !showOptionsAfterRejection;
+  const swapCandidate = !hasPending && !wasRejected ? statusInfo?.swapCandidate || null : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
@@ -269,7 +277,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
             </div>
           )}
 
-          {/* 🆕 حالة الرفض — تعرض السبب لو موجود، وتسمح بتقديم طلب جديد */}
+          {/* حالة الرفض — تعرض السبب لو موجود، وتسمح بتقديم طلب جديد */}
           {!checking && !success && wasRejected && (
             <div className="text-center py-2">
               <div className="w-16 h-16 mx-auto rounded-2xl bg-red-50 dark:bg-red-900/10 flex items-center justify-center mb-4 border border-red-200 dark:border-red-800/30">
@@ -323,79 +331,105 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
 
           {!checking && !success && !hasPending && !wasRejected && (
             <>
-              <p className="text-sm text-gray-500 dark:text-[#8b949e] leading-relaxed">
-                {t(
-                  "هذه الجلسة غير متاحة لأنها ليست في يومها. اختر كيف تريد طلب فتحها — سيتم إرسال طلبك للأدمن للموافقة.",
-                  "This session isn't available because it's not on its scheduled day. Choose how you'd like to request access — your request will be sent to the admin for approval."
-                )}
-              </p>
-
-              {/* Option 1: single */}
-              <button
-                onClick={() => handleSubmit("single")}
-                disabled={submitting}
-                className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#ff6700]/50 dark:hover:border-[#ff6700]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
-                    {submitting && selectedMode === "single"
-                      ? <Loader2 className="w-5 h-5 text-white animate-spin" />
-                      : <ArrowRightCircle className="w-5 h-5 text-white" />}
-                  </div>
-                  <div className="flex-1">
-                    <h5 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-1">
-                      {t("فتح هذه الجلسة فقط", "Open This Session Only")}
-                    </h5>
-                    <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
-                      {t(
-                        "هذه الجلسة تُفتح فورًا (رابط ميتنج + تسجيل حضور). باقي الجلسات بعدها تترحل أسبوعًا، وتبقى مقفولة حتى يحين معادها الجديد.",
-                        "This session opens immediately (meeting link + attendance). All sessions after it shift by one week and stay locked until their new date arrives."
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </button>
-
-              {/* Option 2: withNext */}
-              <button
-                onClick={() => handleSubmit("withNext")}
-                disabled={submitting}
-                className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/50 dark:hover:border-[#004d59]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#004d59]/70 flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
-                    {submitting && selectedMode === "withNext"
-                      ? <Loader2 className="w-5 h-5 text-white animate-spin" />
-                      : <SkipForward className="w-5 h-5 text-white" />}
-                  </div>
-                  <div className="flex-1">
-                    <h5 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-1">
-                      {t("فتح هذه الجلسة وما بعدها", "Open This Session and the Ones After")}
-                    </h5>
-                    <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
-                      {t(
-                        "هذه الجلسة تُفتح فورًا بكل شيء. الجلسات بعدها تترحل أسبوعًا وتظهر تفاصيلها العامة (المحتوى/الدروس)، لكن بدون رابط ميتنج أو تسجيل حضور حتى يحين معادها الجديد فعليًا.",
-                        "This session opens immediately with everything. Sessions after it shift by one week and show general details (content/lessons), but without a meeting link or attendance until their new date actually arrives."
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </button>
-
-              {/* 🆕 رسالة خاصة لو الحضور أُخذ فعليًا — مينفعش يطلب فتح خالص */}
-              {error && errorCode === "ATTENDANCE_ALREADY_TAKEN" && (
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-gray-50 dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d]">
-                  <Lock className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-gray-600 dark:text-[#8b949e] font-medium leading-relaxed">
+              {swapCandidate ? (
+                // 🆕 فيه سيشن "اليوم فعليًا" في نفس الجروب → واجهة استبدال
+                <>
+                  <p className="text-sm text-gray-500 dark:text-[#8b949e] leading-relaxed">
                     {t(
-                      "تم تسجيل الحضور على هذه الجلسة بالفعل، فهي مكتملة ولا يمكن طلب فتحها مرة أخرى.",
-                      "Attendance was already taken for this session — it's complete and can't be reopened."
+                      `عندك جلسة "${swapCandidate.title}" هي المتاحة فعليًا النهاردة في هذا الجروب. تقدر تطلب استبدالها بهذه الجلسة.`,
+                      `"${swapCandidate.title}" is the session currently open today for this group. You can request to swap it with this session.`
                     )}
                   </p>
-                </div>
+
+                  <button
+                    onClick={() => handleSubmit("swap")}
+                    disabled={submitting}
+                    className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#ff6700]/50 dark:hover:border-[#ff6700]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                        {submitting && selectedMode === "swap"
+                          ? <Loader2 className="w-5 h-5 text-white animate-spin" />
+                          : <Repeat className="w-5 h-5 text-white" />}
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-1">
+                          {t("استبدال جلسة اليوم بهذه الجلسة", "Swap Today's Session With This One")}
+                        </h5>
+                        <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
+                          {t(
+                            "هذه الجلسة تُفتح فورًا (رابط ميتنج + تسجيل حضور). جلسة اليوم تترحل أسبوعًا لمكانها، وتفضل بياناتها القديمة محفوظة.",
+                            "This session opens immediately (meeting link + attendance). Today's session shifts one week to take its place, and its old data stays intact."
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-500 dark:text-[#8b949e] leading-relaxed">
+                    {t(
+                      "هذه الجلسة غير متاحة لأنها ليست في يومها. اختر كيف تريد طلب فتحها — سيتم إرسال طلبك للأدمن للموافقة.",
+                      "This session isn't available because it's not on its scheduled day. Choose how you'd like to request access — your request will be sent to the admin for approval."
+                    )}
+                  </p>
+
+                  {/* Option 1: single */}
+                  <button
+                    onClick={() => handleSubmit("single")}
+                    disabled={submitting}
+                    className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#ff6700]/50 dark:hover:border-[#ff6700]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                        {submitting && selectedMode === "single"
+                          ? <Loader2 className="w-5 h-5 text-white animate-spin" />
+                          : <ArrowRightCircle className="w-5 h-5 text-white" />}
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-1">
+                          {t("فتح هذه الجلسة فقط", "Open This Session Only")}
+                        </h5>
+                        <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
+                          {t(
+                            "هذه الجلسة تُفتح فورًا (رابط ميتنج + تسجيل حضور). باقي الجلسات بعدها تترحل أسبوعًا، وتبقى مقفولة حتى يحين معادها الجديد.",
+                            "This session opens immediately (meeting link + attendance). All sessions after it shift by one week and stay locked until their new date arrives."
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Option 2: withNext */}
+                  <button
+                    onClick={() => handleSubmit("withNext")}
+                    disabled={submitting}
+                    className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/50 dark:hover:border-[#004d59]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#004d59]/70 flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                        {submitting && selectedMode === "withNext"
+                          ? <Loader2 className="w-5 h-5 text-white animate-spin" />
+                          : <SkipForward className="w-5 h-5 text-white" />}
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-1">
+                          {t("فتح هذه الجلسة وما بعدها", "Open This Session and the Ones After")}
+                        </h5>
+                        <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
+                          {t(
+                            "هذه الجلسة تُفتح فورًا بكل شيء. الجلسات بعدها تترحل أسبوعًا وتظهر تفاصيلها العامة (المحتوى/الدروس)، لكن بدون رابط ميتنج أو تسجيل حضور حتى يحين معادها الجديد فعليًا.",
+                            "This session opens immediately with everything. Sessions after it shift by one week and show general details (content/lessons), but without a meeting link or attendance until their new date actually arrives."
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </>
               )}
 
-              {error && errorCode !== "ATTENDANCE_ALREADY_TAKEN" && (
+              {error && (
                 <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
                   <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-red-600 dark:text-red-400 font-medium">{error}</p>
@@ -672,16 +706,27 @@ function CourseInfoSection({ session, isAr }) {
 //  - full mode  (canViewDetails): كل المحتوى زي ما كان (لينك + حضور + كل حاجة)
 //  - partial mode (canViewPartialDetails): نفس المودال بس بدون MeetingCredentials
 //    وبدون زرارات تسجيل الحضور — وبانر يوضح إن الجلسة لسه مقفولة
-function SessionModal({ session, onClose, isAr }) {
+// 🆕 كمان بيعرض زرار "طلب إعادة فتح" للسيشنات المكتملة اللي معندهاش earlyAccess
+// فعّال ولا طلب pending، عن طريق onRequestAccess.
+function SessionModal({ session, onClose, isAr, onRequestAccess }) {
   const cfg = STATUS_CFG[session.status] || STATUS_CFG.scheduled;
   const isCompleted = session.status === "completed";
   const attRate = getAttendanceRate(session);
   const t = (ar, en) => isAr ? ar : en;
-  // بعد
   const isActuallyToday = session.isEffectivelyToday ?? session.isToday;
-  // ✅ نفس القاعدة بالظبط: مؤجلة/ملغاة = زي مجدولة بس لو معادها النهارده
-  const isOpenToday = isActuallyToday && ["scheduled", "cancelled", "postponed"].includes(session.status);
+  // ✅ كل الحالات (scheduled/cancelled/postponed/completed) بقت زي بعضها
+  // بالظبط: لو معادها الفعلي (بعد أي ترحيل/earlyAccess) = النهارده، تتفتح
+  // كاملة. completed بقت جوه القاعدة دي عشان تقدر تتفتح تاني لو الأدمن وافق
+  // على طلب إعادة فتحها (earlyAccess)، بغض النظر إن الحضور اتسجل عليها قبل كده.
+  const isOpenToday = isActuallyToday;
   const isPartial = !!session.canViewPartialDetails;
+  const hasEarlyAccess = !!session.hasActiveEarlyAccess;
+  // 🆕 الحضور يفضل "مقفول" (منمنعش تسجيل/إعادة تسجيل) إلا لو فيه earlyAccess
+  // فعّال دلوقتي — ده اللي بيسمح بإعادة فتح سيشن مكتملة واتاخد فيها حضور
+  // قبل كده بعد ما الأدمن يوافق على طلب إعادة الفتح.
+  const attendanceLocked = session.attendanceTaken && !hasEarlyAccess;
+  const canManageAttendance = !isPartial && isOpenToday && !attendanceLocked;
+  const hasPendingReopenRequest = session.pendingReschedule?.status === "pending";
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const lessons = deduplicateLessons(session.lessons || []);
 
@@ -776,32 +821,57 @@ function SessionModal({ session, onClose, isAr }) {
             </div>
           )}
 
+          {/* 🆕 بانر توضيحي لو فيه طلب إعادة فتح قيد المراجعة على السيشن دي بالتحديد */}
+          {hasPendingReopenRequest && (
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+              <div className="w-9 h-9 rounded-xl bg-[#feaf00]/20 dark:bg-[#feaf00]/10 flex items-center justify-center flex-shrink-0 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+                <Hourglass className="w-4 h-4 text-[#f67d00] dark:text-[#feaf00]" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-[#f67d00] dark:text-[#feaf00]">
+                  {t("طلب إعادة الفتح قيد المراجعة", "Reopen Request Pending Review")}
+                </p>
+                <p className="text-xs text-[#f67d00]/70 dark:text-[#feaf00]/70 mt-0.5 leading-relaxed">
+                  {t("في انتظار موافقة الأدمن على طلبك.", "Awaiting admin approval for your request.")}
+                </p>
+              </div>
+            </div>
+          )}
+
           <SessionDescriptionCard session={session} isAr={isAr} />
 
           {!isPartial && isOpenToday && session.meetingLink && (
             <MeetingCredentials session={session} isAr={isAr} />
           )}
 
-          {!isPartial && isOpenToday && !session.meetingLink && !session.attendanceTaken && (
-            <Link href={`/instructor/attendance?session=${session._id}`}
-              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
-              <ClipboardList className="w-5 h-5" />{t("تسجيل الحضور الآن", "Take Attendance Now")}
-            </Link>
+          {/* 🆕 زرار واحد موحّد لتسجيل/إعادة تسجيل الحضور — بيظهر لو السيشن
+              مفتوحة فعليًا (isOpenToday) والحضور مش مقفول */}
+          {canManageAttendance && (
+            session.meetingLink ? (
+              <Link href={`/instructor/attendance?session=${session._id}`}
+                className="flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all">
+                <ClipboardList className="w-4 h-4" />
+                {t(session.attendanceTaken ? "إعادة تسجيل الحضور" : "تسجيل الحضور", session.attendanceTaken ? "Re-take Attendance" : "Take Attendance")}
+              </Link>
+            ) : (
+              <Link href={`/instructor/attendance?session=${session._id}`}
+                className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+                <ClipboardList className="w-5 h-5" />
+                {t(session.attendanceTaken ? "إعادة تسجيل الحضور الآن" : "تسجيل الحضور الآن", session.attendanceTaken ? "Re-take Attendance Now" : "Take Attendance Now")}
+              </Link>
+            )
           )}
 
-          {!isPartial && isOpenToday && session.meetingLink && !session.attendanceTaken && (
-            <Link href={`/instructor/attendance?session=${session._id}`}
-              className="flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all">
-              <ClipboardList className="w-4 h-4" />{t("تسجيل الحضور", "Take Attendance")}
-            </Link>
-          )}
-
-          {/* 🆕 سيشن خلص معادها (completed) بس الحضور لسه ما اتسجلش — بغض النظر عن isActuallyToday */}
-          {!isPartial && session.status === "completed" && !session.attendanceTaken && (
-            <Link href={`/instructor/attendance?session=${session._id}`}
-              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
-              <ClipboardList className="w-5 h-5" />{t("تسجيل الحضور", "Take Attendance")}
-            </Link>
+          {/* 🆕 سيشن مكتملة ومعندهاش earlyAccess فعّال ولا طلب قيد المراجعة —
+              زرار "طلب إعادة فتح" يودّي المدرس لنفس مسار طلب الوصول العادي */}
+          {isCompleted && !hasEarlyAccess && !hasPendingReopenRequest && onRequestAccess && (
+            <button
+              onClick={() => onRequestAccess(session)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-[#004d59] dark:text-teal-400 border border-[#004d59]/30 dark:border-[#004d59]/30 hover:bg-[#004d59]/5 dark:hover:bg-[#004d59]/10 transition-all"
+            >
+              <RefreshCw className="w-4 h-4" />
+              {t("طلب إعادة فتح الجلسة", "Request to Reopen Session")}
+            </button>
           )}
 
           {isCompleted && session.recordingLink && (
@@ -926,13 +996,11 @@ function SessionModal({ session, onClose, isAr }) {
 }
 
 // ─── Session Row ──────────────────────────────────────────────────────────────
-// ─── Session Row ──────────────────────────────────────────────────────────────
 function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   const cfg = STATUS_CFG[session.status] || STATUS_CFG.scheduled;
   const isCompleted = session.status === "completed";
-  // بعد
   const isEffectivelyToday = session.isEffectivelyToday ?? session.isToday;
-  // ✅ مؤجلة/ملغاة تتعامل زي مجدولة بس لو معادها الفعلي (بعد الترحيل) = النهارده
+  // ✅ مؤجلة/ملغاة تتعامل زي مجدولة بس لو معادها الفعلي (بعد أي ترحيل) = النهارده
   const isToday = isEffectivelyToday && ["scheduled", "cancelled", "postponed"].includes(session.status);
   const attRate = getAttendanceRate(session);
   const formatTime = isAr ? fmtTimeAr : fmtTime;
@@ -942,14 +1010,14 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   // ── Determine clickability: full access, partial preview, or needs a request ──
   const canOpenFull = session.canViewDetails;
   const canOpenPartial = session.canViewPartialDetails;
-  // 🆕 السيشن المكتملة أو الملغاة تتفتح عادي دايمًا — مفيش معنى تطلب فتح
-  // سيشن خلصت أو اتلغت أصلاً (الباك إند برضو برفض طلب الترحيل عليها)
-  // بعد
+  // ✅ السيشن المكتملة تتفتح عادي دايمًا (تعرض تفاصيلها/إحصائياتها، وممكن
+  // من جوه المودال تطلب "إعادة فتح" لو حابب). ملغاة/مؤجلة تتفتح بس لو
+  // النهارده معادها الفعلي.
   const isClickable =
     canOpenFull ||
     canOpenPartial ||
     session.status === "completed" ||
-    isToday; // ✅ ملغاة/مؤجلة تتفتح بس لو النهارده معادها، مش دايمًا
+    isToday;
   const hasPendingReq = session.pendingReschedule?.status === "pending";
 
   const iconColors = {
@@ -1186,6 +1254,13 @@ export default function InstructorSessionsPage() {
     localStorage.removeItem("token");
     router.push("/");
   };
+
+  // 🆕 يفتح مودال طلب الوصول ابتداءً من داخل مودال تفاصيل السيشن — بيقفل
+  // مودال التفاصيل الأول عشان مانفتحش مودالين فوق بعض
+  const handleRequestAccessFromModal = useCallback((session) => {
+    setModal(null);
+    setRequestAccessSession(session);
+  }, []);
 
   const today = fmtDateKey(new Date());
 
@@ -1465,7 +1540,14 @@ export default function InstructorSessionsPage() {
         </div>
       </main>
 
-      {modal && <SessionModal session={modal} onClose={() => setModal(null)} isAr={isAr} />}
+      {modal && (
+        <SessionModal
+          session={modal}
+          onClose={() => setModal(null)}
+          onRequestAccess={handleRequestAccessFromModal}
+          isAr={isAr}
+        />
+      )}
       {requestAccessSession && (
         <RequestAccessModal
           session={requestAccessSession}

@@ -10,7 +10,10 @@ import Session from '../../../../../models/Session';
 import Student from '../../../../../models/Student';
 
 // ─── Constants ───────────────────────────────────────────
-const DEDUCT_STATUSES = ['present', 'late'];
+// ✅ الأربع حالات كلها (حاضر/متأخر/غائب/معذور) بتخصم ساعتين — الوحيدة اللي
+// معندهاش خصم هي "pre_absent" لأنها أصلاً مش بتتبعت للـ backend خالص
+// (بتتفلتر في الفرونت قبل الـ submit)
+const DEDUCT_STATUSES = ['present', 'late', 'absent', 'excused'];
 const CREDIT_DEDUCTION = 2;
 
 // ─── GET ─────────────────────────────────────────────────
@@ -256,11 +259,14 @@ export async function PATCH(req, { params }) {
       }
 
       // ── حسب credit action: old vs new فقط ────────────────────
-      // المنطق:
-      // null/غائب/معذور → حاضر/متأخر  = deduct 2
-      // حاضر/متأخر      → غائب/معذور  = refund 2
-      // حاضر             → متأخر       = nothing (الاتنين deducting)
-      // غائب             → معذور       = nothing (الاتنين مش deducting)
+      // ✅ دلوقتي الأربع حالات كلها (present/late/absent/excused) بتخصم،
+      // فالمنطق بقى:
+      //   null → أي حالة من الأربعة        = deduct (أول تسجيل بس)
+      //   أي حالة من الأربعة → حالة تانية   = nothing (اتخصمت خصام قبل كده،
+      //                                         مبيتكررش الخصم ولا بيترجع)
+      // refund عمليًا مش هيحصل أبدًا دلوقتي لأن مفيش حالة "مش بتخصم" يترجع
+      // ليها من حالة بتخصم — ده مقصود ومطلوب (خصم مرة واحدة بس مهما اتغيرت
+      // الحالة بين الأربعة دول لبعضها).
       const wasDeducting = oldStatus !== null && DEDUCT_STATUSES.includes(oldStatus);
       const willDeduct   = DEDUCT_STATUSES.includes(newStatus);
 

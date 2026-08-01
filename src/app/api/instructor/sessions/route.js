@@ -148,8 +148,10 @@ export async function GET(req) {
       const isToday = sessionDate >= todayStart && sessionDate <= todayEnd;
 
       // ── 🔐 Early access: admin approved a "open this session now" request.
-      //     This bypasses the date entirely until consumed (attendance taken
-      //     or manually revoked). Independent from isToday.
+      //     This bypasses the date AND the attendance-taken lock entirely
+      //     until consumed (attendance taken/retaken or manually revoked).
+      //     Independent from isToday. Works even if the session is
+      //     "completed" and already had attendance recorded before.
       const hasActiveEarlyAccess = !!(
         session.earlyAccess?.enabled && !session.earlyAccess?.consumedAt
       );
@@ -173,26 +175,35 @@ export async function GET(req) {
       // محتاجه دايمًا في الـ stats وفي الـ session row
       const attendanceAlreadyTaken = !!session.attendanceTaken;
 
-      // ✅ ملغاة/مؤجلة بمعادها الفعلي (بعد أي ترحيل) تتعامل زي "scheduled" عادي
+      // 🆕 الحضور بيقفل الوصول العادي، إلا لو فيه earlyAccess فعّال دلوقتي —
+      // ده اللي بيسمح بإعادة فتح سيشن (حتى لو completed واتاخد فيها حضور
+      // قبل كده) بعد ما الأدمن يوافق على طلب إعادة الفتح
+      const attendanceBlocksAccess =
+        attendanceAlreadyTaken && !hasActiveEarlyAccess;
+
+      // ✅ كل الحالات (scheduled/cancelled/postponed/completed) بقت زي
+      // بعضها بالظبط: لو معادها الفعلي = النهارده والحضور مش مقفول، الجوين
+      // بتاعها يظهر
       const showJoinButton =
-        ["scheduled", "cancelled", "postponed"].includes(session.status) &&
         isEffectivelyToday &&
         sessionStillActive &&
-        !attendanceAlreadyTaken &&
+        !attendanceBlocksAccess &&
         !!session.meetingLink;
 
-      // ── 🔐 SECURITY: Can user view FULL details (link + credentials + new attendance)? ──
+      // ── 🔐 SECURITY: Can user view FULL details (link + credentials + attendance)? ──
       // True only if the session is effectively "today" (real date today, or
       // an approved early-access grant) AND it's still within its active
-      // window AND attendance hasn't been taken yet. هنا لينك الميتنج
-      // والباسورد لازم يفضلوا مربوطين بـ "اليوم" — ده أمان حقيقي.
+      // window AND the attendance lock isn't in effect. هنا لينك الميتنج
+      // والباسورد لازم يفضلوا مربوطين بـ "اليوم" (أو earlyAccess صريح من
+      // الأدمن) — ده أمان حقيقي.
       const canViewDetails =
-        isEffectivelyToday && sessionStillActive && !attendanceAlreadyTaken;
+        isEffectivelyToday && sessionStillActive && !attendanceBlocksAccess;
 
       // 🆕 ── مراجعة إحصائيات حضور سيشن خلصت بالفعل — مالهاش علاقة بـ "اليوم" ──
       // ده مختلف تمامًا عن canViewDetails: هنا مفيش لينك ميتنج ولا كريدنشيلز
       // بنبعتهم، بس المدرس المفروض يقدر يراجع مين حضر ومين غاب في أي سيشن
-      // completed اتسجل عليها حضور، مهما كان تاريخها.
+      // completed اتسجل عليها حضور، مهما كان تاريخها. (لو حصل earlyAccess،
+      // canViewDetails هيبقى true أصلاً وهياخد الأولوية ويجيب كل حاجة).
       const canViewAttendanceHistory =
         session.status === "completed" && attendanceAlreadyTaken;
 
@@ -231,10 +242,12 @@ export async function GET(req) {
         : null;
 
       // ── 🔐 SECURITY: Sensitive data (link + credentials + roster) ────────
-      // meetingLink / meetingCredentials → لازم يفضلوا مقصورين على اليوم فقط.
-      // attendance → ليها مصدرين دلوقتي:
-      //   1) canViewDetails       → سيشن اليوم (أو early access) قبل ما ياخد حضور
-      //   2) canViewAttendanceHistory → سيشن completed خلصت واتاخد فيها حضور بالفعل
+      // meetingLink / meetingCredentials → لازم يفضلوا مقصورين على اليوم
+      // (أو earlyAccess صريح). attendance → ليها مصدرين دلوقتي:
+      //   1) canViewDetails       → سيشن اليوم (أو early access) قبل/بعد
+      //                              تسجيل الحضور
+      //   2) canViewAttendanceHistory → سيشن completed خلصت واتاخد فيها
+      //                              حضور بالفعل (بدون earlyAccess)
       let meetingCredentials = null;
       let attendance = null;
       let meetingLink = null;

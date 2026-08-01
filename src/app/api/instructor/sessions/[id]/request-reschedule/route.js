@@ -7,15 +7,23 @@ import Session from "../../../../../models/Session";
 import Group from "../../../../../models/Group";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST: المدرس بيقدم طلب ترحيل (cascade reschedule) ابتداءً من سيشن معينة
+// POST: المدرس بيقدم طلب فتح/ترحيل ابتداءً من سيشن معينة
 //
 // Body: { viewMode: "single" | "withNext", shiftDays?: number }
+// (viewMode بيتجاهل تلقائيًا لو الحالة استدعت وضع "استبدال" — راجع الخطوة 3.5)
 //
-// القواعد:
-//  - مينفعش يتقدم على سيشن "completed" أو "cancelled"
+// القواعد النهائية:
+//  - ✅ مسموح تمامًا تطلب فتح سيشن completed أو cancelled أو postponed —
+//    مفيش أي حظر على الـ status أو attendanceTaken هنا. لو الأدمن وافق،
+//    السيشن هتتفتح فورًا (earlyAccess) بغض النظر إن الحضور كان اتسجل عليها
+//    قبل كده.
 //  - مينفعش يتقدم لو فيه طلب pending بالفعل على نفس الجروب (مش بس نفس السيشن)
-//  - السيشن دي لازم تكون مش "اليوم" أصلاً (لو هي اليوم بالفعل، أصلاً المدرس
-//    عنده access مباشر وملوش لازمة يطلب ترحيل)
+//  - السيشن دي لازم تكون مش "متاحة فعليًا اليوم" أصلاً (لو هي كده، المدرس
+//    عنده access مباشر وملوش لازمة يطلب فتح)
+//  - 🆕 لو فيه سيشن تانية شغالة "اليوم فعليًا" في نفس الجروب، الطلب بيتحول
+//    تلقائيًا لوضع "استبدال" (swapToday): السيشن المطلوبة بس هي اللي بتتفتح،
+//    وسيشن اليوم بترحل أسبوع مكانها — من غير ما نلمس أي سيشن تانية في
+//    السلسلة. لو مفيش سيشن اليوم، بيشتغل الكاسكيد الكامل العادي زي ما هو.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function POST(req, { params }) {
   try {
@@ -89,40 +97,10 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ بس "completed" هي اللي تمنع الطلب — السيشن خلصت فعليًا واتاخد فيها حضور
-    // (الفحص بتاع attendanceTaken تحت ده بيغطي الحالة دي أصلاً بشكل أدق، لكن
-    // سايبين الفحص ده كطبقة حماية إضافية زي ما كان).
-    // ✅ "cancelled" بقت زي "postponed" بالظبط — تقدر تطلب فتحها لما تترحل
-    // لمعادها الجديد، بالظبط زي أي سيشن مؤجلة
-    if (session.status === "completed") {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "لا يمكن طلب فتح جلسة مكتملة",
-          code: "INVALID_SESSION_STATUS",
-        },
-        { status: 400 },
-      );
-    }
-
-    // ── 2.5. منع الطلب لو الحضور اتسجل عليها بالفعل، حتى لو status لسه
-    //         "scheduled" (الـ status بيتحول completed بس بعد خطوة التقييم،
-    //         فممكن يكون فيه فترة بينية الحضور فيها مسجل والـ status لسه
-    //         scheduled — السيشن هنا منطقيًا خلصت ومينفعش تتطلب تاني)
-    if (session.attendanceTaken) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "تم تسجيل الحضور لهذه الجلسة بالفعل، لا يمكن طلب فتحها مرة أخرى",
-          code: "ATTENDANCE_ALREADY_TAKEN",
-        },
-        { status: 400 },
-      );
-    }
-
-    // ── 3. منطقياً، السيشن دي أصلاً مش لازم تكون "اليوم" — لو هي اليوم
-    //      المدرس أصلاً عنده access مباشر بدون أي طلب
+    // ── 2. منطقياً، السيشن دي أصلاً مش لازم تكون "متاحة فعليًا اليوم" —
+    //      لو هي كده المدرس أصلاً عنده access مباشر بدون أي طلب. ✅ ده الفحص
+    //      الوحيد المتبقي هنا — بغض النظر عن status أو attendanceTaken، أي
+    //      سيشن (بما فيها completed) يُسمح بتقديم طلب فتح/استبدال عليها.
     if (session.isEffectivelyToday()) {
       return NextResponse.json(
         {
@@ -134,7 +112,61 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ── 4. تقديم الطلب (الـ method نفسها بتتحقق من عدم وجود طلب pending) ────
+    // ── 3. 🆕 لو فيه سيشن شغالة النهاردة فعليًا في نفس الجروب، بنستخدم وضع
+    //         "الاستبدال": السيشن دي بس هي اللي بتتفتح، وسيشن اليوم بترحل
+    //         أسبوع مكانها — من غير ما نلمس أي حاجة تانية في السلسلة. لو
+    //         مفيش سيشن اليوم، الوضع الطبيعي (الكاسكيد الكامل) بيشتغل زي ما
+    //         هو تمامًا، من غير أي تغيير في السلوك القديم.
+    const todaySession = await Session.findEffectiveTodaySessionInGroup(
+      session.groupId,
+      session._id,
+    );
+
+    if (todaySession) {
+      try {
+        const result = await session.submitSwapWithTodayRequest(
+          { todaySession, shiftDays },
+          user.id,
+        );
+
+        return NextResponse.json({
+          success: true,
+          message: "تم إرسال طلب استبدال الجلسة للأدمن للموافقة",
+          data: {
+            mode: "swapToday",
+            batchId: result.batchId,
+            affectedCount: result.affectedCount,
+            groupName: group?.name || "",
+            groupCode: group?.code || "",
+            targetSession: {
+              id: result.targetSessionId,
+              title: result.targetTitle,
+            },
+            todaySession: {
+              id: result.todaySessionId,
+              title: result.todaySessionTitle,
+              oldScheduledDate: result.todayOldDate,
+              newScheduledDate: result.todayNewDate,
+            },
+          },
+        });
+      } catch (err) {
+        if (err.code === "PENDING_REQUEST_EXISTS") {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "يوجد طلب فتح جلسة قيد المراجعة لهذا الجروب بالفعل، يرجى الانتظار حتى يرد الأدمن",
+              code: "PENDING_REQUEST_EXISTS",
+            },
+            { status: 409 },
+          );
+        }
+        throw err;
+      }
+    }
+
+    // ── 4. مفيش سيشن اليوم → الوضع الطبيعي: كاسكيد السلسلة كاملة ────────────
     try {
       const result = await session.submitCascadeRescheduleRequest(
         { viewMode, shiftDays },
@@ -145,6 +177,7 @@ export async function POST(req, { params }) {
         success: true,
         message: "تم إرسال طلب فتح الجلسة للأدمن للموافقة",
         data: {
+          mode: viewMode,
           batchId: result.batchId,
           affectedCount: result.affectedCount,
           viewMode,
@@ -193,8 +226,11 @@ export async function POST(req, { params }) {
 // GET: المدرس يقدر يتشيك حالة الطلب الخاصة بالسيشن دي:
 //  1) هل فيه طلب pending عالقًا على الجروب بتاع السيشن دي؟ (يمنع تقديم طلب جديد)
 //  2) لو مفيش pending، هل آخر طلب على *نفس السيشن دي بالتحديد* كان مرفوضًا؟
-//     لو كان، نرجّع سبب الرفض (reviewNotes) عشان نعرضه للمدرس بدل ما يفضل
-//     مش عارف ليه طلبه اترفض.
+//     لو كان، نرجّع سبب الرفض (reviewNotes) عشان نعرضه للمدرس.
+//  3) 🆕 لو مفيش pending ولا rejected، نتشيك هل فيه سيشن "اليوم فعليًا" في
+//     نفس الجروب ممكن نستبدلها بالسيشن دي (swapCandidate) — عشان الفرونت
+//     يعرض واجهة "استبدال" بدل الخيارين العاديين. الفحص ده شغال بغض النظر
+//     عن status بتاع أي من السيشنين.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(req, { params }) {
   try {
@@ -217,9 +253,7 @@ export async function GET(req, { params }) {
 
     await connectDB();
 
-    const session = await Session.findOne({ _id: id, isDeleted: false }).select(
-      "groupId pendingReschedule",
-    );
+    const session = await Session.findOne({ _id: id, isDeleted: false });
     if (!session) {
       return NextResponse.json(
         { success: false, message: "الجلسة غير موجودة" },
@@ -245,14 +279,33 @@ export async function GET(req, { params }) {
           requestedAt: pending.pendingReschedule?.requestedAt || null,
           reviewNotes: null,
           reviewedAt: null,
+          swapCandidate: null,
         },
       });
     }
 
     // ── 2) مفيش pending — هل آخر طلب على *نفس السيشن دي* كان مرفوضًا؟ ──────
-    // (pendingReschedule بيفضل محفوظ على الـ document حتى بعد reject/approve،
-    // لحد ما طلب جديد يستبدله)
     const wasRejected = session.pendingReschedule?.status === "rejected";
+
+    // ── 3) 🆕 مفيش pending — نشوف هل فيه سيشن اليوم فعليًا ممكن نستبدلها
+    //         بالسيشن دي. مفيش أي فحص على status هنا — completed مسموحة
+    //         تمامًا كطرف في عملية الاستبدال (سواء كسيشن مطلوبة أو كسيشن يوم).
+    let swapCandidate = null;
+    if (!session.isEffectivelyToday()) {
+      const todaySession = await Session.findEffectiveTodaySessionInGroup(
+        session.groupId,
+        session._id,
+      );
+      if (todaySession) {
+        swapCandidate = {
+          sessionId: todaySession._id,
+          title: todaySession.title,
+          sessionNumber: todaySession.sessionNumber,
+          moduleIndex: todaySession.moduleIndex,
+          status: todaySession.status,
+        };
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -266,6 +319,7 @@ export async function GET(req, { params }) {
           ? session.pendingReschedule.reviewNotes || ""
           : null,
         reviewedAt: wasRejected ? session.pendingReschedule.reviewedAt : null,
+        swapCandidate,
       },
     });
   } catch (error) {

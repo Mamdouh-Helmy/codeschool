@@ -1,4 +1,4 @@
-// models/Session.js - ENHANCED WITH MEETING LINK SUPPORT + CASCADE RESCHEDULE REQUESTS
+// models/Session.js - ENHANCED WITH MEETING LINK SUPPORT + CASCADE RESCHEDULE REQUESTS + SWAP-TODAY
 import mongoose from "mongoose";
 
 const attendanceRecordSchema = new mongoose.Schema(
@@ -30,6 +30,13 @@ const attendanceRecordSchema = new mongoose.Schema(
 // بمقدار أسبوع. الطلب ده بيتخزن جوه السيشن نفسها (مش في كولكشن منفصلة) وبيفضل
 // "pending" لحد ما الأدمن يوافق أو يرفض. كل السيشنات اللي طُلبت مع بعض في نفس
 // الطلب بتشترك في batchId واحد عشان الأدمن يقدر يوافق/يرفض المجموعة كلها مرة واحدة.
+//
+// 🆕 viewMode بقى 3 قيم:
+//   - single:    فتح السيشن دي بس، واللي بعدها يفضلوا يتبعوا قاعدة isToday العادية
+//   - withNext:  فتح السيشن دي + معاينة عامة (من غير لينك/حضور) لللي بعدها
+//   - swapToday: استبدال مباشر بين سيشنين بس (السيشن المطلوبة + سيشن موجودة
+//                فعليًا النهاردة في نفس الجروب) — من غير ما نلمس أي سيشن
+//                تانية في السلسلة. راجع submitSwapWithTodayRequest تحت.
 const pendingRescheduleSchema = new mongoose.Schema(
   {
     batchId: {
@@ -47,14 +54,17 @@ const pendingRescheduleSchema = new mongoose.Schema(
       ref: "Session",
       required: true,
     },
-    // فتح دي بس / فتح دي واللي بعدها (بيتحكم في canViewDetails بعد الترحيل)
-    // - single:    بعد الموافقة، اللي بعد الـ trigger يفضلوا يتبعوا قاعدة isToday العادية
-    // - withNext:  بعد الموافقة، اللي بعد الـ trigger يبقى عندهم تفاصيل عامة (محتوى/دروس)
-    //              بس من غير meeting link ولا تسجيل حضور لحد ما تاريخهم الجديد يجي فعلاً
     viewMode: {
       type: String,
-      enum: ["single", "withNext"],
+      enum: ["single", "withNext", "swapToday"],
       default: "single",
+    },
+    // 🆕 بس لو viewMode === "swapToday": مرجع السيشن التانية المشتركة في التبديل
+    // (كل سيشن من الاتنين بيشاور على التانية)
+    swapSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Session",
+      default: null,
     },
     shiftDays: { type: Number, default: 7 },
     oldScheduledDate: { type: Date, required: true },
@@ -194,8 +204,9 @@ const SessionSchema = new mongoose.Schema(
 
     // ✅ Early/Forced Access Window — لما طلب ترحيل يتعمل عليه approve وهو
     // كان الـ trigger session، السيشن دي تتفتح فورًا (meeting link + حضور)
-    // بغض النظر عن تاريخها المجدول، لغاية ما المدرس يسجل الحضور أو ينتهي
-    // الوقت المسموح. ده فلاج مستقل تمامًا عن isToday.
+    // بغض النظر عن تاريخها المجدول أو حالتها (حتى لو completed واتاخد فيها
+    // حضور قبل كده)، لغاية ما المدرس يسجل الحضور تاني أو ينتهي الوقت المسموح.
+    // ده فلاج مستقل تمامًا عن isToday.
     earlyAccess: {
       enabled: { type: Boolean, default: false },
       grantedAt: { type: Date },
@@ -646,8 +657,8 @@ SessionSchema.methods.getStatusColor = function () {
 
 // Check if attendance can be taken
 SessionSchema.methods.canTakeAttendance = function () {
-  // ✅ ملغاة/مؤجلة بمعادها الفعلي (بعد أي ترحيل تلقائي أو يدوي) تتعامل
-  // زي "scheduled" عادي — الـ status هنا بيفضل سجل تاريخي بس
+  // ✅ ملغاة/مؤجلة/مكتملة بمعادها الفعلي (بعد أي ترحيل تلقائي أو يدوي، أو
+  // earlyAccess) تتعامل زي "scheduled" عادي — الـ status هنا بيفضل سجل تاريخي بس
   const allowedStatuses = ["scheduled", "completed", "cancelled", "postponed"];
   if (!allowedStatuses.includes(this.status)) {
     return false;
@@ -799,6 +810,9 @@ SessionSchema.methods.getChainFromHere = async function () {
 // إنه "ترحّل" حتى لو فاتح فورًا، وده مش المطلوب. فبالتالي:
 //   - السيشن trigger (أول عنصر في السلسلة): newScheduledDate = oldScheduledDate (زي ما هي)
 //   - كل اللي بعدها: newScheduledDate = oldScheduledDate + shiftDays (بترحل فعليًا)
+//
+// ✅ ملحوظة: مفيش أي فحص على status هنا — السيشن ممكن تكون completed برضو
+// (طلب "إعادة فتح" سيشن خلصت واتاخد فيها حضور من قبل) وده مقصود ومسموح.
 SessionSchema.methods.buildCascadePreview = async function (shiftDays = 7) {
   const chain = await this.getChainFromHere();
 
@@ -836,6 +850,9 @@ SessionSchema.methods.buildCascadePreview = async function (shiftDays = 7) {
 //
 // 🔐 قاعدة مهمة: مينفعش يتقدم طلب جديد لو فيه طلب "pending" بالفعل على نفس
 // الجروب (مش بس على نفس السيشن) — ده بيمنع تكدس أكتر من باتش في نفس الوقت.
+//
+// ✅ مفيش فحص على status/attendanceTaken هنا — مسموح تمامًا تقدّم الطلب حتى
+// لو السيشن دي (trigger) completed واتاخد فيها حضور بالفعل.
 SessionSchema.methods.submitCascadeRescheduleRequest = async function (
   { viewMode = "single", shiftDays = 7 },
   userId,
@@ -885,6 +902,121 @@ SessionSchema.methods.submitCascadeRescheduleRequest = async function (
   );
 
   return { batchId, affectedCount: preview.affectedSessions.length, preview };
+};
+
+// 🆕 يلاقي سيشن "اليوم فعليًا" (isEffectivelyToday) في نفس الجروب غير السيشن
+// المستثناة. مفيش فحص على status هنا عمدًا — أي سيشن (بما فيها completed)
+// ممكن تبقى partner صالح للاستبدال.
+SessionSchema.statics.findEffectiveTodaySessionInGroup = async function (
+  groupId,
+  excludeSessionId,
+) {
+  const candidates = await this.find({
+    groupId,
+    isDeleted: false,
+    _id: { $ne: excludeSessionId },
+  });
+
+  return candidates.find((s) => s.isEffectivelyToday()) || null;
+};
+
+// ✅ Swap request: سواب حقيقي بين تاريخ السيشن المطلوبة (target) وتاريخ سيشن
+// اليوم — مش ترحيل بـ shiftDays. كل سيشن بتاخد تاريخ التانية بالظبط:
+//   - target (this): بتاخد تاريخ سيشن اليوم (todayOldDate) — يعني هتبقى
+//     "اليوم" فعليًا بعد الموافقة، وبرضو بتاخد earlyAccess احتياطًا (عشان
+//     تفتح حتى لو كانت completed واتاخد فيها حضور قبل كده)
+//   - سيشن اليوم: بتاخد تاريخ الـ target القديم (targetOldDate) بالظبط —
+//     مش +shiftDays زي الكاسكيد العادي
+// السيناريو ده يشتغل بغض النظر عن status/attendanceTaken بتاع أي من
+// السيشنين الاتنين.
+SessionSchema.methods.submitSwapWithTodayRequest = async function (
+  { todaySession, shiftDays = 7 },
+  userId,
+) {
+  const Session = mongoose.model("Session");
+
+  const existingPending = await Session.findOne({
+    groupId: this.groupId,
+    isDeleted: false,
+    "pendingReschedule.status": "pending",
+  }).select("_id pendingReschedule.batchId");
+
+  if (existingPending) {
+    const error = new Error("يوجد طلب ترحيل قيد المراجعة لهذا الجروب بالفعل");
+    error.code = "PENDING_REQUEST_EXISTS";
+    error.existingBatchId = existingPending.pendingReschedule?.batchId;
+    throw error;
+  }
+
+  const batchId = new mongoose.Types.ObjectId();
+  const requestedAt = new Date();
+
+  const targetOldDate = new Date(this.scheduledDate);
+  const todayOldDate = new Date(todaySession.scheduledDate);
+
+  // 🆕 سواب حقيقي: كل سيشن تاخد تاريخ التانية بالظبط
+  const targetNewDate = new Date(todayOldDate);
+  const todayNewDate = new Date(targetOldDate);
+
+  await Promise.all([
+    // الـ target نفسها (trigger) — تاخد تاريخ اليوم، وهتتفتح فورًا بعد الموافقة
+    Session.updateOne(
+      { _id: this._id, isDeleted: false },
+      {
+        $set: {
+          pendingReschedule: {
+            batchId,
+            status: "pending",
+            triggerSessionId: this._id,
+            viewMode: "swapToday",
+            shiftDays,
+            oldScheduledDate: targetOldDate,
+            newScheduledDate: targetNewDate, // 🆕 تاريخ سيشن اليوم بالظبط
+            swapSessionId: todaySession._id,
+            requestedBy: userId,
+            requestedAt,
+          },
+          "metadata.lastModifiedBy": userId,
+          "metadata.updatedAt": requestedAt,
+        },
+      },
+    ),
+    // سيشن اليوم — بتاخد تاريخ الـ target القديم بالظبط (سواب)
+    Session.updateOne(
+      { _id: todaySession._id, isDeleted: false },
+      {
+        $set: {
+          pendingReschedule: {
+            batchId,
+            status: "pending",
+            triggerSessionId: this._id, // نفس الباتش — isTrigger هتبقى false تلقائيًا
+            viewMode: "swapToday",
+            shiftDays,
+            oldScheduledDate: todayOldDate,
+            newScheduledDate: todayNewDate, // 🆕 تاريخ الـ target القديم بالظبط
+            swapSessionId: this._id,
+            requestedBy: userId,
+            requestedAt,
+          },
+          "metadata.lastModifiedBy": userId,
+          "metadata.updatedAt": requestedAt,
+        },
+      },
+    ),
+  ]);
+
+  return {
+    batchId,
+    affectedCount: 2,
+    targetSessionId: this._id,
+    targetTitle: this.title,
+    todaySessionId: todaySession._id,
+    todaySessionTitle: todaySession.title,
+    targetOldDate,
+    targetNewDate,
+    todayOldDate,
+    todayNewDate,
+  };
 };
 
 // ✅ عند إلغاء سيشن (فعل مباشر من الأدمن — من غير approval workflow):
@@ -1296,12 +1428,15 @@ SessionSchema.statics.getPendingRescheduleBatches = async function () {
   return Object.values(batches);
 };
 
-// ✅ موافقة الأدمن على batch كامل:
-//   1. بيحدّث scheduledDate لكل سيشن في الـ batch (دي + كل اللي بعدها)
+// ✅ موافقة الأدمن على batch كامل (يشتغل مع الكاسكيد العادي وكمان مع swapToday
+// من غير أي تعديل — نفس القاعدة بالظبط: trigger ثابت التاريخ وياخد earlyAccess،
+// وكل سيشن تاني في الباتش بياخد newScheduledDate بتاعه):
+//   1. بيحدّث scheduledDate لكل سيشن في الـ batch (ما عدا الـ trigger)
 //   2. بيمنح السيشن "trigger" (اللي المدرس دوس عليها وقدم الطلب منها) earlyAccess
-//      فوري — تتفتح فورًا (meeting link + حضور) من غير ما ترتبط بتاريخها الجديد.
-//   3. مينفعش يلمس status (غير الإرجاع لـ scheduled في حالة withNext مش لازم)،
-//      ولا attendance، ولا meetingLink بتاع باقي السيشنات — كل ده بيفضل زي ما هو.
+//      فوري — تتفتح فورًا (meeting link + حضور) من غير ما ترتبط بتاريخها الجديد،
+//      وده شغال حتى لو كانت completed واتاخد فيها حضور قبل كده.
+//   3. مينفعش يلمس status، ولا attendance، ولا meetingLink بتاع باقي
+//      السيشنات — كل ده بيفضل زي ما هو.
 SessionSchema.statics.approveRescheduleBatch = async function (
   batchId,
   adminUserId,
@@ -1322,17 +1457,16 @@ SessionSchema.statics.approveRescheduleBatch = async function (
 
   const now = new Date();
   const results = [];
-  // كل سيشنات الباتش بيشتركوا في نفس triggerSessionId
   const triggerSessionId =
     sessions[0].pendingReschedule.triggerSessionId?.toString();
 
   for (const session of sessions) {
     const isTrigger = session._id.toString() === triggerSessionId;
+    // 🆕 في وضع الاستبدال (swapToday) الطرفين بياخدوا تاريخ بعض فعليًا —
+    // مش زي الكاسكيد العادي اللي فيه الـ trigger بس تاريخها ثابت
+    const isSwap = session.pendingReschedule.viewMode === "swapToday";
 
-    // 🔐 السيشن trigger مينفعش يترحل خالص — هي اللي هتتفتح فورًا (earlyAccess)
-    // بغض النظر عن تاريخها، فمفيش أي سبب نلمس scheduledDate بتاعها. باقي
-    // السيشنات في الباتش (اللي بعد الـ trigger) هي اللي بترحّل فعليًا.
-    if (!isTrigger) {
+    if (!isTrigger || isSwap) {
       session.scheduledDate = session.pendingReschedule.newScheduledDate;
     }
 
@@ -1342,7 +1476,9 @@ SessionSchema.statics.approveRescheduleBatch = async function (
     session.metadata.lastModifiedBy = adminUserId;
     session.metadata.updatedAt = now;
 
-    // ✅ السيشن اللي المدرس بدأ منها الطلب تتفتح فورًا، بغض النظر عن تاريخها
+    // ✅ الـ trigger برضو بتاخد earlyAccess احتياطًا — حتى لو تاريخها بقى
+    // "اليوم" فعليًا بعد السواب، ده بيضمن فتحها فورًا حتى لو كانت completed
+    // واتاخد فيها حضور قبل كده (بيتخطى قفل الحضور)
     if (isTrigger) {
       session.earlyAccess = {
         enabled: true,
