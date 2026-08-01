@@ -174,11 +174,16 @@ export async function GET(req) {
       // محتاجه دايمًا في الـ stats وفي الـ session row
       const attendanceAlreadyTaken = !!session.attendanceTaken;
 
-      // 🆕 الحضور بيقفل الوصول العادي، إلا لو فيه earlyAccess فعّال دلوقتي —
-      // ده اللي بيسمح بإعادة فتح سيشن (حتى لو completed واتاخد فيها حضور
-      // قبل كده) بعد ما الأدمن يوافق على طلب إعادة الفتح
+      // 🆕 الحضور بيقفل الوصول العادي، إلا لو:
+      //   - فيه earlyAccess فعّال دلوقتي، أو
+      //   - السيشن دي معادها الحقيقي (الخام، مش effective) هو النهاردة فعلاً
+      // ✅ الاستثناء الجديد (isToday الخام) بيضمن إن أي سيشن معادها الحقيقي
+      // النهاردة تتفتح عادي (لينك + حضور) حتى لو attendanceTaken كانت true
+      // من قبل (مثلاً بعد swap رجّعها تبقى سيشن اليوم من غير earlyAccess
+      // منفصل). ده مقصور على isToday الخام عشان محدش يستخدمه كـ bypass
+      // عن طريق earlyAccess وحده على سيشن مش معادها فعلاً النهاردة.
       const attendanceBlocksAccess =
-        attendanceAlreadyTaken && !hasActiveEarlyAccess;
+        attendanceAlreadyTaken && !hasActiveEarlyAccess && !isToday;
 
       // ✅ كل الحالات (scheduled/cancelled/postponed/completed) بقت زي
       // بعضها بالظبط: لو معادها الفعلي = النهارده والحضور مش مقفول، الجوين
@@ -201,8 +206,9 @@ export async function GET(req) {
       // 🆕 ── مراجعة إحصائيات حضور سيشن خلصت بالفعل — مالهاش علاقة بـ "اليوم" ──
       // ده مختلف تمامًا عن canViewDetails: هنا مفيش لينك ميتنج ولا كريدنشيلز
       // بنبعتهم، بس المدرس المفروض يقدر يراجع مين حضر ومين غاب في أي سيشن
-      // completed اتسجل عليها حضور، مهما كان تاريخها. (لو حصل earlyAccess،
-      // canViewDetails هيبقى true أصلاً وهياخد الأولوية ويجيب كل حاجة).
+      // completed اتسجل عليها حضور، مهما كان تاريخها. (لو حصل earlyAccess
+      // أو السيشن معادها الحقيقي النهاردة، canViewDetails هيبقى true أصلاً
+      // وهياخد الأولوية ويجيب كل حاجة).
       const canViewAttendanceHistory =
         session.status === "completed" && attendanceAlreadyTaken;
 
@@ -243,10 +249,11 @@ export async function GET(req) {
       // ── 🔐 SECURITY: Sensitive data (link + credentials + roster) ────────
       // meetingLink / meetingCredentials → لازم يفضلوا مقصورين على اليوم
       // (أو earlyAccess صريح). attendance → ليها مصدرين دلوقتي:
-      //   1) canViewDetails       → سيشن اليوم (أو early access) قبل/بعد
-      //                              تسجيل الحضور
+      //   1) canViewDetails       → سيشن اليوم (الحقيقي أو effective عن طريق
+      //                              earlyAccess) قبل/بعد تسجيل الحضور
       //   2) canViewAttendanceHistory → سيشن completed خلصت واتاخد فيها
-      //                              حضور بالفعل (بدون earlyAccess)
+      //                              حضور بالفعل (بدون earlyAccess ولا كونها
+      //                              معادها الحقيقي النهاردة)
       let meetingCredentials = null;
       let attendance = null;
       let meetingLink = null;

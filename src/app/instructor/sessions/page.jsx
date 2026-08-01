@@ -721,10 +721,17 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
   const isOpenToday = isActuallyToday;
   const isPartial = !!session.canViewPartialDetails;
   const hasEarlyAccess = !!session.hasActiveEarlyAccess;
-  // 🆕 الحضور يفضل "مقفول" (منمنعش تسجيل/إعادة تسجيل) إلا لو فيه earlyAccess
-  // فعّال دلوقتي — ده اللي بيسمح بإعادة فتح سيشن مكتملة واتاخد فيها حضور
-  // قبل كده بعد ما الأدمن يوافق على طلب إعادة الفتح.
-  const attendanceLocked = session.attendanceTaken && !hasEarlyAccess;
+  // 🆕 الحضور يفضل "مقفول" (منمنعش تسجيل/إعادة تسجيل) إلا لو:
+  //   - فيه earlyAccess فعّال دلوقتي، أو
+  //   - السيشن دي معادها الحقيقي (session.isToday الخام، مش effective) هو
+  //     النهاردة فعلاً — ده بيسمح بتسجيل/إعادة تسجيل الحضور لأي سيشن
+  //     بتاريخها الحقيقي النهاردة حتى لو attendanceTaken كانت true قديمًا
+  //     (مثلاً بعد swap رجعها تبقى سيشن اليوم من غير earlyAccess منفصل).
+  //     مهم إننا نستخدم session.isToday الخام هنا مش isActuallyToday، عشان
+  //     الاستثناء يفضل مقصور على "معادها فعلاً النهاردة" مش أي حالة effective
+  //     (اللي أصلاً بتفكها لوحدها عن طريق hasEarlyAccess).
+  const attendanceLocked =
+    session.attendanceTaken && !hasEarlyAccess && !session.isToday;
   const canManageAttendance = !isPartial && isOpenToday && !attendanceLocked;
   const hasPendingReopenRequest = session.pendingReschedule?.status === "pending";
   const formatTime = isAr ? fmtTimeAr : fmtTime;
