@@ -122,12 +122,49 @@ export async function GET(req, { params }) {
     const now = new Date();
     const newSchedule = group.schedule; // { daysOfWeek, timeFrom, timeTo, ... }
 
+    // ✅ FIX: تحقق من إن حجوزات اللينكات لسه "حية" فعلاً — يعني السيشن والجروب
+    // اللي حاجزين اللينك لسه موجودين وغير محذوفين/ملغيين. من غيرها، لو جروب
+    // اتمسح (soft delete) وكان بيستخدم لينك، اللينك ده هيفضل شكله "محجوز" حسب
+    // اللوجيك القديم حتى بعد ما مفيش حاجة فعليًا بتستخدمه — وهو بالظبط اللي
+    // كان بيسبب رسالة "اللينك محجوز" وقت الـ activate رغم إن الجروب صاحب
+    // الحجز اتمسح خالص. الفحص ده بيتم مرة واحدة هنا (batched) قبل ما ندخل
+    // على hasRealConflict لكل لينك، عشان منعملش query لكل لينك لوحده.
+    const reservationSessionIds = allLinks
+      .map((l) => l.currentReservation?.sessionId)
+      .filter(Boolean);
+
+    const liveSessionsMap = new Map();
+    if (reservationSessionIds.length > 0) {
+      const liveSessions = await Session.find({
+        _id: { $in: reservationSessionIds },
+        isDeleted: false,
+      })
+        .select("_id groupId status")
+        .populate({ path: "groupId", select: "_id isDeleted status" })
+        .lean();
+
+      liveSessions.forEach((s) => liveSessionsMap.set(s._id.toString(), s));
+    }
+
     // ✅ FIX: فحص التعارض الفعلي بناءً على الجدول الأسبوعي (يوم + وقت)
     // مش بناءً على "هل النطاق الزمني الكامل للحجز انتهى ولا لأ"
     function hasRealConflict(link) {
       const res = link.currentReservation;
       if (!res?.sessionId) return false;
       if (new Date(res.endTime) < now) return false; // الحجز انتهى خالص
+
+      // ✅ FIX: لو السيشن اللي حاجزة اللينك اتمسحت (soft-deleted) أو مش
+      // موجودة أصلاً، أو الجروب بتاعها اتمسح/اتلغى — الحجز يبقى يتيم
+      // (stale) ومينفعش يتحسب تعارض حقيقي، حتى لو التاريخ المتخزن في
+      // الحجز نفسه لسه مانتهاش
+      const liveSession = liveSessionsMap.get(res.sessionId.toString());
+      if (!liveSession) return false; // السيشن اتمسحت أو مش موجودة
+      if (liveSession.status === "cancelled") return false;
+
+      const reservationGroup = liveSession.groupId;
+      if (!reservationGroup || reservationGroup.isDeleted || reservationGroup.status === "cancelled") {
+        return false;
+      }
 
       if (!res.daysOfWeek?.length || !res.timeFrom || !res.timeTo) {
         // حجز قديم من غير بيانات تكرار (قبل التحديث) - افترض تعارض للأمان

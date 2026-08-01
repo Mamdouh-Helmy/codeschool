@@ -10,9 +10,15 @@ import Session from '../../../../../models/Session';
 import Student from '../../../../../models/Student';
 
 // ─── Constants ───────────────────────────────────────────
-// ✅ الأربع حالات كلها (حاضر/متأخر/غائب/معذور) بتخصم ساعتين — الوحيدة اللي
-// معندهاش خصم هي "pre_absent" لأنها أصلاً مش بتتبعت للـ backend خالص
-// (بتتفلتر في الفرونت قبل الـ submit)
+// ⚠️ مهم جدًا: present / late / absent / excused كلهم في نفس الـ array دي —
+// يعني كلهم "معدودين" بنفس المستوى بالنسبة لمنطق الخصم تحت. الأثر العملي:
+// لو الطالب اتسجل بأي حالة منهم قبل كده وبعدين اتغيرت لحالة تانية من نفس
+// الـ array (مثلاً من "حاضر" لـ "غايب" أو العكس)، مفيش أي خصم إضافي ولا
+// استرجاع بيحصل — لأنه أصلاً كان "محسوب" وبقى "محسوب"، بس بقيمة مختلفة.
+// الخصم بيحصل مرة واحدة بس: أول مرة تتسجل حالة للطالب في الجلسة دي
+// (null → أي حالة من دول). لو حبيت مستقبلاً تضيف status جديد لازم يترسم
+// بوضوح هل هو "محسوب" (يتضاف هنا) ولا لأ، وإلا هتفتح باب لخصم/استرجاع غير
+// متوقع.
 const DEDUCT_STATUSES = ['present', 'late', 'absent', 'excused'];
 const CREDIT_DEDUCTION = 2;
 
@@ -90,7 +96,7 @@ export async function GET(req, { params }) {
   }
 }
 
-// ─── POST (preview template) ──────────────────────────────
+// ─── POST (preview template أو إرسال فوري) ────────────────
 export async function POST(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -107,13 +113,32 @@ export async function POST(req, { params }) {
       return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
     }
 
-    const { attendanceStatus, studentId, extraData = {} } = body;
+    const { attendanceStatus, studentId, extraData = {}, sendNow = false } = body;
 
     if (!studentId || !attendanceStatus) {
       return NextResponse.json(
         { success: false, error: 'studentId and attendanceStatus are required' },
         { status: 400 }
       );
+    }
+
+    // 🆕 sendNow: إرسال فوري لرسالة الواتساب بس — بدون أي لمس لـ attendance
+    // بتاع السيشن ولا لأي ساعات credits. مستخدم في خطوة "الحضور المبدئي" لما
+    // المدرس يحدد طالب "متأخر": الرسالة تتبعت فورًا لولي الأمر، وفي نفس
+    // الوقت "متأخر" هنا مابيتسجلش خالص في الـ DB ولا بيخصم أي ساعات — الخصم
+    // بيحصل بس في خطوة التأكيد النهائي (present/absent/excused) عبر الـ
+    // PATCH تحت. ✅ ده هو الضمان إن "الحضور المبدئي" مش بيحسب ساعات خالص.
+    if (sendNow) {
+      try {
+        await sendAbsenceNotifications(id, [{ studentId, status: attendanceStatus }]);
+        return NextResponse.json({ success: true, data: { sent: true } });
+      } catch (sendError) {
+        console.error('❌ [sendNow] notification error:', sendError);
+        return NextResponse.json(
+          { success: false, error: sendError.message || 'Failed to send notification' },
+          { status: 500 }
+        );
+      }
     }
 
     const [student, session] = await Promise.all([
@@ -179,6 +204,16 @@ export async function POST(req, { params }) {
 }
 
 // ─── PATCH (save attendance + credits) ───────────────────
+// 🔒 ضمان "خصم مرة واحدة بس": الخصم/الاسترجاع بيتحدد بمقارنة oldStatus
+// (المسجل فعليًا في الـ DB قبل الطلب ده) مع newStatus. بما إن present/late/
+// absent/excused كلهم موجودين في DEDUCT_STATUSES، فالتبديل بينهم (حاضر ↔
+// غايب ↔ معذور) — حتى لو حصل كذا مرة عبر submits مختلفة — بيدي creditAction
+// = 'nothing' كل مرة، لأن "كان محسوب" و"لسه محسوب" في الحالتين. الخصم بيحصل
+// مرة واحدة بس لما الحالة تتسجل لأول مرة (من null). شوف مثال:
+//   1) submit "غايب" (oldStatus=null)      → deduct (خصم -2)
+//   2) submit "حاضر" (oldStatus="absent")  → nothing (مفيش تغيير في الساعات)
+//   3) submit "معذور" (oldStatus="present")→ nothing (برضو مفيش تغيير)
+// الساعات المخصومة فضلت 2 بس طول الوقت، مهما اتبدلت الحالة بين التلاتة دول.
 export async function PATCH(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -213,15 +248,14 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
     }
 
-    // ── snapshot من old statuses قبل أي تعديل ────────────────
-    // مهم: نحفظه قبل الـ loop عشان لو نفس الطالب اتبعت مرتين
-    // الـ oldStatus يفضل الأصلي من DB مش المتغير
+    // 📌 oldStatusSnapshot بيتبنى من الـ DB الفعلي (مش من أي حاجة جايه من
+    // الفرونت إند) — ده اللي بيمنع أي تلاعب أو تضارب لو الفرونت إند بعت
+    // بيانات قديمة أو المستخدم فتح تابين اتنين.
     const oldStatusSnapshot = {};
     session.attendance.forEach(a => {
       oldStatusSnapshot[a.studentId?.toString()] = a.status;
     });
 
-    // ── جيب كل الـ students دفعة واحدة ──────────────────────
     const studentIds = attendanceRecords.map(r => r.studentId);
     const students   = await Student.find({ _id: { $in: studentIds } });
     const studentMap = {};
@@ -232,11 +266,9 @@ export async function PATCH(req, { params }) {
 
     for (const record of attendanceRecords) {
       const { studentId, status: newStatus } = record;
-
-      // ── old status من الـ snapshot (الأصلي من DB) ────────────
       const oldStatus = oldStatusSnapshot[studentId] || null;
 
-      // ── لو مفيش تغيير فعلي، تجاهل ───────────────────────────
+      // ✅ لو الحالة متغيرتش، منعملش أي حاجة خالص — لا تسجيل ولا خصم/استرجاع.
       if (oldStatus === newStatus) {
         results.push({
           studentId,
@@ -248,7 +280,6 @@ export async function PATCH(req, { params }) {
         continue;
       }
 
-      // ── حدّث attendance في الـ session ───────────────────────
       const existing = session.attendance.find(
         a => a.studentId?.toString() === studentId
       );
@@ -258,23 +289,16 @@ export async function PATCH(req, { params }) {
         session.attendance.push({ studentId, status: newStatus });
       }
 
-      // ── حسب credit action: old vs new فقط ────────────────────
-      // ✅ دلوقتي الأربع حالات كلها (present/late/absent/excused) بتخصم،
-      // فالمنطق بقى:
-      //   null → أي حالة من الأربعة        = deduct (أول تسجيل بس)
-      //   أي حالة من الأربعة → حالة تانية   = nothing (اتخصمت خصام قبل كده،
-      //                                         مبيتكررش الخصم ولا بيترجع)
-      // refund عمليًا مش هيحصل أبدًا دلوقتي لأن مفيش حالة "مش بتخصم" يترجع
-      // ليها من حالة بتخصم — ده مقصود ومطلوب (خصم مرة واحدة بس مهما اتغيرت
-      // الحالة بين الأربعة دول لبعضها).
+      // 🔒 هنا بالظبط بيتحدد هل نخصم ساعتين، نرجعهم، ولا مفيش أي تغيير.
+      // present/absent/excused (الحالات التلاتة المتاحة في التأكيد النهائي)
+      // كلهم في DEDUCT_STATUSES، فالتبديل بينهم دايمًا بيدي 'nothing'.
       const wasDeducting = oldStatus !== null && DEDUCT_STATUSES.includes(oldStatus);
       const willDeduct   = DEDUCT_STATUSES.includes(newStatus);
 
       let creditAction = 'nothing';
-      if (!wasDeducting && willDeduct)  creditAction = 'deduct';
-      if (wasDeducting  && !willDeduct) creditAction = 'refund';
+      if (!wasDeducting && willDeduct)  creditAction = 'deduct';   // أول تسجيل بس (null → حالة)
+      if (wasDeducting  && !willDeduct) creditAction = 'refund';   // مش وارد يحصل من واجهة التأكيد النهائي حاليًا
 
-      // ── نفّذ الخصم أو الإرجاع ────────────────────────────────
       const student = studentMap[studentId];
       if (student && creditAction !== 'nothing') {
         if (creditAction === 'deduct') {
@@ -301,7 +325,6 @@ export async function PATCH(req, { params }) {
 
       results.push({ studentId, oldStatus, newStatus, action: 'updated', creditAction });
 
-      // ── إشعارات الغياب/التأخير/المعذور ───────────────────────
       if (['absent', 'late', 'excused'].includes(newStatus)) {
         notifyList.push({ studentId, status: newStatus });
       }
@@ -309,15 +332,6 @@ export async function PATCH(req, { params }) {
 
     session.attendanceTaken = true;
 
-    // ✅ استهلاك "الفتح الفوري" (earlyAccess) بعد تسجيل الحضور بنجاح.
-    //
-    // لو الجلسة دي كانت اتفتحت فورًا بسبب موافقة الأدمن على طلب ترحيل
-    // (Cascade Reschedule Request)، فأول ما المدرس يسجل الحضور فيها فعليًا،
-    // لازم نقفل الفلاج ده — وإلا الجلسة هتفضل "متاحة فورًا" للأبد حتى بعد
-    // ما المدرس خلص غرضه منها، وده سلوك غير مقصود.
-    //
-    // الشرط بيتأكد إن earlyAccess كان شغال أصلاً ولسه مستهلك (consumedAt = null)
-    // قبل ما يكتب أي قيمة، عشان ميعملش save زيادة من غير لزوم.
     if (session.earlyAccess?.enabled && !session.earlyAccess?.consumedAt) {
       session.earlyAccess.consumedAt = new Date();
     }
