@@ -166,9 +166,8 @@ export async function GET(req) {
       const sessionEndTime = new Date(sessionDate);
       sessionEndTime.setHours(endH, endM, 0, 0);
 
-      const sessionStillActive = hasActiveEarlyAccess
-        ? true
-        : sessionEndTime > now;
+      const sessionStillActive = true
+        
 
       // ✅ الـ attendanceTaken دايمًا بياخد قيمته الحقيقية من DB
       // مش sensitive data — مجرد flag بيقول "الحضور اتسجل"
