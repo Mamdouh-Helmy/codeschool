@@ -358,8 +358,8 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
                         </h5>
                         <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
                           {t(
-                            "هذه الجلسة تُفتح فورًا (رابط ميتنج + تسجيل حضور). جلسة اليوم تترحل أسبوعًا لمكانها، وتفضل بياناتها القديمة محفوظة.",
-                            "This session opens immediately (meeting link + attendance). Today's session shifts one week to take its place, and its old data stays intact."
+                            "هذه الجلسة تُفتح فورًا (رابط ميتنج + تسجيل حضور). باقي جلسات الجروب اللي لسه مش مكتملة هتترحل أسبوعًا، وتبقى مقفولة حتى يحين معادها الجديد.",
+                            "This session opens immediately (meeting link + attendance). Every other non-completed session in this group shifts by one week and stays locked until its new date arrives."
                           )}
                         </p>
                       </div>
@@ -393,8 +393,8 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
                         </h5>
                         <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
                           {t(
-                            "هذه الجلسة تُفتح فورًا (رابط ميتنج + تسجيل حضور). باقي الجلسات بعدها تترحل أسبوعًا، وتبقى مقفولة حتى يحين معادها الجديد.",
-                            "This session opens immediately (meeting link + attendance). All sessions after it shift by one week and stay locked until their new date arrives."
+                            "هذه الجلسة تُفتح فورًا (رابط ميتنج + تسجيل حضور). باقي جلسات الجروب اللي لسه مش مكتملة هتترحل أسبوعًا، وتبقى مقفولة حتى يحين معادها الجديد.",
+                            "This session opens immediately (meeting link + attendance). Every other non-completed session in this group shifts by one week and stays locked until its new date arrives."
                           )}
                         </p>
                       </div>
@@ -419,8 +419,8 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
                         </h5>
                         <p className="text-xs text-gray-500 dark:text-[#8b949e] leading-relaxed">
                           {t(
-                            "هذه الجلسة تُفتح فورًا بكل شيء. الجلسات بعدها تترحل أسبوعًا وتظهر تفاصيلها العامة (المحتوى/الدروس)، لكن بدون رابط ميتنج أو تسجيل حضور حتى يحين معادها الجديد فعليًا.",
-                            "This session opens immediately with everything. Sessions after it shift by one week and show general details (content/lessons), but without a meeting link or attendance until their new date actually arrives."
+                            "هذه الجلسة تُفتح فورًا بكل شيء. باقي جلسات الجروب اللي لسه مش مكتملة تترحل أسبوعًا وتظهر تفاصيلها العامة (المحتوى/الدروس)، لكن بدون رابط ميتنج أو تسجيل حضور حتى يحين معادها الجديد فعليًا.",
+                            "This session opens immediately with everything. Every other non-completed session in this group shifts by one week and shows general details (content/lessons), but without a meeting link or attendance until its new date actually arrives."
                           )}
                         </p>
                       </div>

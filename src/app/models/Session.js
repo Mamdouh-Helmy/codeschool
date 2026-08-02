@@ -801,30 +801,59 @@ SessionSchema.methods.getChainFromHere = async function () {
   return allSessions.slice(myIndex);
 };
 
-// ✅ يبني preview لترحيل السلسلة (السيشن دي + كل اللي بعدها) بمقدار shiftDays
-// من غير ما يحفظ أي حاجة — للعرض على المدرس/الأدمن قبل التقديم/الموافقة
-//
-// 🔐 مهم جدًا: السيشن اللي المدرس دوس عليها (trigger / "this" session) هي اللي
-// هتُفتح فورًا (earlyAccess) بعد الموافقة — يعني تاريخها المجدول مالوش قيمة
-// عملية، ومينفعش يترحل، علشان معندناش سبب نغيره. لو رحّلناه برضو هيبان للمدرس
-// إنه "ترحّل" حتى لو فاتح فورًا، وده مش المطلوب. فبالتالي:
-//   - السيشن trigger (أول عنصر في السلسلة): newScheduledDate = oldScheduledDate (زي ما هي)
-//   - كل اللي بعدها: newScheduledDate = oldScheduledDate + shiftDays (بترحل فعليًا)
-//
-// ✅ ملحوظة: مفيش أي فحص على status هنا — السيشن ممكن تكون completed برضو
-// (طلب "إعادة فتح" سيشن خلصت واتاخد فيها حضور من قبل) وده مقصود ومسموح.
-SessionSchema.methods.buildCascadePreview = async function (shiftDays = 7) {
-  const chain = await this.getChainFromHere();
+// 🆕 يجيب كل سيشنات الجروب مرتبة بترتيب المنهج (moduleIndex ثم sessionNumber)
+// من غير أي قصّ قبل/بعد سيشن معينة. ده بقى الأساس اللي عليه بيتبني طلب ترحيل
+// السلسلة (buildCascadePreview تحت) بعد ما بقى بيشمل الجروب كله (قبل الـ
+// trigger وبعده في المنهج) مش بس اللي بعده زي الأول.
+SessionSchema.methods.getAllGroupSessionsSorted = async function () {
+  return await mongoose
+    .model("Session")
+    .find({ groupId: this.groupId, isDeleted: false })
+    .sort({ moduleIndex: 1, sessionNumber: 1 });
+};
 
-  const affectedSessions = chain.map((session, index) => {
-    const isTrigger = index === 0; // أول عنصر في الـ chain هو دايمًا السيشن اللي بدأنا منها
+// ✅ يبني preview لترحيل جدول الجروب كله (مش بس اللي بعد الـ trigger في
+// المنهج) بمقدار shiftDays — من غير ما يحفظ أي حاجة، للعرض قبل التقديم/الموافقة.
+//
+// 🔐 الـ trigger هي اللي هتُفتح فورًا (earlyAccess) بعد الموافقة، فتاريخها
+// مالوش قيمة عملية ومينفعش يترحل:
+//   - trigger: newScheduledDate = oldScheduledDate (زي ما هي)
+//   - 🆕 أي سيشن تانية في الجروب — قبل الـ trigger في المنهج أو بعدها، الاتجاه
+//     مبقاش فارق — وstatus بتاعها scheduled/cancelled/postponed: بترحل فعليًا
+//   - أي سيشن تانية completed (قبل أو بعد): بتتستنى تمامًا، متاخدش
+//     pendingReschedule خالص
+//
+// ✅ مفيش فحص على status بتاع الـ trigger نفسها — ممكن تكون completed برضو
+// (طلب "إعادة فتح") وده مقصود ومسموح.
+SessionSchema.methods.buildCascadePreview = async function (shiftDays = 7) {
+  const allSessions = await this.getAllGroupSessionsSorted();
+
+  const affectedSessions = [];
+  const skippedSessions = [];
+
+  allSessions.forEach((session) => {
+    const isTrigger = session._id.toString() === this._id.toString();
     const oldScheduledDate = new Date(session.scheduledDate);
+
+    if (!isTrigger && session.status === "completed") {
+      skippedSessions.push({
+        sessionId: session._id,
+        title: session.title,
+        moduleIndex: session.moduleIndex,
+        sessionNumber: session.sessionNumber,
+        status: session.status,
+        scheduledDate: oldScheduledDate,
+        reason: "completed",
+      });
+      return;
+    }
+
     const newScheduledDate = new Date(oldScheduledDate);
     if (!isTrigger) {
       newScheduledDate.setDate(newScheduledDate.getDate() + shiftDays);
     }
 
-    return {
+    affectedSessions.push({
       sessionId: session._id,
       title: session.title,
       moduleIndex: session.moduleIndex,
@@ -833,7 +862,7 @@ SessionSchema.methods.buildCascadePreview = async function (shiftDays = 7) {
       isTrigger,
       oldScheduledDate,
       newScheduledDate,
-    };
+    });
   });
 
   return {
@@ -841,6 +870,8 @@ SessionSchema.methods.buildCascadePreview = async function (shiftDays = 7) {
     totalAffected: affectedSessions.length,
     completedCount: affectedSessions.filter((s) => s.status === "completed")
       .length,
+    skippedCount: skippedSessions.length,
+    skippedSessions,
     affectedSessions,
   };
 };

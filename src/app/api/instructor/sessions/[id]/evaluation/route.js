@@ -15,6 +15,12 @@ const EVALUATION_TEMPLATE_MAP = {
   repeat: 'evaluation_repeat',
 };
 
+// 🆕 الطلاب اللي حالة حضورهم من ضمن الـ array دي مايدخلوش خطوة التقييم خالص:
+// مش بيظهروا في الـ GET، ومش بياخدوا أي تقييم/رسالة/لينك تسجيل حتى لو
+// اتبعتوا في الـ PATCH لأي سبب (تأمين مزدوج — الفرونت أصلاً مش هيبعتهم
+// لأنهم مش هيظهروا، بس الـ backend بيتأكد بنفسه كمان).
+const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'excused'];
+
 // ─── Helper: resolve var from DB ─────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = 'ar', genderContext = {}) {
   const v = dbVars[key];
@@ -363,19 +369,27 @@ export async function GET(req, { params }) {
       MessageTemplate.getOrFallback('session_recording', 'ar'),
     ]);
 
-    const studentsForEval = students.map((s) => ({
-      _id:               s._id,
-      name:              s.personalInfo?.fullName || 'بدون اسم',
-      enrollmentNumber:  s.enrollmentNumber || '',
-      credits:           s.creditSystem?.currentPackage?.remainingHours ?? 0,
-      guardianPhone:     s.guardianInfo?.whatsappNumber || s.guardianInfo?.phone || '',
-      guardianName:      s.guardianInfo?.name || '',
-      preferredLanguage: s.communicationPreferences?.preferredLanguage || 'ar',
-      attendanceStatus:  attendanceMap[s._id.toString()] || null,
-      currentDecision:   existingEvalMap[s._id.toString()]?.decision || null,
-      currentRatings:    existingEvalMap[s._id.toString()]?.ratings  || null,
-      currentComment:    existingEvalMap[s._id.toString()]?.comment  || '',
-    }));
+    // 🆕 الطلاب اللي "غايب" أو "معذور" في الحضور مايدخلوش خطوة التقييم خالص —
+    // بيتفلتروا هنا قبل ما يترجعوا للفرونت، فمش هيظهروا في الصفحة أصلاً
+    // ومش هياخدوا أي تقييم أو رسالة أو لينك تسجيل.
+    const studentsForEval = students
+      .filter((s) => {
+        const status = attendanceMap[s._id.toString()] || null;
+        return !EXCLUDED_FROM_EVALUATION_STATUSES.includes(status);
+      })
+      .map((s) => ({
+        _id:               s._id,
+        name:              s.personalInfo?.fullName || 'بدون اسم',
+        enrollmentNumber:  s.enrollmentNumber || '',
+        credits:           s.creditSystem?.currentPackage?.remainingHours ?? 0,
+        guardianPhone:     s.guardianInfo?.whatsappNumber || s.guardianInfo?.phone || '',
+        guardianName:      s.guardianInfo?.name || '',
+        preferredLanguage: s.communicationPreferences?.preferredLanguage || 'ar',
+        attendanceStatus:  attendanceMap[s._id.toString()] || null,
+        currentDecision:   existingEvalMap[s._id.toString()]?.decision || null,
+        currentRatings:    existingEvalMap[s._id.toString()]?.ratings  || null,
+        currentComment:    existingEvalMap[s._id.toString()]?.comment  || '',
+      }));
 
     return NextResponse.json({
       success: true,
@@ -423,6 +437,14 @@ export async function POST(req, { params }) {
     const { studentId, decision, customContent, ratings, comment, attendanceStatus } = body;
     if (!studentId || !decision) return NextResponse.json({ success: false, error: 'studentId and decision required' }, { status: 400 });
     if (!['pass', 'review', 'repeat'].includes(decision)) return NextResponse.json({ success: false, error: 'Invalid decision' }, { status: 400 });
+
+    // 🆕 نفس القاعدة هنا: مايتعملش preview لرسالة تقييم لطالب غايب/معذور
+    if (EXCLUDED_FROM_EVALUATION_STATUSES.includes(attendanceStatus)) {
+      return NextResponse.json(
+        { success: false, error: 'الطالب غايب أو معذور — لا يدخل خطوة التقييم' },
+        { status: 400 }
+      );
+    }
 
     const [student, session] = await Promise.all([
       Student.findById(studentId).select('personalInfo guardianInfo communicationPreferences enrollmentNumber').lean(),
@@ -512,13 +534,30 @@ export async function PATCH(req, { params }) {
       const { studentId, decision, notes, recordingLink, ratings, comment } = ev;
       if (!['pass', 'review', 'repeat'].includes(decision)) continue;
 
+      const attendanceStatus = attendanceMap[studentId?.toString()] || 'absent';
+
+      // 🆕 تأمين مزدوج: لو الطالب غايب أو معذور، اتخطاه تمامًا — مفيش تقييم
+      // يتسجل، مفيش رسالة تقييم، ومفيش لينك تسجيل يتبعت له، حتى لو وصل
+      // ضمن الـ evaluations array لأي سبب (مثلاً تاب قديم مفتوح في الفرونت).
+      if (EXCLUDED_FROM_EVALUATION_STATUSES.includes(attendanceStatus)) {
+        results.push({
+          studentId,
+          decision,
+          attendanceStatus,
+          messageSent: false,
+          recordingLinkSent: false,
+          skipped: true,
+          skipReason: 'excluded_attendance_status',
+        });
+        continue;
+      }
+
       const student = await Student.findById(studentId)
         .select('personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem')
         .lean();
       if (!student) continue;
 
-      const lang             = student.communicationPreferences?.preferredLanguage || 'ar';
-      const attendanceStatus = attendanceMap[studentId?.toString()] || 'absent';
+      const lang = student.communicationPreferences?.preferredLanguage || 'ar';
 
       const { rendered, guardianPhone, isFallback } = await buildEvaluationMessage(
         student, decision, session,
