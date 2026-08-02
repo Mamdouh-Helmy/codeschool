@@ -1,7 +1,4 @@
 // app/api/groups/route.js
-// ✅ متوافق مع هيكل instructors الجديد: [{userId: ObjectId, countTime: Number}]
-// ✅ محسّن بفلاتر متقدمة
-
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../models/Group";
@@ -14,14 +11,13 @@ import {
   getSessionDistributionSummary,
 } from "@/utils/sessionGenerator";
 
-// ─── Helper: Check instructor schedule conflicts ──────────────────────────────
+// ─── Helper: Check instructor schedule conflicts (unchanged) ──────────────
 async function checkInstructorConflicts(
   instructors,
   schedule,
   excludeGroupId = null,
 ) {
   if (!instructors || instructors.length === 0 || !schedule) return [];
-
   const scheduleDays = schedule.daysOfWeek || [];
   const timeFrom = schedule.timeFrom;
   const timeTo = schedule.timeTo;
@@ -29,14 +25,12 @@ async function checkInstructorConflicts(
 
   for (const instructorId of instructors) {
     const userId = instructorId?.userId || instructorId;
-
     const query = {
       "instructors.userId": userId,
       isDeleted: false,
       status: { $in: ["draft", "active"] },
     };
     if (excludeGroupId) query._id = { $ne: excludeGroupId };
-
     const conflictingGroups = await Group.find(query)
       .populate("instructors.userId", "name")
       .lean();
@@ -44,28 +38,23 @@ async function checkInstructorConflicts(
     for (const existingGroup of conflictingGroups) {
       const es = existingGroup.schedule;
       if (!es) continue;
-
       const dayOverlap = scheduleDays.some((day) =>
         es.daysOfWeek?.includes(day),
       );
       if (!dayOverlap) continue;
-
       const newFrom = timeFrom.replace(":", "");
       const newTo = timeTo.replace(":", "");
       const existFrom = es.timeFrom?.replace(":", "") || "0000";
       const existTo = es.timeTo?.replace(":", "") || "2359";
       const hasTimeConflict = !(newTo <= existFrom || newFrom >= existTo);
       if (!hasTimeConflict) continue;
-
       const instructorEntry = existingGroup.instructors?.find(
         (i) => (i.userId?._id || i.userId)?.toString() === userId.toString(),
       );
       const instructorName = instructorEntry?.userId?.name || "المدرب";
-
       const overlapDays = scheduleDays.filter((day) =>
         es.daysOfWeek?.includes(day),
       );
-
       conflicts.push({
         instructorId: userId,
         instructorName,
@@ -76,15 +65,13 @@ async function checkInstructorConflicts(
       });
     }
   }
-
   return conflicts;
 }
 
-// ─── GET: Fetch all groups with advanced filters ─────────────────────────────
+// ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(req) {
   try {
     console.log("🔍 Fetching groups with advanced filters...");
-
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
 
@@ -93,130 +80,87 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
-    
-    // ✅ الفلاتر الأساسية
+
     const search = searchParams.get("search");
     const courseId = searchParams.get("courseId");
     const instructorId = searchParams.get("instructorId");
-    
-    // ✅ فلتر الحالة (multi-select)
     const statusParams = searchParams.getAll("status");
-    
-    // ✅ فلتر السعة
     const capacity = searchParams.get("capacity");
-    
-    // ✅ فلتر الأيام
     const daysParams = searchParams.getAll("days");
-    
-    // ✅ فلتر التواريخ
     const startDateFrom = searchParams.get("startDateFrom");
     const startDateTo = searchParams.get("startDateTo");
     const createdAtFrom = searchParams.get("createdAtFrom");
     const createdAtTo = searchParams.get("createdAtTo");
-    
-    // ✅ فلتر عدد الطلاب
     const studentsMin = searchParams.get("studentsMin");
     const studentsMax = searchParams.get("studentsMax");
-    
-    // ✅ فلتر السيشنات
     const sessionsGenerated = searchParams.get("sessionsGenerated");
 
-    // ── Build query ─────────────────────────────────────────────────────────
+    // ✅ فلتر جديد: الوسوم
+    const tagsParam = searchParams.get("tags");
+
     const query = { isDeleted: false };
 
-    // Search (name or code)
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { code: { $regex: search, $options: "i" } },
       ];
     }
-
-    // Course filter
-    if (courseId) {
-      query.courseId = courseId;
-    }
-
-    // Instructor filter
-    if (instructorId) {
-      query["instructors.userId"] = instructorId;
-    }
-
-    // Status filter (multi-select)
-    if (statusParams.length > 0) {
-      query.status = { $in: statusParams };
-    }
-
-    // Capacity filter
+    if (courseId) query.courseId = courseId;
+    if (instructorId) query["instructors.userId"] = instructorId;
+    if (statusParams.length > 0) query.status = { $in: statusParams };
     if (capacity === "full") {
       query.$expr = { $gte: ["$currentStudentsCount", "$maxStudents"] };
     } else if (capacity === "available") {
       query.$expr = { $lt: ["$currentStudentsCount", "$maxStudents"] };
     }
-
-    // Days of week filter
     if (daysParams.length > 0) {
       query["schedule.daysOfWeek"] = { $in: daysParams };
     }
-
-    // Start date range
     if (startDateFrom || startDateTo) {
       query["schedule.startDate"] = {};
-      if (startDateFrom) {
-        query["schedule.startDate"].$gte = new Date(startDateFrom);
-      }
+      if (startDateFrom) query["schedule.startDate"].$gte = new Date(startDateFrom);
       if (startDateTo) {
-        // Set to end of day
         const endDate = new Date(startDateTo);
         endDate.setHours(23, 59, 59, 999);
         query["schedule.startDate"].$lte = endDate;
       }
     }
-
-    // Created at range
     if (createdAtFrom || createdAtTo) {
       query.createdAt = {};
-      if (createdAtFrom) {
-        query.createdAt.$gte = new Date(createdAtFrom);
-      }
+      if (createdAtFrom) query.createdAt.$gte = new Date(createdAtFrom);
       if (createdAtTo) {
         const endDate = new Date(createdAtTo);
         endDate.setHours(23, 59, 59, 999);
         query.createdAt.$lte = endDate;
       }
     }
-
-    // Students count range
     if (studentsMin || studentsMax) {
       query.currentStudentsCount = {};
-      if (studentsMin) {
-        query.currentStudentsCount.$gte = parseInt(studentsMin);
-      }
-      if (studentsMax) {
-        query.currentStudentsCount.$lte = parseInt(studentsMax);
-      }
+      if (studentsMin) query.currentStudentsCount.$gte = parseInt(studentsMin);
+      if (studentsMax) query.currentStudentsCount.$lte = parseInt(studentsMax);
     }
-
-    // Sessions generated filter
-    if (sessionsGenerated === "true") {
-      query.sessionsGenerated = true;
-    } else if (sessionsGenerated === "false") {
-      query.sessionsGenerated = false;
+    if (sessionsGenerated === "true") query.sessionsGenerated = true;
+    else if (sessionsGenerated === "false") query.sessionsGenerated = false;
+    if (tagsParam) {
+      const tagIds = tagsParam.split(",").filter(Boolean);
+      if (tagIds.length) {
+        query.tags = { $in: tagIds };
+      }
     }
 
     console.log("🔍 Query:", JSON.stringify(query, null, 2));
 
-    // ── Pagination ──────────────────────────────────────────────────────────
     const total = await Group.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
     const skip = (page - 1) * limit;
 
-    // ── Fetch groups ─────────────────────────────────────────────────────────
     const groups = await Group.find(query)
       .populate("courseId", "title level")
       .populate("instructors.userId", "name email")
       .populate("students", "personalInfo.fullName enrollmentNumber")
       .populate("createdBy", "name email")
+      .populate("tags") // ✅
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -253,12 +197,11 @@ export async function GET(req) {
       createdBy: group.createdBy,
       createdAt: group.createdAt,
       updatedAt: group.updatedAt,
+      tags: group.tags || [], // ✅
     }));
 
-    // ── Stats (based on same query without pagination) ───────────────────────
     const statsQuery = { ...query };
-    delete statsQuery.$or; // Remove search for stats to get accurate counts
-
+    delete statsQuery.$or;
     const stats = {
       total,
       active: await Group.countDocuments({ ...query, status: "active" }),
@@ -293,11 +236,10 @@ export async function GET(req) {
   }
 }
 
-// ─── POST: Create new group ───────────────────────────────────────────────────
+// ─── POST ─────────────────────────────────────────────────────────────────────
 export async function POST(req) {
   try {
     console.log("🚀 Creating new group...");
-
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
 
@@ -315,9 +257,9 @@ export async function POST(req) {
       schedule,
       automation,
       moduleSelection,
+      tags, // ✅
     } = body;
 
-    // ── Validation ──────────────────────────────────────────────────────────
     if (!name || !courseId || !maxStudents || !schedule) {
       return NextResponse.json(
         {
@@ -328,15 +270,12 @@ export async function POST(req) {
       );
     }
 
-    // ✅ Normalize instructors
     const normalizedInstructors = (instructors || []).map((i) => ({
       userId: i?.userId || i,
       countTime: i?.countTime || 0,
     }));
-
     const instructorUserIds = normalizedInstructors.map((i) => i.userId);
 
-    // CHECK 1: Duplicate group name
     const existingGroupName = await Group.findOne({
       name: { $regex: `^${name.trim()}$`, $options: "i" },
       isDeleted: false,
@@ -357,7 +296,6 @@ export async function POST(req) {
         { status: 400 },
       );
     }
-
     const uniqueDays = [...new Set(schedule.daysOfWeek)];
     if (uniqueDays.length !== schedule.daysOfWeek.length) {
       return NextResponse.json(
@@ -365,7 +303,6 @@ export async function POST(req) {
         { status: 400 },
       );
     }
-
     const startDate = new Date(schedule.startDate);
     const startDayName = startDate.toLocaleDateString("en-US", { weekday: "long" });
     if (!schedule.daysOfWeek.includes(startDayName)) {
@@ -377,7 +314,6 @@ export async function POST(req) {
         { status: 400 },
       );
     }
-
     if (moduleSelection?.mode === "specific" && !moduleSelection.selectedModules?.length) {
       return NextResponse.json(
         { success: false, error: "When selecting specific modules, you must select at least one module" },
@@ -385,7 +321,6 @@ export async function POST(req) {
       );
     }
 
-    // CHECK 2: Instructor schedule conflicts
     if (instructorUserIds.length > 0) {
       const conflicts = await checkInstructorConflicts(instructorUserIds, schedule);
       if (conflicts.length > 0) {
@@ -407,7 +342,6 @@ export async function POST(req) {
       }
     }
 
-    // ── Fetch course ─────────────────────────────────────────────────────────
     const course = await Course.findById(courseId);
     if (!course) {
       return NextResponse.json(
@@ -416,7 +350,6 @@ export async function POST(req) {
       );
     }
 
-    // ── Calculate total sessions ─────────────────────────────────────────────
     let totalSessions;
     if (moduleSelection?.mode === "specific" && moduleSelection.selectedModules.length > 0) {
       totalSessions = moduleSelection.selectedModules.reduce(
@@ -430,7 +363,6 @@ export async function POST(req) {
       );
     }
 
-    // ── Build course snapshot ────────────────────────────────────────────────
     const courseSnapshot = {
       title: course.title,
       level: course.level,
@@ -451,7 +383,6 @@ export async function POST(req) {
       })),
     };
 
-    // ── Build group document ─────────────────────────────────────────────────
     const groupCode = `GRP-${Date.now()}-${Math.random()
       .toString(36)
       .substr(2, 4)
@@ -493,6 +424,7 @@ export async function POST(req) {
       totalSessionsCount: totalSessions,
       createdBy: adminUser.id,
       updatedAt: new Date(),
+      tags: tags || [], // ✅
     };
 
     const group = await Group.create(groupData);
@@ -501,6 +433,7 @@ export async function POST(req) {
       .populate("courseId", "title level")
       .populate("instructors.userId", "name email")
       .populate("createdBy", "name email")
+      .populate("tags") // ✅
       .lean();
 
     const responseData = {
@@ -514,7 +447,6 @@ export async function POST(req) {
     };
 
     console.log("✅ Group created:", group.code);
-
     return NextResponse.json(
       {
         success: true,
@@ -535,7 +467,6 @@ export async function POST(req) {
     );
   } catch (error) {
     console.error("❌ Error creating group:", error);
-
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors || {})
         .map((e) => e.message)
@@ -545,7 +476,6 @@ export async function POST(req) {
         { status: 400 },
       );
     }
-
     if (error.code === 11000) {
       return NextResponse.json(
         {
@@ -556,7 +486,6 @@ export async function POST(req) {
         { status: 409 },
       );
     }
-
     return NextResponse.json(
       {
         success: false,
@@ -568,29 +497,25 @@ export async function POST(req) {
   }
 }
 
-// ─── PUT: Update group ────────────────────────────────────────────────────────
+// ─── PUT ──────────────────────────────────────────────────────────────────────
 export async function PUT(req, { params }) {
   try {
     const { id } = await params;
     console.log(`✏️ Updating group: ${id}`);
-
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
-
     await connectDB();
 
     const body = await req.json();
 
-    const { name, instructors, maxStudents, schedule, automation, moduleSelection } = body;
+    const { name, instructors, maxStudents, schedule, automation, moduleSelection, tags } = body;
 
-    // ✅ Normalize instructors
     const normalizedInstructors = (instructors || []).map((i) => ({
       userId: i?.userId || i,
       countTime: i?.countTime || 0,
     }));
     const instructorUserIds = normalizedInstructors.map((i) => i.userId);
 
-    // CHECK 1: Duplicate group name (exclude current group)
     if (name) {
       const duplicateGroup = await Group.findOne({
         name: { $regex: `^${name.trim()}$`, $options: "i" },
@@ -615,7 +540,6 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // CHECK 2: Instructor conflicts (exclude current group)
     if (instructorUserIds.length > 0 && schedule) {
       const conflicts = await checkInstructorConflicts(instructorUserIds, schedule, id);
       if (conflicts.length > 0) {
@@ -645,7 +569,6 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // ── Recalculate total sessions if module selection changed ───────────────
     let totalSessionsCount = group.totalSessionsCount;
     if (moduleSelection && group.courseSnapshot?.curriculum) {
       if (moduleSelection.mode === "specific" && moduleSelection.selectedModules.length > 0) {
@@ -662,7 +585,6 @@ export async function PUT(req, { params }) {
       }
     }
 
-    // ✅ احتفظ بـ countTime الموجود للمدربين القدامى
     const mergedInstructors = normalizedInstructors.map((newInstructor) => {
       const existingEntry = group.instructors?.find(
         (e) => (e.userId?.toString() || e.userId) === (newInstructor.userId?.toString() || newInstructor.userId)
@@ -689,6 +611,7 @@ export async function PUT(req, { params }) {
         moduleSelection: moduleSelection || { mode: "all", selectedModules: [] },
         totalSessionsCount,
         updatedAt: new Date(),
+        tags: tags || [], // ✅
       },
     };
 
@@ -696,6 +619,7 @@ export async function PUT(req, { params }) {
       .populate("courseId", "title level")
       .populate("instructors.userId", "name email")
       .populate("createdBy", "name email")
+      .populate("tags") // ✅
       .lean();
 
     const responseData = {
@@ -709,7 +633,6 @@ export async function PUT(req, { params }) {
     };
 
     console.log("✅ Group updated:", updatedGroup.code);
-
     return NextResponse.json({
       success: true,
       data: responseData,

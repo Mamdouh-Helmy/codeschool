@@ -1,6 +1,4 @@
 // app/api/groups/[id]/route.js
-// ✅ متوافق مع هيكل instructors الجديد: [{userId: ObjectId, countTime: Number}]
-
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../models/Group";
@@ -10,50 +8,31 @@ import Session from "../../../models/Session";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
-// ============================================================
-// ✅ HELPER: جلب بيانات المدرسين صح مع gender وphone و language
-// ============================================================
 async function getInstructorsData(instructorsArray) {
   if (!instructorsArray || instructorsArray.length === 0) return [];
-
   try {
     const instructorIds = instructorsArray
       .map((i) => i?.userId || i)
       .filter(Boolean);
-
     if (instructorIds.length === 0) return [];
-
-    // ✅ FIX: أضفنا language للـ select
     const users = await User.find({
       _id: { $in: instructorIds },
     }).select("name email gender language profile");
-
     return users.map((user) => {
       const obj = user.toObject({ getters: true });
-
-      const gender = obj.gender
-        ? String(obj.gender).toLowerCase().trim()
-        : null;
-
-      const phone = obj.profile?.phone
-        ? String(obj.profile.phone).trim() || null
-        : null;
-
-      // ✅ FIX: استخرج language (default: "ar")
+      const gender = obj.gender ? String(obj.gender).toLowerCase().trim() : null;
+      const phone = obj.profile?.phone ? String(obj.profile.phone).trim() || null : null;
       const language = obj.language || "ar";
-
       const entry = instructorsArray.find(
-        (i) =>
-          (i?.userId?.toString() || i?.toString()) === obj._id.toString(),
+        (i) => (i?.userId?.toString() || i?.toString()) === obj._id.toString(),
       );
       const countTime = entry?.countTime || 0;
-
       return {
         _id: obj._id,
         name: obj.name,
         email: obj.email,
         gender,
-        language,   // ✅ FIX: مضافة
+        language,
         phone,
         countTime,
       };
@@ -64,9 +43,6 @@ async function getInstructorsData(instructorsArray) {
   }
 }
 
-// ============================================================
-// ✅ HELPER: جلب رابط أول session
-// ============================================================
 async function getFirstSessionMeetingLink(groupId) {
   try {
     const firstSession = await Session.findOne({
@@ -78,24 +54,18 @@ async function getFirstSessionMeetingLink(groupId) {
       .sort({ scheduledDate: 1 })
       .select("meetingLink scheduledDate title")
       .lean();
-
-    const link = firstSession?.meetingLink || null;
-    console.log(`   🔗 First meeting link: ${link || "NOT FOUND"}`);
-    return link;
+    return firstSession?.meetingLink || null;
   } catch (error) {
     console.error("❌ Error fetching first session meeting link:", error);
     return null;
   }
 }
 
-// ============================================================
-// GET: Fetch single group by ID
-// ============================================================
+// ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(req, { params }) {
   try {
     const { id } = await params;
     console.log(`\n📥 Fetching group: ${id}`);
-
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
 
@@ -105,6 +75,7 @@ export async function GET(req, { params }) {
       .populate("courseId", "title level curriculum")
       .populate("students", "personalInfo.fullName enrollmentNumber")
       .populate("createdBy", "name email")
+      .populate("tags") // ✅
       .lean();
 
     if (!group) {
@@ -128,17 +99,6 @@ export async function GET(req, { params }) {
     };
 
     console.log(`✅ Group fetched: ${group.name}`);
-    console.log(`📋 Instructors: ${instructorsData.length}`);
-    instructorsData.forEach((inst, i) => {
-      console.log(`   Instructor ${i + 1}:`, {
-        name: inst.name,
-        gender: inst.gender || "NOT SET",
-        language: inst.language,       // ✅ FIX: في الـ log
-        phone: inst.phone || "NOT SET",
-        countTime: inst.countTime,
-      });
-    });
-
     return NextResponse.json({ success: true, data: groupObj });
   } catch (error) {
     console.error("❌ Error fetching group:", error);
@@ -149,14 +109,11 @@ export async function GET(req, { params }) {
   }
 }
 
-// ============================================================
-// PUT: Update group
-// ============================================================
+// ─── PUT ──────────────────────────────────────────────────────────────────────
 export async function PUT(req, { params }) {
   try {
     const { id } = await params;
     console.log(`✏️ Updating group: ${id}`);
-
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
 
@@ -200,14 +157,18 @@ export async function PUT(req, { params }) {
 
     if (updateData.metadata) delete updatePayload.metadata;
 
+    // ✅ تأكد من وجود tags
+    if (!updatePayload.tags) updatePayload.tags = [];
+
     const updatedGroup = await Group.findByIdAndUpdate(
       id,
       { $set: updatePayload },
       { new: true, runValidators: true },
     )
       .populate("courseId", "title level")
-      .populate("instructors.userId", "name email gender language profile") // ✅ FIX: language
+      .populate("instructors.userId", "name email gender language profile")
       .populate("students", "personalInfo.fullName enrollmentNumber")
+      .populate("tags") // ✅
       .lean();
 
     if (!updatedGroup) {
@@ -224,7 +185,7 @@ export async function PUT(req, { params }) {
         name: i.userId?.name || "",
         email: i.userId?.email || "",
         gender: i.userId?.gender || null,
-        language: i.userId?.language || "ar",  // ✅ FIX: language في الـ PUT response
+        language: i.userId?.language || "ar",
         countTime: i.countTime || 0,
       })),
     };
@@ -253,14 +214,11 @@ export async function PUT(req, { params }) {
   }
 }
 
-// ============================================================
-// DELETE: Hard delete group
-// ============================================================
+// ─── DELETE ──────────────────────────────────────────────────────────────────
 export async function DELETE(req, { params }) {
   try {
     const { id } = await params;
     console.log(`🔥 Hard deleting group: ${id}`);
-
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
 
@@ -284,12 +242,11 @@ export async function DELETE(req, { params }) {
     const deletedGroup = await Group.findByIdAndDelete(id);
     await Session.deleteMany({ groupId: id });
     await Student.updateMany(
-  { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) },
-  { $pull: { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) } }
-);
+      { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) },
+      { $pull: { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) } }
+    );
 
     console.log(`✅ Group permanently deleted: ${deletedGroup?.code || id}`);
-
     return NextResponse.json({
       success: true,
       message: "Group permanently deleted from database",

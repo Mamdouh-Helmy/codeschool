@@ -1,34 +1,83 @@
+// components/admin/GroupForm.jsx
 "use client";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Users, Calendar, Save, X,
   User, Bell, CheckCircle, Hash, AlertCircle, ChevronDown,
-  ChevronRight, ChevronLeft, Layers, Copy
+  ChevronRight, ChevronLeft, Layers, Copy, Tag,
+  MessageCircle, Sparkles, Clock, GraduationCap, Mail,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+// Every color below is one of the 4 brand hues defined in tailwind.config.js:
+//   primary (#ff6700 orange) · secondary (#004d59 teal) · orange-coral (#ff6437) · amber-brand (#feaf00)
+// plus the project's own neutral/dark tokens (PowderBlueBorder, IcyBreeze, darkmode,
+// darklight, dark_input, dark_border, darktext, darkmuted, darksubtle). No outside
+// palette (blue/purple/violet/indigo/fuchsia/green/red/yellow) is used anywhere.
 
 const STEPS = [
-  { id: "basic",       icon: Hash,     color: "violet" },
-  { id: "instructors", icon: User,     color: "blue"   },
-  { id: "schedule",    icon: Calendar, color: "purple" },
-  { id: "automation",  icon: Bell,     color: "orange" },
+  { id: "basic",       icon: Hash,     color: "primary"   },
+  { id: "instructors", icon: User,     color: "secondary" },
+  { id: "schedule",    icon: Calendar, color: "coral"      },
+  { id: "automation",  icon: Bell,     color: "amber"      },
 ];
 
 const COLOR = {
-  violet: { btn: "from-violet-600 to-purple-600",  text: "text-violet-600 dark:text-violet-400",  border: "border-violet-200 dark:border-violet-800",  panel: "from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20",  badge: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300",  dot: "bg-violet-500"  },
-  blue:   { btn: "from-blue-600 to-indigo-600",    text: "text-blue-600 dark:text-blue-400",      border: "border-blue-200 dark:border-blue-800",      panel: "from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20",      badge: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",          dot: "bg-blue-500"    },
-  purple: { btn: "from-purple-600 to-fuchsia-600", text: "text-purple-600 dark:text-purple-400",  border: "border-purple-200 dark:border-purple-800",  panel: "from-purple-50 to-fuchsia-50 dark:from-purple-900/20 dark:to-fuchsia-900/20", badge: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",  dot: "bg-purple-500"  },
-  orange: { btn: "from-orange-500 to-amber-500",   text: "text-orange-600 dark:text-orange-400",  border: "border-orange-200 dark:border-orange-800",  panel: "from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20",   badge: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",  dot: "bg-orange-500"  },
+  primary: {
+    btn:    "from-primary to-orange-deep",
+    solid:  "#ff6700",
+    text:   "text-primary",
+    border: "border-primary/25 dark:border-primary/30",
+    panel:  "from-IcyBreeze to-PaleCyan dark:from-primary/10 dark:to-orange-deep/10",
+    badge:  "bg-primary/10 text-primary dark:bg-primary/15",
+    ring:   "ring-primary/40",
+  },
+  secondary: {
+    btn:    "from-secondary to-teal-dark",
+    solid:  "#004d59",
+    text:   "text-secondary dark:text-white",
+    border: "border-secondary/20 dark:border-secondary/35",
+    panel:  "from-PaleSkyBlu to-IcyBreeze dark:from-secondary/10 dark:to-teal-dark/10",
+    badge:  "bg-secondary/10 text-secondary dark:bg-secondary/20 dark:text-white",
+    ring:   "ring-secondary/40",
+  },
+  coral: {
+    btn:    "from-orange-coral to-primary",
+    solid:  "#ff6437",
+    text:   "text-orange-coral",
+    border: "border-orange-coral/25 dark:border-orange-coral/30",
+    panel:  "from-PaleCyan to-SkyBlueMist dark:from-orange-coral/10 dark:to-primary/10",
+    badge:  "bg-orange-coral/10 text-orange-coral dark:bg-orange-coral/15",
+    ring:   "ring-orange-coral/40",
+  },
+  amber: {
+    btn:    "from-amber-brand to-orange-deep",
+    solid:  "#feaf00",
+    text:   "text-orange-deep dark:text-amber-brand",
+    border: "border-amber-brand/35 dark:border-amber-brand/30",
+    panel:  "from-PaleSkyBlu to-SkyBlueMist dark:from-amber-brand/10 dark:to-orange-deep/10",
+    badge:  "bg-amber-brand/15 text-orange-deep dark:bg-amber-brand/20 dark:text-amber-brand",
+    ring:   "ring-amber-brand/50",
+  },
+};
+
+const AUTOMATION_META = {
+  whatsappEnabled:         { icon: MessageCircle },
+  welcomeMessage:          { icon: Sparkles      },
+  reminderEnabled:         { icon: Bell          },
+  notifyGuardianOnAbsence: { icon: AlertCircle   },
+  notifyOnSessionUpdate:   { icon: Calendar      },
+  completionMessage:       { icon: CheckCircle   },
 };
 
 const ENGLISH_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const inputCls  = "w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-dark_input dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 text-sm transition-all";
-const labelCls  = "block text-13 font-medium text-MidnightNavyText dark:text-white mb-1.5";
-const selectCls = "w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary";
+const inputCls  = "w-full px-3.5 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary dark:bg-dark_input dark:text-white placeholder:text-gray-400 dark:placeholder:text-darksubtle text-sm transition-all shadow-sm";
+const labelCls  = "block text-13 font-semibold text-MidnightNavyText dark:text-white mb-1.5";
+const selectCls = "w-full px-3.5 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-xl bg-white dark:bg-dark_input dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary shadow-sm";
+const cardCls   = "rounded-2xl border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-darklight shadow-sm";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -73,12 +122,27 @@ function buildInitialForm(initial) {
       completionMessage:       initial?.automation?.completionMessage       ?? true,
     },
     moduleSelection: initial?.moduleSelection || { mode: "all", selectedModules: [] },
+    tags: initial?.tags?.map(t => t._id || t) || [],
   };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-// ✅ sessionsGenerated + groupId عشان نقدر نستدعي مزامنة السيشنز مع الاختيار الجديد
+function SectionHeading({ icon: Icon, title, badge, badgeTone = "primary" }) {
+  const toneCls = badgeTone === "primary"
+    ? "bg-primary/10 text-primary"
+    : "bg-gray-100 dark:bg-dark_input text-SlateBlueText dark:text-darktext";
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2">
+        {Icon && <Icon className="w-4 h-4 text-primary" />}
+        <h4 className="text-sm font-semibold text-MidnightNavyText dark:text-white">{title}</h4>
+      </div>
+      {badge != null && <span className={`text-xs px-2 py-1 rounded-full font-medium ${toneCls}`}>{badge}</span>}
+    </div>
+  );
+}
+
 function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, groupId, sessionsGenerated }) {
   const [syncing, setSyncing] = useState(false);
 
@@ -93,10 +157,6 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
   const totalSessionsAll = curriculum.reduce((s, m) => s + (m.totalSessions || 3), 0);
   const selectedSessions  = (selectedModules?.selectedModules || []).reduce((s, i) => s + (curriculum[i]?.totalSessions || 3), 0);
 
-  // ✅ مزامنة السيشنز الفعلية مع اختيار الموديولات الجديد
-  // - أي سيشن Scheduled/Cancelled/Postponed لموديول اتشال من الاختيار → بتتلغي
-  // - الموديولات الجديدة اللي معندهاش سيشنز → بتتولد على المواعيد اللي فضيت (أو بعدها لو مش كفاية)
-  // - أي سيشن Completed منلمسهوش خالص
   const handleSync = async () => {
     if (!groupId) return;
 
@@ -131,45 +191,52 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
   };
 
   return (
-    <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
-      <div className="flex items-center gap-2 mb-3">
-        <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-        <h4 className="text-sm font-semibold text-MidnightNavyText dark:text-white">{t("groups.form.moduleSelection")}</h4>
-      </div>
+    <div className="mt-4 p-4 rounded-2xl border border-secondary/20 dark:border-secondary/30 bg-gradient-to-br from-PaleSkyBlu to-IcyBreeze dark:from-secondary/10 dark:to-teal-dark/10">
+      <SectionHeading icon={Layers} title={t("groups.form.moduleSelection")} />
 
-      <div className="flex gap-4 mb-3">
-        {["all", "specific"].map(mode => (
-          <label key={mode} className="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="moduleMode" checked={selectedModules?.mode === mode}
-              onChange={() => setSelectedModules({ mode, selectedModules: [] })} className="w-4 h-4 text-primary" />
-            <span className="text-sm text-MidnightNavyText dark:text-white">
+      <div className="flex gap-2 mb-3 p-1 bg-white/70 dark:bg-black/20 rounded-xl w-fit">
+        {["all", "specific"].map(mode => {
+          const active = selectedModules?.mode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setSelectedModules({ mode, selectedModules: [] })}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                active
+                  ? "bg-gradient-to-r from-secondary to-teal-dark text-white shadow-sm"
+                  : "text-SlateBlueText dark:text-darktext hover:bg-white dark:hover:bg-black/20"
+              }`}
+            >
               {t(`groups.form.${mode === "all" ? "allModules" : "specificModules"}`)}
-            </span>
-          </label>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
       {selectedModules?.mode === "specific" && (
-        <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar p-2 bg-white dark:bg-darkmode rounded-lg">
+        <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar p-2 bg-white dark:bg-darkmode rounded-xl border border-secondary/10 dark:border-secondary/20">
           {curriculum.map((module, idx) => {
             const isSel = selectedModules?.selectedModules?.includes(idx) || false;
             return (
               <div key={idx} onClick={() => toggle(idx)}
-                className={`flex items-center gap-3 p-2 border rounded-lg cursor-pointer transition-colors ${isSel ? "border-primary bg-primary/5" : "border-PowderBlueBorder dark:border-dark_border hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
-                <input type="checkbox" checked={isSel} onChange={() => {}} className="w-4 h-4 text-primary rounded" />
+                className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${isSel ? "border-secondary/50 bg-secondary/5 dark:bg-secondary/15 shadow-sm" : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"}`}>
+                <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 border-2 transition-colors ${isSel ? "bg-secondary border-secondary" : "border-gray-300 dark:border-dark_border"}`}>
+                  {isSel && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+                </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-MidnightNavyText dark:text-white">
                     {t("groups.form.module")} {idx + 1}: {module.title}
                   </p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] bg-secondary/10 dark:bg-secondary/20 text-secondary dark:text-white px-2 py-0.5 rounded-full">
                       {module.lessons?.length || 0} {t("groups.form.lessons")}
                     </span>
-                    <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] bg-orange-coral/10 dark:bg-orange-coral/20 text-orange-coral px-2 py-0.5 rounded-full">
                       {module.totalSessions || 3} {t("groups.form.sessions")}
                     </span>
                     {areDuplicates(module.lessons) && (
-                      <span className="text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="text-[10px] bg-amber-brand/15 dark:bg-amber-brand/20 text-orange-deep dark:text-amber-brand px-2 py-0.5 rounded-full flex items-center gap-1">
                         <Copy className="w-3 h-3" />{t("groups.form.repeatedLessons")}
                       </span>
                     )}
@@ -181,35 +248,37 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
         </div>
       )}
 
-      <div className="mt-2 p-2 rounded-lg">
+      <div className="mt-3">
         {selectedModules?.mode === "all" ? (
-          <p className="text-xs text-green-800 dark:text-green-300 bg-green-100 dark:bg-green-900/30 p-2 rounded-lg">
-            ✓ {t("groups.form.allModulesSelected")}: {curriculum.length} {t("groups.form.modules")}, {totalSessionsAll} {t("groups.form.totalSessions")}
+          <p className="text-xs text-primary bg-primary/10 dark:bg-primary/15 p-2.5 rounded-xl flex items-center gap-1.5">
+            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            {t("groups.form.allModulesSelected")}: {curriculum.length} {t("groups.form.modules")}, {totalSessionsAll} {t("groups.form.totalSessions")}
           </p>
         ) : selectedModules?.selectedModules?.length > 0 ? (
-          <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg space-y-1">
-            <p className="text-xs text-blue-800 dark:text-blue-300">
-              ✓ {t("groups.form.selectedModules")}: {selectedModules.selectedModules.length} {t("groups.form.modules")}, {selectedSessions} {t("groups.form.totalSessions")}
+          <div className="bg-primary/10 dark:bg-primary/15 p-2.5 rounded-xl space-y-1">
+            <p className="text-xs text-primary flex items-center gap-1.5">
+              <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              {t("groups.form.selectedModules")}: {selectedModules.selectedModules.length} {t("groups.form.modules")}, {selectedSessions} {t("groups.form.totalSessions")}
             </p>
-            <p className="text-[10px] text-blue-600 dark:text-blue-400">
+            <p className="text-[10px] text-primary/80 ps-5">
               {t("groups.form.modulesList")}: {selectedModules.selectedModules.map(i => i + 1).join(", ")}
             </p>
           </div>
         ) : (
-          <p className="text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/30 p-2 rounded-lg">
-            ⚠️ {t("groups.form.noModulesSelected")}
+          <p className="text-xs text-orange-deep dark:text-amber-brand bg-amber-brand/15 dark:bg-amber-brand/20 p-2.5 rounded-xl flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            {t("groups.form.noModulesSelected")}
           </p>
         )}
       </div>
 
-      {/* زرار مزامنة السيشنز — بيظهر بس لو الجروب عنده سيشنز متولدة بالفعل */}
       {sessionsGenerated && groupId && (
         <div className="mt-3 flex flex-col items-end gap-1.5">
           <button
             type="button"
             onClick={handleSync}
             disabled={syncing}
-            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium text-xs transition-colors disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 bg-primary hover:bg-orange-deep text-white rounded-xl font-medium text-xs transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
           >
             {syncing ? (
               <>
@@ -220,7 +289,7 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
               <>🔄 مزامنة السيشنز مع الاختيار الجديد</>
             )}
           </button>
-          <p className="text-[10px] text-orange-700 dark:text-orange-400 text-right">
+          <p className="text-[10px] text-SlateBlueText dark:text-darktext text-right">
             هيتنفذ فورًا: هيلغي أي سيشن Scheduled لموديولات اتشالت، ويضيف سيشنز للموديولات الجديدة. السيشنز المكتملة مش هتتأثر.
           </p>
         </div>
@@ -236,14 +305,8 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
   const totalSessions = curriculum.reduce((s, m) => s + (m.totalSessions || 3), 0);
 
   return (
-    <div className="mt-4 p-4 bg-gray-50 dark:bg-dark_input rounded-xl border border-PowderBlueBorder dark:border-dark_border">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-primary" />
-          <h4 className="text-sm font-semibold text-MidnightNavyText dark:text-white">{t("groups.form.courseStructure")}</h4>
-        </div>
-        <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">{curriculum.length} {t("groups.form.modules")}</span>
-      </div>
+    <div className="mt-4 p-4 bg-IcyBreeze dark:bg-dark_input rounded-2xl border border-PowderBlueBorder dark:border-dark_border">
+      <SectionHeading icon={Layers} title={t("groups.form.courseStructure")} badge={`${curriculum.length} ${t("groups.form.modules")}`} />
 
       <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
         {curriculum.map((module, idx) => {
@@ -253,42 +316,42 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
           const isOpen  = expandedModules.includes(idx);
 
           return (
-            <div key={idx} className="border border-PowderBlueBorder dark:border-dark_border rounded-lg overflow-hidden">
+            <div key={idx} className="border border-PowderBlueBorder dark:border-dark_border rounded-xl overflow-hidden">
               <div
                 onClick={() => onToggleExpand(idx)}
-                className={`flex items-center gap-2 p-3 cursor-pointer transition-colors ${isSel ? "bg-primary/5 border-l-4 border-primary" : "bg-white dark:bg-darkmode hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
+                className={`flex items-center gap-2 p-3 cursor-pointer transition-colors ${isSel ? "bg-primary/5 border-l-4 border-primary" : "bg-white dark:bg-darkmode hover:bg-IcyBreeze dark:hover:bg-dark_border"}`}>
                 {isOpen ? <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />}
                 <div className="flex-1 flex items-center gap-2">
                   <span className={`text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center ${isSel ? "bg-primary text-white" : "bg-primary/10 text-primary"}`}>{idx + 1}</span>
                   <p className="text-sm font-medium text-MidnightNavyText dark:text-white">{module.title}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {isSel && <span className="text-[10px] bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full">✓ {t("groups.form.selected")}</span>}
-                  <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">{module.lessons?.length || 0} {t("groups.form.lessons")}</span>
-                  <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-full">{module.totalSessions || 3} {t("groups.form.sessions")}</span>
+                  {isSel && <span className="text-[10px] bg-primary/10 text-primary dark:bg-primary/20 px-2 py-0.5 rounded-full">✓ {t("groups.form.selected")}</span>}
+                  <span className="text-[10px] bg-secondary/10 dark:bg-secondary/20 text-secondary dark:text-white px-2 py-0.5 rounded-full">{module.lessons?.length || 0} {t("groups.form.lessons")}</span>
+                  <span className="text-[10px] bg-orange-coral/10 dark:bg-orange-coral/20 text-orange-coral px-2 py-0.5 rounded-full">{module.totalSessions || 3} {t("groups.form.sessions")}</span>
                 </div>
               </div>
 
               {isOpen && module.lessons?.length > 0 && (
-                <div className="p-3 bg-gray-50 dark:bg-dark_input border-t border-PowderBlueBorder dark:border-dark_border">
+                <div className="p-3 bg-IcyBreeze dark:bg-dark_input border-t border-PowderBlueBorder dark:border-dark_border">
                   <p className="text-[10px] font-medium text-SlateBlueText dark:text-darktext mb-2 flex items-center gap-2">
                     <span>{t("groups.form.lessons")}:</span>
                     {hasDup && (
-                      <span className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="bg-amber-brand/15 dark:bg-amber-brand/20 text-orange-deep dark:text-amber-brand px-2 py-0.5 rounded-full flex items-center gap-1">
                         <Copy className="w-3 h-3" />{t("groups.form.repeatedContent")}
                       </span>
                     )}
                   </p>
                   <div className="space-y-1.5">
                     {lessonGroups.map((g, gi) => (
-                      <div key={gi} className="bg-white dark:bg-darkmode rounded-lg p-2 border border-PowderBlueBorder dark:border-dark_border flex items-start gap-2">
+                      <div key={gi} className="bg-white dark:bg-darkmode rounded-xl p-2 border border-PowderBlueBorder dark:border-dark_border flex items-start gap-2">
                         <div className="flex-shrink-0 w-5 h-5 bg-primary/10 rounded-full flex items-center justify-center">
                           <span className="text-[8px] font-bold text-primary">{g.startIndex + 1}-{g.endIndex + 1}</span>
                         </div>
                         <div className="flex-1">
                           <p className="text-xs font-medium text-MidnightNavyText dark:text-white">{g.title}</p>
                           {g.count > 1 && (
-                            <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 flex items-center gap-1">
+                            <p className="text-[10px] text-orange-deep dark:text-amber-brand mt-0.5 flex items-center gap-1">
                               <Copy className="w-3 h-3" />{t("groups.form.repeatedLessonsCount", { count: g.count })}
                             </p>
                           )}
@@ -296,10 +359,10 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
                       </div>
                     ))}
                   </div>
-                  <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-[10px] text-blue-800 dark:text-blue-300 flex items-center gap-1">
+                  <div className="mt-2 p-2 bg-secondary/10 dark:bg-secondary/15 rounded-lg">
+                    <p className="text-[10px] text-secondary dark:text-white flex items-center gap-1">
                       <span className="font-medium">{t("groups.form.sessionDistribution")}:</span>
-                      <span className="bg-blue-200 dark:bg-blue-800 px-2 py-0.5 rounded-full">
+                      <span className="bg-secondary/20 dark:bg-secondary/30 px-2 py-0.5 rounded-full">
                         {t("groups.form.sessionsPerModule", { count: module.totalSessions || 3 })}
                       </span>
                     </p>
@@ -313,11 +376,11 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
 
       <div className="mt-3 pt-3 border-t border-PowderBlueBorder dark:border-dark_border grid grid-cols-3 gap-2">
         {[
-          { label: t("groups.form.totalModules"),  val: curriculum.length, color: "text-primary"      },
-          { label: t("groups.form.totalLessons"),  val: totalLessons,      color: "text-green-600"    },
-          { label: t("groups.form.totalSessions"), val: totalSessions,     color: "text-purple-600"   },
+          { label: t("groups.form.totalModules"),  val: curriculum.length, color: "text-primary"       },
+          { label: t("groups.form.totalLessons"),  val: totalLessons,      color: "text-secondary dark:text-white" },
+          { label: t("groups.form.totalSessions"), val: totalSessions,     color: "text-orange-coral"  },
         ].map(({ label, val, color }) => (
-          <div key={label} className="bg-white dark:bg-darkmode rounded-lg p-2 text-center">
+          <div key={label} className="bg-white dark:bg-darkmode rounded-xl p-2.5 text-center border border-PowderBlueBorder dark:border-dark_border">
             <p className="text-[10px] text-SlateBlueText dark:text-darktext">{label}</p>
             <p className={`text-base font-bold ${color}`}>{val}</p>
           </div>
@@ -328,7 +391,7 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
         <div className="mt-3 flex justify-end">
           <button type="button"
             onClick={() => { onClose(); window.dispatchEvent(new CustomEvent("openAddStudents", { detail: { groupId: initial.id } })); }}
-            className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg font-medium text-xs transition-colors flex items-center gap-2 border border-primary/20">
+            className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl font-medium text-xs transition-colors flex items-center gap-2 border border-primary/20">
             <span>⏭️</span>{t("groups.form.skipToAddStudents")}
           </button>
         </div>
@@ -337,26 +400,43 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
   );
 }
 
-// ─── Conflict alert (409) ─────────────────────────────────────────────────────
-
 function ConflictAlert({ conflicts, t }) {
   if (!conflicts?.length) return null;
   return (
-    <div className="mt-3 p-3 rounded-xl border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 space-y-2">
+    <div className="mt-3 p-3 rounded-2xl border border-orange-coral/40 dark:border-orange-coral/40 bg-orange-coral/5 dark:bg-orange-coral/10 space-y-2">
       <div className="flex items-center gap-2">
-        <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
-        <p className="text-xs font-semibold text-red-800 dark:text-red-300">
+        <AlertCircle className="w-4 h-4 text-orange-coral flex-shrink-0" />
+        <p className="text-xs font-semibold text-orange-coral">
           {t("groups.form.reschedule.conflictTitle")}
         </p>
       </div>
       <div className="space-y-1.5">
         {conflicts.map((c, i) => (
-          <div key={i} className="bg-white dark:bg-darkmode rounded-lg p-2 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300">
+          <div key={i} className="bg-white dark:bg-darkmode rounded-xl p-2 border border-orange-coral/25 dark:border-orange-coral/30 text-xs text-orange-coral">
             <p className="font-medium">{c.groupName} <span className="opacity-60">({c.groupCode})</span></p>
             <p className="opacity-80">{c.sharedDays.join(", ")} · {c.theirTime}</p>
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ToggleRow({ label, description, checked, onChange, Icon, colorCls }) {
+  return (
+    <div className={`flex items-center justify-between gap-3 p-3.5 rounded-2xl border transition-all ${checked ? "border-amber-brand/40 dark:border-amber-brand/30 bg-amber-brand/10 dark:bg-amber-brand/10" : "border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-darklight"}`}>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${checked ? "bg-amber-brand/15 dark:bg-amber-brand/20" : "bg-gray-100 dark:bg-dark_input"}`}>
+          <Icon className={`w-4 h-4 ${checked ? "text-orange-deep dark:text-amber-brand" : "text-gray-400"}`} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-MidnightNavyText dark:text-white truncate">{label}</p>
+        </div>
+      </div>
+      <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+        <input type="checkbox" checked={checked} onChange={onChange} className="sr-only peer" />
+        <div className="w-11 h-6 bg-gray-200 rounded-full dark:bg-dark_border peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-sm peer-checked:bg-primary" />
+      </label>
     </div>
   );
 }
@@ -416,6 +496,9 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   const [curriculum,       setCurriculum]       = useState(null);
   const [expandedModules,  setExpandedModules]  = useState([]);
 
+  const [allTags, setAllTags] = useState([]);
+  const [tagsLoading, setTagsLoading] = useState(true);
+
   // ── Reschedule state ────────────────────────────────────────────────────────
   const isActiveWithSessions = useMemo(
     () => initial?.status === "active" && !!initial?.sessionsGenerated,
@@ -433,19 +516,25 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     [isActiveWithSessions, effectiveFrom]
   );
 
-  // ── Load courses + instructors ──────────────────────────────────────────────
+  // ── Load courses + instructors + tags ──────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       try {
-        const [cr, ir] = await Promise.all([fetch("/api/courses"), fetch("/api/instructor")]);
-        const [cd, id] = await Promise.all([cr.json(), ir.json()]);
+        const [cr, ir, tr] = await Promise.all([
+          fetch("/api/courses"),
+          fetch("/api/instructor"),
+          fetch("/api/tags"),
+        ]);
+        const [cd, id, td] = await Promise.all([cr.json(), ir.json(), tr.json()]);
         if (cd.success) setCourses(cd.data || []);
         if (id.success) setInstructors(id.data || []);
+        if (td.success) setAllTags(td.data || []);
       } catch {
         toast.error(t("groups.form.errors.loadCourses"));
       } finally {
         setCoursesLoading(false);
         setInstructorsLoading(false);
+        setTagsLoading(false);
       }
     };
     load();
@@ -467,7 +556,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     load();
   }, [form.courseId, t]);
 
-  // ── Load reschedule preview (once when effectiveFrom is set) ─────────────────
+  // ── Load reschedule preview ─────────────────────────────────────────────────
   const loadPreview = useCallback(async () => {
     if (!isActiveWithSessions || !initial?.id) return;
     setPreviewLoading(true);
@@ -479,10 +568,9 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     finally { setPreviewLoading(false); }
   }, [isActiveWithSessions, initial?.id]);
 
-  // load preview automatically the first time effectiveFrom gets a value
   useEffect(() => {
     if (effectiveFrom && !reschedulePreview) loadPreview();
-  }, [effectiveFrom]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [effectiveFrom, loadPreview, reschedulePreview]);
 
   // ── Day helpers ─────────────────────────────────────────────────────────────
   const anchorDate   = isActiveWithSessions ? effectiveFrom : form.schedule.startDate;
@@ -535,11 +623,16 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     []
   );
 
-  // ── Submit موحّد ───────────────────────────────────────────────────────────
-  // ✅ الفكرة: بيانات الجروب الأساسية (اسم، مدرسين، موديولات، أوتوميشن) بتتحفظ
-  // دايمًا هنا بغض النظر عن حالة الترحيل. لو فيه effectiveFrom متحدد (يعني
-  // المستخدم فعلاً عاوز يرحّل الميعاد)، بعد حفظ البيانات الأساسية بننفذ طلب
-  // الترحيل كخطوة منفصلة. بالشكل ده تغيير المدرسين بيتحفظ دايمًا.
+  const toggleTag = useCallback((tagId) => {
+    setForm(prev => ({
+      ...prev,
+      tags: prev.tags.includes(tagId)
+        ? prev.tags.filter(id => id !== tagId)
+        : [...prev.tags, tagId],
+    }));
+  }, []);
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!form.name || !form.courseId || !form.maxStudents) {
       toast.error(t("groups.form.errors.requiredFields")); return;
@@ -548,7 +641,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       toast.error(t("groups.form.errors.noModulesSelected")); return;
     }
 
-    // الجدول العادي (مش الترحيل) بيتفحص بس لو لسه ينفع نعدله عادي
     if (!isActiveWithSessions) {
       if (!form.schedule.daysOfWeek.length) {
         toast.error(t("groups.form.errors.atLeastOneDay")); return;
@@ -558,7 +650,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       }
     }
 
-    // لو فيه ترحيل ميعاد مطلوب فعلاً، نتأكد من صحة بياناته هو كمان
     if (isRescheduleMode) {
       if (!form.schedule.daysOfWeek.length) {
         toast.error(t("groups.form.errors.atLeastOneDay")); return;
@@ -572,7 +663,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     const toastId = toast.loading(initial ? t("groups.form.messages.updating") : t("groups.form.messages.creating"));
 
     try {
-      // ── 1) حفظ بيانات الجروب الأساسية — دايمًا، بما فيها المدرسين ─────────
       const basePayload = {
         name: form.name,
         courseId: form.courseId,
@@ -580,10 +670,9 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         instructors: form.instructors,
         moduleSelection: form.moduleSelection,
         automation: form.automation,
+        tags: form.tags,
       };
 
-      // الجدول بيتبعت هنا بس لو الجروب لسه ينفع نعدل جدوله عادي
-      // (لو active وعنده سيشنز، الجدول بيتغير بس عن طريق الترحيل تحت)
       if (!isActiveWithSessions) {
         basePayload.schedule = form.schedule;
       }
@@ -599,7 +688,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || t("groups.form.errors.saveFailed"));
 
-      // ── 2) لو فيه ترحيل ميعاد مطلوب، ننفذه بعد ما البيانات الأساسية اتحفظت ──
       if (isRescheduleMode) {
         const rres = await fetch(`/api/groups/${initial.id}/reschedule`, {
           method:  "PUT",
@@ -615,8 +703,6 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         const rresult = await rres.json();
 
         if (rres.status === 409 && rresult.conflicts?.length) {
-          // ✅ بيانات الجروب الأساسية (المدرسين وغيرها) اتحفظت بالفعل فوق —
-          // بس الترحيل نفسه وقف على تعارض؛ نسيب المودال مفتوح يعدّل الميعاد
           toast.error(t("groups.form.errors.scheduleConflict"), { id: toastId });
           setScheduleConflicts(rresult.conflicts);
           setLoading(false);
@@ -651,11 +737,17 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full" dir={isRTL ? "rtl" : "ltr"}>
+    <div className="flex flex-col h-full bg-gray-50/60 dark:bg-darkmode" dir={isRTL ? "rtl" : "ltr"}>
 
       {/* Progress header */}
-      <div className="px-5 pt-4 pb-3 border-b border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-darkmode">
-        <div className="flex items-center justify-between mb-3">
+      <div className="px-5 pt-5 pb-4 border-b border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-darkmode">
+        <div className="relative flex items-center justify-between mb-1">
+          {/* connecting rail */}
+          <div className="absolute top-5 left-5 right-5 h-0.5 bg-gray-100 dark:bg-dark_border -z-0" />
+          <div
+            className="absolute top-5 left-5 h-0.5 bg-gradient-to-r from-primary to-orange-deep -z-0 transition-all duration-500"
+            style={{ width: `calc(${(step / (STEPS.length - 1)) * 100}% - ${step === 0 ? 0 : 0}px)`, maxWidth: "calc(100% - 2.5rem)" }}
+          />
           {STEPS.map((s, i) => {
             const Icon  = s.icon;
             const dc    = COLOR[s.color];
@@ -663,36 +755,33 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             const active = i === step;
             return (
               <button key={s.id} type="button" onClick={() => goTo(i)}
-                className={`flex flex-col items-center gap-1 transition-all ${active ? "scale-110" : "opacity-60 hover:opacity-90"}`}>
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                className="relative z-10 flex flex-col items-center gap-1.5 transition-all group">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-darkmode ${
                   done   ? `bg-gradient-to-br ${dc.btn} text-white shadow-md` :
-                  active ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg ring-2 ring-offset-2 ring-offset-white dark:ring-offset-darkmode` :
-                           "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500"
+                  active ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg scale-110` :
+                           "bg-gray-100 dark:bg-dark_input text-gray-400 dark:text-darkmuted group-hover:bg-gray-200 dark:group-hover:bg-dark_border"
                 }`}>
-                  {done ? <CheckCircle className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                  {done ? <CheckCircle className="w-4.5 h-4.5" /> : <Icon className="w-4.5 h-4.5" />}
                 </div>
-                <span className={`text-[10px] font-medium hidden sm:block ${active ? dc.text : "text-gray-400 dark:text-gray-600"}`}>
+                <span className={`text-[10px] font-semibold hidden sm:block transition-colors ${active ? dc.text : "text-gray-400 dark:text-darksubtle"}`}>
                   {t(`groups.form.step.${s.id}`)}
                 </span>
               </button>
             );
           })}
         </div>
-        <div className="h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-          <div className={`h-full bg-gradient-to-r ${c.btn} rounded-full transition-all duration-500`} style={{ width: `${progress}%` }} />
-        </div>
-        <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-1.5 text-center">
-          {t("groups.form.step")} {step + 1} / {STEPS.length}
+        <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-2 text-center font-medium">
+          {t("groups.form.step")} {step + 1} {isRTL ? "من" : "of"} {STEPS.length}
         </p>
       </div>
 
       {/* Slide area */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-5" style={{ animation: visible ? `slideIn${animDir > 0 ? "Right" : "Left"} 0.22s cubic-bezier(.22,.68,0,1.2) both` : "none" }}>
+        <div className="p-5 max-w-2xl mx-auto" style={{ animation: visible ? `slideIn${animDir > 0 ? "Right" : "Left"} 0.22s cubic-bezier(.22,.68,0,1.2) both` : "none" }}>
 
           {/* Step header */}
           <div className={`flex items-center gap-3 mb-5 p-4 rounded-2xl bg-gradient-to-br ${c.panel} border ${c.border}`}>
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${c.btn} flex items-center justify-center shadow-md flex-shrink-0`}>
+            <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${c.btn} flex items-center justify-center shadow-md flex-shrink-0`}>
               <StepIcon className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -704,40 +793,90 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           {/* ── Step 0: Basic Info ── */}
           {step === 0 && (
             <div className="space-y-4">
-              <div>
-                <label className={labelCls}>{t("groups.form.name")} *</label>
-                <input type="text" value={form.name} onChange={e => onChange("name", e.target.value)}
-                  placeholder={t("groups.form.namePlaceholder")} className={inputCls} />
+              <div className={`${cardCls} p-4 space-y-4`}>
+                <div>
+                  <label className={labelCls}>{t("groups.form.name")} *</label>
+                  <input type="text" value={form.name} onChange={e => onChange("name", e.target.value)}
+                    placeholder={t("groups.form.namePlaceholder")} className={inputCls} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>{t("groups.form.maxStudents")} *</label>
+                    <div className="relative">
+                      <Users className="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" />
+                      <input type="number" value={form.maxStudents} onChange={e => onChange("maxStudents", e.target.value)}
+                        min="1" className={`${inputCls} ps-9`} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>{t("groups.form.course")} *</label>
+                    {coursesLoading ? (
+                      <div className={`${inputCls} text-gray-400`}>{t("groups.form.loading.courses")}</div>
+                    ) : (
+                      <div className="relative">
+                        <GraduationCap className="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" />
+                        <select value={form.courseId} onChange={e => onChange("courseId", e.target.value)} className={`${selectCls} ps-9`}>
+                          <option value="">{t("groups.form.selectCourse")}...</option>
+                          {courses.map(course => <option key={course._id} value={course._id}>{course.title} ({course.level})</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>{t("groups.form.maxStudents")} *</label>
-                <input type="number" value={form.maxStudents} onChange={e => onChange("maxStudents", e.target.value)}
-                  min="1" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>{t("groups.form.course")} *</label>
-                {coursesLoading ? (
-                  <div className={`${inputCls} text-gray-400`}>{t("groups.form.loading.courses")}</div>
+
+              {curriculum && (
+                <>
+                  <ModuleSelection
+                    curriculum={curriculum}
+                    selectedModules={form.moduleSelection}
+                    setSelectedModules={v => onChange("moduleSelection", v)}
+                    t={t}
+                    groupId={initial?.id}
+                    sessionsGenerated={initial?.sessionsGenerated}
+                  />
+                  <CurriculumView curriculum={curriculum} moduleSelection={form.moduleSelection}
+                    expandedModules={expandedModules} onToggleExpand={toggleModuleExpand}
+                    initial={initial} onClose={onClose} t={t} />
+                </>
+              )}
+
+              {/* Tags Selection */}
+              <div className={`${cardCls} p-4`}>
+                <SectionHeading icon={Tag} title={t("groups.form.tags") || "Tags"}
+                  badge={form.tags.length > 0 ? form.tags.length : null} />
+                {tagsLoading ? (
+                  <div className={`${inputCls} text-gray-400`}>{t("groups.form.loading.tags") || "Loading tags..."}</div>
+                ) : allTags.length === 0 ? (
+                  <p className="text-sm text-gray-400 dark:text-darksubtle py-2">
+                    {t("groups.form.noTags") || "No tags available"}
+                  </p>
                 ) : (
-                  <select value={form.courseId} onChange={e => onChange("courseId", e.target.value)} className={selectCls}>
-                    <option value="">{t("groups.form.selectCourse")}...</option>
-                    {courses.map(c => <option key={c._id} value={c._id}>{c.title} ({c.level})</option>)}
-                  </select>
-                )}
-                {curriculum && (
-                  <>
-                    <ModuleSelection
-                      curriculum={curriculum}
-                      selectedModules={form.moduleSelection}
-                      setSelectedModules={v => onChange("moduleSelection", v)}
-                      t={t}
-                      groupId={initial?.id}
-                      sessionsGenerated={initial?.sessionsGenerated}
-                    />
-                    <CurriculumView curriculum={curriculum} moduleSelection={form.moduleSelection}
-                      expandedModules={expandedModules} onToggleExpand={toggleModuleExpand}
-                      initial={initial} onClose={onClose} t={t} />
-                  </>
+                  <div className="flex flex-wrap gap-2">
+                    {allTags.map((tagItem) => {
+                      const selected = form.tags.includes(tagItem._id);
+                      return (
+                        <button
+                          key={tagItem._id}
+                          type="button"
+                          onClick={() => toggleTag(tagItem._id)}
+                          style={selected ? { backgroundColor: tagItem.color, borderColor: tagItem.color } : { borderColor: tagItem.color }}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border flex items-center gap-1.5 ${
+                            selected
+                              ? "text-white shadow-sm"
+                              : "bg-white dark:bg-darklight text-gray-600 dark:text-gray-300 hover:bg-IcyBreeze dark:hover:bg-dark_input"
+                          }`}
+                        >
+                          <span
+                            className="inline-block w-2 h-2 rounded-full"
+                            style={{ backgroundColor: selected ? "rgba(255,255,255,0.85)" : tagItem.color }}
+                          />
+                          {tagItem.name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
@@ -745,28 +884,29 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
           {/* ── Step 1: Instructors ── */}
           {step === 1 && (
-            <div>
+            <div className={`${cardCls} p-4`}>
               {instructorsLoading ? (
                 <div className="text-center py-8 text-sm text-gray-500">{t("groups.form.loading.instructors")}</div>
               ) : instructors.length === 0 ? (
                 <div className="text-center py-8 text-sm text-gray-500">{t("groups.form.noInstructors")}</div>
               ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
+                <div className="grid sm:grid-cols-2 gap-2.5 max-h-96 overflow-y-auto custom-scrollbar">
                   {instructors.map(instructor => {
                     const id       = instructor._id?.toString();
                     const isSel    = form.instructors.includes(id);
                     return (
                       <div key={instructor._id} onClick={() => toggleInstructor(id)}
-                        className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${isSel ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" : "border-PowderBlueBorder dark:border-dark_border hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
-                        <input type="checkbox" checked={isSel} onChange={() => {}} className="w-4 h-4 text-primary rounded" />
-                        <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                          <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        className={`relative flex items-center gap-3 p-3 border rounded-2xl cursor-pointer transition-all ${isSel ? "border-secondary/50 bg-secondary/5 dark:bg-secondary/15 shadow-sm" : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isSel ? "bg-gradient-to-br from-secondary to-teal-dark" : "bg-secondary/10 dark:bg-secondary/20"}`}>
+                          <User className={`w-4.5 h-4.5 ${isSel ? "text-white" : "text-secondary dark:text-white"}`} />
                         </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-MidnightNavyText dark:text-white">{instructor.name}</p>
-                          <p className="text-xs text-SlateBlueText dark:text-darktext">{instructor.email}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-MidnightNavyText dark:text-white truncate">{instructor.name}</p>
+                          <p className="text-xs text-SlateBlueText dark:text-darktext flex items-center gap-1 truncate">
+                            <Mail className="w-3 h-3 flex-shrink-0" />{instructor.email}
+                          </p>
                         </div>
-                        {isSel && <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+                        {isSel && <CheckCircle className="w-4.5 h-4.5 text-secondary dark:text-white flex-shrink-0" />}
                       </div>
                     );
                   })}
@@ -774,7 +914,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
               )}
 
               {form.instructors.length > 0 && (
-                <div className={`mt-4 p-3 rounded-xl ${c.badge} border ${c.border}`}>
+                <div className={`mt-4 p-3 rounded-xl ${c.badge} border ${c.border} flex items-center gap-2`}>
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
                   <p className="text-xs font-medium">{t("groups.form.selectedInstructors")}: {form.instructors.length}</p>
                 </div>
               )}
@@ -783,14 +924,13 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
           {/* ── Step 2: Schedule ── */}
           {step === 2 && (
-            <div className="space-y-5">
+            <div className="space-y-4">
 
-              {/* Reschedule warning banner */}
               {isActiveWithSessions && (
-                <div className="p-4 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 space-y-3">
+                <div className="p-4 rounded-2xl border border-amber-brand/40 dark:border-amber-brand/30 bg-amber-brand/10 dark:bg-amber-brand/10 space-y-3">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-amber-800 dark:text-amber-300">
+                    <AlertCircle className="w-5 h-5 text-orange-deep dark:text-amber-brand flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-orange-deep dark:text-amber-brand">
                       <p className="font-semibold">{t("groups.form.reschedule.warningTitle")}</p>
                       <p className="mt-1 text-xs">{t("groups.form.reschedule.warningDesc")}</p>
                     </div>
@@ -805,23 +945,22 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                       سيب الحقل ده فاضي لو مش عاوز تغيّر الميعاد — باقي البيانات (زي المدرسين) هتتحفظ عادي.
                     </p>
                     {effectiveFrom && (
-                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      <p className="text-xs text-orange-deep dark:text-amber-brand mt-1">
                         {t("groups.form.reschedule.firstDayWillBe", { day: getLocalDay(effectiveFrom) })}
                       </p>
                     )}
                   </div>
 
-                  {/* Preview panel */}
                   {effectiveFrom && (
-                    <div className="text-xs rounded-lg bg-white dark:bg-darkmode border border-amber-200 dark:border-amber-800 p-3 space-y-1">
+                    <div className="text-xs rounded-xl bg-white dark:bg-darkmode border border-amber-brand/30 dark:border-amber-brand/30 p-3 space-y-1">
                       {previewLoading ? (
                         <p className="text-gray-500">{t("groups.form.reschedule.loadingPreview")}</p>
                       ) : reschedulePreview ? (
                         <>
-                          <p className="text-green-700 dark:text-green-400">
+                          <p className="text-primary">
                             ✓ {t("groups.form.reschedule.frozenCount", { count: reschedulePreview.completedCount })}
                           </p>
-                          <p className="text-blue-700 dark:text-blue-400">
+                          <p className="text-orange-deep dark:text-amber-brand">
                             🔄 {t("groups.form.reschedule.affectedCount", { count: reschedulePreview.affectedCount })}
                           </p>
                           {reschedulePreview.affectedCount === 0 && (
@@ -837,13 +976,11 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                     </div>
                   )}
 
-                  {/* Conflict list (shown after 409) */}
                   <ConflictAlert conflicts={scheduleConflicts} t={t} />
                 </div>
               )}
 
-              {/* Original start date (read-only when active) */}
-              <div>
+              <div className={`${cardCls} p-4`}>
                 <label className={labelCls}>
                   {t("groups.form.startDate")} {!isActiveWithSessions && "*"}
                 </label>
@@ -853,16 +990,17 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                   disabled={isActiveWithSessions}
                   className={`${inputCls} ${isActiveWithSessions ? "opacity-60 cursor-not-allowed" : ""}`} />
                 {!isActiveWithSessions && firstLocalDay && (
-                  <p className="text-xs text-primary mt-1">{t("groups.form.messages.firstDayWillBe", { day: firstLocalDay })}</p>
+                  <p className="text-xs text-primary mt-1.5 flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5" />{t("groups.form.messages.firstDayWillBe", { day: firstLocalDay })}
+                  </p>
                 )}
               </div>
 
-              {/* Days selector */}
-              <div>
+              <div className={`${cardCls} p-4`}>
                 <label className={labelCls}>{t("groups.form.daysOfWeek")}</label>
                 <div className={`mb-3 p-3 rounded-xl border ${c.border} bg-gradient-to-br ${c.panel} flex items-start gap-2`}>
-                  <AlertCircle className="w-4 h-4 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
-                  <div className="text-xs text-purple-800 dark:text-purple-300 space-y-1">
+                  <AlertCircle className="w-4 h-4 text-orange-coral mt-0.5 flex-shrink-0" />
+                  <div className="text-xs text-orange-coral space-y-1">
                     <p className="font-medium">{t("groups.form.help.scheduleInfo")}:</p>
                     <p>• {language === "ar" ? "اختر من 1 إلى 3 أيام" : "Select 1 to 3 days"}</p>
                     <p>• {language === "ar" ? "اليوم الأول يجب أن يكون" : "First day must be"} <strong>{firstLocalDay || "---"}</strong></p>
@@ -877,12 +1015,12 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                     const isDisabled = !anchorDate || (isFirst && isSel);
                     return (
                       <button key={day} type="button" onClick={() => toggleDay(day)} disabled={isDisabled}
-                        className={`relative px-1 py-2.5 text-xs rounded-xl font-medium transition-all
-                          ${isSel ? `bg-gradient-to-br ${c.btn} text-white shadow-md ${isFirst ? "ring-2 ring-offset-1 ring-purple-400" : ""}` : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"}
-                          ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
+                        className={`relative px-1 py-3 text-xs rounded-2xl font-medium transition-all
+                          ${isSel ? `bg-gradient-to-br ${c.btn} text-white shadow-md ${isFirst ? `ring-2 ring-offset-1 ${c.ring}` : ""}` : "bg-gray-100 dark:bg-dark_input text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark_border"}
+                          ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:-translate-y-0.5"}`}>
                         {day.slice(0, 3)}
                         {isFirst && isSel && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-darkmode" />
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-secondary rounded-full border-2 border-white dark:border-darkmode" />
                         )}
                       </button>
                     );
@@ -890,15 +1028,13 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                 </div>
               </div>
 
-              {/* Time range */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>{t("groups.form.timeFrom")} *</label>
+              <div className={`${cardCls} p-4`}>
+                <label className={labelCls}>
+                  <span className="inline-flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />{t("groups.form.timeFrom")} — {t("groups.form.timeTo")} *</span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
                   <input type="time" value={form.schedule.timeFrom}
                     onChange={e => onChange("schedule.timeFrom", e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>{t("groups.form.timeTo")} *</label>
                   <input type="time" value={form.schedule.timeTo}
                     onChange={e => onChange("schedule.timeTo", e.target.value)} className={inputCls} />
                 </div>
@@ -917,18 +1053,17 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                 notifyOnSessionUpdate:    t("groups.form.automation.notifyOnSessionUpdate"),
                 completionMessage:        t("groups.form.automation.completionMessage"),
               }).map(([key, lbl]) => (
-                <div key={key} className={`flex items-center justify-between p-3 border rounded-xl transition-all ${form.automation[key] ? "border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/10" : "border-PowderBlueBorder dark:border-dark_border"}`}>
-                  <span className="text-sm text-MidnightNavyText dark:text-white">{lbl}</span>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" checked={form.automation[key]}
-                      onChange={e => onChange(`automation.${key}`, e.target.checked)} className="sr-only peer" />
-                    <div className="w-11 h-6 bg-gray-200 rounded-full dark:bg-gray-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
-                  </label>
-                </div>
+                <ToggleRow
+                  key={key}
+                  label={lbl}
+                  checked={form.automation[key]}
+                  onChange={e => onChange(`automation.${key}`, e.target.checked)}
+                  Icon={AUTOMATION_META[key]?.icon || Bell}
+                />
               ))}
 
               {form.automation.reminderEnabled && (
-                <div className="mt-3 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800">
+                <div className="mt-1 p-4 bg-amber-brand/10 dark:bg-amber-brand/10 rounded-2xl border border-amber-brand/30 dark:border-amber-brand/30">
                   <label className={labelCls}>{t("groups.form.automation.reminderBefore")}</label>
                   <input type="number" value={form.automation.reminderBeforeHours}
                     onChange={e => onChange("automation.reminderBeforeHours", parseInt(e.target.value))}
@@ -941,16 +1076,16 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       </div>
 
       {/* Footer */}
-      <div className="sticky bottom-0 bg-white dark:bg-darkmode border-t border-PowderBlueBorder dark:border-dark_border px-5 py-4">
-        <div className="flex gap-3">
+      <div className="sticky bottom-0 bg-white dark:bg-darkmode border-t border-PowderBlueBorder dark:border-dark_border px-5 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+        <div className="flex gap-3 max-w-2xl mx-auto">
           {step === 0 ? (
             <button type="button" onClick={onClose} disabled={loading}
-              className="flex-1 border border-PowderBlueBorder dark:border-dark_border py-2.5 px-4 rounded-xl font-semibold text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center gap-2 disabled:opacity-50 transition-all text-14">
+              className="flex-1 border border-PowderBlueBorder dark:border-dark_border py-2.5 px-4 rounded-xl font-semibold text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 disabled:opacity-50 transition-all text-14">
               <X className="w-4 h-4" />{t("groups.form.cancel")}
             </button>
           ) : (
             <button type="button" onClick={prev} disabled={loading}
-              className="flex-1 border border-PowderBlueBorder dark:border-dark_border py-2.5 px-4 rounded-xl font-semibold text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center gap-2 disabled:opacity-50 transition-all text-14">
+              className="flex-1 border border-PowderBlueBorder dark:border-dark_border py-2.5 px-4 rounded-xl font-semibold text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 disabled:opacity-50 transition-all text-14">
               {isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
               {t("common.back")}
             </button>
@@ -988,8 +1123,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         .custom-scrollbar::-webkit-scrollbar       { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background:#f1f1f1; border-radius:4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background:#888;    border-radius:4px; }
-        .dark .custom-scrollbar::-webkit-scrollbar-track { background:#374151; }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background:#4b5563; }
+        .dark .custom-scrollbar::-webkit-scrollbar-track { background:#21262d; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background:#30363d; }
         .text-12 { font-size:0.75rem;    }
         .text-13 { font-size:0.8125rem;  }
         .text-14 { font-size:0.875rem;   }

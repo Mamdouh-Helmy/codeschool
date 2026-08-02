@@ -44,10 +44,10 @@ const groupSchema = new mongoose.Schema(
       },
     },
 
-    // ✅ People - instructors مع countTime
+    // Instructors with countTime
     instructors: [
       {
-        _id: false, // ✅ مش محتاجين _id زيادة
+        _id: false,
         userId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "User",
@@ -55,7 +55,7 @@ const groupSchema = new mongoose.Schema(
         },
         countTime: {
           type: Number,
-          default: 0, // ✅ عدد الساعات المُضافة للمدرب من السيشنات المكتملة
+          default: 0,
         },
       },
     ],
@@ -79,7 +79,7 @@ const groupSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // Schedule - 1-3 days allowed
+    // Schedule
     schedule: {
       startDate: {
         type: Date,
@@ -115,7 +115,6 @@ const groupSchema = new mongoose.Schema(
       },
     },
 
-    // First meeting link
     firstMeetingLink: {
       type: String,
       default: "",
@@ -235,6 +234,14 @@ const groupSchema = new mongoose.Schema(
       instructorNotificationsSummary: Object,
     },
 
+    // ✅ الحقل الجديد: الوسوم
+    tags: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Tag",
+      },
+    ],
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -299,10 +306,6 @@ groupSchema.methods.isFull = function () {
   return this.currentStudentsCount >= this.maxStudents;
 };
 
-/**
- * ✅ إضافة ساعتين لكل مدرب في الجروب
- * يُستدعى فقط لما السيشن تبقى completed
- */
 groupSchema.methods.addInstructorHours = async function (hoursToAdd = 2) {
   if (!this.instructors || this.instructors.length === 0) {
     console.log("⚠️ No instructors in group to add hours to");
@@ -324,7 +327,6 @@ groupSchema.methods.addInstructorHours = async function (hoursToAdd = 2) {
   };
 };
 
-// ✅ الحصول على عدد ساعات مدرب معين
 groupSchema.methods.getInstructorHours = function (userId) {
   const instructor = this.instructors.find(
     (i) => i.userId.toString() === userId.toString()
@@ -338,14 +340,19 @@ groupSchema.statics.findActive = function () {
   return this.find({
     status: "active",
     isDeleted: false,
-  }).populate("courseId").populate("instructors.userId", "name email gender profile");
+  })
+    .populate("courseId")
+    .populate("instructors.userId", "name email gender profile")
+    .populate("tags"); // ✅ أضفنا populate للوسوم
 };
 
 groupSchema.statics.findByCourse = function (courseId) {
   return this.find({
     courseId,
     isDeleted: false,
-  }).populate("instructors.userId", "name email");
+  })
+    .populate("instructors.userId", "name email")
+    .populate("tags"); // ✅ أضفنا populate للوسوم
 };
 
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);

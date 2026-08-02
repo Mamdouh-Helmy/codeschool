@@ -4334,6 +4334,16 @@ const en = {
   "reschedule.focus.notFoundDescription":
     "The requested focus session could not be found. It may have been removed or is no longer available.",
   "groups.form.messages.rescheduling": "Rescheduling sessions...",
+  "groups.tags.manage": "Manage Tags",
+  "groups.tags.newTag": "New Tag",
+  "groups.tags.noTags": "No tags available",
+
+  "groups.filters.tags": "Tags",
+
+  "groups.form.tags": "Tags",
+  "groups.form.noTags": "No tags selected",
+  "groups.form.selectedTags": "Selected Tags",
+  "groups.form.loading.tags": "Loading tags...",
 };
 
 export default en;

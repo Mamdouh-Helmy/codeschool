@@ -4451,6 +4451,16 @@ const ar = {
   "reschedule.focus.notFoundDescription":
     "تعذر العثور على جلسة التركيز المطلوبة. ربما تم حذفها أو لم تعد متاحة.",
   "groups.form.messages.rescheduling": "جارٍ إعادة جدولة الجلسات...",
+  "groups.tags.manage": "إدارة العلامات",
+  "groups.tags.newTag": "علامة جديدة",
+  "groups.tags.noTags": "لا توجد علامات",
+
+  "groups.filters.tags": "العلامات",
+
+  "groups.form.tags": "العلامات",
+  "groups.form.noTags": "لم يتم اختيار أي علامات",
+  "groups.form.selectedTags": "العلامات المختارة",
+  "groups.form.loading.tags": "جارٍ تحميل العلامات...",
 };
 
 export default ar;
