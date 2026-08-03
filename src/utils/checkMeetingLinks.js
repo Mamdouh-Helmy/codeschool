@@ -414,3 +414,75 @@ export async function getUpcomingReservations(days = 7) {
     };
   }
 }
+
+/**
+ * ✅ فحص هل اللينكات المستخدمة حاليًا في سيشنات الجروب (غير الـ completed)
+ * لسه متاحة للجدول الجديد (daysOfWeek/timeFrom/timeTo)
+ */
+export async function checkLinksForRescheduledSchedule(groupId, newSchedule) {
+  const Session = (await import("../app/models/Session")).default;
+  const MeetingLink = (await import("../app/models/MeetingLink")).default;
+
+  const sessions = await Session.find({
+    groupId,
+    isDeleted: false,
+    status: { $ne: "completed" },
+    meetingLinkId: { $ne: null },
+  }).select("_id title moduleIndex sessionNumber meetingLinkId").lean();
+
+  if (sessions.length === 0) {
+    return { hasConflicts: false, conflicts: [] };
+  }
+
+  const linkIds = [...new Set(sessions.map((s) => s.meetingLinkId.toString()))];
+  const links = await MeetingLink.find({ _id: { $in: linkIds }, isDeleted: false }).lean();
+
+  const conflicts = [];
+  const now = new Date();
+
+  for (const link of links) {
+    const res = link.currentReservation;
+    if (!res?.sessionId) continue; // مش محجوز فعليًا لحد
+
+    // لو الحجز لنفس الجروب → مش تعارض
+    if (res.groupId?.toString() === groupId.toString()) continue;
+
+    // لو الحجز انتهى فعليًا
+    if (res.endTime && new Date(res.endTime) < now) continue;
+
+    const dayOverlap = (newSchedule.daysOfWeek || []).some((d) =>
+      (res.daysOfWeek || []).includes(d)
+    );
+    if (!dayOverlap) continue;
+
+    if (!res.timeFrom || !res.timeTo) {
+      conflicts.push({ linkId: link._id, linkName: link.name, reason: "missing_time_data" });
+      continue;
+    }
+
+    const newFrom = newSchedule.timeFrom.replace(":", "");
+    const newTo = newSchedule.timeTo.replace(":", "");
+    const existFrom = res.timeFrom.replace(":", "");
+    const existTo = res.timeTo.replace(":", "");
+    const timeOverlap = !(newTo <= existFrom || newFrom >= existTo);
+
+    if (timeOverlap) {
+      const affectedSessions = sessions.filter(
+        (s) => s.meetingLinkId.toString() === link._id.toString()
+      );
+      conflicts.push({
+        linkId: link._id,
+        linkName: link.name,
+        conflictingGroupId: res.groupId,
+        conflictingDays: res.daysOfWeek,
+        conflictingTime: `${res.timeFrom} - ${res.timeTo}`,
+        affectedSessions: affectedSessions.map((s) => ({
+          sessionId: s._id,
+          title: s.title,
+        })),
+      });
+    }
+  }
+
+  return { hasConflicts: conflicts.length > 0, conflicts };
+}

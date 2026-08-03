@@ -175,6 +175,12 @@ function renderTemplate(template, variables) {
 // دي اتلغت، بناءً على allSessions اللي الصفحة الأب محملاها أصلاً.
 // ✅ السيشن نفسها (trigger) بقت بتترحل هي كمان +shiftDays، وبتفضل معلّمة
 //    كـ isTrigger عشان الـ UI يوضحها لوحدها في الشريط.
+// 🔧 FIX: بناخد كل سيشنات الجروب (قبل الـ trigger وبعدها في التسلسل) مش بس
+// "اللي بعدها". قبل كده كان بيعمل slice(myIndex) فبيقطع أي سيشن قبل الـ
+// trigger من المعاينة بالكامل حتى لو كانت لسه "مجدولة" ومحتاجة تترحل هي
+// كمان. دلوقتي: أي سيشن في الجروب مش "مكتملة" (وملهاش إلغاء سابق لو مش هي
+// الـ trigger) بتترحل، بغض النظر عن موقعها قبل أو بعد الـ trigger.
+// ده لازم يفضل متطابق تمامًا مع منطق الباك اند في cascadeShiftOnCancel.
 // ─────────────────────────────────────────────────────────────────────────────
 function getShiftedChainPreview(allSessions, currentSession, shiftDays = 7) {
   if (!currentSession || !allSessions?.length) return { shifting: [], skipped: [] };
@@ -190,15 +196,16 @@ function getShiftedChainPreview(allSessions, currentSession, shiftDays = 7) {
     .slice()
     .sort((a, b) => a.moduleIndex - b.moduleIndex || a.sessionNumber - b.sessionNumber);
 
-  const myIndex = sameGroup.findIndex((s) => s.id === currentSession.id);
-  if (myIndex === -1) return { shifting: [], skipped: [] };
+  const hasCurrent = sameGroup.some((s) => s.id === currentSession.id);
+  if (!hasCurrent) return { shifting: [], skipped: [] };
 
-  const chain = sameGroup.slice(myIndex); // ✅ التريجر + كل اللي بعدها
+  // ✅ كل سيشنات الجروب (مش بس اللي بعد الـ trigger في الترتيب)
+  const chain = sameGroup;
   const shifting = [];
   const skipped = [];
 
-  chain.forEach((s, idx) => {
-    const isTrigger = idx === 0;
+  chain.forEach((s) => {
+    const isTrigger = s.id === currentSession.id;
 
     if (s.status === "completed") {
       skipped.push(s);
@@ -341,8 +348,8 @@ function CascadeImpactStrip({ shifting, skipped, isRTL }) {
         <ArrowLeftRight className="w-3.5 h-3.5 text-red-600 dark:text-red-400 shrink-0" />
         <p className="text-xs font-semibold text-red-700 dark:text-red-300">
           {isRTL
-            ? `الجلسة هتترحل + ${followingCount} جلسة تالية هتترحلوا أسبوع لقدام`
-            : `This session + ${followingCount} upcoming session(s) will shift forward a week`}
+            ? `الجلسة هتترحل + ${followingCount} جلسة تانية هتترحل أسبوعًا لقدام`
+            : `This session + ${followingCount} other session(s) will shift forward a week`}
         </p>
       </div>
 
@@ -936,8 +943,8 @@ export default function EditSessionModal({
         if (json.cascade?.shiftedCount > 0) {
           toast.success(
             isRTL
-              ? `تم الإلغاء، وترحيل ${json.cascade.shiftedCount} جلسة تالية أسبوعًا لقدام`
-              : `Cancelled — ${json.cascade.shiftedCount} upcoming session(s) shifted forward a week`
+              ? `تم الإلغاء، وترحيل ${json.cascade.shiftedCount} جلسة تانية أسبوعًا لقدام`
+              : `Cancelled — ${json.cascade.shiftedCount} other session(s) shifted forward a week`
           );
         } else {
           toast.success(isRTL ? "تم تحديث الجلسة بنجاح" : "Session updated successfully");

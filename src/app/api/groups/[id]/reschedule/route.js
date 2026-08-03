@@ -3,8 +3,10 @@
 // PUT  -> reschedule a group's NON-completed sessions to a new date/time pattern.
 // GET  -> preview what would happen (counts + affected sessions) before committing.
 //
-// الـ PUT بيعمل فحص تعارض مع الجروبات التانية قبل الحفظ:
-//   - لو جروب تاني نشط عنده نفس الأيام + وقت متداخل → بيرجع خطأ 409
+// الـ PUT بيعمل فحصين قبل الحفظ:
+//   1. تعارض مع الجروبات التانية (نفس الأيام + وقت متداخل) → 409 مع conflicts
+//   2. تعارض مع اللينكات المستخدمة حاليًا في سيشنات الجروب (لو محجوزة لجروب
+//      تاني على نفس الأيام/الوقت الجديد) → 409 مع linkConflicts
 //   - لو تمام → بيعمل update على التواريخ فقط (اللينكات بتفضل زي ما هي)
 
 import { NextResponse } from "next/server";
@@ -219,7 +221,7 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // ── فحص التعارض مع الجروبات التانية ────────────────────────────────────
+    // ── فحص التعارض مع الجروبات التانية (على مستوى الجدول العام للجروب) ────
     const conflicts = await findConflictingGroups(id, daysOfWeek, timeFrom, timeTo);
 
     if (conflicts.length > 0) {
@@ -242,13 +244,40 @@ export async function PUT(req, { params }) {
     }
 
     // ── تطبيق الـ reschedule (date-only update، اللينكات بتفضل) ────────────
-    const result = await rescheduleGroupSessions(
-      id,
-      group,
-      { effectiveFrom, daysOfWeek, timeFrom, timeTo, timezone },
-      adminUser.id,
-      [],   // selectedLinkIds — مش محتاجينه هنا
-    );
+    // rescheduleGroupSessions بتعمل فحص إضافي على مستوى اللينكات نفسها (مش
+    // بس جدول الجروب العام) وبترمي error بـ code = "LINK_CONFLICT" لو فيه
+    // لينك مستخدم في سيشن من سيشنات الجروب متعارض فعليًا مع حجز جروب تاني
+    let result;
+    try {
+      result = await rescheduleGroupSessions(
+        id,
+        group,
+        { effectiveFrom, daysOfWeek, timeFrom, timeTo, timezone },
+        adminUser.id,
+        [],   // selectedLinkIds — مش محتاجينه هنا
+      );
+    } catch (error) {
+      if (error.code === "LINK_CONFLICT") {
+        return NextResponse.json(
+          {
+            success: false,
+            error:   error.message,
+            linkConflicts: (error.linkConflicts || []).map((c) => ({
+              linkName:          c.linkName,
+              conflictingGroupId: c.conflictingGroupId,
+              conflictingDays:    c.conflictingDays,
+              conflictingTime:    c.conflictingTime,
+              affectedSessions:   c.affectedSessions,
+            })),
+            message:
+              `اللينكات المرتبطة بسيشنات الجروب متعارضة مع ${error.linkConflicts?.length || 0} ` +
+              `لينك محجوز لجروب تاني في نفس الميعاد الجديد. غيّر الميعاد أو حرّر اللينكات المتعارضة أولاً.`,
+          },
+          { status: 409 },
+        );
+      }
+      throw error; // أي error تاني يروح للـ catch العام تحت
+    }
 
     // تزامن totalSessionsCount
     const newTotal = await Session.countDocuments({ groupId: id, isDeleted: false });

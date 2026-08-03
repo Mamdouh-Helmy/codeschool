@@ -21,7 +21,10 @@ export async function GET(req, { params }) {
     const link = await MeetingLink.findOne({
       _id: id,
       isDeleted: false,
-    });
+    })
+      .populate("currentReservation.groupId", "name code")
+      .populate("currentReservation.reservedBy", "name")
+      .populate("usageHistory.groupId", "name code");
 
     if (!link) {
       return NextResponse.json(
@@ -30,9 +33,17 @@ export async function GET(req, { params }) {
       );
     }
 
+    // ✅ أحدث استخدام يظهر الأول، ومحدودة بـ 50 سجل عشان الحجم يفضل معقول
+    const linkData = link.toJSON();
+    if (Array.isArray(linkData.usageHistory)) {
+      linkData.usageHistory = [...linkData.usageHistory]
+        .sort((a, b) => new Date(b.usedAt) - new Date(a.usedAt))
+        .slice(0, 50);
+    }
+
     return NextResponse.json({
       success: true,
-      data: link,
+      data: linkData,
     });
   } catch (error) {
     console.error("❌ Error in GET /api/meeting-links/[id]:", error);

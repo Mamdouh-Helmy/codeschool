@@ -784,13 +784,20 @@ SessionSchema.methods.getModuleSessions = async function () {
   return moduleSessions;
 };
 
-// ✅ يجيب السيشن دي + كل اللي بعدها بالتسلسل الكامل (moduleIndex ثم sessionNumber)
-// ده الأساس اللي عليه بيتبني طلب ترحيل السلسلة (cascade reschedule request)
+// ✅ يجيب السيشن دي + كل اللي بعدها بالتسلسل الكامل
+// 🔧 FIX: الترتيب بقى على أساس scheduledDate الفعلي (التاريخ الحقيقي المجدولة
+// بيه السيشن) بدل ما كان على moduleIndex ثم sessionNumber بس. الترتيب القديم
+// كان بيسبب مشكلة: لو سيشن رقم 1 (في نفس الموديول) اتأجلت/اتعدلت وبقى
+// تاريخها الفعلي بعد سيشن رقم 2 (أو حتى قريب منها)، كانت برضو بتترتب "قبل"
+// سيشن 2 لمجرد إن رقمها أصغر، فبالتالي متضمناش في السلسلة (chain) لما نلغي
+// سيشن 2 — رغم إنها لسه "مجدولة" (مش completed) ومفروض تترحل معاها.
+// دلوقتي: بيترتب على أساس التاريخ الحقيقي الأول، وموديول/رقم السيشن بيبقوا
+// tie-breaker بس (لما يكون فيه سيشنين بنفس التاريخ بالظبط).
 SessionSchema.methods.getChainFromHere = async function () {
   const allSessions = await mongoose
     .model("Session")
     .find({ groupId: this.groupId, isDeleted: false })
-    .sort({ moduleIndex: 1, sessionNumber: 1 });
+    .sort({ scheduledDate: 1, moduleIndex: 1, sessionNumber: 1 });
 
   const myIndex = allSessions.findIndex(
     (s) => s._id.toString() === this._id.toString(),
@@ -801,15 +808,15 @@ SessionSchema.methods.getChainFromHere = async function () {
   return allSessions.slice(myIndex);
 };
 
-// 🆕 يجيب كل سيشنات الجروب مرتبة بترتيب المنهج (moduleIndex ثم sessionNumber)
-// من غير أي قصّ قبل/بعد سيشن معينة. ده بقى الأساس اللي عليه بيتبني طلب ترحيل
-// السلسلة (buildCascadePreview تحت) بعد ما بقى بيشمل الجروب كله (قبل الـ
-// trigger وبعده في المنهج) مش بس اللي بعده زي الأول.
+// 🆕 يجيب كل سيشنات الجروب مرتبة — نفس منطق getChainFromHere بالظبط:
+// 🔧 FIX: الترتيب بقى على scheduledDate الفعلي أولاً (مش moduleIndex/sessionNumber
+// بس) عشان buildCascadePreview (اللي بيستخدم الدالة دي) يفضل متطابق مع اللي
+// هيحصل فعليًا في cascadeShiftOnCancel واللي بيستخدم getChainFromHere.
 SessionSchema.methods.getAllGroupSessionsSorted = async function () {
   return await mongoose
     .model("Session")
     .find({ groupId: this.groupId, isDeleted: false })
-    .sort({ moduleIndex: 1, sessionNumber: 1 });
+    .sort({ scheduledDate: 1, moduleIndex: 1, sessionNumber: 1 });
 };
 
 // ✅ يبني preview لترحيل جدول الجروب كله (مش بس اللي بعد الـ trigger في
@@ -1054,9 +1061,9 @@ SessionSchema.methods.submitSwapWithTodayRequest = async function (
 //   - السيشن دي (trigger) بتترحل هي كمان أسبوع لقدام (+shiftDays) وتفضل
 //     status = "cancelled" على تاريخها الجديد — يعني بيتسجل إنها اتلغت
 //     وترحلت مع الباقي في نفس الوقت (مش بتفضل واقفة في تاريخها القديم)
-//   - كل السيشنات اللي بعدها في نفس الجروب (بالتسلسل: moduleIndex ثم
-//     sessionNumber) تترحل أسبوع لقدام برضو — كل واحدة من تاريخها هي
-//     +shiftDays (مش تراكمي)، عشان يفضلوا بعيدين عن بعض بنفس المسافة
+//   - كل السيشنات اللي بعدها فعليًا (بترتيب scheduledDate الحقيقي) تترحل
+//     أسبوع لقدام برضو — كل واحدة من تاريخها هي +shiftDays (مش تراكمي)،
+//     عشان يفضلوا بعيدين عن بعض بنفس المسافة
 //   - السيشنات المكتملة بتتستنى تمامًا — مبتتلمسش خالص (لا status ولا تاريخ)
 //   - أي سيشن في السلسلة ملغية من قبل كده (مش الـ trigger) بتتستنى برضو،
 //     عشان متترحلش مرتين لو حصل إلغاء تاني بعدين
@@ -1084,7 +1091,11 @@ SessionSchema.statics.cascadeShiftOnCancel = async function (
     throw error;
   }
 
-  const chain = await triggerSession.getChainFromHere(); // [trigger, ...بعدها]
+  // 🔧 FIX: بناخد كل سيشنات الجروب (قبل وبعد الـ trigger) مش بس "اللي بعدها"
+  // في التسلسل. لو سيشن قبل الـ trigger (زي أول سيشن في الجروب) لسه
+  // "مجدولة" (مش completed)، لازم تترحل هي كمان — قبل كده كانت بتتستبعد
+  // بالكامل لمجرد إنها قبل الـ trigger في الترتيب، حتى لو لسه ما اتاخدتش.
+  const chain = await triggerSession.getAllGroupSessionsSorted(); // كل سيشنات الجروب
   const now = new Date();
   const shifted = [];
   const skipped = [];

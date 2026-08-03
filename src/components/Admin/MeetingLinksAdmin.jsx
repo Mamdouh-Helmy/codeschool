@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import Modal from "./Modal";
 import MeetingLinkForm from "./MeetingLinkForm";
+import MeetingLinkReservationInfo from "./MeetingLinkReservationInfo";
 
 export default function MeetingLinksAdmin() {
     const [links, setLinks] = useState([]);
@@ -52,6 +53,7 @@ export default function MeetingLinksAdmin() {
         inactive: 0
     });
     const [showPassword, setShowPassword] = useState({});
+    const [reservationLink, setReservationLink] = useState(null);
 
     const loadLinks = async () => {
         setLoading(true);
@@ -102,8 +104,8 @@ export default function MeetingLinksAdmin() {
     }, [filters.search]);
 
     const handleFilterChange = useCallback((key, value) => {
-        setFilters(prev => ({ 
-            ...prev, 
+        setFilters(prev => ({
+            ...prev,
             [key]: value,
             page: key !== 'page' ? 1 : value // إعادة تعيين الصفحة إلى 1 عند تغيير الفلاتر
         }));
@@ -444,6 +446,13 @@ export default function MeetingLinksAdmin() {
                                     <td className="py-4 px-4">
                                         <div className="flex items-center gap-1">
                                             <button
+                                                onClick={() => setReservationLink(link)}
+                                                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                                                title="View reservation info"
+                                            >
+                                                <Calendar className="w-4 h-4 text-primary" />
+                                            </button>
+                                            <button
                                                 onClick={() => onEdit(link)}
                                                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                                                 title="Edit"
@@ -540,6 +549,18 @@ export default function MeetingLinksAdmin() {
                         }}
                         onSaved={onSaved}
                     />
+                </Modal>
+            )}
+
+            {/* Reservation Info Modal */}
+            {reservationLink && (
+                <Modal
+                    open={!!reservationLink}
+                    title={`Reservation Info — ${reservationLink.name}`}
+                    onClose={() => setReservationLink(null)}
+                    size="xl"
+                >
+                    <MeetingLinkReservationInfo linkId={reservationLink._id} />
                 </Modal>
             )}
         </div>

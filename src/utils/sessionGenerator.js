@@ -1077,6 +1077,10 @@ export function getModuleSelectionSummary(group) {
  *  - scheduled / cancelled / postponed → بيتحدثلهم scheduledDate + startTime + endTime فقط
  *    اللينكات، الـ meetingLinkId، credentials كلها بتفضل زي ما هي.
  *  - مفيش حذف، مفيش إنشاء جديد.
+ *  - ✅ NEW: قبل أي تعديل فعلي، بيتأكد إن اللينكات المستخدمة حاليًا في سيشنات
+ *    الجروب (غير الـ completed) لسه متاحة على الميعاد الجديد (أيام + وقت) —
+ *    لو أي لينك منهم متعارض مع حجز لجروب تاني، بيرمي error ويوقف قبل ما
+ *    يلمس أي بيانات.
  *
  * @param {String}   groupId
  * @param {Object}   group          - populated (needs courseId.curriculum)
@@ -1114,6 +1118,27 @@ export async function rescheduleGroupSessions(
 
   const course = group.courseId;
   if (!course?.curriculum?.length) throw new Error("Course curriculum not found");
+
+  // ── 0. ✅ فحص تعارض اللينكات المستخدمة مع الميعاد الجديد ──────────────────
+  console.log(`\n🔗 Checking meeting link conflicts for new schedule...`);
+  const { checkLinksForRescheduledSchedule } = await import("./checkMeetingLinks");
+  const linkCheck = await checkLinksForRescheduledSchedule(groupId, {
+    daysOfWeek,
+    timeFrom,
+    timeTo,
+  });
+
+  if (linkCheck.hasConflicts) {
+    console.log(`❌ Link conflicts found: ${linkCheck.conflicts.length}`);
+    linkCheck.conflicts.forEach((c) => {
+      console.log(`   - ${c.linkName}: conflicts with group ${c.conflictingGroupId} (${c.conflictingDays?.join(", ")} ${c.conflictingTime || ""})`);
+    });
+    const error = new Error("فيه لينكات مستخدمة هتتعارض مع جروب تاني في الميعاد الجديد");
+    error.code = "LINK_CONFLICT";
+    error.linkConflicts = linkCheck.conflicts;
+    throw error;
+  }
+  console.log(`✅ No link conflicts found`);
 
   // ── 1. جلب كل السيشن الموجودة ──────────────────────────────────────────────
   const allSessions = await Session.find({
@@ -1189,7 +1214,37 @@ export async function rescheduleGroupSessions(
     },
   });
 
-  // ── 5. إعداد بيانات الإرجاع ───────────────────────────────────────────────
+  // ── 5. ✅ تحديث currentReservation.daysOfWeek/timeFrom/timeTo على اللينكات
+  //    المستخدمة عشان تعكس الجدول الجديد (نفس اللينك لسه بيمثّل نفس السيشنات،
+  //    بس بجدول متكرر مختلف دلوقتي) ────────────────────────────────────────
+  const MeetingLink = (await import("../app/models/MeetingLink")).default;
+  const usedLinkIds = [
+    ...new Set(
+      toReschedule
+        .filter((s) => s.meetingLinkId)
+        .map((s) => s.meetingLinkId.toString()),
+    ),
+  ];
+
+  if (usedLinkIds.length > 0) {
+    await MeetingLink.updateMany(
+      {
+        _id: { $in: usedLinkIds },
+        "currentReservation.groupId": new mongoose.Types.ObjectId(groupId),
+      },
+      {
+        $set: {
+          "currentReservation.daysOfWeek": daysOfWeek,
+          "currentReservation.timeFrom":   timeFrom,
+          "currentReservation.timeTo":     timeTo,
+          "metadata.updatedAt":            new Date(),
+        },
+      },
+    );
+    console.log(`🔗 Updated reservation schedule on ${usedLinkIds.length} link(s)`);
+  }
+
+  // ── 6. إعداد بيانات الإرجاع ───────────────────────────────────────────────
   const updatedSessions = await Session.find({
     _id: { $in: toReschedule.map((s) => s._id) },
     isDeleted: false,
@@ -1241,17 +1296,22 @@ export async function resyncGroupModuleSessions(
   selectedLinkIds = [],
 ) {
   const Session = (await import("../app/models/Session")).default;
-  const Group   = (await import("../app/models/Group")).default;
+  const Group = (await import("../app/models/Group")).default;
 
-  console.log(`\n🔁 ========== RESYNCING GROUP MODULE SELECTION (v2) ==========`);
+  console.log(
+    `\n🔁 ========== RESYNCING GROUP MODULE SELECTION (v2) ==========`,
+  );
   console.log(`Group ID: ${groupId}`);
 
   if (!group.sessionsGenerated) {
-    throw new Error("الجروب لسه معندوش سيشنز متولدة — استخدم التوليد العادي الأول");
+    throw new Error(
+      "الجروب لسه معندوش سيشنز متولدة — استخدم التوليد العادي الأول",
+    );
   }
 
   const course = group.courseId;
-  if (!course?.curriculum?.length) throw new Error("Course curriculum not found");
+  if (!course?.curriculum?.length)
+    throw new Error("Course curriculum not found");
 
   const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
   if (!daysOfWeek?.length) throw new Error("جدول الجروب ناقصه أيام");
@@ -1261,7 +1321,9 @@ export async function resyncGroupModuleSessions(
   const targetModuleIndexes =
     newModuleSelection.mode === "all"
       ? course.curriculum.map((_, idx) => idx)
-      : [...new Set(newModuleSelection.selectedModules || [])].sort((a, b) => a - b);
+      : [...new Set(newModuleSelection.selectedModules || [])].sort(
+          (a, b) => a - b,
+        );
 
   if (targetModuleIndexes.length === 0) {
     throw new Error("لازم تختار موديول واحد على الأقل");
@@ -1270,8 +1332,10 @@ export async function resyncGroupModuleSessions(
   // ── كل السيشنز الحالية ─────────────────────────────────────────────────
   const allSessions = await Session.find({ groupId, isDeleted: false });
 
-  const completedSessions    = allSessions.filter((s) => s.status === "completed");
-  const nonCompletedSessions = allSessions.filter((s) => s.status !== "completed");
+  const completedSessions = allSessions.filter((s) => s.status === "completed");
+  const nonCompletedSessions = allSessions.filter(
+    (s) => s.status !== "completed",
+  );
 
   // ✅ (moduleIndex-sessionNumber) لأي سيشن مكتملة — ثابتة للأبد، بره أي منطق تاني
   const completedKeys = new Set(
@@ -1324,7 +1388,11 @@ export async function resyncGroupModuleSessions(
 
   // ── تواريخ جديدة لكل الـ requiredSlots سوا — بترتيبها الصحيح، بادئة دايمًا
   // من startDate الأصلي بتاع الجروب (مش من "آخر تاريخ مستخدم") ─────────────
-  const newDates = createFlexibleWeeklySchedule(startDate, daysOfWeek, requiredSlots.length);
+  const newDates = createFlexibleWeeklySchedule(
+    startDate,
+    daysOfWeek,
+    requiredSlots.length,
+  );
 
   // ── فك حجز لينكات السيشنز اللي هتتشال فعلاً (موديولها بره الاختيار الجديد) ──
   for (const s of sessionsToRemove) {
@@ -1349,7 +1417,9 @@ export async function resyncGroupModuleSessions(
   // اللي مفيهوش UI لاختيار لينكات أصلاً)، بدل ما نسيب السلوتات الجديدة من
   // غير أي لينك، بنجيب اللينكات اللي الجروب أصلًا بيستخدمها في باقي سيشناته
   // (اللي مش هتتشال) ونعيد استخدامها بنفس ترتيب ظهورها.
-  const sessionsToRemoveIds = new Set(sessionsToRemove.map((s) => s._id.toString()));
+  const sessionsToRemoveIds = new Set(
+    sessionsToRemove.map((s) => s._id.toString()),
+  );
 
   let allAvailableLinks = [];
   if (selectedLinkIds.length > 0) {
@@ -1366,7 +1436,10 @@ export async function resyncGroupModuleSessions(
     const usedLinkIds = [
       ...new Set(
         allSessions
-          .filter((s) => s.meetingLinkId && !sessionsToRemoveIds.has(s._id.toString()))
+          .filter(
+            (s) =>
+              s.meetingLinkId && !sessionsToRemoveIds.has(s._id.toString()),
+          )
           .map((s) => s.meetingLinkId.toString()),
       ),
     ];
@@ -1377,11 +1450,17 @@ export async function resyncGroupModuleSessions(
         isDeleted: false,
       }).lean();
       allAvailableLinks.sort(
-        (a, b) => usedLinkIds.indexOf(a._id.toString()) - usedLinkIds.indexOf(b._id.toString()),
+        (a, b) =>
+          usedLinkIds.indexOf(a._id.toString()) -
+          usedLinkIds.indexOf(b._id.toString()),
       );
-      console.log(`📋 مفيش لينكات محددة — بنعيد استخدام ${allAvailableLinks.length} لينك مستخدم بالفعل في الجروب`);
+      console.log(
+        `📋 مفيش لينكات محددة — بنعيد استخدام ${allAvailableLinks.length} لينك مستخدم بالفعل في الجروب`,
+      );
     } else {
-      console.log(`📋 مفيش لينكات محددة ولا لينكات مستخدمة بالفعل في الجروب — السلوتات الجديدة هتتعمل من غير لينك`);
+      console.log(
+        `📋 مفيش لينكات محددة ولا لينكات مستخدمة بالفعل في الجروب — السلوتات الجديدة هتتعمل من غير لينك`,
+      );
     }
   }
   let freshLinkCursor = 0;
@@ -1391,9 +1470,11 @@ export async function resyncGroupModuleSessions(
 
   requiredSlots.forEach((slot, i) => {
     const module = course.curriculum[slot.moduleIndex];
-    const lessonTitle = module.lessons[slot.lessonIndexes[0]]?.title?.trim() || "";
+    const lessonTitle =
+      module.lessons[slot.lessonIndexes[0]]?.title?.trim() || "";
     const title = `Session ${slot.sessionNumber}: ${lessonTitle}`;
-    const description = module.lessons[slot.lessonIndexes[0]]?.description || "";
+    const description =
+      module.lessons[slot.lessonIndexes[0]]?.description || "";
     const newDate = newDates[i];
 
     if (slot.existing) {
@@ -1442,12 +1523,17 @@ export async function resyncGroupModuleSessions(
         cancelNotificationSent: false,
         meetingLinkAssigned: false,
       },
-      metadata: { createdBy: userId, createdAt: new Date(), updatedAt: new Date() },
+      metadata: {
+        createdBy: userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
       isDeleted: false,
     };
 
     if (allAvailableLinks.length > 0) {
-      const link = allAvailableLinks[freshLinkCursor % allAvailableLinks.length];
+      const link =
+        allAvailableLinks[freshLinkCursor % allAvailableLinks.length];
       freshLinkCursor++;
       newSessionsToInsert.push({
         ...base,
@@ -1477,7 +1563,10 @@ export async function resyncGroupModuleSessions(
   }
 
   // ── تحديث بيانات الجروب ──────────────────────────────────────────────────
-  const finalCount = await Session.countDocuments({ groupId, isDeleted: false });
+  const finalCount = await Session.countDocuments({
+    groupId,
+    isDeleted: false,
+  });
 
   await Group.findByIdAndUpdate(groupId, {
     $set: {

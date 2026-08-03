@@ -18,72 +18,72 @@ import { useI18n } from "@/i18n/I18nProvider";
 // palette (blue/purple/violet/indigo/fuchsia/green/red/yellow) is used anywhere.
 
 const STEPS = [
-  { id: "basic",       icon: Hash,     color: "primary"   },
-  { id: "instructors", icon: User,     color: "secondary" },
-  { id: "schedule",    icon: Calendar, color: "coral"      },
-  { id: "automation",  icon: Bell,     color: "amber"      },
+  { id: "basic", icon: Hash, color: "primary" },
+  { id: "instructors", icon: User, color: "secondary" },
+  { id: "schedule", icon: Calendar, color: "coral" },
+  { id: "automation", icon: Bell, color: "amber" },
 ];
 
 const COLOR = {
   primary: {
-    btn:    "from-primary to-orange-deep",
-    solid:  "#ff6700",
-    text:   "text-primary",
+    btn: "from-primary to-orange-deep",
+    solid: "#ff6700",
+    text: "text-primary",
     border: "border-primary/25 dark:border-primary/30",
-    panel:  "from-IcyBreeze to-PaleCyan dark:from-primary/10 dark:to-orange-deep/10",
-    badge:  "bg-primary/10 text-primary dark:bg-primary/15",
-    ring:   "ring-primary/40",
+    panel: "from-IcyBreeze to-PaleCyan dark:from-primary/10 dark:to-orange-deep/10",
+    badge: "bg-primary/10 text-primary dark:bg-primary/15",
+    ring: "ring-primary/40",
   },
   secondary: {
-    btn:    "from-secondary to-teal-dark",
-    solid:  "#004d59",
-    text:   "text-secondary dark:text-white",
+    btn: "from-secondary to-teal-dark",
+    solid: "#004d59",
+    text: "text-secondary dark:text-white",
     border: "border-secondary/20 dark:border-secondary/35",
-    panel:  "from-PaleSkyBlu to-IcyBreeze dark:from-secondary/10 dark:to-teal-dark/10",
-    badge:  "bg-secondary/10 text-secondary dark:bg-secondary/20 dark:text-white",
-    ring:   "ring-secondary/40",
+    panel: "from-PaleSkyBlu to-IcyBreeze dark:from-secondary/10 dark:to-teal-dark/10",
+    badge: "bg-secondary/10 text-secondary dark:bg-secondary/20 dark:text-white",
+    ring: "ring-secondary/40",
   },
   coral: {
-    btn:    "from-orange-coral to-primary",
-    solid:  "#ff6437",
-    text:   "text-orange-coral",
+    btn: "from-orange-coral to-primary",
+    solid: "#ff6437",
+    text: "text-orange-coral",
     border: "border-orange-coral/25 dark:border-orange-coral/30",
-    panel:  "from-PaleCyan to-SkyBlueMist dark:from-orange-coral/10 dark:to-primary/10",
-    badge:  "bg-orange-coral/10 text-orange-coral dark:bg-orange-coral/15",
-    ring:   "ring-orange-coral/40",
+    panel: "from-PaleCyan to-SkyBlueMist dark:from-orange-coral/10 dark:to-primary/10",
+    badge: "bg-orange-coral/10 text-orange-coral dark:bg-orange-coral/15",
+    ring: "ring-orange-coral/40",
   },
   amber: {
-    btn:    "from-amber-brand to-orange-deep",
-    solid:  "#feaf00",
-    text:   "text-orange-deep dark:text-amber-brand",
+    btn: "from-amber-brand to-orange-deep",
+    solid: "#feaf00",
+    text: "text-orange-deep dark:text-amber-brand",
     border: "border-amber-brand/35 dark:border-amber-brand/30",
-    panel:  "from-PaleSkyBlu to-SkyBlueMist dark:from-amber-brand/10 dark:to-orange-deep/10",
-    badge:  "bg-amber-brand/15 text-orange-deep dark:bg-amber-brand/20 dark:text-amber-brand",
-    ring:   "ring-amber-brand/50",
+    panel: "from-PaleSkyBlu to-SkyBlueMist dark:from-amber-brand/10 dark:to-orange-deep/10",
+    badge: "bg-amber-brand/15 text-orange-deep dark:bg-amber-brand/20 dark:text-amber-brand",
+    ring: "ring-amber-brand/50",
   },
 };
 
 const AUTOMATION_META = {
-  whatsappEnabled:         { icon: MessageCircle },
-  welcomeMessage:          { icon: Sparkles      },
-  reminderEnabled:         { icon: Bell          },
-  notifyGuardianOnAbsence: { icon: AlertCircle   },
-  notifyOnSessionUpdate:   { icon: Calendar      },
-  completionMessage:       { icon: CheckCircle   },
+  whatsappEnabled: { icon: MessageCircle },
+  welcomeMessage: { icon: Sparkles },
+  reminderEnabled: { icon: Bell },
+  notifyGuardianOnAbsence: { icon: AlertCircle },
+  notifyOnSessionUpdate: { icon: Calendar },
+  completionMessage: { icon: CheckCircle },
 };
 
 const ENGLISH_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const inputCls  = "w-full px-3.5 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary dark:bg-dark_input dark:text-white placeholder:text-gray-400 dark:placeholder:text-darksubtle text-sm transition-all shadow-sm";
-const labelCls  = "block text-13 font-semibold text-MidnightNavyText dark:text-white mb-1.5";
+const inputCls = "w-full px-3.5 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary dark:bg-dark_input dark:text-white placeholder:text-gray-400 dark:placeholder:text-darksubtle text-sm transition-all shadow-sm";
+const labelCls = "block text-13 font-semibold text-MidnightNavyText dark:text-white mb-1.5";
 const selectCls = "w-full px-3.5 py-2.5 border border-PowderBlueBorder dark:border-dark_border rounded-xl bg-white dark:bg-dark_input dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary shadow-sm";
-const cardCls   = "rounded-2xl border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-darklight shadow-sm";
+const cardCls = "rounded-2xl border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-darklight shadow-sm";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const getDayIndex      = (dateStr) => dateStr ? new Date(dateStr).getDay() : -1;
-const getEnglishDay    = (dateStr) => dateStr ? ENGLISH_DAYS[new Date(dateStr).getDay()] : null;
-const areDuplicates    = (lessons) => lessons?.length > 1 && lessons.every(l => l.title === lessons[0]?.title);
+const getDayIndex = (dateStr) => dateStr ? new Date(dateStr).getDay() : -1;
+const getEnglishDay = (dateStr) => dateStr ? ENGLISH_DAYS[new Date(dateStr).getDay()] : null;
+const areDuplicates = (lessons) => lessons?.length > 1 && lessons.every(l => l.title === lessons[0]?.title);
 
 function getUniqueLessonGroups(lessons) {
   if (!lessons?.length) return [];
@@ -101,25 +101,25 @@ function getUniqueLessonGroups(lessons) {
 
 function buildInitialForm(initial) {
   return {
-    name:       initial?.name || "",
-    courseId:   initial?.courseId?._id || initial?.courseId || initial?.course?.id || initial?.course?._id || "",
+    name: initial?.name || "",
+    courseId: initial?.courseId?._id || initial?.courseId || initial?.course?.id || initial?.course?._id || "",
     instructors: initial?.instructors?.map(i => (i._id || i.id || i)?.toString()) || [],
     maxStudents: initial?.maxStudents || 25,
     schedule: {
-      startDate:  initial?.schedule?.startDate?.split("T")[0] || "",
+      startDate: initial?.schedule?.startDate?.split("T")[0] || "",
       daysOfWeek: initial?.schedule?.daysOfWeek || [],
-      timeFrom:   initial?.schedule?.timeFrom   || "18:00",
-      timeTo:     initial?.schedule?.timeTo     || "20:00",
-      timezone:   initial?.schedule?.timezone   || "Africa/Cairo",
+      timeFrom: initial?.schedule?.timeFrom || "18:00",
+      timeTo: initial?.schedule?.timeTo || "20:00",
+      timezone: initial?.schedule?.timezone || "Africa/Cairo",
     },
     automation: {
-      whatsappEnabled:         initial?.automation?.whatsappEnabled         ?? true,
-      welcomeMessage:          initial?.automation?.welcomeMessage          ?? true,
-      reminderEnabled:         initial?.automation?.reminderEnabled         ?? true,
-      reminderBeforeHours:     initial?.automation?.reminderBeforeHours     || 24,
+      whatsappEnabled: initial?.automation?.whatsappEnabled ?? true,
+      welcomeMessage: initial?.automation?.welcomeMessage ?? true,
+      reminderEnabled: initial?.automation?.reminderEnabled ?? true,
+      reminderBeforeHours: initial?.automation?.reminderBeforeHours || 24,
       notifyGuardianOnAbsence: initial?.automation?.notifyGuardianOnAbsence ?? true,
-      notifyOnSessionUpdate:   initial?.automation?.notifyOnSessionUpdate   ?? true,
-      completionMessage:       initial?.automation?.completionMessage       ?? true,
+      notifyOnSessionUpdate: initial?.automation?.notifyOnSessionUpdate ?? true,
+      completionMessage: initial?.automation?.completionMessage ?? true,
     },
     moduleSelection: initial?.moduleSelection || { mode: "all", selectedModules: [] },
     tags: initial?.tags?.map(t => t._id || t) || [],
@@ -155,7 +155,7 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
   };
 
   const totalSessionsAll = curriculum.reduce((s, m) => s + (m.totalSessions || 3), 0);
-  const selectedSessions  = (selectedModules?.selectedModules || []).reduce((s, i) => s + (curriculum[i]?.totalSessions || 3), 0);
+  const selectedSessions = (selectedModules?.selectedModules || []).reduce((s, i) => s + (curriculum[i]?.totalSessions || 3), 0);
 
   const handleSync = async () => {
     if (!groupId) return;
@@ -202,11 +202,10 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
               key={mode}
               type="button"
               onClick={() => setSelectedModules({ mode, selectedModules: [] })}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                active
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${active
                   ? "bg-gradient-to-r from-secondary to-teal-dark text-white shadow-sm"
                   : "text-SlateBlueText dark:text-darktext hover:bg-white dark:hover:bg-black/20"
-              }`}
+                }`}
             >
               {t(`groups.form.${mode === "all" ? "allModules" : "specificModules"}`)}
             </button>
@@ -301,7 +300,7 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
 function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggleExpand, initial, onClose, t }) {
   if (!curriculum?.length) return null;
 
-  const totalLessons  = curriculum.reduce((s, m) => s + (m.lessons?.length || 0), 0);
+  const totalLessons = curriculum.reduce((s, m) => s + (m.lessons?.length || 0), 0);
   const totalSessions = curriculum.reduce((s, m) => s + (m.totalSessions || 3), 0);
 
   return (
@@ -311,9 +310,9 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
       <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
         {curriculum.map((module, idx) => {
           const lessonGroups = getUniqueLessonGroups(module.lessons);
-          const hasDup  = areDuplicates(module.lessons);
-          const isSel   = moduleSelection.mode === "specific" && moduleSelection.selectedModules?.includes(idx);
-          const isOpen  = expandedModules.includes(idx);
+          const hasDup = areDuplicates(module.lessons);
+          const isSel = moduleSelection.mode === "specific" && moduleSelection.selectedModules?.includes(idx);
+          const isOpen = expandedModules.includes(idx);
 
           return (
             <div key={idx} className="border border-PowderBlueBorder dark:border-dark_border rounded-xl overflow-hidden">
@@ -376,9 +375,9 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
 
       <div className="mt-3 pt-3 border-t border-PowderBlueBorder dark:border-dark_border grid grid-cols-3 gap-2">
         {[
-          { label: t("groups.form.totalModules"),  val: curriculum.length, color: "text-primary"       },
-          { label: t("groups.form.totalLessons"),  val: totalLessons,      color: "text-secondary dark:text-white" },
-          { label: t("groups.form.totalSessions"), val: totalSessions,     color: "text-orange-coral"  },
+          { label: t("groups.form.totalModules"), val: curriculum.length, color: "text-primary" },
+          { label: t("groups.form.totalLessons"), val: totalLessons, color: "text-secondary dark:text-white" },
+          { label: t("groups.form.totalSessions"), val: totalSessions, color: "text-orange-coral" },
         ].map(({ label, val, color }) => (
           <div key={label} className="bg-white dark:bg-darkmode rounded-xl p-2.5 text-center border border-PowderBlueBorder dark:border-dark_border">
             <p className="text-[10px] text-SlateBlueText dark:text-darktext">{label}</p>
@@ -415,6 +414,34 @@ function ConflictAlert({ conflicts, t }) {
           <div key={i} className="bg-white dark:bg-darkmode rounded-xl p-2 border border-orange-coral/25 dark:border-orange-coral/30 text-xs text-orange-coral">
             <p className="font-medium">{c.groupName} <span className="opacity-60">({c.groupCode})</span></p>
             <p className="opacity-80">{c.sharedDays.join(", ")} · {c.theirTime}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ✅ جديد: تنبيه تعارض اللينكات (شكل بيانات مختلف عن ConflictAlert بتاع الجروبات)
+function LinkConflictAlert({ conflicts, t }) {
+  if (!conflicts?.length) return null;
+  return (
+    <div className="mt-3 p-3 rounded-2xl border border-orange-coral/40 dark:border-orange-coral/40 bg-orange-coral/5 dark:bg-orange-coral/10 space-y-2">
+      <div className="flex items-center gap-2">
+        <AlertCircle className="w-4 h-4 text-orange-coral flex-shrink-0" />
+        <p className="text-xs font-semibold text-orange-coral">
+          {t("groups.form.reschedule.linkConflictTitle") || "فيه لينكات مستخدمة في سيشنات الجروب هتتعارض مع جروب تاني في الميعاد الجديد"}
+        </p>
+      </div>
+      <div className="space-y-1.5">
+        {conflicts.map((c, i) => (
+          <div key={i} className="bg-white dark:bg-darkmode rounded-xl p-2 border border-orange-coral/25 dark:border-orange-coral/30 text-xs text-orange-coral">
+            <p className="font-medium">{c.linkName}</p>
+            <p className="opacity-80">{(c.conflictingDays || []).join(", ")} · {c.conflictingTime}</p>
+            {c.affectedSessions?.length > 0 && (
+              <p className="opacity-70 mt-1">
+                {t("groups.form.reschedule.affectedSessions") || "السيشنز المتأثرة"}: {c.affectedSessions.map(s => s.title).join(", ")}
+              </p>
+            )}
           </div>
         ))}
       </div>
@@ -460,9 +487,9 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   );
 
   // ── Step navigation ─────────────────────────────────────────────────────────
-  const [step,     setStep]     = useState(0);
-  const [animDir,  setAnimDir]  = useState(1);
-  const [visible,  setVisible]  = useState(true);
+  const [step, setStep] = useState(0);
+  const [animDir, setAnimDir] = useState(1);
+  const [visible, setVisible] = useState(true);
 
   const goTo = useCallback((next) => {
     if (next === step) return;
@@ -479,9 +506,9 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
   const onChange = useCallback((path, value) => {
     setForm(prev => {
-      const n    = JSON.parse(JSON.stringify(prev));
+      const n = JSON.parse(JSON.stringify(prev));
       const keys = path.split(".");
-      let cur    = n;
+      let cur = n;
       for (let i = 0; i < keys.length - 1; i++) cur = cur[keys[i]];
       cur[keys[keys.length - 1]] = value;
       return n;
@@ -489,12 +516,12 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   }, []);
 
   // ── Data ────────────────────────────────────────────────────────────────────
-  const [courses,          setCourses]          = useState([]);
-  const [instructors,      setInstructors]      = useState([]);
-  const [coursesLoading,   setCoursesLoading]   = useState(true);
+  const [courses, setCourses] = useState([]);
+  const [instructors, setInstructors] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
   const [instructorsLoading, setInstructorsLoading] = useState(true);
-  const [curriculum,       setCurriculum]       = useState(null);
-  const [expandedModules,  setExpandedModules]  = useState([]);
+  const [curriculum, setCurriculum] = useState(null);
+  const [expandedModules, setExpandedModules] = useState([]);
 
   const [allTags, setAllTags] = useState([]);
   const [tagsLoading, setTagsLoading] = useState(true);
@@ -505,11 +532,12 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     [initial]
   );
 
-  const [effectiveFrom,    setEffectiveFrom]    = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState("");
   const [reschedulePreview, setReschedulePreview] = useState(null);
-  const [previewLoading,   setPreviewLoading]   = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [scheduleConflicts, setScheduleConflicts] = useState([]);
-  const [loading,          setLoading]          = useState(false);
+  const [linkConflicts, setLinkConflicts] = useState([]); // ✅ جديد: تعارض اللينكات
+  const [loading, setLoading] = useState(false);
 
   const isRescheduleMode = useMemo(
     () => isActiveWithSessions && !!effectiveFrom,
@@ -573,9 +601,9 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   }, [effectiveFrom, loadPreview, reschedulePreview]);
 
   // ── Day helpers ─────────────────────────────────────────────────────────────
-  const anchorDate   = isActiveWithSessions ? effectiveFrom : form.schedule.startDate;
+  const anchorDate = isActiveWithSessions ? effectiveFrom : form.schedule.startDate;
   const firstEnglishDay = getEnglishDay(anchorDate);
-  const firstLocalDay   = getLocalDay(anchorDate);
+  const firstLocalDay = getLocalDay(anchorDate);
 
   const isDaySelected = (localDay) => {
     const idx = localDays.indexOf(localDay);
@@ -589,7 +617,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   };
 
   const toggleDay = (localDay) => {
-    const idx        = localDays.indexOf(localDay);
+    const idx = localDays.indexOf(localDay);
     const englishDay = ENGLISH_DAYS[idx];
 
     if (englishDay === firstEnglishDay && form.schedule.daysOfWeek.includes(englishDay)) {
@@ -599,7 +627,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
     setForm(prev => {
       const current = prev.schedule.daysOfWeek;
-      const isSel   = current.includes(englishDay);
+      const isSel = current.includes(englishDay);
       if (!isSel && current.length >= 3) { toast.error(t("groups.form.errors.maxDays")); return prev; }
       const next = isSel
         ? current.filter(d => d !== englishDay)
@@ -660,6 +688,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     }
 
     setLoading(true);
+    setScheduleConflicts([]); // ✅ تصفير التعارضات القديمة قبل كل محاولة جديدة
+    setLinkConflicts([]);     // ✅
     const toastId = toast.loading(initial ? t("groups.form.messages.updating") : t("groups.form.messages.creating"));
 
     try {
@@ -677,10 +707,10 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         basePayload.schedule = form.schedule;
       }
 
-      const url    = initial?.id ? `/api/groups/${initial.id}` : "/api/groups";
+      const url = initial?.id ? `/api/groups/${initial.id}` : "/api/groups";
       const method = initial?.id ? "PUT" : "POST";
 
-      const res    = await fetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(basePayload),
@@ -690,21 +720,33 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
       if (isRescheduleMode) {
         const rres = await fetch(`/api/groups/${initial.id}/reschedule`, {
-          method:  "PUT",
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             effectiveFrom,
             daysOfWeek: form.schedule.daysOfWeek,
-            timeFrom:   form.schedule.timeFrom,
-            timeTo:     form.schedule.timeTo,
-            timezone:   form.schedule.timezone,
+            timeFrom: form.schedule.timeFrom,
+            timeTo: form.schedule.timeTo,
+            timezone: form.schedule.timezone,
           }),
         });
         const rresult = await rres.json();
 
+        // ✅ تعارض جروبات تانية (الجدول العام)
         if (rres.status === 409 && rresult.conflicts?.length) {
           toast.error(t("groups.form.errors.scheduleConflict"), { id: toastId });
           setScheduleConflicts(rresult.conflicts);
+          setLoading(false);
+          return;
+        }
+
+        // ✅ تعارض لينكات مستخدمة فعليًا في سيشنات الجروب
+        if (rres.status === 409 && rresult.linkConflicts?.length) {
+          toast.error(
+            t("groups.form.errors.linkConflict") || "فيه لينكات هتتعارض مع جروب تاني في الميعاد الجديد",
+            { id: toastId }
+          );
+          setLinkConflicts(rresult.linkConflicts);
           setLoading(false);
           return;
         }
@@ -729,10 +771,10 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   };
 
   // ── Render helpers ──────────────────────────────────────────────────────────
-  const progress  = ((step + 1) / STEPS.length) * 100;
-  const cs        = STEPS[step];
-  const c         = COLOR[cs.color];
-  const StepIcon  = cs.icon;
+  const progress = ((step + 1) / STEPS.length) * 100;
+  const cs = STEPS[step];
+  const c = COLOR[cs.color];
+  const StepIcon = cs.icon;
   const isLastStep = step === STEPS.length - 1;
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -749,18 +791,17 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             style={{ width: `calc(${(step / (STEPS.length - 1)) * 100}% - ${step === 0 ? 0 : 0}px)`, maxWidth: "calc(100% - 2.5rem)" }}
           />
           {STEPS.map((s, i) => {
-            const Icon  = s.icon;
-            const dc    = COLOR[s.color];
-            const done  = i < step;
+            const Icon = s.icon;
+            const dc = COLOR[s.color];
+            const done = i < step;
             const active = i === step;
             return (
               <button key={s.id} type="button" onClick={() => goTo(i)}
                 className="relative z-10 flex flex-col items-center gap-1.5 transition-all group">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-darkmode ${
-                  done   ? `bg-gradient-to-br ${dc.btn} text-white shadow-md` :
-                  active ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg scale-110` :
-                           "bg-gray-100 dark:bg-dark_input text-gray-400 dark:text-darkmuted group-hover:bg-gray-200 dark:group-hover:bg-dark_border"
-                }`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-darkmode ${done ? `bg-gradient-to-br ${dc.btn} text-white shadow-md` :
+                    active ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg scale-110` :
+                      "bg-gray-100 dark:bg-dark_input text-gray-400 dark:text-darkmuted group-hover:bg-gray-200 dark:group-hover:bg-dark_border"
+                  }`}>
                   {done ? <CheckCircle className="w-4.5 h-4.5" /> : <Icon className="w-4.5 h-4.5" />}
                 </div>
                 <span className={`text-[10px] font-semibold hidden sm:block transition-colors ${active ? dc.text : "text-gray-400 dark:text-darksubtle"}`}>
@@ -862,11 +903,10 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                           type="button"
                           onClick={() => toggleTag(tagItem._id)}
                           style={selected ? { backgroundColor: tagItem.color, borderColor: tagItem.color } : { borderColor: tagItem.color }}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border flex items-center gap-1.5 ${
-                            selected
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border flex items-center gap-1.5 ${selected
                               ? "text-white shadow-sm"
                               : "bg-white dark:bg-darklight text-gray-600 dark:text-gray-300 hover:bg-IcyBreeze dark:hover:bg-dark_input"
-                          }`}
+                            }`}
                         >
                           <span
                             className="inline-block w-2 h-2 rounded-full"
@@ -892,8 +932,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
               ) : (
                 <div className="grid sm:grid-cols-2 gap-2.5 max-h-96 overflow-y-auto custom-scrollbar">
                   {instructors.map(instructor => {
-                    const id       = instructor._id?.toString();
-                    const isSel    = form.instructors.includes(id);
+                    const id = instructor._id?.toString();
+                    const isSel = form.instructors.includes(id);
                     return (
                       <div key={instructor._id} onClick={() => toggleInstructor(id)}
                         className={`relative flex items-center gap-3 p-3 border rounded-2xl cursor-pointer transition-all ${isSel ? "border-secondary/50 bg-secondary/5 dark:bg-secondary/15 shadow-sm" : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"}`}>
@@ -939,7 +979,11 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                   <div>
                     <label className={labelCls}>{t("groups.form.reschedule.effectiveFrom")}</label>
                     <input type="date" value={effectiveFrom}
-                      onChange={e => { setEffectiveFrom(e.target.value); setScheduleConflicts([]); }}
+                      onChange={e => {
+                        setEffectiveFrom(e.target.value);
+                        setScheduleConflicts([]);
+                        setLinkConflicts([]); // ✅ تصفير تعارض اللينكات كمان لما يغيّر الميعاد
+                      }}
                       min={new Date().toISOString().split("T")[0]} className={inputCls} />
                     <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-1">
                       سيب الحقل ده فاضي لو مش عاوز تغيّر الميعاد — باقي البيانات (زي المدرسين) هتتحفظ عادي.
@@ -977,6 +1021,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                   )}
 
                   <ConflictAlert conflicts={scheduleConflicts} t={t} />
+                  <LinkConflictAlert conflicts={linkConflicts} t={t} /> {/* ✅ جديد */}
                 </div>
               )}
 
@@ -1010,8 +1055,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
                 <div className="grid grid-cols-7 gap-1.5">
                   {localDays.map(day => {
-                    const isFirst    = day === firstLocalDay;
-                    const isSel      = isDaySelected(day);
+                    const isFirst = day === firstLocalDay;
+                    const isSel = isDaySelected(day);
                     const isDisabled = !anchorDate || (isFirst && isSel);
                     return (
                       <button key={day} type="button" onClick={() => toggleDay(day)} disabled={isDisabled}
@@ -1046,12 +1091,12 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           {step === 3 && (
             <div className="space-y-3">
               {Object.entries({
-                whatsappEnabled:          t("groups.form.automation.whatsappEnabled"),
-                welcomeMessage:           t("groups.form.automation.welcomeMessage"),
-                reminderEnabled:          t("groups.form.automation.reminderEnabled"),
-                notifyGuardianOnAbsence:  t("groups.form.automation.notifyGuardianOnAbsence"),
-                notifyOnSessionUpdate:    t("groups.form.automation.notifyOnSessionUpdate"),
-                completionMessage:        t("groups.form.automation.completionMessage"),
+                whatsappEnabled: t("groups.form.automation.whatsappEnabled"),
+                welcomeMessage: t("groups.form.automation.welcomeMessage"),
+                reminderEnabled: t("groups.form.automation.reminderEnabled"),
+                notifyGuardianOnAbsence: t("groups.form.automation.notifyGuardianOnAbsence"),
+                notifyOnSessionUpdate: t("groups.form.automation.notifyOnSessionUpdate"),
+                completionMessage: t("groups.form.automation.completionMessage"),
               }).map(([key, lbl]) => (
                 <ToggleRow
                   key={key}
