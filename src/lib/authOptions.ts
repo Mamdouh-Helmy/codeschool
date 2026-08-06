@@ -1,11 +1,12 @@
+import { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
 import bcrypt from "bcryptjs";
-import User from "../../src/app/models/User"; // عدّل المسار حسب مكان الملف
+import User from "../app/models/User";
 import { connectDB } from "./mongodb";
 
-export const authOptions = {
+export const authOptions: AuthOptions = {
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
 
@@ -18,9 +19,9 @@ export const authOptions = {
       },
       async authorize(credentials) {
         await connectDB();
-        const user = await User.findOne({ email: credentials.email }).select("+password");
+        const user = await User.findOne({ email: credentials?.email }).select("+password");
         if (!user) throw new Error("User not found");
-        const isValid = await bcrypt.compare(credentials.password, user.password);
+        const isValid = await bcrypt.compare(credentials!.password, user.password);
         if (!isValid) throw new Error("Invalid password");
         return {
           id: user._id.toString(),
@@ -31,12 +32,12 @@ export const authOptions = {
       },
     }),
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
     GitHubProvider({
-      clientId: process.env.GITHUB_ID,
-      clientSecret: process.env.GITHUB_SECRET,
+      clientId: process.env.GITHUB_ID!,
+      clientSecret: process.env.GITHUB_SECRET!,
     }),
   ],
 
@@ -60,8 +61,8 @@ export const authOptions = {
 
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.role = user.role;
+        token.id = (user as any).id;
+        token.role = (user as any).role;
       }
       if (!token.role && token.email) {
         await connectDB();
@@ -76,8 +77,8 @@ export const authOptions = {
 
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.id;
-        session.user.role = token.role;
+        (session.user as any).id = token.id;
+        (session.user as any).role = token.role;
       }
       return session;
     },
