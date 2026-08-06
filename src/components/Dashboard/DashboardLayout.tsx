@@ -122,15 +122,7 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           label: t('dashboard.rescheduleRequests') || "طلبات الترحيل",
           href: "/admin/reschedule-requests",
           icon: "ion:calendar-outline",
-          // ❌ نشيل البادج الديناميكي عشان ميبقاش فيه loop
-          // badge: createBadge(t('common.new') || "New"),
         },
-        // {
-        //   label: t('nav.curriculumCourse') || "Curriculum Course",
-        //   href: "/admin/curriculumCourse",
-        //   icon: "ion:bookmarks-outline",
-        //   badge: createBadge(t('common.new') || "New"),
-        // },
         {
           label: t('dashboard.courses') || "Courses",
           href: "/admin/courses",
@@ -244,6 +236,11 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           label: t('nav.homepage') || "Home",
           href: "/",
           icon: "ion:home-outline",
+        },
+        {
+          label: t('nav.referralSources') || "مصادر التسجيل",
+          href: "/admin/referral-sources",
+          icon: "ion:git-branch-outline",
         },
         {
           label: t('nav.settings') || "Settings",

@@ -51,10 +51,12 @@ const UserSchema = new mongoose.Schema(
       },
       default: "ar",
     },
+    // ✅ "guest" اتضاف كـ role جديد وبقى هو الافتراضي بدل "student"
+    // أي مستخدم بيعمل self-register من غير ما حد يحدد role يبقى guest تلقائيًا
     role: {
       type: String,
-      enum: ["admin", "marketing", "student", "instructor"],
-      default: "student",
+      enum: ["admin", "marketing", "student", "instructor", "guest"],
+      default: "guest",
     },
     image: {
       type: String,
@@ -67,6 +69,13 @@ const UserSchema = new mongoose.Schema(
     qrCodeData: {
       type: String,
       default: "",
+    },
+    // ✅ جديد: مصدر معرفة المستخدم بالموقع (زي "TED"، "Instagram"...)
+    // القيم دي مش هارد كودد — بتيجي من موديل ReferralSource اللي الأدمن بيديره
+    referralSource: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ReferralSource",
+      default: null,
     },
     profile: {
       bio: {
@@ -153,6 +162,7 @@ const UserSchema = new mongoose.Schema(
 // ✅ بدون duplicate indexes — email و username معرّفين unique في الـ schema فوق
 UserSchema.index({ gender: 1 }, { sparse: true });
 UserSchema.index({ language: 1 }, { sparse: true });
+UserSchema.index({ referralSource: 1 }, { sparse: true });
 
 UserSchema.virtual("profileUrl").get(function () {
   return this.username ? `/portfolio/${this.username}` : null;

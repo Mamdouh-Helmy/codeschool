@@ -1,5 +1,5 @@
 "use client";
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -14,6 +14,12 @@ type SignUpProps = {
   onSuccess: (userData: any) => void;
 };
 
+type ReferralSourceOption = {
+  _id: string;
+  label: string;
+  value: string;
+};
+
 const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
   const router = useRouter();
   const authDialog = useContext(AuthDialogContext);
@@ -26,11 +32,39 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
     email: "",
     password: "",
     otp: "",
+    referralSource: "",
   });
   const [errors, setErrors] = useState({});
   const [otpSent, setOtpSent] = useState(false);
   const [canResend, setCanResend] = useState(true);
   const [resendTimer, setResendTimer] = useState(0);
+
+  // ✅ خيارات "جاي منين" بتيجي من الأدمن مش هارد كودد
+  const [referralSources, setReferralSources] = useState<ReferralSourceOption[]>([]);
+  const [referralSourcesLoading, setReferralSourcesLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchReferralSources = async () => {
+      try {
+        const res = await fetch("/api/referral-sources");
+        const result = await res.json();
+        if (isMounted && result.success) {
+          setReferralSources(result.sources || []);
+        }
+      } catch (error) {
+        console.error("💥 Error fetching referral sources:", error);
+      } finally {
+        if (isMounted) setReferralSourcesLoading(false);
+      }
+    };
+
+    fetchReferralSources();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // دالة إرسال رمز التحقق
   const sendVerificationCode = async () => {
@@ -133,6 +167,7 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
           name: form.name.trim(),
           email: form.email.trim().toLowerCase(),
           password: form.password,
+          referralSource: form.referralSource || undefined,
         }),
       });
 
@@ -301,6 +336,67 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
                 minLength={6}
                 className="w-full rounded-md border border-border dark:border-dark_border border-solid bg-transparent px-5 py-3 text-base text-dark outline-none transition placeholder:text-gray-300 focus:border-primary"
               />
+            </div>
+
+            {/* ✅ من فين عرفت عننا؟ — الخيارات ديناميكية من الأدمن، مش هارد كودد */}
+            <div className="mb-9">
+              <div className="relative">
+                <select
+                  name="referralSource"
+                  value={form.referralSource}
+                  onChange={(e) => setForm({ ...form, referralSource: e.target.value })}
+                  disabled={referralSourcesLoading}
+                  className="peer w-full cursor-pointer appearance-none rounded-md border border-border dark:border-dark_border border-solid bg-transparent dark:bg-darklight px-5 py-3 pr-11 text-base text-dark dark:text-white outline-none transition-all duration-300 hover:border-primary focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <option value="" className="text-gray-400 dark:bg-darklight dark:text-gray-400">
+                    {referralSourcesLoading
+                      ? (t("auth.loadingOptions") || "Loading options...")
+                      : (t("auth.howDidYouHear") || "How did you hear about us? (optional)")}
+                  </option>
+                  {referralSources.map((source) => (
+                    <option
+                      key={source._id}
+                      value={source._id}
+                      className="text-dark dark:bg-darklight dark:text-white"
+                    >
+                      {source.label}
+                    </option>
+                  ))}
+                </select>
+
+                {/* أيقونة السهم بتتلون مع الهوفر/الفوكس، وبتتحول لودر وقت التحميل */}
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition-all duration-300 peer-hover:text-primary peer-focus:rotate-180 peer-focus:text-primary">
+                  {referralSourcesLoading ? (
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  )}
+                </span>
+              </div>
             </div>
 
             <div className="mb-9">

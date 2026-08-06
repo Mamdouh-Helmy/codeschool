@@ -1,19 +1,27 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import QRCode from "qrcode";
 import User from "../../models/User";
 import Portfolio from "../../models/Portfolio";
 import Verification from "../../models/Verification";
+import ReferralSource from "../../models/ReferralSource";
 import { connectDB } from "@/lib/mongodb";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const usernameRegex = /^[a-zA-Z0-9_]+$/;
 
-function validatePayload({ name, email, password, username }) {
-  console.log("🔍 Validating payload:", { name, email, password: password ? "***" : "missing", username });
-  
+function validatePayload({ name, email, password, username, referralSource }) {
+  console.log("🔍 Validating payload:", {
+    name,
+    email,
+    password: password ? "***" : "missing",
+    username,
+    referralSource: referralSource || "none",
+  });
+
   const errors = {};
-  
+
   if (!name || typeof name !== "string" || name.trim().length < 2) {
     errors.name = "Name is required and must be at least 2 characters";
   }
@@ -30,7 +38,11 @@ function validatePayload({ name, email, password, username }) {
       errors.username = "Username can only contain letters, numbers and underscores";
     }
   }
-  
+  // ✅ referralSource اختياري، بس لو اتبعت لازم يكون ObjectId شكله صحيح
+  if (referralSource && !mongoose.Types.ObjectId.isValid(referralSource)) {
+    errors.referralSource = "Invalid referral source";
+  }
+
   return errors;
 }
 
@@ -40,12 +52,25 @@ async function checkUsernameAvailability(username) {
     const existingUser = await User.findOne({ username: username.toLowerCase().trim() });
     return {
       available: !existingUser,
-      existingUser: existingUser ? existingUser.email : null
+      existingUser: existingUser ? existingUser.email : null,
     };
   } catch (error) {
     console.error("Error checking username availability:", error);
     return { available: false, error: error.message };
   }
+}
+
+// ✅ لو referralSource اتبعت، نتأكد إنها موجودة فعلاً ومفعّلة في قايمة الأدمن
+// (بنمنع أي قيمة عشوائية متبعتش من الـ select)
+async function validateReferralSource(referralSourceId) {
+  if (!referralSourceId) return { valid: true, source: null };
+
+  const source = await ReferralSource.findOne({
+    _id: referralSourceId,
+    isActive: true,
+  });
+
+  return { valid: !!source, source };
 }
 
 async function generateUsernameFromName(name) {
@@ -90,11 +115,12 @@ async function createDefaultPortfolio(userId, userName, username) {
       userId,
       title: `${userName}'s Portfolio`,
       description: `Welcome to ${userName}'s professional portfolio. Explore my skills, projects, and experience.`,
+      // ✅ قيم icon متطابقة مع iconMap في مكوّن Resume (lowercase بدون مسافات)
       skills: [
-        { name: "JavaScript", level: 75, category: "Frontend", icon: "🟨" },
-        { name: "React",      level: 70, category: "Frontend", icon: "⚛️" },
-        { name: "Node.js",    level: 65, category: "Backend",  icon: "🟢" },
-        { name: "HTML/CSS",   level: 85, category: "Frontend", icon: "🎨" },
+        { name: "JavaScript", level: 75, category: "Frontend", icon: "javascript" },
+        { name: "React", level: 70, category: "Frontend", icon: "react" },
+        { name: "Node.js", level: 65, category: "Backend", icon: "nodejs" },
+        { name: "HTML/CSS", level: 85, category: "Frontend", icon: "html" },
       ],
       projects: [
         {
@@ -118,11 +144,8 @@ async function createDefaultPortfolio(userId, userName, username) {
           images: [],
         },
       ],
-      socialLinks: {
-        github:   `https://github.com/${username}`,
-        linkedin: `https://linkedin.com/in/${username}`,
-        twitter:  `https://twitter.com/${username}`,
-      },
+      // ✅ مبنحطش روابط سوشيال مخمّنة — اليوزر يضيفها بنفسه من الداشبورد
+      socialLinks: {},
       contactInfo: { email: "", phone: "", location: "Add your location" },
       isPublished: true,
       views: 0,
@@ -142,18 +165,19 @@ export async function POST(req) {
     console.log("🚀 ============ REGISTRATION STARTED ============");
 
     const body = await req.json();
-    const { name, email, password, role, username } = body;
+    const { name, email, password, role, username, referralSource } = body;
 
     console.log("📝 Registration data received:", {
-      name:     name     ? "✓" : "✗",
-      email:    email    ? "✓" : "✗",
+      name: name ? "✓" : "✗",
+      email: email ? "✓" : "✗",
       password: password ? "***" : "✗",
       username: username || 'auto-generate',
-      role:     role     || 'student',
+      role: role || 'guest',
+      referralSource: referralSource || 'none',
     });
 
     // ── Validate ───────────────────────────────────────────────────────────
-    const errors = validatePayload({ name, email, password, username });
+    const errors = validatePayload({ name, email, password, username, referralSource });
     if (Object.keys(errors).length) {
       console.error("❌ Validation errors:", errors);
       return NextResponse.json({ success: false, message: "Validation failed", errors }, { status: 400 });
@@ -198,6 +222,17 @@ export async function POST(req) {
       }
     }
 
+    // ── Check referral source ──────────────────────────────────────────────
+    const referralCheck = await validateReferralSource(referralSource);
+    if (!referralCheck.valid) {
+      console.log("❌ Invalid referral source:", referralSource);
+      return NextResponse.json({
+        success: false,
+        message: "Invalid referral source",
+        errors: { referralSource: "Please select a valid option" },
+      }, { status: 400 });
+    }
+
     // ── Hash password ──────────────────────────────────────────────────────
     console.log("🔑 Hashing password...");
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -210,15 +245,17 @@ export async function POST(req) {
     console.log("🎯 Final username:", finalUsername);
 
     // ── Create user ────────────────────────────────────────────────────────
+    // ✅ role الافتراضي بقى "guest" بدل "student" لو محددش حد role معين
     console.log("👤 Creating user in database...");
     const newUser = new User({
-      name:          name.trim(),
-      email:         email.toLowerCase(),
-      username:      finalUsername,
-      password:      hashedPassword,
-      role:          role || "student",
-      qrCode:        "",
-      qrCodeData:    "",
+      name: name.trim(),
+      email: email.toLowerCase(),
+      username: finalUsername,
+      password: hashedPassword,
+      role: role || "guest",
+      referralSource: referralCheck.source?._id || null,
+      qrCode: "",
+      qrCodeData: "",
       emailVerified: true,
     });
     await newUser.save();
@@ -237,7 +274,7 @@ export async function POST(req) {
 
     // ── Generate QR with portfolio _id ─────────────────────────────────────
     let qrCodeImage = "";
-    const baseUrl    = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const portfolioUrl = portfolioId
       ? `${baseUrl}/portfolio/${portfolioId}`
       : `${baseUrl}/portfolio/${newUser._id}`;
@@ -246,9 +283,9 @@ export async function POST(req) {
       console.log("🔗 Portfolio URL:", portfolioUrl);
       console.log("🎨 Generating QR Code...");
       qrCodeImage = await QRCode.toDataURL(portfolioUrl, {
-        width:  200,
+        width: 200,
         margin: 2,
-        color:  { dark: '#000000', light: '#FFFFFF' },
+        color: { dark: '#000000', light: '#FFFFFF' },
       });
       console.log("✅ QR Code generated successfully");
     } catch (qrError) {
@@ -257,7 +294,7 @@ export async function POST(req) {
 
     // ── Update user with QR ────────────────────────────────────────────────
     await User.findByIdAndUpdate(newUser._id, {
-      qrCode:     qrCodeImage,
+      qrCode: qrCodeImage,
       qrCodeData: portfolioUrl,
     });
 
@@ -271,15 +308,18 @@ export async function POST(req) {
 
     // ── Response ───────────────────────────────────────────────────────────
     const userResponse = {
-      id:           newUser._id,
-      name:         newUser.name,
-      email:        newUser.email,
-      username:     newUser.username,
-      role:         newUser.role,
-      qrCode:       qrCodeImage,
+      id: newUser._id,
+      name: newUser.name,
+      email: newUser.email,
+      username: newUser.username,
+      role: newUser.role,
+      referralSource: referralCheck.source
+        ? { id: referralCheck.source._id, label: referralCheck.source.label }
+        : null,
+      qrCode: qrCodeImage,
       portfolioUrl: portfolioUrl,
-      profileUrl:   `/portfolio/${portfolioId || newUser._id}`,
-      createdAt:    newUser.createdAt,
+      profileUrl: `/portfolio/${portfolioId || newUser._id}`,
+      createdAt: newUser.createdAt,
     };
 
     console.log("✅ ============ REGISTRATION COMPLETED ============");
@@ -287,7 +327,7 @@ export async function POST(req) {
     return NextResponse.json({
       success: true,
       message: "User registered successfully with default portfolio",
-      user:    userResponse,
+      user: userResponse,
     }, { status: 201 });
 
   } catch (error) {
@@ -296,7 +336,7 @@ export async function POST(req) {
     console.error("Error message:", error.message);
 
     if (error.code === 11000) {
-      const field   = Object.keys(error.keyPattern)[0];
+      const field = Object.keys(error.keyPattern)[0];
       const message = field === 'username'
         ? 'Username is already taken'
         : 'Email is already registered';

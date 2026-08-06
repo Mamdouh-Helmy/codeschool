@@ -46,6 +46,7 @@ const Header: React.FC = () => {
   const [instructorDropdownOpen, setInstructorDropdownOpen] = useState(false);
   const [studentDropdownOpen, setStudentDropdownOpen] = useState(false);
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
+  const [guestDropdownOpen, setGuestDropdownOpen] = useState(false);
 
   const navbarRef = useRef<HTMLDivElement>(null);
   const signInRef = useRef<HTMLDivElement>(null);
@@ -57,6 +58,7 @@ const Header: React.FC = () => {
   const instructorDropdownRef = useRef<HTMLLIElement>(null);
   const studentDropdownRef = useRef<HTMLLIElement>(null);
   const adminDropdownRef = useRef<HTMLLIElement>(null);
+  const guestDropdownRef = useRef<HTMLLIElement>(null);
 
   const { headerData, loading } = useHeaderData();
 
@@ -99,6 +101,11 @@ const Header: React.FC = () => {
       !adminDropdownRef.current.contains(event.target as Node)
     )
       setAdminDropdownOpen(false);
+    if (
+      guestDropdownRef.current &&
+      !guestDropdownRef.current.contains(event.target as Node)
+    )
+      setGuestDropdownOpen(false);
   };
 
   useEffect(() => {
@@ -214,13 +221,14 @@ const Header: React.FC = () => {
   };
 
   const canAccessPortfolio = localUser &&
-    (localUser.role === "student" || localUser.role === "admin" || localUser.role === "marketing" || localUser.role === "user" || localUser.role === "instructor");
+    (localUser.role === "student" || localUser.role === "admin" || localUser.role === "marketing" || localUser.role === "user" || localUser.role === "instructor" || localUser.role === "guest");
 
   const closeAllDropdowns = () => {
     setMarketingDropdownOpen(false);
     setInstructorDropdownOpen(false);
     setStudentDropdownOpen(false);
     setAdminDropdownOpen(false);
+    setGuestDropdownOpen(false);
   };
 
   return (
@@ -444,6 +452,57 @@ const Header: React.FC = () => {
                         )}
                         <Link
                           href="/admin"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.dashboard") || "لوحة التحكم"}
+                        </Link>
+                      </div>
+                    )}
+                  </li>
+                )}
+
+                {/* Dropdown for Guest role */}
+                {localUser?.role === "guest" && (
+                  <li className="relative" ref={guestDropdownRef}>
+                    <button
+                      onClick={() => {
+                        closeAllDropdowns();
+                        setGuestDropdownOpen(!guestDropdownOpen);
+                      }}
+                      className="flex items-center text-base font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors duration-200"
+                    >
+                      {t("nav.guestDashboard") || "لوحة الزائر"}
+                      <svg
+                        className={`ml-1 w-4 h-4 transition-transform ${guestDropdownOpen ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {guestDropdownOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-darklight rounded-lg shadow-lg dark:shadow-darkmd py-2 z-50 border border-gray-100 dark:border-dark_border">
+                        <Link
+                          href="/portfolio/builder"
+                          className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
+                          onClick={closeAllDropdowns}
+                        >
+                          {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                        </Link>
+                        {localUser?.username && (
+                          <Link
+                            href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
+                            className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
+                            onClick={closeAllDropdowns}
+                          >
+                            {t("nav.myPortfolio") || "بورتفليو"}
+                          </Link>
+                        )}
+                        <Link
+                          href="/guest"
                           className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkhover transition-colors duration-150"
                           onClick={closeAllDropdowns}
                         >
@@ -794,6 +853,41 @@ const Header: React.FC = () => {
                   )}
                   <Link
                     href="/admin"
+                    onClick={() => setNavbarOpen(false)}
+                    className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
+                  >
+                    {t("nav.dashboard") || "لوحة التحكم"}
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {localUser?.role === "guest" && (
+              <div className="w-full mb-4">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-darkmuted mb-2 px-4">
+                  {t("nav.guestDashboard") || "لوحة الزائر"}
+                </h3>
+                <div className="space-y-1">
+                  {canAccessPortfolio && (
+                    <Link
+                      href="/portfolio/builder"
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
+                    >
+                      {t("nav.createPortfolio") || "إنشاء بورتفليو"}
+                    </Link>
+                  )}
+                  {canAccessPortfolio && localUser?.username && (
+                    <Link
+                      href={portfolioId ? `/portfolio/${portfolioId}` : "/portfolio/builder"}
+                      onClick={() => setNavbarOpen(false)}
+                      className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
+                    >
+                      {t("nav.myPortfolio") || "بورتفليو"}
+                    </Link>
+                  )}
+                  <Link
+                    href="/guest"
                     onClick={() => setNavbarOpen(false)}
                     className="block w-full text-left text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-darkhover transition-all duration-200"
                   >

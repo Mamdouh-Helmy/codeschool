@@ -4389,6 +4389,9 @@ const en = {
   "portfolio.basic.statsNote": "Highlight your experience and achievements.",
   "portfolio.basic.yearsOfExperience": "Years of Experience",
   "portfolio.basic.codeCommits": "Code Commits",
+  "auth.howDidYouHear": "How did you hear about us?",
+  "nav.referralSources": "Referral Sources",
+  "nav.guestDashboard": "Guest Dashboard",
 };
 
 export default en;

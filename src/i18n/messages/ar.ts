@@ -4506,6 +4506,9 @@ const ar = {
   "portfolio.basic.statsNote": "اعرض خبراتك وإنجازاتك بشكل مميز.",
   "portfolio.basic.yearsOfExperience": "سنوات الخبرة",
   "portfolio.basic.codeCommits": "عدد عمليات رفع الكود",
+  "nav.referralSources": "مصادر الإحالة",
+  "auth.howDidYouHear": "كيف سمعت عنا؟",
+  "nav.guestDashboard": "لوحة تحكم الزائر",
 };
 
 export default ar;

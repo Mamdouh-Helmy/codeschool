@@ -1,9 +1,17 @@
 "use client";
 
 import {
-  FaHtml5, FaCss3, FaJs, FaReact, FaFigma, FaNodeJs,
+  FaHtml5, FaCss3, FaJs, FaReact, FaFigma, FaNodeJs, FaPython, FaJava,
+  FaPhp, FaVuejs, FaAngular, FaGitAlt, FaGithub, FaDocker, FaAws,
+  FaSass, FaBootstrap, FaCode,
 } from "react-icons/fa";
-import { SiTailwindcss, SiNextdotjs, SiTypescript } from "react-icons/si";
+import {
+  SiTailwindcss, SiNextdotjs, SiTypescript, SiMongodb, SiExpress,
+  SiPostgresql, SiMysql, SiRedux, SiGraphql, SiFirebase, SiFlutter,
+  SiDjango, SiLaravel, SiKotlin, SiSwift, SiCplusplus, SiC, SiDotnet,
+  SiVite, SiWebpack, SiJquery, SiRedis, SiNginx, SiLinux, SiVercel,
+  SiFramer, SiThreedotjs, SiFlask, SiNestjs, SiSupabase,
+} from "react-icons/si";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -12,8 +20,8 @@ import { ScrollArea } from "../ui/scroll-area";
 import { motion } from "framer-motion";
 import type { PortfolioData } from "@/types/portfolio";
 
-// ✅ المفاتيح دلوقتي مطابقة لقيم skill.icon الفعلية المخزنة في الداتابيز
-// (حروف صغيرة، أسماء مختصرة زي "react", "typescript", "nodejs"...)
+// ✅ خريطة موسّعة تغطي أغلب التكنولوجيات الشائعة.
+// المفاتيح lowercase وبدون مسافات أو نقط عشان الـ normalize يطابقها بسهولة
 const iconMap: Record<string, React.ReactNode> = {
   html: <FaHtml5 />,
   html5: <FaHtml5 />,
@@ -22,17 +30,83 @@ const iconMap: Record<string, React.ReactNode> = {
   javascript: <FaJs />,
   js: <FaJs />,
   react: <FaReact />,
+  reactjs: <FaReact />,
   nextjs: <SiNextdotjs />,
-  "next.js": <SiNextdotjs />,
+  next: <SiNextdotjs />,
   tailwind: <SiTailwindcss />,
   tailwindcss: <SiTailwindcss />,
   nodejs: <FaNodeJs />,
-  "node.js": <FaNodeJs />,
   node: <FaNodeJs />,
   figma: <FaFigma />,
   typescript: <SiTypescript />,
   ts: <SiTypescript />,
+  python: <FaPython />,
+  java: <FaJava />,
+  php: <FaPhp />,
+  vue: <FaVuejs />,
+  vuejs: <FaVuejs />,
+  angular: <FaAngular />,
+  git: <FaGitAlt />,
+  github: <FaGithub />,
+  docker: <FaDocker />,
+  aws: <FaAws />,
+  sass: <FaSass />,
+  scss: <FaSass />,
+  bootstrap: <FaBootstrap />,
+  mongodb: <SiMongodb />,
+  mongo: <SiMongodb />,
+  express: <SiExpress />,
+  expressjs: <SiExpress />,
+  postgresql: <SiPostgresql />,
+  postgres: <SiPostgresql />,
+  mysql: <SiMysql />,
+  redux: <SiRedux />,
+  graphql: <SiGraphql />,
+  firebase: <SiFirebase />,
+  flutter: <SiFlutter />,
+  django: <SiDjango />,
+  laravel: <SiLaravel />,
+  kotlin: <SiKotlin />,
+  swift: <SiSwift />,
+  "c++": <SiCplusplus />,
+  cpp: <SiCplusplus />,
+  c: <SiC />,
+  "c#": <SiDotnet />,
+  csharp: <SiDotnet />,
+  dotnet: <SiDotnet />,
+  vite: <SiVite />,
+  webpack: <SiWebpack />,
+  jquery: <SiJquery />,
+  redis: <SiRedis />,
+  nginx: <SiNginx />,
+  linux: <SiLinux />,
+  vercel: <SiVercel />,
+  framer: <SiFramer />,
+  framermotion: <SiFramer />,
+  threejs: <SiThreedotjs />,
+  three: <SiThreedotjs />,
+  flask: <SiFlask />,
+  nestjs: <SiNestjs />,
+  nest: <SiNestjs />,
+  supabase: <SiSupabase />,
 };
+
+// بيشيل المسافات والنقط ويحول لحروف صغيرة عشان "Next.js" و"nextjs" و"next js" كلهم يطابقوا نفس المفتاح
+function normalizeKey(value?: string) {
+  return (value || "").toLowerCase().replace(/[\s.]/g, "");
+}
+
+// بيدور أول حاجة في skill.icon، ولو مفيش تطابق يدور في skill.name،
+// ولو برضه مفيش تطابق يرجع أيقونة عامة بدل ما يعرض نص
+function resolveSkillIcon(icon?: string, name?: string) {
+  const byIcon = iconMap[normalizeKey(icon)];
+  if (byIcon) return byIcon;
+
+  const byName = iconMap[normalizeKey(name)];
+  if (byName) return byName;
+
+  return <FaCode />;
+}
 
 const Resume = ({ portfolio }: { portfolio: PortfolioData }) => {
   // ✅ سنين الخبرة بتيجي من stats.yearsOfExperience المحسوبة في fetchPortfolio.ts
@@ -146,9 +220,7 @@ const Resume = ({ portfolio }: { portfolio: PortfolioData }) => {
                         <Tooltip>
                           <TooltipTrigger className="w-full h-[150px] bg-[#232329] rounded-xl flex justify-center items-center group">
                             <div className="text-6xl group-hover:text-accent transition-all duration-300">
-                              {iconMap[skill.icon?.toLowerCase()] ?? (
-                                <span className="text-2xl font-bold text-white/70">{skill.name}</span>
-                              )}
+                              {resolveSkillIcon(skill.icon, skill.name)}
                             </div>
                           </TooltipTrigger>
                           <TooltipContent>
