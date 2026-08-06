@@ -6,6 +6,9 @@ import PortfolioBuilderUI from "./PortfolioBuilderUI";
 import { Portfolio, PortfolioFormData } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 
+// ✅ نفس الديفولت المستخدم في PortfolioBuilderUI — لازم يفضلوا متطابقين
+const DEFAULT_STATS = { yearsOfExperience: 0, codeCommits: 0 };
+
 /* ── Inline branded loader ───────────────────────────────────────── */
 function PortfolioLoader() {
   return (
@@ -58,9 +61,9 @@ function PortfolioLoader() {
 export default function PortfolioBuilder() {
   const { t } = useI18n();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [loading, setLoading]     = useState<boolean>(true);
-  const [saving, setSaving]       = useState<boolean>(false);
-  const [user, setUser]           = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
+  const [user, setUser] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -112,29 +115,34 @@ export default function PortfolioBuilder() {
   ): Promise<void> => {
     try {
       const currentToken = token || localStorage.getItem("token");
-      const userData     = currentUser || user;
+      const userData = currentUser || user;
 
-      const res  = await fetch("/api/portfolio", {
+      const res = await fetch("/api/portfolio", {
         headers: { Authorization: `Bearer ${currentToken}` },
       });
       const data = await res.json();
 
       if (data.success && data.portfolio) {
-        // ✅ FIX: نتأكد إن certificates موجودة دايماً في الـ object
+        // ✅ FIX: نتأكد إن certificates و stats و cvUrl موجودين دايمًا في الـ object
         setPortfolio({
           ...data.portfolio,
           certificates: data.portfolio.certificates || [],
+          cvUrl: data.portfolio.cvUrl || "",
+          stats: data.portfolio.stats || DEFAULT_STATS,
           userId: data.portfolio.userId || userData,
         });
       } else {
         /* Build default portfolio */
-        // ✅ FIX: certificates مضاف صريح في الـ default
         const defaultPortfolio: PortfolioFormData = {
           title: t("portfolio.basic.titlePlaceholder"),
           description: "",
+          ownerRole: userData?.profile?.jobTitle || "",
+          ownerImage: userData?.image || "",
+          cvUrl: "",
+          stats: DEFAULT_STATS,
           skills: [
             { name: "JavaScript", level: 75, category: "Frontend", icon: "🟨" },
-            { name: "React",      level: 70, category: "Frontend", icon: "⚛️" },
+            { name: "React", level: 70, category: "Frontend", icon: "⚛️" },
           ],
           projects: [
             {
@@ -149,12 +157,19 @@ export default function PortfolioBuilder() {
               images: [],
             },
           ],
-          certificates: [], // ✅ صريح هنا
+          certificates: [],
+          experience: [],
+          education: [],
+          services: [],
           socialLinks: {
-            github:   `https://github.com/${userData?.username || ""}`,
+            github: `https://github.com/${userData?.username || ""}`,
             linkedin: `https://linkedin.com/in/${userData?.username || ""}`,
           },
-          contactInfo: {},
+          contactInfo: {
+            email: userData?.email || "",
+            phone: userData?.phone || "",
+            location: userData?.location || "",
+          },
           isPublished: false,
           views: 0,
           settings: { theme: "dark", layout: "standard" },
@@ -178,6 +193,8 @@ export default function PortfolioBuilder() {
             setPortfolio({
               ...saved.portfolio,
               certificates: saved.portfolio.certificates || [],
+              cvUrl: saved.portfolio.cvUrl || "",
+              stats: saved.portfolio.stats || DEFAULT_STATS,
               userId: saved.portfolio.userId || userData,
             });
           }
@@ -195,49 +212,53 @@ export default function PortfolioBuilder() {
 
   /* ── Save portfolio ─────────────────────────────────────────── */
   const savePortfolio = async (portfolioData: PortfolioFormData): Promise<boolean> => {
-  setSaving(true);
-  try {
-    const token = localStorage.getItem("token");
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("token");
 
-    // ✅ بنتأكد من _id أو id عشان نعرف PUT ولا POST
-    const portfolioId = (portfolio as any)?._id || (portfolio as any)?.id;
-    const method = portfolioId ? "PUT" : "POST";
+      // ✅ بنتأكد من _id أو id عشان نعرف PUT ولا POST
+      const portfolioId = (portfolio as any)?._id || (portfolio as any)?.id;
+      const method = portfolioId ? "PUT" : "POST";
 
-    const payload: PortfolioFormData = {
-      ...portfolioData,
-      certificates: portfolioData.certificates || [],
-    };
+      const payload: PortfolioFormData = {
+        ...portfolioData,
+        certificates: portfolioData.certificates || [],
+        cvUrl: portfolioData.cvUrl || "",
+        stats: portfolioData.stats || DEFAULT_STATS,
+      };
 
-    const res = await fetch("/api/portfolio", {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-
-    if (data.success) {
-      toast.success(t("portfolio.status.saved"));
-      setPortfolio({
-        ...data.portfolio,
-        certificates: data.portfolio.certificates || [],
-        userId: data.portfolio.userId || user,
+      const res = await fetch("/api/portfolio", {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
       });
-      return true;
-    } else {
-      toast.error(data.message || t("portfolio.status.saveFailed"));
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success(t("portfolio.status.saved"));
+        setPortfolio({
+          ...data.portfolio,
+          certificates: data.portfolio.certificates || [],
+          cvUrl: data.portfolio.cvUrl || "",
+          stats: data.portfolio.stats || DEFAULT_STATS,
+          userId: data.portfolio.userId || user,
+        });
+        return true;
+      } else {
+        toast.error(data.message || t("portfolio.status.saveFailed"));
+        return false;
+      }
+    } catch (error) {
+      console.error("Error saving portfolio:", error);
+      toast.error(t("portfolio.status.saveFailed"));
       return false;
+    } finally {
+      setSaving(false);
     }
-  } catch (error) {
-    console.error("Error saving portfolio:", error);
-    toast.error(t("portfolio.status.saveFailed"));
-    return false;
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   if (loading) return <PortfolioLoader />;
 

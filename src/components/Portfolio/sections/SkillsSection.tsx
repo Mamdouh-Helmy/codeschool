@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { Plus, Trash2, Star, Edit3, Check } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
 import * as Slider from "@radix-ui/react-slider";
@@ -7,6 +8,16 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { ChevronDown } from "lucide-react";
 import { PortfolioFormData, Skill } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
+import SkillIcon from "./SkillIcon";
+
+// ✅ الـ Picker فيه بيانات آلاف اللوجوهات (simple-icons)، فبنعمله lazy load
+// عشان ميتحملش إلا لما اليوزر يفتح الـ picker فعليًا
+const IconPicker = dynamic(() => import("./IconPicker"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-14 h-14 rounded-lg border border-gray-200 dark:border-dark_border animate-pulse bg-gray-100 dark:bg-dark_input" />
+  ),
+});
 
 interface SkillsSectionProps {
   data: PortfolioFormData;
@@ -146,20 +157,12 @@ export default function SkillsSection({ data, onChange }: SkillsSectionProps) {
             </div>
           </div>
 
-          {/* Icon emoji */}
+          {/* Icon — Simple Icons picker (بحث بين آلاف اللوجوهات) */}
           <Field label={t("portfolio.skills.icon")}>
-            <div className="pf-wrap" style={{ maxWidth: 120 }}>
-              <div className="pf-surface">
-                <input
-                  type="text"
-                  value={draft.icon}
-                  onChange={(e) => setDraft((p) => ({ ...p, icon: e.target.value }))}
-                  placeholder="⚛"
-                  className="pf-input text-center text-xl"
-                  maxLength={2}
-                />
-              </div>
-            </div>
+            <IconPicker
+              value={draft.icon}
+              onChange={(slug: string) => setDraft((p) => ({ ...p, icon: slug }))}
+            />
           </Field>
 
           <button
@@ -193,8 +196,8 @@ export default function SkillsSection({ data, onChange }: SkillsSectionProps) {
                 >
                   {/* Icon */}
                   {skill.icon ? (
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-lg flex-shrink-0">
-                      {skill.icon}
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <SkillIcon name={skill.icon} size={20} />
                     </div>
                   ) : (
                     <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-dark_input flex items-center justify-center flex-shrink-0">

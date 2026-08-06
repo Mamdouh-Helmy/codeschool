@@ -4461,6 +4461,51 @@ const ar = {
   "groups.form.noTags": "لم يتم اختيار أي علامات",
   "groups.form.selectedTags": "العلامات المختارة",
   "groups.form.loading.tags": "جارٍ تحميل العلامات...",
+  "portfolio.builder.loadingPreview": "جاري تحميل المعاينة",
+  "portfolio.basic.ownerImage": "",
+  "portfolio.basic.uploadPhoto": "رفع صورة",
+  "portfolio.basic.ownerRole": "المسمى الوظيفي",
+  "portfolio.basic.ownerRolePlaceholder":
+    "مثال: مطور واجهات أمامية أو مصمم واجهات وتجربة مستخدم",
+
+  "portfolio.builder.experience": "الخبرات",
+  "portfolio.builder.experienceDesc": "اعرض خبراتك المهنية.",
+
+  "portfolio.builder.education": "التعليم",
+  "portfolio.builder.educationDesc": "أضف مؤهلاتك التعليمية.",
+
+  "portfolio.builder.services": "الخدمات",
+  "portfolio.builder.servicesDesc": "اعرض الخدمات التي تقدمها.",
+
+  "portfolio.experience.addNew": "إضافة خبرة",
+  "portfolio.experience.yourExperience": "خبراتك",
+  "portfolio.experience.noExperience": "لا توجد خبرات مضافة بعد.",
+  "portfolio.experience.position": "المنصب",
+  "portfolio.experience.company": "الشركة",
+  "portfolio.experience.duration": "المدة",
+
+  "portfolio.education.addNew": "إضافة مؤهل",
+  "portfolio.education.yourEducation": "تعليمك",
+  "portfolio.education.noEducation": "لا توجد مؤهلات مضافة بعد.",
+  "portfolio.education.degree": "الدرجة العلمية",
+  "portfolio.education.institution": "المؤسسة التعليمية",
+  "portfolio.education.duration": "المدة",
+
+  "portfolio.services.addNew": "إضافة خدمة",
+  "portfolio.services.yourServices": "خدماتك",
+  "portfolio.services.noServices": "لا توجد خدمات مضافة بعد.",
+  "portfolio.services.num": "الرقم",
+  "portfolio.services.title": "عنوان الخدمة",
+  "portfolio.services.description": "الوصف",
+  "portfolio.services.href": "رابط الخدمة",
+  "portfolio.basic.cv": "السيرة الذاتية",
+  "portfolio.basic.uploadCv": "رفع السيرة الذاتية",
+  "portfolio.basic.uploadingCv": "جارٍ رفع السيرة الذاتية...",
+  "portfolio.basic.cvUploaded": "تم رفع السيرة الذاتية بنجاح",
+  "portfolio.basic.statsTitle": "الإحصائيات المهنية",
+  "portfolio.basic.statsNote": "اعرض خبراتك وإنجازاتك بشكل مميز.",
+  "portfolio.basic.yearsOfExperience": "سنوات الخبرة",
+  "portfolio.basic.codeCommits": "عدد عمليات رفع الكود",
 };
 
 export default ar;

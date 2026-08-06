@@ -10,6 +10,7 @@ export async function POST(request) {
     const formData = await request.formData();
     const file = formData.get("file");
     const folder = formData.get("folder") || "section-images";
+    
 
     if (!file) {
       return NextResponse.json(

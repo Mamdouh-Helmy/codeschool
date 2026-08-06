@@ -104,6 +104,13 @@ const config: Config = {
         primary:    "#ff6700",   
         secondary:  "#004d59",  
 
+        // ✅ جديد: accent — ده اللون اللي كومبوننتات البورتفوليو
+        // (Nav, Social, Home, Button, Tabs...) بتستخدمه أصلاً
+        // في كل مكان (text-accent, border-accent, bg-accent).
+        // من غيره الكلاسات دي كانت بترندر من غير لون خالص.
+        accent:        "#ff6700",
+        "accent-hover": "#f67d00",
+
         // ── Brand Aliases ──────────────────────────────────
         SereneSky:          "#004d59",
         ElectricAqua:       "#ff6437",

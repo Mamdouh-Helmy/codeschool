@@ -552,13 +552,12 @@ export default function MeetingLinksAdmin() {
                 </Modal>
             )}
 
-            {/* Reservation Info Modal */}
             {reservationLink && (
                 <Modal
                     open={!!reservationLink}
-                    title={`Reservation Info — ${reservationLink.name}`}
+                    title={`Reservation Details — ${reservationLink.name}`}
                     onClose={() => setReservationLink(null)}
-                    size="xl"
+                    size="2xl"
                 >
                     <MeetingLinkReservationInfo linkId={reservationLink._id} />
                 </Modal>

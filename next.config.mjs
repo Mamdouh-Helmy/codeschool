@@ -16,7 +16,6 @@ const nextConfig = {
       });
 
       // ✅ منع Webpack من تصغير أسماء الـ functions في Mongoose models
-      // بيحل مشكلة "TypeError: a is not a function" في production
       config.optimization = {
         ...config.optimization,
         minimize: false,
@@ -51,6 +50,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'codeschool.online' },
       { protocol: 'http', hostname: 'localhost' },
+      { protocol: 'https', hostname: 'res.cloudinary.com' }, // ✅ مضافة
     ],
     formats: ['image/webp'],
   },

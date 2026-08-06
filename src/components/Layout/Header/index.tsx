@@ -126,11 +126,28 @@ const Header: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data.success && data.portfolio?._id) {
-        setPortfolioId(data.portfolio._id);
+
+      // Log مؤقت للتأكد من شكل الـ response الفعلي - احذفه بعد ما تتأكد
+      console.log("portfolio response:", data);
+
+      // بعض الـ APIs بترجع الـ object جوه data.portfolio، وبعضها جوه data.data
+      // أو array اسمه data.portfolios، وبعضها بيسمي المفتاح id مش _id
+      const portfolioObj =
+        data.portfolio ??
+        data.data ??
+        (Array.isArray(data.portfolios) ? data.portfolios[0] : null) ??
+        (Array.isArray(data) ? data[0] : null);
+
+      const id = portfolioObj?._id ?? portfolioObj?.id ?? null;
+
+      if (data.success !== false && id) {
+        setPortfolioId(id);
+      } else {
+        setPortfolioId(null);
       }
     } catch (err) {
       console.error("Error fetching portfolio id:", err);
+      setPortfolioId(null);
     }
   };
 

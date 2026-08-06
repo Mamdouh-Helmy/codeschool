@@ -9,3 +9,10 @@ export function mapMongoDoc<T extends { _id?: any }>(doc: T | null) {
 export function mapMongoDocs<T extends { _id?: any }>(docs: T[]) {
   return docs.map((d) => mapMongoDoc(d) as T);
 }
+
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}

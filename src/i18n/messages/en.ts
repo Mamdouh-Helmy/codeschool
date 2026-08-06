@@ -4344,6 +4344,51 @@ const en = {
   "groups.form.noTags": "No tags selected",
   "groups.form.selectedTags": "Selected Tags",
   "groups.form.loading.tags": "Loading tags...",
+  "portfolio.builder.loadingPreview": "Loading preview",
+  "portfolio.basic.ownerImage": "",
+  "portfolio.basic.uploadPhoto": "Upload Photo",
+  "portfolio.basic.ownerRole": "Professional Title",
+  "portfolio.basic.ownerRolePlaceholder":
+    "e.g. Frontend Developer, UI/UX Designer",
+
+  "portfolio.builder.experience": "Experience",
+  "portfolio.builder.experienceDesc": "Showcase your professional experience.",
+
+  "portfolio.builder.education": "Education",
+  "portfolio.builder.educationDesc": "Add your educational background.",
+
+  "portfolio.builder.services": "Services",
+  "portfolio.builder.servicesDesc": "Highlight the services you provide.",
+
+  "portfolio.experience.addNew": "Add New Experience",
+  "portfolio.experience.yourExperience": "Your Experience",
+  "portfolio.experience.noExperience": "No experience added yet.",
+  "portfolio.experience.position": "Position",
+  "portfolio.experience.company": "Company",
+  "portfolio.experience.duration": "Duration",
+
+  "portfolio.education.addNew": "Add New Education",
+  "portfolio.education.yourEducation": "Your Education",
+  "portfolio.education.noEducation": "No education added yet.",
+  "portfolio.education.degree": "Degree",
+  "portfolio.education.institution": "Institution",
+  "portfolio.education.duration": "Duration",
+
+  "portfolio.services.addNew": "Add New Service",
+  "portfolio.services.yourServices": "Your Services",
+  "portfolio.services.noServices": "No services added yet.",
+  "portfolio.services.num": "No.",
+  "portfolio.services.title": "Service Title",
+  "portfolio.services.description": "Description",
+  "portfolio.services.href": "Service Link",
+  "portfolio.basic.cv": "CV",
+  "portfolio.basic.uploadCv": "Upload CV",
+  "portfolio.basic.uploadingCv": "Uploading CV...",
+  "portfolio.basic.cvUploaded": "CV uploaded successfully",
+  "portfolio.basic.statsTitle": "Professional Statistics",
+  "portfolio.basic.statsNote": "Highlight your experience and achievements.",
+  "portfolio.basic.yearsOfExperience": "Years of Experience",
+  "portfolio.basic.codeCommits": "Code Commits",
 };
 
 export default en;

@@ -1,16 +1,17 @@
 // app/api/portfolio/route.js
-import { NextResponse } from 'next/server';
-import Portfolio from '../../models/Portfolio';
-import User from '../../models/User';
-import { connectDB } from '@/lib/mongodb';
-import { uploadToCloudinary } from '@/lib/cloudinary';
-import jwt from 'jsonwebtoken';
+import { NextResponse } from "next/server";
+import Portfolio from "../../models/Portfolio";
+import User from "../../models/User";
+import { connectDB } from "@/lib/mongodb";
+import { uploadToCloudinary } from "@/lib/cloudinary";
+import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
+const JWT_SECRET =
+  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
 
 function getTokenFromHeader(req) {
-  const authHeader = req.headers.get('authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
+  const authHeader = req.headers.get("authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
     return authHeader.substring(7);
   }
   return null;
@@ -21,15 +22,15 @@ async function getUserIdFromToken(token) {
   if (decoded.id) return decoded.id;
   if (decoded.username) {
     const user = await User.findOne({ username: decoded.username });
-    if (!user) throw new Error('User not found');
+    if (!user) throw new Error("User not found");
     return user._id.toString();
   }
   if (decoded.email) {
     const user = await User.findOne({ email: decoded.email });
-    if (!user) throw new Error('User not found');
+    if (!user) throw new Error("User not found");
     return user._id.toString();
   }
-  throw new Error('No valid identifier in token');
+  throw new Error("No valid identifier in token");
 }
 
 /**
@@ -40,15 +41,15 @@ async function getUserIdFromToken(token) {
 async function processCertificates(certificates = []) {
   const processed = [];
   for (const cert of certificates) {
-    let imageUrl = cert.image?.url || '';
-    if (imageUrl && imageUrl.startsWith('data:')) {
-      imageUrl = await uploadToCloudinary(imageUrl, 'portfolio-certificates');
+    let imageUrl = cert.image?.url || "";
+    if (imageUrl && imageUrl.startsWith("data:")) {
+      imageUrl = await uploadToCloudinary(imageUrl, "portfolio-certificates");
     }
     processed.push({
       ...cert,
       image: {
         url: imageUrl,
-        alt: cert.image?.alt || cert.title || '',
+        alt: cert.image?.alt || cert.title || "",
       },
     });
   }
@@ -61,24 +62,38 @@ export async function GET(req) {
     await connectDB();
     const token = getTokenFromHeader(req);
     if (!token) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 },
+      );
     }
 
     const userId = await getUserIdFromToken(token);
 
-    const portfolio = await Portfolio.findOne({ userId })
-      .populate('userId', 'name email image role username profile socialLinks');
+    const portfolio = await Portfolio.findOne({ userId }).populate(
+      "userId",
+      "name email image role username profile socialLinks",
+    );
 
     if (!portfolio) {
-      return NextResponse.json({ success: false, message: 'Portfolio not found' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "Portfolio not found" },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json({ success: true, portfolio });
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
+    if (error.name === "JsonWebTokenError") {
+      return NextResponse.json(
+        { success: false, message: "Invalid token" },
+        { status: 401 },
+      );
     }
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -88,7 +103,10 @@ export async function POST(req) {
     await connectDB();
     const token = getTokenFromHeader(req);
     if (!token) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 },
+      );
     }
 
     const userId = await getUserIdFromToken(token);
@@ -96,39 +114,58 @@ export async function POST(req) {
 
     const existing = await Portfolio.findOne({ userId });
     if (existing) {
-      return NextResponse.json({ success: false, message: 'Portfolio already exists' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "Portfolio already exists" },
+        { status: 400 },
+      );
     }
 
     // ✅ جيب الـ name من DB مباشرة — مش محتاج jwt.verify تاني
     const user = await User.findById(userId);
-    const userName = user?.name || 'User';
+    const userName = user?.name || "User";
 
     const certificates = await processCertificates(body.certificates || []);
 
     const portfolio = await Portfolio.create({
       userId,
       title: body.title || `${userName}'s Portfolio`,
-      description: body.description || '',
+      description: body.description || "",
+      ownerRole: body.ownerRole || "",
+      ownerImage: body.ownerImage || "",
+      cvUrl: body.cvUrl || "",
       skills: body.skills || [],
       projects: body.projects || [],
       certificates,
+      experience: body.experience || [],
+      education: body.education || [],
+      services: body.services || [],
+      stats: body.stats || { yearsOfExperience: 0, codeCommits: 0 }, 
       socialLinks: body.socialLinks || {},
       contactInfo: body.contactInfo || {},
-      settings: body.settings || { theme: 'dark', layout: 'standard' },
+      settings: body.settings || { theme: "dark", layout: "standard" },
     });
 
-    await portfolio.populate('userId', 'name email image role username');
+    await portfolio.populate("userId", "name email image role username");
 
-    return NextResponse.json({
-      success: true,
-      message: 'Portfolio created successfully',
-      portfolio,
-    }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Portfolio created successfully",
+        portfolio,
+      },
+      { status: 201 },
+    );
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
+    if (error.name === "JsonWebTokenError") {
+      return NextResponse.json(
+        { success: false, message: "Invalid token" },
+        { status: 401 },
+      );
     }
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -138,7 +175,10 @@ export async function PUT(req) {
     await connectDB();
     const token = getTokenFromHeader(req);
     if (!token) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 },
+      );
     }
 
     const userId = await getUserIdFromToken(token);
@@ -158,23 +198,32 @@ export async function PUT(req) {
     const portfolio = await Portfolio.findOneAndUpdate(
       { userId },
       { $set: body },
-      { new: true, runValidators: true }
-    ).populate('userId', 'name email image role username');
+      { new: true, runValidators: true },
+    ).populate("userId", "name email image role username");
 
     if (!portfolio) {
-      return NextResponse.json({ success: false, message: 'Portfolio not found' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "Portfolio not found" },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Portfolio updated successfully',
+      message: "Portfolio updated successfully",
       portfolio,
     });
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
+    if (error.name === "JsonWebTokenError") {
+      return NextResponse.json(
+        { success: false, message: "Invalid token" },
+        { status: 401 },
+      );
     }
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -184,21 +233,36 @@ export async function DELETE(req) {
     await connectDB();
     const token = getTokenFromHeader(req);
     if (!token) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 },
+      );
     }
 
     const userId = await getUserIdFromToken(token);
     const portfolio = await Portfolio.findOneAndDelete({ userId });
 
     if (!portfolio) {
-      return NextResponse.json({ success: false, message: 'Portfolio not found' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "Portfolio not found" },
+        { status: 404 },
+      );
     }
 
-    return NextResponse.json({ success: true, message: 'Portfolio deleted successfully' });
+    return NextResponse.json({
+      success: true,
+      message: "Portfolio deleted successfully",
+    });
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
+    if (error.name === "JsonWebTokenError") {
+      return NextResponse.json(
+        { success: false, message: "Invalid token" },
+        { status: 401 },
+      );
     }
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 },
+    );
   }
 }

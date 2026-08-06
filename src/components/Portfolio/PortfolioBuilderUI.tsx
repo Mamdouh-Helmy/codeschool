@@ -4,7 +4,7 @@ import {
   Save, Eye, EyeOff, Settings, User, Code, FolderGit2,
   Link2, LayoutDashboard, Menu, X, ExternalLink, RefreshCw,
   CheckCircle2, TrendingUp, Globe, ChevronRight, Loader2,
-  Sparkles, Award,
+  Sparkles, Award, Briefcase, GraduationCap, Wrench,
 } from "lucide-react";
 import BasicInfoSection from "./sections/BasicInfoSection";
 import SkillsSection from "./sections/SkillsSection";
@@ -12,6 +12,9 @@ import ProjectsSection from "./sections/ProjectsSection";
 import SocialLinksSection from "./sections/SocialLinksSection";
 import SettingsSection from "./sections/SettingsSection";
 import CertificatesSection from "./sections/CertificatesSection";
+import ExperienceSection from "./sections/ExperienceSection";
+import EducationSection from "./sections/EducationSection";
+import ServicesSection from "./sections/ServicesSection";
 import { Portfolio, PortfolioFormData } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -29,13 +32,19 @@ interface Section {
 }
 
 const SECTIONS: Section[] = [
-  { id: "basic",        label: "portfolio.builder.basicInfo",    icon: User,       description: "portfolio.builder.basicInfoDesc"    },
-  { id: "skills",       label: "portfolio.builder.skills",       icon: Code,       description: "portfolio.builder.skillsDesc"       },
-  { id: "projects",     label: "portfolio.builder.projects",     icon: FolderGit2, description: "portfolio.builder.projectsDesc"     },
-  { id: "certificates", label: "portfolio.builder.certificates", icon: Award,      description: "portfolio.builder.certificatesDesc" },
-  { id: "social",       label: "portfolio.builder.socialLinks",  icon: Link2,      description: "portfolio.builder.socialLinksDesc"  },
-  { id: "settings",     label: "portfolio.builder.settings",     icon: Settings,   description: "portfolio.builder.settingsDesc"     },
+  { id: "basic", label: "portfolio.builder.basicInfo", icon: User, description: "portfolio.builder.basicInfoDesc" },
+  { id: "experience", label: "portfolio.builder.experience", icon: Briefcase, description: "portfolio.builder.experienceDesc" },
+  { id: "education", label: "portfolio.builder.education", icon: GraduationCap, description: "portfolio.builder.educationDesc" },
+  { id: "skills", label: "portfolio.builder.skills", icon: Code, description: "portfolio.builder.skillsDesc" },
+  { id: "projects", label: "portfolio.builder.projects", icon: FolderGit2, description: "portfolio.builder.projectsDesc" },
+  { id: "services", label: "portfolio.builder.services", icon: Wrench, description: "portfolio.builder.servicesDesc" },
+  { id: "certificates", label: "portfolio.builder.certificates", icon: Award, description: "portfolio.builder.certificatesDesc" },
+  { id: "social", label: "portfolio.builder.socialLinks", icon: Link2, description: "portfolio.builder.socialLinksDesc" },
+  { id: "settings", label: "portfolio.builder.settings", icon: Settings, description: "portfolio.builder.settingsDesc" },
 ];
+
+// ✅ الحقلين اليدويين بس — متوافق مع PortfolioFormData.stats (object، مش array)
+const DEFAULT_STATS = { yearsOfExperience: 0, codeCommits: 0 };
 
 export default function PortfolioBuilderUI({ portfolio, onSave, saving }: PortfolioBuilderUIProps) {
   const { t } = useI18n();
@@ -44,40 +53,54 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
   const [formData, setFormData] = useState<PortfolioFormData>({
     title: t("portfolio.basic.titlePlaceholder"),
     description: "",
+    ownerRole: "",
+    ownerImage: "",
+    cvUrl: "",
+    stats: DEFAULT_STATS,
     skills: [],
     projects: [],
     certificates: [],
+    experience: [],
+    education: [],
+    services: [],
     socialLinks: {},
-    contactInfo: {},
+    contactInfo: { email: "", phone: "", location: "" },
     isPublished: false,
     views: 0,
     settings: { theme: "dark", layout: "standard" },
     userId: "",
   });
 
-  const [showPreview, setShowPreview]       = useState<boolean>(false);
+  const [showPreview, setShowPreview] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-  const [iframeKey, setIframeKey]           = useState<number>(0);
+  const [iframeKey, setIframeKey] = useState<number>(0);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
-  const [saveSuccess, setSaveSuccess]       = useState<boolean>(false);
+  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
   useEffect(() => {
     if (portfolio) {
       setFormData({
-        title:        portfolio.title        || t("portfolio.basic.titlePlaceholder"),
-        description:  portfolio.description  || "",
-        skills:       portfolio.skills       || [],
-        projects:     portfolio.projects     || [],
+        title: portfolio.title || t("portfolio.basic.titlePlaceholder"),
+        description: portfolio.description || "",
+        ownerRole: portfolio.ownerRole || "",
+        ownerImage: portfolio.ownerImage || "",
+        cvUrl: (portfolio as any).cvUrl || "",
+        stats: (portfolio as any).stats || DEFAULT_STATS,
+        skills: portfolio.skills || [],
+        projects: portfolio.projects || [],
         certificates: portfolio.certificates || [],
-        socialLinks:  portfolio.socialLinks  || {},
-        contactInfo:  portfolio.contactInfo  || {},
-        isPublished:  portfolio.isPublished  || false,
-        views:        portfolio.views        || 0,
-        settings:     portfolio.settings     || { theme: "dark", layout: "standard" },
+        experience: portfolio.experience || [],
+        education: portfolio.education || [],
+        services: portfolio.services || [],
+        socialLinks: portfolio.socialLinks || {},
+        contactInfo: portfolio.contactInfo || { email: "", phone: "", location: "" },
+        isPublished: portfolio.isPublished || false,
+        views: portfolio.views || 0,
+        settings: portfolio.settings || { theme: "dark", layout: "standard" },
         userId:
           (portfolio.userId as any)?._id ||
-          (portfolio.userId as any)?.id  ||
-          (portfolio.userId as string)   || "",
+          (portfolio.userId as any)?.id ||
+          (portfolio.userId as string) || "",
       });
     }
   }, [portfolio, t]);
@@ -101,7 +124,7 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
   };
 
   const portfolioId = getPortfolioId();
-  const previewUrl  = portfolioId ? `/portfolio/${portfolioId}` : null;
+  const previewUrl = portfolioId ? `/portfolio/${portfolioId}` : null;
 
   const handleOpenInNewTab = () => {
     if (previewUrl) window.open(previewUrl, "_blank");
@@ -129,13 +152,16 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
   const renderSection = (): React.ReactNode => {
     const props = { data: formData, onChange: updateFormData };
     switch (activeSection) {
-      case "basic":        return <BasicInfoSection    {...props} />;
-      case "skills":       return <SkillsSection       {...props} />;
-      case "projects":     return <ProjectsSection     {...props} />;
+      case "basic": return <BasicInfoSection    {...props} />;
+      case "experience": return <ExperienceSection   {...props} />;
+      case "education": return <EducationSection    {...props} />;
+      case "skills": return <SkillsSection       {...props} />;
+      case "projects": return <ProjectsSection     {...props} />;
+      case "services": return <ServicesSection     {...props} />;
       case "certificates": return <CertificatesSection {...props} />;
-      case "social":       return <SocialLinksSection  {...props} />;
-      case "settings":     return <SettingsSection     {...props} />;
-      default:             return <BasicInfoSection    {...props} />;
+      case "social": return <SocialLinksSection  {...props} />;
+      case "settings": return <SettingsSection     {...props} />;
+      default: return <BasicInfoSection    {...props} />;
     }
   };
 

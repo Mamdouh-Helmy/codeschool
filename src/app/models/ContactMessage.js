@@ -31,6 +31,11 @@ const ContactMessageSchema = new mongoose.Schema(
         trim: true,
       },
     },
+    service: {
+      type: String,
+      enum: ["web", "uiux", "logo", "seo", ""],
+      default: "",
+    },
     message: {
       type: String,
       required: true,
@@ -60,7 +65,7 @@ const ContactMessageSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Indexes للبحث السريع
@@ -95,7 +100,7 @@ ContactMessageSchema.methods.archive = function () {
 // Static method للبحث في الرسائل
 ContactMessageSchema.statics.findByPortfolio = function (
   portfolioId,
-  options = {}
+  options = {},
 ) {
   const { page = 1, limit = 20, read, replied, archived, spam } = options;
   const skip = (page - 1) * limit;

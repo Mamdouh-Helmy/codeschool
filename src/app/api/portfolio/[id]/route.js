@@ -1,5 +1,7 @@
+// app/api/portfolio/[id]/route.js
 import { NextResponse } from "next/server";
 import Portfolio from "../../../models/Portfolio";
+import User from "../../../models/User";
 import { connectDB } from "@/lib/mongodb";
 import mongoose from "mongoose";
 
@@ -45,13 +47,23 @@ export async function GET(req, context) {
 
     const user = portfolio.userId;
 
+    // ✅ الداتا بترجع خام زي ما هي مخزنة في الداتابيز.
+    // كل حسابات الـ stats (سنين خبرة، عدد مشاريع مكتملة، عدد مهارات، كومنتس)
+    // بتتعمل في lib/fetchPortfolio.ts عشان يكون فيه مصدر واحد بس للمنطق ده.
     const portfolioData = {
       _id: portfolio._id,
       title: portfolio.title,
       description: portfolio.description,
+      ownerRole: portfolio.ownerRole || user?.profile?.jobTitle || "",
+      ownerImage: portfolio.ownerImage || user?.image || "",
+      cvUrl: portfolio.cvUrl || "",
       skills: portfolio.skills || [],
       projects: portfolio.projects || [],
       certificates: portfolio.certificates || [],
+      experience: portfolio.experience || [],
+      education: portfolio.education || [],
+      services: portfolio.services || [],
+      stats: portfolio.stats || { yearsOfExperience: 0, codeCommits: 0 },
       socialLinks: portfolio.socialLinks || {},
       contactInfo: portfolio.contactInfo || {},
       isPublished: portfolio.isPublished,
@@ -70,7 +82,6 @@ export async function GET(req, context) {
       updatedAt: portfolio.updatedAt,
     };
 
-    // increment views بعد ما نرجع الداتا
     Portfolio.findByIdAndUpdate(id, { $inc: { views: 1 } }).exec();
 
     return NextResponse.json({ success: true, portfolio: portfolioData });

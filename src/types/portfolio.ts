@@ -63,12 +63,6 @@ export interface SocialLinks {
   dribbble?: string;
 }
 
-export interface ContactInfo {
-  email?: string;
-  phone?: string;
-  location?: string;
-}
-
 export interface PortfolioSettings {
   theme: "light" | "dark" | "blue" | "green";
   layout: "standard" | "minimal" | "creative";
@@ -92,9 +86,14 @@ export interface Portfolio {
   userId: string | PublicUser;
   title: string;
   description?: string;
+  ownerRole?: string;
+  ownerImage?: string;
   skills: Skill[];
   projects: Project[];
   certificates: Certificate[];
+  experience: ExperienceItem[];
+  education: EducationItem[];
+  services: ServiceItem[];
   socialLinks: SocialLinks;
   contactInfo: ContactInfo;
   isPublished: boolean;
@@ -113,11 +112,34 @@ export interface PublicPortfolio extends Omit<Portfolio, "userId"> {
 }
 
 // ✅ FIX: certificates مضاف صريح عشان يتجنب مشاكل الـ Omit والـ as any
-export interface PortfolioFormData
-  extends Omit<Portfolio, "_id" | "userId" | "createdAt" | "updatedAt"> {
-  _id?: string;
-  userId?: string;
-  certificates: Certificate[]; // ← صريح هنا عشان TypeScript يعرفه بدون as any
+export interface PortfolioFormData {
+  title: string;
+  description: string;
+  ownerRole: string;
+  ownerImage: string;
+  cvUrl: string;
+  stats: {
+    yearsOfExperience: number;
+    codeCommits: number;
+  };
+  skills: SkillItem[];
+  projects: ProjectItem[];
+  certificates: CertificateItem[];
+  experience: ExperienceItem[];
+  education: EducationItem[];
+  services: ServiceItem[];
+  socialLinks: Record<string, string>;
+  contactInfo: ContactInfo;
+  isPublished: boolean;
+  views: number;
+  settings: { theme: string; layout: string };
+  userId: string;
+}
+
+export interface StatItem {
+  id: string;
+  num: number;
+  text: string;
 }
 
 export interface PortfolioApiResponse {
@@ -449,4 +471,92 @@ export interface ExportOptions {
 export interface CertificatesSectionProps {
   data: PortfolioFormData;
   onChange: (updates: Partial<PortfolioFormData>) => void;
+}
+
+export interface PortfolioData {
+  id: string;
+  title: string;
+  description: string;
+  ownerName: string;
+  ownerRole: string;
+  ownerImage: string;
+  cvUrl: string; // ✅ ضيف السطر ده
+  stats: StatItem[]; // ✅ وده
+  isPublished: boolean;
+  views: number;
+  settings: { theme: string; layout: string };
+  skills: SkillItem[];
+  projects: ProjectItem[];
+  certificates: CertificateItem[];
+  socialLinks: SocialLink[];
+  contactInfo: ContactInfo | null;
+  experience: ExperienceItem[];
+  education: EducationItem[];
+  services: ServiceItem[];
+}
+
+export interface SkillItem {
+  id: string;
+  name: string;
+  level: number;
+  category: string;
+  icon: string;
+}
+
+export interface ProjectItem {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  technologies: string[];
+  demoUrl: string;
+  githubUrl: string;
+  imageUrl: string;
+  featured: boolean;
+  status: string;
+}
+
+export interface CertificateItem {
+  id: string;
+  title: string;
+  description: string;
+  issuer: string;
+  issueDate: string | null;
+  credentialUrl: string;
+  imageUrl: string;
+}
+
+export interface SocialLink {
+  id: string;
+  platform: string;
+  url: string;
+}
+
+export interface ContactInfo {
+  id?: string;
+  email: string;
+  phone: string;
+  location: string;
+}
+
+export interface ExperienceItem {
+  id: string;
+  company: string;
+  position: string;
+  duration: string;
+}
+
+export interface EducationItem {
+  id: string;
+  institution: string;
+  degree: string;
+  duration: string;
+}
+
+export interface ServiceItem {
+  id: string;
+  num: string;
+  title: string;
+  description: string;
+  href: string;
 }

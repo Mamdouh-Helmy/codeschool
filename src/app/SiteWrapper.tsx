@@ -18,7 +18,8 @@ const DASHBOARD_PREFIXES: string[] = [
 
 // patterns للمسارات الديناميكية التي يجب أن تكون بدون header/footer
 const DASHBOARD_PATTERNS: RegExp[] = [
-  /^\/portfolio\/[^\/]+$/, // يطابق /portfolio/username (بدون أجزاء إضافية)
+  // يطابق /portfolio/username وكمان أي مسار فرعي تحته زي /portfolio/username/services
+  /^\/portfolio\/[^\/]+(\/.*)?$/,
 ];
 
 interface SiteWrapperProps {
