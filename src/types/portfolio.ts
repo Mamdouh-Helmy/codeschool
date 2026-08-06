@@ -68,6 +68,9 @@ export interface CertificateItem {
   };
 }
 
+// ✅ Alias عشان أي كومبوننت قديم بيستورد "Certificate" يفضل شغال
+export type Certificate = CertificateItem;
+
 export interface ExperienceItem {
   id?: string;
   company: string;

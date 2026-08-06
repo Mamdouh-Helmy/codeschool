@@ -257,7 +257,7 @@ export default function CertificatesSection({ data, onChange }: CertificatesSect
 
           <Field label={t("portfolio.certificates.image") || "Certificate Image"} icon={<Image size={13} />}>
             <ImageUploadButton
-              currentUrl={draft.image.url}
+              currentUrl={draft.image?.url ?? ""}
               onFileChange={handleDraftImage}
               onRemove={() => setDraft((p) => ({ ...p, image: { url: "", alt: "" } }))}
               uploading={draftUploading}
