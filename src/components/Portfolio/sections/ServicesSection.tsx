@@ -10,7 +10,7 @@ interface ServicesSectionProps {
   onChange: (updates: Partial<PortfolioFormData>) => void;
 }
 
-type ServiceDraft = Omit<ServiceItem, "id">;
+type ServiceDraft = Omit<ServiceItem, "id" | "num"> & { num: string };
 const EMPTY: ServiceDraft = { num: "", title: "", description: "", href: "/contact" };
 
 function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {

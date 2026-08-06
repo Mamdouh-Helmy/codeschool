@@ -39,6 +39,14 @@ export interface SkillItem {
   icon?: string;
 }
 
+// ✅ Alias عشان الكومبوننتات القديمة اللي بتستورد Skill تفضل شغالة
+export type Skill = SkillItem;
+
+export interface ProjectImage {
+  url: string;
+  alt: string;
+}
+
 export interface ProjectItem {
   id?: string;
   title: string;
@@ -46,13 +54,16 @@ export interface ProjectItem {
   technologies: string[];
   demoUrl?: string;
   githubUrl?: string;
-  images?: { url: string; alt: string }[];
+  images: ProjectImage[]; // ✅ required (مش optional) عشان تتفادى "possibly undefined"
   imageUrl?: string;
   featured: boolean;
   startDate?: Date | string;
   endDate?: Date | string;
   status: "completed" | "in-progress" | "planned";
 }
+
+// ✅ Alias عشان الكومبوننتات القديمة اللي بتستورد Project تفضل شغالة
+export type Project = ProjectItem;
 
 export interface CertificateItem {
   id?: string;
@@ -106,6 +117,18 @@ export interface SocialLink {
   url: string;
 }
 
+// ✅ الشكل اللي كومبوننتات الـ social links بتستخدمه (object بمفاتيح المنصات)
+export interface SocialLinks {
+  github?: string;
+  linkedin?: string;
+  twitter?: string;
+  youtube?: string;
+  instagram?: string;
+  facebook?: string;
+  website?: string;
+  dribbble?: string;
+}
+
 export interface ContactInfo {
   id?: string;
   email: string;
@@ -117,6 +140,12 @@ export interface StatItem {
   id: string;
   num: number;
   text: string;
+}
+
+// ✅ شكل الـ settings المستخدم في الـ Builder (theme/layout كـ string عادي)
+export interface PortfolioSettings {
+  theme: string;
+  layout: string;
 }
 
 // ==================== Portfolio الرئيسي ====================
@@ -139,16 +168,7 @@ export interface Portfolio {
   experience: ExperienceItem[];
   education: EducationItem[];
   services: ServiceItem[];
-  socialLinks: {
-    github?: string;
-    linkedin?: string;
-    twitter?: string;
-    youtube?: string;
-    instagram?: string;
-    facebook?: string;
-    website?: string;
-    dribbble?: string;
-  };
+  socialLinks: SocialLinks;
   contactInfo: ContactInfo;
   isPublished: boolean;
   views: number;
@@ -163,6 +183,7 @@ export interface Portfolio {
 // ==================== PortfolioFormData (مستخدم في الـ Builder) ====================
 
 export interface PortfolioFormData {
+  _id?: string; // ✅ مضافة عشان data._id تشتغل في SettingsSection
   title: string;
   description: string;
   ownerRole: string;
@@ -178,23 +199,11 @@ export interface PortfolioFormData {
   experience: ExperienceItem[];
   education: EducationItem[];
   services: ServiceItem[];
-  socialLinks: {
-    github?: string;
-    linkedin?: string;
-    twitter?: string;
-    youtube?: string;
-    instagram?: string;
-    facebook?: string;
-    website?: string;
-    dribbble?: string;
-  };
+  socialLinks: SocialLinks;
   contactInfo: ContactInfo;
   isPublished: boolean;
   views: number;
-  settings: {
-    theme: string;
-    layout: string;
-  };
+  settings: PortfolioSettings;
   userId: string;
 }
 
@@ -424,16 +433,7 @@ export interface CreatePortfolioData {
   skills?: SkillItem[];
   projects?: ProjectItem[];
   certificates?: CertificateItem[];
-  socialLinks?: {
-    github?: string;
-    linkedin?: string;
-    twitter?: string;
-    youtube?: string;
-    instagram?: string;
-    facebook?: string;
-    website?: string;
-    dribbble?: string;
-  };
+  socialLinks?: SocialLinks;
   contactInfo?: ContactInfo;
   settings?: {
     theme: "light" | "dark" | "blue" | "green";

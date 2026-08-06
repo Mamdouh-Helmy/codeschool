@@ -184,7 +184,13 @@ export default function SettingsSection({ data, onChange }: SettingsSectionProps
               className="pf-reset-btn"
               onClick={() => {
                 if (confirm(t("portfolio.settings.resetConfirm"))) {
-                  onChange({ skills: [], projects: [], socialLinks: {}, contactInfo: {}, settings: { theme: "light", layout: "standard" } });
+                  onChange({
+                    skills: [],
+                    projects: [],
+                    socialLinks: {},
+                    contactInfo: { email: "", phone: "", location: "" },
+                    settings: { theme: "light", layout: "standard" },
+                  });
                 }
               }}
             >

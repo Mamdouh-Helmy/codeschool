@@ -40,7 +40,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function SkillsSection({ data, onChange }: SkillsSectionProps) {
   const { t } = useI18n();
-  const [draft, setDraft]           = useState<Skill>(EMPTY);
+  const [draft, setDraft] = useState<Skill>(EMPTY);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
 
   const skills = data.skills || [];
@@ -160,7 +160,7 @@ export default function SkillsSection({ data, onChange }: SkillsSectionProps) {
           {/* Icon — Simple Icons picker (بحث بين آلاف اللوجوهات) */}
           <Field label={t("portfolio.skills.icon")}>
             <IconPicker
-              value={draft.icon}
+              value={draft.icon ?? ""}
               onChange={(slug: string) => setDraft((p) => ({ ...p, icon: slug }))}
             />
           </Field>
