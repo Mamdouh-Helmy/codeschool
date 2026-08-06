@@ -8,7 +8,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "react-hot-toast";
 import NextTopLoader from "nextjs-toploader";
 
-import { authOptions } from "./api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authOptions";
 
 import { AuthDialogProvider } from "./context/AuthDialogContext";
 import { LocaleProvider } from "./context/LocaleContext";
