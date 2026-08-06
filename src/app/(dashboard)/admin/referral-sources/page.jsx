@@ -1,4 +1,4 @@
-import ReferralSourcesManager from "../../../../components/admin/ReferralSourcesManager";
+import ReferralSourcesManager from "@/components/Admin/ReferralSourcesManager";
 
 export default function ReferralSourcesPage() {
   return <ReferralSourcesManager />;
