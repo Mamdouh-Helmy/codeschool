@@ -42,7 +42,7 @@ const Work = ({ portfolio }: { portfolio: PortfolioData }) => {
                 {String(activeIndex + 1).padStart(2, "0")}
               </div>
               <h2 className="text-[42px] font-bold leading-none text-white capitalize">
-                {project.category}
+                {project.title}
               </h2>
               <p className="text-white/60">{project.description}</p>
               <ul className="flex gap-4 flex-wrap">
