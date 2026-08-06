@@ -1,46 +1,19 @@
 // app/api/users/update/route.js
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import User from "../../../models/User";
 import { connectDB } from "@/lib/mongodb";
-
-const JWT_SECRET =
-  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
+import { getUserFromRequest } from "@/lib/auth"; // ✅ next-auth aware helper
 
 export async function PATCH(req: NextRequest) {
   try {
-    if (!JWT_SECRET) {
-      console.error("JWT secret not set");
-      return NextResponse.json(
-        { success: false, message: "Server misconfiguration" },
-        { status: 500 }
-      );
-    }
+    await connectDB();
 
-    const authHeader = req.headers.get("authorization") || "";
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    // ✅ next-auth session cookie بدل Bearer header
+    const authUser = await getUserFromRequest(req);
+    if (!authUser) {
       return NextResponse.json(
-        { success: false, message: "Missing or invalid Authorization header" },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.split(" ")[1];
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Missing token" },
-        { status: 401 }
-      );
-    }
-
-    let payload;
-    try {
-      payload = jwt.verify(token, JWT_SECRET);
-    } catch (err) {
-      console.error("JWT verify error:", err);
-      return NextResponse.json(
-        { success: false, message: "Invalid or expired token" },
+        { success: false, message: "Unauthorized" },
         { status: 401 }
       );
     }
@@ -48,19 +21,7 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { name, password, image } = body ?? {};
 
-    await connectDB();
-
-    const userPayload = payload as jwt.JwtPayload;
-    const userId = (userPayload.id || userPayload._id) as string;
-
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, message: "Invalid token payload" },
-        { status: 401 }
-      );
-    }
-
-    const user = await User.findById(userId);
+    const user = await User.findById(authUser.id);
     if (!user) {
       return NextResponse.json(
         { success: false, message: "User not found" },

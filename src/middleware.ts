@@ -1,15 +1,10 @@
-// middleware.ts - تحديث
+// middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this"
-);
+import { getToken } from "next-auth/jwt";
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const token = req.cookies.get("token")?.value;
 
   const protectedRoutes = [
     "/admin",
@@ -17,12 +12,18 @@ export async function middleware(req: NextRequest) {
     "/instructor",
     "/profile",
     "/marketing",
-    "/portfolio/builder"
+    "/portfolio/builder",
   ];
 
-  const isProtectedRoute = protectedRoutes.some(route => 
+  const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route)
   );
+
+  // getToken بيقرا الكوكي الصح ويفك التشفير تلقائي، ومش محتاج تحدد اسم الكوكي بنفسك
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
 
   if (isProtectedRoute) {
     if (!token) {
@@ -31,55 +32,37 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    try {
-      const { payload }: any = await jwtVerify(token, JWT_SECRET);
-      
-      // تحقق من الصلاحيات للإدارة
-      if (pathname.startsWith("/admin") && payload.role !== "admin") {
-        return NextResponse.redirect(new URL("/", req.url));
-      }
-      
-      // تحقق من الصلاحيات للتسويق
-      if (pathname.startsWith("/marketing") && payload.role !== "marketing") {
-        return NextResponse.redirect(new URL("/", req.url));
-      }
-      
-      // تحقق من الصلاحيات للاستاذ
-      if (pathname.startsWith("/instructor") && payload.role !== "instructor") {
-        return NextResponse.redirect(new URL("/", req.url));
-      }
-      
-      // تحقق من الصلاحيات للداشبورد - يجب أن يكون المستخدم طالباً أو مستخدم عادي
-      if (pathname.startsWith("/dashboard") && payload.role !== "student" && payload.role !== "user") {
-        return NextResponse.redirect(new URL("/", req.url));
-      }
-      
-      // إضافة بيانات المستخدم للهيدر
-      const requestHeaders = new Headers(req.headers);
-      requestHeaders.set("x-user-id", payload.id);
-      requestHeaders.set("x-user-role", payload.role);
+    const role = token.role as string;
 
-      return NextResponse.next({
-        request: {
-          headers: requestHeaders,
-        },
-      });
-    } catch (err) {
-      console.error("Invalid token:", err);
-      const loginUrl = new URL("/signin", req.url);
-      loginUrl.searchParams.set("redirect", pathname);
-      return NextResponse.redirect(loginUrl);
+    if (pathname.startsWith("/admin") && role !== "admin") {
+      return NextResponse.redirect(new URL("/", req.url));
     }
+    if (pathname.startsWith("/marketing") && role !== "marketing") {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+    if (pathname.startsWith("/instructor") && role !== "instructor") {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+    if (
+      pathname.startsWith("/dashboard") &&
+      role !== "student" &&
+      role !== "user"
+    ) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-user-id", token.id as string);
+    requestHeaders.set("x-user-role", role);
+
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    });
   }
 
-  // 🔐 منع المستخدم المسجل من زيارة صفحات التسجيل
+  // منع مستخدم مسجل دخول من زيارة صفحات signin/signup
   if (token && (pathname.startsWith("/signin") || pathname.startsWith("/signup"))) {
-    try {
-      const { payload }: any = await jwtVerify(token, JWT_SECRET);
-      return NextResponse.redirect(new URL("/", req.url));
-    } catch (err) {
-      // التوكن غير صالح، اتركه يكمل
-    }
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
   return NextResponse.next();
@@ -89,13 +72,13 @@ export const config = {
   matcher: [
     "/admin/:path*",
     "/dashboard/:path*",
-    "/dashboard", 
+    "/dashboard",
     "/instructor/:path*",
     "/instructor",
     "/profile/:path*",
     "/marketing/:path*",
     "/portfolio/builder",
     "/signin",
-    "/signup"
+    "/signup",
   ],
 };

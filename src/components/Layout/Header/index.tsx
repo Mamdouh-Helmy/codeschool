@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useContext, useEffect, useRef, useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 import Logo from "./Logo";
 import HeaderLink from "../Header/Navigation/HeaderLink";
 import MobileHeaderLink from "../Header/Navigation/MobileHeaderLink";
@@ -34,6 +35,9 @@ const Header: React.FC = () => {
   const pathUrl = usePathname();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
+
+  // ✅ next-auth session بدل localStorage
+  const { data: session, status } = useSession();
 
   const [navbarOpen, setNavbarOpen] = useState(false);
   const [sticky, setSticky] = useState(false);
@@ -121,24 +125,34 @@ const Header: React.FC = () => {
   const { locale, toggleLocale } = useLocale();
   const { t } = useI18n();
 
-  const [localUser, setLocalUser] = useState<LocalUser | null>(null);
-  const [loadingUser, setLoadingUser] = useState(false);
+  // ✅ localUser بقى مشتق من next-auth session بدل ما يبقى state منفصل بيتحدث من localStorage
+  const localUser: LocalUser | null = session?.user
+    ? {
+        id: (session.user as any).id,
+        name: session.user.name || undefined,
+        email: session.user.email || undefined,
+        username: (session.user as any).username,
+        role: (session.user as any).role,
+        image: session.user.image || null,
+      }
+    : null;
+
+  const loadingUser = status === "loading";
+
   const [portfolioId, setPortfolioId] = useState<string | null>(null);
 
-  const USER_ENDPOINT = "/api/users/me";
-
-  const fetchPortfolioId = async (token: string) => {
+  // ✅ مبقاش محتاج Bearer token — next-auth session cookie بتتبعت أوتوماتيك
+  // مع أي fetch لنفس الدومين، بس لازم الـ API route يكون بيستخدم next-auth
+  // (getUserFromRequest) بدل ما يدور على Authorization header
+  const fetchPortfolioId = async () => {
     try {
       const res = await fetch("/api/portfolio", {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       const data = await res.json();
 
-      // Log مؤقت للتأكد من شكل الـ response الفعلي - احذفه بعد ما تتأكد
       console.log("portfolio response:", data);
 
-      // بعض الـ APIs بترجع الـ object جوه data.portfolio، وبعضها جوه data.data
-      // أو array اسمه data.portfolios، وبعضها بيسمي المفتاح id مش _id
       const portfolioObj =
         data.portfolio ??
         data.data ??
@@ -158,62 +172,26 @@ const Header: React.FC = () => {
     }
   };
 
-  const fetchUserWithToken = async (token: string) => {
-    try {
-      setLoadingUser(true);
-      const res = await fetch(USER_ENDPOINT, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Fetch user error:", res.status, text);
-        localStorage.removeItem("token");
-        setLocalUser(null);
-        return;
-      }
-
-      const data = await res.json();
-      if (data?.success && data.user) {
-        setLocalUser(data.user);
-        fetchPortfolioId(token); // ← أضف دي بس
-
-      } else {
-        setLocalUser(null);
-        localStorage.removeItem("token");
-      }
-    } catch (err) {
-      console.error("Error fetching user:", err);
-      setLocalUser(null);
-      localStorage.removeItem("token");
-    } finally {
-      setLoadingUser(false);
-    }
-  };
-
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      fetchUserWithToken(token);
+    if (localUser) {
+      fetchPortfolioId();
+    } else {
+      setPortfolioId(null);
     }
-  }, []);
+  }, [localUser?.id]);
 
   const handleProfileUpdate = (updatedUser: LocalUser) => {
-    setLocalUser(updatedUser);
+    // ملحوظة: next-auth session مش بتتحدث تلقائيًا لما تعدل بيانات البروفايل
+    // من الداتابيز مباشرة. لو التحديث محتاج يظهر فورًا في الهيدر، استخدم
+    // `update()` من useSession، أو خلي المستخدم يعمل refresh بسيط للصفحة.
+    router.refresh();
   };
 
+  // ✅ signOut من next-auth بدل استدعاء /api/auth/logout يدويًا
   const handleSignOut = async () => {
     try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-      });
-
-      localStorage.removeItem("token");
-      setLocalUser(null);
+      setPortfolioId(null);
+      await signOut({ redirect: false });
       router.push("/");
     } catch (error) {
       console.error("حدث خطأ أثناء تسجيل الخروج:", error);
@@ -1042,9 +1020,9 @@ const Header: React.FC = () => {
             </button>
             <Signin
               signInOpen={(value: boolean) => setIsSignInOpen(value)}
-              onSuccess={(userData) => {
-                setLocalUser(userData);
-                localStorage.setItem("user", JSON.stringify(userData));
+              onSuccess={() => {
+                // ✅ مبقاش محتاج نخزن حاجة يدويًا هنا — useSession هيتحدث لوحده
+                // بعد ما signIn() تنجح في Signin.tsx
               }}
             />
           </div>
@@ -1065,9 +1043,7 @@ const Header: React.FC = () => {
             </button>
             <SignUp
               signUpOpen={(value: boolean) => setIsSignUpOpen(value)}
-              onSuccess={(userData) => {
-                setLocalUser(userData);
-              }}
+              onSuccess={() => {}}
             />
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import toast, { Toaster } from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 import {
@@ -20,7 +20,8 @@ import {
 
 const DEFAULT_AVATAR = "/images/default-avatar.jpg";
 
-const profileCache = new Map();
+// ✅ الكاش بقى بمفتاح بسيط لأنه شخصي للسيشن الحالية بس (next-auth بيدير الهوية)
+let profileCacheEntry: { data: any; timestamp: number } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000;
 
 type Props = {
@@ -50,6 +51,9 @@ const validateImage = (file: File) => {
 
 // ✅ Upload to Cloudinary via API route
 export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
+  // ✅ next-auth session بدل ما نقرا token من localStorage
+  const { data: session, status, update: updateSession } = useSession();
+
   const [userData, setUserData] = useState<{
     _id: string;
     name: string;
@@ -65,7 +69,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  // ✅ نفس نمط BlogForm — uploadedImageUrl هو المصدر الوحيد للحفظ
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [errors, setErrors] = useState<{
     name?: string;
@@ -91,44 +94,47 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
   }, []);
 
   useEffect(() => {
+    // ✅ next-auth لسه بيحمّل الـ session، ماينفعش نجيب البيانات لحد ما يخلص
+    if (status === "loading") return;
+
+    if (status === "unauthenticated") {
+      toast.error(t("auth.validation.required"));
+      if (onClose) onClose();
+      return;
+    }
+
     let isSubscribed = true;
     const controller = new AbortController();
 
     const fetchUser = async () => {
       try {
-        const token =
-          typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        if (!token) {
-          if (isSubscribed) toast.error(t("auth.validation.required"));
-          return;
-        }
-
-        const cacheKey = `user_${token.substring(0, 20)}`;
-        const cachedData = profileCache.get(cacheKey);
-        if (cachedData && Date.now() - cachedData.timestamp < CACHE_DURATION) {
+        if (
+          profileCacheEntry &&
+          Date.now() - profileCacheEntry.timestamp < CACHE_DURATION
+        ) {
           if (isSubscribed) {
-            setUserData(cachedData.data);
-            setName(cachedData.data.name || "");
-            setEmail(cachedData.data.email || t("common.none"));
-            setImagePreview(cachedData.data.image || null);
-            setUploadedImageUrl(cachedData.data.image || null);
+            setUserData(profileCacheEntry.data);
+            setName(profileCacheEntry.data.name || "");
+            setEmail(profileCacheEntry.data.email || t("common.none"));
+            setImagePreview(profileCacheEntry.data.image || null);
+            setUploadedImageUrl(profileCacheEntry.data.image || null);
+            setQrCode(profileCacheEntry.data.qrCode || "");
           }
           return;
         }
 
+        // ✅ credentials: "include" بدل Authorization Bearer —
+        // next-auth session cookie بتتبعت أوتوماتيك
         const res = await fetch("/api/users/me", {
           method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: "include",
           signal: controller.signal,
         });
 
         const data = await res.json();
         if (isSubscribed) {
           if (res.ok && data.success) {
-            profileCache.set(cacheKey, { data: data.user, timestamp: Date.now() });
+            profileCacheEntry = { data: data.user, timestamp: Date.now() };
             setUserData(data.user);
             setName(data.user.name || "");
             setEmail(data.user.email || t("common.none"));
@@ -138,8 +144,8 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
           } else {
             if (res.status === 401) {
               toast.error(t("profile.sessionExpired"));
-              localStorage.removeItem("token");
               if (onClose) onClose();
+              await signOut({ callbackUrl: "/" });
             } else {
               toast.error(data?.message || t("common.error"));
             }
@@ -159,48 +165,42 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       isSubscribed = false;
       controller.abort();
     };
-  }, [onClose]);
+  }, [status, onClose]);
 
   const handleShowQR = async () => {
     if (qrGenerationTimeout.current) clearTimeout(qrGenerationTimeout.current);
 
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) { toast.error("يجب تسجيل الدخول أولاً"); return; }
-      if (!userData?._id) { toast.error("بيانات المستخدم غير متوفرة"); return; }
-
-      qrGenerationTimeout.current = setTimeout(async () => {
-        try {
-          const response = await fetch("/api/auth/generate-qr", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ userId: userData._id }),
-          });
-
-          const data = await response.json();
-          if (data.success) {
-            setQrCode(data.qrCode);
-            setShowQR(true);
-            const updatedUser = { ...userData, qrCode: data.qrCode, qrCodeData: data.qrData };
-            setUserData(updatedUser);
-            if (onProfileUpdate) onProfileUpdate(updatedUser);
-          } else {
-            toast.error(data.message || "فشل توليد QR code");
-          }
-        } catch (error) {
-          toast.error("حدث خطأ أثناء توليد QR code");
-        }
-      }, 300);
-    } catch (error) {
-      toast.error("حدث خطأ أثناء توليد QR code");
+    if (!userData?._id) {
+      toast.error("بيانات المستخدم غير متوفرة");
+      return;
     }
+
+    qrGenerationTimeout.current = setTimeout(async () => {
+      try {
+        // ✅ credentials: "include" بدل Bearer token
+        const response = await fetch("/api/auth/generate-qr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ userId: userData._id }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          setQrCode(data.qrCode);
+          setShowQR(true);
+          const updatedUser = { ...userData, qrCode: data.qrCode, qrCodeData: data.qrData };
+          setUserData(updatedUser);
+          if (onProfileUpdate) onProfileUpdate(updatedUser);
+        } else {
+          toast.error(data.message || "فشل توليد QR code");
+        }
+      } catch (error) {
+        toast.error("حدث خطأ أثناء توليد QR code");
+      }
+    }, 300);
   };
 
-  // ✅ معالج الصورة مع رفع فوري على Cloudinary
-  // ✅ نفس نمط BlogForm بالظبط
   const processImageFile = async (file: File) => {
     const imageError = validateImage(file);
     if (imageError) {
@@ -211,7 +211,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       toast.error("حجم الملف كبير جداً. الحد الأقصى 20MB");
       return;
     }
-    // ✅ Preview فوري بـ object URL (بدون base64)
     setImagePreview(URL.createObjectURL(file));
     setErrors((prev) => ({ ...prev, image: "" }));
     setUploadingImage(true);
@@ -222,12 +221,10 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       const res = await fetch("/api/upload-image", { method: "POST", body: formData });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Upload failed");
-      // ✅ URL الحقيقي من Cloudinary يُحفظ هنا فقط
       setUploadedImageUrl(data.imageUrl);
       setImagePreview(data.imageUrl);
       toast.success("تم رفع الصورة بنجاح ✓");
     } catch (err: any) {
-      // ✅ Rollback زي BlogForm
       setImagePreview(userData?.image || null);
       setUploadedImageUrl(userData?.image || null);
       setErrors((prev) => ({ ...prev, image: err.message || "فشل رفع الصورة" }));
@@ -286,8 +283,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
         updateData.name = name.trim();
       if (password && password !== "") updateData.password = password;
 
-      // ✅ نفس نمط BlogForm — uploadedImageUrl هو URL Cloudinary الحقيقي
-      // بنقارن مع userData.image اللي ممكن يكون قديم
       if (uploadedImageUrl && uploadedImageUrl !== userData?.image) {
         updateData.image = uploadedImageUrl;
       }
@@ -298,23 +293,13 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
         return;
       }
 
-      // ✅ debug log لو في مشكلة
       console.log("[ProfileModal] updateData:", updateData);
 
-      const token =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      if (!token) {
-        toast.error(t("auth.validation.required"));
-        setLoading(false);
-        return;
-      }
-
+      // ✅ credentials: "include" بدل Authorization Bearer
       const res = await fetch("/api/users/update", {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(updateData),
       });
 
@@ -323,8 +308,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       if (!res.ok) {
         if (res.status === 401) {
           toast.error(t("profile.sessionExpired"));
-          localStorage.removeItem("token");
-          profileCache.delete(`user_${token.substring(0, 20)}`);
+          profileCacheEntry = null;
           if (onClose) onClose();
           await signOut({ callbackUrl: "/" });
           return;
@@ -338,7 +322,17 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       const updatedUser = data.user || userData;
       setUserData(updatedUser);
       if (onProfileUpdate) onProfileUpdate(updatedUser);
-      profileCache.set(`user_${token.substring(0, 20)}`, { data: updatedUser, timestamp: Date.now() });
+      profileCacheEntry = { data: updatedUser, timestamp: Date.now() };
+
+      // ✅ next-auth session بتحمل name/image كـ claims في التوكن —
+      // لازم نحدثها يدويًا عشان الهيدر يعكس التغيير فورًا من غير refresh كامل
+      if (updateData.name || updateData.image) {
+        await updateSession({
+          ...(updateData.name ? { name: updateData.name } : {}),
+          ...(updateData.image ? { image: updateData.image } : {}),
+        });
+      }
+
       setPassword("");
       setErrors((prev) => ({ ...prev, password: "" }));
       setLoading(false);
@@ -350,11 +344,11 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
     }
   };
 
+  // ✅ signOut من next-auth مباشرة — من غير استدعاء /api/auth/logout اليدوي
+  // ومن غير أي تعامل مع localStorage
   const handleSignOut = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      localStorage.removeItem("token");
-      profileCache.clear();
+      profileCacheEntry = null;
       await signOut({ callbackUrl: "/" });
     } catch (error) {
       console.error("Sign out error:", error);
@@ -418,7 +412,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
           <div className="absolute top-4 left-1/2 w-8 h-8 rounded-full border border-white" />
         </div>
 
-        {/* Close button */}
         {onClose && (
           <button
             onClick={onClose}
@@ -428,7 +421,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
           </button>
         )}
 
-        {/* QR button */}
         <button
           onClick={handleShowQR}
           className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-medium transition-all duration-200 backdrop-blur-sm"
@@ -441,7 +433,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
       {/* ── Avatar Zone ── */}
       <div className="px-6 pb-2">
         <div className="flex items-end gap-4 -mt-10 mb-4">
-          {/* Avatar with upload overlay */}
           <div className="relative group">
             <div
               className={`w-20 h-20 rounded-2xl overflow-hidden border-4 border-white dark:border-darklight shadow-lg transition-all duration-300 ${
@@ -464,7 +455,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
                 </div>
               )}
 
-              {/* Upload overlay */}
               <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center cursor-pointer gap-1">
                 <input
                   ref={fileInputRef}
@@ -484,7 +474,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
               </label>
             </div>
 
-            {/* Upload status badge */}
             {uploadingImage && (
               <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
                 <Loader2 size={10} className="text-white animate-spin" />
@@ -497,7 +486,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
             )}
           </div>
 
-          {/* Name + Role */}
           <div className="flex-1 pb-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-semibold text-gray-900 dark:text-white leading-tight">
@@ -513,7 +501,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
           </div>
         </div>
 
-        {/* Image errors */}
         {errors.image && (
           <div className="flex items-center gap-2 p-3 mb-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
             <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
@@ -521,7 +508,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
           </div>
         )}
 
-        {/* Upload hint */}
         {!imagePreview && !userData.image && (
           <div
             className={`mb-4 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 ${
@@ -542,10 +528,7 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
           </div>
         )}
 
-        {/* ── Form ── */}
         <form onSubmit={handleSubmit} className="space-y-3" noValidate>
-
-          {/* Email (disabled) */}
           <div>
             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1.5">
               <Mail size={12} />
@@ -559,7 +542,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
             />
           </div>
 
-          {/* Name */}
           <div>
             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1.5">
               <User size={12} />
@@ -582,7 +564,6 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
             )}
           </div>
 
-          {/* Password */}
           <div>
             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1.5">
               <Lock size={12} />
@@ -642,10 +623,8 @@ export default function ProfileModal({ onClose, onProfileUpdate }: Props) {
             )}
           </div>
 
-          {/* Divider */}
           <div className="border-t border-gray-100 dark:border-dark_border my-1" />
 
-          {/* ── Action Buttons ── */}
           <div className="flex items-center gap-2 pt-1">
             <button
               type="button"

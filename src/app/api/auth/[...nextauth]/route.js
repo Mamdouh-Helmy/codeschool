@@ -6,12 +6,13 @@ import bcrypt from "bcryptjs";
 import User from "../../../models/User";
 import { connectDB } from "../../../../lib/mongodb.ts";
 
-const handler = NextAuth({
+// ✅ بقت authOptions متصدّرة بشكل منفصل عشان نقدر نستخدمها في getServerSession
+// في أي مكان تاني في السيرفر (زي layout.tsx)
+export const authOptions = {
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
 
   providers: [
-    // ✅ تسجيل الدخول بالبريد والباسورد
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -36,28 +37,55 @@ const handler = NextAuth({
       },
     }),
 
-    // ✅ تسجيل الدخول عبر Google
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
 
-    // ✅ تسجيل الدخول عبر GitHub
     GitHubProvider({
       clientId: process.env.GITHUB_ID,
       clientSecret: process.env.GITHUB_SECRET,
     }),
   ],
 
-  // 🧠 التعامل مع الـ JWT و Session
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === "google" || account?.provider === "github") {
+        await connectDB();
+
+        const existingUser = await User.findOne({ email: user.email });
+
+        if (!existingUser) {
+          await User.create({
+            name: user.name || "New User",
+            email: user.email,
+            image: user.image || undefined,
+            role: "guest",
+            emailVerified: true,
+          });
+        }
+      }
+      return true;
+    },
+
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
       }
+
+      if (!token.role && token.email) {
+        await connectDB();
+        const dbUser = await User.findOne({ email: token.email }).select("role _id");
+        if (dbUser) {
+          token.id = dbUser._id.toString();
+          token.role = dbUser.role;
+        }
+      }
+
       return token;
     },
+
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id;
@@ -66,6 +94,8 @@ const handler = NextAuth({
       return session;
     },
   },
-});
+};
+
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

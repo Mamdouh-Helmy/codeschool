@@ -1,15 +1,14 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import PortfolioBuilderUI from "./PortfolioBuilderUI";
 import { Portfolio, PortfolioFormData } from "@/types/portfolio";
 import { useI18n } from "@/i18n/I18nProvider";
 
-// ✅ نفس الديفولت المستخدم في PortfolioBuilderUI — لازم يفضلوا متطابقين
 const DEFAULT_STATS = { yearsOfExperience: 0, codeCommits: 0 };
 
-/* ── Inline branded loader ───────────────────────────────────────── */
 function PortfolioLoader() {
   return (
     <>
@@ -57,73 +56,35 @@ function PortfolioLoader() {
   );
 }
 
-/* ── Main component ──────────────────────────────────────────────── */
 export default function PortfolioBuilder() {
   const { t } = useI18n();
+  const { data: session, status } = useSession(); // ✅ بدل localStorage
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
-  const [user, setUser] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/signin");
+    if (status === "loading") return; // لسه بيحمل الـ session، ماتعملش حاجة
+
+    if (status === "unauthenticated") {
+      router.push("/signin?redirect=/portfolio/builder");
       return;
     }
-    fetchUserWithToken(token);
-  }, [router]);
 
-  /* ── Fetch current user ─────────────────────────────────────── */
-  const fetchUserWithToken = async (token: string) => {
-    try {
-      const res = await fetch("/api/users/me", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        console.error("Fetch user error:", res.status, await res.text());
-        localStorage.removeItem("token");
-        router.push("/signin");
-        return;
-      }
-
-      const data = await res.json();
-      if (data?.success && data.user) {
-        setUser(data.user);
-        fetchPortfolio(token, data.user);
-      } else {
-        localStorage.removeItem("token");
-        router.push("/signin");
-      }
-    } catch (err) {
-      console.error("Error fetching user:", err);
-      localStorage.removeItem("token");
-      router.push("/signin");
+    if (status === "authenticated" && session?.user) {
+      fetchPortfolio(session.user);
     }
-  };
+  }, [status, session]);
 
   /* ── Fetch (or create) portfolio ────────────────────────────── */
-  const fetchPortfolio = async (
-    token?: string,
-    currentUser?: any
-  ): Promise<void> => {
+  const fetchPortfolio = async (userData: any): Promise<void> => {
     try {
-      const currentToken = token || localStorage.getItem("token");
-      const userData = currentUser || user;
-
-      const res = await fetch("/api/portfolio", {
-        headers: { Authorization: `Bearer ${currentToken}` },
-      });
+      // ✅ الكوكي بتتبعت أوتوماتيك، مش محتاجين Authorization header
+      const res = await fetch("/api/portfolio", { credentials: "include" });
       const data = await res.json();
 
       if (data.success && data.portfolio) {
-        // ✅ FIX: نتأكد إن certificates و stats و cvUrl موجودين دايمًا في الـ object
         setPortfolio({
           ...data.portfolio,
           certificates: data.portfolio.certificates || [],
@@ -132,11 +93,10 @@ export default function PortfolioBuilder() {
           userId: data.portfolio.userId || userData,
         });
       } else {
-        /* Build default portfolio */
         const defaultPortfolio: PortfolioFormData = {
           title: t("portfolio.basic.titlePlaceholder"),
           description: "",
-          ownerRole: userData?.profile?.jobTitle || "",
+          ownerRole: (userData as any)?.profile?.jobTitle || "",
           ownerImage: userData?.image || "",
           cvUrl: "",
           stats: DEFAULT_STATS,
@@ -162,30 +122,27 @@ export default function PortfolioBuilder() {
           education: [],
           services: [],
           socialLinks: {
-            github: `https://github.com/${userData?.username || ""}`,
-            linkedin: `https://linkedin.com/in/${userData?.username || ""}`,
+            github: `https://github.com/${(userData as any)?.username || ""}`,
+            linkedin: `https://linkedin.com/in/${(userData as any)?.username || ""}`,
           },
           contactInfo: {
             email: userData?.email || "",
-            phone: userData?.phone || "",
-            location: userData?.location || "",
+            phone: (userData as any)?.phone || "",
+            location: (userData as any)?.location || "",
           },
           isPublished: false,
           views: 0,
           settings: { theme: "dark", layout: "standard" },
-          userId: userData?.id || userData?._id || "",
+          userId: (userData as any)?.id || "",
         };
 
         setPortfolio(defaultPortfolio as Portfolio);
 
-        /* Auto-save default */
         try {
           const saveRes = await fetch("/api/portfolio", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${currentToken}`,
-            },
+            headers: { "Content-Type": "application/json" },
+            credentials: "include", // ✅ بدل Authorization Bearer
             body: JSON.stringify(defaultPortfolio),
           });
           const saved = await saveRes.json();
@@ -214,9 +171,6 @@ export default function PortfolioBuilder() {
   const savePortfolio = async (portfolioData: PortfolioFormData): Promise<boolean> => {
     setSaving(true);
     try {
-      const token = localStorage.getItem("token");
-
-      // ✅ بنتأكد من _id أو id عشان نعرف PUT ولا POST
       const portfolioId = (portfolio as any)?._id || (portfolio as any)?.id;
       const method = portfolioId ? "PUT" : "POST";
 
@@ -229,10 +183,8 @@ export default function PortfolioBuilder() {
 
       const res = await fetch("/api/portfolio", {
         method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // ✅ بدل Authorization Bearer
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -244,7 +196,7 @@ export default function PortfolioBuilder() {
           certificates: data.portfolio.certificates || [],
           cvUrl: data.portfolio.cvUrl || "",
           stats: data.portfolio.stats || DEFAULT_STATS,
-          userId: data.portfolio.userId || user,
+          userId: data.portfolio.userId || session?.user,
         });
         return true;
       } else {
@@ -260,13 +212,9 @@ export default function PortfolioBuilder() {
     }
   };
 
-  if (loading) return <PortfolioLoader />;
+  if (status === "loading" || loading) return <PortfolioLoader />;
 
   return (
-    <PortfolioBuilderUI
-      portfolio={portfolio}
-      onSave={savePortfolio}
-      saving={saving}
-    />
+    <PortfolioBuilderUI portfolio={portfolio} onSave={savePortfolio} saving={saving} />
   );
 }

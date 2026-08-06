@@ -4,34 +4,7 @@ import Portfolio from "../../models/Portfolio";
 import User from "../../models/User";
 import { connectDB } from "@/lib/mongodb";
 import { uploadToCloudinary } from "@/lib/cloudinary";
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET =
-  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
-
-function getTokenFromHeader(req) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7);
-  }
-  return null;
-}
-
-async function getUserIdFromToken(token) {
-  const decoded = jwt.verify(token, JWT_SECRET);
-  if (decoded.id) return decoded.id;
-  if (decoded.username) {
-    const user = await User.findOne({ username: decoded.username });
-    if (!user) throw new Error("User not found");
-    return user._id.toString();
-  }
-  if (decoded.email) {
-    const user = await User.findOne({ email: decoded.email });
-    if (!user) throw new Error("User not found");
-    return user._id.toString();
-  }
-  throw new Error("No valid identifier in token");
-}
+import { getUserFromRequest } from "@/lib/auth"; // ✅ next-auth aware helper
 
 /**
  * معالجة الشهادات قبل الحفظ:
@@ -60,17 +33,17 @@ async function processCertificates(certificates = []) {
 export async function GET(req) {
   try {
     await connectDB();
-    const token = getTokenFromHeader(req);
-    if (!token) {
+
+    // ✅ next-auth session cookie بدل Bearer header
+    const user = await getUserFromRequest(req);
+    if (!user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 },
       );
     }
 
-    const userId = await getUserIdFromToken(token);
-
-    const portfolio = await Portfolio.findOne({ userId }).populate(
+    const portfolio = await Portfolio.findOne({ userId: user.id }).populate(
       "userId",
       "name email image role username profile socialLinks",
     );
@@ -84,12 +57,6 @@ export async function GET(req) {
 
     return NextResponse.json({ success: true, portfolio });
   } catch (error) {
-    if (error.name === "JsonWebTokenError") {
-      return NextResponse.json(
-        { success: false, message: "Invalid token" },
-        { status: 401 },
-      );
-    }
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 },
@@ -101,18 +68,18 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await connectDB();
-    const token = getTokenFromHeader(req);
-    if (!token) {
+
+    const user = await getUserFromRequest(req);
+    if (!user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 },
       );
     }
 
-    const userId = await getUserIdFromToken(token);
     const body = await req.json();
 
-    const existing = await Portfolio.findOne({ userId });
+    const existing = await Portfolio.findOne({ userId: user.id });
     if (existing) {
       return NextResponse.json(
         { success: false, message: "Portfolio already exists" },
@@ -120,14 +87,13 @@ export async function POST(req) {
       );
     }
 
-    // ✅ جيب الـ name من DB مباشرة — مش محتاج jwt.verify تاني
-    const user = await User.findById(userId);
-    const userName = user?.name || "User";
+    const dbUser = await User.findById(user.id);
+    const userName = dbUser?.name || "User";
 
     const certificates = await processCertificates(body.certificates || []);
 
     const portfolio = await Portfolio.create({
-      userId,
+      userId: user.id,
       title: body.title || `${userName}'s Portfolio`,
       description: body.description || "",
       ownerRole: body.ownerRole || "",
@@ -139,7 +105,7 @@ export async function POST(req) {
       experience: body.experience || [],
       education: body.education || [],
       services: body.services || [],
-      stats: body.stats || { yearsOfExperience: 0, codeCommits: 0 }, 
+      stats: body.stats || { yearsOfExperience: 0, codeCommits: 0 },
       socialLinks: body.socialLinks || {},
       contactInfo: body.contactInfo || {},
       settings: body.settings || { theme: "dark", layout: "standard" },
@@ -156,12 +122,6 @@ export async function POST(req) {
       { status: 201 },
     );
   } catch (error) {
-    if (error.name === "JsonWebTokenError") {
-      return NextResponse.json(
-        { success: false, message: "Invalid token" },
-        { status: 401 },
-      );
-    }
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 },
@@ -173,15 +133,15 @@ export async function POST(req) {
 export async function PUT(req) {
   try {
     await connectDB();
-    const token = getTokenFromHeader(req);
-    if (!token) {
+
+    const user = await getUserFromRequest(req);
+    if (!user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 },
       );
     }
 
-    const userId = await getUserIdFromToken(token);
     const body = await req.json();
 
     delete body._id;
@@ -190,13 +150,12 @@ export async function PUT(req) {
     delete body.updatedAt;
     delete body.__v;
 
-    // معالجة صور الشهادات قبل الحفظ
     if (Array.isArray(body.certificates)) {
       body.certificates = await processCertificates(body.certificates);
     }
 
     const portfolio = await Portfolio.findOneAndUpdate(
-      { userId },
+      { userId: user.id },
       { $set: body },
       { new: true, runValidators: true },
     ).populate("userId", "name email image role username");
@@ -214,12 +173,6 @@ export async function PUT(req) {
       portfolio,
     });
   } catch (error) {
-    if (error.name === "JsonWebTokenError") {
-      return NextResponse.json(
-        { success: false, message: "Invalid token" },
-        { status: 401 },
-      );
-    }
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 },
@@ -231,16 +184,16 @@ export async function PUT(req) {
 export async function DELETE(req) {
   try {
     await connectDB();
-    const token = getTokenFromHeader(req);
-    if (!token) {
+
+    const user = await getUserFromRequest(req);
+    if (!user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 },
       );
     }
 
-    const userId = await getUserIdFromToken(token);
-    const portfolio = await Portfolio.findOneAndDelete({ userId });
+    const portfolio = await Portfolio.findOneAndDelete({ userId: user.id });
 
     if (!portfolio) {
       return NextResponse.json(
@@ -254,12 +207,6 @@ export async function DELETE(req) {
       message: "Portfolio deleted successfully",
     });
   } catch (error) {
-    if (error.name === "JsonWebTokenError") {
-      return NextResponse.json(
-        { success: false, message: "Invalid token" },
-        { status: 401 },
-      );
-    }
     return NextResponse.json(
       { success: false, message: error.message },
       { status: 500 },

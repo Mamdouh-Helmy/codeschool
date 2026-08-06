@@ -1,10 +1,9 @@
-// lib/auth.js - FIXED VERSION
-import jwt from "jsonwebtoken";
+// lib/auth.ts - FIXED VERSION (next-auth aware)
+import { getToken } from "next-auth/jwt";
 import { connectDB } from "./mongodb";
 import User from "@/app/models/User";
 
-const JWT_SECRET =
-  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this";
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET;
 
 export interface SafeUser {
   id: string;
@@ -20,90 +19,35 @@ interface UserDoc {
   email?: string;
   role?: string;
   image?: string | null;
-  isActive?: boolean; // ADDED THIS LINE
+  isActive?: boolean;
 }
 
 /**
- * Parse cookie header string into object form.
- */
-function parseCookieHeader(cookieHeader: string | null) {
-  if (!cookieHeader) return {};
-  return Object.fromEntries(
-    cookieHeader.split(";").map((c) => {
-      const [k, ...v] = c.split("=");
-      return [k?.trim(), decodeURIComponent(v.join("="))];
-    })
-  );
-}
-
-/**
- * Get user information from Request (either via Authorization header or cookie)
- * UPDATED for Next.js App Router compatibility
+ * ✅ الطريقة الصح للتعامل مع next-auth JWT في App Router API routes.
+ * getToken بتفك تشفير next-auth session token صح (JWE) بدل jwt.verify العادي.
  */
 export async function getUserFromRequest(req: Request): Promise<SafeUser | null> {
   try {
     console.log("🔐 [Auth] getUserFromRequest called");
-    
-    // Get headers from Request object
-    const headers = req.headers;
-    const authHeader = headers.get('authorization') || '';
-    
-    // Try Authorization header first
-    let token: string | null = null;
-    
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      token = authHeader.split(" ")[1];
-      console.log("🔐 [Auth] Token from Authorization header");
-    }
-    
-    // Try cookie if no Authorization header
-    if (!token) {
-      const cookieHeader = headers.get('cookie') || '';
-      const cookies = parseCookieHeader(cookieHeader);
-      token = cookies["token"] || cookies["auth-token"];
-      console.log("🔐 [Auth] Token from cookies:", token ? "Found" : "Not found");
-    }
-    
-    // Try next-auth cookie
-    if (!token) {
-      const cookieHeader = headers.get('cookie') || '';
-      const cookies = parseCookieHeader(cookieHeader);
-      const nextAuthCookie = cookies["next-auth.session-token"] || 
-                            cookies["__Secure-next-auth.session-token"];
-      
-      if (nextAuthCookie) {
-        console.log("🔐 [Auth] Next-auth cookie found");
-        // يمكنك معالجة next-auth token هنا إذا كنت تستخدم next-auth
-        token = nextAuthCookie;
-      }
-    }
+
+    const token = await getToken({
+      req: req as any,
+      secret: NEXTAUTH_SECRET,
+    });
 
     if (!token) {
-      console.log("❌ [Auth] No token found in request");
+      console.log("❌ [Auth] No next-auth session token found");
       return null;
     }
 
-    // Verify JWT
-    console.log("🔐 [Auth] Verifying JWT token...");
-    let payload: any;
-    
-    try {
-      payload = jwt.verify(token, JWT_SECRET);
-      console.log("✅ [Auth] JWT verified successfully");
-    } catch (jwtError: any) {
-      console.error("❌ [Auth] JWT verification failed:", jwtError.message);
-      return null;
-    }
-    
-    const userId = payload?.id || payload?.userId || payload?.sub || payload?._id;
+    const userId = token.id as string;
     if (!userId) {
-      console.error("❌ [Auth] No user ID in JWT payload");
+      console.error("❌ [Auth] No user ID in next-auth token");
       return null;
     }
 
     console.log(`👤 [Auth] Looking for user ID: ${userId}`);
 
-    // Get user from DB
     try {
       await connectDB();
     } catch (dbError) {
@@ -116,7 +60,7 @@ export async function getUserFromRequest(req: Request): Promise<SafeUser | null>
       user = await User.findById(userId)
         .select("_id name email role image isActive")
         .lean<UserDoc>();
-      
+
       console.log("✅ [Auth] User query completed:", user ? "Found" : "Not found");
     } catch (dbError) {
       console.error("❌ [Auth] Database query failed:", dbError);
@@ -128,7 +72,6 @@ export async function getUserFromRequest(req: Request): Promise<SafeUser | null>
       return null;
     }
 
-    // Check if user is active
     if (user.isActive === false) {
       console.error("❌ [Auth] User account is inactive");
       return null;
@@ -138,7 +81,7 @@ export async function getUserFromRequest(req: Request): Promise<SafeUser | null>
       id: user._id.toString(),
       name: user.name,
       role: user.role,
-      email: user.email
+      email: user.email,
     });
 
     return {
@@ -148,43 +91,8 @@ export async function getUserFromRequest(req: Request): Promise<SafeUser | null>
       role: user.role,
       image: user.image || null,
     };
-    
   } catch (err) {
     console.error("❌ [Auth] Unexpected error in getUserFromRequest:", err);
-    return null;
-  }
-}
-
-/**
- * Helper: verify JWT token manually (e.g., in API routes)
- */
-export function verifyJwt(token?: string): SafeUser | null {
-  try {
-    console.log("🔐 [Auth] verifyJwt called");
-    
-    if (!token || typeof token !== "string" || token.trim() === "") {
-      console.error("❌ [Auth] No token provided to verifyJwt");
-      return null;
-    }
-
-    console.log("🔐 [Auth] Verifying token...");
-    const payload: any = jwt.verify(token, JWT_SECRET);
-    console.log("✅ [Auth] Token verified");
-
-    if (!payload?.id) {
-      console.error("❌ [Auth] No user ID in JWT payload");
-      return null;
-    }
-
-    return {
-      id: payload.id,
-      email: payload.email,
-      role: payload.role,
-      name: payload.name,
-      image: payload.image || null,
-    };
-  } catch (err) {
-    console.error("❌ [Auth] JWT verification error:", err);
     return null;
   }
 }
@@ -197,14 +105,14 @@ export function createAuthResponse(user: SafeUser | null) {
     return {
       success: false,
       message: "Authentication required",
-      code: "AUTH_REQUIRED"
+      code: "AUTH_REQUIRED",
     };
   }
 
   return {
     success: true,
     user,
-    permissions: getUserPermissions(user.role)
+    permissions: getUserPermissions(user.role),
   };
 }
 
@@ -213,11 +121,11 @@ export function createAuthResponse(user: SafeUser | null) {
  */
 function getUserPermissions(role?: string) {
   const permissions = {
-    admin: ['read', 'write', 'delete', 'manage_users', 'manage_courses', 'manage_groups'],
-    marketing: ['read', 'write', 'manage_campaigns', 'view_analytics'],
-    instructor: ['read', 'write_student_evaluations', 'manage_sessions'],
-    student: ['read']
+    admin: ["read", "write", "delete", "manage_users", "manage_courses", "manage_groups"],
+    marketing: ["read", "write", "manage_campaigns", "view_analytics"],
+    instructor: ["read", "write_student_evaluations", "manage_sessions"],
+    student: ["read"],
   };
 
-  return permissions[role as keyof typeof permissions] || ['read'];
+  return permissions[role as keyof typeof permissions] || ["read"];
 }

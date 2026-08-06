@@ -3,9 +3,23 @@ import { NextResponse } from "next/server";
 import QRCode from "qrcode";
 import User from "@/app/models/User";
 import { connectDB } from "@/lib/mongodb";
+import { getUserFromRequest } from "@/lib/auth"; // ✅ next-auth aware helper
 
 export async function POST(req) {
   try {
+    await connectDB();
+
+    // ✅ لازم نتأكد مين اللي بيبعت الـ request أصلاً —
+    // قبل كده الـ route ده كان بيثق في userId جاي من الـ body من غير أي تحقق،
+    // يعني أي حد يقدر يولّد QR code لأي حساب تاني.
+    const authUser = await getUserFromRequest(req);
+    if (!authUser) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
     const { userId } = await req.json();
 
     if (!userId) {
@@ -18,7 +32,18 @@ export async function POST(req) {
       );
     }
 
-    await connectDB();
+    // ✅ منع أي مستخدم من توليد QR code لحساب مش بتاعه
+    // (لو عندك دور admin وعايز تسمحله يولّد لأي حد، ضيف استثناء هنا:
+    // if (authUser.role !== "admin" && authUser.id !== userId) { ... })
+    if (authUser.id !== userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Forbidden: cannot generate QR code for another user",
+        },
+        { status: 403 },
+      );
+    }
 
     const user = await User.findById(userId);
     if (!user) {

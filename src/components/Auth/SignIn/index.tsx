@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState, useContext } from "react";
+import { signIn, getSession } from "next-auth/react";
 import toast, { Toaster } from "react-hot-toast";
 import Logo from "@/components/Layout/Header/Logo";
 import Loader from "@/components/Common/Loader";
@@ -65,41 +66,38 @@ const Signin: React.FC<SigninProps> = ({ signInOpen, onSuccess }) => {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      // ✅ بقينا بنستخدم next-auth signIn بدل ما نكلم /api/auth/login مباشرة
+      // عشان الـ session تتحدث فورًا في كل مكان (useSession) وميحصلش تعارض
+      const result = await signIn("credentials", {
+        email: email.trim().toLowerCase(),
+        password,
+        redirect: false,
       });
 
-      const data = await res.json();
       setLoading(false);
 
-      if (!res.ok || !data.success) {
-        const message = data?.message || "auth.loginFailed";
-        toast.error(t(message));
+      if (!result || result.error) {
+        toast.error(t("auth.loginFailed"));
         authDialog?.setIsFailedDialogOpen(true);
         setTimeout(() => authDialog?.setIsFailedDialogOpen(false), 1100);
         return;
-      }
-
-      try {
-        if (data.accessToken) localStorage.setItem("token", data.accessToken);
-      } catch (err) {
-        console.warn("Failed to store token", err);
       }
 
       // toast.success(t("auth.loginSuccess"));
       authDialog?.setIsSuccessDialogOpen(true);
       setTimeout(() => authDialog?.setIsSuccessDialogOpen(false), 1100);
 
+      // ✅ نجيب الـ session المحدثة من next-auth عشان نعرف بيانات المستخدم والـ role
+      const session = await getSession();
+
       // تحديث بيانات المستخدم
-      if (onSuccess && data.user) {
-        onSuccess(data.user);
+      if (onSuccess && session?.user) {
+        onSuccess(session.user);
       }
 
       setTimeout(() => {
         signInOpen && signInOpen(false);
-        if (data.user?.role === "admin") {
+        if (session?.user?.role === "admin") {
           window.location.href = "/admin";
         } else {
           window.location.href = "/";

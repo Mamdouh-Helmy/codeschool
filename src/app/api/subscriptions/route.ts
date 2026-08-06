@@ -1,30 +1,18 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { connectDB } from "@/lib/mongodb";
 import Subscription from "../../models/Subscription";
 import User from "../../models/User";
 import PricingPlan from "../../models/PricingPlan";
-import { verifyJwt } from "@/lib/auth";
-
+import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET(request: Request) {
   try {
     await connectDB();
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "غير مصرح" },
-        { status: 401 }
-      );
-    }
-
-    const user = verifyJwt(token);
+    const user = await getUserFromRequest(request);
     if (!user) {
       return NextResponse.json(
-        { success: false, message: "توكن غير صالح" },
+        { success: false, message: "غير مصرح" },
         { status: 401 }
       );
     }
@@ -74,25 +62,14 @@ export async function GET(request: Request) {
   }
 }
 
-
 export async function POST(req: Request) {
   try {
     await connectDB();
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "غير مصرح" },
-        { status: 401 }
-      );
-    }
-
-    const user = verifyJwt(token);
+    const user = await getUserFromRequest(req);
     if (!user) {
       return NextResponse.json(
-        { success: false, message: "توكن غير صالح" },
+        { success: false, message: "غير مصرح" },
         { status: 401 }
       );
     }
@@ -107,7 +84,6 @@ export async function POST(req: Request) {
       );
     }
 
-  
     const plan = await PricingPlan.findById(planId);
     if (!plan) {
       return NextResponse.json(
@@ -116,11 +92,9 @@ export async function POST(req: Request) {
       );
     }
 
-  
     const currency = plan.currency || "USD";
     const totalAmount = plan.price || 0;
 
-  
     const subscription = new Subscription({
       user: user.id,
       plan: planId,
@@ -128,10 +102,10 @@ export async function POST(req: Request) {
       paymentStatus: "pending",
       paymentMethod,
       startDate: new Date(),
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), 
+      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       studentCount,
       totalAmount: totalAmount,
-      currency: currency, 
+      currency: currency,
       invoiceNumber: `INV-${Date.now()}-${Math.random()
         .toString(36)
         .substr(2, 5)
@@ -140,10 +114,9 @@ export async function POST(req: Request) {
 
     await subscription.save();
 
-   
     const populatedSubscription = await Subscription.findById(subscription._id)
       .populate("user", "name email phone")
-      .populate("plan", "name price duration features currency"); 
+      .populate("plan", "name price duration features currency");
 
     return NextResponse.json({
       success: true,
@@ -159,25 +132,14 @@ export async function POST(req: Request) {
   }
 }
 
-
 export async function PUT(req: Request) {
   try {
     await connectDB();
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "غير مصرح" },
-        { status: 401 }
-      );
-    }
-
-    const user = verifyJwt(token);
+    const user = await getUserFromRequest(req);
     if (!user) {
       return NextResponse.json(
-        { success: false, message: "توكن غير صالح" },
+        { success: false, message: "غير مصرح" },
         { status: 401 }
       );
     }
@@ -199,7 +161,6 @@ export async function PUT(req: Request) {
       );
     }
 
- 
     const subscription = await Subscription.findById(subscriptionId);
     if (!subscription) {
       return NextResponse.json(
@@ -208,7 +169,6 @@ export async function PUT(req: Request) {
       );
     }
 
-  
     const userDoc = await User.findById(user.id);
     const isAdmin = userDoc?.role === "admin";
 
@@ -219,7 +179,6 @@ export async function PUT(req: Request) {
       );
     }
 
-  
     const updateData: any = {};
     if (status) updateData.status = status;
     if (paymentStatus) updateData.paymentStatus = paymentStatus;
@@ -227,7 +186,6 @@ export async function PUT(req: Request) {
     if (studentCount !== undefined) updateData.studentCount = studentCount;
     if (notes !== undefined) updateData.notes = notes;
 
-  
     if (status === "active" && subscription.status !== "active") {
       updateData.startDate = new Date();
       updateData.endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -259,20 +217,10 @@ export async function DELETE(req: Request) {
   try {
     await connectDB();
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "غير مصرح" },
-        { status: 401 }
-      );
-    }
-
-    const user = verifyJwt(token);
+    const user = await getUserFromRequest(req);
     if (!user) {
       return NextResponse.json(
-        { success: false, message: "توكن غير صالح" },
+        { success: false, message: "غير مصرح" },
         { status: 401 }
       );
     }
@@ -287,7 +235,6 @@ export async function DELETE(req: Request) {
       );
     }
 
-   
     const subscription = await Subscription.findById(subscriptionId);
     if (!subscription) {
       return NextResponse.json(
@@ -296,7 +243,6 @@ export async function DELETE(req: Request) {
       );
     }
 
-   
     const userDoc = await User.findById(user.id);
     const isAdmin = userDoc?.role === "admin";
 
@@ -307,7 +253,6 @@ export async function DELETE(req: Request) {
       );
     }
 
-   
     await Subscription.findByIdAndDelete(subscriptionId);
 
     return NextResponse.json({

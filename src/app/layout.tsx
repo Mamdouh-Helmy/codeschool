@@ -8,6 +8,8 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "react-hot-toast";
 import NextTopLoader from "nextjs-toploader";
 
+import { authOptions } from "./api/auth/[...nextauth]/route";
+
 import { AuthDialogProvider } from "./context/AuthDialogContext";
 import { LocaleProvider } from "./context/LocaleContext";
 import { I18nProvider } from "@/i18n/I18nProvider";
@@ -28,7 +30,6 @@ export const metadata: Metadata = {
   description: "منصة تعليمية لتعليم البرمجة للأطفال والمبتدئين",
 };
 
-
 export default async function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
@@ -37,7 +38,9 @@ export default async function RootLayout({
     cookieStore.get("app_locale")?.value === "ar" ? "ar" : "en"
   ) as "ar" | "en";
 
-  const session = await getServerSession();
+  // ✅ بقت بتستخدم authOptions عشان تجيب الـ session كاملة بما فيها role
+  // من أول render على السيرفر (بدل ما تستنى الـ client يجيبها)
+  const session = await getServerSession(authOptions);
 
   return (
     <html
