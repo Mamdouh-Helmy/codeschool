@@ -43,7 +43,6 @@ const SECTIONS: Section[] = [
   { id: "settings", label: "portfolio.builder.settings", icon: Settings, description: "portfolio.builder.settingsDesc" },
 ];
 
-// ✅ الحقلين اليدويين بس — متوافق مع PortfolioFormData.stats (object، مش array)
 const DEFAULT_STATS = { yearsOfExperience: 0, codeCommits: 0 };
 
 export default function PortfolioBuilderUI({ portfolio, onSave, saving }: PortfolioBuilderUIProps) {
@@ -117,14 +116,16 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
     }
   };
 
-  // ✅ التعديل الأساسي — بنجيب الـ _id مش الـ username
   const getPortfolioId = (): string | null => {
     if (!portfolio) return null;
     return (portfolio as any)._id || (portfolio as any).id || null;
   };
 
   const portfolioId = getPortfolioId();
-  const previewUrl = portfolioId ? `/portfolio/${portfolioId}` : null;
+  // ✅ إضافة theme إلى query param لتمريره إلى صفحة المعاينة
+  const previewUrl = portfolioId
+    ? `/portfolio/${portfolioId}?theme=${formData.settings?.theme || 'dark'}`
+    : null;
 
   const handleOpenInNewTab = () => {
     if (previewUrl) window.open(previewUrl, "_blank");
@@ -168,6 +169,7 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
   return (
     <>
       <style>{`
+        /* ── تعريف المتغيرات للوضع الفاتح (افتراضي) ── */
         .pb-root {
           --brand:        #ff6700;
           --brand-deep:   #e55a00;
@@ -176,30 +178,48 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
           --teal:         #004d59;
           --teal-light:   rgba(0,77,89,.35);
           --amber:        #feaf00;
-          --bg:           #0a0f17;
-          --card:         #161b22;
-          --input:        #21262d;
-          --border:       #30363d;
-          --border-hover: #484f58;
-          --txt-1:  #e6edf3;
-          --txt-2:  #8b949e;
-          --txt-3:  #484f58;
+
+          /* Light mode surfaces */
+          --bg:           #f8f9fa;
+          --card:         #ffffff;
+          --input:        #f1f3f5;
+          --border:       #e2e8f0;
+          --border-hover: #cbd5e0;
+          --txt-1:        #1a202c;
+          --txt-2:        #4a5568;
+          --txt-3:        #a0aec0;
+
           --sidebar-w: 240px;
           --radius-sm: 8px;
           --radius-md: 10px;
           --radius-lg: 14px;
         }
+
+        /* ── تجاوز المتغيرات عند تفعيل الوضع المظلم ── */
+        .pb-root.dark {
+          --bg:           #0a0f17;
+          --card:         #161b22;
+          --input:        #21262d;
+          --border:       #30363d;
+          --border-hover: #484f58;
+          --txt-1:        #e6edf3;
+          --txt-2:        #8b949e;
+          --txt-3:        #484f58;
+        }
+
         .pb-root * { box-sizing: border-box; }
         .pb-root ::-webkit-scrollbar        { width: 4px; height: 4px; }
         .pb-root ::-webkit-scrollbar-track  { background: transparent; }
         .pb-root ::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 4px; }
         .pb-root ::-webkit-scrollbar-thumb:hover { background: var(--brand); }
+
         .pb-shell {
           display: flex; height: 100vh;
           background: var(--bg);
           font-family: 'Geist', 'SF Pro Display', system-ui, sans-serif;
           color: var(--txt-1); overflow: hidden;
         }
+
         .pb-sidebar {
           width: var(--sidebar-w); background: var(--card);
           border-right: 1px solid var(--border);
@@ -210,10 +230,12 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
           .pb-sidebar { position: fixed; inset-y: 0; left: 0; width: 280px; transform: translateX(-100%); }
           .pb-sidebar.open { transform: translateX(0); }
         }
+
         .pb-logo { display: flex; align-items: center; gap: 10px; padding: 20px 18px 16px; border-bottom: 1px solid var(--border); }
         .pb-logo-mark { width: 34px; height: 34px; background: var(--brand); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .pb-logo-text { font-size: 14px; font-weight: 600; color: var(--txt-1); letter-spacing: -.2px; }
         .pb-logo-sub  { font-size: 10px; color: var(--txt-2); letter-spacing: .04em; text-transform: uppercase; margin-top: 1px; }
+
         .pb-nav { flex: 1; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
         .pb-nav-item {
           display: flex; align-items: center; gap: 10px;
@@ -232,11 +254,13 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
         .pb-nav-icon { flex-shrink: 0; }
         .pb-nav-item .pb-nav-icon { color: var(--txt-2); }
         .pb-nav-item.active .pb-nav-icon { color: var(--brand); }
+
         .pb-footer { padding: 14px 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
         .pb-stat-row { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; border-bottom: 1px solid var(--border); }
         .pb-stat-chip { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--txt-2); }
         .pb-dot { width: 6px; height: 6px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 6px #3fb950; }
         .pb-dot.offline { background: var(--txt-3); box-shadow: none; }
+
         .btn-primary {
           display: flex; align-items: center; justify-content: center; gap: 7px;
           width: 100%; padding: 10px 16px; background: var(--brand); color: #fff;
@@ -248,6 +272,7 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
         .btn-primary:active { transform: scale(.98); }
         .btn-primary.success { background: #238636; }
         .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
         .btn-outline {
           display: flex; align-items: center; justify-content: center; gap: 7px;
           width: 100%; padding: 8px 16px; background: transparent; color: var(--txt-2);
@@ -255,6 +280,7 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
           font-size: 12px; font-family: inherit; cursor: pointer; transition: all .15s;
         }
         .btn-outline:hover { border-color: var(--brand); color: var(--brand); background: var(--brand-glow); }
+
         .btn-ghost {
           display: flex; align-items: center; justify-content: center; gap: 6px;
           padding: 6px 10px; background: transparent; color: var(--txt-2);
@@ -262,16 +288,20 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
           font-size: 11px; font-family: inherit; cursor: pointer; transition: all .15s;
         }
         .btn-ghost:hover { color: var(--txt-1); border-color: var(--border-hover); background: var(--input); }
+
         .pb-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(2px); z-index: 90; }
         @media (max-width: 1023px) { .pb-overlay.show { display: block; } }
+
         .pb-mobile-header {
           display: none; align-items: center; justify-content: space-between;
           padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border);
           position: fixed; top: 0; left: 0; right: 0; z-index: 80;
         }
         @media (max-width: 1023px) { .pb-mobile-header { display: flex; } }
+
         .pb-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
         @media (max-width: 1023px) { .pb-main { padding-top: 57px; } }
+
         .pb-topbar {
           background: var(--card); border-bottom: 1px solid var(--border);
           padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
@@ -280,11 +310,19 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
         .pb-topbar-left { display: flex; flex-direction: column; gap: 2px; }
         .pb-section-title { font-size: 15px; font-weight: 600; color: var(--txt-1); }
         .pb-section-sub   { font-size: 12px; color: var(--txt-2); }
+
         .pb-breadcrumb { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--txt-2); }
         .pb-breadcrumb-active { color: var(--brand); font-weight: 500; }
+
         .pb-editor { flex: 1; overflow-y: auto; padding: 28px 32px; transition: width .3s ease; }
         @media (max-width: 767px) { .pb-editor { padding: 20px 16px; } }
-        .pb-preview-panel { width: 50%; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: #0d1117; flex-shrink: 0; }
+
+        .pb-preview-panel {
+          width: 50%; border-left: 1px solid var(--border);
+          display: flex; flex-direction: column;
+          background: var(--bg); /* لجعل خلفية المعاينة متناغمة */
+          flex-shrink: 0;
+        }
         .pb-preview-header {
           display: flex; align-items: center; justify-content: space-between;
           padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0;
@@ -297,7 +335,11 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
           font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .pb-preview-actions { display: flex; gap: 4px; }
-        .pb-preview-footer { padding: 8px 16px; text-align: center; background: var(--card); border-top: 1px solid var(--border); font-size: 11px; color: var(--txt-3); flex-shrink: 0; }
+        .pb-preview-footer {
+          padding: 8px 16px; text-align: center; background: var(--card); border-top: 1px solid var(--border);
+          font-size: 11px; color: var(--txt-3); flex-shrink: 0;
+        }
+
         .pb-section-wrap { max-width: 720px; margin: 0 auto; width: 100%; }
         .pb-section-header { margin-bottom: 28px; }
         .pb-section-badge {
@@ -309,19 +351,31 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
         }
         .pb-section-h { font-size: 22px; font-weight: 700; color: var(--txt-1); letter-spacing: -.4px; }
         .pb-section-p { font-size: 13px; color: var(--txt-2); margin-top: 4px; line-height: 1.5; }
+
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin { animation: spin .7s linear infinite; }
+
         .preview-loader {
           position: absolute; inset: 0; z-index: 10;
           display: flex; flex-direction: column; align-items: center; justify-content: center;
-          background: #0d1117; gap: 10px;
+          background: var(--bg); gap: 10px;
         }
         .preview-loader-ring { width: 32px; height: 32px; border: 2.5px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: spin .75s linear infinite; }
         .preview-loader-text { font-size: 12px; color: var(--txt-2); }
-        .pb-mobile-preview-note { display: none; padding: 10px 16px; background: rgba(0,77,89,.15); border-top: 1px solid rgba(0,77,89,.4); font-size: 12px; color: #56d3ba; text-align: center; }
+
+        .pb-mobile-preview-note {
+          display: none; padding: 10px 16px;
+          background: rgba(0,77,89,.15); border-top: 1px solid rgba(0,77,89,.4);
+          font-size: 12px; color: #56d3ba; text-align: center;
+        }
         @media (max-width: 1023px) { .pb-mobile-preview-note { display: block; } }
         .pb-mobile-preview-note button { background: none; border: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
-        .pb-no-preview { font-size: 11px; color: var(--txt-3); text-align: center; background: var(--input); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 10px 14px; line-height: 1.5; }
+
+        .pb-no-preview {
+          font-size: 11px; color: var(--txt-3); text-align: center;
+          background: var(--input); border: 1px dashed var(--border);
+          border-radius: var(--radius-sm); padding: 10px 14px; line-height: 1.5;
+        }
       `}</style>
 
       <div className="pb-root">

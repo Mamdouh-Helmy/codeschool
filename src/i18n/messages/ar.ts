@@ -4510,6 +4510,8 @@ const ar = {
   "auth.howDidYouHear": "كيف سمعت عنا؟",
   "nav.guestDashboard": "لوحة تحكم الزائر",
   "auth.loadingOptions": "جاري تحميل خيارات تسجيل الدخول...",
+  "portfolio.builder.saveToPreview": "حفظ ومعاينة",
+"portfolio.builder.draft": "حفظ كمسودة"
 };
 
 export default ar;

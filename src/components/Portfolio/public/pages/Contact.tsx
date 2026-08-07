@@ -23,32 +23,22 @@ type FormState = {
 type FormErrors = Partial<Record<keyof FormState, string>>;
 
 const INITIAL_STATE: FormState = {
-  firstName: "",
-  lastName: "",
-  email: "",
-  phoneNumber: "",
-  service: "",
-  message: "",
+  firstName: "", lastName: "", email: "", phoneNumber: "", service: "", message: "",
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function validate(form: FormState): FormErrors {
   const errors: FormErrors = {};
-
   if (!form.firstName.trim()) errors.firstName = "First name is required";
   if (!form.lastName.trim()) errors.lastName = "Last name is required";
-
   if (!form.email.trim()) errors.email = "Email is required";
   else if (!EMAIL_REGEX.test(form.email.trim())) errors.email = "Enter a valid email";
-
   if (!form.phoneNumber.trim()) errors.phoneNumber = "Phone number is required";
-
   const messageLength = form.message.trim().length;
   if (!messageLength) errors.message = "Message is required";
   else if (messageLength < 10) errors.message = "Message should be at least 10 characters";
   else if (messageLength > 2000) errors.message = "Message is too long (max 2000 characters)";
-
   return errors;
 }
 
@@ -67,20 +57,15 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
 
   const handleChange = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-    // clear the field error as soon as the user starts fixing it
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const validationErrors = validate(form);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
 
-    // ✅ PortfolioData يستخدم "id" مش "_id" (اتعمل mapping له في fetchPortfolio.ts)
     if (!portfolio?.id) {
       setStatus("error");
       setServerMessage("Portfolio not found. Please refresh the page.");
@@ -110,7 +95,6 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        // map backend field errors back onto the form if present
         if (Array.isArray(data.errors) && data.errors.length > 0) {
           setServerMessage(data.errors.join(" • "));
         } else {
@@ -133,16 +117,20 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
     <motion.section
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { delay: 2.4, duration: 0.4, ease: "easeIn" } }}
-      className="py-6"
+      className="py-6 text-secondary dark:text-white"
       dir="ltr"
     >
       <div className="container mx-auto" dir="ltr">
         <div className="flex flex-col xl:flex-row gap-[30px]">
           {/* form */}
           <div className="xl:w-[54%] order-2 xl:order-none">
-            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6 p-10 bg-[#27272c] rounded-xl">
+            <form
+              onSubmit={handleSubmit}
+              noValidate
+              className="flex flex-col gap-6 p-10 bg-gray-100 dark:bg-[#27272c] rounded-xl"
+            >
               <h3 className="text-4xl text-accent">Let's work together</h3>
-              <p className="text-white/60">
+              <p className="text-secondary/60 dark:text-white/60">
                 Have a project in mind or just want to say hello? Fill out the form below and I'll get back to you as soon as possible.
               </p>
 
@@ -155,7 +143,7 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
                     onChange={(e) => handleChange("firstName", e.target.value)}
                     aria-invalid={!!errors.firstName}
                   />
-                  {errors.firstName && <p className="text-red-400 text-sm mt-1">{errors.firstName}</p>}
+                  {errors.firstName && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.firstName}</p>}
                 </div>
 
                 <div>
@@ -166,7 +154,7 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
                     onChange={(e) => handleChange("lastName", e.target.value)}
                     aria-invalid={!!errors.lastName}
                   />
-                  {errors.lastName && <p className="text-red-400 text-sm mt-1">{errors.lastName}</p>}
+                  {errors.lastName && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.lastName}</p>}
                 </div>
 
                 <div>
@@ -177,7 +165,7 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
                     onChange={(e) => handleChange("email", e.target.value)}
                     aria-invalid={!!errors.email}
                   />
-                  {errors.email && <p className="text-red-400 text-sm mt-1">{errors.email}</p>}
+                  {errors.email && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.email}</p>}
                 </div>
 
                 <div>
@@ -188,7 +176,7 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
                     onChange={(e) => handleChange("phoneNumber", e.target.value)}
                     aria-invalid={!!errors.phoneNumber}
                   />
-                  {errors.phoneNumber && <p className="text-red-400 text-sm mt-1">{errors.phoneNumber}</p>}
+                  {errors.phoneNumber && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.phoneNumber}</p>}
                 </div>
               </div>
 
@@ -215,14 +203,14 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
                   onChange={(e) => handleChange("message", e.target.value)}
                   aria-invalid={!!errors.message}
                 />
-                {errors.message && <p className="text-red-400 text-sm mt-1">{errors.message}</p>}
+                {errors.message && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.message}</p>}
               </div>
 
               {status === "success" && (
-                <p className="text-green-400 text-sm">{serverMessage}</p>
+                <p className="text-green-600 dark:text-green-400 text-sm">{serverMessage}</p>
               )}
               {status === "error" && (
-                <p className="text-red-400 text-sm">{serverMessage}</p>
+                <p className="text-red-500 dark:text-red-400 text-sm">{serverMessage}</p>
               )}
 
               <Button type="submit" size="md" className="max-w-40" disabled={status === "submitting"}>
@@ -236,11 +224,11 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
             <ul className="flex flex-col gap-10">
               {info.map((item, index) => (
                 <li key={index} className="flex items-center gap-6">
-                  <div className="w-[52px] h-[52px] xl:w-[72px] xl:h-[72px] bg-[#27272c] text-accent rounded-md flex items-center justify-center">
+                  <div className="w-[52px] h-[52px] xl:w-[72px] xl:h-[72px] bg-gray-100 dark:bg-[#27272c] text-accent rounded-md flex items-center justify-center">
                     <div className="text-[28px]">{item.icon}</div>
                   </div>
                   <div className="flex-1">
-                    <p className="text-white/60">{item.title}</p>
+                    <p className="text-secondary/60 dark:text-white/60">{item.title}</p>
                     <h3 className="text-xl">{item.description}</h3>
                   </div>
                 </li>

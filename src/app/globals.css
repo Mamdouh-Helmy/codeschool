@@ -438,10 +438,18 @@ body {
 
 .text-outline {
   color: transparent;
-  -webkit-text-stroke: 2px #ffffff;
+  -webkit-text-stroke: 2px #1f2937; /* Light Mode */
+}
+
+.dark .text-outline {
+  -webkit-text-stroke: 2px #ffffff; /* Dark Mode */
 }
 
 .group:hover .text-outline {
-  color: #ffffff;
+  color: #1f2937;
   -webkit-text-stroke: 0;
+}
+
+.dark .group:hover .text-outline {
+  color: #ffffff;
 }

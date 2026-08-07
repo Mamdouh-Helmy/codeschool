@@ -1,4 +1,3 @@
-// components/Portfolio/public/pages/Social.tsx
 import {
   FaGithub,
   FaLinkedinIn,

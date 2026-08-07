@@ -29,11 +29,11 @@ export default function PreviewPanel({ portfolio }: PreviewPanelProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-100">
+    <div className="h-full flex flex-col bg-gray-100 dark:bg-gray-900">
       {/* Device Controls */}
-      <div className="p-4 border-b border-gray-200 bg-white">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900 text-sm lg:text-base">
+          <h3 className="font-semibold text-black dark:text-white text-sm lg:text-base">
             {t("portfolio.builder.preview")}
           </h3>
           <div className="flex gap-1 lg:gap-2">
@@ -44,7 +44,7 @@ export default function PreviewPanel({ portfolio }: PreviewPanelProps) {
                 className={`p-2 rounded text-xs lg:text-sm ${
                   device === dev 
                     ? "bg-blue-600 text-white" 
-                    : "bg-gray-200 text-gray-600"
+                    : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
                 }`}
               >
                 {dev === "mobile" && <Smartphone className="w-3 h-3 lg:w-4 lg:h-4" />}

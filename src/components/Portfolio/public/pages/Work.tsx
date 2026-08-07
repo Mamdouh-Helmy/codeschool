@@ -19,7 +19,7 @@ const Work = ({ portfolio }: { portfolio: PortfolioData }) => {
   if (!project) {
     return (
       <section className="min-h-[80vh] flex items-center justify-center">
-        <p className="text-white/60 text-xl">No projects yet.</p>
+        <p className="text-secondary/60 dark:text-white/60 text-xl">No projects yet.</p>
       </section>
     );
   }
@@ -27,11 +27,8 @@ const Work = ({ portfolio }: { portfolio: PortfolioData }) => {
   return (
     <motion.section
       initial={{ opacity: 0 }}
-      animate={{
-        opacity: 1,
-        transition: { delay: 2.4, duration: 0.4, ease: "easeIn" },
-      }}
-      className="min-h-[80vh] flex flex-col justify-center py-12 xl:px-0"
+      animate={{ opacity: 1, transition: { delay: 2.4, duration: 0.4, ease: "easeIn" } }}
+      className="min-h-[80vh] flex flex-col justify-center py-12 xl:px-0 text-secondary dark:text-white"
       dir="ltr"
     >
       <div className="container mx-auto" dir="ltr">
@@ -41,10 +38,10 @@ const Work = ({ portfolio }: { portfolio: PortfolioData }) => {
               <div className="text-8xl leading-none font-extrabold text-transparent text-outline">
                 {String(activeIndex + 1).padStart(2, "0")}
               </div>
-              <h2 className="text-[42px] font-bold leading-none text-white capitalize">
+              <h2 className="text-[42px] font-bold leading-none capitalize">
                 {project.title}
               </h2>
-              <p className="text-white/60">{project.description}</p>
+              <p className="text-secondary/60 dark:text-white/60">{project.description}</p>
               <ul className="flex gap-4 flex-wrap">
                 {project.technologies.map((tech, index) => (
                   <li key={index} className="text-xl text-accent">
@@ -53,14 +50,14 @@ const Work = ({ portfolio }: { portfolio: PortfolioData }) => {
                   </li>
                 ))}
               </ul>
-              <div className="border border-white/20"></div>
+              <div className="border border-secondary/20 dark:border-white/20"></div>
               <div className="flex items-center gap-4">
                 {project.demoUrl && (
                   <a href={project.demoUrl} target="_blank" rel="noopener noreferrer">
                     <TooltipProvider delayDuration={100}>
                       <Tooltip>
-                        <TooltipTrigger className="w-[70px] h-[70px] rounded-full bg-white/5 flex justify-center items-center group">
-                          <BsArrowUpRight className="text-white text-3xl group-hover:text-accent" />
+                        <TooltipTrigger className="w-[70px] h-[70px] rounded-full bg-secondary/5 dark:bg-white/5 flex justify-center items-center group">
+                          <BsArrowUpRight className="text-3xl group-hover:text-accent" />
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>Live project</p>
@@ -73,8 +70,8 @@ const Work = ({ portfolio }: { portfolio: PortfolioData }) => {
                   <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
                     <TooltipProvider delayDuration={100}>
                       <Tooltip>
-                        <TooltipTrigger className="w-[70px] h-[70px] rounded-full bg-white/5 flex justify-center items-center group">
-                          <BsGithub className="text-white text-3xl group-hover:text-accent" />
+                        <TooltipTrigger className="w-[70px] h-[70px] rounded-full bg-secondary/5 dark:bg-white/5 flex justify-center items-center group">
+                          <BsGithub className="text-3xl group-hover:text-accent" />
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>Github repository</p>

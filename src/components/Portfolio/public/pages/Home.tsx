@@ -1,4 +1,3 @@
-// components/Portfolio/public/pages/Home.tsx
 "use client";
 
 import { Button } from "../ui/button";
@@ -13,7 +12,7 @@ const Home = ({ portfolio }: { portfolio: PortfolioData }) => {
   const hasCv = !!portfolio.cvUrl && portfolio.cvUrl.trim().length > 0;
 
   return (
-    <section className="h-full" dir="ltr">
+    <section className="h-full text-secondary dark:text-white" dir="ltr">
       <div className="container mx-auto h-full">
         <motion.div
           initial={{ opacity: 0 }}
@@ -30,7 +29,7 @@ const Home = ({ portfolio }: { portfolio: PortfolioData }) => {
               Hello I'm <br />{" "}
               <span className="text-accent block md:text-8xl">{portfolio.ownerName}</span>
             </h1>
-            <p className="max-w-[440px] mb-7 text-sm text-white/80">
+            <p className="max-w-[440px] mb-7 text-sm text-secondary/80 dark:text-white/80">
               {portfolio.description}
             </p>
             {/* btn and socials */}

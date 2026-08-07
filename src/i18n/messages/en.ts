@@ -4393,6 +4393,8 @@ const en = {
   "nav.referralSources": "Referral Sources",
   "nav.guestDashboard": "Guest Dashboard",
   "auth.loadingOptions": "Loading sign-in options...",
+  "portfolio.builder.saveToPreview": "Save & Preview",
+"portfolio.builder.draft": "Save as Draft"
 };
 
 export default en;

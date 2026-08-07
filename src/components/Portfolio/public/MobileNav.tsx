@@ -1,4 +1,3 @@
-// components/Portfolio/public/MobileNav.tsx
 "use client";
 
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
@@ -26,7 +25,7 @@ const MobileNav = () => {
       <SheetTrigger className="flex justify-center items-center">
         <CiMenuFries className="text-[32px] text-accent" />
       </SheetTrigger>
-      <SheetContent className="flex flex-col">
+      <SheetContent className="flex flex-col bg-white text-secondary dark:bg-darkmode dark:text-white">
         <div className="mt-32 mb-40 text-center text-2xl">
           <Link href={basePath}>
             <h1 className="text-4xl font-semibold">
@@ -44,7 +43,9 @@ const MobileNav = () => {
                 href={href}
                 key={index}
                 className={`${
-                  isActive && "text-accent border-b-2 border-accent"
+                  isActive
+                    ? "text-accent border-b-2 border-accent"
+                    : "text-secondary dark:text-white"
                 } text-xl capitalize hover:text-accent transition-all`}
               >
                 {link.name}

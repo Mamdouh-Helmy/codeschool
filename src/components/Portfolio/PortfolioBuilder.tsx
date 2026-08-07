@@ -15,40 +15,25 @@ function PortfolioLoader() {
       <style>{`
         @keyframes pb-spin  { to { transform: rotate(360deg); } }
         @keyframes pb-pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
-        .pb-loader-shell {
-          min-height: 100vh;
-          display: flex; flex-direction: column;
-          align-items: center; justify-content: center;
-          background: #0a0f17; gap: 18px;
-        }
         .pb-loader-ring {
-          width: 44px; height: 44px;
-          border: 3px solid #30363d;
-          border-top-color: #ff6700;
-          border-radius: 50%;
           animation: pb-spin .75s linear infinite;
         }
-        .pb-loader-text {
-          font-size: 13px; color: #8b949e;
-          font-family: system-ui, sans-serif;
+        .pb-loader-text, .pb-loader-dot {
           animation: pb-pulse 1.6s ease-in-out infinite;
-        }
-        .pb-loader-dots { display: inline-flex; gap: 4px; margin-top: 4px; }
-        .pb-loader-dot  {
-          width: 5px; height: 5px; border-radius: 50%;
-          background: #ff6700; animation: pb-pulse 1.2s ease-in-out infinite;
         }
         .pb-loader-dot:nth-child(2) { animation-delay: .2s; }
         .pb-loader-dot:nth-child(3) { animation-delay: .4s; }
       `}</style>
-      <div className="pb-loader-shell">
-        <div className="pb-loader-ring" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-[18px] bg-[#f8f9fa] dark:bg-[#0a0f17] transition-colors">
+        <div className="pb-loader-ring w-11 h-11 rounded-full border-[3px] border-[#e2e8f0] dark:border-[#30363d] border-t-[#ff6700]" />
         <div>
-          <div className="pb-loader-text">Loading your portfolio</div>
-          <div className="pb-loader-dots">
-            <span className="pb-loader-dot" />
-            <span className="pb-loader-dot" />
-            <span className="pb-loader-dot" />
+          <div className="pb-loader-text text-[13px] text-center text-[#4a5568] dark:text-[#8b949e]">
+            Loading your portfolio
+          </div>
+          <div className="flex items-center justify-center gap-1 mt-1">
+            <span className="pb-loader-dot w-[5px] h-[5px] rounded-full bg-[#ff6700]" />
+            <span className="pb-loader-dot w-[5px] h-[5px] rounded-full bg-[#ff6700]" />
+            <span className="pb-loader-dot w-[5px] h-[5px] rounded-full bg-[#ff6700]" />
           </div>
         </div>
       </div>
@@ -132,7 +117,7 @@ export default function PortfolioBuilder() {
           },
           isPublished: false,
           views: 0,
-          settings: { theme: "dark", layout: "standard" },
+          settings: { theme: "light", layout: "standard" },
           userId: (userData as any)?.id || "",
         };
 

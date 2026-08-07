@@ -1,4 +1,3 @@
-// components/Portfolio/public/pages/Services.tsx
 "use client";
 
 import { BsArrowDownRight } from "react-icons/bs";
@@ -22,7 +21,6 @@ const Services = ({ portfolio }: { portfolio: PortfolioData }) => {
           }}
           className="grid grid-cols-1 md:grid-cols-2 gap-[60px]"
         >
-
           {services.map((service, index) => (
             <div
               key={service.id || index}
@@ -34,16 +32,16 @@ const Services = ({ portfolio }: { portfolio: PortfolioData }) => {
                 </div>
                 <Link
                   href={service.href ? `${basePath}${service.href}` : `${basePath}/contact`}
-                  className="w-[70px] h-[70px] rounded-full bg-white group-hover:bg-accent transition-all duration-500 flex justify-center items-center hover:-rotate-45"
+                  className="w-[70px] h-[70px] rounded-full bg-secondary/10 dark:bg-white group-hover:bg-accent transition-all duration-500 flex justify-center items-center hover:-rotate-45"
                 >
-                  <BsArrowDownRight className="text-darkmid text-3xl" />
+                  <BsArrowDownRight className="text-secondary dark:text-darkmid text-3xl" />
                 </Link>
               </div>
-              <h2 className="text-[42px] font-bold leading-none text-white group-hover:text-accent transition-all duration-500">
+              <h2 className="text-[42px] font-bold leading-none text-secondary dark:text-white group-hover:text-accent transition-all duration-500">
                 {service.title}
               </h2>
-              <p className="text-white/60">{service.description}</p>
-              <div className="border-b border-white/20 w-full"></div>
+              <p className="text-secondary/60 dark:text-white/60">{service.description}</p>
+              <div className="border-b border-secondary/20 dark:border-white/20 w-full"></div>
             </div>
           ))}
         </motion.div>
