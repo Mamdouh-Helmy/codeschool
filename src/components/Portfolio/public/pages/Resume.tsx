@@ -12,6 +12,7 @@ import {
   SiVite, SiWebpack, SiJquery, SiRedis, SiNginx, SiLinux, SiVercel,
   SiFramer, SiThreedotjs, SiFlask, SiNestjs, SiSupabase,
 } from "react-icons/si";
+import { Icon } from "@iconify/react"; // ✅ جديد
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -46,7 +47,29 @@ function normalizeKey(value?: string) {
   return (value || "").toLowerCase().replace(/[\s.]/g, "");
 }
 
+/**
+ * ✅ بيتعرف دلوقتي على 3 صيغ:
+ * 1) صورة مرفوعة يدويًا: "https://..." أو "data:image/..."
+ * 2) صيغة iconify الجديدة من الـ IconPicker: "prefix:name" (مثلاً "logos:figma")
+ *    width/height="1em" عشان ياخد نفس حجم النص المحيط بيه (زي text-6xl هنا)
+ * 3) fallback: iconMap القديم (react-icons) للـ skills المحفوظة قبل كده،
+ *    وبعده FaCode لو مفيش تطابق خالص
+ */
 function resolveSkillIcon(icon?: string, name?: string) {
+  if (icon?.startsWith("http") || icon?.startsWith("data:")) {
+    return (
+      <img
+        src={icon}
+        alt=""
+        style={{ width: "1em", height: "1em", objectFit: "contain" }}
+      />
+    );
+  }
+
+  if (icon?.includes(":")) {
+    return <Icon icon={icon} width="1em" height="1em" />;
+  }
+
   const byIcon = iconMap[normalizeKey(icon)];
   if (byIcon) return byIcon;
   const byName = iconMap[normalizeKey(name)];
