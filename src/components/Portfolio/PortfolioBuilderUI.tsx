@@ -45,6 +45,27 @@ const SECTIONS: Section[] = [
 
 const DEFAULT_STATS = { yearsOfExperience: 0, codeCommits: 0 };
 
+/* ── Reusable Tailwind class strings (kept out of JSX to avoid repetition) ── */
+const NAV_ITEM_BASE =
+  "flex items-center gap-2.5 px-3 py-[9px] rounded-lg cursor-pointer border-none bg-transparent " +
+  "text-[13px] w-full text-left relative transition-colors duration-150 " +
+  "text-[#4a5568] dark:text-darkmuted hover:bg-[#f1f3f5] dark:hover:bg-dark_input hover:text-[#1a202c] dark:hover:text-white";
+const NAV_ITEM_ACTIVE = "bg-primary/[0.18] text-primary hover:bg-primary/[0.18] hover:text-primary";
+
+const BTN_PRIMARY =
+  "flex items-center justify-center gap-[7px] w-full px-4 py-2.5 text-white border-none rounded-lg " +
+  "text-[13px] font-semibold font-inherit cursor-pointer transition-colors duration-150 active:scale-[0.98] " +
+  "disabled:opacity-50 disabled:cursor-not-allowed";
+
+const BTN_OUTLINE =
+  "flex items-center justify-center gap-[7px] w-full px-4 py-2 bg-transparent rounded-lg text-xs font-inherit " +
+  "border transition-all duration-150 cursor-pointer";
+
+const BTN_GHOST =
+  "flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-transparent rounded-lg text-[11px] font-inherit " +
+  "border border-[#e2e8f0] dark:border-dark_border text-[#4a5568] dark:text-darkmuted cursor-pointer transition-all duration-150 " +
+  "hover:text-[#1a202c] dark:hover:text-white hover:border-[#cbd5e0] dark:hover:border-dark_border hover:bg-[#f1f3f5] dark:hover:bg-dark_input";
+
 export default function PortfolioBuilderUI({ portfolio, onSave, saving }: PortfolioBuilderUIProps) {
   const { t } = useI18n();
   const [activeSection, setActiveSection] = useState<string>("basic");
@@ -166,403 +187,241 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
     }
   };
 
+  const saveButtonClasses = `${BTN_PRIMARY} ${saveSuccess ? "bg-[#238636] hover:bg-[#238636]" : "bg-primary hover:bg-orange-deep"}`;
+
   return (
-    <>
-      <style>{`
-        /* ── تعريف المتغيرات للوضع الفاتح (افتراضي) ── */
-        .pb-root {
-          --brand:        #ff6700;
-          --brand-deep:   #e55a00;
-          --brand-coral:  #ff6437;
-          --brand-glow:   rgba(255,103,0,.18);
-          --teal:         #004d59;
-          --teal-light:   rgba(0,77,89,.35);
-          --amber:        #feaf00;
+    <div className="pb-root">
+      {/* Mobile overlay */}
+      <div
+        className={mobileMenuOpen ? "fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] lg:hidden" : "hidden"}
+        onClick={() => setMobileMenuOpen(false)}
+      />
 
-          /* Light mode surfaces */
-          --bg:           #f8f9fa;
-          --card:         #ffffff;
-          --input:        #f1f3f5;
-          --border:       #e2e8f0;
-          --border-hover: #cbd5e0;
-          --txt-1:        #1a202c;
-          --txt-2:        #4a5568;
-          --txt-3:        #a0aec0;
+      {/* Mobile Header */}
+      <div className="flex lg:hidden items-center justify-between px-4 py-3 bg-white dark:bg-darklight border-b border-[#e2e8f0] dark:border-dark_border fixed top-0 left-0 right-0 z-[80]">
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="bg-transparent border border-[#e2e8f0] dark:border-dark_border rounded-lg p-1.5 text-[#1a202c] dark:text-white cursor-pointer flex items-center"
+        >
+          {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+        </button>
+        <span className="text-sm font-semibold text-[#1a202c] dark:text-white flex items-center gap-[7px]">
+          <LayoutDashboard size={16} className="text-primary" />
+          {t("portfolio.builder.title")}
+        </span>
+        <button
+          onClick={showPreview ? handleSaveAndRefreshPreview : handleSave}
+          disabled={saving}
+          className={`${saveButtonClasses} w-auto px-3.5 py-1.5 text-xs`}
+        >
+          {saving ? <Loader2 size={13} className="animate-spin" /> : saveSuccess ? <CheckCircle2 size={13} /> : <Save size={13} />}
+          {saving ? t("portfolio.builder.saving") : saveSuccess ? t("portfolio.status.saved") || "Saved!" : t("portfolio.builder.save")}
+        </button>
+      </div>
 
-          --sidebar-w: 240px;
-          --radius-sm: 8px;
-          --radius-md: 10px;
-          --radius-lg: 14px;
-        }
-
-        /* ── تجاوز المتغيرات عند تفعيل الوضع المظلم ── */
-        .pb-root.dark {
-          --bg:           #0a0f17;
-          --card:         #161b22;
-          --input:        #21262d;
-          --border:       #30363d;
-          --border-hover: #484f58;
-          --txt-1:        #e6edf3;
-          --txt-2:        #8b949e;
-          --txt-3:        #484f58;
-        }
-
-        .pb-root * { box-sizing: border-box; }
-        .pb-root ::-webkit-scrollbar        { width: 4px; height: 4px; }
-        .pb-root ::-webkit-scrollbar-track  { background: transparent; }
-        .pb-root ::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 4px; }
-        .pb-root ::-webkit-scrollbar-thumb:hover { background: var(--brand); }
-
-        .pb-shell {
-          display: flex; height: 100vh;
-          background: var(--bg);
-          font-family: 'Geist', 'SF Pro Display', system-ui, sans-serif;
-          color: var(--txt-1); overflow: hidden;
-        }
-
-        .pb-sidebar {
-          width: var(--sidebar-w); background: var(--card);
-          border-right: 1px solid var(--border);
-          display: flex; flex-direction: column; flex-shrink: 0;
-          transition: transform .28s cubic-bezier(.4,0,.2,1); z-index: 100;
-        }
-        @media (max-width: 1023px) {
-          .pb-sidebar { position: fixed; inset-y: 0; left: 0; width: 280px; transform: translateX(-100%); }
-          .pb-sidebar.open { transform: translateX(0); }
-        }
-
-        .pb-logo { display: flex; align-items: center; gap: 10px; padding: 20px 18px 16px; border-bottom: 1px solid var(--border); }
-        .pb-logo-mark { width: 34px; height: 34px; background: var(--brand); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .pb-logo-text { font-size: 14px; font-weight: 600; color: var(--txt-1); letter-spacing: -.2px; }
-        .pb-logo-sub  { font-size: 10px; color: var(--txt-2); letter-spacing: .04em; text-transform: uppercase; margin-top: 1px; }
-
-        .pb-nav { flex: 1; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
-        .pb-nav-item {
-          display: flex; align-items: center; gap: 10px;
-          padding: 9px 12px; border-radius: var(--radius-sm);
-          cursor: pointer; border: none; background: none;
-          color: var(--txt-2); font-size: 13px; font-family: inherit;
-          width: 100%; text-align: left;
-          transition: background .15s, color .15s; position: relative;
-        }
-        .pb-nav-item:hover  { background: var(--input); color: var(--txt-1); }
-        .pb-nav-item.active { background: var(--brand-glow); color: var(--brand); }
-        .pb-nav-item.active::before {
-          content: ''; position: absolute; left: 0; top: 20%; bottom: 20%;
-          width: 3px; border-radius: 0 3px 3px 0; background: var(--brand);
-        }
-        .pb-nav-icon { flex-shrink: 0; }
-        .pb-nav-item .pb-nav-icon { color: var(--txt-2); }
-        .pb-nav-item.active .pb-nav-icon { color: var(--brand); }
-
-        .pb-footer { padding: 14px 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-        .pb-stat-row { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; border-bottom: 1px solid var(--border); }
-        .pb-stat-chip { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--txt-2); }
-        .pb-dot { width: 6px; height: 6px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 6px #3fb950; }
-        .pb-dot.offline { background: var(--txt-3); box-shadow: none; }
-
-        .btn-primary {
-          display: flex; align-items: center; justify-content: center; gap: 7px;
-          width: 100%; padding: 10px 16px; background: var(--brand); color: #fff;
-          border: none; border-radius: var(--radius-sm);
-          font-size: 13px; font-weight: 600; font-family: inherit;
-          cursor: pointer; transition: background .15s, transform .1s;
-        }
-        .btn-primary:hover  { background: var(--brand-deep); }
-        .btn-primary:active { transform: scale(.98); }
-        .btn-primary.success { background: #238636; }
-        .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
-
-        .btn-outline {
-          display: flex; align-items: center; justify-content: center; gap: 7px;
-          width: 100%; padding: 8px 16px; background: transparent; color: var(--txt-2);
-          border: 1px solid var(--border); border-radius: var(--radius-sm);
-          font-size: 12px; font-family: inherit; cursor: pointer; transition: all .15s;
-        }
-        .btn-outline:hover { border-color: var(--brand); color: var(--brand); background: var(--brand-glow); }
-
-        .btn-ghost {
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          padding: 6px 10px; background: transparent; color: var(--txt-2);
-          border: 1px solid var(--border); border-radius: var(--radius-sm);
-          font-size: 11px; font-family: inherit; cursor: pointer; transition: all .15s;
-        }
-        .btn-ghost:hover { color: var(--txt-1); border-color: var(--border-hover); background: var(--input); }
-
-        .pb-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(2px); z-index: 90; }
-        @media (max-width: 1023px) { .pb-overlay.show { display: block; } }
-
-        .pb-mobile-header {
-          display: none; align-items: center; justify-content: space-between;
-          padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border);
-          position: fixed; top: 0; left: 0; right: 0; z-index: 80;
-        }
-        @media (max-width: 1023px) { .pb-mobile-header { display: flex; } }
-
-        .pb-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        @media (max-width: 1023px) { .pb-main { padding-top: 57px; } }
-
-        .pb-topbar {
-          background: var(--card); border-bottom: 1px solid var(--border);
-          padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
-          gap: 12px; flex-shrink: 0;
-        }
-        .pb-topbar-left { display: flex; flex-direction: column; gap: 2px; }
-        .pb-section-title { font-size: 15px; font-weight: 600; color: var(--txt-1); }
-        .pb-section-sub   { font-size: 12px; color: var(--txt-2); }
-
-        .pb-breadcrumb { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--txt-2); }
-        .pb-breadcrumb-active { color: var(--brand); font-weight: 500; }
-
-        .pb-editor { flex: 1; overflow-y: auto; padding: 28px 32px; transition: width .3s ease; }
-        @media (max-width: 767px) { .pb-editor { padding: 20px 16px; } }
-
-        .pb-preview-panel {
-          width: 50%; border-left: 1px solid var(--border);
-          display: flex; flex-direction: column;
-          background: var(--bg); /* لجعل خلفية المعاينة متناغمة */
-          flex-shrink: 0;
-        }
-        .pb-preview-header {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0;
-        }
-        .pb-traffic-lights { display: flex; gap: 5px; align-items: center; }
-        .pb-tl { width: 11px; height: 11px; border-radius: 50%; }
-        .pb-url-bar {
-          flex: 1; margin: 0 10px; background: var(--input); border: 1px solid var(--border);
-          border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--txt-2);
-          font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .pb-preview-actions { display: flex; gap: 4px; }
-        .pb-preview-footer {
-          padding: 8px 16px; text-align: center; background: var(--card); border-top: 1px solid var(--border);
-          font-size: 11px; color: var(--txt-3); flex-shrink: 0;
-        }
-
-        .pb-section-wrap { max-width: 720px; margin: 0 auto; width: 100%; }
-        .pb-section-header { margin-bottom: 28px; }
-        .pb-section-badge {
-          display: inline-flex; align-items: center; gap: 6px;
-          font-size: 11px; font-weight: 600; letter-spacing: .06em;
-          text-transform: uppercase; color: var(--brand);
-          background: var(--brand-glow); border: 1px solid rgba(255,103,0,.25);
-          padding: 4px 10px; border-radius: 20px; margin-bottom: 10px;
-        }
-        .pb-section-h { font-size: 22px; font-weight: 700; color: var(--txt-1); letter-spacing: -.4px; }
-        .pb-section-p { font-size: 13px; color: var(--txt-2); margin-top: 4px; line-height: 1.5; }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .spin { animation: spin .7s linear infinite; }
-
-        .preview-loader {
-          position: absolute; inset: 0; z-index: 10;
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          background: var(--bg); gap: 10px;
-        }
-        .preview-loader-ring { width: 32px; height: 32px; border: 2.5px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: spin .75s linear infinite; }
-        .preview-loader-text { font-size: 12px; color: var(--txt-2); }
-
-        .pb-mobile-preview-note {
-          display: none; padding: 10px 16px;
-          background: rgba(0,77,89,.15); border-top: 1px solid rgba(0,77,89,.4);
-          font-size: 12px; color: #56d3ba; text-align: center;
-        }
-        @media (max-width: 1023px) { .pb-mobile-preview-note { display: block; } }
-        .pb-mobile-preview-note button { background: none; border: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
-
-        .pb-no-preview {
-          font-size: 11px; color: var(--txt-3); text-align: center;
-          background: var(--input); border: 1px dashed var(--border);
-          border-radius: var(--radius-sm); padding: 10px 14px; line-height: 1.5;
-        }
-      `}</style>
-
-      <div className="pb-root">
-        <div className={`pb-overlay ${mobileMenuOpen ? "show" : ""}`} onClick={() => setMobileMenuOpen(false)} />
-
-        {/* Mobile Header */}
-        <div className="pb-mobile-header">
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "6px", color: "var(--txt-1)", cursor: "pointer", display: "flex", alignItems: "center" }}
-          >
-            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
-          <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--txt-1)", display: "flex", alignItems: "center", gap: "7px" }}>
-            <LayoutDashboard size={16} color="var(--brand)" />
-            {t("portfolio.builder.title")}
-          </span>
-          <button
-            onClick={showPreview ? handleSaveAndRefreshPreview : handleSave}
-            disabled={saving}
-            className="btn-primary"
-            style={{ width: "auto", padding: "6px 14px", fontSize: "12px" }}
-          >
-            {saving ? <Loader2 size={13} className="spin" /> : saveSuccess ? <CheckCircle2 size={13} /> : <Save size={13} />}
-            {saving ? t("portfolio.builder.saving") : saveSuccess ? t("portfolio.status.saved") || "Saved!" : t("portfolio.builder.save")}
-          </button>
-        </div>
-
-        <div className="pb-shell">
-          {/* Sidebar */}
-          <aside className={`pb-sidebar ${mobileMenuOpen ? "open" : ""}`}>
-            <div className="pb-logo">
-              <div className="pb-logo-mark"><LayoutDashboard size={17} color="#fff" /></div>
-              <div>
-                <div className="pb-logo-text">{t("portfolio.builder.title")}</div>
-                <div className="pb-logo-sub">Portfolio Studio</div>
+      <div className="flex h-screen bg-[#f8f9fa] dark:bg-darkmode font-sans text-[#1a202c] dark:text-white overflow-hidden">
+        {/* Sidebar */}
+        <aside
+          className={
+            "w-[280px] lg:w-60 bg-white dark:bg-darklight border-r border-[#e2e8f0] dark:border-dark_border " +
+            "flex flex-col flex-shrink-0 transition-transform duration-300 ease-in-out z-[100] " +
+            "fixed inset-y-0 left-0 lg:static " +
+            (mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0")
+          }
+        >
+          <div className="flex items-center gap-2.5 px-[18px] pt-5 pb-4 border-b border-[#e2e8f0] dark:border-dark_border">
+            <div className="w-[34px] h-[34px] bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+              <LayoutDashboard size={17} className="text-white" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-[#1a202c] dark:text-white tracking-tight">
+                {t("portfolio.builder.title")}
+              </div>
+              <div className="text-[10px] text-[#4a5568] dark:text-darkmuted tracking-wide uppercase mt-0.5">
+                Portfolio Studio
               </div>
             </div>
+          </div>
 
-            <nav className="pb-nav">
-              {SECTIONS.map((section) => {
-                const Icon = section.icon;
-                const isActive = activeSection === section.id;
-                return (
-                  <button
-                    key={section.id}
-                    onClick={() => { setActiveSection(section.id); setMobileMenuOpen(false); }}
-                    className={`pb-nav-item ${isActive ? "active" : ""}`}
-                  >
-                    <Icon size={16} className="pb-nav-icon" />
-                    <span style={{ fontWeight: isActive ? 600 : 400 }}>{t(section.label)}</span>
-                    {isActive && <ChevronRight size={13} style={{ marginLeft: "auto", opacity: 0.6 }} color="var(--brand)" />}
-                  </button>
-                );
-              })}
-            </nav>
+          <nav className="flex-1 p-2.5 flex flex-col gap-0.5 overflow-y-auto">
+            {SECTIONS.map((section) => {
+              const Icon = section.icon;
+              const isActive = activeSection === section.id;
+              return (
+                <button
+                  key={section.id}
+                  onClick={() => { setActiveSection(section.id); setMobileMenuOpen(false); }}
+                  className={`${NAV_ITEM_BASE} ${isActive ? NAV_ITEM_ACTIVE : ""}`}
+                >
+                  <Icon size={16} className={`flex-shrink-0 ${isActive ? "text-primary" : "text-[#4a5568] dark:text-darkmuted"}`} />
+                  <span className={isActive ? "font-semibold" : "font-normal"}>{t(section.label)}</span>
+                  {isActive && <ChevronRight size={13} className="ml-auto opacity-60 text-primary" />}
+                  {isActive && (
+                    <span className="absolute left-0 top-[20%] bottom-[20%] w-[3px] rounded-r-[3px] bg-primary" />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
 
-            <div className="pb-footer">
-              <div className="pb-stat-row">
-                <div className="pb-stat-chip">
-                  <span className={`pb-dot ${formData.isPublished ? "" : "offline"}`} />
-                  {formData.isPublished ? t("portfolio.builder.published") || "Published" : t("portfolio.builder.draft") || "Draft"}
-                </div>
-                {formData.views > 0 && (
-                  <div className="pb-stat-chip">
-                    <TrendingUp size={12} />
-                    {formData.views.toLocaleString()} {t("portfolio.builder.views") || "views"}
-                  </div>
-                )}
+          <div className="px-2.5 py-3.5 border-t border-[#e2e8f0] dark:border-dark_border flex flex-col gap-2">
+            <div className="flex items-center justify-between px-1 pb-2 border-b border-[#e2e8f0] dark:border-dark_border">
+              <div className="flex items-center gap-1.5 text-[11px] text-[#4a5568] dark:text-darkmuted">
+                <span
+                  className={
+                    "w-1.5 h-1.5 rounded-full " +
+                    (formData.isPublished
+                      ? "bg-[#3fb950] shadow-[0_0_6px_#3fb950]"
+                      : "bg-[#a0aec0] dark:bg-dark_border")
+                  }
+                />
+                {formData.isPublished ? t("portfolio.builder.published") || "Published" : t("portfolio.builder.draft") || "Draft"}
               </div>
-
-              <button
-                onClick={showPreview ? handleSaveAndRefreshPreview : handleSave}
-                disabled={saving}
-                className={`btn-primary ${saveSuccess ? "success" : ""}`}
-              >
-                {saving ? <Loader2 size={15} className="spin" /> : saveSuccess ? <CheckCircle2 size={15} /> : <Save size={15} />}
-                {saving ? t("portfolio.builder.saving") : saveSuccess ? t("portfolio.status.saved") || "Saved!" : t("portfolio.builder.save")}
-              </button>
-
-              {previewUrl ? (
-                <>
-                  <button
-                    onClick={() => setShowPreview(!showPreview)}
-                    className="btn-outline"
-                    style={showPreview ? { borderColor: "var(--brand-coral)", color: "var(--brand-coral)", background: "rgba(255,100,55,.08)" } : {}}
-                  >
-                    {showPreview ? <><EyeOff size={14} />{t("portfolio.builder.hidePreview") || "Hide Preview"}</> : <><Eye size={14} />{t("portfolio.builder.livePreview") || "Live Preview"}</>}
-                  </button>
-                  <button onClick={handleOpenInNewTab} className="btn-ghost">
-                    <ExternalLink size={12} />
-                    {t("portfolio.builder.openInNewTab") || "Open in New Tab"}
-                  </button>
-                </>
-              ) : (
-                <div className="pb-no-preview">
-                  <Sparkles size={13} style={{ display: "inline", marginRight: "4px", verticalAlign: "middle" }} />
-                  {t("portfolio.builder.saveToPreview") || "Save your portfolio to enable live preview"}
-                </div>
-              )}
-            </div>
-          </aside>
-
-          {/* Main */}
-          <div className="pb-main">
-            <div className="pb-topbar">
-              <div className="pb-topbar-left">
-                <div className="pb-section-title">{t(activeSecData?.label || "portfolio.builder.basicInfo")}</div>
-                <div className="pb-section-sub">{t(activeSecData?.description || "portfolio.builder.basicInfoDesc")}</div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div className="pb-breadcrumb">
-                  <Globe size={11} />
-                  <span>{t("portfolio.builder.title")}</span>
-                  <ChevronRight size={10} />
-                  <span className="pb-breadcrumb-active">{t(activeSecData?.label || "portfolio.builder.basicInfo")}</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-              <div className="pb-editor" style={{ width: showPreview && previewUrl ? "50%" : "100%" }}>
-                <div className="pb-section-wrap">
-                  <div className="pb-section-header">
-                    <div className="pb-section-badge">
-                      {activeSecData && (() => { const Icon = activeSecData.icon; return <Icon size={11} />; })()}
-                      {t(activeSecData?.label || "portfolio.builder.basicInfo")}
-                    </div>
-                    <h2 className="pb-section-h">{t(activeSecData?.label || "portfolio.builder.basicInfo")}</h2>
-                    <p className="pb-section-p">{t(activeSecData?.description || "portfolio.builder.basicInfoDesc")}</p>
-                  </div>
-                  {renderSection()}
-                </div>
-              </div>
-
-              {showPreview && previewUrl && (
-                <div className="pb-preview-panel">
-                  <div className="pb-preview-header">
-                    <div className="pb-traffic-lights">
-                      <div className="pb-tl" style={{ background: "#ff5f57" }} />
-                      <div className="pb-tl" style={{ background: "#febc2e" }} />
-                      <div className="pb-tl" style={{ background: "#28c840" }} />
-                    </div>
-                    <div className="pb-url-bar">{previewUrl}</div>
-                    <div className="pb-preview-actions">
-                      <button onClick={handleRefreshPreview} className="btn-ghost" title="Refresh" style={{ padding: "5px 8px" }}>
-                        <RefreshCw size={13} className={previewLoading ? "spin" : ""} />
-                      </button>
-                      <button onClick={handleOpenInNewTab} className="btn-ghost" title="Open" style={{ padding: "5px 8px" }}>
-                        <ExternalLink size={13} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-                    {previewLoading && (
-                      <div className="preview-loader">
-                        <div className="preview-loader-ring" />
-                        <div className="preview-loader-text">{t("portfolio.builder.loadingPreview") || "Loading preview…"}</div>
-                      </div>
-                    )}
-                    <iframe
-                      key={iframeKey}
-                      src={previewUrl}
-                      style={{ width: "100%", height: "100%", border: "none" }}
-                      title="Portfolio Live Preview"
-                      onLoad={() => setPreviewLoading(false)}
-                      onError={() => setPreviewLoading(false)}
-                    />
-                  </div>
-
-                  <div className="pb-preview-footer">
-                    {t("portfolio.builder.previewNote") || "Save changes then refresh to see the latest version"}
-                  </div>
+              {formData.views > 0 && (
+                <div className="flex items-center gap-1.5 text-[11px] text-[#4a5568] dark:text-darkmuted">
+                  <TrendingUp size={12} />
+                  {formData.views.toLocaleString()} {t("portfolio.builder.views") || "views"}
                 </div>
               )}
             </div>
 
-            {showPreview && previewUrl && (
-              <div className="pb-mobile-preview-note">
-                Live preview is available on large screens only.{" "}
-                <button onClick={handleOpenInNewTab}>{t("portfolio.builder.openInNewTab") || "Open in new tab"}</button>
+            <button
+              onClick={showPreview ? handleSaveAndRefreshPreview : handleSave}
+              disabled={saving}
+              className={saveButtonClasses}
+            >
+              {saving ? <Loader2 size={15} className="animate-spin" /> : saveSuccess ? <CheckCircle2 size={15} /> : <Save size={15} />}
+              {saving ? t("portfolio.builder.saving") : saveSuccess ? t("portfolio.status.saved") || "Saved!" : t("portfolio.builder.save")}
+            </button>
+
+            {previewUrl ? (
+              <>
+                <button
+                  onClick={() => setShowPreview(!showPreview)}
+                  className={
+                    BTN_OUTLINE +
+                    " " +
+                    (showPreview
+                      ? "border-[#ff6437] text-[#ff6437] bg-[#ff6437]/[0.08]"
+                      : "border-[#e2e8f0] dark:border-dark_border text-[#4a5568] dark:text-darkmuted hover:border-primary hover:text-primary hover:bg-primary/[0.08]")
+                  }
+                >
+                  {showPreview ? <><EyeOff size={14} />{t("portfolio.builder.hidePreview") || "Hide Preview"}</> : <><Eye size={14} />{t("portfolio.builder.livePreview") || "Live Preview"}</>}
+                </button>
+                <button onClick={handleOpenInNewTab} className={BTN_GHOST}>
+                  <ExternalLink size={12} />
+                  {t("portfolio.builder.openInNewTab") || "Open in New Tab"}
+                </button>
+              </>
+            ) : (
+              <div className="text-[11px] text-[#a0aec0] dark:text-dark_border text-center bg-[#f1f3f5] dark:bg-dark_input border border-dashed border-[#e2e8f0] dark:border-dark_border rounded-lg px-3.5 py-2.5 leading-relaxed">
+                <Sparkles size={13} className="inline mr-1 align-middle" />
+                {t("portfolio.builder.saveToPreview") || "Save your portfolio to enable live preview"}
               </div>
             )}
           </div>
+        </aside>
+
+        {/* Main */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0 pt-[57px] lg:pt-0">
+          <div className="bg-white dark:bg-darklight border-b border-[#e2e8f0] dark:border-dark_border px-6 py-3.5 flex items-center justify-between gap-3 flex-shrink-0">
+            <div className="flex flex-col gap-0.5">
+              <div className="text-[15px] font-semibold text-[#1a202c] dark:text-white">
+                {t(activeSecData?.label || "portfolio.builder.basicInfo")}
+              </div>
+              <div className="text-xs text-[#4a5568] dark:text-darkmuted">
+                {t(activeSecData?.description || "portfolio.builder.basicInfoDesc")}
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-1.5 text-[11px] text-[#4a5568] dark:text-darkmuted">
+                <Globe size={11} />
+                <span>{t("portfolio.builder.title")}</span>
+                <ChevronRight size={10} />
+                <span className="text-primary font-medium">{t(activeSecData?.label || "portfolio.builder.basicInfo")}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 flex overflow-hidden">
+            <div
+              className="flex-1 overflow-y-auto px-4 py-5 md:px-8 md:py-7 transition-[width] duration-300 ease-in-out"
+              style={{ width: showPreview && previewUrl ? "50%" : "100%" }}
+            >
+              <div className="max-w-[720px] mx-auto w-full">
+                <div className="mb-7">
+                  <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wider uppercase text-primary bg-primary/[0.18] border border-primary/25 px-2.5 py-1 rounded-full mb-2.5">
+                    {activeSecData && (() => { const Icon = activeSecData.icon; return <Icon size={11} />; })()}
+                    {t(activeSecData?.label || "portfolio.builder.basicInfo")}
+                  </div>
+                  <h2 className="text-[22px] font-bold text-[#1a202c] dark:text-white tracking-tight">
+                    {t(activeSecData?.label || "portfolio.builder.basicInfo")}
+                  </h2>
+                  <p className="text-[13px] text-[#4a5568] dark:text-darkmuted mt-1 leading-relaxed">
+                    {t(activeSecData?.description || "portfolio.builder.basicInfoDesc")}
+                  </p>
+                </div>
+                {renderSection()}
+              </div>
+            </div>
+
+            {showPreview && previewUrl && (
+              <div className="w-1/2 border-l border-[#e2e8f0] dark:border-dark_border flex flex-col bg-[#f8f9fa] dark:bg-darkmode flex-shrink-0">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-white dark:bg-darklight border-b border-[#e2e8f0] dark:border-dark_border flex-shrink-0">
+                  <div className="flex gap-[5px] items-center">
+                    <div className="w-[11px] h-[11px] rounded-full bg-[#ff5f57]" />
+                    <div className="w-[11px] h-[11px] rounded-full bg-[#febc2e]" />
+                    <div className="w-[11px] h-[11px] rounded-full bg-[#28c840]" />
+                  </div>
+                  <div className="flex-1 mx-2.5 bg-[#f1f3f5] dark:bg-dark_input border border-[#e2e8f0] dark:border-dark_border rounded-md px-2.5 py-1 text-[11px] text-[#4a5568] dark:text-darkmuted font-mono whitespace-nowrap overflow-hidden text-ellipsis">
+                    {previewUrl}
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={handleRefreshPreview} className={`${BTN_GHOST} px-2 py-1`} title="Refresh">
+                      <RefreshCw size={13} className={previewLoading ? "animate-spin" : ""} />
+                    </button>
+                    <button onClick={handleOpenInNewTab} className={`${BTN_GHOST} px-2 py-1`} title="Open">
+                      <ExternalLink size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 relative overflow-hidden">
+                  {previewLoading && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#f8f9fa] dark:bg-darkmode gap-2.5">
+                      <div className="w-8 h-8 border-[2.5px] border-[#e2e8f0] dark:border-dark_border border-t-primary rounded-full animate-spin" />
+                      <div className="text-xs text-[#4a5568] dark:text-darkmuted">
+                        {t("portfolio.builder.loadingPreview") || "Loading preview…"}
+                      </div>
+                    </div>
+                  )}
+                  <iframe
+                    key={iframeKey}
+                    src={previewUrl}
+                    className="w-full h-full border-none"
+                    title="Portfolio Live Preview"
+                    onLoad={() => setPreviewLoading(false)}
+                    onError={() => setPreviewLoading(false)}
+                  />
+                </div>
+
+                <div className="px-4 py-2 text-center bg-white dark:bg-darklight border-t border-[#e2e8f0] dark:border-dark_border text-[11px] text-[#a0aec0] dark:text-dark_border flex-shrink-0">
+                  {t("portfolio.builder.previewNote") || "Save changes then refresh to see the latest version"}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {showPreview && previewUrl && (
+            <div className="block lg:hidden px-4 py-2.5 bg-secondary/[0.15] border-t border-secondary/40 text-xs text-[#56d3ba] text-center">
+              Live preview is available on large screens only.{" "}
+              <button onClick={handleOpenInNewTab} className="bg-transparent border-none text-inherit font-inherit underline cursor-pointer">
+                {t("portfolio.builder.openInNewTab") || "Open in new tab"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
