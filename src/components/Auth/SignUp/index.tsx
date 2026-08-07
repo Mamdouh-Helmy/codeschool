@@ -1,6 +1,5 @@
 "use client";
 import React, { useContext, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import SocialSignUp from "../SocialSignUp";
@@ -12,6 +11,7 @@ import { useI18n } from "@/i18n/I18nProvider";
 type SignUpProps = {
   signUpOpen: (value: boolean) => void;
   onSuccess: (userData: any) => void;
+  onSwitchToSignIn: () => void;
 };
 
 type ReferralSourceOption = {
@@ -20,7 +20,7 @@ type ReferralSourceOption = {
   value: string;
 };
 
-const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
+const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess, onSwitchToSignIn }) => {
   const router = useRouter();
   const authDialog = useContext(AuthDialogContext);
   const { t } = useI18n();
@@ -181,7 +181,8 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
             "This email is already registered. Try logging in instead."
           );
           setTimeout(() => {
-            router.push("/signin");
+            signUpOpen(false);
+            onSwitchToSignIn();
           }, 2000);
         } else if (res.status === 400) {
           toast.error(
@@ -252,11 +253,8 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
           console.error("❌ Auto login failed:", loginError);
           // فتح modal تسجيل الدخول يدوياً
           toast.success(t("auth.registrationSuccessManualLogin") || "Account created! Please log in.");
-          if (signUpOpen) signUpOpen(false);
-
-          setTimeout(() => {
-            router.push("/signin");
-          }, 1200);
+          signUpOpen(false);
+          onSwitchToSignIn();
         }
       } else {
         toast.error(result.message || t("auth.registrationFailed"));
@@ -497,12 +495,16 @@ const SignUp: React.FC<SignUpProps> = ({ signUpOpen, onSuccess }) => {
 
       <p className="text-body-secondary text-base">
         {t("auth.haveAccount") || "Already have an account?"}
-        <Link
-          href="/signin"
-          className="pl-2 text-primary hover:bg-darkprimary hover:underline"
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            onSwitchToSignIn();
+          }}
+          className="pl-2 text-primary hover:underline"
         >
           {t("auth.signIn") || "Sign In"}
-        </Link>
+        </a>
       </p>
     </>
   );

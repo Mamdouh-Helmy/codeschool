@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useState, useContext } from "react";
 import { signIn, getSession } from "next-auth/react";
 import toast, { Toaster } from "react-hot-toast";
@@ -26,9 +25,10 @@ const validatePassword = (password: string) => {
 type SigninProps = {
   signInOpen: (value: boolean) => void;
   onSuccess: (userData: any) => void;
+  onSwitchToSignUp: () => void;
 };
 
-const Signin: React.FC<SigninProps> = ({ signInOpen, onSuccess }) => {
+const Signin: React.FC<SigninProps> = ({ signInOpen, onSuccess, onSwitchToSignUp }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
@@ -181,9 +181,16 @@ const Signin: React.FC<SigninProps> = ({ signInOpen, onSuccess }) => {
 
       <p className="text-body-secondary text-base">
         {t("auth.noAccount")}{" "}
-        <Link href="/signup" className="text-primary hover:underline">
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            onSwitchToSignUp();
+          }}
+          className="text-primary hover:underline"
+        >
           {t("auth.signUp")}
-        </Link>
+        </a>
       </p>
     </>
   );

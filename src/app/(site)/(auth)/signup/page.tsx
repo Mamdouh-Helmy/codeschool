@@ -1,20 +1,17 @@
+"use client";
+
+import { useRouter } from "next/navigation";
 import SignUp from "@/components/Auth/SignUp";
 import Breadcrumb from "@/components/Common/Breadcrumb";
-import { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title:
-    "Sign Up | Codeschool",
-};
 
 const SignupPage = () => {
+  const router = useRouter();
+
   const handleSuccess = (userData: any) => {
-   
-    localStorage.setItem("user", JSON.stringify(userData));
+    // next-auth بيدير الـ session تلقائيًا، مش محتاجين نخزّن يدويًا
   };
 
   const handleSignUpOpen = (value: boolean) => {
-    
     console.log("SignUp modal open:", value);
   };
 
@@ -22,15 +19,13 @@ const SignupPage = () => {
     <>
       <Breadcrumb pageName="Sign Up Page" />
 
-      <SignUp 
+      <SignUp
         signUpOpen={handleSignUpOpen}
         onSuccess={handleSuccess}
+        onSwitchToSignIn={() => router.push("/signin")}
       />
     </>
   );
 };
 
 export default SignupPage;
-
-
-

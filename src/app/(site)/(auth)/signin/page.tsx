@@ -41,7 +41,11 @@ const SigninPage = () => {
     <>
       <Breadcrumb pageName="Sign In Page" />
 
-      <Signin signInOpen={handleSignInOpen} onSuccess={handleSuccess} />
+      <Signin
+        signInOpen={handleSignInOpen}
+        onSuccess={handleSuccess}
+        onSwitchToSignUp={() => router.push("/signup")}
+      />
     </>
   );
 };

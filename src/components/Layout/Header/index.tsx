@@ -1024,6 +1024,10 @@ const Header: React.FC = () => {
                 // ✅ مبقاش محتاج نخزن حاجة يدويًا هنا — useSession هيتحدث لوحده
                 // بعد ما signIn() تنجح في Signin.tsx
               }}
+              onSwitchToSignUp={() => {
+                setIsSignInOpen(false);
+                setIsSignUpOpen(true);
+              }}
             />
           </div>
         </div>
@@ -1044,6 +1048,10 @@ const Header: React.FC = () => {
             <SignUp
               signUpOpen={(value: boolean) => setIsSignUpOpen(value)}
               onSuccess={() => {}}
+              onSwitchToSignIn={() => {
+                setIsSignUpOpen(false);
+                setIsSignInOpen(true);
+              }}
             />
           </div>
         </div>
