@@ -11,6 +11,13 @@ import type { PortfolioData } from "@/types/portfolio";
 const Home = ({ portfolio }: { portfolio: PortfolioData }) => {
   const hasCv = !!portfolio.cvUrl && portfolio.cvUrl.trim().length > 0;
 
+  const cvDownloadUrl = hasCv
+    ? `/api/download-cv?${new URLSearchParams({
+        url: portfolio.cvUrl,
+        name: portfolio.ownerName || "CV",
+      }).toString()}`
+    : "";
+
   return (
     <section className="h-full text-secondary dark:text-white" dir="ltr">
       <div className="container mx-auto h-full">
@@ -41,12 +48,7 @@ const Home = ({ portfolio }: { portfolio: PortfolioData }) => {
                   className="uppercase flex items-center gap-2"
                   asChild
                 >
-                  <a
-                    href={portfolio.cvUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
-                  >
+                  <a href={cvDownloadUrl}>
                     <span>Download CV</span>
                     <FiDownload className="text-lg" />
                   </a>
