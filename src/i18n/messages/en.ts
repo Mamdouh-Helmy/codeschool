@@ -4392,6 +4392,7 @@ const en = {
   "auth.howDidYouHear": "How did you hear about us?",
   "nav.referralSources": "Referral Sources",
   "nav.guestDashboard": "Guest Dashboard",
+  "auth.loadingOptions": "Loading sign-in options...",
 };
 
 export default en;

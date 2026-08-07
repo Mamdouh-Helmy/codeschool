@@ -24,12 +24,12 @@ const Stats = ({ stats = [] }: StatsProps) => {
                 end={item.num}
                 duration={5}
                 delay={2}
-                className="text-4xl xl:text-6xl font-extrabold"
+                className="text-3xl xl:text-5xl font-extrabold"
               />
               <p
                 className={`${
-                  item.text.length < 15 ? "max-w-[100px]" : "max-w-[150px]"
-                } leading-snug text-white/80`}
+                  item.text.length < 15 ? "max-w-[90px]" : "max-w-[130px]"
+                } leading-snug text-sm text-white/80`}
               >
                 {item.text}
               </p>

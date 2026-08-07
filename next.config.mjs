@@ -12,7 +12,7 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals.push({
-        'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
+        "mongodb-client-encryption": "commonjs mongodb-client-encryption",
       });
 
       // ✅ منع Webpack من تصغير أسماء الـ functions في Mongoose models
@@ -29,7 +29,7 @@ const nextConfig = {
       tls: false,
       dns: false,
       child_process: false,
-      'timers/promises': false,
+      "timers/promises": false,
       async_hooks: false,
       crypto: false,
       stream: false,
@@ -48,11 +48,13 @@ const nextConfig = {
 
   images: {
     remotePatterns: [
-      { protocol: 'https', hostname: 'codeschool.online' },
-      { protocol: 'http', hostname: 'localhost' },
-      { protocol: 'https', hostname: 'res.cloudinary.com' }, // ✅ مضافة
+      { protocol: "https", hostname: "codeschool.online" },
+      { protocol: "http", hostname: "localhost" },
+      { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
-    formats: ['image/webp'],
+    formats: ["image/webp"],
+    qualities: [75, 100], // ✅ يسمح بالـ quality اللي بتستخدمه فعليًا في الكود
   },
 
   env: {
@@ -62,7 +64,7 @@ const nextConfig = {
 
   experimental: {
     serverActions: {
-      bodySizeLimit: '20mb',
+      bodySizeLimit: "20mb",
     },
   },
 

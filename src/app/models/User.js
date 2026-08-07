@@ -29,9 +29,21 @@ const UserSchema = new mongoose.Schema(
         "Username can only contain letters, numbers and underscores",
       ],
     },
+    // ✅ جديد: مصدر إنشاء الحساب — بيتحكم في هل الـ password مطلوب ولا لأ
+    authProvider: {
+      type: String,
+      enum: ["credentials", "google", "github"],
+      default: "credentials",
+    },
     password: {
       type: String,
-      required: [true, "Password is required"],
+      // ✅ بقى شرطي: مطلوب بس لو الحساب اتعمل بـ credentials
+      required: [
+        function () {
+          return this.authProvider === "credentials";
+        },
+        "Password is required",
+      ],
       minlength: 6,
       select: false,
     },
@@ -51,8 +63,7 @@ const UserSchema = new mongoose.Schema(
       },
       default: "ar",
     },
-    // ✅ "guest" اتضاف كـ role جديد وبقى هو الافتراضي بدل "student"
-    // أي مستخدم بيعمل self-register من غير ما حد يحدد role يبقى guest تلقائيًا
+    // ✅ "guest" هو الـ role الافتراضي لأي مستخدم جديد (credentials أو OAuth)
     role: {
       type: String,
       enum: ["admin", "marketing", "student", "instructor", "guest"],
@@ -70,8 +81,6 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    // ✅ جديد: مصدر معرفة المستخدم بالموقع (زي "TED"، "Instagram"...)
-    // القيم دي مش هارد كودد — بتيجي من موديل ReferralSource اللي الأدمن بيديره
     referralSource: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ReferralSource",
@@ -159,7 +168,6 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// ✅ بدون duplicate indexes — email و username معرّفين unique في الـ schema فوق
 UserSchema.index({ gender: 1 }, { sparse: true });
 UserSchema.index({ language: 1 }, { sparse: true });
 UserSchema.index({ referralSource: 1 }, { sparse: true });

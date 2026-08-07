@@ -4509,6 +4509,7 @@ const ar = {
   "nav.referralSources": "مصادر الإحالة",
   "auth.howDidYouHear": "كيف سمعت عنا؟",
   "nav.guestDashboard": "لوحة تحكم الزائر",
+  "auth.loadingOptions": "جاري تحميل خيارات تسجيل الدخول...",
 };
 
 export default ar;

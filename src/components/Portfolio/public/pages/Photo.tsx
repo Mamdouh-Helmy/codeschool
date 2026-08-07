@@ -29,7 +29,7 @@ const Photo = ({ src }: PhotoProps) => {
             opacity: 1,
             transition: { delay: 2.4, duration: 0.4, ease: "easeInOut" },
           }}
-          className="w-[298px] h-[298px] xl:w-[498px] xl:h-[498px] mix-blend-lighten absolute"
+          className="w-[240px] h-[240px] xl:w-[400px] xl:h-[400px] mix-blend-lighten absolute"
         >
           <Image
             src={imageSrc}
@@ -44,7 +44,7 @@ const Photo = ({ src }: PhotoProps) => {
         {/* circle — ✅ text-accent + stroke="currentColor" بدل الـ hex الثابت
             عشان يورث لون الـ accent بتاعك (أورانج) تلقائيًا */}
         <motion.svg
-          className="w-[300px] xl:w-[506px] h-[300px] xl:h-[506px] text-accent"
+          className="w-[242px] xl:w-[408px] h-[242px] xl:h-[408px] text-accent"
           fill="transparent"
           viewBox="0 0 506 506"
           xmlns="http://www.w3.org/2000/svg"
