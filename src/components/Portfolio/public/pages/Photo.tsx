@@ -14,13 +14,14 @@ const Photo = ({ src }: PhotoProps) => {
   const imageSrc = src && src.trim().length > 0 ? src : DEFAULT_PHOTO;
 
   return (
-    <div className="w-full h-full relative">
+    <div className="w-full h-full flex items-center justify-center">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{
           opacity: 1,
           transition: { delay: 2, duration: 0.4, ease: "easeIn" },
         }}
+        className="relative w-[240px] h-[240px] xl:w-[400px] xl:h-[400px]"
       >
         {/* image */}
         <motion.div
@@ -29,22 +30,23 @@ const Photo = ({ src }: PhotoProps) => {
             opacity: 1,
             transition: { delay: 2.4, duration: 0.4, ease: "easeInOut" },
           }}
-          className="w-[240px] h-[240px] xl:w-[400px] xl:h-[400px] mix-blend-lighten absolute"
+          className="absolute inset-0 overflow-hidden rounded-full"
         >
           <Image
             src={imageSrc}
             priority
             quality={100}
             fill
+            sizes="(min-width: 1280px) 400px, 240px"
             alt=""
-            className="object-contain rounded-full"
+            className="object-cover rounded-full"
           />
         </motion.div>
 
-        {/* circle — ✅ text-accent + stroke="currentColor" بدل الـ hex الثابت
+        {/* circle — text-accent + stroke="currentColor" بدل الـ hex الثابت
             عشان يورث لون الـ accent بتاعك (أورانج) تلقائيًا */}
         <motion.svg
-          className="w-[242px] xl:w-[408px] h-[242px] xl:h-[408px] text-accent"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[242px] w-[242px] -translate-x-1/2 -translate-y-1/2 text-accent xl:h-[415px] xl:w-[415px]"
           fill="transparent"
           viewBox="0 0 506 506"
           xmlns="http://www.w3.org/2000/svg"
