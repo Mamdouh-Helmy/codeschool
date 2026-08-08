@@ -1,5 +1,235 @@
 // lib/emailService.js - إصدار معدل
 import nodemailer from "nodemailer";
+import path from "path";
+import fs from "fs";
+
+// ---------- Brand tokens ----------
+const BRAND = {
+  primary: "#8c52ff",
+  primaryDeep: "#6d3fd1",
+  ink: "#102C46",
+  muted: "#547593",
+  faint: "#8FACC6",
+  bg: "#f4f6f9",
+  card: "#ffffff",
+  border: "#e7edf3",
+  softBg: "#f7f9fc",
+};
+
+// ---------- Logo attachment (embedded via CID, cached in memory) ----------
+let cachedLogoBuffer = null;
+
+async function getLogoAttachment() {
+  if (cachedLogoBuffer) {
+    return {
+      filename: "logo.png",
+      content: cachedLogoBuffer,
+      cid: "codeschool-logo",
+      contentType: "image/png",
+      contentDisposition: "inline",
+    };
+  }
+
+  // 1) Try local filesystem first (works on traditional/self-hosted servers,
+  //    and on serverless platforms once public/ is bundled via
+  //    outputFileTracingIncludes in next.config.js).
+  try {
+    const logoPath = path.join(process.cwd(), "public/images/logo/footer-logo-white.png");
+    if (fs.existsSync(logoPath)) {
+      cachedLogoBuffer = fs.readFileSync(logoPath);
+      return {
+        filename: "logo.png",
+        content: cachedLogoBuffer,
+        cid: "codeschool-logo",
+        contentType: "image/png",
+        contentDisposition: "inline",
+      };
+    }
+    console.warn("⚠️ Logo not found on local filesystem at:", logoPath);
+  } catch (error) {
+    console.warn("⚠️ Filesystem read for logo failed:", error.message);
+  }
+
+  // 2) Fallback: fetch the already-hosted logo over HTTP and embed it as CID.
+  try {
+    const res = await fetch("https://i.ibb.co/rftm186y/footer-logo-white.png");
+    if (!res.ok) {
+      console.warn("⚠️ Logo fetch fallback failed with status:", res.status);
+      return null;
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    cachedLogoBuffer = Buffer.from(arrayBuffer);
+    return {
+      filename: "logo.png",
+      content: cachedLogoBuffer,
+      cid: "codeschool-logo",
+      contentType: "image/png",
+      contentDisposition: "inline",
+    };
+  } catch (error) {
+    console.warn("⚠️ Logo fetch fallback errored:", error.message);
+    return null;
+  }
+}
+
+function buildVerificationEmail({ otp, hasLogo }) {
+  const logoBlock = hasLogo
+    ? `<img src="cid:codeschool-logo" alt="CodeSchool" width="52" height="52" style="width:52px;height:52px;border-radius:12px;display:block;margin:0 auto 14px;border:0;outline:none;" />`
+    : `<div style="font-size:22px;font-weight:800;color:#ffffff;margin:0 auto 14px;">CodeSchool</div>`;
+
+  return `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>التحقق من البريد الإلكتروني</title>
+      <style>
+        body, p, h1, h2, h3 { direction: rtl !important; text-align: center !important; }
+      </style>
+    </head>
+    <body dir="rtl" style="margin:0;padding:0;background-color:${BRAND.bg};font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;direction:rtl;text-align:center;-webkit-font-smoothing:antialiased;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${BRAND.bg};padding:40px 16px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:${BRAND.card};border-radius:16px;overflow:hidden;border:1px solid ${BRAND.border};">
+
+              <!-- Header -->
+              <tr>
+                <td align="center" style="background:linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.ink} 100%);padding:34px 24px;">
+                  ${logoBlock}
+                  <p style="margin:0 0 6px;color:#EFFBFF;font-size:14px;">منصة تعلم البرمجة بالعربية</p>
+                  <h1 style="margin:0 0 4px;color:#ffffff;font-size:21px;font-weight:700;">تحقق من بريدك الإلكتروني</h1>
+                  <p style="margin:0;color:rgba(255,255,255,0.85);font-size:13px;">أكمل تسجيلك في ثوانٍ</p>
+                </td>
+              </tr>
+
+              <!-- Body -->
+              <tr>
+                <td style="padding:32px 28px;">
+                  <p style="margin:0 0 22px;color:${BRAND.ink};font-size:15px;line-height:1.7;">
+                    أهلاً وسهلاً بك في <strong style="color:${BRAND.primary};">CodeSchool</strong>! نحن متحمسون لانضمامك إلينا.
+                    لإكمال تسجيلك وبدء رحلتك في البرمجة، يرجى التحقق من بريدك الإلكتروني.
+                  </p>
+
+                  <!-- OTP -->
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.primaryDeep} 100%);border-radius:12px;margin:0 0 24px;">
+                    <tr>
+                      <td align="center" style="padding:22px;">
+                        <p style="margin:0 0 12px;color:#ffffff;font-size:14px;font-weight:500;">كود التحقق الخاص بك</p>
+                        <div dir="ltr" style="direction:ltr;unicode-bidi:isolate;display:inline-block;font-size:36px;font-weight:800;color:#ffffff;letter-spacing:8px;font-family:'Courier New',monospace;background:rgba(255,255,255,0.12);padding:14px 20px;border-radius:8px;border:2px dashed rgba(255,255,255,0.35);">
+                          ${otp}
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <!-- Steps -->
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
+                    <tr>
+                      <td style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:8px;padding:12px 14px;">
+                        <table role="presentation" dir="rtl" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td style="width:32px;height:32px;background:${BRAND.primary};border-radius:50%;color:#fff;font-weight:700;text-align:center;vertical-align:middle;">١</td>
+                            <td style="padding-right:12px;color:${BRAND.ink};font-size:13px;font-weight:500;">انسخ كود التحقق أعلاه</td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr><td style="height:8px;"></td></tr>
+                    <tr>
+                      <td style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:8px;padding:12px 14px;">
+                        <table role="presentation" dir="rtl" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td style="width:32px;height:32px;background:${BRAND.primary};border-radius:50%;color:#fff;font-weight:700;text-align:center;vertical-align:middle;">٢</td>
+                            <td style="padding-right:12px;color:${BRAND.ink};font-size:13px;font-weight:500;">ارجع إلى صفحة التسجيل</td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr><td style="height:8px;"></td></tr>
+                    <tr>
+                      <td style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:8px;padding:12px 14px;">
+                        <table role="presentation" dir="rtl" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td style="width:32px;height:32px;background:${BRAND.primary};border-radius:50%;color:#fff;font-weight:700;text-align:center;vertical-align:middle;">٣</td>
+                            <td style="padding-right:12px;color:${BRAND.ink};font-size:13px;font-weight:500;">أدخل الكود في حقل التحقق</td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <!-- Features -->
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
+                    <tr>
+                      <td width="50%" style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:8px;padding:14px;text-align:center;">
+                        <div style="font-size:18px;margin-bottom:4px;">🎯</div>
+                        <div style="font-size:12px;color:${BRAND.muted};font-weight:500;">دروس متخصصة</div>
+                      </td>
+                      <td width="8"></td>
+                      <td width="50%" style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:8px;padding:14px;text-align:center;">
+                        <div style="font-size:18px;margin-bottom:4px;">👨‍🏫</div>
+                        <div style="font-size:12px;color:${BRAND.muted};font-weight:500;">مدربين محترفين</div>
+                      </td>
+                    </tr>
+                    <tr><td colspan="3" style="height:8px;"></td></tr>
+                    <tr>
+                      <td width="50%" style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:8px;padding:14px;text-align:center;">
+                        <div style="font-size:18px;margin-bottom:4px;">📚</div>
+                        <div style="font-size:12px;color:${BRAND.muted};font-weight:500;">مسارات تعليمية</div>
+                      </td>
+                      <td width="8"></td>
+                      <td width="50%" style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:8px;padding:14px;text-align:center;">
+                        <div style="font-size:18px;margin-bottom:4px;">🏆</div>
+                        <div style="font-size:12px;color:${BRAND.muted};font-weight:500;">شهادات معتمدة</div>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <!-- Warning -->
+                  <div style="background:#FFF3CD;border:1px solid #FFE15A;color:#856404;padding:14px;border-radius:8px;margin-bottom:20px;font-size:13px;">
+                    <strong>⏰ هذا الكود سينتهي خلال 10 دقائق</strong><br />
+                    لأسباب أمنية، يرجى استخدامه فوراً.
+                  </div>
+
+                  <!-- Info -->
+                  <div style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:8px;padding:16px;">
+                    <p style="margin:0 0 6px;color:${BRAND.ink};font-weight:600;font-size:14px;">💡 لماذا التحقق من البريد الإلكتروني؟</p>
+                    <p style="margin:0;color:${BRAND.muted};font-size:13px;line-height:1.6;">
+                      التحقق من البريد الإلكتروني يضمن أمان حسابك ويسمح لنا بإرسال التحديثات المهمة
+                      حول دوراتك، تقدمك، والعروض الخاصة.
+                    </p>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td align="center" style="background:${BRAND.ink};padding:24px;">
+                  <p style="margin:0 0 10px;">
+                    <a href="#" style="color:#46C4FF;text-decoration:none;font-size:13px;margin:0 6px;">الموقع الإلكتروني</a>
+                    <a href="#" style="color:#46C4FF;text-decoration:none;font-size:13px;margin:0 6px;">تويتر</a>
+                    <a href="#" style="color:#46C4FF;text-decoration:none;font-size:13px;margin:0 6px;">فيسبوك</a>
+                  </p>
+                  <p style="margin:0 0 10px;color:#EFFBFF;font-size:13px;">
+                    تحتاج مساعدة؟ <a href="mailto:support@codeschool.com" style="color:#46C4FF;text-decoration:none;">اتصل بفريق الدعم</a>
+                  </p>
+                  <p style="margin:0;color:${BRAND.faint};font-size:11px;line-height:1.5;">
+                    © 2024 CodeSchool. جميع الحقوق محفوظة.<br />
+                    نبني مستقبل تعليم البرمجة، طالباً واحداً في كل مرة.
+                  </p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+}
 
 export async function sendVerificationEmail(email, otp) {
   try {
@@ -8,10 +238,9 @@ export async function sendVerificationEmail(email, otp) {
     console.log("OTP:", otp);
     console.log("-------------------");
 
-    // إرجاع كائن بدلاً من boolean
     const result = {
       success: true,
-      message: "Email sent successfully"
+      message: "Email sent successfully",
     };
 
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -25,398 +254,16 @@ export async function sendVerificationEmail(email, otp) {
         },
       });
 
+      const logoAttachment = await getLogoAttachment();
+      const attachments = logoAttachment ? [logoAttachment] : [];
+      const hasLogo = Boolean(logoAttachment);
+
       const mailOptions = {
         from: process.env.SMTP_FROM || process.env.SMTP_USER,
         to: email,
         subject: "🔐 تحقق من بريدك الإلكتروني - CodeSchool",
-        html: `
-        <!DOCTYPE html>
-        <html lang="ar" dir="rtl">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>التحقق من البريد الإلكتروني</title>
-            <style>
-                /* CSS الأساسي المدعوم في البريد الإلكتروني */
-                body {
-                    margin: 0;
-                    padding: 0;
-                    background-color: #f5f5f5;
-                    font-family: Arial, sans-serif;
-                    direction: rtl;
-                }
-                
-                .container {
-                    width: 100%;
-                    max-width: 700px;
-                    margin: 0 auto;
-                    background-color: #ffffff;
-                }
-                
-                .header {
-                    background: linear-gradient(135deg, #8c52ff 0%, #102C46 100%);
-                    padding: 20px;
-                    text-align: center;
-                    color: white;
-                }
-                
-                .logo-container {
-                    text-align: center;
-                    margin-bottom: 15px;
-                }
-                
-                .logo-img {
-                    width: 60px;
-                    height: 60px;
-                    border-radius: 12px;
-                    border: 2px solid rgba(255,255,255,0.3);
-                }
-                
-                .logo-text {
-                    font-size: 28px;
-                    font-weight: bold;
-                    color: white;
-                    margin: 10px 0;
-                }
-                
-                .logo-subtitle {
-                    font-size: 16px;
-                    color: #EFFBFF;
-                    margin-bottom: 15px;
-                }
-                
-                .title {
-                    font-size: 24px;
-                    font-weight: 600;
-                    margin: 10px 0;
-                }
-                
-                .subtitle {
-                    font-size: 16px;
-                }
-                
-                .content {
-                    padding: 20px;
-                }
-                
-                .welcome-text {
-                    font-size: 18px;
-                    color: #102D47;
-                    margin-bottom: 20px;
-                    line-height: 1.6;
-                    text-align: center;
-                }
-                
-                .otp-container {
-                    background: linear-gradient(135deg, #8c52ff 0%, #46C4FF 100%);
-                    padding: 20px;
-                    text-align: center;
-                    margin: 20px 0;
-                    border: 2px solid #EFFBFF;
-                }
-                
-                .otp-label {
-                    color: white;
-                    font-size: 18px;
-                    margin-bottom: 15px;
-                    font-weight: 500;
-                }
-                
-                .otp-code {
-                    font-size: 42px;
-                    font-weight: bold;
-                    color: white;
-                    letter-spacing: 8px;
-                    font-family: 'Courier New', monospace;
-                    background: rgba(255,255,255,0.1);
-                    padding: 15px;
-                    border: 2px dashed rgba(255,255,255,0.3);
-                    display: inline-block;
-                }
-                
-                .info-box {
-                    background: #EFFBFF;
-                    padding: 20px;
-                    border-right: 4px solid #8c52ff;
-                    margin: 20px 0;
-                }
-                
-                .info-title {
-                    color: #102C46;
-                    font-weight: 600;
-                    margin-bottom: 10px;
-                    font-size: 16px;
-                }
-                
-                .info-text {
-                    color: #547593;
-                    line-height: 1.5;
-                    font-size: 14px;
-                }
-                
-                .step {
-                    margin-bottom: 12px;
-                    padding: 12px;
-                    background: #F8F9FA;
-                    border: 1px solid #E1F1F6;
-                }
-                
-                .step-number {
-                    background: #8c52ff;
-                    color: white;
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 50%;
-                    display: inline-block;
-                    text-align: center;
-                    line-height: 32px;
-                    font-weight: bold;
-                    margin-left: 18px;
-                }
-                
-                .step-text {
-                    color: #102D47;
-                    font-size: 14px;
-                    font-weight: 500;
-                }
-                
-                .warning {
-                    background: #FFF3CD;
-                    border: 2px solid #FFE15A;
-                    color: #856404;
-                    padding: 15px;
-                    margin: 20px 0;
-                    text-align: center;
-                    font-weight: 500;
-                }
-                
-                .features-table {
-                    width: 100%;
-                    margin: 20px 0;
-                    border-collapse: collapse;
-                }
-                
-                .feature-cell {
-                    background: #F8F9FA;
-                    padding: 12px;
-                    border: 1px solid #E1F1F6;
-                    text-align: center;
-                    width: 50%;
-                }
-                
-                .feature-icon {
-                    font-size: 20px;
-                    margin-bottom: 6px;
-                    color: #8c52ff;
-                }
-                
-                .feature-text {
-                    font-size: 12px;
-                    color: #547593;
-                    font-weight: 500;
-                }
-                
-                .contact-image {
-                    width: 100%;
-                    max-width: 300px;
-                    margin: 20px auto;
-                    display: block;
-                }
-                
-                .footer {
-                    background: #102C46;
-                    color: white;
-                    padding: 25px;
-                    text-align: center;
-                }
-                
-                .social-links {
-                    margin: 15px 0;
-                }
-                
-                .social-link {
-                    color: #46C4FF;
-                    text-decoration: none;
-                    margin: 0 8px;
-                    font-weight: 500;
-                    font-size: 14px;
-                }
-                
-                .copyright {
-                    font-size: 11px;
-                    color: #8FACC6;
-                    line-height: 1.4;
-                    margin-top: 12px;
-                }
-                
-                .support {
-                    margin-top: 12px;
-                    font-size: 13px;
-                }
-                
-                .support a {
-                    color: #46C4FF;
-                    text-decoration: none;
-                    font-weight: 500;
-                }
-                
-                .brand-highlight {
-                    color: #8c52ff;
-                    font-weight: bold;
-                }
-                
-                @media (max-width: 600px) {
-                    .container {
-                        width: 100% !important;
-                    }
-                    
-                    .otp-code {
-                        font-size: 32px;
-                        letter-spacing: 6px;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <!-- Header -->
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" class="header">
-                    <tr>
-                        <td align="center">
-                            <div class="logo-container">
-                                <!-- اللوجو -->
-                                <img src="https://i.ibb.co/rftm186y/footer-logo-white.png" alt="CodeSchool Logo" class="logo-img" 
-                                     onerror="this.style.display='none'">
-                                <div class="logo-text">CodeSchool</div>
-                            </div>
-                            <div class="logo-subtitle">منصة تعلم البرمجة بالعربية</div>
-                            <h1 class="title">تحقق من بريدك الإلكتروني</h1>
-                            <p class="subtitle">أكمل تسجيلك في ثوانٍ</p>
-                        </td>
-                    </tr>
-                </table>
-                
-                <!-- Content -->
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" class="content">
-                    <tr>
-                        <td>
-                            <p class="welcome-text">
-                                أهلاً وسهلاً بك في <span class="brand-highlight">CodeSchool</span>! نحن متحمسون لانضمامك إلينا. 
-                                لإكمال تسجيلك وبدء رحلتك في البرمجة، يرجى التحقق من بريدك الإلكتروني.
-                            </p>
-                            
-                            <!-- OTP Code -->
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" class="otp-container">
-                                <tr>
-                                    <td align="center">
-                                        <div class="otp-label">كود التحقق الخاص بك</div>
-                                        <div class="otp-code">${otp}</div>
-                                    </td>
-                                </tr>
-                            </table>
-                            
-                            <!-- صورة التواصل -->
-                            <img src="https://i.ibb.co/Kj43s2rt/contact.png" alt="CodeSchool Contact" class="contact-image"
-                                 onerror="this.style.display='none'">
-                            
-                            <!-- Steps -->
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                                <tr>
-                                    <td>
-                                        <div class="step">
-                                            <span class="step-number">١</span>
-                                            <span class="step-text">انسخ كود التحقق أعلاه</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="step">
-                                            <span class="step-number">٢</span>
-                                            <span class="step-text">ارجع إلى صفحة التسجيل</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="step">
-                                            <span class="step-number">٣</span>
-                                            <span class="step-text">أدخل الكود في حقل التحقق</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </table>
-                            
-                            <!-- Features -->
-                            <table class="features-table" cellpadding="0" cellspacing="0" border="0">
-                                <tr>
-                                    <td class="feature-cell">
-                                        <div class="feature-icon">🎯</div>
-                                        <div class="feature-text">دروس متخصصة</div>
-                                    </td>
-                                    <td class="feature-cell">
-                                        <div class="feature-icon">👨‍🏫</div>
-                                        <div class="feature-text">مدربين محترفين</div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="feature-cell">
-                                        <div class="feature-icon">📚</div>
-                                        <div class="feature-text">مسارات تعليمية</div>
-                                    </td>
-                                    <td class="feature-cell">
-                                        <div class="feature-icon">🏆</div>
-                                        <div class="feature-text">شهادات معتمدة</div>
-                                    </td>
-                                </tr>
-                            </table>
-                            
-                            <!-- Warning -->
-                            <div class="warning">
-                                <span>⏰</span>
-                                <strong>هذا الكود سينتهي خلال 10 دقائق</strong>
-                                <br>
-                                لأسباب أمنية، يرجى استخدامه فوراً.
-                            </div>
-                            
-                            <!-- Info Box -->
-                            <div class="info-box">
-                                <div class="info-title">💡 لماذا التحقق من البريد الإلكتروني؟</div>
-                                <div class="info-text">
-                                    التحقق من البريد الإلكتروني يضمن أمان حسابك ويسمح لنا بإرسال التحديثات المهمة 
-                                    حول دوراتك، تقدمك، والعروض الخاصة.
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                </table>
-                
-                <!-- Footer -->
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" class="footer">
-                    <tr>
-                        <td align="center">
-                            <div class="social-links">
-                                <a href="#" class="social-link">الموقع الإلكتروني</a>
-                                <a href="#" class="social-link">تويتر</a>
-                                <a href="#" class="social-link">فيسبوك</a>
-                                <a href="#" class="social-link">لينكد إن</a>
-                            </div>
-                            
-                            <div class="support">
-                                تحتاج مساعدة؟ <a href="mailto:support@codeschool.com">اتصل بفريق الدعم</a>
-                            </div>
-                            
-                            <div class="copyright">
-                                © 2024 CodeSchool. جميع الحقوق محفوظة.<br>
-                                نبني مستقبل تعليم البرمجة، طالباً واحداً في كل مرة.
-                            </div>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-        </body>
-        </html>
-        `,
+        html: buildVerificationEmail({ otp, hasLogo }),
+        attachments,
       };
 
       await transporter.sendMail(mailOptions);
@@ -433,7 +280,7 @@ export async function sendVerificationEmail(email, otp) {
     return {
       success: false,
       error: error.message,
-      message: "Failed to send email"
+      message: "Failed to send email",
     };
   }
 }

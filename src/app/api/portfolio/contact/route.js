@@ -5,6 +5,8 @@ import Portfolio from "../../../models/Portfolio";
 import ContactMessage from "../../../models/ContactMessage";
 import { connectDB } from "@/lib/mongodb";
 import nodemailer from "nodemailer";
+import path from "path";
+import fs from "fs";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_SERVICES = ["web", "uiux", "logo", "seo", ""];
@@ -27,13 +29,73 @@ function createTransporter() {
   });
 }
 
-async function sendEmail(transporter, options) {
+async function sendEmail(transporter, options, label = "email") {
   try {
     const info = await transporter.sendMail(options);
+    console.log(`📧 [${label}] sent successfully ->`, info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("📧 Email sending error:", error);
+    // بنطبع الخطأ كامل هنا عشان تعرف بالظبط السبب من الـ server logs
+    console.error(`📧 [${label}] FAILED to send:`, error.message);
     return { success: false, error: error.message };
+  }
+}
+
+// ---------- Logo attachment (embedded via CID) ----------
+// Cached in memory so we don't re-read/re-fetch it on every request.
+let cachedLogoBuffer = null;
+
+async function getLogoAttachment() {
+  if (cachedLogoBuffer) {
+    return { filename: "logo.png", content: cachedLogoBuffer, cid: "portfolio-logo" };
+  }
+
+  // 1) Try local filesystem first (works on traditional / self-hosted Node servers,
+  //    and locally in dev). On serverless platforms (e.g. Vercel) the `public/`
+  //    folder is often NOT included in the function bundle, so this can fail silently.
+  try {
+    const logoPath = path.join(process.cwd(), "public/images/logo/logo.png");
+    if (fs.existsSync(logoPath)) {
+      cachedLogoBuffer = fs.readFileSync(logoPath);
+      return {
+        filename: "logo.png",
+        content: cachedLogoBuffer,
+        cid: "portfolio-logo",
+        contentType: "image/png",
+        contentDisposition: "inline",
+      };
+    }
+    console.warn("⚠️ Logo not found on local filesystem at:", logoPath);
+  } catch (error) {
+    console.warn("⚠️ Filesystem read for logo failed:", error.message);
+  }
+
+  // 2) Fallback: fetch the logo over HTTP from the public app URL. This works
+  //    regardless of runtime/hosting, as long as NEXT_PUBLIC_APP_URL is a real,
+  //    publicly reachable domain (not localhost).
+  try {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!appUrl || appUrl.includes("localhost")) {
+      console.warn("⚠️ Skipping logo fetch fallback: NEXT_PUBLIC_APP_URL is missing or local:", appUrl);
+      return null;
+    }
+    const res = await fetch(`${appUrl}/images/logo/logo.png`);
+    if (!res.ok) {
+      console.warn("⚠️ Logo fetch fallback failed with status:", res.status);
+      return null;
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    cachedLogoBuffer = Buffer.from(arrayBuffer);
+    return {
+      filename: "logo.png",
+      content: cachedLogoBuffer,
+      cid: "portfolio-logo",
+      contentType: "image/png",
+      contentDisposition: "inline",
+    };
+  } catch (error) {
+    console.warn("⚠️ Logo fetch fallback errored:", error.message);
+    return null;
   }
 }
 
@@ -66,75 +128,259 @@ function validatePayload(body) {
   return errors;
 }
 
-// ---------- Email templates ----------
-function buildOwnerEmail({ user, contactMessage, service }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+// ---------- Brand tokens (matched to tailwind.config.js) ----------
+const BRAND = {
+  primary: "#ff6700",
+  secondary: "#004d59",
+  ink: "#1f2d30",
+  muted: "#6b7c80",
+  faint: "#98a5a8",
+  bg: "#f4f6f7",
+  card: "#ffffff",
+  border: "#e8ecec",
+  softBg: "#f8fafa",
+};
+
+function emailShell({ headerIcon, headerTitle, headerSubtitle, bodyHtml, accent, hasLogo }) {
   const appName = process.env.NEXT_PUBLIC_APP_NAME || "Portfolio App";
+  const accentColor = accent || BRAND.primary;
+
+  const logoBlock = hasLogo
+    ? `<img src="cid:portfolio-logo" alt="${appName}" width="120" height="30" style="height:30px;width:auto;display:block;border:0;outline:none;" />`
+    : `<span style="font-size:16px;font-weight:700;color:${BRAND.secondary};letter-spacing:0.02em;">${appName}</span>`;
 
   return `
     <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
-    <body style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;background:#f5f7fa;">
-      <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:30px;text-align:center;border-radius:10px 10px 0 0;">
-        <h1 style="margin:0;">📩 New Message from Your Portfolio</h1>
-        <p style="margin:8px 0 0;">You have received a new message via your portfolio contact form</p>
-      </div>
-      <div style="background:#fff;padding:30px;border-radius:0 0 10px 10px;border:1px solid #e0e0e0;">
-        <div style="background:#f5f5f5;padding:20px;border-radius:6px;margin-bottom:20px;border:1px solid #e0e0e0;">
-          <h3 style="margin-top:0;color:#667eea;">Sender Information</h3>
-          <p><strong>Name:</strong> ${contactMessage.senderInfo.firstName} ${contactMessage.senderInfo.lastName}</p>
-          <p><strong>Email:</strong> <a href="mailto:${contactMessage.senderInfo.email}">${contactMessage.senderInfo.email}</a></p>
-          <p><strong>Phone:</strong> <a href="tel:${contactMessage.senderInfo.phoneNumber}">${contactMessage.senderInfo.phoneNumber}</a></p>
-          ${service ? `<p><strong>Service:</strong> ${service}</p>` : ""}
-          <p><strong>Date:</strong> ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
-        </div>
-        <h3 style="color:#667eea;">Message</h3>
-        <div style="background:#f8f9fa;padding:20px;border-radius:8px;border-left:4px solid #667eea;white-space:pre-wrap;">${contactMessage.message}</div>
-        <div style="text-align:center;margin-top:30px;">
-          <a href="${appUrl}/dashboard/messages" style="display:inline-block;background:#667eea;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:5px;">📋 View All Messages</a>
-          <a href="mailto:${contactMessage.senderInfo.email}?subject=Re: Your message to ${user.name}" style="display:inline-block;background:#48bb78;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:5px;">📧 Reply</a>
-        </div>
-      </div>
-      <p style="text-align:center;color:#666;font-size:12px;margin-top:20px;">Sent automatically from ${appName}</p>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>${appName}</title>
+      <style>
+        body, p, h1, h2, h3 { direction: rtl !important; text-align: center !important; }
+      </style>
+    </head>
+    <body dir="rtl" style="margin:0;padding:0;background-color:${BRAND.bg};font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;-webkit-font-smoothing:antialiased;direction:rtl;text-align:center;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${BRAND.bg};padding:40px 16px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+
+              <!-- Logo -->
+              <tr>
+                <td align="center" style="padding-bottom:24px;">
+                  ${logoBlock}
+                </td>
+              </tr>
+
+              <!-- Card -->
+              <tr>
+                <td style="background:${BRAND.card};border:1px solid ${BRAND.border};border-radius:14px;overflow:hidden;">
+
+                  <!-- Accent bar -->
+                  <div style="height:3px;background:${accentColor};"></div>
+
+                  <!-- Header -->
+                  <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="padding:32px 32px 20px;">
+                        <table role="presentation" dir="rtl" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td style="vertical-align:middle;padding-left:12px;font-size:20px;">${headerIcon}</td>
+                            <td style="vertical-align:middle;">
+                              <h1 style="margin:0;color:${BRAND.ink};font-size:18px;font-weight:600;">${headerTitle}</h1>
+                              ${headerSubtitle ? `<p style="margin:4px 0 0;color:${BRAND.muted};font-size:13px;">${headerSubtitle}</p>` : ""}
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <div style="height:1px;background:${BRAND.border};margin:0 32px;"></div>
+
+                  <!-- Body -->
+                  <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="padding:24px 32px 32px;color:${BRAND.ink};font-size:14px;line-height:1.75;">
+                        ${bodyHtml}
+                      </td>
+                    </tr>
+                  </table>
+
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td align="center" style="padding-top:24px;">
+                  <p style="margin:0;color:${BRAND.faint};font-size:12px;">
+                    تم الإرسال تلقائيًا من ${appName}
+                  </p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
   `;
 }
 
-function buildConfirmationEmail({ user, portfolio, contactMessage }) {
-  const appName = process.env.NEXT_PUBLIC_APP_NAME || "Portfolio App";
+// ---------- Email templates ----------
+function buildOwnerEmail({ user, contactMessage, service, hasLogo }) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  const bodyHtml = `
+    <p style="margin:0 0 20px;color:${BRAND.muted};">
+      وصلتك رسالة جديدة من زائر شاف البورتفوليو بتاعك.
+    </p>
+
+    <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:10px;margin-bottom:20px;">
+      <tr>
+        <td style="padding:18px 20px;">
+          <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;text-align:right;">
+            <tr><td style="padding:4px 0;color:${BRAND.faint};width:90px;">الاسم</td><td style="padding:4px 0;color:${BRAND.ink};font-weight:500;">${contactMessage.senderInfo.firstName} ${contactMessage.senderInfo.lastName}</td></tr>
+            <tr><td style="padding:4px 0;color:${BRAND.faint};">الإيميل</td><td style="padding:4px 0;"><a href="mailto:${contactMessage.senderInfo.email}" style="color:${BRAND.secondary};text-decoration:none;">${contactMessage.senderInfo.email}</a></td></tr>
+            <tr><td style="padding:4px 0;color:${BRAND.faint};">التليفون</td><td style="padding:4px 0;"><a href="tel:${contactMessage.senderInfo.phoneNumber}" style="color:${BRAND.secondary};text-decoration:none;">${contactMessage.senderInfo.phoneNumber}</a></td></tr>
+            ${service ? `<tr><td style="padding:4px 0;color:${BRAND.faint};">الخدمة</td><td style="padding:4px 0;color:${BRAND.ink};">${service}</td></tr>` : ""}
+            <tr><td style="padding:4px 0;color:${BRAND.faint};">التاريخ</td><td style="padding:4px 0;color:${BRAND.ink};">${new Date().toLocaleString("ar-EG", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 8px;color:${BRAND.faint};font-size:12px;text-transform:uppercase;letter-spacing:0.04em;">الرسالة</p>
+    <div style="background:${BRAND.softBg};padding:16px 18px;border-radius:10px;border:1px solid ${BRAND.border};white-space:pre-wrap;color:${BRAND.ink};font-size:14px;">
+      ${contactMessage.message}
+    </div>
+
+    <table role="presentation" dir="rtl" cellpadding="0" cellspacing="0" style="margin-top:26px;">
+      <tr>
+        <td style="padding-left:10px;">
+          <a href="${appUrl}/dashboard/messages" style="display:inline-block;background:${BRAND.card};color:${BRAND.secondary};border:1px solid ${BRAND.border};padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;">عرض كل الرسائل</a>
+        </td>
+        <td>
+          <a href="mailto:${contactMessage.senderInfo.email}?subject=Re: Your message to ${user.name}" style="display:inline-block;background:${BRAND.primary};color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;">الرد على الرسالة</a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return emailShell({
+    headerIcon: "📩",
+    headerTitle: "رسالة جديدة من البورتفوليو",
+    headerSubtitle: "حد تواصل معاك من صفحة الاتصال",
+    bodyHtml,
+    accent: BRAND.primary,
+    hasLogo,
+  });
+}
+
+function buildConfirmationEmail({ user, portfolio, contactMessage, hasLogo }) {
   const preview =
     contactMessage.message.length > 150
       ? `${contactMessage.message.substring(0, 150)}...`
       : contactMessage.message;
 
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
-    <body style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;background:#f5f7fa;">
-      <div style="background:linear-gradient(135deg,#4299e1 0%,#667eea 100%);color:#fff;padding:30px;text-align:center;border-radius:10px 10px 0 0;">
-        <h1 style="margin:0;">✅ Message Sent Successfully</h1>
-      </div>
-      <div style="background:#fff;padding:30px;border-radius:0 0 10px 10px;border:1px solid #e0e0e0;">
-        <p>Hi ${contactMessage.senderInfo.firstName},</p>
-        <p>Thank you for contacting <strong>${user.name}</strong>. Your message has been sent successfully and ${user.name} will get back to you soon.</p>
-        <div style="background:#f8f9fa;padding:15px;border-radius:6px;border-left:4px solid #4299e1;margin:20px 0;font-style:italic;color:#555;">"${preview}"</div>
-        <div style="background:#f5f5f5;padding:15px;border-radius:6px;">
-          <h3 style="color:#4299e1;margin-top:0;">Contact Information</h3>
-          <p><strong>Name:</strong> ${user.name}</p>
-          ${user.profile?.company ? `<p><strong>Company:</strong> ${user.profile.company}</p>` : ""}
-          ${portfolio.contactInfo?.email ? `<p><strong>Email:</strong> ${portfolio.contactInfo.email}</p>` : ""}
-          ${portfolio.contactInfo?.phone ? `<p><strong>Phone:</strong> ${portfolio.contactInfo.phone}</p>` : ""}
-          ${portfolio.contactInfo?.location ? `<p><strong>Location:</strong> ${portfolio.contactInfo.location}</p>` : ""}
-        </div>
-        <p style="margin-top:20px;font-style:italic;color:#666;">This is an automatic confirmation email. Please do not reply directly.</p>
-        <p>Best regards,<br><strong>The ${appName} Team</strong></p>
-      </div>
-    </body>
-    </html>
+  const bodyHtml = `
+    <p style="margin:0 0 4px;color:${BRAND.ink};font-weight:600;">أهلاً ${contactMessage.senderInfo.firstName} 👋</p>
+    <p style="margin:0 0 20px;color:${BRAND.muted};">
+      شكرًا لتواصلك مع <strong style="color:${BRAND.ink};">${user.name}</strong>. رسالتك اتبعتت بنجاح
+      وهيتواصل معاك في أقرب وقت.
+    </p>
+
+    <div style="background:${BRAND.softBg};padding:14px 16px;border-radius:10px;border:1px solid ${BRAND.border};margin:0 0 22px;color:${BRAND.muted};font-size:13px;font-style:italic;">
+      "${preview}"
+    </div>
+
+    <p style="margin:0 0 8px;color:${BRAND.faint};font-size:12px;text-transform:uppercase;letter-spacing:0.04em;">بيانات التواصل</p>
+    <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:10px;">
+      <tr>
+        <td style="padding:16px 18px;">
+          <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;text-align:right;">
+            <tr><td style="padding:4px 0;color:${BRAND.faint};width:90px;">الاسم</td><td style="padding:4px 0;color:${BRAND.ink};font-weight:500;">${user.name}</td></tr>
+            ${user.profile?.company ? `<tr><td style="padding:4px 0;color:${BRAND.faint};">الشركة</td><td style="padding:4px 0;color:${BRAND.ink};">${user.profile.company}</td></tr>` : ""}
+            ${portfolio.contactInfo?.email ? `<tr><td style="padding:4px 0;color:${BRAND.faint};">الإيميل</td><td style="padding:4px 0;color:${BRAND.ink};">${portfolio.contactInfo.email}</td></tr>` : ""}
+            ${portfolio.contactInfo?.phone ? `<tr><td style="padding:4px 0;color:${BRAND.faint};">التليفون</td><td style="padding:4px 0;color:${BRAND.ink};">${portfolio.contactInfo.phone}</td></tr>` : ""}
+            ${portfolio.contactInfo?.location ? `<tr><td style="padding:4px 0;color:${BRAND.faint};">الموقع</td><td style="padding:4px 0;color:${BRAND.ink};">${portfolio.contactInfo.location}</td></tr>` : ""}
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:22px 0 0;color:${BRAND.faint};font-size:12px;font-style:italic;">
+      ده إيميل تأكيد تلقائي، من فضلك متردش عليه مباشرة.
+    </p>
   `;
+
+  return emailShell({
+    headerIcon: "✅",
+    headerTitle: "تم إرسال رسالتك بنجاح",
+    headerSubtitle: null,
+    bodyHtml,
+    accent: BRAND.secondary,
+    hasLogo,
+  });
+}
+
+function buildAdminEmail({ user, portfolio, contactMessage, service, hasLogo }) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const senderFullName = `${contactMessage.senderInfo.firstName} ${contactMessage.senderInfo.lastName}`;
+
+  const bodyHtml = `
+    <p style="margin:0 0 4px;color:${BRAND.ink};font-weight:600;">أهلاً يا مدير 👋</p>
+    <p style="margin:0 0 20px;color:${BRAND.muted};">
+      في شخص اسمه <strong style="color:${BRAND.ink};">${senderFullName}</strong>
+      بعت رسالة لـ <strong style="color:${BRAND.ink};">${user?.name || "صاحب بورتفوليو"}</strong>
+      عن طريق البورتفوليو بتاعه.
+    </p>
+
+    <p style="margin:0 0 8px;color:${BRAND.faint};font-size:12px;text-transform:uppercase;letter-spacing:0.04em;">صاحب البورتفوليو</p>
+    <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:10px;margin-bottom:20px;">
+      <tr>
+        <td style="padding:16px 18px;">
+          <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;text-align:right;">
+            <tr><td style="padding:4px 0;color:${BRAND.faint};width:90px;">الاسم</td><td style="padding:4px 0;color:${BRAND.ink};font-weight:500;">${user?.name || "-"}</td></tr>
+            <tr><td style="padding:4px 0;color:${BRAND.faint};">الإيميل</td><td style="padding:4px 0;color:${BRAND.ink};">${user?.contactEmail || user?.email || "-"}</td></tr>
+            <tr><td style="padding:4px 0;color:${BRAND.faint};">البورتفوليو</td><td style="padding:4px 0;"><a href="${appUrl}/portfolio/${portfolio._id}" style="color:${BRAND.secondary};text-decoration:none;">${appUrl}/portfolio/${portfolio._id}</a></td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 8px;color:${BRAND.faint};font-size:12px;text-transform:uppercase;letter-spacing:0.04em;">الشخص اللي بعت</p>
+    <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.softBg};border:1px solid ${BRAND.border};border-radius:10px;margin-bottom:20px;">
+      <tr>
+        <td style="padding:16px 18px;">
+          <table role="presentation" dir="rtl" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;text-align:right;">
+            <tr><td style="padding:4px 0;color:${BRAND.faint};width:90px;">الاسم</td><td style="padding:4px 0;color:${BRAND.ink};font-weight:500;">${senderFullName}</td></tr>
+            <tr><td style="padding:4px 0;color:${BRAND.faint};">الإيميل</td><td style="padding:4px 0;"><a href="mailto:${contactMessage.senderInfo.email}" style="color:${BRAND.secondary};text-decoration:none;">${contactMessage.senderInfo.email}</a></td></tr>
+            <tr><td style="padding:4px 0;color:${BRAND.faint};">التليفون</td><td style="padding:4px 0;"><a href="tel:${contactMessage.senderInfo.phoneNumber}" style="color:${BRAND.secondary};text-decoration:none;">${contactMessage.senderInfo.phoneNumber}</a></td></tr>
+            ${service ? `<tr><td style="padding:4px 0;color:${BRAND.faint};">الخدمة</td><td style="padding:4px 0;color:${BRAND.ink};">${service}</td></tr>` : ""}
+            <tr><td style="padding:4px 0;color:${BRAND.faint};">التاريخ</td><td style="padding:4px 0;color:${BRAND.ink};">${new Date().toLocaleString("ar-EG", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</td></tr>
+            <tr><td style="padding:4px 0;color:${BRAND.faint};">IP</td><td style="padding:4px 0;color:${BRAND.ink};">${contactMessage.ipAddress || "-"}</td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 8px;color:${BRAND.faint};font-size:12px;text-transform:uppercase;letter-spacing:0.04em;">الرسالة</p>
+    <div style="background:${BRAND.softBg};padding:16px 18px;border-radius:10px;border:1px solid ${BRAND.border};white-space:pre-wrap;color:${BRAND.ink};font-size:14px;">
+      ${contactMessage.message}
+    </div>
+  `;
+
+  return emailShell({
+    headerIcon: "🛠️",
+    headerTitle: "رسالة جديدة على المنصة",
+    headerSubtitle: "نسخة إدارية للمتابعة",
+    bodyHtml,
+    accent: BRAND.secondary,
+    hasLogo,
+  });
 }
 
 // ---------- Route handler ----------
@@ -196,25 +442,72 @@ export async function POST(req) {
     const transporter = createTransporter();
 
     if (transporter) {
-      const recipientEmail = user?.contactEmail || user?.email;
+      const logoAttachment = await getLogoAttachment();
+      const attachments = logoAttachment ? [logoAttachment] : [];
+      const hasLogo = Boolean(logoAttachment);
+      const senderFullNameForSubject = `${contactMessage.senderInfo.firstName} ${contactMessage.senderInfo.lastName}`;
 
-      if (recipientEmail) {
-        const result = await sendEmail(transporter, {
-          from: `"${process.env.EMAIL_FROM_NAME || "Portfolio App"}" <${process.env.EMAIL_USER}>`,
-          to: recipientEmail,
-          subject: `📩 New message from ${contactMessage.senderInfo.firstName} via your portfolio`,
-          html: buildOwnerEmail({ user, contactMessage, service: safeService }),
-          replyTo: contactMessage.senderInfo.email,
-        });
-        emailSent = result.success;
+      // إيميلات صاحب البورتفوليو (بتاخد نفس نسخة "رسالة جديدة" العادية)
+      const ownerRecipients = [...new Set(
+        [user?.contactEmail, user?.email, portfolio.contactInfo?.email]
+          .filter((email) => email && EMAIL_REGEX.test(email))
+          .map((email) => email.toLowerCase().trim())
+      )];
+
+      // الإيميل الأساسي/الأدمن (بياخد نسخة مختلفة فيها "مين بعت لمين")
+      const adminEmail =
+        process.env.EMAIL_USER && EMAIL_REGEX.test(process.env.EMAIL_USER)
+          ? process.env.EMAIL_USER.toLowerCase().trim()
+          : null;
+
+      if (ownerRecipients.length > 0) {
+        const results = await Promise.all(
+          ownerRecipients.map((to) =>
+            sendEmail(
+              transporter,
+              {
+                from: `"${process.env.EMAIL_FROM_NAME || "Portfolio App"}" <${process.env.EMAIL_USER}>`,
+                to,
+                subject: `📩 New message from ${contactMessage.senderInfo.firstName} via your portfolio`,
+                html: buildOwnerEmail({ user, contactMessage, service: safeService, hasLogo }),
+                replyTo: contactMessage.senderInfo.email,
+                attachments,
+              },
+              `owner-email:${to}`
+            )
+          )
+        );
+        emailSent = results.some((r) => r.success);
+      } else {
+        console.warn("⚠️ No valid recipient email found for portfolio owner:", user?._id);
       }
 
-      const confirmationResult = await sendEmail(transporter, {
-        from: `"${process.env.EMAIL_FROM_NAME || "Portfolio App"}" <${process.env.EMAIL_USER}>`,
-        to: contactMessage.senderInfo.email,
-        subject: `✅ Message sent to ${user?.name || "the owner"} confirmed`,
-        html: buildConfirmationEmail({ user, portfolio, contactMessage }),
-      });
+      if (adminEmail) {
+        await sendEmail(
+          transporter,
+          {
+            from: `"${process.env.EMAIL_FROM_NAME || "Portfolio App"}" <${process.env.EMAIL_USER}>`,
+            to: adminEmail,
+            subject: `🛠️ [Admin] ${senderFullNameForSubject} → ${user?.name || "Unknown owner"}`,
+            html: buildAdminEmail({ user, portfolio, contactMessage, service: safeService, hasLogo }),
+            replyTo: contactMessage.senderInfo.email,
+            attachments,
+          },
+          `admin-email:${adminEmail}`
+        );
+      }
+
+      const confirmationResult = await sendEmail(
+        transporter,
+        {
+          from: `"${process.env.EMAIL_FROM_NAME || "Portfolio App"}" <${process.env.EMAIL_USER}>`,
+          to: contactMessage.senderInfo.email,
+          subject: `✅ Message sent to ${user?.name || "the owner"} confirmed`,
+          html: buildConfirmationEmail({ user, portfolio, contactMessage, hasLogo }),
+          attachments,
+        },
+        "confirmation-email"
+      );
       confirmationSent = confirmationResult.success;
     }
 
