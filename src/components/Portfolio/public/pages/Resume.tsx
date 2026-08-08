@@ -19,6 +19,7 @@ import {
 } from "../ui/tooltip";
 import { ScrollArea } from "../ui/scroll-area";
 import { motion } from "framer-motion";
+import Certificates from "./Certificates";
 import type { PortfolioData } from "@/types/portfolio";
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -103,6 +104,7 @@ const Resume = ({ portfolio }: { portfolio: PortfolioData }) => {
             <TabsTrigger value="experience">Experience</TabsTrigger>
             <TabsTrigger value="education">Education</TabsTrigger>
             <TabsTrigger value="skills">Skills</TabsTrigger>
+            <TabsTrigger value="certificates">Certificates</TabsTrigger>
             <TabsTrigger value="about">About me</TabsTrigger>
           </TabsList>
 
@@ -192,6 +194,17 @@ const Resume = ({ portfolio }: { portfolio: PortfolioData }) => {
                     </li>
                   ))}
                 </ul>
+              </div>
+            </TabsContent>
+
+            {/* certificates */}
+            <TabsContent value="certificates" className="w-full mb-10">
+              <div className="flex flex-col gap-[30px] text-center xl:text-left">
+                <h3 className="text-4xl font-bold">My certificates</h3>
+                <p className="max-w-[600px] text-secondary/60 dark:text-white/60 mx-auto xl:mx-0">
+                  Certifications and credentials I&apos;ve earned along the way.
+                </p>
+                <Certificates certificates={portfolio.certificates} />
               </div>
             </TabsContent>
 

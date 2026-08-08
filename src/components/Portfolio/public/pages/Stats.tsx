@@ -9,15 +9,17 @@ interface StatsProps {
 }
 
 const Stats = ({ stats = [] }: StatsProps) => {
-  if (!stats.length) return null;
+  const visibleStats = stats.filter((item) => item.num !== 0);
+
+  if (!visibleStats.length) return null;
 
   return (
     <section className="pt-4 pb-12 xl:pt-0 xl:pb-0">
       <div className="container mx-auto">
-        <div className="flex flex-wrap gap-6 max-w-[80vw] mx-auto xl:max-w-none">
-          {stats.map((item) => (
+        <div className="flex flex-wrap gap-x-12 gap-y-6 justify-center xl:justify-start max-w-[80vw] mx-auto xl:max-w-none">
+          {visibleStats.map((item) => (
             <div
-              className="flex-1 flex gap-4 items-center justify-center xl:justify-start"
+              className="flex gap-4 items-center"
               key={item.id}
             >
               <CountUp
