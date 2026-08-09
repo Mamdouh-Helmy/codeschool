@@ -29,12 +29,15 @@ const MessageTemplateSchema = new mongoose.Schema(
         "session_recording",
         "learning_supervisor_intro", // ✅ جديد
         "module_overview", // ✅ جديد
+        "portfolio_inactivity_reminder", // ✅ جديد
+        "portfolio_update_broadcast", // ✅ جديد
+        "portfolio_contact_form_notification", // ✅ جديد
       ],
     },
 
     recipientType: {
       type: String,
-      enum: ["student", "guardian"],
+      enum: ["student", "guardian", "portfolio_owner"], // ✅ إضافة portfolio_owner
       required: true,
     },
 
@@ -171,6 +174,10 @@ MessageTemplateSchema.methods.getExample = function (language = "ar") {
       language === "ar"
         ? "Real-Life Mobile Solutions"
         : "Real-Life Mobile Solutions",
+    ownerName: language === "ar" ? "أحمد" : "Ahmed", // ✅ جديد
+    portfolioLink: "https://codeschool.com/portfolio/ahmed", // ✅ جديد
+    updateLink: "https://codeschool.com/portfolio/ahmed", // ✅ جديد
+    dashboardLink: "https://codeschool.com/dashboard", // ✅ جديد
   };
   return this.render(examples, language);
 };
@@ -522,6 +529,96 @@ Learning Supervisor`,
       ],
       ar: `{guardianSalutation}،\n\n⏳ تذكير: حصة {childTitle} *{studentName}* - *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
       en: `{guardianSalutation},\n\n⏳ Reminder: {childTitle} *{studentName}*'s session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
+    },
+    portfolio_inactivity_reminder: {
+      variables: [
+        { key: "ownerName", label: "اسم صاحب البورتفوليو", example: "أحمد" },
+        {
+          key: "portfolioLink",
+          label: "رابط البورتفوليو",
+          example: "https://codeschool.com/portfolio/ahmed",
+        },
+      ],
+      ar: `أهلاً بيك يا {ownerName}،
+
+عارفين إن الـ Personal Portfolio بتاعك مش مجرد صفحة على النت، ده واجهة الـ Business بتاعك والمكان اللي بيعكس مجهودك وشغلك.
+
+عشان كده، صممنا البورتفوليو بتاعك ليكون صديق لمحركات البحث ومُحسن للـ SEO والـ GEO.. وده معناه Visibility أعلى وعملاء أكتر يقدروا يوصلولك بسهولة.
+
+ادخل دلوقتي وضيف أي Updates جديدة في الـ Projects بتاعتك عشان تفضل دايماً في الصدارة والـ Ranking بتاعك يعلى!
+
+لينك البورتفوليو بتاعك:
+{portfolioLink}`,
+      en: `Hi {ownerName},
+
+Your Personal Portfolio isn't just a page online — it's the face of your business and the place that reflects your effort and work.
+
+That's why we designed your portfolio to be search-engine friendly and optimized for SEO & GEO.. which means higher visibility and more clients finding you easily.
+
+Log in now and add any new Updates to your Projects to stay ahead and keep your Ranking climbing!
+
+Your portfolio link:
+{portfolioLink}`,
+    },
+
+    // ─── NEW: Portfolio Update Broadcast ─────────────────────────────────────
+    portfolio_update_broadcast: {
+      variables: [
+        { key: "ownerName", label: "اسم صاحب البورتفوليو", example: "أحمد" },
+        {
+          key: "updateLink",
+          label: "رابط صفحة التحديثات",
+          example: "https://codeschool.com/portfolio/ahmed",
+        },
+      ],
+      ar: `أهلاً يا {ownerName} ✨
+
+لأن الـ Personal Portfolio بتاعك هو واجهتك الرقمية، إحنا دايماً بنطور الـ System عشان نضمن إنك في الصدارة. 🎯
+
+نزلنا النهاردة Update جديد هيحسن الـ SEO والـ GEO لصفحتك بشكل ملحوظ عشان يضمنلك أعلى Visibility ممكنة.
+
+ادخل شوف التحديثات واعمل Update لبياناتك من هنا:
+🔗 {updateLink}
+
+يومك جميل وموفق! 🌻`,
+      en: `Hi {ownerName} ✨
+
+Since your Personal Portfolio is your digital face, we're always upgrading the System to keep you ahead. 🎯
+
+Today we shipped a new Update that noticeably improves the SEO & GEO of your page, giving you the highest possible Visibility.
+
+Check out the updates and refresh your data here:
+🔗 {updateLink}
+
+Have a great day! 🌻`,
+    },
+
+    // ─── NEW: Portfolio Contact Form Notification ────────────────────────────
+    portfolio_contact_form_notification: {
+      variables: [
+        { key: "ownerName", label: "اسم صاحب البورتفوليو", example: "أحمد" },
+        {
+          key: "dashboardLink",
+          label: "رابط لوحة التحكم",
+          example: "https://codeschool.com/dashboard",
+        },
+      ],
+      ar: `عزيزي {ownerName}،
+
+يعلمك نظام الإشعارات الآلي بتلقي رسالة جديدة عبر الـ Contact Form الخاص بالـ Personal Portfolio الخاص بك.
+
+لضمان الخصوصية وسرية البيانات، يتم توجيه جميع الرسائل وتشفيرها آلياً إلى حسابك دون أي تدخل بشري.
+
+لعرض محتوى الرسالة والرد عليها، برجاء تسجيل الدخول إلى الـ Dashboard:
+🔗 {dashboardLink}`,
+      en: `Dear {ownerName},
+
+Our automated notification system informs you that a new message has been received via the Contact Form on your Personal Portfolio.
+
+To ensure privacy and data confidentiality, all messages are automatically routed and encrypted to your account without any human intervention.
+
+To view the message and reply, please log in to your Dashboard:
+🔗 {dashboardLink}`,
     },
   };
 }

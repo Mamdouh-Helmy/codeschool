@@ -65,6 +65,9 @@ const TEMPLATE_TYPES = [
     api: "instructor",
     isNew: true
   },
+  { id: "portfolio_inactivity_reminder", label: "تذكير عدم تحديث البورتفوليو", icon: RefreshCw, color: "amber", emoji: "💼", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
+  { id: "portfolio_update_broadcast", label: "إعلان تحديث النظام", icon: Zap, color: "secondary", emoji: "📢", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
+  { id: "portfolio_contact_form_notification", label: "إشعار رسالة Contact Form", icon: MessageCircle, color: "sky", emoji: "📩", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
 ];
 
 const CATEGORIES = {
@@ -76,6 +79,7 @@ const CATEGORIES = {
   attendance: { label: "الحضور", emoji: "📋" },
   completion: { label: "الإكمال", emoji: "🎉" },
   evaluation: { label: "التقييم", emoji: "⭐" },
+  portfolio: { label: "البورتفوليو", emoji: "💼" }, // ✅ جديد
 };
 
 const VAR_GROUPS = {
@@ -89,6 +93,7 @@ const VAR_GROUPS = {
   completion: { label: "الإكمال", emoji: "🎉" },
   evaluation: { label: "التقييم", emoji: "⭐" },
   common: { label: "عامة", emoji: "📌" },
+  portfolio: { label: "البورتفوليو", emoji: "💼" }, // ✅ جديد
 };
 
 const TEMPLATE_VARS = {
@@ -169,6 +174,9 @@ const TEMPLATE_VARS = {
 
   learning_supervisor_intro: ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
   module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "moduleDescription", "supervisorName"],
+  portfolio_inactivity_reminder: ["ownerName", "portfolioLink"],
+  portfolio_update_broadcast: ["ownerName", "updateLink"],
+  portfolio_contact_form_notification: ["ownerName", "dashboardLink"],
 };
 
 const FRONTEND_FALLBACKS = {
@@ -220,6 +228,18 @@ const FRONTEND_FALLBACKS = {
     ar: `{instructorSalutation} 👋\nحبيت أفكرك إن ميعادنا هيبدأ خلال *15 دقيقة* إن شاء الله ✨\n\n📘 الـ Session: {sessionName}\n📝 وصف السيشن: {sessionDescription}\n⏰ الوقت: {time}\n🔗 لينك الحصة:\n{meetingLink}\n\n🔐 بيانات الدخول:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 المجموعة: {groupName}\n\nمتحمسين نشوفك دلوقتي 💻🚀\nفريق Code School`,
     en: `{instructorSalutation} 👋\nJust a reminder that our session starts in *15 minutes*, God willing ✨\n\n📘 Session: {sessionName}\n📝 Session Overview: {sessionDescription}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n🔐 Login Details:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 Group: {groupName}\n\nCan't wait to see you now 💻🚀\nCode School Team`,
   },
+  portfolio_inactivity_reminder: {
+    ar: `أهلاً بيك يا {ownerName}،\n\nعارفين إن الـ Personal Portfolio بتاعك مش مجرد صفحة على النت، ده واجهة الـ Business بتاعك والمكان اللي بيعكس مجهودك وشغلك.\n\nعشان كده، صممنا البورتفوليو بتاعك ليكون صديق لمحركات البحث ومُحسن للـ SEO والـ GEO.. وده معناه Visibility أعلى وعملاء أكتر يقدروا يوصلولك بسهولة.\n\nادخل دلوقتي وضيف أي Updates جديدة في الـ Projects بتاعتك عشان تفضل دايماً في الصدارة والـ Ranking بتاعك يعلى!\n\nلينك البورتفوليو بتاعك:\n{portfolioLink}`,
+    en: `Hi {ownerName},\n\nYour Personal Portfolio isn't just a page online — it's the face of your business and the place that reflects your effort and work.\n\nThat's why we designed your portfolio to be search-engine friendly and optimized for SEO & GEO.. which means higher visibility and more clients finding you easily.\n\nLog in now and add any new Updates to your Projects to stay ahead and keep your Ranking climbing!\n\nYour portfolio link:\n{portfolioLink}`,
+  },
+  portfolio_update_broadcast: {
+    ar: `أهلاً يا {ownerName} ✨\n\nلأن الـ Personal Portfolio بتاعك هو واجهتك الرقمية، إحنا دايماً بنطور الـ System عشان نضمن إنك في الصدارة. 🎯\n\nنزلنا النهاردة Update جديد هيحسن الـ SEO والـ GEO لصفحتك بشكل ملحوظ عشان يضمنلك أعلى Visibility ممكنة.\n\nادخل شوف التحديثات واعمل Update لبياناتك من هنا:\n🔗 {updateLink}\n\nيومك جميل وموفق! 🌻`,
+    en: `Hi {ownerName} ✨\n\nSince your Personal Portfolio is your digital face, we're always upgrading the System to keep you ahead. 🎯\n\nToday we shipped a new Update that noticeably improves the SEO & GEO of your page, giving you the highest possible Visibility.\n\nCheck out the updates and refresh your data here:\n🔗 {updateLink}\n\nHave a great day! 🌻`,
+  },
+  portfolio_contact_form_notification: {
+    ar: `عزيزي {ownerName}،\n\nيعلمك نظام الإشعارات الآلي بتلقي رسالة جديدة عبر الـ Contact Form الخاص بالـ Personal Portfolio الخاص بك.\n\nلضمان الخصوصية وسرية البيانات، يتم توجيه جميع الرسائل وتشفيرها آلياً إلى حسابك دون أي تدخل بشري.\n\nلعرض محتوى الرسالة والرد عليها، برجاء تسجيل الدخول إلى الـ Dashboard:\n🔗 {dashboardLink}`,
+    en: `Dear {ownerName},\n\nOur automated notification system informs you that a new message has been received via the Contact Form on your Personal Portfolio.\n\nTo ensure privacy and data confidentiality, all messages are automatically routed and encrypted to your account without any human intervention.\n\nTo view the message and reply, please log in to your Dashboard:\n🔗 {dashboardLink}`,
+  },
 };
 
 // ── Color map with brand colors ──
@@ -254,6 +274,13 @@ function buildVals(variable) {
     valueMotherAr: variable.valueMotherAr ?? "",
     valueMotherEn: variable.valueMotherEn ?? "",
   };
+}
+
+// ✅ الفانكشن الجديدة — حطها هنا بالظبط
+function getRecipientType(tabId) {
+  if (tabId.startsWith("portfolio_")) return "portfolio_owner";
+  if (tabId.includes("student")) return "student";
+  return "guardian";
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -939,7 +966,7 @@ export default function WhatsAppTemplatesPage() {
               templateType: activeTab,
               contentAr: cur.contentAr || cur.content,
               contentEn: cur.contentEn || "",
-              recipientType: activeTab.includes("student") ? "student" : "guardian",
+              recipientType: getRecipientType(activeTab),
               name: activeTab,
               isDefault: true,
               isActive: true,
@@ -955,7 +982,7 @@ export default function WhatsAppTemplatesPage() {
           templateType: activeTab,
           contentAr: cur.contentAr || cur.content,
           contentEn: cur.contentEn,
-          recipientType: activeTab.includes("student") ? "student" : "guardian",
+          recipientType: getRecipientType(activeTab),
         };
       } else {
         endpoint = "/api/whatsapp/templates";
