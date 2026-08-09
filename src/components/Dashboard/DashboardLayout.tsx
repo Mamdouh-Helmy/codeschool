@@ -154,27 +154,35 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
       icon: "ion:people-outline",
       items: [
         {
+          label: t('dashboard.allUsers') || "كل المستخدمين",
+          href: "/admin/users",
+          icon: "ion:people-circle-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
+        {
           label: t('dashboard.students') || "Students",
           href: "/admin/allStudents",
           icon: "ion:school-outline",
-          badge: createBadge(t('common.new') || "New"),
         },
         {
           label: t('dashboard.instructors') || "Instructors",
           href: "/admin/InstructorsPage",
           icon: "ion:person-circle-outline",
-          badge: createBadge(t('common.new') || "New"),
         },
         {
           label: t('dashboard.Marketing') || "Marketing",
           href: "/admin/MarketingPage",
           icon: "ion:megaphone-outline",
-          badge: createBadge(t('common.new') || "New"),
         },
         {
           label: t('dashboard.Admin') || "Admin",
           href: "/admin/AdminPage",
           icon: "ion:shield-checkmark-outline",
+        },
+        {
+          label: t('dashboard.guests') || "الزوار",
+          href: "/admin/guests",
+          icon: "ion:person-outline",
           badge: createBadge(t('common.new') || "New"),
         },
         {

@@ -1,35 +1,18 @@
-import { jwtVerify } from 'jose';
 import { NextResponse } from 'next/server';
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SIGN_SECRET || process.env.NEXTAUTH_SECRET || "change_this"
-);
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/authOptions'; // تأكد من صحة المسار
 
 /**
- * التحقق من التوكن واستخراج بيانات المستخدم
- */
-export async function verifyAuthToken(token) {
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    return {
-      valid: true,
-      payload
-    };
-  } catch (error) {
-    return {
-      valid: false,
-      error: error.message
-    };
-  }
-}
-
-/**
- * Middleware للتحقق من صلاحية الأدمن
+ * Middleware للتحقق من صلاحية الأدمن باستخدام جلسة NextAuth
+ * @param {NextRequest} req - طلب Next.js (يُمرر للتوافق فقط، غير مستخدم)
+ * @returns {Object} { authorized: boolean, response?: NextResponse, user?: any }
  */
 export async function requireAdmin(req) {
-  const token = req.cookies.get('token')?.value;
+  // الحصول على الجلسة من NextAuth (تعتمد على الكوكيز المُدارة بواسطة NextAuth)
+  const session = await getServerSession(authOptions);
 
-  if (!token) {
+  // إذا لم توجد جلسة → غير مصرّح
+  if (!session) {
     return {
       authorized: false,
       response: NextResponse.json(
@@ -39,9 +22,8 @@ export async function requireAdmin(req) {
     };
   }
 
-  const authResult = await verifyAuthToken(token);
-  
-  if (!authResult.valid || authResult.payload.role !== 'admin') {
+  // التحقق من دور المستخدم (يجب أن يكون admin)
+  if (session.user.role !== 'admin') {
     return {
       authorized: false,
       response: NextResponse.json(
@@ -51,8 +33,9 @@ export async function requireAdmin(req) {
     };
   }
 
+  // مصرّح: نعيد المستخدم مع البيانات الأساسية
   return {
     authorized: true,
-    user: authResult.payload
+    user: session.user // يحتوي على id, name, email, role (حسب إعدادات session callback)
   };
-} 
+}
