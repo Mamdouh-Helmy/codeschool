@@ -242,80 +242,72 @@ function validateScheduleDays(startDate, daysOfWeek) {
 }
 
 /**
- * ✅ Assign meeting link to a session
+ * ✅ يسجل currentReservation فعليًا على كل لينك اتحط على سيشنات الجروب —
+ * من غير الخطوة دي اللينك بيفضل "available" في الداتابيز حتى لو مستخدم
+ * فعلاً، وأي جروب تاني هيقدر ياخده على نفس الميعاد من غير ما يتحذّر.
+ *
+ * الحجز بيمثّل النمط الأسبوعي المتكرر بتاع الجروب (daysOfWeek + timeFrom/
+ * timeTo) — مش سيشن واحدة بعينها — فبيتسجل مرة واحدة لكل لينك مستخدم
+ * (مش لكل سيشن على حدة). startTime/endTime المحفوظين للعرض بس (أول
+ * سيشن → آخر سيشن)؛ الفحص الفعلي بيعتمد على daysOfWeek/timeFrom/timeTo.
+ *
+ * @param {Array}  sessionsWithLinks - سيشنات (فيها meetingLinkId + scheduledDate + _id)
+ * @param {Object} group             - الجروب (فيه schedule.daysOfWeek/timeFrom/timeTo)
+ * @param {String} userId
  */
-async function assignMeetingLinkToSession(sessionData, userId) {
-  try {
-    console.log(
-      `🔗 Looking for meeting link for session: ${sessionData.title}`,
-    );
+async function persistLinkReservations(sessionsWithLinks, group, userId) {
+  const { daysOfWeek, timeFrom, timeTo } = group.schedule;
 
-    const startTime = new Date(sessionData.scheduledDate);
-    const [hours, minutes] = sessionData.startTime.split(":").map(Number);
-    startTime.setHours(hours, minutes, 0, 0);
+  const byLink = new Map();
 
-    const endTime = new Date(startTime);
-    const [endHours, endMinutes] = sessionData.endTime.split(":").map(Number);
-    endTime.setHours(endHours, endMinutes, 0, 0);
+  for (const session of sessionsWithLinks) {
+    if (!session.meetingLinkId) continue;
+    const key = session.meetingLinkId.toString();
+    const existing = byLink.get(key);
 
-    console.log(
-      `  Session time: ${startTime.toISOString()} to ${endTime.toISOString()}`,
-    );
-
-    const availableLinks = await MeetingLink.findAvailableLinks(
-      startTime,
-      endTime,
-      5,
-    );
-
-    if (!availableLinks || availableLinks.length === 0) {
-      console.log("⚠️ No meeting links available for this time slot");
-      return sessionData;
+    if (!existing) {
+      byLink.set(key, {
+        minDate: session.scheduledDate,
+        maxDate: session.scheduledDate,
+        lastSessionId: session._id,
+      });
+    } else {
+      if (session.scheduledDate < existing.minDate) {
+        existing.minDate = session.scheduledDate;
+      }
+      if (session.scheduledDate > existing.maxDate) {
+        existing.maxDate = session.scheduledDate;
+        existing.lastSessionId = session._id;
+      }
     }
+  }
 
-    console.log(`📋 Found ${availableLinks.length} available links`);
+  for (const [linkId, entry] of byLink) {
+    try {
+      const link = await MeetingLink.findById(linkId);
+      if (!link) continue;
 
-    const bestLinkId = availableLinks[0]._id;
-    const bestLink = await MeetingLink.findById(bestLinkId);
+      const startTime = new Date(entry.minDate);
+      const [fromHours, fromMinutes] = timeFrom.split(":").map(Number);
+      startTime.setHours(fromHours, fromMinutes, 0, 0);
 
-    if (!bestLink) {
-      console.log("⚠️ Could not retrieve meeting link document");
-      return sessionData;
+      const endTime = new Date(entry.maxDate);
+      const [toHours, toMinutes] = timeTo.split(":").map(Number);
+      endTime.setHours(toHours, toMinutes, 0, 0);
+
+      await link.reserveForSession(
+        entry.lastSessionId,
+        group._id,
+        startTime,
+        endTime,
+        userId,
+        { daysOfWeek, timeFrom, timeTo },
+      );
+
+      console.log(`🔗 Reservation persisted on link ${link.name} for group ${group._id}`);
+    } catch (error) {
+      console.error(`⚠️ Failed to persist reservation for link ${linkId}:`, error.message);
     }
-
-    console.log(`  📌 Selected link: ${bestLink.name}`);
-
-    const reservationResult = await bestLink.reserveForSession(
-      sessionData._id || new mongoose.Types.ObjectId(),
-      sessionData.groupId,
-      startTime,
-      endTime,
-      userId,
-    );
-
-    console.log(
-      `✅ Link reserved: ${reservationResult.link.substring(0, 50)}...`,
-    );
-
-    return {
-      ...sessionData,
-      meetingLink: reservationResult.link,
-      meetingCredentials: {
-        username: bestLink.credentials?.username,
-        password: bestLink.credentials?.password,
-      },
-      meetingLinkId: bestLink._id,
-      meetingPlatform: bestLink.platform,
-      automationEvents: {
-        ...(sessionData.automationEvents || {}),
-        meetingLinkAssigned: true,
-        meetingLinkAssignedAt: new Date(),
-      },
-    };
-  } catch (error) {
-    console.error("❌ Error assigning meeting link:", error.message);
-    console.error(error.stack);
-    return sessionData;
   }
 }
 
@@ -538,7 +530,7 @@ export async function generateSessionsForGroup(
       );
     }
 
-    // ── ✅ Assign meeting links (modulo — no reservation) ─────────────────
+    // ── ✅ Assign meeting links (modulo distribution) ───────────────────────
     console.log(`\n🔗 Assigning meeting links to sessions...`);
 
     let allAvailableLinks = [];
@@ -560,6 +552,32 @@ export async function generateSessionsForGroup(
       );
     } else {
       console.log(`📋 No links selected — sessions will have no meeting links`);
+    }
+
+    // ✅ فحص تعارض: اللينكات المختارة لازم تكون فاضية فعليًا على جدول
+    // الجروب الجديد (أيام + وقت) — مش بس "status: available" شكليًا.
+    // من غير الفحص ده، اللينك ممكن يتحط على سيشنات الجروب ده وهو فعليًا
+    // متحجز لجروب تاني في نفس الميعاد.
+    if (allAvailableLinks.length > 0) {
+      const { checkLinksConflictForSchedule } = await import("./checkMeetingLinks");
+      const linkIdsToCheck = allAvailableLinks.map((l) => l._id.toString());
+      const conflictCheck = await checkLinksConflictForSchedule(
+        linkIdsToCheck,
+        { daysOfWeek, timeFrom, timeTo },
+        group._id,
+      );
+
+      if (conflictCheck.hasConflicts) {
+        console.log(`❌ Link conflicts found: ${conflictCheck.conflicts.length}`);
+        conflictCheck.conflicts.forEach((c) => {
+          console.log(`   - ${c.linkName}: conflicts with group ${c.conflictingGroupId} (${c.conflictingDays?.join(", ")} ${c.conflictingTime || ""})`);
+        });
+        const error = new Error("اللينكات المختارة متعارضة مع جروب تاني في نفس الميعاد");
+        error.code = "LINK_CONFLICT";
+        error.linkConflicts = conflictCheck.conflicts;
+        throw error;
+      }
+      console.log(`✅ No link conflicts found for selected links`);
     }
 
     const sessionsWithLinks = [];
@@ -600,6 +618,12 @@ export async function generateSessionsForGroup(
     console.log(`  Total Sessions:  ${sessions.length}`);
     console.log(`  Links Assigned:  ${linksAssigned}`);
     console.log(`  Links Failed:    ${linksFailed}`);
+
+    // ✅ نسجل الحجز الفعلي على الـ MeetingLink documents نفسها — من غير
+    // الخطوة دي اللينكات هتفضل "available" في الداتابيز حتى لو مستخدمة.
+    if (linksAssigned > 0) {
+      await persistLinkReservations(sessionsWithLinks, group, userId);
+    }
 
     // ── Day distribution analysis ─────────────────────────────────────────
     const dayDistribution = {};
@@ -916,15 +940,28 @@ export function validateSessionDistribution(sessions, expectedDaysOfWeek) {
 }
 
 /**
- * ✅ Get available meeting links for manual assignment
+ * ✅ Get available meeting links للجدول الأسبوعي المتكرر (أيام + من/لـ)
+ * — بدل التاريخ/الوقت المطلق. بتستخدم findAvailableLinksForSchedule بتاعة
+ * الموديل (اللي فعليًا بتقارن على التكرار)، مش findAvailableLinks اللي
+ * مش موجودة أصلاً في الموديل.
+ *
+ * @param {String[]} daysOfWeek
+ * @param {String}   timeFrom
+ * @param {String}   timeTo
+ * @param {String}   [platform]
  */
 export async function getAvailableMeetingLinks(
-  startTime,
-  endTime,
+  daysOfWeek,
+  timeFrom,
+  timeTo,
   platform = null,
 ) {
   try {
-    const links = await MeetingLink.findAvailableLinks(startTime, endTime, 10);
+    const links = await MeetingLink.findAvailableLinksForSchedule({
+      daysOfWeek,
+      timeFrom,
+      timeTo,
+    });
 
     if (platform) {
       return links.filter((link) => link.platform === platform);
@@ -964,6 +1001,31 @@ export async function manuallyAssignMeetingLink(
       throw new Error("Meeting link not found");
     }
 
+    // ✅ الجدول المتكرر اللي السيشن دي بتمثله — يوم واحد بس (يوم السيشن
+    // نفسها)، مش كل أيام الجروب، عشان مانقفلش اللينك على أيام تانية
+    // الجروب بيستخدمها بلينكات مختلفة
+    const scheduleInfo = {
+      daysOfWeek: [session.dayName],
+      timeFrom: session.startTime,
+      timeTo: session.endTime,
+    };
+
+    // ✅ فحص تعارض دفاعي وقت الحفظ الفعلي — القايمة اللي اتعرضت للأدمن
+    // ممكن تكون اتفلترت من شوية، فبنتأكد تاني قبل ما نحجز فعليًا
+    const { checkLinksConflictForSchedule } = await import("./checkMeetingLinks");
+    const conflictCheck = await checkLinksConflictForSchedule(
+      [meetingLinkId],
+      scheduleInfo,
+      session.groupId,
+    );
+
+    if (conflictCheck.hasConflicts) {
+      const error = new Error("اللينك ده متعارض مع جروب تاني في نفس الميعاد");
+      error.code = "LINK_CONFLICT";
+      error.linkConflicts = conflictCheck.conflicts;
+      throw error;
+    }
+
     const startTime = new Date(session.scheduledDate);
     const [hours, minutes] = session.startTime.split(":").map(Number);
     startTime.setHours(hours, minutes, 0, 0);
@@ -978,6 +1040,7 @@ export async function manuallyAssignMeetingLink(
       startTime,
       endTime,
       userId,
+      scheduleInfo,
     );
 
     await Session.findByIdAndUpdate(sessionId, {
@@ -1064,11 +1127,6 @@ export function getModuleSelectionSummary(group) {
   };
 }
 
-// ============================================================
-// PATCH: استبدل الدالة rescheduleGroupSessions الموجودة بالكاملة
-// بالنسخة دي في utils/sessionGenerator.js
-// ============================================================
-
 /**
  * ✅ Reschedule a group's NON-completed sessions.
  *
@@ -1077,7 +1135,7 @@ export function getModuleSelectionSummary(group) {
  *  - scheduled / cancelled / postponed → بيتحدثلهم scheduledDate + startTime + endTime فقط
  *    اللينكات، الـ meetingLinkId، credentials كلها بتفضل زي ما هي.
  *  - مفيش حذف، مفيش إنشاء جديد.
- *  - ✅ NEW: قبل أي تعديل فعلي، بيتأكد إن اللينكات المستخدمة حاليًا في سيشنات
+ *  - ✅ قبل أي تعديل فعلي، بيتأكد إن اللينكات المستخدمة حاليًا في سيشنات
  *    الجروب (غير الـ completed) لسه متاحة على الميعاد الجديد (أيام + وقت) —
  *    لو أي لينك منهم متعارض مع حجز لجروب تاني، بيرمي error ويوقف قبل ما
  *    يلمس أي بيانات.
@@ -1217,7 +1275,7 @@ export async function rescheduleGroupSessions(
   // ── 5. ✅ تحديث currentReservation.daysOfWeek/timeFrom/timeTo على اللينكات
   //    المستخدمة عشان تعكس الجدول الجديد (نفس اللينك لسه بيمثّل نفس السيشنات،
   //    بس بجدول متكرر مختلف دلوقتي) ────────────────────────────────────────
-  const MeetingLink = (await import("../app/models/MeetingLink")).default;
+  const MeetingLinkModel = (await import("../app/models/MeetingLink")).default;
   const usedLinkIds = [
     ...new Set(
       toReschedule
@@ -1227,7 +1285,7 @@ export async function rescheduleGroupSessions(
   ];
 
   if (usedLinkIds.length > 0) {
-    await MeetingLink.updateMany(
+    await MeetingLinkModel.updateMany(
       {
         _id: { $in: usedLinkIds },
         "currentReservation.groupId": new mongoose.Types.ObjectId(groupId),
@@ -1269,25 +1327,25 @@ export async function rescheduleGroupSessions(
   };
 }
 
-// ============================================================
-// ✅ FIX: resyncGroupModuleSessions — استبدل بيها الفانكشن اللي بنفس الاسم
-// في utils/sessionGenerator.js. باقي الملف (الـ imports، createFlexibleWeeklySchedule،
-// releaseMeetingLink، MeetingLink، mongoose... إلخ) يفضل زي ما هو من غير أي تعديل،
-// الفانكشن دي بتستخدمهم زي الأول.
-//
-// ايه اللي اتصلح بالظبط:
-//   السبب الأصلي للمشكلة: زرار "🔄 مزامنة السيشنز" في الفرونت (GroupForm.jsx)
-//   بيبعت moduleSelection بس، من غير selectedLinkIds خالص. فكان selectedLinkIds
-//   بيوصل هنا دايمًا [] (فاضي)، وبالتالي allAvailableLinks كانت بتفضل فاضية
-//   دايمًا — فأي "سلوت جديد تمامًا" (زي موديول 1 لما ترجع تضيفه بعد ما كنت
-//   بادئ بموديول 2 بس) كان بياخد سيشن من غير meetingLink خالص.
-//
-//   الحل: لو selectedLinkIds مبعتش صراحة، الفانكشن دلوقتي بتجيب اللينكات
-//   اللي الجروب أصلًا بيستخدمها في باقي سيشناته (اللي مش هتتشال دلوقتي)
-//   وتعيد استخدامها للسلوتات الجديدة، بنفس منطق التوزيع (modulo) اللي كان
-//   موجود أصلاً. باقي المنطق (kept-in-place, removed, completed untouched)
-//   متلمسش خالص.
-// ============================================================
+/**
+ * ✅ Resync a group's module selection (add/remove modules) without
+ * touching completed sessions or the ones staying in place.
+ *
+ * السبب الأصلي للمشكلة القديمة: زرار "🔄 مزامنة السيشنز" في الفرونت
+ * (GroupForm.jsx) بيبعت moduleSelection بس، من غير selectedLinkIds خالص.
+ * فكان selectedLinkIds بيوصل هنا دايمًا [] (فاضي)، وبالتالي allAvailableLinks
+ * كانت بتفضل فاضية دايمًا — فأي "سلوت جديد تمامًا" (زي موديول 1 لما ترجع
+ * تضيفه بعد ما كنت بادئ بموديول 2 بس) كان بياخد سيشن من غير meetingLink خالص.
+ *
+ * الحل: لو selectedLinkIds مبعتش صراحة، الفانكشن بتجيب اللينكات اللي
+ * الجروب أصلًا بيستخدمها في باقي سيشناته (اللي مش هتتشال دلوقتي) وتعيد
+ * استخدامها للسلوتات الجديدة، بنفس منطق التوزيع (modulo).
+ *
+ * ✅ NEW: قبل ما تستخدم أي لينك للسلوتات الجديدة، بتفحص إنه فعلاً فاضي على
+ * جدول الجروب (أيام + وقت) — ولو حصل تعارض بترمي error وتوقف قبل أي تعديل.
+ * وبعد ما تحجز السلوتات الجديدة فعليًا، بتسجل الحجز على الـ MeetingLink
+ * نفسه (زي generateSessionsForGroup بالظبط) عشان يفضل معروف إن اللينك مشغول.
+ */
 export async function resyncGroupModuleSessions(
   groupId,
   group,
@@ -1413,9 +1471,9 @@ export async function resyncGroupModuleSessions(
   }
 
   // ── لينكات جديدة للسلوتات الجديدة تمامًا ──────────────────────────────
-  // ✅ FIX: لو مفيش selectedLinkIds اتبعتت صراحة (زي زرار "مزامنة السيشنز"
-  // اللي مفيهوش UI لاختيار لينكات أصلاً)، بدل ما نسيب السلوتات الجديدة من
-  // غير أي لينك، بنجيب اللينكات اللي الجروب أصلًا بيستخدمها في باقي سيشناته
+  // لو مفيش selectedLinkIds اتبعتت صراحة (زي زرار "مزامنة السيشنز" اللي
+  // مفيهوش UI لاختيار لينكات أصلاً)، بدل ما نسيب السلوتات الجديدة من غير
+  // أي لينك، بنجيب اللينكات اللي الجروب أصلًا بيستخدمها في باقي سيشناته
   // (اللي مش هتتشال) ونعيد استخدامها بنفس ترتيب ظهورها.
   const sessionsToRemoveIds = new Set(
     sessionsToRemove.map((s) => s._id.toString()),
@@ -1463,6 +1521,32 @@ export async function resyncGroupModuleSessions(
       );
     }
   }
+
+  // ✅ فحص تعارض: اللينكات اللي هتتستخدم للسلوتات الجديدة لازم تكون فاضية
+  // فعليًا على جدول الجروب (أيام + وقت) — بنفس الفلسفة المستخدمة وقت
+  // التوليد الأول، عشان مانحطش لينك مستخدم فعلاً في جروب تاني.
+  if (allAvailableLinks.length > 0) {
+    const { checkLinksConflictForSchedule } = await import("./checkMeetingLinks");
+    const linkIdsToCheck = allAvailableLinks.map((l) => l._id.toString());
+    const conflictCheck = await checkLinksConflictForSchedule(
+      linkIdsToCheck,
+      { daysOfWeek, timeFrom, timeTo },
+      group._id,
+    );
+
+    if (conflictCheck.hasConflicts) {
+      console.log(`❌ Link conflicts found: ${conflictCheck.conflicts.length}`);
+      conflictCheck.conflicts.forEach((c) => {
+        console.log(`   - ${c.linkName}: conflicts with group ${c.conflictingGroupId} (${c.conflictingDays?.join(", ")} ${c.conflictingTime || ""})`);
+      });
+      const error = new Error("اللينكات المتاحة للسلوتات الجديدة متعارضة مع جروب تاني في نفس الميعاد");
+      error.code = "LINK_CONFLICT";
+      error.linkConflicts = conflictCheck.conflicts;
+      throw error;
+    }
+    console.log(`✅ No link conflicts found for resync links`);
+  }
+
   let freshLinkCursor = 0;
 
   const bulkUpdateExisting = [];
@@ -1560,6 +1644,15 @@ export async function resyncGroupModuleSessions(
   }
   if (newSessionsToInsert.length > 0) {
     await Session.insertMany(newSessionsToInsert);
+
+    // ✅ نسجل الحجز الفعلي على الـ MeetingLink documents بتاعة السلوتات
+    // الجديدة تمامًا — السيشنز اللي "kept in place" مالهاش داعي، لأنها
+    // مستخدمة نفس اللينك من الأول وحجزه مسجل بالفعل بنفس daysOfWeek/
+    // timeFrom/timeTo (مش متغيّرين هنا).
+    const newSessionsWithLinks = newSessionsToInsert.filter((s) => s.meetingLinkId);
+    if (newSessionsWithLinks.length > 0) {
+      await persistLinkReservations(newSessionsWithLinks, group, userId);
+    }
   }
 
   // ── تحديث بيانات الجروب ──────────────────────────────────────────────────

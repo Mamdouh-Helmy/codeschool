@@ -544,6 +544,13 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     [isActiveWithSessions, effectiveFrom]
   );
 
+  // ✅ الجروب active وسيشناته متولدة، ولسه محددش "من تاريخ" (effectiveFrom) —
+  // يبقى أي تعديل على الوقت (أو الأيام) لازم يتقفل لحد ما يدخل وضع الـ
+  // reschedule الصريح، عشان أي تعديل معاد يعدي حتمًا من نفس المسار اللي
+  // بيحدّث الـ Group.schedule والـ Sessions مع بعض في نفس العملية
+  // (rescheduleGroupSessions) — مش يتحفظ في الفورم بس من غير ما يوصل لحد.
+  const scheduleLocked = isActiveWithSessions && !effectiveFrom;
+
   // ── Load courses + instructors + tags ──────────────────────────────────────
   useEffect(() => {
     const load = async () => {
@@ -986,7 +993,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                       }}
                       min={new Date().toISOString().split("T")[0]} className={inputCls} />
                     <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-1">
-                      سيب الحقل ده فاضي لو مش عاوز تغيّر الميعاد — باقي البيانات (زي المدرسين) هتتحفظ عادي.
+                      حدد "من تاريخ" عشان تقدر تعدّل الأيام أو الوقت — التعديل هيتطبق على الجروب والسيشنات (الغير مكتملة) مع بعض في نفس اللحظة.
+                      سيبه فاضي لو مش عاوز تغيّر الميعاد خالص.
                     </p>
                     {effectiveFrom && (
                       <p className="text-xs text-orange-deep dark:text-amber-brand mt-1">
@@ -1077,11 +1085,21 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                 <label className={labelCls}>
                   <span className="inline-flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />{t("groups.form.timeFrom")} — {t("groups.form.timeTo")} *</span>
                 </label>
+                {scheduleLocked && (
+                  <p className="text-[11px] text-orange-coral mb-2 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    عشان تعدّل الوقت لازم تحدد "من تاريخ" فوق الأول — التعديل هيتطبق على الجروب والسيشنات مع بعض.
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <input type="time" value={form.schedule.timeFrom}
-                    onChange={e => onChange("schedule.timeFrom", e.target.value)} className={inputCls} />
+                    onChange={e => onChange("schedule.timeFrom", e.target.value)}
+                    disabled={scheduleLocked}
+                    className={`${inputCls} ${scheduleLocked ? "opacity-60 cursor-not-allowed" : ""}`} />
                   <input type="time" value={form.schedule.timeTo}
-                    onChange={e => onChange("schedule.timeTo", e.target.value)} className={inputCls} />
+                    onChange={e => onChange("schedule.timeTo", e.target.value)}
+                    disabled={scheduleLocked}
+                    className={`${inputCls} ${scheduleLocked ? "opacity-60 cursor-not-allowed" : ""}`} />
                 </div>
               </div>
             </div>

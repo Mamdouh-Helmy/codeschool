@@ -21,6 +21,15 @@ const EVALUATION_TEMPLATE_MAP = {
 // لأنهم مش هيظهروا، بس الـ backend بيتأكد بنفسه كمان).
 const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'excused'];
 
+// ✅ نفس الحد المستخدم في الفرونت (MAX_COMMENT_LENGTH في صفحة التقييم).
+// أي تعليق (notes) مخزّن في الداتابيز أطول من كده يبقى غالبًا بيانات تالفة —
+// رسالة تقييم كاملة اتسجلت غلط بدل تعليق المدرس القصير الفعلي (باگ قديم).
+// بنستخدمه في مكانين: (1) وقت القراءة في GET، لو اللي مخزّن أطول من الحد،
+// منعرضوش في الـ textarea خالص (نرجّع فاضي) بدل ما نعرض نص مشوّه/متكرر.
+// (2) وقت الحفظ في PATCH، بنقص أي تعليق جديد لنفس الحد قبل التخزين، عشان
+// نمنع تكرار نفس المشكلة تاني في المستقبل.
+const MAX_COMMENT_LENGTH = 500;
+
 // ─── Helper: resolve var from DB ─────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = 'ar', genderContext = {}) {
   const v = dbVars[key];
@@ -355,10 +364,16 @@ export async function GET(req, { params }) {
     }).lean();
     const existingEvalMap = {};
     existingEvals.forEach((e) => {
+      // ✅ تعليقات قديمة/تالفة (رسالة كاملة اتسجلت غلط بدل تعليق قصير من
+      // باگ سابق) أطول من الحد المسموح للتعليق الحقيقي — منعرضهاش في
+      // الـ textarea خالص، نرجّع فاضي بدل النص المشوّه/المتكرر.
+      const rawNotes = e.notes || '';
+      const safeComment = rawNotes.length > MAX_COMMENT_LENGTH ? '' : rawNotes;
+
       existingEvalMap[e.studentId.toString()] = {
         decision: e.finalDecision,
         ratings:  e.criteria,
-        comment:  e.notes || '',
+        comment:  safeComment,
       };
     });
 
@@ -559,12 +574,21 @@ export async function PATCH(req, { params }) {
 
       const lang = student.communicationPreferences?.preferredLanguage || 'ar';
 
+      // ✅ نقص التعليق الجديد لنفس الحد المسموح بيه في الفرونت قبل أي حاجة —
+      // سواء وقت بناء رسالة الواتساب أو وقت التخزين في StudentEvaluation.notes.
+      // ده اللي بيمنع تخزين نص طويل غلط (زي رسالة كاملة) يبقى "تعليق" ويتكرر
+      // ظهوره في الـ textarea في المرات الجاية.
+      const rawComment   = (comment || notes || '').trim();
+      const safeComment  = rawComment.length > MAX_COMMENT_LENGTH
+        ? rawComment.slice(0, MAX_COMMENT_LENGTH)
+        : rawComment;
+
       const { rendered, guardianPhone, isFallback } = await buildEvaluationMessage(
         student, decision, session,
         {
           rawContent:        null,
           ratings:           ratings || {},
-          comment:           comment || notes || '',
+          comment:           safeComment,
           attendanceStatus,
           groupId:           session.groupId?._id,
           moduleTitle,
@@ -588,7 +612,7 @@ export async function PATCH(req, { params }) {
           studentId,
           instructorId:  user.id,
           finalDecision: decision,
-          notes:         comment || notes || '',
+          notes:         safeComment,
           criteria,
           'metadata.evaluatedAt':    new Date(),
           'metadata.evaluatedBy':    user.id,

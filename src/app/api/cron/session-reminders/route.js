@@ -48,9 +48,13 @@ export async function GET(req) {
 
     // ============================================================
     // 1) تذكير 24 ساعة — نافذة 23-25 ساعة
+    // ✅ الفلتر بقى status !== 'completed' بدل status === 'scheduled'
+    //    عشان السيشنات المؤجلة (postponed) أو الملغية (cancelled) برضو
+    //    تاخد تذكير طالما مكتملتش — المكتملة (completed) بس هي اللي
+    //    مفيش داعي تتبعتلها تذكير.
     // ============================================================
     const sessions24h = await Session.find({
-      status:        'scheduled',
+      status:        { $ne: 'completed' },
       isDeleted:     false,
       scheduledDate: { $gte: dayStart, $lte: dayEnd },
       'automationEvents.reminder24hSent': { $ne: true },
@@ -64,7 +68,7 @@ export async function GET(req) {
         const sessionDateTime = buildSessionDateTime(session);
         const diffHours       = (sessionDateTime - now) / (1000 * 60 * 60);
 
-        console.log(`   Session: "${session.title}"`);
+        console.log(`   Session: "${session.title}" | status: ${session.status}`);
         console.log(`   sessionDateTime (UTC): ${sessionDateTime.toISOString()}`);
         console.log(`   diff: ${diffHours.toFixed(2)}h`);
 
@@ -95,6 +99,7 @@ export async function GET(req) {
           results.reminder24h.sessions.push({
             id:               session._id,
             title:            session.title,
+            status:           session.status,
             scheduledDate:    session.scheduledDate,
             studentsNotified: result.successCount,
           });
@@ -131,9 +136,10 @@ export async function GET(req) {
 
     // ============================================================
     // 2) تذكير 15 دقيقة — نافذة 12-18 دقيقة
+    // ✅ نفس الفكرة: status !== 'completed' بدل status === 'scheduled'
     // ============================================================
     const sessions15min = await Session.find({
-      status:        'scheduled',
+      status:        { $ne: 'completed' },
       isDeleted:     false,
       scheduledDate: { $gte: dayStart, $lte: dayEnd },
       'automationEvents.reminder15minSent': { $ne: true },
@@ -147,7 +153,7 @@ export async function GET(req) {
         const sessionDateTime = buildSessionDateTime(session);
         const diffMinutes     = (sessionDateTime - now) / (1000 * 60);
 
-        console.log(`   Session: "${session.title}"`);
+        console.log(`   Session: "${session.title}" | status: ${session.status}`);
         console.log(`   sessionDateTime (UTC): ${sessionDateTime.toISOString()}`);
         console.log(`   diff: ${diffMinutes.toFixed(1)}min`);
 
@@ -180,6 +186,7 @@ export async function GET(req) {
           results.reminder15min.sessions.push({
             id:               session._id,
             title:            session.title,
+            status:           session.status,
             scheduledDate:    session.scheduledDate,
             studentsNotified: result.successCount,
           });

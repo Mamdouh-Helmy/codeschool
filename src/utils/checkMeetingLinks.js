@@ -123,7 +123,7 @@ async function checkLinkAvailability(link, startTime, endTime) {
 
     const res = link.currentReservation;
 
-    // ✅ FIX: لو فيه بيانات تكرار (الأيام + الوقت) - استخدمها للمقارنة الصحيحة
+    // ✅ لو فيه بيانات تكرار (الأيام + الوقت) - استخدمها للمقارنة الصحيحة
     // بدل المقارنة بالتاريخ المطلق اللي كانت بتعتبر أي وقت جوه نطاق
     // [أول سيشن → آخر سيشن] محجوز، حتى لو يوم/ساعة مختلفين تمامًا
     if (res.daysOfWeek?.length && res.timeFrom && res.timeTo) {
@@ -415,13 +415,107 @@ export async function getUpcomingReservations(days = 7) {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// ✅ SHARED CORE: فحص تعارض جدول أسبوعي جديد (أيام + من/لـ) مع حجز موجود
+// على لينك معين. الدالة دي هي المصدر الوحيد لمنطق المقارنة — أي مكان
+// في المشروع محتاج يفحص "هل اللينك ده هيتعارض مع الميعاد الجديد" لازم
+// يمر من هنا، بدل ما يكرر نفس المقارنة تاني في مكان تاني.
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * ✅ يفحص هل حجز لينك معيّن (link.currentReservation) بيتعارض مع جدول
+ * أسبوعي جديد. المقارنة بتتم على التكرار الأسبوعي (يوم + وقت من/لـ) —
+ * مش على تاريخ مطلق — عشان تعكس الواقع: اللينك بيتكرر استخدامه كل أسبوع
+ * في نفس اليوم/الوقت.
+ *
+ * @param {Object} link            - وثيقة MeetingLink (أو lean object)
+ * @param {Object} newSchedule     - { daysOfWeek: string[], timeFrom: "HH:MM", timeTo: "HH:MM" }
+ * @param {String} [excludeGroupId] - لو الحجز الحالي لنفس الجروب ده، منعتبروش تعارض
+ * @returns {Object|null} تفاصيل التعارض، أو null لو مفيش تعارض
+ */
+function findScheduleConflict(link, newSchedule, excludeGroupId = null) {
+  const res = link.currentReservation;
+  if (!res?.sessionId) return null; // اللينك مش محجوز أصلاً
+
+  if (excludeGroupId && res.groupId?.toString() === excludeGroupId.toString()) {
+    return null; // الحجز الحالي لنفس الجروب اللي بنفحصله — مش تعارض
+  }
+
+  const now = new Date();
+  if (res.endTime && new Date(res.endTime) < now) return null; // الحجز انتهى فعليًا
+
+  const dayOverlap = (newSchedule.daysOfWeek || []).some((d) =>
+    (res.daysOfWeek || []).includes(d)
+  );
+  if (!dayOverlap) return null; // مفيش يوم مشترك
+
+  if (!res.timeFrom || !res.timeTo) {
+    // حجز قديم من غير بيانات تكرار — نتعامل بحذر ونعتبره تعارض
+    return {
+      conflictingGroupId: res.groupId,
+      conflictingDays: res.daysOfWeek,
+      conflictingTime: null,
+      reason: "missing_time_data",
+    };
+  }
+
+  const newFrom = newSchedule.timeFrom.replace(":", "");
+  const newTo = newSchedule.timeTo.replace(":", "");
+  const existFrom = res.timeFrom.replace(":", "");
+  const existTo = res.timeTo.replace(":", "");
+  const timeOverlaps = !(newTo <= existFrom || newFrom >= existTo);
+  if (!timeOverlaps) return null;
+
+  return {
+    conflictingGroupId: res.groupId,
+    conflictingDays: res.daysOfWeek,
+    conflictingTime: `${res.timeFrom} - ${res.timeTo}`,
+  };
+}
+
+/**
+ * ✅ يفحص مجموعة لينكات (بالـ id) قبل ما تتحجز/تتستخدم لجروب على جدول
+ * جديد. بيتستخدم في أي حالة عاوزين نتأكد فيها إن اللينكات دي فاضية فعليًا
+ * على الأيام/الأوقات دي — سواء وقت توليد سيشنز جديدة، resync الموديولات،
+ * أو أي تعديل تاني على جدول الجروب.
+ *
+ * @param {String[]} linkIds
+ * @param {Object}   newSchedule    - { daysOfWeek, timeFrom, timeTo }
+ * @param {String}   [excludeGroupId] - جروب مستثنى من الفحص (بيستخدم نفس اللينكات أصلاً)
+ * @returns {{hasConflicts: boolean, conflicts: Array}}
+ */
+export async function checkLinksConflictForSchedule(linkIds, newSchedule, excludeGroupId = null) {
+  if (!linkIds?.length) return { hasConflicts: false, conflicts: [] };
+
+  const MeetingLink = (await import("../app/models/MeetingLink")).default;
+  const links = await MeetingLink.find({
+    _id: { $in: linkIds },
+    isDeleted: false,
+  }).lean();
+
+  const conflicts = [];
+  for (const link of links) {
+    const conflict = findScheduleConflict(link, newSchedule, excludeGroupId);
+    if (conflict) {
+      conflicts.push({
+        linkId: link._id,
+        linkName: link.name,
+        ...conflict,
+      });
+    }
+  }
+
+  return { hasConflicts: conflicts.length > 0, conflicts };
+}
+
 /**
  * ✅ فحص هل اللينكات المستخدمة حاليًا في سيشنات الجروب (غير الـ completed)
- * لسه متاحة للجدول الجديد (daysOfWeek/timeFrom/timeTo)
+ * لسه متاحة للجدول الجديد (daysOfWeek/timeFrom/timeTo).
+ * بيبني قائمة اللينكات من سيشنات الجروب نفسها، وبعدين بيمرر الفحص الفعلي
+ * لـ checkLinksConflictForSchedule (نفس المصدر اللي بيستخدمه أي فحص تاني).
  */
 export async function checkLinksForRescheduledSchedule(groupId, newSchedule) {
   const Session = (await import("../app/models/Session")).default;
-  const MeetingLink = (await import("../app/models/MeetingLink")).default;
 
   const sessions = await Session.find({
     groupId,
@@ -435,54 +529,19 @@ export async function checkLinksForRescheduledSchedule(groupId, newSchedule) {
   }
 
   const linkIds = [...new Set(sessions.map((s) => s.meetingLinkId.toString()))];
-  const links = await MeetingLink.find({ _id: { $in: linkIds }, isDeleted: false }).lean();
 
-  const conflicts = [];
-  const now = new Date();
+  const { conflicts: rawConflicts } = await checkLinksConflictForSchedule(
+    linkIds,
+    newSchedule,
+    groupId, // الحجز الحالي بتاع نفس الجروب ده مش تعارض
+  );
 
-  for (const link of links) {
-    const res = link.currentReservation;
-    if (!res?.sessionId) continue; // مش محجوز فعليًا لحد
-
-    // لو الحجز لنفس الجروب → مش تعارض
-    if (res.groupId?.toString() === groupId.toString()) continue;
-
-    // لو الحجز انتهى فعليًا
-    if (res.endTime && new Date(res.endTime) < now) continue;
-
-    const dayOverlap = (newSchedule.daysOfWeek || []).some((d) =>
-      (res.daysOfWeek || []).includes(d)
-    );
-    if (!dayOverlap) continue;
-
-    if (!res.timeFrom || !res.timeTo) {
-      conflicts.push({ linkId: link._id, linkName: link.name, reason: "missing_time_data" });
-      continue;
-    }
-
-    const newFrom = newSchedule.timeFrom.replace(":", "");
-    const newTo = newSchedule.timeTo.replace(":", "");
-    const existFrom = res.timeFrom.replace(":", "");
-    const existTo = res.timeTo.replace(":", "");
-    const timeOverlap = !(newTo <= existFrom || newFrom >= existTo);
-
-    if (timeOverlap) {
-      const affectedSessions = sessions.filter(
-        (s) => s.meetingLinkId.toString() === link._id.toString()
-      );
-      conflicts.push({
-        linkId: link._id,
-        linkName: link.name,
-        conflictingGroupId: res.groupId,
-        conflictingDays: res.daysOfWeek,
-        conflictingTime: `${res.timeFrom} - ${res.timeTo}`,
-        affectedSessions: affectedSessions.map((s) => ({
-          sessionId: s._id,
-          title: s.title,
-        })),
-      });
-    }
-  }
+  const conflicts = rawConflicts.map((c) => ({
+    ...c,
+    affectedSessions: sessions
+      .filter((s) => s.meetingLinkId.toString() === c.linkId.toString())
+      .map((s) => ({ sessionId: s._id, title: s.title })),
+  }));
 
   return { hasConflicts: conflicts.length > 0, conflicts };
 }

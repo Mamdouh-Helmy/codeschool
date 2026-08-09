@@ -1394,28 +1394,11 @@ SessionSchema.statics.getSessionsNeedingMeetingLinks = async function (
 };
 
 // ✅ Get available meeting links for a session
-SessionSchema.statics.getAvailableMeetingLinksForSession = async function (
-  sessionId,
-) {
+SessionSchema.statics.getAvailableMeetingLinksForSession = async function (sessionId) {
   const session = await this.findById(sessionId);
-
-  if (!session) {
-    throw new Error("Session not found");
-  }
-
-  const { getAvailableMeetingLinks } =
-    await import("../../utils/sessionGenerator");
-
-  // Create date objects for the session time
-  const startTime = new Date(session.scheduledDate);
-  const [hours, minutes] = session.startTime.split(":").map(Number);
-  startTime.setHours(hours, minutes, 0, 0);
-
-  const endTime = new Date(startTime);
-  const [endHours, endMinutes] = session.endTime.split(":").map(Number);
-  endTime.setHours(endHours, endMinutes, 0, 0);
-
-  return await getAvailableMeetingLinks(startTime, endTime);
+  if (!session) throw new Error("Session not found");
+  const { getAvailableMeetingLinks } = await import("../../utils/sessionGenerator");
+  return await getAvailableMeetingLinks([session.dayName], session.startTime, session.endTime);
 };
 
 // ✅ Get all pending cascade reschedule requests, grouped by batchId — للأدمن
