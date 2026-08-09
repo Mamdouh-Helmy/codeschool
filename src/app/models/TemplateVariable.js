@@ -41,7 +41,7 @@ const TemplateVariableSchema = new mongoose.Schema(
     // نوع الجنس: "student" | "guardian" | "instructor"
     genderType: {
       type: String,
-      enum: ["student", "guardian", "instructor", null],
+      enum: ["student", "guardian", "instructor", "portfolio_owner", null],
       default: null,
     },
 
@@ -88,6 +88,7 @@ TemplateVariableSchema.statics.getVarsMap = async function (
     studentGender = "male",
     guardianType = "father",
     instructorGender = "male",
+    ownerGender = "male", // ✅ جديد
   } = genderContext;
 
   const map = {};
@@ -114,6 +115,14 @@ TemplateVariableSchema.statics.getVarsMap = async function (
             ? (instructorGender === "male" ? v.valueMaleAr : v.valueFemaleAr) ||
               v.valueAr
             : (instructorGender === "male" ? v.valueMaleEn : v.valueFemaleEn) ||
+              v.valueEn;
+      } else if (v.genderType === "portfolio_owner") {
+        // ✅ جديد
+        val =
+          lang === "ar"
+            ? (ownerGender === "male" ? v.valueMaleAr : v.valueFemaleAr) ||
+              v.valueAr
+            : (ownerGender === "male" ? v.valueMaleEn : v.valueFemaleEn) ||
               v.valueEn;
       } else {
         val = lang === "ar" ? v.valueAr : v.valueEn;
@@ -1081,7 +1090,12 @@ export function getDefaultVariables() {
       icon: "👤",
       valueAr: "أحمد",
       valueEn: "Ahmed",
-      hasGender: false,
+      valueMaleAr: "أحمد",
+      valueMaleEn: "Ahmed",
+      valueFemaleAr: "سارة",
+      valueFemaleEn: "Sara",
+      hasGender: true,
+      genderType: "portfolio_owner",
       group: "portfolio",
     },
     {
@@ -1112,6 +1126,36 @@ export function getDefaultVariables() {
       valueAr: "https://codeschool.com/dashboard",
       valueEn: "https://codeschool.com/dashboard",
       hasGender: false,
+      group: "portfolio",
+    },
+    {
+      key: "ownerSalutation",
+      labelAr: "تحية صاحب البورتفوليو",
+      labelEn: "Portfolio Owner Salutation",
+      icon: "👋",
+      valueAr: "عزيزي",
+      valueEn: "Dear",
+      valueMaleAr: "عزيزي",
+      valueMaleEn: "Dear",
+      valueFemaleAr: "عزيزتي",
+      valueFemaleEn: "Dear",
+      hasGender: true,
+      genderType: "portfolio_owner",
+      group: "portfolio",
+    },
+    {
+      key: "ownerWelcome",
+      labelAr: "ترحيب صاحب البورتفوليو (أهلاً بيك)",
+      labelEn: "Portfolio Owner Welcome",
+      icon: "🌟",
+      valueAr: "أهلاً بيك يا",
+      valueEn: "Hi",
+      valueMaleAr: "أهلاً بيك يا",
+      valueMaleEn: "Hi",
+      valueFemaleAr: "أهلاً بيكِ يا",
+      valueFemaleEn: "Hi",
+      hasGender: true,
+      genderType: "portfolio_owner",
       group: "portfolio",
     },
   ];

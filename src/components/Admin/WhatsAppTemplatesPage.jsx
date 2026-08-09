@@ -177,6 +177,14 @@ const TEMPLATE_VARS = {
   portfolio_inactivity_reminder: ["ownerName", "portfolioLink"],
   portfolio_update_broadcast: ["ownerName", "updateLink"],
   portfolio_contact_form_notification: ["ownerName", "dashboardLink"],
+  portfolio_inactivity_reminder: ["ownerWelcome", "ownerName", "portfolioLink"],
+  portfolio_update_broadcast: ["ownerName", "updateLink"],
+  portfolio_contact_form_notification: ["ownerSalutation", "ownerName", "dashboardLink"],
+  learning_supervisor_intro: ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
+  module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "moduleDescription", "supervisorName"],
+  portfolio_inactivity_reminder: ["ownerWelcome", "ownerName", "portfolioLink"],
+  portfolio_update_broadcast: ["ownerName", "updateLink"],
+  portfolio_contact_form_notification: ["ownerSalutation", "ownerName", "dashboardLink"],
 };
 
 const FRONTEND_FALLBACKS = {
@@ -287,7 +295,7 @@ function getRecipientType(tabId) {
 // GENDER CONTEXT SELECTOR
 // ─────────────────────────────────────────────────────────────
 function GenderContextSelector({ genderContext, setGenderContext }) {
-  const { studentGender, guardianType, instructorGender } = genderContext;
+  const { studentGender, guardianType, instructorGender, ownerGender } = genderContext;
 
   const btnBase = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border";
   const active = "bg-[#ff6700] text-white border-[#ff6700] shadow-sm";
@@ -320,6 +328,15 @@ function GenderContextSelector({ genderContext, setGenderContext }) {
         <span className="text-[10px] text-slate-400 ml-1">👨‍🏫 المدرب:</span>
         <button onClick={() => setGenderContext(p => ({ ...p, instructorGender: "male" }))} className={`${btnBase} ${instructorGender === "male" ? active : inactive}`}>♂ ذكر</button>
         <button onClick={() => setGenderContext(p => ({ ...p, instructorGender: "female" }))} className={`${btnBase} ${instructorGender === "female" ? active : inactive}`}>♀ أنثى</button>
+      </div>
+
+      <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
+
+      {/* ✅ مجموعة جديدة — صاحب البورتفوليو */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <span className="text-[10px] text-slate-400 ml-1">💼 صاحب البورتفوليو:</span>
+        <button onClick={() => setGenderContext(p => ({ ...p, ownerGender: "male" }))} className={`${btnBase} ${ownerGender === "male" ? active : inactive}`}>♂ ذكر</button>
+        <button onClick={() => setGenderContext(p => ({ ...p, ownerGender: "female" }))} className={`${btnBase} ${ownerGender === "female" ? active : inactive}`}>♀ أنثى</button>
       </div>
     </div>
   );
@@ -682,6 +699,7 @@ export default function WhatsAppTemplatesPage() {
     studentGender: "male",
     guardianType: "father",
     instructorGender: "male",
+    ownerGender: "male",
   });
 
   const textareaRef = useRef(null);
@@ -809,7 +827,7 @@ export default function WhatsAppTemplatesPage() {
   const resolveVarValue = useCallback((v, lang) => {
     if (!v.hasGender) return lang === "ar" ? v.valueAr : v.valueEn;
 
-    const { studentGender, guardianType, instructorGender } = genderContext;
+    const { studentGender, guardianType, instructorGender, ownerGender } = genderContext;
 
     if (v.genderType === "guardian") {
       return lang === "ar"
@@ -820,6 +838,11 @@ export default function WhatsAppTemplatesPage() {
       return lang === "ar"
         ? (instructorGender === "male" ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr
         : (instructorGender === "male" ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn;
+    }
+    if (v.genderType === "portfolio_owner") { // ✅ جديد
+      return lang === "ar"
+        ? (ownerGender === "male" ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr
+        : (ownerGender === "male" ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn;
     }
     return lang === "ar"
       ? (studentGender === "male" ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr
