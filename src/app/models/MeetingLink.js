@@ -1,4 +1,36 @@
+// → app/models/MeetingLink.js  (استبدل الملف القديم بالكامل بده)
+//
+// ✅ التغيير الجوهري: currentReservation (object واحد) بقى reservations
+// (array). السبب: object واحد يقدر يمثّل حجز جروب واحد بس في كل لحظة —
+// فأي جروب تاني ياخد نفس اللينك (حتى لو مواعيده مش متعارضة فعليًا) كان
+// بيكتب فوق حجز الجروب الأول ويمسحه بالكامل، وده اللي كان بيسمح بتضارب
+// حقيقي بين الجروبات (لينك محجوز الأحد 1-3 يتحط تاني في نفس المعاد لجروب
+// تاني، لأن الفحص كان بيقارن بس مع آخر حجز اتكتب، مش كل الحجوزات الفعلية).
 import mongoose from "mongoose";
+
+const reservationSchema = new mongoose.Schema(
+  {
+    groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group", required: true },
+    // sessionId تمثيلي (آخر سيشن اتحدّث بيه الحجز ده) — مش المصدر الوحيد
+    // للحقيقة؛ الفحص الفعلي بيعتمد على daysOfWeek/timeFrom/timeTo
+    sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
+    daysOfWeek: [
+      {
+        type: String,
+        enum: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      },
+    ],
+    timeFrom: String, // "HH:MM"
+    timeTo: String,   // "HH:MM"
+    // أول/آخر تاريخ فعلي لسيشن الجروب على اللينك ده — للعرض بس ("محجوز
+    // لحد كذا")، مش بيُستخدم في فحص التعارض
+    startTime: Date,
+    endTime: Date,
+    reservedAt: { type: Date, default: Date.now },
+    reservedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  },
+  { _id: true }
+);
 
 const meetingLinkSchema = new mongoose.Schema(
   {
@@ -44,26 +76,13 @@ const meetingLinkSchema = new mongoose.Schema(
       },
     ],
 
-    // ✅ Current Reservation
-    // startTime/endTime = النطاق الكامل (أول سيشن → آخر سيشن) وده للعرض بس
-    // ("محجوز لحد كذا" في الواجهة) — مش بيُستخدم للفحص الفعلي للتعارض
-    // ✅ الفحص الحقيقي بيعتمد على daysOfWeek + timeFrom/timeTo (الجدول الأسبوعي المتكرر)
-    currentReservation: {
-      sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
-      groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group" },
-      startTime: Date,
-      endTime: Date,
-      // ✅ NEW
-      daysOfWeek: [
-        {
-          type: String,
-          enum: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
-        },
-      ],
-      timeFrom: String, // "HH:MM"
-      timeTo: String,   // "HH:MM"
-      reservedAt: { type: Date, default: Date.now },
-      reservedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    // ✅ NEW: كل entry = حجز جروب واحد على اللينك، وممكن يبقى فيه أكتر من
+    // entry نشط في نفس الوقت طول ما مواعيدهم (أيام + وقت) مش متعارضة.
+    // ده اللي بيسمح فعليًا بمشاركة نفس اللينك بين جروبات مختلفة من غير ما
+    // حجز جروب يمسح حجز التاني بالغلط.
+    reservations: {
+      type: [reservationSchema],
+      default: [],
     },
 
     stats: {
@@ -90,10 +109,11 @@ meetingLinkSchema.index({ link: 1 }, { unique: true });
 meetingLinkSchema.index({ status: 1 });
 meetingLinkSchema.index({ platform: 1 });
 meetingLinkSchema.index({ isDeleted: 1 });
-meetingLinkSchema.index({ "currentReservation.sessionId": 1 });
-meetingLinkSchema.index({ "currentReservation.endTime": 1 });
+meetingLinkSchema.index({ "reservations.sessionId": 1 });
+meetingLinkSchema.index({ "reservations.groupId": 1 });
+meetingLinkSchema.index({ "reservations.endTime": 1 });
 
-// ==================== HELPER ====================
+// ==================== HELPERS ====================
 /**
  * ✅ مقارنة جدول جديد مع حجز موجود بناءً على التكرار الأسبوعي (يوم + وقت)
  * مش بناءً على التاريخ المطلق
@@ -103,8 +123,7 @@ function scheduleOverlaps(newSchedule, reservedDays, reservedFrom, reservedTo) {
     return true; // بيانات ناقصة - تعامل بحذر
   }
   if (!reservedDays?.length || !reservedFrom || !reservedTo) {
-    // حجز قديم من غير بيانات تكرار (قبل التحديث) - افترض تعارض للأمان
-    return true;
+    return true; // حجز قديم من غير بيانات تكرار - افترض تعارض للأمان
   }
 
   const dayOverlap = newSchedule.daysOfWeek.some((d) => reservedDays.includes(d));
@@ -118,15 +137,30 @@ function scheduleOverlaps(newSchedule, reservedDays, reservedFrom, reservedTo) {
   return !(newTo <= existFrom || newFrom >= existTo);
 }
 
+/**
+ * ✅ يدور جوه array الحجوزات على أول حجز (مش بتاع excludeGroupId، ولسه
+ * ساري) بيتعارض فعليًا مع الجدول الجديد
+ */
+function findConflictingReservation(reservations, newSchedule, excludeGroupId = null) {
+  const now = new Date();
+  for (const res of reservations || []) {
+    if (excludeGroupId && res.groupId?.toString() === excludeGroupId.toString()) continue;
+    if (res.endTime && new Date(res.endTime) < now) continue; // انتهى فعليًا
+    if (scheduleOverlaps(newSchedule, res.daysOfWeek, res.timeFrom, res.timeTo)) {
+      return res;
+    }
+  }
+  return null;
+}
+
 // ==================== STATIC METHODS ====================
 
 /**
- * ✅ NEW: جلب اللينكات المتاحة فعليًا لجدول جروب جديد
- * (بيقارن الأيام/الساعات الأسبوعية مش التاريخ الكامل)
+ * ✅ جلب اللينكات المتاحة فعليًا لجدول جروب جديد (بيقارن مع كل الحجوزات
+ * النشطة على كل لينك، مش حجز واحد بس)
  */
 meetingLinkSchema.statics.findAvailableLinksForSchedule = async function (newSchedule, limit = 50) {
   try {
-    const now = new Date();
     const candidates = await this.find({
       isDeleted: false,
       status: { $in: ["available", "reserved"] },
@@ -134,12 +168,9 @@ meetingLinkSchema.statics.findAvailableLinksForSchedule = async function (newSch
       .sort({ "stats.totalUses": 1 })
       .lean();
 
-    const available = candidates.filter((link) => {
-      const res = link.currentReservation;
-      if (!res?.sessionId) return true;
-      if (new Date(res.endTime) < now) return true;
-      return !scheduleOverlaps(newSchedule, res.daysOfWeek, res.timeFrom, res.timeTo);
-    });
+    const available = candidates.filter(
+      (link) => !findConflictingReservation(link.reservations, newSchedule),
+    );
 
     return available.slice(0, limit);
   } catch (error) {
@@ -172,8 +203,13 @@ meetingLinkSchema.statics.getAllActive = async function () {
 // ==================== INSTANCE METHODS ====================
 
 /**
- * ✅ Reserve this link for a session
+ * ✅ Reserve this link for a group's session(s).
  * scheduleInfo = { daysOfWeek: [...], timeFrom: "HH:MM", timeTo: "HH:MM" }
+ *
+ * لو الجروب ده أصلاً عنده entry على اللينك (بيستخدمه بالفعل)، الـ entry
+ * بتتحدّث (union للأيام + توسيع نطاق التاريخ) بدل ما يتعمل entry جديد.
+ * لو مفيش entry، بيتفحص تعارض مع أي entry تاني (لجروبات مختلفة) بس —
+ * حجز نفس الجروب على نفس اللينك مش تعارض أبدًا.
  */
 meetingLinkSchema.methods.reserveForSession = async function (
   sessionId,
@@ -184,40 +220,55 @@ meetingLinkSchema.methods.reserveForSession = async function (
   scheduleInfo = null
 ) {
   try {
-    console.log(`🔒 Reserving link ${this.name} for session ${sessionId}`);
+    console.log(`🔒 Reserving link ${this.name} for group ${groupId} (session ${sessionId})`);
 
     if (this.status === "maintenance" || this.status === "inactive") {
       throw new Error(`Link is not available (status: ${this.status})`);
     }
 
-    if (this.currentReservation && this.currentReservation.sessionId) {
-      const currentEndTime = new Date(this.currentReservation.endTime);
-      if (currentEndTime > new Date()) {
-        if (this.currentReservation.sessionId.toString() !== sessionId.toString()) {
-          const realConflict = scheduleOverlaps(
-            scheduleInfo,
-            this.currentReservation.daysOfWeek,
-            this.currentReservation.timeFrom,
-            this.currentReservation.timeTo,
-          );
-          if (realConflict) {
-            throw new Error("Link is currently reserved for another session");
-          }
-        }
-      }
-    }
+    const now = new Date();
+    // نظّف أي حجوزات انتهت فعليًا (endTime في الماضي) قبل أي فحص
+    this.reservations = (this.reservations || []).filter(
+      (r) => !r.endTime || new Date(r.endTime) >= now,
+    );
 
-    this.currentReservation = {
-      sessionId,
-      groupId,
-      startTime,
-      endTime,
-      daysOfWeek: scheduleInfo?.daysOfWeek || [],
-      timeFrom: scheduleInfo?.timeFrom || null,
-      timeTo: scheduleInfo?.timeTo || null,
-      reservedAt: new Date(),
-      reservedBy: userId,
-    };
+    const existingIndex = this.reservations.findIndex(
+      (r) => r.groupId?.toString() === groupId.toString(),
+    );
+
+    if (existingIndex === -1) {
+      // جروب جديد على اللينك ده — لازم يتأكد إنه مش هيتعارض مع جروب تاني
+      const conflict = findConflictingReservation(this.reservations, scheduleInfo, null);
+      if (conflict) {
+        throw new Error("Link is currently reserved for another group at an overlapping time");
+      }
+
+      this.reservations.push({
+        groupId,
+        sessionId,
+        startTime,
+        endTime,
+        daysOfWeek: scheduleInfo?.daysOfWeek || [],
+        timeFrom: scheduleInfo?.timeFrom || null,
+        timeTo: scheduleInfo?.timeTo || null,
+        reservedAt: new Date(),
+        reservedBy: userId,
+      });
+    } else {
+      // الجروب ده أصلاً بيستخدم اللينك — نحدّث entry بتاعه (union للأيام،
+      // توسيع نطاق التاريخ) من غير فحص تعارض مع نفسه
+      const existing = this.reservations[existingIndex];
+      existing.daysOfWeek = Array.from(
+        new Set([...(existing.daysOfWeek || []), ...(scheduleInfo?.daysOfWeek || [])]),
+      );
+      existing.timeFrom = scheduleInfo?.timeFrom || existing.timeFrom;
+      existing.timeTo = scheduleInfo?.timeTo || existing.timeTo;
+      existing.sessionId = sessionId;
+      if (!existing.startTime || startTime < existing.startTime) existing.startTime = startTime;
+      if (!existing.endTime || endTime > existing.endTime) existing.endTime = endTime;
+      existing.reservedAt = new Date();
+      existing.reservedBy = userId;
+    }
 
     this.status = "reserved";
     this.metadata.updatedAt = new Date();
@@ -240,91 +291,149 @@ meetingLinkSchema.methods.reserveForSession = async function (
   }
 };
 
-meetingLinkSchema.methods.releaseLink = async function (actualDuration = null) {
+/**
+ * ✅ يفك حجز جروب معيّن بس من على اللينك — من غير ما يلمس حجوزات
+ * جروبات تانية شغالة على نفس اللينك في نفس الوقت.
+ */
+meetingLinkSchema.methods.releaseReservation = async function (groupId, actualDuration = null) {
   try {
-    console.log(`🔓 Releasing link ${this.name}`);
+    console.log(`🔓 Releasing link ${this.name} for group ${groupId}`);
 
-    if (this.currentReservation && this.currentReservation.sessionId) {
-      const usageRecord = {
-        sessionId: this.currentReservation.sessionId,
-        groupId: this.currentReservation.groupId,
-        startTime: this.currentReservation.startTime,
-        endTime: this.currentReservation.endTime,
-        duration:
-          actualDuration ||
-          Math.round(
-            (new Date(this.currentReservation.endTime) - new Date(this.currentReservation.startTime)) / 60000
-          ),
-        usedAt: this.currentReservation.reservedAt,
-      };
+    const index = (this.reservations || []).findIndex(
+      (r) => r.groupId?.toString() === groupId.toString(),
+    );
 
-      this.usageHistory.push(usageRecord);
-      this.stats.totalUses += 1;
-      this.stats.lastUsed = new Date();
-
-      if (actualDuration) {
-        this.stats.totalHours += actualDuration / 60;
-        const totalMinutes = this.stats.totalHours * 60;
-        this.stats.averageUsageDuration = Math.round(totalMinutes / this.stats.totalUses);
-      }
+    if (index === -1) {
+      return { success: true, message: "No active reservation for this group", status: this.status };
     }
 
-    this.currentReservation = undefined;
-    this.status = "available";
+    const reservation = this.reservations[index];
+
+    this.usageHistory.push({
+      sessionId: reservation.sessionId,
+      groupId: reservation.groupId,
+      startTime: reservation.startTime,
+      endTime: reservation.endTime,
+      duration:
+        actualDuration ||
+        (reservation.startTime && reservation.endTime
+          ? Math.round((new Date(reservation.endTime) - new Date(reservation.startTime)) / 60000)
+          : 0),
+      usedAt: reservation.reservedAt,
+    });
+
+    this.stats.totalUses += 1;
+    this.stats.lastUsed = new Date();
+    if (actualDuration) {
+      this.stats.totalHours += actualDuration / 60;
+      const totalMinutes = this.stats.totalHours * 60;
+      this.stats.averageUsageDuration = Math.round(totalMinutes / this.stats.totalUses);
+    }
+
+    this.reservations.splice(index, 1);
+    this.status = this.reservations.length > 0 ? "reserved" : "available";
     this.metadata.updatedAt = new Date();
     await this.save();
 
-    console.log(`✅ Link released and marked as available`);
-    return { success: true, message: "Link released successfully", status: this.status };
+    console.log(`✅ Reservation released for group ${groupId}. Remaining active reservations: ${this.reservations.length}`);
+    return {
+      success: true,
+      message: "Reservation released successfully",
+      status: this.status,
+      remainingReservations: this.reservations.length,
+    };
   } catch (error) {
-    console.error("❌ Error releasing link:", error);
+    console.error("❌ Error releasing reservation:", error);
     throw error;
   }
 };
 
 /**
- * ✅ NEW: فحص التوفر بناءً على جدول أسبوعي جديد (مش وقت واحد محدد)
+ * ✅ يفك كل حجوزات اللينك دفعة واحدة (override إداري صريح — بيقفل كل
+ * الجروبات المرتبطة باللينك ده، مش بس واحد). بيتستخدم في مسارات زي
+ * "إلغاء حجز اللينكات المتاحة" في شاشة تفعيل الجروب.
+ * ⚠️ لو فيه جروبات تانية شغالة فعليًا على اللينك، حجزها هيتفك برضو —
+ * استخدمها بس لما تكون متأكد إن ده المطلوب فعلاً.
  */
-meetingLinkSchema.methods.isAvailableForSchedule = function (newSchedule) {
-  if (this.status === "maintenance" || this.status === "inactive") return false;
+meetingLinkSchema.methods.releaseAllReservations = async function () {
+  try {
+    console.log(`🔓 Force-releasing ALL reservations on link ${this.name}`);
+    const now = new Date();
 
-  const res = this.currentReservation;
-  if (!res || !res.sessionId) return true;
+    for (const reservation of this.reservations || []) {
+      this.usageHistory.push({
+        sessionId: reservation.sessionId,
+        groupId: reservation.groupId,
+        startTime: reservation.startTime,
+        endTime: reservation.endTime,
+        duration:
+          reservation.startTime && reservation.endTime
+            ? Math.round((new Date(reservation.endTime) - new Date(reservation.startTime)) / 60000)
+            : 0,
+        usedAt: reservation.reservedAt,
+      });
+      this.stats.totalUses += 1;
+    }
+    if ((this.reservations || []).length > 0) this.stats.lastUsed = now;
 
-  const now = new Date();
-  if (new Date(res.endTime) < now) return true;
+    const releasedCount = (this.reservations || []).length;
+    this.reservations = [];
+    this.status = "available";
+    this.metadata.updatedAt = now;
+    await this.save();
 
-  return !scheduleOverlaps(newSchedule, res.daysOfWeek, res.timeFrom, res.timeTo);
+    return {
+      success: true,
+      message: `Released ${releasedCount} reservation(s)`,
+      status: this.status,
+      releasedCount,
+    };
+  } catch (error) {
+    console.error("❌ Error force-releasing link:", error);
+    throw error;
+  }
 };
 
 /**
- * (Legacy) فحص توفر لوقت محدد - بقى بياخد بالباله الجدول المتكرر لو موجود
+ * ✅ فحص التوفر بناءً على جدول أسبوعي جديد (مش وقت واحد محدد)، مع
+ * إمكانية استثناء جروب معين (نفس الجروب اللي بيفحص مش تعارض مع نفسه)
+ */
+meetingLinkSchema.methods.isAvailableForSchedule = function (newSchedule, excludeGroupId = null) {
+  if (this.status === "maintenance" || this.status === "inactive") return false;
+  return !findConflictingReservation(this.reservations, newSchedule, excludeGroupId);
+};
+
+/**
+ * (Legacy) فحص توفر لوقت محدد - بيلف على كل الحجوزات النشطة
  */
 meetingLinkSchema.methods.isAvailableForTimeSlot = function (startTime, endTime) {
   if (this.status !== "available" && this.status !== "reserved") return false;
 
-  const res = this.currentReservation;
-  if (!res || !res.sessionId) return true;
-
   const now = new Date();
-  if (new Date(res.endTime) < now) return true;
+  const dayName = startTime.toLocaleDateString("en-US", { weekday: "long" });
+  const newFrom = `${startTime.getHours().toString().padStart(2, "0")}${startTime.getMinutes().toString().padStart(2, "0")}`;
+  const newTo = `${endTime.getHours().toString().padStart(2, "0")}${endTime.getMinutes().toString().padStart(2, "0")}`;
 
-  if (res.daysOfWeek?.length && res.timeFrom && res.timeTo) {
-    const dayName = startTime.toLocaleDateString("en-US", { weekday: "long" });
-    if (!res.daysOfWeek.includes(dayName)) return true;
+  for (const res of this.reservations || []) {
+    if (res.endTime && new Date(res.endTime) < now) continue;
 
-    const newFrom = `${startTime.getHours().toString().padStart(2, "0")}${startTime.getMinutes().toString().padStart(2, "0")}`;
-    const newTo = `${endTime.getHours().toString().padStart(2, "0")}${endTime.getMinutes().toString().padStart(2, "0")}`;
-    const existFrom = res.timeFrom.replace(":", "");
-    const existTo = res.timeTo.replace(":", "");
+    if (res.daysOfWeek?.length && res.timeFrom && res.timeTo) {
+      if (!res.daysOfWeek.includes(dayName)) continue;
+      const existFrom = res.timeFrom.replace(":", "");
+      const existTo = res.timeTo.replace(":", "");
+      const overlaps = !(newTo <= existFrom || newFrom >= existTo);
+      if (overlaps) return false;
+      continue;
+    }
 
-    return newTo <= existFrom || newFrom >= existTo;
+    if (res.startTime && res.endTime) {
+      const reservedStart = new Date(res.startTime);
+      const reservedEnd = new Date(res.endTime);
+      if (startTime < reservedEnd && endTime > reservedStart) return false;
+    }
   }
 
-  // fallback لحجوزات قديمة من غير بيانات تكرار
-  const reservedStart = new Date(res.startTime);
-  const reservedEnd = new Date(res.endTime);
-  return !(startTime < reservedEnd && endTime > reservedStart);
+  return true;
 };
 
 meetingLinkSchema.methods.getUsageStats = function () {
@@ -334,18 +443,18 @@ meetingLinkSchema.methods.getUsageStats = function () {
     averageUsageDuration: this.stats.averageUsageDuration,
     lastUsed: this.stats.lastUsed,
     currentStatus: this.status,
-    isCurrentlyReserved: !!(this.currentReservation && this.currentReservation.sessionId),
+    activeReservationsCount: (this.reservations || []).length,
+    isCurrentlyReserved: (this.reservations || []).length > 0,
   };
 };
 
 meetingLinkSchema.virtual("isAvailable").get(function () {
   if (this.status !== "available" && this.status !== "reserved") return false;
-  if (this.currentReservation && this.currentReservation.sessionId) {
-    const now = new Date();
-    const reservedEnd = new Date(this.currentReservation.endTime);
-    return reservedEnd < now;
-  }
-  return true;
+  const now = new Date();
+  const activeReservations = (this.reservations || []).filter(
+    (r) => !r.endTime || new Date(r.endTime) >= now,
+  );
+  return activeReservations.length === 0;
 });
 
 meetingLinkSchema.virtual("displayName").get(function () {

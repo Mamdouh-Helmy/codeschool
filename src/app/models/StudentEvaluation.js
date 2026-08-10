@@ -56,6 +56,16 @@ const studentEvaluationSchema = new mongoose.Schema({
     ref: 'Student',
     required: true
   },
+  // ✅ NEW: التقييم بقى مربوط بسيشن محددة، مش بس بالجروب والطالب.
+  // ده عشان كل سيشن يكون ليها تقييمها المستقل (تعليق، درجات، قرار) —
+  // قبل كده كان أي تقييم جديد لنفس الطالب في نفس الجروب بيدهس (overwrite)
+  // تقييم أي سيشن سابقة لنفس الطالب، فكان التعليق القديم بيظهر تلقائيًا
+  // في أي سيشن جديدة.
+  sessionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Session',
+    required: true
+  },
   instructorId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -218,7 +228,12 @@ const studentEvaluationSchema = new mongoose.Schema({
 });
 
 // Indexes
-studentEvaluationSchema.index({ groupId: 1, studentId: 1 }, { unique: true });
+// ✅ FIX: الـ unique index بقى على { groupId, studentId, sessionId } بدل
+// { groupId, studentId } بس — عشان يسمح بتقييم مستقل لكل سيشن. لو سيبنا
+// الـ index القديم زي ما هو، أي محاولة إنشاء تقييم تاني لنفس الطالب في
+// نفس الجروب (حتى لسيشن مختلفة) كانت هترفض بـ duplicate key error.
+studentEvaluationSchema.index({ groupId: 1, studentId: 1, sessionId: 1 }, { unique: true });
+studentEvaluationSchema.index({ sessionId: 1 });
 studentEvaluationSchema.index({ instructorId: 1 });
 studentEvaluationSchema.index({ finalDecision: 1 });
 studentEvaluationSchema.index({ 'metadata.evaluatedAt': -1 });
@@ -462,6 +477,23 @@ studentEvaluationSchema.statics.getGroupStats = async function(groupId) {
   });
 
   return stats;
+};
+
+// ✅ NEW: Static Method للحصول على إحصائيات سيشن محددة (مش الجروب كله)
+studentEvaluationSchema.statics.getSessionStats = async function(sessionId) {
+  const evaluations = await this.find({ sessionId, isDeleted: false })
+    .populate('studentId', 'personalInfo.fullName enrollmentNumber')
+    .lean();
+
+  return {
+    total: evaluations.length,
+    decisions: {
+      pass: evaluations.filter(e => e.finalDecision === 'pass').length,
+      review: evaluations.filter(e => e.finalDecision === 'review').length,
+      repeat: evaluations.filter(e => e.finalDecision === 'repeat').length
+    },
+    evaluations
+  };
 };
 
 // Method لتفعيل المتابعة التسويقية

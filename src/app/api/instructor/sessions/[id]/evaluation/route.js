@@ -21,15 +21,6 @@ const EVALUATION_TEMPLATE_MAP = {
 // لأنهم مش هيظهروا، بس الـ backend بيتأكد بنفسه كمان).
 const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'excused'];
 
-// ✅ نفس الحد المستخدم في الفرونت (MAX_COMMENT_LENGTH في صفحة التقييم).
-// أي تعليق (notes) مخزّن في الداتابيز أطول من كده يبقى غالبًا بيانات تالفة —
-// رسالة تقييم كاملة اتسجلت غلط بدل تعليق المدرس القصير الفعلي (باگ قديم).
-// بنستخدمه في مكانين: (1) وقت القراءة في GET، لو اللي مخزّن أطول من الحد،
-// منعرضوش في الـ textarea خالص (نرجّع فاضي) بدل ما نعرض نص مشوّه/متكرر.
-// (2) وقت الحفظ في PATCH، بنقص أي تعليق جديد لنفس الحد قبل التخزين، عشان
-// نمنع تكرار نفس المشكلة تاني في المستقبل.
-const MAX_COMMENT_LENGTH = 500;
-
 // ─── Helper: resolve var from DB ─────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = 'ar', genderContext = {}) {
   const v = dbVars[key];
@@ -358,22 +349,23 @@ export async function GET(req, { params }) {
       attendanceMap[a.studentId?.toString()] = a.status;
     });
 
+    // ✅ FIX: التقييمات لازم تتفلتر بالسيشن الحالية (sessionId: session._id)
+    // مش بس بالجروب والطالب — قبل كده كانت الكويري بتجيب "آخر تقييم اتعمل
+    // للطالب ده في الجروب كله" بغض النظر عن أي سيشن كان، فلو الطالب اتقيّم
+    // في سيشن سابقة وكُتب تعليق طويل، التعليق ده كان بيظهر تلقائيًا كـ
+    // "currentComment" في أي سيشن جديدة تانية لنفس الطالب — وده سبب ظهور
+    // التقرير القديم جوه الـ textarea بدل ما يكون فاضي.
     const existingEvals = await StudentEvaluation.find({
       groupId:   session.groupId?._id,
+      sessionId: session._id,
       studentId: { $in: allStudentIds },
     }).lean();
     const existingEvalMap = {};
     existingEvals.forEach((e) => {
-      // ✅ تعليقات قديمة/تالفة (رسالة كاملة اتسجلت غلط بدل تعليق قصير من
-      // باگ سابق) أطول من الحد المسموح للتعليق الحقيقي — منعرضهاش في
-      // الـ textarea خالص، نرجّع فاضي بدل النص المشوّه/المتكرر.
-      const rawNotes = e.notes || '';
-      const safeComment = rawNotes.length > MAX_COMMENT_LENGTH ? '' : rawNotes;
-
       existingEvalMap[e.studentId.toString()] = {
         decision: e.finalDecision,
         ratings:  e.criteria,
-        comment:  safeComment,
+        comment:  e.notes || '',
       };
     });
 
@@ -502,7 +494,6 @@ export async function POST(req, { params }) {
 }
 
 // ─── PATCH: احفظ التقييمات + ابعت الرسائل ────────────────────────────────────
-// ─── PATCH: احفظ التقييمات + ابعت الرسائل ────────────────────────────────────
 export async function PATCH(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -574,21 +565,12 @@ export async function PATCH(req, { params }) {
 
       const lang = student.communicationPreferences?.preferredLanguage || 'ar';
 
-      // ✅ نقص التعليق الجديد لنفس الحد المسموح بيه في الفرونت قبل أي حاجة —
-      // سواء وقت بناء رسالة الواتساب أو وقت التخزين في StudentEvaluation.notes.
-      // ده اللي بيمنع تخزين نص طويل غلط (زي رسالة كاملة) يبقى "تعليق" ويتكرر
-      // ظهوره في الـ textarea في المرات الجاية.
-      const rawComment   = (comment || notes || '').trim();
-      const safeComment  = rawComment.length > MAX_COMMENT_LENGTH
-        ? rawComment.slice(0, MAX_COMMENT_LENGTH)
-        : rawComment;
-
       const { rendered, guardianPhone, isFallback } = await buildEvaluationMessage(
         student, decision, session,
         {
           rawContent:        null,
           ratings:           ratings || {},
-          comment:           safeComment,
+          comment:           comment || notes || '',
           attendanceStatus,
           groupId:           session.groupId?._id,
           moduleTitle,
@@ -605,14 +587,20 @@ export async function PATCH(req, { params }) {
         participation: ratings?.participation ?? perfScore,
       };
 
+      // ✅ FIX: الـ upsert بقى بمفتاح { groupId, studentId, sessionId } بدل
+      // { groupId, studentId } بس — قبل كده أي تقييم جديد لنفس الطالب في
+      // نفس الجروب كان بيدهس (overwrite) تقييم أي سيشن سابقة لنفس الطالب،
+      // فكان فعليًا بيتسجل تقييم واحد بس لكل (جروب+طالب) بدل تقييم منفصل
+      // لكل سيشن. دلوقتي كل سيشن ليها تقييمها المستقل الخاص بيها.
       await StudentEvaluation.findOneAndUpdate(
-        { groupId: session.groupId?._id, studentId },
+        { groupId: session.groupId?._id, studentId, sessionId: session._id },
         {
           groupId:       session.groupId?._id,
           studentId,
+          sessionId:     session._id,
           instructorId:  user.id,
           finalDecision: decision,
-          notes:         safeComment,
+          notes:         comment || notes || '',
           criteria,
           'metadata.evaluatedAt':    new Date(),
           'metadata.evaluatedBy':    user.id,
@@ -632,80 +620,60 @@ export async function PATCH(req, { params }) {
       let recordingLinkSent = false;
 
       if (guardianPhone && rendered) {
-  console.log("========== EVAL DEBUG ==========");
-  console.log("studentId:", studentId);
-  console.log("guardianPhone:", guardianPhone);
-  console.log("rendered exists:", !!rendered);
+        let evalResult = null;
 
-  let evalResult = null;
+        try {
+          const { wapilotService } = await import(
+            "../../../../../services/wapilot-service"
+          );
 
-  try {
-    console.log("🔥 ENTERED SEND BLOCK");
+          evalResult = await wapilotService.sendAndLogEvalMessage({
+            studentId,
+            phoneNumber: guardianPhone,
+            messageContent: rendered,
+            messageType: `evaluation_${decision}`,
+            language: lang,
+            metadata: {
+              sessionId: id,
+              sessionTitle: session.title,
+              decision,
+              attendanceStatus,
+              recipientType: "guardian",
+              remainingHours,
+              isFallback,
+              moduleTitle,
+            },
+          });
 
-    const { wapilotService } = await import(
-      "../../../../../services/wapilot-service"
-    );
+          messageSent = evalResult?.success || false;
 
-    console.log("🔥 CALLING sendAndLogEvalMessage");
+          if (recordingLink?.trim()) {
+            const { rendered: recRendered } = await buildRecordingMessage(
+              student,
+              session,
+              recordingLink
+            );
 
-    evalResult = await wapilotService.sendAndLogEvalMessage({
-      studentId,
-      phoneNumber: guardianPhone,
-      messageContent: rendered,
-      messageType: `evaluation_${decision}`,
-      language: lang,
-      metadata: {
-        sessionId: id,
-        sessionTitle: session.title,
-        decision,
-        attendanceStatus,
-        recipientType: "guardian",
-        remainingHours,
-        isFallback,
-        moduleTitle,
-      },
-    });
+            const linkResult = await wapilotService.sendAndLogMessage({
+              studentId,
+              phoneNumber: guardianPhone,
+              messageContent: recRendered,
+              messageType: "session_recording",
+              language: lang,
+              metadata: {
+                sessionId: id,
+                sessionTitle: session.title,
+                recipientType: "guardian",
+                remainingHours,
+              },
+            });
 
-    console.log("🔥 RESULT:", JSON.stringify(evalResult, null, 2));
-
-    messageSent = evalResult?.success || false;
-
-    if (recordingLink?.trim()) {
-      console.log("🔥 Sending recording link");
-
-      const { rendered: recRendered } = await buildRecordingMessage(
-        student,
-        session,
-        recordingLink
-      );
-
-      const linkResult = await wapilotService.sendAndLogMessage({
-        studentId,
-        phoneNumber: guardianPhone,
-        messageContent: recRendered,
-        messageType: "session_recording",
-        language: lang,
-        metadata: {
-          sessionId: id,
-          sessionTitle: session.title,
-          recipientType: "guardian",
-          remainingHours,
-        },
-      });
-
-      console.log("🔥 Recording Result:", JSON.stringify(linkResult, null, 2));
-
-      recordingLinkSent = linkResult?.success || false;
-    }
-  } catch (err) {
-    console.error("❌ SEND ERROR:");
-    console.error(err);
-  }
-} else {
-  console.log("⛔ SEND BLOCK SKIPPED");
-  console.log("guardianPhone:", guardianPhone);
-  console.log("rendered exists:", !!rendered);
-}
+            recordingLinkSent = linkResult?.success || false;
+          }
+        } catch (err) {
+          console.error("❌ SEND ERROR:", err);
+        }
+      }
 
       results.push({ studentId, decision, attendanceStatus, messageSent, recordingLinkSent });
     }

@@ -114,15 +114,13 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
                 <button
                   key={id}
                   onClick={() => onToggle(id, !checked)}
-                  className={`w-full flex items-center gap-3 px-5 py-3.5 text-right transition-all duration-200 ${
-                    checked
+                  className={`w-full flex items-center gap-3 px-5 py-3.5 text-right transition-all duration-200 ${checked
                       ? "bg-teal-brand/5 dark:bg-teal-brand/10 border-r-4 border-teal-brand"
                       : "hover:bg-gray-50 dark:hover:bg-darkhover/30"
-                  }`}
+                    }`}
                 >
-                  <div className={`w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center border-2 transition-all ${
-                    checked ? "bg-teal-brand border-teal-brand shadow-sm" : "border-gray-300 dark:border-gray-600 bg-white dark:bg-darkmid"
-                  }`}>
+                  <div className={`w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center border-2 transition-all ${checked ? "bg-teal-brand border-teal-brand shadow-sm" : "border-gray-300 dark:border-gray-600 bg-white dark:bg-darkmid"
+                    }`}>
                     {checked && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                   </div>
 
@@ -159,8 +157,8 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
               const pm = PLATFORM_META[link.platform] || PLATFORM_META.other;
               const until = link.reservedUntil
                 ? new Date(link.reservedUntil).toLocaleDateString("ar-EG", {
-                    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-                  })
+                  day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+                })
                 : "—";
               return (
                 <div key={link.id?.toString()} className="flex items-center gap-3 px-5 py-3">
@@ -248,9 +246,8 @@ function SessionsTable({ sessionRows, showAll, onToggleShow }) {
             return (
               <div
                 key={idx}
-                className={`grid grid-cols-12 px-5 py-3 items-center text-sm transition-colors ${
-                  link ? "hover:bg-gray-50 dark:hover:bg-darkhover/30" : "bg-amber-brand/5 dark:bg-amber-brand/5"
-                }`}
+                className={`grid grid-cols-12 px-5 py-3 items-center text-sm transition-colors ${link ? "hover:bg-gray-50 dark:hover:bg-darkhover/30" : "bg-amber-brand/5 dark:bg-amber-brand/5"
+                  }`}
               >
                 <div className="col-span-1 text-center">
                   <span className="inline-flex w-6 h-6 rounded-full bg-gray-100 dark:bg-darkmid text-xs font-bold items-center justify-center text-gray-500">
@@ -375,7 +372,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4" dir="rtl">
       <div className="bg-white dark:bg-darkmode rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200/50 dark:border-dark_border/50 animate-in zoom-in-95 duration-300">
-        
+
         {/* Header - باستخدام التدرج اللوني للعلامة التجارية */}
         <div className="relative bg-gradient-to-l from-teal-brand to-teal-dark px-6 py-5 flex items-center justify-between flex-shrink-0 overflow-hidden">
           <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />

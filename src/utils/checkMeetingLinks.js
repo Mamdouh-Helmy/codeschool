@@ -1,4 +1,4 @@
-// utils/checkMeetingLinks.js
+// → utils/checkMeetingLinks.js  (استبدل الملف القديم بالكامل بده)
 import MeetingLink from "../app/models/MeetingLink";
 
 /**
@@ -82,9 +82,9 @@ export function generateSessionDatesForCheck(group) {
     }
 
     // إضافة وقت الجلسة
-    const startDateTime = new Date(sessionDate);
+    const startDateTime2 = new Date(sessionDate);
     const [hours, minutes] = timeFrom.split(":").map(Number);
-    startDateTime.setHours(hours, minutes, 0, 0);
+    startDateTime2.setHours(hours, minutes, 0, 0);
 
     const endDateTime = new Date(sessionDate);
     const [endHours, endMinutes] = timeTo.split(":").map(Number);
@@ -94,7 +94,7 @@ export function generateSessionDatesForCheck(group) {
       index: sessionIndex + 1,
       date: sessionDate,
       dayName: dayMapReverse[sessionDate.getDay()],
-      startTime: startDateTime,
+      startTime: startDateTime2,
       endTime: endDateTime,
       timeFrom: timeFrom,
       timeTo: timeTo,
@@ -105,47 +105,46 @@ export function generateSessionDatesForCheck(group) {
 }
 
 /**
- * Helper function للتحقق من توفر رابط لوقت محدد
+ * ✅ Helper function للتحقق من توفر رابط لوقت محدد — بيلف على كل
+ * الحجوزات النشطة على اللينك (reservations array)، مش حجز واحد بس
  */
 async function checkLinkAvailability(link, startTime, endTime) {
   if (link.status === "available") {
     return true;
   }
 
-  if (link.status === "reserved" && link.currentReservation?.sessionId) {
-    const reservedEnd = new Date(link.currentReservation.endTime);
-    const now = new Date();
+  if (link.status !== "reserved") {
+    return false;
+  }
 
-    // إذا انتهى الحجز كليًا، الرابط متاح
-    if (reservedEnd < now) {
-      return true;
-    }
+  const now = new Date();
+  const dayName = startTime.toLocaleDateString("en-US", { weekday: "long" });
+  const newFrom = `${startTime.getHours().toString().padStart(2, "0")}${startTime.getMinutes().toString().padStart(2, "0")}`;
+  const newTo = `${endTime.getHours().toString().padStart(2, "0")}${endTime.getMinutes().toString().padStart(2, "0")}`;
 
-    const res = link.currentReservation;
+  for (const res of link.reservations || []) {
+    if (res.endTime && new Date(res.endTime) < now) continue; // الحجز ده انتهى فعليًا
 
     // ✅ لو فيه بيانات تكرار (الأيام + الوقت) - استخدمها للمقارنة الصحيحة
-    // بدل المقارنة بالتاريخ المطلق اللي كانت بتعتبر أي وقت جوه نطاق
-    // [أول سيشن → آخر سيشن] محجوز، حتى لو يوم/ساعة مختلفين تمامًا
     if (res.daysOfWeek?.length && res.timeFrom && res.timeTo) {
-      const dayName = startTime.toLocaleDateString("en-US", { weekday: "long" });
-      const dayOverlap = res.daysOfWeek.includes(dayName);
-      if (!dayOverlap) return true; // يوم مختلف - مفيش تعارض
+      if (!res.daysOfWeek.includes(dayName)) continue; // يوم مختلف - مفيش تعارض مع الحجز ده
 
-      const newFrom = `${startTime.getHours().toString().padStart(2, "0")}${startTime.getMinutes().toString().padStart(2, "0")}`;
-      const newTo = `${endTime.getHours().toString().padStart(2, "0")}${endTime.getMinutes().toString().padStart(2, "0")}`;
       const existFrom = res.timeFrom.replace(":", "");
       const existTo = res.timeTo.replace(":", "");
-
       const hasTimeConflict = !(newTo <= existFrom || newFrom >= existTo);
-      return !hasTimeConflict;
+      if (hasTimeConflict) return false;
+      continue;
     }
 
     // fallback لحجوزات قديمة بدون بيانات تكرار (قبل التحديث)
-    const reservedStart = new Date(res.startTime);
-    return !(startTime < reservedEnd && endTime > reservedStart);
+    if (res.startTime && res.endTime) {
+      const reservedStart = new Date(res.startTime);
+      const reservedEnd = new Date(res.endTime);
+      if (startTime < reservedEnd && endTime > reservedStart) return false;
+    }
   }
 
-  return false;
+  return true;
 }
 
 /**
@@ -373,7 +372,8 @@ export async function checkMeetingLinksAvailability(group) {
 }
 
 /**
- * الحصول على جميع الحجوزات القادمة
+ * ✅ الحصول على جميع الحجوزات القادمة — بيلف على reservations array بتاعة
+ * كل اللينكات (مش currentReservation object واحد)
  */
 export async function getUpcomingReservations(days = 7) {
   try {
@@ -381,23 +381,32 @@ export async function getUpcomingReservations(days = 7) {
     const future = new Date();
     future.setDate(now.getDate() + days);
 
-    const reservedLinks = await MeetingLink.find({
+    const links = await MeetingLink.find({
       isDeleted: false,
-      status: "reserved",
-      "currentReservation.startTime": { $gte: now, $lte: future },
-    }).sort({ "currentReservation.startTime": 1 }).lean();
+      "reservations.0": { $exists: true },
+    }).lean();
 
-    const reservations = reservedLinks
-      .map(link => ({
-        linkName: link.name,
-        platform: link.platform,
-        sessionId: link.currentReservation?.sessionId,
-        groupId: link.currentReservation?.groupId,
-        startTime: link.currentReservation?.startTime,
-        endTime: link.currentReservation?.endTime,
-        reservedAt: link.currentReservation?.reservedAt,
-      }))
-      .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    const reservations = [];
+
+    for (const link of links) {
+      for (const res of link.reservations || []) {
+        if (!res.startTime) continue;
+        const start = new Date(res.startTime);
+        if (start >= now && start <= future) {
+          reservations.push({
+            linkName: link.name,
+            platform: link.platform,
+            sessionId: res.sessionId,
+            groupId: res.groupId,
+            startTime: res.startTime,
+            endTime: res.endTime,
+            reservedAt: res.reservedAt,
+          });
+        }
+      }
+    }
+
+    reservations.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
 
     return {
       success: true,
@@ -416,17 +425,16 @@ export async function getUpcomingReservations(days = 7) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// ✅ SHARED CORE: فحص تعارض جدول أسبوعي جديد (أيام + من/لـ) مع حجز موجود
-// على لينك معين. الدالة دي هي المصدر الوحيد لمنطق المقارنة — أي مكان
+// ✅ SHARED CORE: فحص تعارض جدول أسبوعي جديد (أيام + من/لـ) مع أي حجز
+// موجود على لينك معين. الدالة دي هي المصدر الوحيد لمنطق المقارنة — أي مكان
 // في المشروع محتاج يفحص "هل اللينك ده هيتعارض مع الميعاد الجديد" لازم
 // يمر من هنا، بدل ما يكرر نفس المقارنة تاني في مكان تاني.
 // ════════════════════════════════════════════════════════════════════════
 
 /**
- * ✅ يفحص هل حجز لينك معيّن (link.currentReservation) بيتعارض مع جدول
- * أسبوعي جديد. المقارنة بتتم على التكرار الأسبوعي (يوم + وقت من/لـ) —
- * مش على تاريخ مطلق — عشان تعكس الواقع: اللينك بيتكرر استخدامه كل أسبوع
- * في نفس اليوم/الوقت.
+ * ✅ يفحص هل أي حجز في reservations بتاعة لينك معيّن بيتعارض مع جدول
+ * أسبوعي جديد. بيدور على كل الحجوزات النشطة (مش حجز واحد بس) ويرجّع أول
+ * تعارض بيلاقيه.
  *
  * @param {Object} link            - وثيقة MeetingLink (أو lean object)
  * @param {Object} newSchedule     - { daysOfWeek: string[], timeFrom: "HH:MM", timeTo: "HH:MM" }
@@ -434,43 +442,47 @@ export async function getUpcomingReservations(days = 7) {
  * @returns {Object|null} تفاصيل التعارض، أو null لو مفيش تعارض
  */
 function findScheduleConflict(link, newSchedule, excludeGroupId = null) {
-  const res = link.currentReservation;
-  if (!res?.sessionId) return null; // اللينك مش محجوز أصلاً
-
-  if (excludeGroupId && res.groupId?.toString() === excludeGroupId.toString()) {
-    return null; // الحجز الحالي لنفس الجروب اللي بنفحصله — مش تعارض
-  }
-
   const now = new Date();
-  if (res.endTime && new Date(res.endTime) < now) return null; // الحجز انتهى فعليًا
 
-  const dayOverlap = (newSchedule.daysOfWeek || []).some((d) =>
-    (res.daysOfWeek || []).includes(d)
-  );
-  if (!dayOverlap) return null; // مفيش يوم مشترك
+  for (const res of link.reservations || []) {
+    if (!res?.groupId) continue;
 
-  if (!res.timeFrom || !res.timeTo) {
-    // حجز قديم من غير بيانات تكرار — نتعامل بحذر ونعتبره تعارض
+    if (excludeGroupId && res.groupId?.toString() === excludeGroupId.toString()) {
+      continue; // الحجز ده لنفس الجروب اللي بنفحصله — مش تعارض
+    }
+
+    if (res.endTime && new Date(res.endTime) < now) continue; // الحجز ده انتهى فعليًا
+
+    const dayOverlap = (newSchedule.daysOfWeek || []).some((d) =>
+      (res.daysOfWeek || []).includes(d)
+    );
+    if (!dayOverlap) continue; // مفيش يوم مشترك مع الحجز ده
+
+    if (!res.timeFrom || !res.timeTo) {
+      // حجز قديم من غير بيانات تكرار — نتعامل بحذر ونعتبره تعارض
+      return {
+        conflictingGroupId: res.groupId,
+        conflictingDays: res.daysOfWeek,
+        conflictingTime: null,
+        reason: "missing_time_data",
+      };
+    }
+
+    const newFrom = newSchedule.timeFrom.replace(":", "");
+    const newTo = newSchedule.timeTo.replace(":", "");
+    const existFrom = res.timeFrom.replace(":", "");
+    const existTo = res.timeTo.replace(":", "");
+    const timeOverlaps = !(newTo <= existFrom || newFrom >= existTo);
+    if (!timeOverlaps) continue;
+
     return {
       conflictingGroupId: res.groupId,
       conflictingDays: res.daysOfWeek,
-      conflictingTime: null,
-      reason: "missing_time_data",
+      conflictingTime: `${res.timeFrom} - ${res.timeTo}`,
     };
   }
 
-  const newFrom = newSchedule.timeFrom.replace(":", "");
-  const newTo = newSchedule.timeTo.replace(":", "");
-  const existFrom = res.timeFrom.replace(":", "");
-  const existTo = res.timeTo.replace(":", "");
-  const timeOverlaps = !(newTo <= existFrom || newFrom >= existTo);
-  if (!timeOverlaps) return null;
-
-  return {
-    conflictingGroupId: res.groupId,
-    conflictingDays: res.daysOfWeek,
-    conflictingTime: `${res.timeFrom} - ${res.timeTo}`,
-  };
+  return null;
 }
 
 /**
