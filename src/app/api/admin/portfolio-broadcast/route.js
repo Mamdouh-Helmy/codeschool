@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Portfolio from "../../../models/Portfolio";
-import { sendPortfolioMessage } from "../../../services/portfolioNotifications";
+import { sendPortfolioMessage, resolveOwnerPhone } from "../../../services/portfolioNotifications";
 import { requireAdmin } from "@/utils/authMiddleware";
 
 export async function POST(req) {
@@ -31,15 +31,13 @@ export async function POST(req) {
     }
 
     const updateLink = `${process.env.NEXTAUTH_URL}/portfolio/${owner._id}`;
-
-    // ✅ الرقم من الـ User الأول، ولو فاضي ناخد من contactInfo بتاع البورتفوليو
-    const phone = owner.profile?.phone || portfolio.contactInfo?.phone;
+    const phone = await resolveOwnerPhone(owner, portfolio); // ✅
 
     const result = await sendPortfolioMessage(
       "portfolio_update_broadcast",
       owner,
       { updateLink },
-      phone, // ✅ override
+      phone,
     );
 
     if (result.skipped) {

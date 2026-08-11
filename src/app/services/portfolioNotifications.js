@@ -1,6 +1,7 @@
 // /src/app/services/portfolioNotifications.js
 import MessageTemplate from "../models/MessageTemplate";
-import TemplateVariable, { getDefaultVariables } from "../models/TemplateVariable";
+import TemplateVariable from "../models/TemplateVariable";
+import Student from "../models/Student"; // ✅ جديد
 import { wapilotService } from "./wapilot-service";
 
 // ── جلب محتوى القالب (DB أو fallback) ──────────────────────────────────────
@@ -15,11 +16,9 @@ async function getPortfolioTemplateContent(templateType, language) {
   if (template) {
     const content = language === "ar" ? template.contentAr : template.contentEn;
     if (content && content.trim() !== "") return content;
-    // fallback للغة التانية لو الأساسية فاضية
     return language === "ar" ? template.contentEn : template.contentAr;
   }
 
-  // ── fallback من TemplateVariable defaults مش موجود هنا، فبنرجع لـ MessageTemplate fallback ──
   const { getFallbackTemplates } = await import("../models/MessageTemplate");
   const fb = getFallbackTemplates()[templateType];
   return fb ? (language === "ar" ? fb.ar : fb.en) : "";
@@ -29,10 +28,8 @@ async function getPortfolioTemplateContent(templateType, language) {
 async function buildVarsMap(language, owner, extraVars = {}) {
   const ownerGender = owner.gender === "female" ? "female" : "male";
 
-  // كل المتغيرات العامة (بتاخد في الاعتبار الجنس تلقائياً)
   const varsMap = await TemplateVariable.getVarsMap(language, { ownerGender });
 
-  // ✅ override بالقيم الحقيقية الخاصة باليوزر ده
   const ownerFirstName = owner.name?.split(" ")[0] || owner.name || "";
   varsMap["{ownerName}"] = ownerFirstName;
 
@@ -52,8 +49,33 @@ function renderTemplate(content, varsMap) {
 }
 
 /**
+ * ✅ جلب رقم صاحب البورتفوليو من كل المصادر المحتملة بالترتيب:
+ * 1) User.profile.phone
+ * 2) Portfolio.contactInfo.phone
+ * 3) Student.personalInfo.whatsappNumber / phone (لو صاحب البورتفوليو أصله طالب)
+ */
+export async function resolveOwnerPhone(owner, portfolio) {
+  if (owner.profile?.phone) return owner.profile.phone;
+  if (portfolio?.contactInfo?.phone) return portfolio.contactInfo.phone;
+
+  // ✅ آخر محاولة: هل صاحب الحساب ده مرتبط بسجل Student؟
+  try {
+    const student = await Student.findOne({ authUserId: owner._id })
+      .select("personalInfo.phone personalInfo.whatsappNumber")
+      .lean();
+
+    if (student) {
+      return student.personalInfo?.whatsappNumber || student.personalInfo?.phone || null;
+    }
+  } catch (err) {
+    console.warn("⚠️ Could not resolve phone from Student schema:", err.message);
+  }
+
+  return null;
+}
+
+/**
  * ✅ بناء رسالة البورتفوليو الجاهزة للإرسال
- * templateType: "portfolio_inactivity_reminder" | "portfolio_update_broadcast" | "portfolio_contact_form_notification"
  */
 export async function buildPortfolioMessage(templateType, owner, extraVars = {}) {
   const language = owner.language === "en" ? "en" : "ar";
@@ -64,6 +86,7 @@ export async function buildPortfolioMessage(templateType, owner, extraVars = {})
 
 /**
  * ✅ إرسال رسالة بورتفوليو لصاحبها مباشرة
+ * phoneOverride: لو محدد بيتستخدم مباشرة، غير كده بيدوّر تلقائي في كل المصادر
  */
 export async function sendPortfolioMessage(templateType, owner, extraVars = {}, phoneOverride = null) {
   const phone = phoneOverride || owner.profile?.phone;

@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Portfolio from "../../../models/Portfolio";
-import { sendPortfolioMessage } from "../../../services/portfolioNotifications";
+import { sendPortfolioMessage, resolveOwnerPhone } from "../../../services/portfolioNotifications";
 
 const INACTIVITY_DAYS = 30;
 
@@ -27,7 +27,7 @@ export async function GET(req) {
     updatedAt: { $lte: cutoff },
     $or: [
       { "metadata.lastInactivityReminderSentAt": null },
-      { "metadata.lastInactivityReminderSentAt": { $lte: cutoff } }, // كل شهر بس مش أكتر
+      { "metadata.lastInactivityReminderSentAt": { $lte: cutoff } },
     ],
   }).populate("userId", "name profile gender language isActive role");
 
@@ -39,7 +39,6 @@ export async function GET(req) {
   for (const portfolio of portfolios) {
     const owner = portfolio.userId;
 
-    // ✅ بيتبعت لكل صاحب بورتفوليو (مش instructors بس) طالما الحساب موجود وفعّال
     if (!owner || !owner.isActive) {
       skipped++;
       skipReasons.push({
@@ -53,14 +52,14 @@ export async function GET(req) {
 
     const portfolioLink = `${process.env.NEXTAUTH_URL}/portfolio/${owner._id}`;
 
-    // ✅ الرقم من الـ User الأول، ولو فاضي ناخد من contactInfo بتاع البورتفوليو
-    const phone = owner.profile?.phone || portfolio.contactInfo?.phone;
+    // ✅ بيدوّر في User → Portfolio.contactInfo → Student تلقائياً
+    const phone = await resolveOwnerPhone(owner, portfolio);
 
     const result = await sendPortfolioMessage(
       "portfolio_inactivity_reminder",
       owner,
       { portfolioLink },
-      phone, // ✅ override
+      phone,
     );
 
     if (result.success) {
