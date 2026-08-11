@@ -129,6 +129,7 @@ const UserSchema = new mongoose.Schema(
           default: null,
         },
         groupName: { type: String, default: "" },
+        messageType: { type: String, default: "" }, 
         courseName: { type: String, default: "" },
         messageContent: { type: String, default: "" },
         language: {
@@ -165,7 +166,7 @@ const UserSchema = new mongoose.Schema(
     timestamps: true,
     strict: true,
     minimize: false,
-  }
+  },
 );
 
 UserSchema.index({ gender: 1 }, { sparse: true });

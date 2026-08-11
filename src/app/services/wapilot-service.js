@@ -2,6 +2,7 @@
 import Student from "../models/Student.js";
 import { connectDB } from "@/lib/mongodb";
 import TemplateVariable from "../models/TemplateVariable.js";
+import User from "../models/User.js";
 
 const FORCE_PRODUCTION = true;
 
@@ -12,16 +13,19 @@ const isMaleGender = (gender) => {
 
 class WapilotService {
   constructor() {
-    this.baseURL = process.env.WHATSAPP_API_URL || "https://api.wapilot.net/api/v2";
+    this.baseURL =
+      process.env.WHATSAPP_API_URL || "https://api.wapilot.net/api/v2";
     this.apiToken = process.env.WHATSAPP_API_TOKEN;
     this.instanceId = process.env.WHATSAPP_INSTANCE_ID;
 
     // ✅ Evaluation instance — نفس التوكن، instance تاني بس
-    this.evalInstanceId = process.env.WHATSAPP_EVAL_INSTANCE_ID || this.instanceId;
+    this.evalInstanceId =
+      process.env.WHATSAPP_EVAL_INSTANCE_ID || this.instanceId;
 
     this.isEnabled = !!this.apiToken && !!this.instanceId;
     this.mode =
-      FORCE_PRODUCTION || (this.isEnabled && process.env.NODE_ENV === "production")
+      FORCE_PRODUCTION ||
+      (this.isEnabled && process.env.NODE_ENV === "production")
         ? "production"
         : "simulation";
     this.dbVars = null;
@@ -30,9 +34,10 @@ class WapilotService {
     console.log("📱 Wapilot WhatsApp Service initialized:", {
       enabled: this.isEnabled,
       instance: this.instanceId ? "Configured" : "Not configured",
-      evalInstance: this.evalInstanceId !== this.instanceId
-        ? `Configured (${this.evalInstanceId})`
-        : `Same as main (${this.instanceId})`,
+      evalInstance:
+        this.evalInstanceId !== this.instanceId
+          ? `Configured (${this.evalInstanceId})`
+          : `Same as main (${this.instanceId})`,
       mode: this.mode,
     });
   }
@@ -46,7 +51,7 @@ class WapilotService {
       await connectDB();
       const vars = await TemplateVariable.find({ isActive: true }).lean();
       const varsMap = {};
-      vars.forEach(v => {
+      vars.forEach((v) => {
         varsMap[v.key] = {
           valueAr: v.valueAr,
           valueEn: v.valueEn,
@@ -75,7 +80,12 @@ class WapilotService {
   // ✅ دوال بناء التحية
   // ============================================================
 
-  async getStudentSalutation(gender, language = "ar", arabicName = "", englishName = "") {
+  async getStudentSalutation(
+    gender,
+    language = "ar",
+    arabicName = "",
+    englishName = "",
+  ) {
     const male = isMaleGender(gender);
     const displayNameAr = arabicName ? ` ${arabicName}` : "";
     const displayNameEn = englishName ? ` ${englishName}` : "";
@@ -83,7 +93,9 @@ class WapilotService {
     if (language === "ar") {
       const dbSalutationAr = await this.getDbVariable("salutation_ar", "ar");
       if (dbSalutationAr) return `${dbSalutationAr}${displayNameAr}`;
-      return male ? `عزيزي الطالب${displayNameAr}` : `عزيزتي الطالبة${displayNameAr}`;
+      return male
+        ? `عزيزي الطالب${displayNameAr}`
+        : `عزيزتي الطالبة${displayNameAr}`;
     } else {
       const dbSalutationEn = await this.getDbVariable("salutation_en", "en");
       if (dbSalutationEn) return `${dbSalutationEn}${displayNameEn}`;
@@ -91,27 +103,50 @@ class WapilotService {
     }
   }
 
-  async getGuardianSalutation(guardianName, relationship, guardianNickname = null, language = "ar") {
-    const displayNameAr = guardianNickname?.ar || guardianName?.split(" ")[0] || guardianName || "";
-    const displayNameEn = guardianNickname?.en || guardianName?.split(" ")[0] || guardianName || "";
+  async getGuardianSalutation(
+    guardianName,
+    relationship,
+    guardianNickname = null,
+    language = "ar",
+  ) {
+    const displayNameAr =
+      guardianNickname?.ar || guardianName?.split(" ")[0] || guardianName || "";
+    const displayNameEn =
+      guardianNickname?.en || guardianName?.split(" ")[0] || guardianName || "";
 
     if (language === "ar") {
-      const dbGuardianSalutationAr = await this.getDbVariable("guardianSalutation_ar", "ar");
-      if (dbGuardianSalutationAr) return `${dbGuardianSalutationAr} ${displayNameAr}`;
+      const dbGuardianSalutationAr = await this.getDbVariable(
+        "guardianSalutation_ar",
+        "ar",
+      );
+      if (dbGuardianSalutationAr)
+        return `${dbGuardianSalutationAr} ${displayNameAr}`;
       switch (relationship) {
-        case "father": return `عزيزي الأستاذ ${displayNameAr}`;
-        case "mother": return `عزيزتي السيدة ${displayNameAr}`;
-        case "guardian": return `عزيزي السيد ${displayNameAr}`;
-        default: return `عزيزي/عزيزتي ${displayNameAr}`;
+        case "father":
+          return `عزيزي الأستاذ ${displayNameAr}`;
+        case "mother":
+          return `عزيزتي السيدة ${displayNameAr}`;
+        case "guardian":
+          return `عزيزي السيد ${displayNameAr}`;
+        default:
+          return `عزيزي/عزيزتي ${displayNameAr}`;
       }
     } else {
-      const dbGuardianSalutationEn = await this.getDbVariable("guardianSalutation_en", "en");
-      if (dbGuardianSalutationEn) return `${dbGuardianSalutationEn} ${displayNameEn}`;
+      const dbGuardianSalutationEn = await this.getDbVariable(
+        "guardianSalutation_en",
+        "en",
+      );
+      if (dbGuardianSalutationEn)
+        return `${dbGuardianSalutationEn} ${displayNameEn}`;
       switch (relationship) {
-        case "father": return `Dear Mr. ${displayNameEn}`;
-        case "mother": return `Dear Mrs. ${displayNameEn}`;
-        case "guardian": return `Dear Mr./Mrs. ${displayNameEn}`;
-        default: return `Dear ${displayNameEn}`;
+        case "father":
+          return `Dear Mr. ${displayNameEn}`;
+        case "mother":
+          return `Dear Mrs. ${displayNameEn}`;
+        case "guardian":
+          return `Dear Mr./Mrs. ${displayNameEn}`;
+        default:
+          return `Dear ${displayNameEn}`;
       }
     }
   }
@@ -119,11 +154,17 @@ class WapilotService {
   async getStudentChildTitle(gender, language = "ar") {
     const male = isMaleGender(gender);
     if (language === "ar") {
-      const dbStudentGenderAr = await this.getDbVariable("studentGender_ar", "ar");
+      const dbStudentGenderAr = await this.getDbVariable(
+        "studentGender_ar",
+        "ar",
+      );
       if (dbStudentGenderAr) return dbStudentGenderAr;
       return male ? "الابن" : "الابنة";
     } else {
-      const dbStudentGenderEn = await this.getDbVariable("studentGender_en", "en");
+      const dbStudentGenderEn = await this.getDbVariable(
+        "studentGender_en",
+        "en",
+      );
       if (dbStudentGenderEn) return dbStudentGenderEn;
       return male ? "son" : "daughter";
     }
@@ -164,13 +205,15 @@ class WapilotService {
       });
 
       const result = await response.json();
-      if (!response.ok) throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
+      if (!response.ok)
+        throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
 
-      console.log('📦 Full wapilot response:', JSON.stringify(result, null, 2));
+      console.log("📦 Full wapilot response:", JSON.stringify(result, null, 2));
 
       return {
         success: true,
-        messageId: result.message_id || result.id || result.messageId || result.data?.id,
+        messageId:
+          result.message_id || result.id || result.messageId || result.data?.id,
         chatId: messagePayload.chat_id,
         data: result,
         sentVia: "wapilot",
@@ -198,7 +241,9 @@ class WapilotService {
   async sendEvalTextMessage(phoneNumber, messageText) {
     try {
       if (!this.apiToken || !this.evalInstanceId) {
-        console.warn("⚠️ No eval instance configured, falling back to main instance");
+        console.warn(
+          "⚠️ No eval instance configured, falling back to main instance",
+        );
         return await this.sendTextMessage(phoneNumber, messageText);
       }
 
@@ -221,13 +266,15 @@ class WapilotService {
       });
 
       const result = await response.json();
-      if (!response.ok) throw new Error(`WhatsApp Eval API error: ${JSON.stringify(result)}`);
+      if (!response.ok)
+        throw new Error(`WhatsApp Eval API error: ${JSON.stringify(result)}`);
 
-      console.log('📦 Full wapilot response:', JSON.stringify(result, null, 2));
+      console.log("📦 Full wapilot response:", JSON.stringify(result, null, 2));
 
       return {
         success: true,
-        messageId: result.message_id || result.id || result.messageId || result.data?.id,
+        messageId:
+          result.message_id || result.id || result.messageId || result.data?.id,
         chatId: messagePayload.chat_id,
         data: result,
         sentVia: "wapilot-eval",
@@ -252,7 +299,14 @@ class WapilotService {
   // ✅ sendAndLogMessage — Instance الرئيسي (للتذكيرات والرسائل العادية)
   // ============================================================
 
-  async sendAndLogMessage({ studentId, phoneNumber, messageContent, messageType, language = "ar", metadata = {} }) {
+  async sendAndLogMessage({
+    studentId,
+    phoneNumber,
+    messageContent,
+    messageType,
+    language = "ar",
+    metadata = {},
+  }) {
     try {
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) throw new Error("Invalid phone number format");
@@ -261,7 +315,10 @@ class WapilotService {
       if (this.mode === "production") {
         sendResult = await this.sendTextMessage(preparedNumber, messageContent);
       } else {
-        sendResult = await this.simulateSendMessage(preparedNumber, messageContent);
+        sendResult = await this.simulateSendMessage(
+          preparedNumber,
+          messageContent,
+        );
       }
 
       if (studentId) {
@@ -278,7 +335,9 @@ class WapilotService {
             recipientType: metadata.recipientType || "student",
             sentFromInstance: this.instanceId,
           },
-          error: sendResult.success ? null : sendResult.error || "Unknown error",
+          error: sendResult.success
+            ? null
+            : sendResult.error || "Unknown error",
         });
       }
 
@@ -293,16 +352,29 @@ class WapilotService {
   // ✅ sendAndLogEvalMessage — Instance التقييم (instance3806)
   // ============================================================
 
-  async sendAndLogEvalMessage({ studentId, phoneNumber, messageContent, messageType, language = "ar", metadata = {} }) {
+  async sendAndLogEvalMessage({
+    studentId,
+    phoneNumber,
+    messageContent,
+    messageType,
+    language = "ar",
+    metadata = {},
+  }) {
     try {
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) throw new Error("Invalid phone number format");
 
       let sendResult;
       if (this.mode === "production") {
-        sendResult = await this.sendEvalTextMessage(preparedNumber, messageContent);
+        sendResult = await this.sendEvalTextMessage(
+          preparedNumber,
+          messageContent,
+        );
       } else {
-        sendResult = await this.simulateSendMessage(preparedNumber, messageContent);
+        sendResult = await this.simulateSendMessage(
+          preparedNumber,
+          messageContent,
+        );
       }
 
       if (studentId) {
@@ -319,7 +391,9 @@ class WapilotService {
             recipientType: metadata.recipientType || "guardian",
             sentFromInstance: this.evalInstanceId, // ✅ تسجيل إن الرسالة اتبعتت من instance التقييم
           },
-          error: sendResult.success ? null : sendResult.error || "Unknown error",
+          error: sendResult.success
+            ? null
+            : sendResult.error || "Unknown error",
         });
       }
 
@@ -334,17 +408,17 @@ class WapilotService {
   // ✅ logToStudentSchema
   // ============================================================
 
-async logToStudentSchema(studentId, messageData) {
+  async logToStudentSchema(studentId, messageData) {
     try {
       await connectDB();
       const result = await Student.findByIdAndUpdate(
         studentId,
         {
           $push: { whatsappMessages: messageData },
-          $inc: { 'metadata.whatsappTotalMessages': 1 },
-          $set: { 'metadata.whatsappLastInteraction': new Date() }
+          $inc: { "metadata.whatsappTotalMessages": 1 },
+          $set: { "metadata.whatsappLastInteraction": new Date() },
         },
-        { new: true }
+        { new: true },
       );
 
       if (!result) {
@@ -366,7 +440,10 @@ async logToStudentSchema(studentId, messageData) {
   preparePhoneNumber(phoneNumber) {
     if (!phoneNumber) return null;
     try {
-      let cleanNumber = phoneNumber.toString().replace(/\s+/g, "").replace(/^0+/, "");
+      let cleanNumber = phoneNumber
+        .toString()
+        .replace(/\s+/g, "")
+        .replace(/^0+/, "");
 
       if (!cleanNumber.startsWith("+")) {
         if (cleanNumber.startsWith("1") && cleanNumber.length >= 10) {
@@ -397,13 +474,28 @@ async logToStudentSchema(studentId, messageData) {
   // ✅ رسالة اختيار اللغة للطالب (bilingual)
   // ============================================================
 
-  async prepareBilingualLanguageSelectionMessage(studentName, gender, nickname = null) {
+  async prepareBilingualLanguageSelectionMessage(
+    studentName,
+    gender,
+    nickname = null,
+  ) {
     const male = isMaleGender(gender);
     const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
-    const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
+    const englishName =
+      nickname?.en || studentName.split(" ")[0] || studentName;
 
-    const salutationAr = await this.getStudentSalutation(gender, "ar", arabicName, englishName);
-    const salutationEn = await this.getStudentSalutation(gender, "en", arabicName, englishName);
+    const salutationAr = await this.getStudentSalutation(
+      gender,
+      "ar",
+      arabicName,
+      englishName,
+    );
+    const salutationEn = await this.getStudentSalutation(
+      gender,
+      "en",
+      arabicName,
+      englishName,
+    );
     const welcomeAr = await this.getWelcomeMessage("ar", gender);
 
     return `${salutationAr}
@@ -436,13 +528,29 @@ The Code School Team 💻
   // ============================================================
 
   async prepareBilingualGuardianNotificationMessage(
-    guardianName, studentName, studentGender, relationship,
-    guardianNickname = null, studentNickname = null,
+    guardianName,
+    studentName,
+    studentGender,
+    relationship,
+    guardianNickname = null,
+    studentNickname = null,
   ) {
-    const guardianSalAr = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar");
-    const guardianSalEn = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en");
-    const studentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
-    const studentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
+    const guardianSalAr = await this.getGuardianSalutation(
+      guardianName,
+      relationship,
+      guardianNickname,
+      "ar",
+    );
+    const guardianSalEn = await this.getGuardianSalutation(
+      guardianName,
+      relationship,
+      guardianNickname,
+      "en",
+    );
+    const studentNameAr =
+      studentNickname?.ar || studentName.split(" ")[0] || studentName;
+    const studentNameEn =
+      studentNickname?.en || studentName.split(" ")[0] || studentName;
     const titleAr = await this.getStudentChildTitle(studentGender, "ar");
     const titleEn = await this.getStudentChildTitle(studentGender, "en");
     const enrolledVerb = isMaleGender(studentGender) ? "انضم" : "انضمت";
@@ -473,10 +581,21 @@ The Code School Team 💻
   // ✅ رسالة تأكيد اللغة للطالب
   // ============================================================
 
-  async prepareLanguageConfirmationMessage(studentName, gender, selectedLanguage, nickname = null) {
+  async prepareLanguageConfirmationMessage(
+    studentName,
+    gender,
+    selectedLanguage,
+    nickname = null,
+  ) {
     const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
-    const englishName = nickname?.en || studentName.split(" ")[0] || studentName;
-    const salutation = await this.getStudentSalutation(gender, selectedLanguage, arabicName, englishName);
+    const englishName =
+      nickname?.en || studentName.split(" ")[0] || studentName;
+    const salutation = await this.getStudentSalutation(
+      gender,
+      selectedLanguage,
+      arabicName,
+      englishName,
+    );
 
     if (selectedLanguage === "en") {
       return `✅ Language Preference Confirmed
@@ -520,14 +639,26 @@ ${salutation}،
   // ============================================================
 
   async prepareGuardianLanguageConfirmationMessage(
-    guardianName, studentName, studentGender, relationship, selectedLanguage,
-    guardianNickname = null, studentNickname = null,
+    guardianName,
+    studentName,
+    studentGender,
+    relationship,
+    selectedLanguage,
+    guardianNickname = null,
+    studentNickname = null,
   ) {
-    const studentNameAr = studentNickname?.ar || studentName.split(" ")[0] || studentName;
-    const studentNameEn = studentNickname?.en || studentName.split(" ")[0] || studentName;
+    const studentNameAr =
+      studentNickname?.ar || studentName.split(" ")[0] || studentName;
+    const studentNameEn =
+      studentNickname?.en || studentName.split(" ")[0] || studentName;
     const titleAr = await this.getStudentChildTitle(studentGender, "ar");
     const titleEn = await this.getStudentChildTitle(studentGender, "en");
-    const salutation = await this.getGuardianSalutation(guardianName, relationship, guardianNickname, selectedLanguage);
+    const salutation = await this.getGuardianSalutation(
+      guardianName,
+      relationship,
+      guardianNickname,
+      selectedLanguage,
+    );
 
     if (selectedLanguage === "en") {
       return `${salutation},
@@ -573,7 +704,13 @@ The Code School Team 💻`;
       const messagePayload = {
         chat_id: phoneNumber.replace("+", ""),
         priority: 0,
-        interactive: { title, description, footer: "Code School 💻", button: buttonText, sections },
+        interactive: {
+          title,
+          description,
+          footer: "Code School 💻",
+          button: buttonText,
+          sections,
+        },
       };
 
       const response = await fetch(apiUrl, {
@@ -583,13 +720,15 @@ The Code School Team 💻`;
       });
 
       const result = await response.json();
-      if (!response.ok) throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
+      if (!response.ok)
+        throw new Error(`WhatsApp API error: ${JSON.stringify(result)}`);
 
-      console.log('📦 Full wapilot response:', JSON.stringify(result, null, 2));
+      console.log("📦 Full wapilot response:", JSON.stringify(result, null, 2));
 
       return {
         success: true,
-        messageId: result.message_id || result.id || result.messageId || result.data?.id,
+        messageId:
+          result.message_id || result.id || result.messageId || result.data?.id,
         chatId: messagePayload.chat_id,
         data: result,
         sentVia: "wapilot",
@@ -599,7 +738,14 @@ The Code School Team 💻`;
       };
     } catch (error) {
       console.error("❌ List Message error:", error.message);
-      return { success: false, error: error.message, sentVia: "wapilot", simulated: false, interactive: true, timestamp: new Date() };
+      return {
+        success: false,
+        error: error.message,
+        sentVia: "wapilot",
+        simulated: false,
+        interactive: true,
+        timestamp: new Date(),
+      };
     }
   }
 
@@ -607,9 +753,13 @@ The Code School Team 💻`;
     console.log("🔧 SIMULATION: Sending WhatsApp message");
     await new Promise((resolve) => setTimeout(resolve, 1500));
     return {
-      success: true, simulated: true, messageId: `sim-${Date.now()}`,
-      chatId: phoneNumber.replace("+", ""), sentVia: "simulation",
-      interactive: isInteractive, timestamp: new Date(),
+      success: true,
+      simulated: true,
+      messageId: `sim-${Date.now()}`,
+      chatId: phoneNumber.replace("+", ""),
+      sentVia: "simulation",
+      interactive: isInteractive,
+      timestamp: new Date(),
     };
   }
 
@@ -618,13 +768,18 @@ The Code School Team 💻`;
   // ============================================================
 
   async sendWelcomeMessages(
-    studentId, studentName, studentPhone, guardianPhone,
-    customFirstMessage, customSecondMessage,
+    studentId,
+    studentName,
+    studentPhone,
+    guardianPhone,
+    customFirstMessage,
+    customSecondMessage,
   ) {
     try {
       await connectDB();
       const student = await Student.findById(studentId);
-      if (!student) return { success: false, skipped: true, reason: "Student not found" };
+      if (!student)
+        return { success: false, skipped: true, reason: "Student not found" };
 
       const gender = student.personalInfo?.gender || "male";
       const male = isMaleGender(gender);
@@ -634,7 +789,11 @@ The Code School Team 💻`;
       const relationship = student.guardianInfo?.relationship || "father";
 
       if (!studentPhone && !guardianPhone) {
-        return { success: false, skipped: true, reason: "No WhatsApp numbers provided" };
+        return {
+          success: false,
+          skipped: true,
+          reason: "No WhatsApp numbers provided",
+        };
       }
 
       const results = { student: null, guardian: null };
@@ -647,18 +806,52 @@ The Code School Team 💻`;
 
           if (customSecondMessage) {
             languageMessage = customSecondMessage
-              .replace(/{name_ar}/g, studentNickname?.ar || studentName.split(" ")[0] || studentName)
-              .replace(/{name_en}/g, studentNickname?.en || studentName.split(" ")[0] || studentName)
+              .replace(
+                /{name_ar}/g,
+                studentNickname?.ar || studentName.split(" ")[0] || studentName,
+              )
+              .replace(
+                /{name_en}/g,
+                studentNickname?.en || studentName.split(" ")[0] || studentName,
+              )
               .replace(/{fullName}/g, studentName)
               .replace(/{gender}/g, male ? "ولد" : "بنت")
-              .replace(/{salutation_ar}/g, await this.getStudentSalutation(gender, "ar", studentNickname?.ar, studentNickname?.en))
-              .replace(/{salutation_en}/g, await this.getStudentSalutation(gender, "en", studentNickname?.ar, studentNickname?.en))
-              .replace(/{you_ar}/g, await this.getDbVariable("you_ar", "ar") || (male ? "أنت" : "أنتِ"))
+              .replace(
+                /{salutation_ar}/g,
+                await this.getStudentSalutation(
+                  gender,
+                  "ar",
+                  studentNickname?.ar,
+                  studentNickname?.en,
+                ),
+              )
+              .replace(
+                /{salutation_en}/g,
+                await this.getStudentSalutation(
+                  gender,
+                  "en",
+                  studentNickname?.ar,
+                  studentNickname?.en,
+                ),
+              )
+              .replace(
+                /{you_ar}/g,
+                (await this.getDbVariable("you_ar", "ar")) ||
+                  (male ? "أنت" : "أنتِ"),
+              )
               .replace(/{you_en}/g, "you")
-              .replace(/{welcome_ar}/g, await this.getWelcomeMessage("ar", gender))
+              .replace(
+                /{welcome_ar}/g,
+                await this.getWelcomeMessage("ar", gender),
+              )
               .replace(/{welcome_en}/g, "Welcome");
           } else {
-            languageMessage = await this.prepareBilingualLanguageSelectionMessage(studentName, gender, studentNickname);
+            languageMessage =
+              await this.prepareBilingualLanguageSelectionMessage(
+                studentName,
+                gender,
+                studentNickname,
+              );
           }
 
           const listTitle = male
@@ -667,17 +860,35 @@ The Code School Team 💻`;
 
           if (this.mode === "production") {
             results.student = await this.sendListMessage(
-              preparedStudentNumber, listTitle, languageMessage, "اختر | Choose",
-              [{
-                title: "اللغات المتاحة | Available Languages",
-                rows: [
-                  { rowId: "arabic_lang", title: "➡️ العربية", description: "اختر العربية كلغة مفضلة - Choose Arabic" },
-                  { rowId: "english_lang", title: "➡️ English", description: "Choose English as preferred language - اختر الإنجليزية" },
-                ],
-              }],
+              preparedStudentNumber,
+              listTitle,
+              languageMessage,
+              "اختر | Choose",
+              [
+                {
+                  title: "اللغات المتاحة | Available Languages",
+                  rows: [
+                    {
+                      rowId: "arabic_lang",
+                      title: "➡️ العربية",
+                      description: "اختر العربية كلغة مفضلة - Choose Arabic",
+                    },
+                    {
+                      rowId: "english_lang",
+                      title: "➡️ English",
+                      description:
+                        "Choose English as preferred language - اختر الإنجليزية",
+                    },
+                  ],
+                },
+              ],
             );
           } else {
-            results.student = await this.simulateSendMessage(preparedStudentNumber, languageMessage, true);
+            results.student = await this.simulateSendMessage(
+              preparedStudentNumber,
+              languageMessage,
+              true,
+            );
           }
 
           if (studentId) {
@@ -706,7 +917,7 @@ The Code School Team 💻`;
             if (results.student.chatId) {
               await Student.updateOne(
                 { _id: studentId },
-                { $set: { "metadata.whatsappChatId": results.student.chatId } }
+                { $set: { "metadata.whatsappChatId": results.student.chatId } },
               );
             }
           }
@@ -721,27 +932,91 @@ The Code School Team 💻`;
 
           if (customFirstMessage) {
             guardianMessage = customFirstMessage
-              .replace(/{guardianName_ar}/g, guardianNickname?.ar || guardianName.split(" ")[0] || guardianName)
-              .replace(/{guardianName_en}/g, guardianNickname?.en || guardianName.split(" ")[0] || guardianName)
-              .replace(/{studentName_ar}/g, studentNickname?.ar || studentName.split(" ")[0] || studentName)
-              .replace(/{studentName_en}/g, studentNickname?.en || studentName.split(" ")[0] || studentName)
+              .replace(
+                /{guardianName_ar}/g,
+                guardianNickname?.ar ||
+                  guardianName.split(" ")[0] ||
+                  guardianName,
+              )
+              .replace(
+                /{guardianName_en}/g,
+                guardianNickname?.en ||
+                  guardianName.split(" ")[0] ||
+                  guardianName,
+              )
+              .replace(
+                /{studentName_ar}/g,
+                studentNickname?.ar || studentName.split(" ")[0] || studentName,
+              )
+              .replace(
+                /{studentName_en}/g,
+                studentNickname?.en || studentName.split(" ")[0] || studentName,
+              )
               .replace(/{fullStudentName}/g, studentName)
-              .replace(/{relationship_ar}/g, relationship === "father" ? "الأب" : relationship === "mother" ? "الأم" : "الوصي")
-              .replace(/{relationship_en}/g, relationship === "father" ? "father" : relationship === "mother" ? "mother" : "guardian")
-              .replace(/{studentGender_ar}/g, await this.getStudentChildTitle(gender, "ar"))
-              .replace(/{studentGender_en}/g, await this.getStudentChildTitle(gender, "en"))
-              .replace(/{guardianSalutation_ar}/g, await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "ar"))
-              .replace(/{guardianSalutation_en}/g, await this.getGuardianSalutation(guardianName, relationship, guardianNickname, "en"));
+              .replace(
+                /{relationship_ar}/g,
+                relationship === "father"
+                  ? "الأب"
+                  : relationship === "mother"
+                    ? "الأم"
+                    : "الوصي",
+              )
+              .replace(
+                /{relationship_en}/g,
+                relationship === "father"
+                  ? "father"
+                  : relationship === "mother"
+                    ? "mother"
+                    : "guardian",
+              )
+              .replace(
+                /{studentGender_ar}/g,
+                await this.getStudentChildTitle(gender, "ar"),
+              )
+              .replace(
+                /{studentGender_en}/g,
+                await this.getStudentChildTitle(gender, "en"),
+              )
+              .replace(
+                /{guardianSalutation_ar}/g,
+                await this.getGuardianSalutation(
+                  guardianName,
+                  relationship,
+                  guardianNickname,
+                  "ar",
+                ),
+              )
+              .replace(
+                /{guardianSalutation_en}/g,
+                await this.getGuardianSalutation(
+                  guardianName,
+                  relationship,
+                  guardianNickname,
+                  "en",
+                ),
+              );
           } else {
-            guardianMessage = await this.prepareBilingualGuardianNotificationMessage(
-              guardianName, studentName, gender, relationship, guardianNickname, studentNickname,
-            );
+            guardianMessage =
+              await this.prepareBilingualGuardianNotificationMessage(
+                guardianName,
+                studentName,
+                gender,
+                relationship,
+                guardianNickname,
+                studentNickname,
+              );
           }
 
           if (this.mode === "production") {
-            results.guardian = await this.sendTextMessage(preparedGuardianNumber, guardianMessage);
+            results.guardian = await this.sendTextMessage(
+              preparedGuardianNumber,
+              guardianMessage,
+            );
           } else {
-            results.guardian = await this.simulateSendMessage(preparedGuardianNumber, guardianMessage);
+            results.guardian = await this.simulateSendMessage(
+              preparedGuardianNumber,
+              guardianMessage,
+            );
           }
 
           if (studentId) {
@@ -768,8 +1043,12 @@ The Code School Team 💻`;
 
       return {
         success: results.student?.success || results.guardian?.success || false,
-        results, studentId, studentName, studentGender: gender,
-        guardianName, relationship,
+        results,
+        studentId,
+        studentName,
+        studentGender: gender,
+        guardianName,
+        relationship,
         whatsappNumbers: { student: studentPhone, guardian: guardianPhone },
         mode: this.mode,
         totalMessages: (studentPhone ? 1 : 0) + (guardianPhone ? 1 : 0),
@@ -789,12 +1068,17 @@ The Code School Team 💻`;
   // ============================================================
 
   async sendLanguageConfirmationMessage(
-    studentId, studentPhone, guardianPhone, studentName, selectedLanguage,
+    studentId,
+    studentPhone,
+    guardianPhone,
+    studentName,
+    selectedLanguage,
   ) {
     try {
       await connectDB();
       const student = await Student.findById(studentId);
-      if (!student) return { success: false, skipped: true, reason: "Student not found" };
+      if (!student)
+        return { success: false, skipped: true, reason: "Student not found" };
 
       const gender = student.personalInfo?.gender || "male";
       const studentNickname = student.personalInfo?.nickname || null;
@@ -808,7 +1092,10 @@ The Code School Team 💻`;
         const preparedStudentNumber = this.preparePhoneNumber(studentPhone);
         if (preparedStudentNumber) {
           const studentMessage = await this.prepareLanguageConfirmationMessage(
-            studentName, gender, selectedLanguage, studentNickname,
+            studentName,
+            gender,
+            selectedLanguage,
+            studentNickname,
           );
 
           results.student = await this.sendAndLogMessage({
@@ -830,10 +1117,16 @@ The Code School Team 💻`;
       if (guardianPhone) {
         const preparedGuardianNumber = this.preparePhoneNumber(guardianPhone);
         if (preparedGuardianNumber) {
-          const guardianMessage = await this.prepareGuardianLanguageConfirmationMessage(
-            guardianName, studentName, gender, relationship, selectedLanguage,
-            guardianNickname, studentNickname,
-          );
+          const guardianMessage =
+            await this.prepareGuardianLanguageConfirmationMessage(
+              guardianName,
+              studentName,
+              gender,
+              relationship,
+              selectedLanguage,
+              guardianNickname,
+              studentNickname,
+            );
 
           results.guardian = await this.sendAndLogMessage({
             studentId,
@@ -880,6 +1173,80 @@ The Code School Team 💻`;
       genderHandling: "✅ Case-insensitive (male/Male/MALE all work correctly)",
       usesDbVariables: true,
     };
+  }
+
+  // ============================================================
+  // ✅ Logging على User schema (للـ portfolio owners)
+  // ============================================================
+  async logToUserSchema(userId, messageData) {
+    try {
+      await connectDB();
+      const result = await User.findByIdAndUpdate(
+        userId,
+        {
+          $push: {
+            notificationHistory: {
+              messageType: messageData.messageType, // ✅ بقى بيتسجل في حقله الصح
+              messageContent: messageData.messageContent,
+              language: messageData.language,
+              status: messageData.status,
+              failureReason: messageData.error || "",
+              sentAt: new Date(),
+            },
+          },
+          $set: { "metadata.lastGroupNotificationSent": new Date() },
+        },
+        { new: true },
+      );
+
+      if (!result) {
+        console.error(`⚠️ User ${userId} not found for logging`);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("❌ [LOG] Error logging to user schema:", error.message);
+      return false;
+    }
+  }
+
+  // ============================================================
+  // ✅ إرسال + تسجيل لصاحب بورتفوليو (User)
+  // ============================================================
+  async sendAndLogUserMessage({
+    userId,
+    phoneNumber,
+    messageContent,
+    messageType,
+    language = "ar",
+    metadata = {},
+  }) {
+    try {
+      const preparedNumber = this.preparePhoneNumber(phoneNumber);
+      if (!preparedNumber) throw new Error("Invalid phone number format");
+
+      const sendResult =
+        this.mode === "production"
+          ? await this.sendTextMessage(preparedNumber, messageContent)
+          : await this.simulateSendMessage(preparedNumber, messageContent);
+
+      if (userId) {
+        await this.logToUserSchema(userId, {
+          messageType,
+          messageContent,
+          language,
+          status: sendResult.success ? "sent" : "failed",
+          error: sendResult.success
+            ? null
+            : sendResult.error || "Unknown error",
+        });
+      }
+
+      return sendResult;
+    } catch (error) {
+      console.error("❌ Error in sendAndLogUserMessage:", error.message);
+      throw error;
+    }
   }
 }
 
