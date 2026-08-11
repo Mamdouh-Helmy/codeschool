@@ -27,18 +27,27 @@ export async function GET(req) {
     updatedAt: { $lte: cutoff },
     $or: [
       { "metadata.lastInactivityReminderSentAt": null },
-      { "metadata.lastInactivityReminderSentAt": { $lte: cutoff } }, // كل شهر بس مش أكتر
+      { "metadata.lastInactivityReminderSentAt": { $lte: cutoff } },
     ],
   }).populate("userId", "name profile gender language isActive role");
 
   let sent = 0,
     skipped = 0,
     failed = 0;
+  const skipReasons = [];
 
   for (const portfolio of portfolios) {
     const owner = portfolio.userId;
-    if (!owner || !owner.isActive || owner.role !== "instructor") {
+
+    // ✅ الشرط بقى بس: اليوزر موجود + الحساب فعّال (شيلنا شرط الـ role)
+    if (!owner || !owner.isActive) {
       skipped++;
+      skipReasons.push({
+        portfolioId: portfolio._id,
+        title: portfolio.title,
+        hasOwner: !!owner,
+        isActive: owner?.isActive,
+      });
       continue;
     }
 
@@ -47,9 +56,7 @@ export async function GET(req) {
     const result = await sendPortfolioMessage(
       "portfolio_inactivity_reminder",
       owner,
-      {
-        portfolioLink,
-      },
+      { portfolioLink },
     );
 
     if (result.success) {
@@ -57,6 +64,13 @@ export async function GET(req) {
       portfolio.metadata.lastInactivityReminderSentAt = new Date();
       await portfolio.save();
       sent++;
+    } else if (result.skipped) {
+      skipped++;
+      skipReasons.push({
+        portfolioId: portfolio._id,
+        title: portfolio.title,
+        reason: result.reason,
+      });
     } else {
       failed++;
     }
@@ -68,5 +82,6 @@ export async function GET(req) {
     sent,
     skipped,
     failed,
+    skipReasons,
   });
 }
