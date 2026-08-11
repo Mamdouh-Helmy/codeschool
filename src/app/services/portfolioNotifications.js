@@ -65,8 +65,8 @@ export async function buildPortfolioMessage(templateType, owner, extraVars = {})
 /**
  * ✅ إرسال رسالة بورتفوليو لصاحبها مباشرة
  */
-export async function sendPortfolioMessage(templateType, owner, extraVars = {}) {
-  const phone = owner.profile?.phone;
+export async function sendPortfolioMessage(templateType, owner, extraVars = {}, phoneOverride = null) {
+  const phone = phoneOverride || owner.profile?.phone;
   if (!phone) {
     return { success: false, skipped: true, reason: "no_phone" };
   }

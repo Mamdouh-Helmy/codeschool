@@ -27,7 +27,7 @@ export async function GET(req) {
     updatedAt: { $lte: cutoff },
     $or: [
       { "metadata.lastInactivityReminderSentAt": null },
-      { "metadata.lastInactivityReminderSentAt": { $lte: cutoff } },
+      { "metadata.lastInactivityReminderSentAt": { $lte: cutoff } }, // كل شهر بس مش أكتر
     ],
   }).populate("userId", "name profile gender language isActive role");
 
@@ -39,7 +39,7 @@ export async function GET(req) {
   for (const portfolio of portfolios) {
     const owner = portfolio.userId;
 
-    // ✅ الشرط بقى بس: اليوزر موجود + الحساب فعّال (شيلنا شرط الـ role)
+    // ✅ بيتبعت لكل صاحب بورتفوليو (مش instructors بس) طالما الحساب موجود وفعّال
     if (!owner || !owner.isActive) {
       skipped++;
       skipReasons.push({
@@ -53,10 +53,14 @@ export async function GET(req) {
 
     const portfolioLink = `${process.env.NEXTAUTH_URL}/portfolio/${owner._id}`;
 
+    // ✅ الرقم من الـ User الأول، ولو فاضي ناخد من contactInfo بتاع البورتفوليو
+    const phone = owner.profile?.phone || portfolio.contactInfo?.phone;
+
     const result = await sendPortfolioMessage(
       "portfolio_inactivity_reminder",
       owner,
       { portfolioLink },
+      phone, // ✅ override
     );
 
     if (result.success) {

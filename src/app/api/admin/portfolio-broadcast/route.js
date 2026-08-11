@@ -11,19 +11,15 @@ export async function POST(req) {
 
   await connectDB();
 
-  // ✅ بنجيب كل البورتفوليوهات مع أصحابها (بدل ما نفلتر على role instructor بس)
   const portfolios = await Portfolio.find({})
     .populate("userId", "name profile gender language isActive");
 
-  let sent = 0,
-    failed = 0,
-    skipped = 0;
+  let sent = 0, failed = 0, skipped = 0;
   const results = [];
 
   for (const portfolio of portfolios) {
     const owner = portfolio.userId;
 
-    // ✅ استبعاد الـ orphans (صاحب البورتفوليو اتمسح) والحسابات الموقوفة
     if (!owner || !owner.isActive) {
       skipped++;
       results.push({
@@ -36,9 +32,15 @@ export async function POST(req) {
 
     const updateLink = `${process.env.NEXTAUTH_URL}/portfolio/${owner._id}`;
 
-    const result = await sendPortfolioMessage("portfolio_update_broadcast", owner, {
-      updateLink,
-    });
+    // ✅ الرقم من الـ User الأول، ولو فاضي ناخد من contactInfo بتاع البورتفوليو
+    const phone = owner.profile?.phone || portfolio.contactInfo?.phone;
+
+    const result = await sendPortfolioMessage(
+      "portfolio_update_broadcast",
+      owner,
+      { updateLink },
+      phone, // ✅ override
+    );
 
     if (result.skipped) {
       skipped++;
@@ -52,12 +54,5 @@ export async function POST(req) {
     }
   }
 
-  return NextResponse.json({
-    success: true,
-    total: portfolios.length,
-    sent,
-    failed,
-    skipped,
-    results,
-  });
+  return NextResponse.json({ success: true, total: portfolios.length, sent, failed, skipped, results });
 }
