@@ -59,11 +59,10 @@ export default async function RootLayout({
                   defaultTheme="system"
                 >
                   <Aoscompo>
-                    <NextTopLoader />
+                    <NextTopLoader color="#ff6700" />
                     <SiteWrapper>{children}</SiteWrapper>
                     <WelcomePopupManager />
                   </Aoscompo>
-
                   <Toaster
                     position="top-center"
                     containerStyle={{ zIndex: 99999 }}
