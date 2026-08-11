@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Student from '../../../models/Student';
+import User from '../../../models/User';
 import WhatsAppTemplate from '../../../models/WhatsAppTemplate';
 import MessageTemplate from '../../../models/MessageTemplate';
 import TemplateVariable from '../../../models/TemplateVariable';
@@ -33,6 +34,21 @@ async function resolveLidToPhone(lid) {
   } catch (error) {
     console.error('❌ resolveLidToPhone error:', error.message);
     return null;
+  }
+}
+
+// ============================================================
+// ✅ مزامنة اللغة المختارة مع حساب الـ User المرتبط بالطالب
+// ============================================================
+async function syncUserLanguage(authUserId, language) {
+  if (!authUserId) return;
+  if (language !== 'ar' && language !== 'en') return;
+
+  try {
+    await User.updateOne({ _id: authUserId }, { $set: { language } });
+    console.log(`✅ User.language synced: ${authUserId} → ${language}`);
+  } catch (err) {
+    console.error('❌ syncUserLanguage error:', err.message);
   }
 }
 
@@ -276,6 +292,9 @@ async function processIncomingMessage(msg) {
   );
 
   console.log(`✅ DB updated - preferredLanguage: ${selectedLanguage}`);
+
+  // ✅ مزامنة اللغة مع حساب الـ User المرتبط (لو الطالب مربوط بحساب)
+  await syncUserLanguage(student.authUserId, selectedLanguage);
 
   const confirmResult = await sendConfirmationMessages(student, selectedLanguage);
 
