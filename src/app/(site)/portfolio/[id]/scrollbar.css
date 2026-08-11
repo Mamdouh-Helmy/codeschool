@@ -1,0 +1,56 @@
+/* Custom Scrollbar - Brand Style */
+
+/* Firefox */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #ff6700 transparent;
+}
+
+.dark html {
+  scrollbar-color: #ff6437 #161b22;
+}
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #004d59 0%, #ff6700 100%);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  transition: all 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ff6700 0%, #feaf00 100%);
+  background-clip: padding-box;
+  box-shadow: 0 4px 16px 0 rgba(255, 103, 0, 0.2);
+}
+
+/* Dark mode */
+.dark ::-webkit-scrollbar-track {
+  background: #161b22; /* darklight */
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #001a1f 0%, #ff6437 100%);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ff6437 0%, #feaf00 100%);
+  background-clip: padding-box;
+}
+
+/* corner (where horizontal & vertical scrollbars meet) */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

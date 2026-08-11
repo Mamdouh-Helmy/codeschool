@@ -4,6 +4,7 @@ import { fetchPortfolio } from "@/lib/fetchPortfolio";
 import { PortfolioProvider } from "../../../../../context/PortfolioContext";
 import Header from "../../../../components/Portfolio/public/Header";
 import StairTransition from "../../../../components/Portfolio/public/StairTransition";
+import "./scrollbar.css";
 
 interface LayoutProps {
   children: ReactNode;
