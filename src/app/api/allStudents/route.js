@@ -22,6 +22,33 @@ function nullIfEmpty(value) {
   return value;
 }
 
+// ✅ مزامنة رقم التلفون / النوع / اللغة مع حساب الـ User المرتبط بالطالب
+function normalizeGenderForUser(gender) {
+  if (!gender) return null;
+  const lower = String(gender).toLowerCase().trim();
+  return lower === "male" || lower === "female" ? lower : null;
+}
+
+async function syncUserFromStudentInfo(authUserId, { phone, gender, language }) {
+  if (!authUserId) return;
+
+  const userUpdate = {};
+  if (phone) userUpdate["profile.phone"] = phone;
+
+  const normalizedGender = normalizeGenderForUser(gender);
+  if (normalizedGender) userUpdate.gender = normalizedGender;
+
+  if (language === "ar" || language === "en") userUpdate.language = language;
+
+  if (Object.keys(userUpdate).length === 0) return;
+
+  try {
+    await User.findByIdAndUpdate(authUserId, { $set: userUpdate });
+  } catch (err) {
+    console.error("⚠️ Failed to sync User from Student:", err.message);
+  }
+}
+
 function buildCreditStats(query) {
   const base = { isDeleted: false };
   return Promise.all([
@@ -368,6 +395,15 @@ export async function POST(req) {
         return NextResponse.json({ success: false, message: "Validation failed", errors }, { status: 400 });
       }
       throw saveError;
+    }
+
+    // ── Sync phone / gender / language to the linked User account ───────────
+    if (savedStudent.authUserId) {
+      await syncUserFromStudentInfo(savedStudent.authUserId, {
+        phone:    savedStudent.personalInfo?.phone || savedStudent.personalInfo?.whatsappNumber,
+        gender:   savedStudent.personalInfo?.gender,
+        language: savedStudent.communicationPreferences?.preferredLanguage,
+      });
     }
 
     // ── Fire-and-forget: WhatsApp welcome ──────────────────────────────────

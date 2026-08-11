@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Student from "../../../models/Student";
+import User from "../../../models/User";
 import "../../../models/Tag"; // ✅ لازم نسجّل الموديل عشان الـ populate يشتغل
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
@@ -21,6 +22,33 @@ function validateJsonContentType(req) {
     );
   }
   return null;
+}
+
+// ✅ مزامنة رقم التلفون / النوع / اللغة مع حساب الـ User المرتبط بالطالب
+function normalizeGenderForUser(gender) {
+  if (!gender) return null;
+  const lower = String(gender).toLowerCase().trim();
+  return lower === "male" || lower === "female" ? lower : null;
+}
+
+async function syncUserFromStudentInfo(authUserId, { phone, gender, language }) {
+  if (!authUserId) return;
+
+  const userUpdate = {};
+  if (phone) userUpdate["profile.phone"] = phone;
+
+  const normalizedGender = normalizeGenderForUser(gender);
+  if (normalizedGender) userUpdate.gender = normalizedGender;
+
+  if (language === "ar" || language === "en") userUpdate.language = language;
+
+  if (Object.keys(userUpdate).length === 0) return;
+
+  try {
+    await User.findByIdAndUpdate(authUserId, { $set: userUpdate });
+  } catch (err) {
+    console.error("⚠️ Failed to sync User from Student:", err.message);
+  }
 }
 
 // Fields that must never be updated by a client request
@@ -183,6 +211,15 @@ export async function PUT(req, context) {
         { success: false, message: "Update failed" },
         { status: 500 }
       );
+    }
+
+    // ── Sync phone / gender / language to the linked User account ───────────
+    if (updated.authUserId?._id) {
+      await syncUserFromStudentInfo(updated.authUserId._id, {
+        phone:    updated.personalInfo?.phone || updated.personalInfo?.whatsappNumber,
+        gender:   updated.personalInfo?.gender,
+        language: updated.communicationPreferences?.preferredLanguage,
+      });
     }
 
     return NextResponse.json({
