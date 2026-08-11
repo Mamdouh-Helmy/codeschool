@@ -2,7 +2,8 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Tag from "../../../models/Tag";
-import Group from "../../../models/Group"; // ✅ لإزالة الإشارات من المجموعات
+import Group from "../../../models/Group";     // ✅ لإزالة الإشارات من المجموعات
+import Student from "../../../models/Student"; // ✅ لإزالة الإشارات من الطلاب
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
@@ -95,7 +96,7 @@ export async function PUT(req, { params }) {
   }
 }
 
-// ─── DELETE: حذف وسم نهائياً (Hard Delete) وإزالة الإشارات من المجموعات ─────
+// ─── DELETE: حذف وسم نهائياً (Hard Delete) وإزالة الإشارات من المجموعات والطلاب ─
 export async function DELETE(req, { params }) {
   try {
     const authCheck = await requireAdmin(req);
@@ -120,17 +121,17 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // 2. إزالة الإشارة إلى هذا التاج من جميع المجموعات
-    await Group.updateMany(
-      { tags: id },
-      { $pull: { tags: id } }
-    );
+    // 2. إزالة الإشارة إلى هذا التاج من جميع المجموعات والطلاب
+    await Promise.all([
+      Group.updateMany({ tags: id }, { $pull: { tags: id } }),
+      Student.updateMany({ tags: id }, { $pull: { tags: id } }), // ✅
+    ]);
 
-    console.log(`✅ Tag "${tag.name}" permanently deleted and removed from all groups.`);
+    console.log(`✅ Tag "${tag.name}" permanently deleted and removed from all groups and students.`);
 
     return NextResponse.json({
       success: true,
-      message: "Tag permanently deleted and removed from all groups",
+      message: "Tag permanently deleted and removed from all groups and students",
       data: tag,
     });
   } catch (error) {

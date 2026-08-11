@@ -6,7 +6,8 @@ import {
   MessageCircle, Bell, GlobeIcon, Hash, AlertCircle, Info,
   UserCircle, Languages, Sparkles, MessageSquare, RefreshCw,
   Eye, Zap, Loader2, Database, MapPin, Smartphone,
-  ChevronLeft, ChevronRight, ArrowRight, ArrowLeft
+  ChevronLeft, ChevronRight, ArrowRight, ArrowLeft,
+  Tag as TagIcon, // ✅ أيقونة الوسوم
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -133,6 +134,8 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       groupIds:       initial?.academicInfo?.groupIds       || [],
       currentCourses: initial?.academicInfo?.currentCourses || [],
     },
+    // ✅ الوسوم — top-level زي الـ Student schema بالظبط
+    tags: (initial?.tags || []).map(tg => (typeof tg === "string" ? tg : tg._id)),
     communicationPreferences: {
       preferredLanguage:    initial?.communicationPreferences?.preferredLanguage    || "ar",
       notificationChannels: initial?.communicationPreferences?.notificationChannels || { email: true, whatsapp: true, sms: false },
@@ -161,10 +164,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   const [updatingAccount,    setUpdatingAccount]    = useState(false); // لودينج خاص بتحديث الإيميل/الباسورد بس
 
   // ── ✅ NEW: real-time email-taken check (debounced) ──────────────────────
-  // "idle"      → لسه مفيش فحص (الحقل فاضي أو لسه نفس الإيميل الأصلي)
-  // "checking"  → جاري الفحص
-  // "taken"     → الإيميل ده مستخدم من حساب تاني
-  // "available" → الإيميل متاح
   const [emailCheckStatus, setEmailCheckStatus] = useState("idle");
   const emailCheckAbortRef = useRef(null);
 
@@ -178,6 +177,10 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   const [selectedHintIndex,setSelectedHintIndex]= useState(0);
   const [dbVars,           setDbVars]           = useState({});
   const [loadingVars,      setLoadingVars]      = useState(false);
+
+  // ── ✅ Tags state ─────────────────────────────────────────────────────────
+  const [tagsList,    setTagsList]    = useState([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
 
   const dropdownRef         = useRef(null);
   const studentTextareaRef  = useRef(null);
@@ -208,6 +211,17 @@ export default function StudentForm({ initial, onClose, onSaved }) {
         address: { ...prev.personalInfo.address, [field]: value },
       },
     }));
+
+  // ✅ دالة تبديل التاج
+  const toggleTag = (tagId) => {
+    setForm(prev => {
+      const current = prev.tags || [];
+      const nextTags = current.includes(tagId)
+        ? current.filter(id => id !== tagId)
+        : [...current, tagId];
+      return { ...prev, tags: nextTags };
+    });
+  };
 
   // ── DB variables ─────────────────────────────────────────────────────────
   const fetchDbVariables = async () => {
@@ -360,6 +374,18 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   useEffect(() => { fetchDbVariables(); }, []);
   useEffect(() => { fetchTemplates(); },   []);
 
+  // ✅ تحميل قائمة الوسوم
+  useEffect(() => {
+    (async () => {
+      setTagsLoading(true);
+      try {
+        const res  = await fetch("/api/tags");
+        const data = await res.json();
+        if (data.success) setTagsList(data.data || []);
+      } catch { /* silent */ } finally { setTagsLoading(false); }
+    })();
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (form.whatsappCustomMessages?.secondMessage && templates.student && form.whatsappCustomMessages.secondMessage !== templates.student.content)
@@ -464,13 +490,9 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   }, [initial]);
 
   // ── ✅ NEW: real-time "email already taken" check ────────────────────────
-  // بيشتغل فقط على إيميل الحساب القابل للتعديل (editEmail) للطالب الموجود
-  // فعليًا، وبعد فترة سكون صغيرة (debounce) عشان مانضربش السيرفر كل ضغطة.
   useEffect(() => {
     const isExistingStudent = selectedStudent && !selectedStudent.isManual;
 
-    // مفيش داعي للفحص لو: مفيش طالب موجود، أو الإيميل فاضي، أو هو نفس
-    // الإيميل الأصلي بتاع الحساب (مفيش تغيير فعلي).
     if (!isExistingStudent || !editEmail.trim() || editEmail.trim().toLowerCase() === (selectedStudent.email || "").toLowerCase()) {
       setEmailCheckStatus("idle");
       return;
@@ -478,7 +500,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
 
     const trimmed = editEmail.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setEmailCheckStatus("idle"); // إيميل غير مكتمل/غير صحيح الصيغة بعد — منعرضش حاجة
+      setEmailCheckStatus("idle");
       return;
     }
 
@@ -621,7 +643,14 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       // just-updated) account email when editing an existing student.
       const finalEmail = isExistingStudent ? editEmail.trim().toLowerCase() : form.personalInfo.email;
 
-      const payload   = { ...form, authUserId: userId, personalInfo: { ...form.personalInfo, email: finalEmail, dateOfBirth: dateOfBirthISO } };
+      // ✅ الوسوم بتتبعت top-level زي ما هي مخزنة في الـ Student schema
+      const payload = {
+        ...form,
+        authUserId: userId,
+        personalInfo: { ...form.personalInfo, email: finalEmail, dateOfBirth: dateOfBirthISO },
+        tags: form.tags || [],
+      };
+
       const studentId = initial?.id || initial?._id;
       const res       = await fetch(studentId ? `/api/allStudents/${studentId}` : "/api/allStudents", {
         method: studentId ? "PUT" : "POST",
@@ -800,13 +829,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   </div>
                 </div>
 
-                {/* ── الإيميل ──────────────────────────────────────────────
-                    ✅ FIX: لطالب موجود (مرتبط بيوزر فعلي) الحقل بقى قابل
-                    للتعديل بدل ما يكون disabled — القيمة بتتاخد من editEmail
-                    وبتتحدّث فعليًا عبر /api/allStudents/updateUser في submit.
-                    ✅ NEW: فحص فوري (debounced) لو الإيميل الجديد مستخدم
-                    من حساب تاني قبل حتى ما يدوس حفظ.
-                */}
+                {/* ── الإيميل ── */}
                 <div className="space-y-2">
                   <label className={labelBase}>{t("common.email") || "البريد الإلكتروني"} <span className="text-red-500">*</span></label>
                   <div className="relative">
@@ -835,7 +858,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     )}
                   </div>
 
-                  {/* رسائل حالة الفحص — بالأولوية: taken > checking > available > "سيتم التحديث" */}
                   {selectedStudent && !selectedStudent.isManual && emailCheckStatus === "taken" ? (
                     <div className="flex items-center justify-end gap-1.5 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl border border-red-100 dark:border-red-900">
                       <span>{t("studentForm.emailAlreadyTaken") || "هذا البريد الإلكتروني مستخدم من قبل حساب آخر"}</span>
@@ -858,7 +880,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   )}
                 </div>
 
-                {/* ── كلمة مرور لحساب جديد (طالب جديد فقط) ── */}
+                {/* ── كلمة مرور لحساب جديد ── */}
                 {(!selectedStudent || selectedStudent.isManual) && form.personalInfo.fullName && (
                   <div className="space-y-4 pt-2 border-t border-orange-100 dark:border-orange-900/40">
                     <div className="flex items-center justify-end gap-2 pt-1">
@@ -887,10 +909,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   </div>
                 )}
 
-                {/* ── ✅ NEW: تغيير كلمة المرور لطالب موجود (اختياري) ──────
-                    يظهر فقط لو فيه طالب موجود فعليًا مرتبط بيوزر. سايبه
-                    فاضي يعني مفيش تغيير، وده بيتفحص ويتبعت عبر updateUser.
-                */}
+                {/* ── ✅ NEW: تغيير كلمة المرور لطالب موجود ── */}
                 {selectedStudent && !selectedStudent.isManual && (
                   <div className="space-y-4 pt-2 border-t border-orange-100 dark:border-orange-900/40">
                     <div className="flex items-center justify-end gap-2 pt-1">
@@ -947,19 +966,16 @@ export default function StudentForm({ initial, onClose, onSaved }) {
 
           {/* ════════════════════════════════════════════
               STEP 1 — Personal Info
-              ✅ FIX: DOB uses separate dob state
-              ✅ FIX: Gender reads form.personalInfo.gender (normalized)
           ════════════════════════════════════════════ */}
           {step === 1 && (
             <div className="space-y-6">
 
-              {/* Date of Birth ─── 3 separate number inputs */}
+              {/* Date of Birth */}
               <div className="space-y-2">
                 <label className={labelBase}>
                   {t("common.dateOfBirth") || "تاريخ الميلاد"}
                 </label>
                 <div className="grid grid-cols-3 gap-3">
-                  {/* Day */}
                   <div className="space-y-1">
                     <p className="text-xs text-gray-400 text-right">اليوم</p>
                     <input
@@ -971,7 +987,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                       className={`${inputBase} text-center`}
                     />
                   </div>
-                  {/* Month */}
                   <div className="space-y-1">
                     <p className="text-xs text-gray-400 text-right">الشهر</p>
                     <div className="relative">
@@ -988,7 +1003,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                       <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     </div>
                   </div>
-                  {/* Year */}
                   <div className="space-y-1">
                     <p className="text-xs text-gray-400 text-right">السنة</p>
                     <input
@@ -1002,7 +1016,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   </div>
                 </div>
 
-                {/* Live preview of assembled date */}
                 {dob.day && dob.month && dob.year && dob.year.length === 4 && (
                   <div className="flex items-center justify-end gap-1.5 text-xs">
                     <span className="font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-full">
@@ -1018,7 +1031,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                 </div>
               </div>
 
-              {/* Gender ─── button group */}
+              {/* Gender */}
               <div className="space-y-2">
                 <label className={labelBase}>
                   {t("common.gender") || "الجنس"} <span className="text-red-500">*</span>
@@ -1054,7 +1067,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                           ${selected ? `${colors.active} ${colors.ring}` : colors.inactive}
                         `}
                       >
-                        {/* Selected indicator dot */}
                         {selected && (
                           <span className={`absolute top-2.5 left-2.5 w-2 h-2 rounded-full ${colors.dot}`} />
                         )}
@@ -1065,7 +1077,6 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     );
                   })}
                 </div>
-                {/* Show selected value clearly */}
                 {form.personalInfo.gender && (
                   <div className="flex items-center justify-end gap-1.5 text-xs">
                     <span className={`font-semibold px-2.5 py-1 rounded-full ${
@@ -1262,6 +1273,46 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* ✅ Tags selector */}
+              <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                <label className={`${labelBase} flex items-center gap-1.5 justify-end`}>
+                  <TagIcon className="w-3.5 h-3.5" />
+                  {t("studentForm.tags") || "الوسوم"}
+                </label>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  {tagsList.map((tg) => {
+                    const selected = (form.tags || []).includes(tg._id);
+                    return (
+                      <button
+                        key={tg._id}
+                        type="button"
+                        onClick={() => toggleTag(tg._id)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ring-1 ring-inset ${
+                          selected
+                            ? "text-white ring-transparent shadow-sm"
+                            : "bg-gray-50 dark:bg-dark_input text-gray-600 dark:text-gray-300 ring-gray-200 dark:ring-gray-700"
+                        }`}
+                        style={selected ? { backgroundColor: tg.color } : {}}
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: selected ? "rgba(255,255,255,0.85)" : tg.color }}
+                        />
+                        {tg.name}
+                      </button>
+                    );
+                  })}
+                  {tagsList.length === 0 && !tagsLoading && (
+                    <span className="text-xs text-gray-400 italic">{t("studentForm.noTags") || "لا توجد وسوم بعد"}</span>
+                  )}
+                  {tagsLoading && (
+                    <span className="text-xs text-gray-400 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> {t("common.loading") || "جاري التحميل..."}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           )}

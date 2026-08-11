@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Student from "../../../models/Student";
+import "../../../models/Tag"; // ✅ لازم نسجّل الموديل عشان الـ populate يشتغل
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
@@ -74,7 +75,8 @@ export async function GET(req, context) {
     const student = await Student.findOne({ _id: id, isDeleted: false })
       .populate("authUserId",             "name email role")
       .populate("metadata.createdBy",     "name email")
-      .populate("metadata.lastModifiedBy","name email");
+      .populate("metadata.lastModifiedBy","name email")
+      .populate("tags"); // ✅ populate الوسوم
 
     if (!student) {
       return NextResponse.json(
@@ -94,6 +96,7 @@ export async function GET(req, context) {
         guardianInfo:     student.guardianInfo,
         enrollmentInfo:   student.enrollmentInfo,
         academicInfo:     student.academicInfo,
+        tags:             student.tags, // ✅
         communicationPreferences: student.communicationPreferences,
         creditSystem:     student.creditSystem,
         metadata: {
@@ -172,7 +175,8 @@ export async function PUT(req, context) {
       { new: true, runValidators: true, context: "query" }
     )
       .populate("metadata.lastModifiedBy", "name email")
-      .populate("authUserId",              "name email");
+      .populate("authUserId",              "name email")
+      .populate("tags"); // ✅
 
     if (!updated) {
       return NextResponse.json(
@@ -189,6 +193,7 @@ export async function PUT(req, context) {
         enrollmentNumber: updated.enrollmentNumber,
         fullName:         updated.personalInfo.fullName,
         updatedFields:    Object.keys(updateData),
+        tags:             updated.tags, // ✅
         metadata: {
           lastModifiedBy: updated.metadata?.lastModifiedBy,
           updatedAt:      updated.metadata?.updatedAt,

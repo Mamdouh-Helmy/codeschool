@@ -10,6 +10,7 @@ import {
   Zap, Snowflake, Ban, Award, Hash, User,
   X, ChevronDown, Layers, UserCheck, UserX,
   TrendingUp, Target, Minus, Loader2, Info,
+  Tag, Sparkles, // ✅ أيقونات الوسوم
 } from "lucide-react";
 import Modal from "./Modal";
 import StudentForm from "./StudentForm";
@@ -326,7 +327,7 @@ export default function StudentAdmin() {
   const debouncedSearch = useDebounce(searchInput, 350);
 
   const [filters, setFilters] = useState({
-    status: "", level: "", source: "", creditStatus: "", inGroup: "",
+    status: "", level: "", source: "", creditStatus: "", inGroup: "", tags: "", // ✅
     page: 1, limit: 10,
   });
 
@@ -338,6 +339,25 @@ export default function StudentAdmin() {
     totalExpired: 0, totalNoPackage: 0, lowBalance: 0,
   });
   const [groupStats, setGroupStats] = useState({ inGroup: 0, notInGroup: 0 });
+
+  // ── Tags State ────────────────────────────────────────────────────────────
+  const [tagsList, setTagsList]       = useState([]);
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+  const [editingTag, setEditingTag]   = useState(null);
+  const [newTagName, setNewTagName]   = useState("");
+  const [newTagColor, setNewTagColor] = useState("#3B82F6");
+
+  const loadTags = useCallback(async () => {
+    try {
+      const res  = await fetch("/api/tags");
+      const json = await res.json();
+      if (json.success) setTagsList(json.data || []);
+    } catch (err) {
+      console.error("Error loading tags:", err);
+    }
+  }, []);
+
+  useEffect(() => { loadTags(); }, [loadTags]);
 
   // ─── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -353,6 +373,7 @@ export default function StudentAdmin() {
       ...(filters.source         && { source:       filters.source }),
       ...(filters.creditStatus   && { creditStatus: filters.creditStatus }),
       ...(filters.inGroup !== "" && { inGroup:      filters.inGroup }),
+      ...(filters.tags           && { tags:         filters.tags }), // ✅
     });
 
     fetch(`/api/allStudents?${params}`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } })
@@ -375,7 +396,7 @@ export default function StudentAdmin() {
   }, [
     filters.page, filters.limit,
     filters.status, filters.level, filters.source,
-    filters.creditStatus, filters.inGroup,
+    filters.creditStatus, filters.inGroup, filters.tags, // ✅
     debouncedSearch, refreshKey,
   ]);
 
@@ -384,6 +405,17 @@ export default function StudentAdmin() {
 
   const setFilter    = (key, value) => setFilters(f => ({ ...f, [key]: value, page: 1 }));
   const loadStudents = () => setRefreshKey(k => k + 1);
+
+  // ✅ toggle فلتر التاج (متعدد الاختيار زي المجموعات)
+  const toggleTagFilter = useCallback((tagId) => {
+    setFilters((prev) => {
+      const current = prev.tags ? prev.tags.split(",") : [];
+      const newTags = current.includes(tagId)
+        ? current.filter((tid) => tid !== tagId)
+        : [...current, tagId];
+      return { ...prev, tags: newTags.join(","), page: 1 };
+    });
+  }, []);
 
   // ─── onSaved ───────────────────────────────────────────────────────────────
   const onSaved = useCallback((isNew = false) => {
@@ -412,12 +444,13 @@ export default function StudentAdmin() {
     filters.level          && { key: "level",        label: `Level: ${filters.level}` },
     filters.creditStatus   && { key: "creditStatus", label: `Credits: ${filters.creditStatus}` },
     filters.inGroup !== "" && { key: "inGroup",      label: filters.inGroup === "true" ? "In a Group" : "No Group" },
+    filters.tags            && { key: "tags",         label: `Tags: ${filters.tags.split(",").length}` }, // ✅
     debouncedSearch        && { key: "search",       label: `"${debouncedSearch}"` },
   ].filter(Boolean);
 
   const clearAll = () => {
     setSearchInput("");
-    setFilters({ status: "", level: "", source: "", creditStatus: "", inGroup: "", page: 1, limit: filters.limit });
+    setFilters({ status: "", level: "", source: "", creditStatus: "", inGroup: "", tags: "", page: 1, limit: filters.limit }); // ✅
   };
 
   // ─── Row actions ───────────────────────────────────────────────────────────
@@ -474,7 +507,6 @@ export default function StudentAdmin() {
   };
 
   // ─── Credit hours quick-adjust callback ────────────────────────────────────
-  // بيستقبل الطالب المحدث من السيرفر ويحدث الـ state المحلي فورًا بدون إعادة تحميل كل الصفحة
   const onCreditAdjusted = useCallback((studentId, updatedStudentPartial) => {
     setStudents(prev => prev.map(s => {
       const sid = s._id || s.id;
@@ -538,6 +570,69 @@ export default function StudentAdmin() {
   const paginationStart = (pagination.page - 1) * pagination.limit + 1;
   const paginationEnd   = Math.min(pagination.page * pagination.limit, pagination.totalStudents);
 
+  // ─── Tag Management Functions ──────────────────────────────────────────────
+  const handleAddTag = async () => {
+    if (!newTagName.trim()) {
+      toast.error("Tag name is required");
+      return;
+    }
+    try {
+      const res  = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newTagName.trim(), color: newTagColor }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Tag added successfully");
+        setNewTagName("");
+        setNewTagColor("#3B82F6");
+        await loadTags();
+      } else {
+        toast.error(json.error || "Failed to add tag");
+      }
+    } catch {
+      toast.error("Failed to add tag");
+    }
+  };
+
+  const handleUpdateTag = async (id, name, color) => {
+    try {
+      const res  = await fetch(`/api/tags/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, color }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Tag updated");
+        await loadTags();
+        setEditingTag(null);
+      } else {
+        toast.error(json.error || "Failed to update tag");
+      }
+    } catch {
+      toast.error("Failed to update tag");
+    }
+  };
+
+  const handleDeleteTag = async (id) => {
+    if (!confirm("Are you sure you want to permanently delete this tag? It will be removed from all groups and students.")) return;
+    try {
+      const res = await fetch(`/api/tags/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Tag permanently deleted");
+        await loadTags();
+        loadStudents(); // ✅ عشان يشيل التاج من صفوف الطلاب المعروضة
+      } else {
+        const json = await res.json();
+        toast.error(json.error || "Failed to delete tag");
+      }
+    } catch {
+      toast.error("Failed to delete tag");
+    }
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen w-full bg-gray-50 dark:bg-darkmode">
@@ -553,19 +648,34 @@ export default function StudentAdmin() {
               {t("students.managementDescription")}
             </p>
           </div>
-          <button
-            onClick={() => { setEditingStudent(null); setModalOpen(true); }}
-            className="
-              flex items-center gap-2 px-5 py-2.5
-              bg-primary hover:bg-orange-deep
-              text-white rounded-xl font-semibold text-sm
-              shadow-brand-sm hover:shadow-brand-md
-              transition-all duration-200 hover:-translate-y-0.5 shrink-0
-            "
-          >
-            <UserPlus className="w-4 h-4" />
-            {t("students.addNew")}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* ✅ زر إدارة الوسوم */}
+            <button
+              onClick={() => setTagsModalOpen(true)}
+              className="
+                flex items-center gap-2 px-4 py-2.5
+                bg-gray-100 hover:bg-gray-200 dark:bg-dark_input dark:hover:bg-gray-700
+                text-gray-700 dark:text-gray-200 rounded-xl font-semibold text-sm
+                transition-all duration-200 shrink-0
+              "
+            >
+              <Tag className="w-4 h-4" />
+              Manage Tags
+            </button>
+            <button
+              onClick={() => { setEditingStudent(null); setModalOpen(true); }}
+              className="
+                flex items-center gap-2 px-5 py-2.5
+                bg-primary hover:bg-orange-deep
+                text-white rounded-xl font-semibold text-sm
+                shadow-brand-sm hover:shadow-brand-md
+                transition-all duration-200 hover:-translate-y-0.5 shrink-0
+              "
+            >
+              <UserPlus className="w-4 h-4" />
+              {t("students.addNew")}
+            </button>
+          </div>
         </div>
 
         {/* ── Stats ── */}
@@ -671,6 +781,36 @@ export default function StudentAdmin() {
             </div>
           </div>
 
+          {/* ✅ Tags filter row */}
+          {tagsList.length > 0 && (
+            <div className="flex flex-wrap gap-2 items-center pt-2.5 border-t border-gray-100 dark:border-dark_border">
+              <span className="text-xs text-gray-400 dark:text-darksubtle font-medium flex items-center gap-1">
+                <Tag className="w-3 h-3" /> Tags:
+              </span>
+              {tagsList.map((tag) => {
+                const selected = filters.tags ? filters.tags.split(",").includes(tag._id) : false;
+                return (
+                  <button
+                    key={tag._id}
+                    onClick={() => toggleTagFilter(tag._id)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ring-1 ring-inset ${
+                      selected
+                        ? "text-white ring-transparent shadow-sm"
+                        : "bg-gray-50 dark:bg-dark_input text-gray-600 dark:text-darktext ring-gray-200 dark:ring-dark_border"
+                    }`}
+                    style={selected ? { backgroundColor: tag.color } : {}}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: selected ? "rgba(255,255,255,0.85)" : tag.color }}
+                    />
+                    {tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Active chips */}
           {activeFilters.length > 0 && (
             <div className="flex flex-wrap gap-2 items-center pt-2.5 border-t border-gray-100 dark:border-dark_border">
@@ -747,6 +887,21 @@ export default function StudentAdmin() {
                             <p className="text-xs text-gray-400 dark:text-darksubtle truncate max-w-[150px]">
                               {student.personalInfo?.email || t("students.table.noEmail")}
                             </p>
+                            {/* ✅ عرض الوسوم */}
+                            {student.tags && student.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {student.tags.map((tag) => (
+                                  <span
+                                    key={tag._id}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium"
+                                    style={{ backgroundColor: tag.color + "18", color: tag.color }}
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: tag.color }} />
+                                    {tag.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -1081,6 +1236,112 @@ export default function StudentAdmin() {
           }}
         />
       )}
+
+      {/* ✅ Manage Tags Modal */}
+      <Modal
+        open={tagsModalOpen}
+        title="Manage Tags"
+        onClose={() => { setTagsModalOpen(false); setEditingTag(null); }}
+        size="md"
+      >
+        <div className="space-y-5 p-1">
+          {/* إضافة وسم جديد */}
+          <div className="bg-gray-50 dark:bg-dark_input/60 rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-gray-700">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> New tag
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
+                placeholder="New tag name"
+                className="flex-1 px-3 py-2 border border-transparent bg-white dark:bg-dark_input rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none shadow-sm"
+              />
+              <label className="relative shrink-0">
+                <input
+                  type="color"
+                  value={newTagColor}
+                  onChange={(e) => setNewTagColor(e.target.value)}
+                  className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white dark:border-dark_input shadow-sm appearance-none"
+                  style={{ backgroundColor: newTagColor }}
+                />
+              </label>
+              <button
+                onClick={handleAddTag}
+                className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition shadow-sm shadow-primary/20 flex items-center gap-1.5 shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add
+              </button>
+            </div>
+          </div>
+
+          {/* قائمة الوسوم */}
+          <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+            {tagsList.map((tag) => (
+              <div key={tag._id} className="flex items-center justify-between p-2.5 rounded-xl ring-1 ring-inset ring-gray-100 dark:ring-gray-700 hover:ring-gray-200 dark:hover:bg-gray-800/60 transition">
+                {editingTag?._id === tag._id ? (
+                  <div className="flex items-center gap-2 flex-1">
+                    <input
+                      type="text"
+                      value={editingTag.name}
+                      onChange={(e) => setEditingTag({ ...editingTag, name: e.target.value })}
+                      autoFocus
+                      className="flex-1 px-2.5 py-1.5 border rounded-lg text-sm dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
+                    />
+                    <input
+                      type="color"
+                      value={editingTag.color}
+                      onChange={(e) => setEditingTag({ ...editingTag, color: e.target.value })}
+                      className="w-8 h-8 p-0 border rounded-lg cursor-pointer"
+                    />
+                    <button
+                      onClick={() => handleUpdateTag(editingTag._id, editingTag.name, editingTag.color)}
+                      className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-medium hover:bg-emerald-600 transition"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingTag(null)}
+                      className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium hover:bg-gray-300 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="inline-block w-3.5 h-3.5 rounded-full ring-2 ring-offset-2 ring-offset-white dark:ring-offset-darklight"
+                        style={{ backgroundColor: tag.color, "--tw-ring-color": tag.color + "40" }}
+                      />
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{tag.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setEditingTag({ _id: tag._id, name: tag.name, color: tag.color })}
+                        className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10 transition"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTag(tag._id)}
+                        className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+            {tagsList.length === 0 && (
+              <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6 italic">No tags yet</p>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

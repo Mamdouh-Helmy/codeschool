@@ -1300,8 +1300,8 @@ function Pagination({ pagination, t, isRTL, onPageChange }) {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <p className="text-xs text-SlateBlueText dark:text-darktext order-2 sm:order-1 tabular-nums">
                     {t("groups.pagination.showing")
-                        ?.replace("{start}", start)
-                        ?.replace("{end}", end)
+                        ?.replace("{from}", start)
+                        ?.replace("{to}", end)
                         ?.replace("{total}", total)
                         || `Showing ${start}-${end} of ${total}`}
                 </p>

@@ -4698,6 +4698,7 @@ const ar = {
   "users.pagination.of": "من",
   "users.pagination.users": "يوزر",
   "users.pagination.page": "صفحة",
+  "studentForm.tags": "علامات الطالب",
 };
 
 export default ar;

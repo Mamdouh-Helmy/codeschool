@@ -4583,6 +4583,7 @@ const en = {
   "users.pagination.of": "of",
   "users.pagination.users": "users",
   "users.pagination.page": "Page",
+  "studentForm.tags": "Student Tags",
 };
 
 export default en;

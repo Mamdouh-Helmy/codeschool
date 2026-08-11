@@ -318,6 +318,14 @@ const StudentSchema = new mongoose.Schema(
       currentCourses: [currentCourseSchema],
     },
 
+    // ✅ الوسوم الخاصة بالطالب
+    tags: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Tag",
+      },
+    ],
+
     communicationPreferences: {
       preferredLanguage: { type: String, enum: ["ar", "en"], default: "ar" },
       notificationChannels: notificationChannelsSchema,

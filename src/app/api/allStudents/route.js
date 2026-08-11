@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Student from "../../models/Student";
 import User from "../../models/User";
+import "../../models/Tag"; // ✅ لازم نسجّل الموديل عشان الـ populate يشتغل
 import { generateEnrollmentNumber } from "@/utils/enrollmentGenerator";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
@@ -102,6 +103,7 @@ function formatStudent(student) {
     },
     inGroup:     (student.academicInfo?.groupIds?.length || 0) > 0,
     groupCount:  student.academicInfo?.groupIds?.length || 0,
+    tags:        student.tags || [], // ✅ الوسوم
     metadata:    student.metadata,
     createdAt:   student.metadata?.createdAt,
     authUserId:  student.authUserId,
@@ -127,6 +129,7 @@ export async function GET(req) {
     const source       = searchParams.get("source");
     const creditStatus = searchParams.get("creditStatus");
     const inGroup      = searchParams.get("inGroup"); // "true" | "false" | null
+    const tags         = searchParams.get("tags");    // ✅ CSV من tag IDs
 
     // ── Build query ────────────────────────────────────────────────────────
     const query = { isDeleted: false };
@@ -143,6 +146,14 @@ export async function GET(req) {
         { "academicInfo.groupIds": { $exists: false } },
         { "academicInfo.groupIds": { $size: 0 } },
       ];
+    }
+
+    // ✅ Tags filter
+    if (tags) {
+      const tagIds = tags.split(",").filter(Boolean);
+      if (tagIds.length > 0) {
+        query.tags = { $in: tagIds };
+      }
     }
 
     // Credit status filter
@@ -206,6 +217,7 @@ export async function GET(req) {
         .populate("authUserId",             "name email role")
         .populate("metadata.createdBy",     "name email")
         .populate("enrollmentInfo.referredBy", "personalInfo.fullName enrollmentNumber")
+        .populate("tags") // ✅
         .sort({ "metadata.createdAt": -1 })
         .skip(skip)
         .limit(limit)
