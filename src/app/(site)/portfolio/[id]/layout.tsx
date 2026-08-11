@@ -4,7 +4,6 @@ import { fetchPortfolio } from "@/lib/fetchPortfolio";
 import { PortfolioProvider } from "../../../../../context/PortfolioContext";
 import Header from "../../../../components/Portfolio/public/Header";
 import StairTransition from "../../../../components/Portfolio/public/StairTransition";
-// @ts-expect-error: global CSS import side effect; no local type declaration
 import "./scrollbar.css";
 
 interface LayoutProps {
