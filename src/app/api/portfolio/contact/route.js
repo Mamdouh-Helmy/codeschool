@@ -75,12 +75,12 @@ async function getLogoAttachment() {
   }
 
   // 2) Fallback: fetch the logo over HTTP from the public app URL. This works
-  //    regardless of runtime/hosting, as long as NEXT_PUBLIC_APP_URL is a real,
+  //    regardless of runtime/hosting, as long as NEXT_PUBLIC_API_URL is a real,
   //    publicly reachable domain (not localhost).
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const appUrl = process.env.NEXT_PUBLIC_API_URL;
     if (!appUrl || appUrl.includes("localhost")) {
-      console.warn("⚠️ Skipping logo fetch fallback: NEXT_PUBLIC_APP_URL is missing or local:", appUrl);
+      console.warn("⚠️ Skipping logo fetch fallback: NEXT_PUBLIC_API_URL is missing or local:", appUrl);
       return null;
     }
     const res = await fetch(`${appUrl}/images/logo/logo.png`);
@@ -235,7 +235,7 @@ function emailShell({ headerIcon, headerTitle, headerSubtitle, bodyHtml, accent,
 
 // ---------- Email templates ----------
 function buildOwnerEmail({ user, contactMessage, service, hasLogo }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
   const bodyHtml = `
     <p style="margin:0 0 20px;color:${BRAND.muted};">
@@ -331,7 +331,7 @@ function buildConfirmationEmail({ user, portfolio, contactMessage, hasLogo }) {
 }
 
 function buildAdminEmail({ user, portfolio, contactMessage, service, hasLogo }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
   const senderFullName = `${contactMessage.senderInfo.firstName} ${contactMessage.senderInfo.lastName}`;
 
   const bodyHtml = `
@@ -407,7 +407,7 @@ function getDashboardMessagesPath(role) {
 // وبيراعي الـ role بتاعه عشان يبعتله لينك اللوحة الصح
 async function notifyOwnerViaWhatsapp({ user, portfolio }) {
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
     const messagesPath = getDashboardMessagesPath(user?.role);
     const dashboardLink = `${appUrl}/${messagesPath}`;
 
