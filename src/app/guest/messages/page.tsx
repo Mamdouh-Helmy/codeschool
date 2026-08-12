@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import GuestSidebar from "../GuestSidebar";
-import GuestHeader from "../GuestHeader";
+import GuestHeader from "../Guestheader";
 import {
   Mail,
   Search,

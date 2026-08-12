@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import GuestSidebar from "./GuestSidebar";
-import GuestHeader from "./GuestHeader";
+import GuestHeader from "./Guestheader";
 import {
   Eye,
   FolderKanban,
