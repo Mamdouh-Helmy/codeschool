@@ -7,9 +7,13 @@ import { connectDB } from "@/lib/mongodb";
 import nodemailer from "nodemailer";
 import path from "path";
 import fs from "fs";
+import { sendPortfolioMessage, resolveOwnerPhone } from "../../../services/portfolioNotifications";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_SERVICES = ["web", "uiux", "logo", "seo", ""];
+
+// ✅ نوع القالب اللي بيتبعت لصاحب البورتفوليو على الواتساب لما توصله رسالة جديدة
+const CONTACT_NOTIFICATION_TYPE = "portfolio_contact_form_notification";
 
 // ---------- Mail transporter ----------
 function createTransporter() {
@@ -383,6 +387,56 @@ function buildAdminEmail({ user, portfolio, contactMessage, service, hasLogo }) 
   });
 }
 
+// ---------- Role → dashboard messages path ----------
+// ✅ كل role ليه لوحة تحكم مختلفة، فرابط "رسائلي" بيختلف حسب دور صاحب البورتفوليو
+const ROLE_MESSAGES_PATH = {
+  instructor: "instructor/messages",
+  student: "dashboard/messages",
+  admin: "admin/messages",
+  marketing: "marketing/messages",
+  guest: "guest/messages",
+};
+
+function getDashboardMessagesPath(role) {
+  return ROLE_MESSAGES_PATH[role] || "dashboard/messages";
+}
+
+// ---------- WhatsApp notification to portfolio owner ----------
+// ✅ بيبعت قالب "إشعار رسالة Contact Form" لصاحب البورتفوليو على الواتساب
+// بيراعي جنسه (ذكر/أنثى) ولغته (عربي/إنجليزي) تلقائياً عن طريق sendPortfolioMessage
+// وبيراعي الـ role بتاعه عشان يبعتله لينك اللوحة الصح
+async function notifyOwnerViaWhatsapp({ user, portfolio }) {
+  try {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const messagesPath = getDashboardMessagesPath(user?.role);
+    const dashboardLink = `${appUrl}/${messagesPath}`;
+
+    const phone = await resolveOwnerPhone(user, portfolio);
+    if (!phone) {
+      console.warn("⚠️ [WhatsApp] No phone found for portfolio owner:", user?._id);
+      return { success: false, skipped: true, reason: "no_phone" };
+    }
+
+    const result = await sendPortfolioMessage(
+      CONTACT_NOTIFICATION_TYPE,
+      user,
+      { dashboardLink },
+      phone,
+    );
+
+    if (result.success) {
+      console.log("✅ [WhatsApp] Contact form notification sent to owner:", user?._id);
+    } else {
+      console.warn("⚠️ [WhatsApp] Failed to notify owner:", result.error || result.reason);
+    }
+
+    return result;
+  } catch (error) {
+    console.error("❌ [WhatsApp] Error notifying portfolio owner:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // ---------- Route handler ----------
 export async function POST(req) {
   try {
@@ -401,9 +455,11 @@ export async function POST(req) {
 
     const safeService = VALID_SERVICES.includes(service) ? service : "";
 
+    // ✅ إضافة gender و language عشان رسالة الواتساب تظبط الجنس واللغة صح
+    // و role عشان نحدد لينك لوحة التحكم الصح (instructor/admin/student/marketing/guest)
     const portfolio = await Portfolio.findById(portfolioId).populate(
       "userId",
-      "name email contactEmail profile"
+      "name email contactEmail profile gender language role"
     );
 
     if (!portfolio) {
@@ -511,12 +567,19 @@ export async function POST(req) {
       confirmationSent = confirmationResult.success;
     }
 
+    // ✅ بعت إشعار واتساب لصاحب البورتفوليو — منفصل عن الإيميلات وميبوظش الطلب لو فشل
+    let whatsappSent = false;
+    if (user) {
+      const whatsappResult = await notifyOwnerViaWhatsapp({ user, portfolio });
+      whatsappSent = !!whatsappResult?.success;
+    }
+
     await Portfolio.findByIdAndUpdate(portfolioId, { $inc: { messagesCount: 1 } });
 
     return NextResponse.json({
       success: true,
       message: "Message sent successfully",
-      data: { messageId: contactMessage._id, emailSent, confirmationSent },
+      data: { messageId: contactMessage._id, emailSent, confirmationSent, whatsappSent },
     });
   } catch (error) {
     console.error("❌ Contact form error:", error);
