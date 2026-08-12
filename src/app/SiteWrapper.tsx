@@ -12,6 +12,7 @@ const DASHBOARD_PREFIXES: string[] = [
   "/dashboard",
   "/marketing",
   "/instructor",
+  "/guest",
   "/portfolio/builder",
   "/portfolio/scanner"
 ];

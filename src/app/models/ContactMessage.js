@@ -129,5 +129,13 @@ ContactMessageSchema.statics.getUnreadCount = function (portfolioId) {
   });
 };
 
+// Static method لتعليم كل رسائل البورتفوليو كمقروءة دفعة واحدة
+ContactMessageSchema.statics.markAllAsRead = function (portfolioId) {
+  return this.updateMany(
+    { portfolioId, read: false },
+    { $set: { read: true } }
+  );
+};
+
 export default mongoose.models.ContactMessage ||
   mongoose.model("ContactMessage", ContactMessageSchema);
