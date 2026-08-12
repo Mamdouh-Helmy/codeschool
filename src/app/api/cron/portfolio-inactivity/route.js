@@ -50,9 +50,9 @@ export async function GET(req) {
       continue;
     }
 
-    const portfolioLink = `${process.env.NEXTAUTH_URL}/portfolio/${owner._id}`;
+    // ✅ التصحيح: portfolio._id مش owner._id — عشان الـ route بيدوّر بـ Portfolio.findById
+    const portfolioLink = `${process.env.NEXTAUTH_URL}/portfolio/${portfolio._id}`;
 
-    // ✅ بيدوّر في User → Portfolio.contactInfo → Student تلقائياً
     const phone = await resolveOwnerPhone(owner, portfolio);
 
     const result = await sendPortfolioMessage(

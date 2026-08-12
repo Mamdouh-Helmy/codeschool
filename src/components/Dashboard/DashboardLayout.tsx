@@ -142,6 +142,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           badge: createBadge(t('common.new') || "New"),
         },
         {
+          label: t('dashboard.portfolioBroadcast') || "إعلان البورتفوليو",
+          href: "/admin/portfolio-broadcast",
+          icon: "ion:megaphone-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
+        {
           label: t('nav.schedules') || "Schedules",
           href: "/admin/schedules",
           icon: "ion:time-outline",

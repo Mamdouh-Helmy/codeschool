@@ -4699,6 +4699,7 @@ const ar = {
   "users.pagination.users": "يوزر",
   "users.pagination.page": "صفحة",
   "studentForm.tags": "علامات الطالب",
+  "dashboard.portfolioBroadcast": "بث البورتفوليو",
 };
 
 export default ar;

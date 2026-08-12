@@ -4584,6 +4584,7 @@ const en = {
   "users.pagination.users": "users",
   "users.pagination.page": "Page",
   "studentForm.tags": "Student Tags",
+  "dashboard.portfolioBroadcast": "Portfolio Broadcast",
 };
 
 export default en;
