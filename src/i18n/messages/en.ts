@@ -4585,6 +4585,8 @@ const en = {
   "users.pagination.page": "Page",
   "studentForm.tags": "Student Tags",
   "dashboard.portfolioBroadcast": "Portfolio Broadcast",
+  "studentForm.noTags": "No tags",
+  "dashboard.portfolioInactivity": "Portfolio inactivity",
 };
 
 export default en;

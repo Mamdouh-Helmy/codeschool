@@ -4700,6 +4700,8 @@ const ar = {
   "users.pagination.page": "صفحة",
   "studentForm.tags": "علامات الطالب",
   "dashboard.portfolioBroadcast": "بث البورتفوليو",
+  "studentForm.noTags": "لا توجد علامات",
+  "dashboard.portfolioInactivity": "عدم نشاط الملف الشخصي",
 };
 
 export default ar;
