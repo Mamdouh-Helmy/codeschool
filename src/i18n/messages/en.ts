@@ -4587,6 +4587,7 @@ const en = {
   "dashboard.portfolioBroadcast": "Portfolio Broadcast",
   "studentForm.noTags": "No tags",
   "dashboard.portfolioInactivity": "Portfolio inactivity",
+  "dashboard.sectionGuestPopup": "Guest Section Popup",
 };
 
 export default en;

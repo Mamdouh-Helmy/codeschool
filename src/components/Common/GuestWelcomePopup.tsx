@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -11,7 +11,18 @@ interface GuestWelcomePopupProps {
   onClose: () => void;
 }
 
-/* ── Motion choreography: the mini card "fills itself in" ────────── */
+interface GuestPopupContent {
+  titleAr: string; titleAccentAr: string; subtitle1Ar: string; subtitle2Ar: string;
+  point1TitleAr: string; point1Ar: string; point2TitleAr: string; point2Ar: string;
+  ctaAr: string; buttonAr: string; tag1Ar: string; tag2Ar: string; tag3Ar: string; liveAr: string;
+  titleEn: string; titleAccentEn: string; subtitle1En: string; subtitle2En: string;
+  point1TitleEn: string; point1En: string; point2TitleEn: string; point2En: string;
+  ctaEn: string; buttonEn: string; tag1En: string; tag2En: string; tag3En: string; liveEn: string;
+  buttonLink: string;
+  stampLogoUrl?: string;
+  isActive: boolean;
+}
+
 const cardStage: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.13, delayChildren: 0.35 } },
@@ -32,57 +43,65 @@ const GuestWelcomePopup: React.FC<GuestWelcomePopupProps> = ({ isOpen, onClose }
   const direction = isRTL ? "rtl" : "ltr";
   const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
 
-  const content = {
-    ar: {
-      title: "شوف ملفك وهو",
-      titleAccent: "بيتوثّق",
-      subtitle1:
-        "يسعدنا الانضمام للأسبقين في تأسيس الـ Personal Portfolio الخاص بك.",
-      subtitle2:
-        "منصة مصممة خصيصًا لتعكس خبراتك وتبرز مهاراتك بشكل احترافي، يسهل مشاركتها مع شبكة علاقاتك أو جهات عمل مستقبلية.",
-      point1Title: "مسار مهني منظم",
-      point1: "قدّم نفسك بشكل معتمد وموثوق في مجالك.",
-      point2Title: "أدوات عرض ذكية",
-      point2: "أبرز إنجازاتك بأفضل صورة ممكنة.",
-      cta: "ابدأ في إضافة بياناتك وتحديث مسارك المهني",
-      button: "ابدأ بناء ملفك الشخصي",
-      tag1: "مهارة",
-      tag2: "مهارة",
-      tag3: "+٥",
-      live: "موثّق",
-    },
-    en: {
-      title: "Watch your profile",
-      titleAccent: "get verified",
-      subtitle1:
-        "We're excited to have you among the first to build your Personal Portfolio.",
-      subtitle2:
-        "A platform designed to reflect your experience and highlight your skills professionally — easy to share with your network or future employers.",
-      point1Title: "A career, organized",
-      point1: "Present yourself as a credible, verified expert in your field.",
-      point2Title: "Smart showcase tools",
-      point2: "Highlight your achievements in the best possible light.",
-      cta: "Start adding your info and updating your career path.",
-      button: "Build My Portfolio",
-      tag1: "Skill",
-      tag2: "Skill",
-      tag3: "+5",
-      live: "Verified",
-    },
-  };
+  const [content, setContent] = useState<GuestPopupContent | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const t = isRTL ? content.ar : content.en;
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchContent = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/section-guest-popup?activeOnly=true");
+        const json = await res.json();
+
+        if (json.success && json.data) {
+          setContent(json.data);
+        } else {
+          setContent(null);
+          onClose();
+        }
+      } catch (error) {
+        console.error("Error fetching guest popup data:", error);
+        setContent(null);
+        onClose();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContent();
+  }, [isOpen, onClose]);
+
+  if (!isOpen || loading || !content) return null;
+
+  const s = isRTL ? "Ar" : "En";
+  const t = {
+    title:       content[`title${s}` as keyof GuestPopupContent] as string,
+    titleAccent: content[`titleAccent${s}` as keyof GuestPopupContent] as string,
+    subtitle1:   content[`subtitle1${s}` as keyof GuestPopupContent] as string,
+    subtitle2:   content[`subtitle2${s}` as keyof GuestPopupContent] as string,
+    point1Title: content[`point1Title${s}` as keyof GuestPopupContent] as string,
+    point1:      content[`point1${s}` as keyof GuestPopupContent] as string,
+    point2Title: content[`point2Title${s}` as keyof GuestPopupContent] as string,
+    point2:      content[`point2${s}` as keyof GuestPopupContent] as string,
+    cta:         content[`cta${s}` as keyof GuestPopupContent] as string,
+    button:      content[`button${s}` as keyof GuestPopupContent] as string,
+    tag1:        content[`tag1${s}` as keyof GuestPopupContent] as string,
+    tag2:        content[`tag2${s}` as keyof GuestPopupContent] as string,
+    tag3:        content[`tag3${s}` as keyof GuestPopupContent] as string,
+    live:        content[`live${s}` as keyof GuestPopupContent] as string,
+  };
 
   const handleStart = () => {
     onClose();
-    router.push("/portfolio/builder");
+    router.push(content.buttonLink || "/portfolio/builder");
   };
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             key="guest-popup-backdrop"
             initial={{ opacity: 0 }}
@@ -92,7 +111,6 @@ const GuestWelcomePopup: React.FC<GuestWelcomePopupProps> = ({ isOpen, onClose }
             onClick={onClose}
           />
 
-          {/* Popup wrapper */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 pointer-events-none">
             <motion.div
               key="guest-popup-content"
@@ -104,15 +122,12 @@ const GuestWelcomePopup: React.FC<GuestWelcomePopupProps> = ({ isOpen, onClose }
               className="relative w-full max-w-lg pointer-events-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Soft ambient wash behind the card — kept to one place, no scatter */}
               <div
                 className="absolute -inset-8 -z-10 bg-brand-warm opacity-30 dark:opacity-20 blur-3xl rounded-full pointer-events-none"
                 aria-hidden="true"
               />
 
-              {/* Card */}
               <div className="w-full max-h-[95vh] overflow-y-auto bg-white dark:bg-darklight rounded-2xl sm:rounded-3xl shadow-brand-lg border border-white/60 dark:border-dark_border">
-                {/* Close button */}
                 <button
                   onClick={onClose}
                   aria-label={isRTL ? "إغلاق" : "Close"}
@@ -211,18 +226,32 @@ const GuestWelcomePopup: React.FC<GuestWelcomePopupProps> = ({ isOpen, onClose }
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white dark:bg-darkmode flex items-center justify-center overflow-hidden shadow-sm">
-                          <div className="relative w-6 h-6 sm:w-7 sm:h-7 dark:hidden">
-                            <Image src="/images/logo/logo.png" alt="Code School" fill className="object-contain" sizes="28px" />
-                          </div>
-                          <div className="relative w-6 h-6 sm:w-7 sm:h-7 hidden dark:block">
+                          {content.stampLogoUrl ? (
+                            /* ✅ لوجو مخصص مرفوع من الأدمن — نفس الصورة في اللايت والدارك */
                             <Image
-                              src="/images/logo/footer-logo-white.png"
+                              src={content.stampLogoUrl}
                               alt="Code School"
                               fill
-                              className="object-contain"
+                              className="object-contain p-1"
                               sizes="28px"
                             />
-                          </div>
+                          ) : (
+                            /* ── fallback: اللوجو الافتراضي حسب وضع اللايت/الدارك ── */
+                            <>
+                              <div className="relative w-6 h-6 sm:w-7 sm:h-7 dark:hidden">
+                                <Image src="/images/logo/logo.png" alt="Code School" fill className="object-contain" sizes="28px" />
+                              </div>
+                              <div className="relative w-6 h-6 sm:w-7 sm:h-7 hidden dark:block">
+                                <Image
+                                  src="/images/logo/footer-logo-white.png"
+                                  alt="Code School"
+                                  fill
+                                  className="object-contain"
+                                  sizes="28px"
+                                />
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </motion.div>

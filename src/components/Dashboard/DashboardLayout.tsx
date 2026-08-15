@@ -99,6 +99,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           icon: "ion:images-outline",
           badge: createBadge(t('common.new') || "New"),
         },
+        {
+          label: t('dashboard.sectionGuestPopup') || "Guest Popup",
+          href: "/admin/sectionGuestPopup",
+          icon: "ion:sparkles-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
       ]
     },
     {

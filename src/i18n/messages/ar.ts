@@ -4702,6 +4702,7 @@ const ar = {
   "dashboard.portfolioBroadcast": "بث البورتفوليو",
   "studentForm.noTags": "لا توجد علامات",
   "dashboard.portfolioInactivity": "عدم نشاط الملف الشخصي",
+  "dashboard.sectionGuestPopup": "نافذة الضيوف المنبثقة",
 };
 
 export default ar;
