@@ -19,9 +19,13 @@ interface GuestPopupContent {
   point1TitleEn: string; point1En: string; point2TitleEn: string; point2En: string;
   ctaEn: string; buttonEn: string; tag1En: string; tag2En: string; tag3En: string; liveEn: string;
   buttonLink: string;
-  stampLogoUrl?: string;
+  stampLogoUrlLight?: string;
+  stampLogoUrlDark?: string;
   isActive: boolean;
 }
+
+const DEFAULT_LOGO_LIGHT = "/images/logo/logo.png";
+const DEFAULT_LOGO_DARK  = "/images/logo/footer-logo-white.png";
 
 const cardStage: Variants = {
   hidden: {},
@@ -92,6 +96,9 @@ const GuestWelcomePopup: React.FC<GuestWelcomePopupProps> = ({ isOpen, onClose }
     tag3:        content[`tag3${s}` as keyof GuestPopupContent] as string,
     live:        content[`live${s}` as keyof GuestPopupContent] as string,
   };
+
+  const stampLight = content.stampLogoUrlLight || DEFAULT_LOGO_LIGHT;
+  const stampDark  = content.stampLogoUrlDark  || DEFAULT_LOGO_DARK;
 
   const handleStart = () => {
     onClose();
@@ -226,32 +233,14 @@ const GuestWelcomePopup: React.FC<GuestWelcomePopupProps> = ({ isOpen, onClose }
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white dark:bg-darkmode flex items-center justify-center overflow-hidden shadow-sm">
-                          {content.stampLogoUrl ? (
-                            /* ✅ لوجو مخصص مرفوع من الأدمن — نفس الصورة في اللايت والدارك */
-                            <Image
-                              src={content.stampLogoUrl}
-                              alt="Code School"
-                              fill
-                              className="object-contain p-1"
-                              sizes="28px"
-                            />
-                          ) : (
-                            /* ── fallback: اللوجو الافتراضي حسب وضع اللايت/الدارك ── */
-                            <>
-                              <div className="relative w-6 h-6 sm:w-7 sm:h-7 dark:hidden">
-                                <Image src="/images/logo/logo.png" alt="Code School" fill className="object-contain" sizes="28px" />
-                              </div>
-                              <div className="relative w-6 h-6 sm:w-7 sm:h-7 hidden dark:block">
-                                <Image
-                                  src="/images/logo/footer-logo-white.png"
-                                  alt="Code School"
-                                  fill
-                                  className="object-contain"
-                                  sizes="28px"
-                                />
-                              </div>
-                            </>
-                          )}
+                          {/* ✅ صورة اللايت — تظهر بس في اللايت مود */}
+                          <div className="relative w-6 h-6 sm:w-7 sm:h-7 dark:hidden">
+                            <Image src={stampLight} alt="Code School" fill className="object-contain" sizes="28px" />
+                          </div>
+                          {/* ✅ صورة الدارك — تظهر بس في الدارك مود */}
+                          <div className="relative w-6 h-6 sm:w-7 sm:h-7 hidden dark:block">
+                            <Image src={stampDark} alt="Code School" fill className="object-contain" sizes="28px" />
+                          </div>
                         </div>
                       </div>
                     </motion.div>

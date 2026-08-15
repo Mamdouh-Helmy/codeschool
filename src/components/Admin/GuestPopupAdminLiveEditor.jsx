@@ -41,7 +41,11 @@ const DEFAULT = {
   tag1En: "Skill", tag2En: "Skill", tag3En: "+5", liveEn: "Verified",
 
   buttonLink: "/portfolio/builder",
-  stampLogoUrl: "",
+
+  // ✅ صورتان مستقلتان لكل وضع
+  stampLogoUrlLight: "",
+  stampLogoUrlDark: "",
+
   isActive: true,
 };
 
@@ -83,14 +87,12 @@ function Editable({ fieldKey, value, onChange, tag: Tag = "span", multiline = fa
   const [foc, setFoc] = useState(false);
 
   useEffect(() => {
-    // ✅ حدّث الـ DOM لو المستخدم مش بيكتب دلوقتي، ولو القيمة الجديدة
-    // مختلفة عن آخر قيمة اتعرضت (سواء بسبب تغيير fieldKey أو وصول داتا من الـ API)
     if (ref.current && !isFocused.current && value !== lastSaved.current) {
       ref.current.innerText = value ?? "";
       lastSaved.current = value;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fieldKey, value]); // ✅ الإصلاح: بنراقب value كمان مش fieldKey لوحده
+  }, [fieldKey, value]);
 
   const onFocus = () => { isFocused.current = true; setFoc(true); };
   const onBlur  = () => {
@@ -157,6 +159,10 @@ function GuestPopupTemplate({ data, lang, dark, set, uploadStampLogo, uploadingS
   const subClr   = dark ? C.darktext : C.SlateBlue;
   const cardBg   = dark ? "#0d1a2c" : "#fff";
 
+  // ✅ الحقل الصح حسب الوضع الحالي (لايت/دارك)
+  const stampField = dark ? "stampLogoUrlDark" : "stampLogoUrlLight";
+  const stampUrl    = data[stampField];
+
   return (
     <div dir={isRTL ? "rtl" : "ltr"} style={{ width:"100%", maxWidth:520, margin:"0 auto", borderRadius:22, overflow:"hidden", boxShadow: dark ? "0 24px 64px rgba(0,0,0,.5)" : "0 24px 64px rgba(0,0,0,.14)", background: cardBg }}>
 
@@ -195,8 +201,8 @@ function GuestPopupTemplate({ data, lang, dark, set, uploadStampLogo, uploadingS
             </svg>
             <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
               <EditableImage
-                src={data.stampLogoUrl}
-                alt="Stamp Logo"
+                src={stampUrl}
+                alt={`Stamp Logo (${dark ? "Dark" : "Light"})`}
                 uploading={uploadingStamp}
                 onUpload={uploadStampLogo}
                 style={{ width:30, height:30, borderRadius:"50%", background: dark ? C.darkmode : "#fff", boxShadow:"0 2px 6px rgba(0,0,0,.15)", overflow:"hidden" }}
@@ -270,7 +276,7 @@ export default function GuestPopupAdminLiveEditor() {
           setData({ ...DEFAULT, ...json.data });
         }
       } catch {
-        // يبقى DEFAULT عند الفشل
+        // يفضل DEFAULT عند الفشل
       }
     };
     load();
@@ -283,7 +289,7 @@ export default function GuestPopupAdminLiveEditor() {
     setTimeout(() => setToast(null), 3200);
   };
 
-  /* ── رفع صورة الـ stamp ── */
+  /* ── رفع صورة الـ stamp — بترفع للحقل الخاص بالوضع الحالي فقط ── */
   const uploadStampLogo = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -293,29 +299,27 @@ export default function GuestPopupAdminLiveEditor() {
       return;
     }
 
+    const targetField = dark ? "stampLogoUrlDark" : "stampLogoUrlLight";
+
     setUploadingStamp(true);
     try {
-      // ── ضغط الصورة أولاً ──
       const compressedDataUrl = await compressImage(file, 400, 0.85);
-
-      // ── تحويل الـ data URL المضغوط لـ Blob ثم File ──
       const blob = await (await fetch(compressedDataUrl)).blob();
       const compressedFile = new File([blob], file.name, { type: blob.type });
 
-      // ── بناء FormData زي ما الـ API الحقيقي محتاج ──
       const formData = new FormData();
       formData.append("file", compressedFile);
       formData.append("folder", "section-guest-popup");
 
       const res  = await fetch("/api/upload-image", {
         method: "POST",
-        body: formData, // ⚠️ من غير Content-Type — المتصفح بيحطه لوحده مع الـ boundary
+        body: formData,
       });
       const json = await res.json();
 
       if (json.success) {
-        set("stampLogoUrl", json.imageUrl);
-        notify("✓ تم رفع الصورة بنجاح");
+        set(targetField, json.imageUrl);
+        notify(`✓ تم رفع صورة وضع الـ ${dark ? "Dark" : "Light"} بنجاح`);
       } else {
         notify(json.message || "فشل رفع الصورة", "err");
       }
@@ -329,7 +333,7 @@ export default function GuestPopupAdminLiveEditor() {
   };
 
   const save = async () => {
-    if (data.stampLogoUrl?.startsWith("data:")) {
+    if (data.stampLogoUrlLight?.startsWith("data:") || data.stampLogoUrlDark?.startsWith("data:")) {
       notify("صورة الـ Stamp لم تُرفع بعد — انتظر اكتمال الرفع", "err");
       return;
     }
@@ -428,6 +432,10 @@ export default function GuestPopupAdminLiveEditor() {
           ✏️ {pLang==="ar" ? "انقر على أي نص أو صورة للتحرير" : "Click any text or image to edit"}
         </div>
 
+        <div style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 12px", background: dark ? "rgba(250,180,70,0.09)" : "rgba(15,118,110,0.09)", border:`0.5px solid ${dark ? "rgba(250,180,70,0.35)" : "rgba(15,118,110,0.35)"}`, borderRadius:8, fontSize:11, fontWeight:600, color: dark ? C.amber : C.teal, whiteSpace:"nowrap" }}>
+          🖼️ {pLang==="ar" ? `صورة الـ Stamp الحالية: ${dark ? "Dark" : "Light"}` : `Editing stamp for: ${dark ? "Dark" : "Light"}`}
+        </div>
+
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:6, fontSize:11, fontWeight:500, color:mutedClr }}>
           <span style={{ width:7, height:7, borderRadius:"50%", background:"#ef4444", display:"inline-block", animation:"blink 1.4s infinite" }}/>
           Live Preview
@@ -476,8 +484,8 @@ export default function GuestPopupAdminLiveEditor() {
           <div style={{ marginTop:12, padding:"12px 18px", background:sidebarBg, borderRadius:10, border:`0.5px solid ${borderClr}`, display:"flex", gap:10, alignItems:"center" }}>
             <span style={{ fontSize:16 }}>💡</span>
             <span style={{ fontSize:11, color:mutedClr, lineHeight:1.7 }}>
-              سجل واحد يحتوي على كل البيانات عربي + إنجليزي. انقر على دائرة الـ stamp لرفع لوجو مخصص — لو مفيش صورة هيرجع للّوجو الافتراضي حسب وضع اللايت/الدارك في الموقع الفعلي.
-              {" "}<b style={{color:C.primary}}>حفظ التغييرات</b> يرسل للـ API مباشرة.
+              فعّل زرار <b style={{color:C.primary}}>Dark/Light</b> فوق عشان تختار الوضع اللي عايز ترفعله صورة الـ Stamp — كل وضع بياخد صورته الخاصة وبيتحفظ لوحده.
+              لو مفيش صورة مرفوعة لوضع معيّن هيظهر أيقونة ⚡ افتراضية بدلاً منه. <b style={{color:C.primary}}>حفظ التغييرات</b> يرسل الاتنين للـ API مع بعض.
             </span>
           </div>
         </div>
