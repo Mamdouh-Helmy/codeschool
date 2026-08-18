@@ -1,19 +1,23 @@
 import { NextResponse } from "next/server";
-import puppeteer from "puppeteer";
 import fs from "fs-extra";
 import path from "path";
 import { buildCertificateHtml } from "../../../../../utils/certificateHtml";
+import { getBrowser } from "../../../../../utils/browserPool";
 
 // ============================================================
 // POST /api/admin/certificates/preview
 //
 // بتولد صورة شهادة تجريبية (test) بنفس تصميم CertificateTemplate — لكن من
-// غير React/ReactDOMServer (مينفعش تتستخدم جوه Route Handler، راجع
-// utils/certificateHtml.js للتفاصيل). من غير ما تحفظ أي حاجة على أي طالب،
-// وبترجع رابط الصورة عشان تتعرض في صفحة الأدمن للمعاينة.
+// غير React/ReactDOMServer. من غير ما تحفظ أي حاجة على أي طالب، وبترجع
+// رابط الصورة عشان تتعرض في صفحة الأدمن للمعاينة.
+//
+// ✅ تحديث: بيستخدم browser instance واحد مشترك (browserPool) بدل ما يفتح
+// ويقفل Chrome في كل request — أسرع بكتير وأقل استهلاك للموارد.
+// ✅ تحديث: الصور بقت base64 جوه الـ HTML نفسه (راجع certificateHtml.js)
+// فمفيش استنى لطلبات شبكة، فاستخدمنا "load" بدل "networkidle0".
 // ============================================================
 export async function POST(request) {
-  let browser = null;
+  let page = null;
 
   try {
     const body = await request.json();
@@ -38,8 +42,6 @@ export async function POST(request) {
       achievements = ["Successfully completed all module requirements."];
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-
     const fullHtml = buildCertificateHtml({
       studentName,
       moduleTitle,
@@ -47,18 +49,29 @@ export async function POST(request) {
       date: date || new Date().toLocaleDateString("en-GB"),
       achievements,
       backgroundStyle: background,
-      baseUrl,
     });
 
-    browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
-    const page = await browser.newPage();
-    await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+    const browser = await getBrowser();
+    page = await browser.newPage();
+
+    // ✅ Logging مفيد لو أي مشكلة رجعت تاني — بيتشال بسهولة لو مش محتاجه
+    page.on("requestfailed", (req) => {
+      console.log("❌ [certificate] REQUEST FAILED:", req.url(), "-", req.failure()?.errorText);
+    });
+    page.on("pageerror", (err) => {
+      console.log("💥 [certificate] PAGE ERROR:", err.message);
+    });
+
+    await page.setViewport({ width: 1200, height: 900 });
+
+    // ✅ "load" كفاية دلوقتي لأن مفيش صور/خطوط خارجية بتتحمل بالشبكة —
+    // كل حاجة base64 جوه الـ HTML نفسه أو خطوط النظام.
+    await page.setContent(fullHtml, { waitUntil: "load", timeout: 30000 });
 
     const fileName = `preview-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`;
     const filePath = path.join(process.cwd(), "public", "temp", fileName);
     await fs.ensureDir(path.dirname(filePath));
     await page.screenshot({ path: filePath, fullPage: true });
-    await page.close();
 
     return NextResponse.json({ success: true, imageUrl: `/temp/${fileName}` });
   } catch (error) {
@@ -68,6 +81,6 @@ export async function POST(request) {
       { status: 500 }
     );
   } finally {
-    if (browser) await browser.close();
+    if (page) await page.close();
   }
 }

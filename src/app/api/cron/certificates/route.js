@@ -4,10 +4,10 @@ import Student from "../../../models/Student";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
 import { wapilotService } from "../../../services/wapilot-service";
-import puppeteer from "puppeteer";
 import fs from "fs-extra";
 import path from "path";
 import { buildCertificateHtml } from "../../../../utils/certificateHtml";
+import { getBrowser } from "../../../../utils/browserPool";
 
 // ============================================================
 // ✅ حماية زي portfolio-inactivity بالظبط: لازم يبقى معاه CRON_SECRET
@@ -26,9 +26,14 @@ function isAuthorizedRequest(req, searchParams) {
 // ============================================================
 // ✅ توليد صورة الشهادة — بدون React/react-dom/server (متوافق مع
 // Route Handlers). راجع src/app/utils/certificateHtml.js للتفاصيل.
+//
+// ✅ تحديث: بيستخدم browser instance مشترك (browserPool) بدل ما يفتح
+// Chrome process جديدة كل مرة، وبيقرأ الصور كـ base64 مباشرة (مفيش
+// baseUrl لتحميل صور الشهادة نفسها — baseUrl لسه مستخدم بعد كده بس
+// لبناء رابط الصورة النهائي اللي بيتبعت على واتساب).
 // ============================================================
 async function generateCertificateImage(browser, data) {
-  const { studentName, moduleTitle, achievements, signature, background, date, baseUrl } = data;
+  const { studentName, moduleTitle, achievements, signature, background, date } = data;
 
   const fullHtml = buildCertificateHtml({
     studentName,
@@ -37,12 +42,12 @@ async function generateCertificateImage(browser, data) {
     date,
     achievements,
     backgroundStyle: background,
-    baseUrl,
   });
 
   const page = await browser.newPage();
   try {
-    await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+    await page.setViewport({ width: 1200, height: 900 });
+    await page.setContent(fullHtml, { waitUntil: "load", timeout: 30000 });
 
     const fileName = `cert-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`;
     const filePath = path.join(process.cwd(), "public", "temp", fileName);
@@ -60,8 +65,6 @@ export async function GET(request) {
   if (!isAuthorizedRequest(request, searchParams)) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
-
-  let browser = null;
 
   try {
     await connectDB();
@@ -143,9 +146,7 @@ export async function GET(request) {
               ? module.lessons.map((l) => l.title)
               : ["Successfully completed all module requirements."];
 
-            if (!browser) {
-              browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
-            }
+            const browser = await getBrowser();
 
             const imagePath = await generateCertificateImage(browser, {
               studentName: student.personalInfo.fullName,
@@ -154,7 +155,6 @@ export async function GET(request) {
               signature: module.certificateSignatureName || "Aya Elnagar",
               background: module.certificateBackground || "navy-orange",
               date: new Date().toLocaleDateString("en-GB"),
-              baseUrl,
             });
 
             summary.generated++;
@@ -260,9 +260,5 @@ export async function GET(request) {
   } catch (error) {
     console.error("❌ Cron Job Error:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
   }
 }

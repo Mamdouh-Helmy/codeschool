@@ -3,15 +3,20 @@
 // ✅ نفس تصميم CertificateTemplate.jsx بالظبط، لكن كـ HTML string عادي من
 // غير React/ReactDOMServer. السبب: Route Handlers (app/api/.../route.js)
 // شغالة على طبقة "react-server"، ومينفعش تستورد فيها كومبوننت عليه
-// "use client" وتستخدم react-dom/server في نفس الوقت — Next.js بيرفض
-// الـ build برسالة:
-//   "You're importing a component that imports react-dom/server..."
+// "use client" وتستخدم react-dom/server في نفس الوقت.
 //
-// الحل: بما إن الاستخدام هنا هو توليد صورة عن طريق puppeteer فقط (مفيش
-// تفاعل ولا React state)، مفيش داعي لـ React أصلاً — بنبني الـ HTML مباشرة.
+// ✅ تحديث مهم: الصور دلوقتي بتتقرأ مباشرة من الـ filesystem وتتحول
+// لـ base64 (data URI) بدل ما تتطلب بـ HTTP request. السبب: على السيرفر،
+// Puppeteer كان بيحاول يطلب الصور عن طريق الدومين العام (baseUrl) حتى لو
+// كانت الصور على نفس السيرفر، وده كان بيسبب مشاكل توقف/تعليق (hairpin NAT /
+// شبكة). بقراءة الصور محليًا، بنضمن إن توليد الشهادة ميعتمدش على الشبكة
+// خالص لجزء الصور، وبيبقى أسرع وأكثر استقرارًا.
 //
 // لو غيّرت تصميم CertificateTemplate.jsx (الكومبوننت اللي بتتعرض في
 // المتصفح)، لازم تحدّث الدالة دي هنا كمان عشان يفضلوا متطابقين.
+
+import fs from "fs";
+import path from "path";
 
 const BACKGROUND_THEMES = {
   "navy-orange": { outerBg: "#0d2b3e", accentColor: "#ff6a00", stripeColor: "#123a52" },
@@ -21,6 +26,36 @@ const BACKGROUND_THEMES = {
   "teal-gold": { outerBg: "#0f6b6b", accentColor: "#d4a017", stripeColor: "#0c5757" },
   "navy-gold": { outerBg: "#0d2b3e", accentColor: "#d4a017", stripeColor: "#123a52" },
 };
+
+const MIME_TYPES = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+};
+
+// ✅ Cache في الميموري عشان منقراش نفس الملف من الديسك في كل طلب —
+// الصور دي ثابتة (badge, logo, partners) فمفيش داعي نعيد القراءة كل مرة.
+const imageDataUriCache = {};
+
+function imageToDataUri(imageName) {
+  if (imageDataUriCache[imageName]) return imageDataUriCache[imageName];
+
+  try {
+    const filePath = path.join(process.cwd(), "public", "images", imageName);
+    const ext = path.extname(imageName).toLowerCase();
+    const mime = MIME_TYPES[ext] || "image/png";
+    const fileBuffer = fs.readFileSync(filePath);
+    const dataUri = `data:${mime};base64,${fileBuffer.toString("base64")}`;
+    imageDataUriCache[imageName] = dataUri;
+    return dataUri;
+  } catch (err) {
+    console.error(`⚠️ Could not read image for certificate: ${imageName}`, err.message);
+    // بنرجع string فاضي بدل ما نكسر توليد الشهادة بالكامل بسبب صورة واحدة ناقصة
+    return "";
+  }
+}
 
 function escapeHtml(str = "") {
   return String(str)
@@ -38,7 +73,6 @@ function escapeHtml(str = "") {
  * @param {string} data.date
  * @param {string[]} data.achievements
  * @param {string} data.backgroundStyle
- * @param {string} [data.baseUrl] - عشان الصور (badge.png, code-logo.png...) تتحل صح جوه puppeteer
  * @returns {string} full HTML document ready for page.setContent()
  */
 export function buildCertificateHtml({
@@ -50,11 +84,8 @@ export function buildCertificateHtml({
     "Successfully completed all module requirements.",
   ],
   backgroundStyle = "navy-orange",
-  baseUrl = "",
 } = {}) {
   const theme = BACKGROUND_THEMES[backgroundStyle] || BACKGROUND_THEMES["navy-orange"];
-
-  const img = (name) => `${baseUrl}/images/${name}`;
 
   const achievementsHtml = achievements
     .map(
@@ -71,8 +102,7 @@ export function buildCertificateHtml({
 <head>
   <meta charset="utf-8" />
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,900;1,400&display=swap');
-    body { margin: 0; padding: 0; }
+    body { margin: 0; padding: 0; font-family: 'Georgia', 'Times New Roman', serif; }
   </style>
 </head>
 <body>
@@ -82,7 +112,7 @@ export function buildCertificateHtml({
       padding:45px;
       position:relative;
       box-sizing:border-box;
-      font-family:'Georgia','Playfair Display',serif;
+      font-family:'Georgia',serif;
       margin:0 auto;
       overflow:hidden;
     ">
@@ -107,11 +137,11 @@ export function buildCertificateHtml({
         box-sizing:border-box;
       ">
       <div style="position:absolute;top:-30px;left:10px;z-index:10;">
-        <img src="${img("badge.png")}" alt="Badge" style="width:290px;" />
+        <img src="${imageToDataUri("badge.png")}" alt="Badge" style="width:290px;" />
       </div>
 
       <div style="margin-top:20px;">
-        <img src="${img("code-logo.png")}" alt="Code School" style="width:350px;" />
+        <img src="${imageToDataUri("code-logo.png")}" alt="Code School" style="width:350px;" />
       </div>
 
       <div style="text-align:center;">
@@ -124,7 +154,7 @@ export function buildCertificateHtml({
             color:#0d2b3e;
             margin:0;
             letter-spacing:4px;
-            font-family:'Playfair Display',serif;
+            font-family:'Georgia',serif;
             font-variant:small-caps;
             margin-bottom:40px;
           ">
@@ -140,13 +170,13 @@ export function buildCertificateHtml({
           color:${theme.accentColor};
           font-weight:bold;
           margin:22px 0;
-          font-family:'Playfair Display',serif;
+          font-family:'Georgia',serif;
         ">
         ${escapeHtml(studentName)}
       </h2>
 
       <div style="text-align:center;padding:0 30px;width:100%;color:#0d2b3e;">
-        <div style="display:inline-block;text-align:center;font-family:'Cormorant Garamond','Playfair Display',serif;">
+        <div style="display:inline-block;text-align:center;font-family:'Georgia',serif;">
           <p style="font-size:26px;margin:12px 0;">
             You have successfully completed <strong>${escapeHtml(moduleTitle)}</strong>
           </p>
@@ -164,10 +194,10 @@ export function buildCertificateHtml({
       </div>
 
       <div style="display:flex;justify-content:center;align-items:center;margin-top:35px;">
-        <img src="${img("stem.png")}" alt="STEM" style="width:130px;" />
-        <img src="${img("iAIDL.png")}" alt="iAIDL" style="width:130px;" />
-        <img src="${img("finland.png")}" alt="Finland" style="width:130px;" />
-        <img src="${img("kidsafe.png")}" alt="KidSAFE" style="width:130px;" />
+        <img src="${imageToDataUri("stem.png")}" alt="STEM" style="width:130px;" />
+        <img src="${imageToDataUri("iAIDL.png")}" alt="iAIDL" style="width:130px;" />
+        <img src="${imageToDataUri("finland.png")}" alt="Finland" style="width:130px;" />
+        <img src="${imageToDataUri("kidsafe.png")}" alt="KidSAFE" style="width:130px;" />
       </div>
 
       <div style="display:flex;justify-content:space-between;width:82%;margin-top:40px;color:#0d2b3e;">
@@ -178,10 +208,11 @@ export function buildCertificateHtml({
         <div style="text-align:center;padding-right:20px;">
           <p style="
               font-size:56px;
-              font-family:'Alex Brush','Dancing Script','Great Vibes',cursive;
+              font-family:'Georgia',cursive;
               color:#0d2b3e;
               margin:0 0 6px;
               font-weight:normal;
+              font-style:italic;
             ">
             ${escapeHtml(signatureName)}
           </p>
