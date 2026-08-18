@@ -8,7 +8,7 @@ import fs from "fs-extra";
 import path from "path";
 import { buildCertificateHtml } from "../../../../utils/certificateHtml";
 import { getBrowser } from "../../../../utils/browserPool";
-import { GENERATED_DIR } from "../../temp-image/[filename]/route";
+import { GENERATED_DIR } from "../../../../utils/generatedFilesPaths";
 
 // ============================================================
 // ✅ حماية زي portfolio-inactivity بالظبط: لازم يبقى معاه CRON_SECRET

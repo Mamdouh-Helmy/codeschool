@@ -14,9 +14,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-
-// ✅ لازم يبقى نفس المسار المستخدم في preview/route.js و cron/route.js
-export const GENERATED_DIR = "/home/codeschool/generated/temp";
+import { GENERATED_DIR } from "../../../../utils/generatedFilesPaths";
 
 const MIME_TYPES = {
   ".png": "image/png",
