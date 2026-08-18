@@ -38,7 +38,7 @@ export async function POST(request) {
       achievements = ["Successfully completed all module requirements."];
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
     const fullHtml = buildCertificateHtml({
       studentName,

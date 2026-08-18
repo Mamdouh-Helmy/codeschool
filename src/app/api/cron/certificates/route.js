@@ -68,7 +68,7 @@ export async function GET(request) {
     console.log("🚀 Running Certificate Cron Job...");
 
     const students = await Student.find({ isDeleted: false }).lean();
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
     const summary = {
       checked: 0,
