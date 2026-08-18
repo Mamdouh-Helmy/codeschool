@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import puppeteer from "puppeteer";
 import fs from "fs-extra";
 import path from "path";
-import { buildCertificateHtml } from "../../../../../utils/certificateHtml";
+import { buildCertificateHtml } from "../../../../utils/certificateHtml";
 
 // ============================================================
 // POST /api/admin/certificates/preview

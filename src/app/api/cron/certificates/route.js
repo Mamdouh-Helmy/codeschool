@@ -3,42 +3,42 @@ import { connectDB } from "@/lib/mongodb";
 import Student from "../../../models/Student";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
-import Course from "../../../models/Course";
 import { wapilotService } from "../../../services/wapilot-service";
 import puppeteer from "puppeteer";
 import fs from "fs-extra";
 import path from "path";
-import ReactDOMServer from "react-dom/server";
-import React from "react";
-import CertificateTemplate from "../../../../components/CertificateGenerator/CertificateTemplate";
+import { buildCertificateHtml } from "../../../utils/certificateHtml";
 
-async function generateCertificateImage(browser, data) {
-  const { studentName, moduleTitle, achievements, signature, background, date } = data;
-
-  const htmlContent = ReactDOMServer.renderToString(
-    React.createElement(CertificateTemplate, {
-      studentName,
-      moduleTitle,
-      signatureName: signature,
-      date,
-      achievements,
-      backgroundStyle: background,
-    })
+// ============================================================
+// ✅ حماية زي portfolio-inactivity بالظبط: لازم يبقى معاه CRON_SECRET
+// (كـ Authorization: Bearer <secret> أو ?secret=<secret> في الرابط)
+// وإلا يترفض. ده بيمنع أي حد يضرب الرابط من برا ويولد/يبعت شهادات.
+// ============================================================
+function isAuthorizedRequest(req, searchParams) {
+  const authHeader = req.headers.get("authorization");
+  const querySecret = searchParams.get("secret");
+  return (
+    authHeader === `Bearer ${process.env.CRON_SECRET}` ||
+    querySecret === process.env.CRON_SECRET
   );
+}
 
-  const fullHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { margin: 0; padding: 0; }
-      </style>
-    </head>
-    <body>
-      ${htmlContent}
-    </body>
-    </html>
-  `;
+// ============================================================
+// ✅ توليد صورة الشهادة — بدون React/react-dom/server (متوافق مع
+// Route Handlers). راجع src/app/utils/certificateHtml.js للتفاصيل.
+// ============================================================
+async function generateCertificateImage(browser, data) {
+  const { studentName, moduleTitle, achievements, signature, background, date, baseUrl } = data;
+
+  const fullHtml = buildCertificateHtml({
+    studentName,
+    moduleTitle,
+    signatureName: signature,
+    date,
+    achievements,
+    backgroundStyle: background,
+    baseUrl,
+  });
 
   const page = await browser.newPage();
   try {
@@ -56,6 +56,11 @@ async function generateCertificateImage(browser, data) {
 }
 
 export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  if (!isAuthorizedRequest(request, searchParams)) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   let browser = null;
 
   try {
@@ -63,6 +68,7 @@ export async function GET(request) {
     console.log("🚀 Running Certificate Cron Job...");
 
     const students = await Student.find({ isDeleted: false }).lean();
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     const summary = {
       checked: 0,
@@ -148,11 +154,11 @@ export async function GET(request) {
               signature: module.certificateSignatureName || "Aya Elnagar",
               background: module.certificateBackground || "navy-orange",
               date: new Date().toLocaleDateString("en-GB"),
+              baseUrl,
             });
 
             summary.generated++;
 
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
             const fullImageUrl = `${baseUrl}${imagePath}`;
 
             // ✅ اللغة المفضلة بتاعة الطالب — بتحكم في لغة رسالتي الطالب وولي الأمر

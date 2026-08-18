@@ -14,36 +14,12 @@
 // المتصفح)، لازم تحدّث الدالة دي هنا كمان عشان يفضلوا متطابقين.
 
 const BACKGROUND_THEMES = {
-  "navy-orange": {
-    outerBg: "#0d2b3e",
-    accentColor: "#ff6a00",
-    stripeColor: "#123a52",
-  },
-  "blue-orange": {
-    outerBg: "#1c4e80",
-    accentColor: "#ff6a00",
-    stripeColor: "#2a5f94",
-  },
-  "gold-teal": {
-    outerBg: "#d4a017",
-    accentColor: "#0f6b6b",
-    stripeColor: "#c99310",
-  },
-  "orange-teal": {
-    outerBg: "#c9531e",
-    accentColor: "#0f6b6b",
-    stripeColor: "#b3481a",
-  },
-  "teal-gold": {
-    outerBg: "#0f6b6b",
-    accentColor: "#d4a017",
-    stripeColor: "#0c5757",
-  },
-  "navy-gold": {
-    outerBg: "#0d2b3e",
-    accentColor: "#d4a017",
-    stripeColor: "#123a52",
-  },
+  "navy-orange": { outerBg: "#0d2b3e", accentColor: "#ff6a00", stripeColor: "#123a52" },
+  "blue-orange": { outerBg: "#1c4e80", accentColor: "#ff6a00", stripeColor: "#2a5f94" },
+  "gold-teal": { outerBg: "#d4a017", accentColor: "#0f6b6b", stripeColor: "#c99310" },
+  "orange-teal": { outerBg: "#c9531e", accentColor: "#0f6b6b", stripeColor: "#b3481a" },
+  "teal-gold": { outerBg: "#0f6b6b", accentColor: "#d4a017", stripeColor: "#0c5757" },
+  "navy-gold": { outerBg: "#0d2b3e", accentColor: "#d4a017", stripeColor: "#123a52" },
 };
 
 function escapeHtml(str = "") {
@@ -70,12 +46,13 @@ export function buildCertificateHtml({
   moduleTitle = "Grade 5-6 Module 1 Chatbot Dev 1",
   signatureName = "Aya Elnagar",
   date = "15/12/2025",
-  achievements = ["Successfully completed all module requirements."],
+  achievements = [
+    "Successfully completed all module requirements.",
+  ],
   backgroundStyle = "navy-orange",
   baseUrl = "",
 } = {}) {
-  const theme =
-    BACKGROUND_THEMES[backgroundStyle] || BACKGROUND_THEMES["navy-orange"];
+  const theme = BACKGROUND_THEMES[backgroundStyle] || BACKGROUND_THEMES["navy-orange"];
 
   const img = (name) => `${baseUrl}/images/${name}`;
 
@@ -83,8 +60,8 @@ export function buildCertificateHtml({
     .map(
       (item) =>
         `<p style="font-size:23px;margin:12px 0;"><span style="font-weight:bold;">•</span> ${escapeHtml(
-          item,
-        )}</p>`,
+          item
+        )}</p>`
     )
     .join("");
 
