@@ -3,6 +3,7 @@ import fs from "fs-extra";
 import path from "path";
 import { buildCertificateHtml } from "../../../../../utils/certificateHtml";
 import { getBrowser } from "../../../../../utils/browserPool";
+import { GENERATED_DIR } from "../../../temp-image/[filename]/route";
 
 // ============================================================
 // POST /api/admin/certificates/preview
@@ -69,11 +70,11 @@ export async function POST(request) {
     await page.setContent(fullHtml, { waitUntil: "load", timeout: 30000 });
 
     const fileName = `preview-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`;
-    const filePath = path.join(process.cwd(), "public", "temp", fileName);
-    await fs.ensureDir(path.dirname(filePath));
+    const filePath = path.join(GENERATED_DIR, fileName);
+    await fs.ensureDir(GENERATED_DIR);
     await page.screenshot({ path: filePath, fullPage: true });
 
-    return NextResponse.json({ success: true, imageUrl: `/temp/${fileName}` });
+    return NextResponse.json({ success: true, imageUrl: `/api/temp-image/${fileName}` });
   } catch (error) {
     console.error("❌ Error generating certificate preview:", error);
     return NextResponse.json(

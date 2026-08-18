@@ -8,6 +8,7 @@ import fs from "fs-extra";
 import path from "path";
 import { buildCertificateHtml } from "../../../../utils/certificateHtml";
 import { getBrowser } from "../../../../utils/browserPool";
+import { GENERATED_DIR } from "../../temp-image/[filename]/route";
 
 // ============================================================
 // ✅ حماية زي portfolio-inactivity بالظبط: لازم يبقى معاه CRON_SECRET
@@ -50,11 +51,11 @@ async function generateCertificateImage(browser, data) {
     await page.setContent(fullHtml, { waitUntil: "load", timeout: 30000 });
 
     const fileName = `cert-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`;
-    const filePath = path.join(process.cwd(), "public", "temp", fileName);
-    await fs.ensureDir(path.dirname(filePath));
+    const filePath = path.join(GENERATED_DIR, fileName);
+    await fs.ensureDir(GENERATED_DIR);
     await page.screenshot({ path: filePath, fullPage: true });
 
-    return `/temp/${fileName}`;
+    return `/api/temp-image/${fileName}`;
   } finally {
     await page.close();
   }
