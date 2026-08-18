@@ -7,7 +7,7 @@ import { wapilotService } from "../../../services/wapilot-service";
 import puppeteer from "puppeteer";
 import fs from "fs-extra";
 import path from "path";
-import { buildCertificateHtml } from "../../../utils/certificateHtml";
+import { buildCertificateHtml } from "../../../../utils/certificateHtml";
 
 // ============================================================
 // ✅ حماية زي portfolio-inactivity بالظبط: لازم يبقى معاه CRON_SECRET
