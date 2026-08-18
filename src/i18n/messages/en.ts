@@ -4588,6 +4588,10 @@ const en = {
   "studentForm.noTags": "No tags",
   "dashboard.portfolioInactivity": "Portfolio inactivity",
   "dashboard.sectionGuestPopup": "Guest Section Popup",
+  "dashboard.certificates": "Certificates",
+  "certificates.management": "Certificate Management",
+  "certificates.managementDescription":
+    "Manage certificates and track their details",
 };
 
 export default en;

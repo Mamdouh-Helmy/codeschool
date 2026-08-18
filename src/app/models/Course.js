@@ -19,11 +19,13 @@ const SessionSchema = new mongoose.Schema(
   {
     sessionNumber: { type: Number, required: true },
     presentationUrl: { type: String, default: "" },
+    blogBodyAr: { type: String, default: "" },
+    blogBodyEn: { type: String, default: "" },
+    blogImage: { type: String, default: "" },
+    blogUpdatedAt: { type: Date, default: Date.now },
   },
   { _id: false }
 );
-
-
 
 // Module Schema
 const ModuleSchema = new mongoose.Schema({
@@ -38,6 +40,15 @@ const ModuleSchema = new mongoose.Schema({
   blogCreatedAt: { type: Date, default: Date.now },
   blogUpdatedAt: { type: Date, default: Date.now },
   totalSessions: { type: Number, default: 3 },
+
+  // ✅ Certificate fields
+  hasCertificate: { type: Boolean, default: false },
+  certificateBackground: {
+    type: String,
+    enum: ["", "navy-orange", "blue-orange", "gold-teal", "orange-teal", "teal-gold", "navy-gold"],
+    default: "",
+  },
+  certificateSignatureName: { type: String, default: "" },
 });
 
 // Course Schema

@@ -17,32 +17,47 @@ const generateSlug = (title) => {
 const calculateSessionNumber = (lessonOrder) => Math.ceil(lessonOrder / 2);
 
 const processModule = (module, moduleIndex) => {
-  const blogBodyAr = (module.blog?.bodyAr || module.blogBodyAr || "").trim();
-  const blogBodyEn = (module.blog?.bodyEn || module.blogBodyEn || "").trim();
+  // Module-level blog (backward compatibility)
+  const moduleBlogBodyAr = (module.blog?.bodyAr || module.blogBodyAr || "").trim();
+  const moduleBlogBodyEn = (module.blog?.bodyEn || module.blogBodyEn || "").trim();
 
   return {
     title: module.title?.trim() || `Module ${moduleIndex + 1}`,
     description: module.description?.trim() || "",
     order: module.order || moduleIndex + 1,
     totalSessions: module.totalSessions || 3,
-    projects: Array.isArray(module.projects) 
-      ? module.projects.filter(p => p?.trim()) 
+    projects: Array.isArray(module.projects)
+      ? module.projects.filter((p) => p?.trim())
       : [],
-    blogBodyAr,
-    blogBodyEn,
+    blogBodyAr: moduleBlogBodyAr,
+    blogBodyEn: moduleBlogBodyEn,
     blogCreatedAt: module.blog?.createdAt || module.blogCreatedAt || new Date(),
     blogUpdatedAt: new Date(),
     lessons: (module.lessons || []).map((lesson, lessonIndex) => ({
       title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
       description: lesson.description?.trim() || "",
       order: lesson.order || lessonIndex + 1,
-      sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
+      sessionNumber:
+        lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
       duration: lesson.duration || "45 mins",
     })),
+    // ✅ Session-level blog (Ar/En) + cover image
     sessions: (module.sessions || []).map((session, sessionIndex) => ({
       sessionNumber: session.sessionNumber || sessionIndex + 1,
       presentationUrl: session.presentationUrl?.trim() || "",
+      blogBodyAr: (session.blogBodyAr || "").trim(),
+      blogBodyEn: (session.blogBodyEn || "").trim(),
+      blogImage: session.blogImage?.trim() || "",
+      blogUpdatedAt: new Date(),
     })),
+    // ✅ Certificate fields
+    hasCertificate: !!module.hasCertificate,
+    certificateBackground: module.hasCertificate
+      ? (module.certificateBackground?.trim() || "")
+      : "",
+    certificateSignatureName: module.hasCertificate
+      ? (module.certificateSignatureName?.trim() || "")
+      : "",
   };
 };
 
@@ -56,19 +71,19 @@ export async function GET(request) {
     const skip = (page - 1) * limit;
 
     const query = {};
-    
+
     if (searchParams.get("level")) {
       query.level = searchParams.get("level");
     }
-    
+
     if (searchParams.get("active") !== null) {
       query.isActive = searchParams.get("active") === "true";
     }
-    
+
     if (searchParams.get("featured") === "true") {
       query.featured = true;
     }
-    
+
     if (searchParams.get("search")) {
       query.$or = [
         { title: { $regex: searchParams.get("search"), $options: "i" } },
@@ -153,9 +168,8 @@ export async function POST(request) {
     }
 
     // Process curriculum
-    const processedCurriculum = curriculum && Array.isArray(curriculum)
-      ? curriculum.map(processModule)
-      : [];
+    const processedCurriculum =
+      curriculum && Array.isArray(curriculum) ? curriculum.map(processModule) : [];
 
     // Create course
     const course = new Course({
@@ -179,7 +193,7 @@ export async function POST(request) {
     });
 
     await course.save();
-    
+
     const savedCourse = await Course.findById(course._id).lean();
 
     return NextResponse.json(
@@ -192,22 +206,22 @@ export async function POST(request) {
     );
   } catch (error) {
     console.error("❌ POST Error:", error);
-    
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(err => err.message);
+
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json(
-        { success: false, error: messages.join(', ') },
+        { success: false, error: messages.join(", ") },
         { status: 400 }
       );
     }
-    
+
     if (error.code === 11000) {
       return NextResponse.json(
         { success: false, error: "Course with this title already exists" },
         { status: 409 }
       );
     }
-    
+
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

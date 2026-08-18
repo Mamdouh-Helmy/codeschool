@@ -4703,6 +4703,9 @@ const ar = {
   "studentForm.noTags": "لا توجد علامات",
   "dashboard.portfolioInactivity": "عدم نشاط الملف الشخصي",
   "dashboard.sectionGuestPopup": "نافذة الضيوف المنبثقة",
+  "dashboard.certificates": "الشهادات",
+  "certificates.management": "إدارة الشهادات",
+  "certificates.managementDescription": "إدارة الشهادات ومتابعة بياناتها",
 };
 
 export default ar;

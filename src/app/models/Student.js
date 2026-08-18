@@ -363,6 +363,21 @@ const StudentSchema = new mongoose.Schema(
     sessionReminders: [sessionReminderSchema],
     whatsappMessages: [whatsappMessageSchema],
 
+    // ✅ NEW: Certificates issued to the student
+    // تخزين معرفات الشهادات التي تم إرسالها للطالب لمنع التكرار
+      issuedCertificates: [
+      {
+        moduleId: { type: String, required: true },
+        courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+        imageUrl: { type: String },
+        issuedAt: { type: Date, default: Date.now },
+        studentDelivered: { type: Boolean, default: false },
+        studentDeliveredAt: { type: Date },
+        guardianDelivered: { type: Boolean, default: false },
+        guardianDeliveredAt: { type: Date },
+      },
+    ],
+
     metadata: {
       createdAt: { type: Date, default: Date.now },
       updatedAt: { type: Date, default: Date.now },

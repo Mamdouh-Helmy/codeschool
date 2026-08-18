@@ -1248,6 +1248,133 @@ The Code School Team 💻`;
       throw error;
     }
   }
+
+  async sendMediaMessage(
+    phoneNumber,
+    mediaUrl,
+    caption = "",
+    mediaType = "image",
+  ) {
+    try {
+      if (!this.apiToken || !this.instanceId) {
+        throw new Error("WhatsApp API Token or Instance ID not configured");
+      }
+
+      const apiUrl = `${this.baseURL}/${this.instanceId}/send-media`;
+      const messagePayload = {
+        chat_id: phoneNumber.replace("+", ""),
+        media: mediaUrl, // رابط الصورة التي تم رفعها (مثل S3 أو public URL)
+        type: mediaType, // image, video, document
+        caption: caption,
+        priority: 0,
+      };
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: this.apiToken },
+        body: JSON.stringify(messagePayload),
+      });
+
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(`WhatsApp API media error: ${JSON.stringify(result)}`);
+
+      return {
+        success: true,
+        messageId: result.message_id || result.id || result.messageId,
+        data: result,
+        sentVia: "wapilot",
+        instanceId: this.instanceId,
+      };
+    } catch (error) {
+      console.error("❌ wapilot media error:", error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async prepareCertificateStudentMessage(
+    studentName,
+    gender,
+    language = "ar",
+    moduleTitle,
+    nickname = null,
+  ) {
+    const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
+    const englishName =
+      nickname?.en || studentName.split(" ")[0] || studentName;
+    const salutation = await this.getStudentSalutation(
+      gender,
+      language,
+      arabicName,
+      englishName,
+    );
+
+    if (language === "en") {
+      return `${salutation}, 🎉
+
+Congratulations! You have successfully completed the *${moduleTitle}* module and earned your certificate.
+
+Wishing you all the best in your learning journey with us! 🌟
+
+The Code School Team 💻`;
+    }
+
+    return `${salutation}، 🎉
+
+تهانينا! لقد أكملت بنجاح وحدة *${moduleTitle}* وحصلت على شهادتك.
+
+كل التوفيق في مسيرتك التعليمية معنا! 🌟
+
+فريق Code School 💻`;
+  }
+
+  async prepareCertificateGuardianMessage(
+    guardianName,
+    relationship,
+    studentName,
+    studentGender,
+    language = "ar",
+    guardianNickname = null,
+    studentNickname = null,
+    moduleTitle,
+  ) {
+    const salutation = await this.getGuardianSalutation(
+      guardianName,
+      relationship,
+      guardianNickname,
+      language,
+    );
+    const studentDisplayNameAr =
+      studentNickname?.ar || studentName.split(" ")[0] || studentName;
+    const studentDisplayNameEn =
+      studentNickname?.en || studentName.split(" ")[0] || studentName;
+    const male = isMaleGender(studentGender);
+
+    if (language === "en") {
+      const childTitle = await this.getStudentChildTitle(studentGender, "en");
+      const pronoun = male ? "his" : "her";
+      return `${salutation},
+
+We are pleased to inform you that your ${childTitle} **${studentDisplayNameEn}** has successfully completed the *${moduleTitle}* module and earned ${pronoun} completion certificate. 🎉
+
+Congratulations, and we wish continued progress!
+
+The Code School Team 💻`;
+    }
+
+    const childTitle = await this.getStudentChildTitle(studentGender, "ar");
+    const completedVerb = male ? "أكمل" : "أكملت";
+    const earnedVerb = male ? "حصل" : "حصلت";
+    const pronoun = male ? "له" : "لها";
+
+    return `${salutation}،
+
+يسعدنا إبلاغكم بأن ${childTitle} **${studentDisplayNameAr}** ${completedVerb} بنجاح وحدة *${moduleTitle}* و${earnedVerb} على شهادة الإتمام. 🎉
+
+مبروك ونتمنى ${pronoun} المزيد من التقدم! 🌟
+
+فريق Code School 💻`;
+  }
 }
 
 export const wapilotService = new WapilotService();

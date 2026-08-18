@@ -160,6 +160,12 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           badge: createBadge(t('common.new') || "New"),
         },
         {
+          label: t('dashboard.certificates') || "الشهادات",
+          href: "/admin/certificates",
+          icon: "ion:ribbon-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
+        {
           label: t('nav.schedules') || "Schedules",
           href: "/admin/schedules",
           icon: "ion:time-outline",

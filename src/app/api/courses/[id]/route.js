@@ -7,49 +7,64 @@ import Course from "../../../models/Course";
 const calculateSessionNumber = (lessonOrder) => Math.ceil(lessonOrder / 2);
 
 const processModule = (module, moduleIndex) => {
-  const blogBodyAr = (module.blog?.bodyAr || module.blogBodyAr || "").trim();
-  const blogBodyEn = (module.blog?.bodyEn || module.blogBodyEn || "").trim();
+  // Module-level blog (backward compatibility)
+  const moduleBlogBodyAr = (module.blog?.bodyAr || module.blogBodyAr || "").trim();
+  const moduleBlogBodyEn = (module.blog?.bodyEn || module.blogBodyEn || "").trim();
 
   return {
     title: module.title?.trim() || `Module ${moduleIndex + 1}`,
     description: module.description?.trim() || "",
     order: module.order || moduleIndex + 1,
     totalSessions: module.totalSessions || 3,
-    projects: Array.isArray(module.projects) 
-      ? module.projects.filter(p => p?.trim()) 
+    projects: Array.isArray(module.projects)
+      ? module.projects.filter((p) => p?.trim())
       : [],
-    blogBodyAr,
-    blogBodyEn,
+    blogBodyAr: moduleBlogBodyAr,
+    blogBodyEn: moduleBlogBodyEn,
     blogCreatedAt: module.blog?.createdAt || module.blogCreatedAt || new Date(),
     blogUpdatedAt: new Date(),
     lessons: (module.lessons || []).map((lesson, lessonIndex) => ({
       title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
       description: lesson.description?.trim() || "",
       order: lesson.order || lessonIndex + 1,
-      sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
+      sessionNumber:
+        lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
       duration: lesson.duration || "45 mins",
     })),
+    // ✅ Session-level blog (Ar/En) + cover image
     sessions: (module.sessions || []).map((session, sessionIndex) => ({
       sessionNumber: session.sessionNumber || sessionIndex + 1,
       presentationUrl: session.presentationUrl?.trim() || "",
+      blogBodyAr: (session.blogBodyAr || "").trim(),
+      blogBodyEn: (session.blogBodyEn || "").trim(),
+      blogImage: session.blogImage?.trim() || "",
+      blogUpdatedAt: new Date(),
     })),
+    // ✅ Certificate fields
+    hasCertificate: !!module.hasCertificate,
+    certificateBackground: module.hasCertificate
+      ? (module.certificateBackground?.trim() || "")
+      : "",
+    certificateSignatureName: module.hasCertificate
+      ? (module.certificateSignatureName?.trim() || "")
+      : "",
   };
 };
 
 export async function GET(request, { params }) {
   try {
     await connectDB();
-    
+
     const { id } = await params;
     const course = await Course.findById(id).lean();
-    
+
     if (!course) {
       return NextResponse.json(
         { success: false, error: "Course not found" },
         { status: 404 }
       );
     }
-    
+
     return NextResponse.json({ success: true, data: course });
   } catch (error) {
     console.error("❌ GET by ID Error:", error);
@@ -63,28 +78,28 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     await connectDB();
-    
+
     const { id } = await params;
     const body = await request.json();
-    
+
     // Process curriculum if present
     if (body.curriculum && Array.isArray(body.curriculum)) {
       body.curriculum = body.curriculum.map(processModule);
     }
-    
+
     const course = await Course.findByIdAndUpdate(
       id,
       { $set: body },
       { new: true, runValidators: true }
     ).lean();
-    
+
     if (!course) {
       return NextResponse.json(
         { success: false, error: "Course not found" },
         { status: 404 }
       );
     }
-    
+
     return NextResponse.json({
       success: true,
       data: course,
@@ -92,15 +107,15 @@ export async function PUT(request, { params }) {
     });
   } catch (error) {
     console.error("❌ PUT Error:", error);
-    
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(err => err.message);
+
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json(
-        { success: false, error: messages.join(', ') },
+        { success: false, error: messages.join(", ") },
         { status: 400 }
       );
     }
-    
+
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
@@ -111,17 +126,17 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
-    
+
     const { id } = await params;
     const course = await Course.findByIdAndDelete(id);
-    
+
     if (!course) {
       return NextResponse.json(
         { success: false, error: "Course not found" },
         { status: 404 }
       );
     }
-    
+
     return NextResponse.json({
       success: true,
       message: "Course deleted successfully",

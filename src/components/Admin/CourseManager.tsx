@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { useAuth } from "@/hooks/useAuth";
 import RichTextEditor from "@/components/Blog/RichTextEditor";
@@ -24,6 +24,8 @@ import {
     Presentation,
     FileText,
     Globe,
+    Image as ImageIcon,
+    Award,
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -38,6 +40,9 @@ interface Lesson {
 interface Session {
     sessionNumber: number;
     presentationUrl?: string;
+    blogBodyAr?: string;
+    blogBodyEn?: string;
+    blogImage?: string;
 }
 
 interface Module {
@@ -47,11 +52,15 @@ interface Module {
     lessons: Lesson[];
     sessions: Session[];
     projects: string[];
-    blogBodyAr?: string;  // ✅ FLAT STRUCTURE
-    blogBodyEn?: string;  // ✅ FLAT STRUCTURE
+    blogBodyAr?: string;  // Module-level (legacy) blog
+    blogBodyEn?: string;
     blogCreatedAt?: Date;
     blogUpdatedAt?: Date;
     totalSessions: number;
+    // ✅ Certificate fields
+    hasCertificate?: boolean;
+    certificateBackground?: string;
+    certificateSignatureName?: string;
 }
 
 interface Course {
@@ -81,6 +90,16 @@ interface CourseManagerProps {
     onSelect?: (courseId: string) => void;
     selectedId?: string;
 }
+
+// ✅ خيارات ألوان الشهادة (خلفية + شريط) — من التصميمات الجاهزة عندنا
+const CERTIFICATE_BACKGROUNDS: { id: string; label: string; colors: [string, string] }[] = [
+    { id: "navy-orange", label: "كحلي + أورانج", colors: ["#0d2b3e", "#ff6a00"] },
+    { id: "blue-orange", label: "أزرق + أورانج", colors: ["#1c4e80", "#ff6a00"] },
+    { id: "gold-teal", label: "دهبي + تيل", colors: ["#d4a017", "#0f6b6b"] },
+    { id: "orange-teal", label: "أورانج + تيل", colors: ["#ff6a00", "#0f6b6b"] },
+    { id: "teal-gold", label: "تيل + دهبي", colors: ["#0f6b6b", "#d4a017"] },
+    { id: "navy-gold", label: "كحلي + دهبي", colors: ["#0d2b3e", "#d4a017"] },
+];
 
 // Step indicator component
 const StepIndicator = ({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) => {
@@ -203,18 +222,27 @@ export default function CourseManager({
     // State لإدارة المشاريع في المودول
     const [newModuleProject, setNewModuleProject] = useState("");
 
-    // State لتخزين بيانات الجلسات المؤقتة (مع Presentation)
+    // State لتخزين بيانات الجلسات المؤقتة (مع Presentation + Blog Ar/En + Image)
     const [sessionLessonsData, setSessionLessonsData] = useState<{
         [key: number]: {
             title: string;
             description: string;
             presentationUrl: string;
+            blogBodyAr: string;
+            blogBodyEn: string;
+            blogImage: string;
         }
     }>({
-        1: { title: "", description: "", presentationUrl: "" },
-        2: { title: "", description: "", presentationUrl: "" },
-        3: { title: "", description: "", presentationUrl: "" },
+        1: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
+        2: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
+        3: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
     });
+
+    // رفع الصور وحالة الرفع لكل جلسة
+    const [uploadingImage, setUploadingImage] = useState<{ [key: number]: boolean }>({});
+    // اللغة النشطة في تبويب البلوج لكل جلسة
+    const [activeBlogLang, setActiveBlogLang] = useState<{ [key: number]: 'ar' | 'en' }>({ 1: 'ar', 2: 'ar', 3: 'ar' });
+    const fileInputRefs = useRef<{ [key: number]: HTMLInputElement | null }>({});
 
     // Load all courses
     useEffect(() => {
@@ -303,6 +331,12 @@ export default function CourseManager({
         return colors[level as keyof typeof colors] || colors.beginner;
     };
 
+    const emptySessionData = () => ({
+        1: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
+        2: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
+        3: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
+    });
+
     const openModuleModal = (moduleIndex?: number) => {
         if (moduleIndex !== undefined) {
             // Edit existing module
@@ -313,22 +347,21 @@ export default function CourseManager({
                 ...existingModule,
                 blogBodyAr: existingModule.blogBodyAr || "",
                 blogBodyEn: existingModule.blogBodyEn || "",
+                hasCertificate: existingModule.hasCertificate || false,
+                certificateBackground: existingModule.certificateBackground || "",
+                certificateSignatureName: existingModule.certificateSignatureName || "",
             });
 
             // استرجاع بيانات الجلسات من الدروس والـ sessions الموجودة
-            const newSessionData: any = {
-                1: { title: "", description: "", presentationUrl: "" },
-                2: { title: "", description: "", presentationUrl: "" },
-                3: { title: "", description: "", presentationUrl: "" },
-            };
+            const newSessionData: any = emptySessionData();
 
             if (existingModule.lessons && Array.isArray(existingModule.lessons)) {
                 existingModule.lessons.forEach(lesson => {
                     if (lesson.sessionNumber >= 1 && lesson.sessionNumber <= 3) {
                         newSessionData[lesson.sessionNumber] = {
+                            ...newSessionData[lesson.sessionNumber],
                             title: lesson.title,
                             description: lesson.description || "",
-                            presentationUrl: newSessionData[lesson.sessionNumber].presentationUrl
                         };
                     }
                 });
@@ -338,6 +371,9 @@ export default function CourseManager({
                 existingModule.sessions.forEach(session => {
                     if (session.sessionNumber >= 1 && session.sessionNumber <= 3) {
                         newSessionData[session.sessionNumber].presentationUrl = session.presentationUrl || "";
+                        newSessionData[session.sessionNumber].blogBodyAr = session.blogBodyAr || "";
+                        newSessionData[session.sessionNumber].blogBodyEn = session.blogBodyEn || "";
+                        newSessionData[session.sessionNumber].blogImage = session.blogImage || "";
                     }
                 });
             }
@@ -379,16 +415,16 @@ export default function CourseManager({
                 blogCreatedAt: new Date(),
                 blogUpdatedAt: new Date(),
                 totalSessions: 3,
+                hasCertificate: false,
+                certificateBackground: "",
+                certificateSignatureName: "",
             });
 
             // إعادة تعيين بيانات الجلسات
-            setSessionLessonsData({
-                1: { title: "", description: "", presentationUrl: "" },
-                2: { title: "", description: "", presentationUrl: "" },
-                3: { title: "", description: "", presentationUrl: "" },
-            });
+            setSessionLessonsData(emptySessionData());
         }
         setModuleStep(1);
+        setActiveBlogLang({ 1: 'ar', 2: 'ar', 3: 'ar' });
         setIsModalOpen(true);
         setNewModuleProject("");
     };
@@ -409,6 +445,18 @@ export default function CourseManager({
             }
         }
 
+        // ✅ التحقق من بيانات الشهادة لو مفعّلة
+        if (tempModule.hasCertificate) {
+            if (!tempModule.certificateBackground) {
+                toast.error("من فضلك اختار لون خلفية الشهادة");
+                return;
+            }
+            if (!tempModule.certificateSignatureName?.trim()) {
+                toast.error("من فضلك اكتب اسم التوقيع على الشهادة");
+                return;
+            }
+        }
+
         // تحديث الدروس بناءً على بيانات الجلسات
         const updatedLessons = tempModule.lessons.map(lesson => ({
             ...lesson,
@@ -416,13 +464,16 @@ export default function CourseManager({
             description: sessionLessonsData[lesson.sessionNumber].description,
         }));
 
-        // تحديث الـ sessions بناءً على presentation URLs
+        // تحديث الـ sessions بناءً على presentation URLs + blog Ar/En + image
         const updatedSessions = tempModule.sessions.map(session => ({
             sessionNumber: session.sessionNumber,
             presentationUrl: sessionLessonsData[session.sessionNumber].presentationUrl,
+            blogBodyAr: sessionLessonsData[session.sessionNumber].blogBodyAr,
+            blogBodyEn: sessionLessonsData[session.sessionNumber].blogBodyEn,
+            blogImage: sessionLessonsData[session.sessionNumber].blogImage,
         }));
 
-        // ✅ FIXED: Use flat blog structure
+        // ✅ Use flat blog structure (module-level, legacy) + certificate fields
         const updatedModule = {
             ...tempModule,
             lessons: updatedLessons,
@@ -430,12 +481,17 @@ export default function CourseManager({
             blogBodyAr: tempModule.blogBodyAr || "",
             blogBodyEn: tempModule.blogBodyEn || "",
             blogUpdatedAt: new Date(),
+            hasCertificate: tempModule.hasCertificate || false,
+            certificateBackground: tempModule.hasCertificate ? (tempModule.certificateBackground || "") : "",
+            certificateSignatureName: tempModule.hasCertificate ? (tempModule.certificateSignatureName || "") : "",
         };
 
         console.log("💾 Saving module with blog data:", {
             title: updatedModule.title,
             blogBodyAr: updatedModule.blogBodyAr?.substring(0, 100),
             blogBodyEn: updatedModule.blogBodyEn?.substring(0, 100),
+            sessionsWithBlog: updatedSessions.filter(s => s.blogBodyAr || s.blogBodyEn).length,
+            hasCertificate: updatedModule.hasCertificate,
         });
 
         if (currentModuleIndex !== null) {
@@ -455,11 +511,7 @@ export default function CourseManager({
         setCurrentModuleIndex(null);
         setModuleStep(1);
         setNewModuleProject("");
-        setSessionLessonsData({
-            1: { title: "", description: "", presentationUrl: "" },
-            2: { title: "", description: "", presentationUrl: "" },
-            3: { title: "", description: "", presentationUrl: "" },
-        });
+        setSessionLessonsData(emptySessionData());
     };
 
     const removeModule = (moduleIndex: number) => {
@@ -476,7 +528,11 @@ export default function CourseManager({
         setTempModule({ ...tempModule, [field]: value });
     };
 
-    const updateSessionLessonsData = (sessionNumber: number, field: 'title' | 'description' | 'presentationUrl', value: string) => {
+    const updateSessionLessonsData = (
+        sessionNumber: number,
+        field: 'title' | 'description' | 'presentationUrl' | 'blogBodyAr' | 'blogBodyEn' | 'blogImage',
+        value: string
+    ) => {
         setSessionLessonsData(prev => ({
             ...prev,
             [sessionNumber]: {
@@ -484,6 +540,47 @@ export default function CourseManager({
                 [field]: value
             }
         }));
+    };
+
+    // رفع صورة الغلاف الخاصة بجلسة معينة
+    const handleImageUpload = async (sessionNumber: number, file: File) => {
+        if (!file) return;
+
+        if (!file.type.startsWith("image/")) {
+            toast.error("Please select a valid image file");
+            return;
+        }
+
+        if (file.size > 20 * 1024 * 1024) {
+            toast.error("Image size must be less than 20MB");
+            return;
+        }
+
+        setUploadingImage(prev => ({ ...prev, [sessionNumber]: true }));
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("folder", "session-blog-images");
+
+            const res = await fetch("/api/upload-image", {
+                method: "POST",
+                body: formData,
+            });
+
+            const json = await res.json();
+
+            if (json.success) {
+                updateSessionLessonsData(sessionNumber, "blogImage", json.imageUrl);
+                toast.success("Image uploaded successfully");
+            } else {
+                toast.error(json.message || "Failed to upload image");
+            }
+        } catch (err) {
+            console.error("Error uploading image:", err);
+            toast.error("Failed to upload image");
+        } finally {
+            setUploadingImage(prev => ({ ...prev, [sessionNumber]: false }));
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -506,7 +603,7 @@ export default function CourseManager({
                 ? `/api/courses/${editingCourse._id}`
                 : "/api/courses";
 
-            // ✅ FIXED: Send data with flat blog structure
+            // ✅ Send data with flat blog structure (module-level) + session-level blog fields + certificate
             const payload = {
                 title: form.title,
                 description: form.description || "",
@@ -524,18 +621,22 @@ export default function CourseManager({
                         duration: lesson.duration || "45 mins",
                     })),
                     sessions: module.sessions || [
-                        { sessionNumber: 1, presentationUrl: "" },
-                        { sessionNumber: 2, presentationUrl: "" },
-                        { sessionNumber: 3, presentationUrl: "" }
+                        { sessionNumber: 1, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
+                        { sessionNumber: 2, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
+                        { sessionNumber: 3, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" }
                     ],
                     projects: module.projects || [],
-                    // ✅ Send blog as nested object (API will flatten it)
+                    // ✅ Send module-level blog as nested object (API will flatten it)
                     blog: {
                         bodyAr: module.blogBodyAr || "",
                         bodyEn: module.blogBodyEn || "",
                         createdAt: module.blogCreatedAt || new Date(),
                         updatedAt: new Date(),
-                    }
+                    },
+                    // ✅ Certificate fields
+                    hasCertificate: module.hasCertificate || false,
+                    certificateBackground: module.hasCertificate ? (module.certificateBackground || "") : "",
+                    certificateSignatureName: module.hasCertificate ? (module.certificateSignatureName || "") : "",
                 })),
                 grade: form.grade,
                 subject: form.subject,
@@ -931,6 +1032,18 @@ export default function CourseManager({
                                                                     Blog Available
                                                                 </span>
                                                             )}
+                                                            {module.sessions?.some(s => s.blogBodyAr || s.blogBodyEn) && (
+                                                                <span className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded text-xs flex items-center gap-1">
+                                                                    <FileText className="w-3 h-3" />
+                                                                    Session Blogs Available
+                                                                </span>
+                                                            )}
+                                                            {module.hasCertificate && (
+                                                                <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded text-xs flex items-center gap-1">
+                                                                    <Award className="w-3 h-3" />
+                                                                    شهادة مفعّلة
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -1019,11 +1132,7 @@ export default function CourseManager({
                         setCurrentModuleIndex(null);
                         setModuleStep(1);
                         setNewModuleProject("");
-                        setSessionLessonsData({
-                            1: { title: "", description: "", presentationUrl: "" },
-                            2: { title: "", description: "", presentationUrl: "" },
-                            3: { title: "", description: "", presentationUrl: "" },
-                        });
+                        setSessionLessonsData(emptySessionData());
                     }}
                     title={`Module ${currentModuleIndex !== null ? currentModuleIndex + 1 : form.curriculum.length + 1}: ${tempModule?.title || "Untitled"}`}
                 >
@@ -1065,7 +1174,7 @@ export default function CourseManager({
                                 </div>
                             </div>
 
-                            {/* Module Step 1: Basic Info + Projects */}
+                            {/* Module Step 1: Basic Info + Projects + Certificate */}
                             {moduleStep === 1 && (
                                 <div className="space-y-4">
                                     <div>
@@ -1153,6 +1262,95 @@ export default function CourseManager({
                                         </div>
                                     </div>
 
+                                    {/* ✅ Certificate Section */}
+                                    <div className="border-2 border-dashed border-amber-300 dark:border-amber-700 rounded-xl p-4 sm:p-5 bg-amber-50/50 dark:bg-amber-900/10">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <Award className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                            <h5 className="font-bold text-MidnightNavyText dark:text-white text-sm sm:text-base">
+                                                شهادة الموديول
+                                            </h5>
+                                        </div>
+
+                                        <label className="block text-sm font-semibold text-MidnightNavyText dark:text-white mb-3">
+                                            هل يوجد شهادة لهذا الموديول؟
+                                        </label>
+                                        <div className="flex gap-2 mb-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => updateTempModule("hasCertificate", true)}
+                                                className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl font-semibold text-sm transition-all ${tempModule.hasCertificate
+                                                    ? "bg-primary text-white shadow-md"
+                                                    : "bg-white dark:bg-dark_input text-gray-600 dark:text-gray-400 border-2 border-gray-200 dark:border-dark_border"
+                                                    }`}
+                                            >
+                                                نعم يوجد شهادة
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => updateTempModule("hasCertificate", false)}
+                                                className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl font-semibold text-sm transition-all ${!tempModule.hasCertificate
+                                                    ? "bg-gray-700 text-white shadow-md"
+                                                    : "bg-white dark:bg-dark_input text-gray-600 dark:text-gray-400 border-2 border-gray-200 dark:border-dark_border"
+                                                    }`}
+                                            >
+                                                لا يوجد
+                                            </button>
+                                        </div>
+
+                                        {tempModule.hasCertificate && (
+                                            <div className="space-y-4 bg-white dark:bg-dark_input rounded-lg p-4 border-2 border-gray-200 dark:border-dark_border">
+                                                {/* Background color picker */}
+                                                <div>
+                                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
+                                                        لون خلفية الشهادة
+                                                    </label>
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+                                                        {CERTIFICATE_BACKGROUNDS.map((bg) => (
+                                                            <button
+                                                                key={bg.id}
+                                                                type="button"
+                                                                onClick={() => updateTempModule("certificateBackground", bg.id)}
+                                                                className={`rounded-xl overflow-hidden border-2 transition-all ${tempModule.certificateBackground === bg.id
+                                                                    ? "border-primary ring-2 ring-primary/30 scale-[1.02]"
+                                                                    : "border-gray-200 dark:border-dark_border hover:border-primary/50"
+                                                                    }`}
+                                                            >
+                                                                <div
+                                                                    className="h-12 sm:h-14 w-full"
+                                                                    style={{
+                                                                        background: `linear-gradient(135deg, ${bg.colors[0]} 0%, ${bg.colors[0]} 60%, ${bg.colors[1]} 100%)`,
+                                                                    }}
+                                                                />
+                                                                <div className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white dark:bg-darklight">
+                                                                    {tempModule.certificateBackground === bg.id && (
+                                                                        <Check className="w-3 h-3 text-primary flex-shrink-0" />
+                                                                    )}
+                                                                    <span className="text-[10px] sm:text-xs font-medium text-gray-700 dark:text-gray-300">
+                                                                        {bg.label}
+                                                                    </span>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Signature name */}
+                                                <div>
+                                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                                                        اسم التوقيع
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={tempModule.certificateSignatureName || ""}
+                                                        onChange={(e) => updateTempModule("certificateSignatureName", e.target.value)}
+                                                        placeholder="مثال: Aya Elnagar"
+                                                        className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <div className="flex justify-end pt-4">
                                         <button
                                             type="button"
@@ -1160,6 +1358,16 @@ export default function CourseManager({
                                                 if (!tempModule.title.trim()) {
                                                     toast.error("Please enter a module title");
                                                     return;
+                                                }
+                                                if (tempModule.hasCertificate) {
+                                                    if (!tempModule.certificateBackground) {
+                                                        toast.error("من فضلك اختار لون خلفية الشهادة");
+                                                        return;
+                                                    }
+                                                    if (!tempModule.certificateSignatureName?.trim()) {
+                                                        toast.error("من فضلك اكتب اسم التوقيع على الشهادة");
+                                                        return;
+                                                    }
                                                 }
                                                 setModuleStep(2);
                                             }}
@@ -1240,6 +1448,107 @@ export default function CourseManager({
                                                             </p>
                                                         </div>
                                                     </div>
+
+                                                    {/* Session Blog Section (Ar/En + Cover Image) */}
+                                                    <div className="mt-6 border-2 border-dashed border-primary/30 rounded-xl p-4 sm:p-5 bg-gradient-to-br from-blue-50/50 to-purple-50/50 dark:from-blue-900/10 dark:to-purple-900/10">
+                                                        <div className="flex items-center gap-2 mb-4">
+                                                            <FileText className="w-5 h-5 text-primary" />
+                                                            <h5 className="font-bold text-MidnightNavyText dark:text-white text-sm sm:text-base">
+                                                                Session {sessionNum} Blog Content
+                                                            </h5>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400">(Optional)</span>
+                                                        </div>
+
+                                                        {/* Cover Image */}
+                                                        <div className="mb-4">
+                                                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                                                                Cover Image
+                                                            </label>
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                ref={(el) => { fileInputRefs.current[sessionNum] = el; }}
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) handleImageUpload(sessionNum, file);
+                                                                    e.target.value = "";
+                                                                }}
+                                                                className="hidden"
+                                                            />
+                                                            {sessionLessonsData[sessionNum].blogImage ? (
+                                                                <div className="relative inline-block">
+                                                                    <img
+                                                                        src={sessionLessonsData[sessionNum].blogImage}
+                                                                        alt="Session blog cover"
+                                                                        className="w-full max-w-xs h-32 object-cover rounded-lg border-2 border-gray-200 dark:border-dark_border"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => updateSessionLessonsData(sessionNum, "blogImage", "")}
+                                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-lg"
+                                                                    >
+                                                                        <X className="w-3 h-3" />
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => fileInputRefs.current[sessionNum]?.click()}
+                                                                    disabled={uploadingImage[sessionNum]}
+                                                                    className="w-full max-w-xs h-24 border-2 border-dashed border-gray-300 dark:border-dark_border rounded-lg flex flex-col items-center justify-center gap-1 hover:border-primary hover:bg-primary/5 transition-all text-gray-500 dark:text-gray-400"
+                                                                >
+                                                                    {uploadingImage[sessionNum] ? (
+                                                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                                                                    ) : (
+                                                                        <>
+                                                                            <ImageIcon className="w-5 h-5" />
+                                                                            <span className="text-xs">Click to upload</span>
+                                                                        </>
+                                                                    )}
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Language Tabs */}
+                                                        <div className="flex gap-2 mb-3">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setActiveBlogLang(prev => ({ ...prev, [sessionNum]: 'ar' }))}
+                                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${(activeBlogLang[sessionNum] || 'ar') === 'ar'
+                                                                    ? "bg-primary text-white"
+                                                                    : "bg-white dark:bg-dark_input text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-dark_border"
+                                                                    }`}
+                                                            >
+                                                                <Globe className="w-3 h-3" /> العربية
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setActiveBlogLang(prev => ({ ...prev, [sessionNum]: 'en' }))}
+                                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${activeBlogLang[sessionNum] === 'en'
+                                                                    ? "bg-primary text-white"
+                                                                    : "bg-white dark:bg-dark_input text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-dark_border"
+                                                                    }`}
+                                                            >
+                                                                <Globe className="w-3 h-3" /> English
+                                                            </button>
+                                                        </div>
+
+                                                        <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl overflow-hidden bg-white dark:bg-darklight">
+                                                            {(activeBlogLang[sessionNum] || 'ar') === 'ar' ? (
+                                                                <RichTextEditor
+                                                                    value={sessionLessonsData[sessionNum].blogBodyAr}
+                                                                    onChange={(value) => updateSessionLessonsData(sessionNum, "blogBodyAr", value)}
+                                                                    placeholder="أدخل محتوى المدونة لهذه الجلسة بالعربية..."
+                                                                />
+                                                            ) : (
+                                                                <RichTextEditor
+                                                                    value={sessionLessonsData[sessionNum].blogBodyEn}
+                                                                    onChange={(value) => updateSessionLessonsData(sessionNum, "blogBodyEn", value)}
+                                                                    placeholder="Enter session blog content in English..."
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
@@ -1279,7 +1588,7 @@ export default function CourseManager({
                                 </div>
                             )}
 
-                            {/* Module Step 5: Blog Content */}
+                            {/* Module Step 5: Blog Content (Module-level, legacy) */}
                             {moduleStep === 5 && (
                                 <div className="space-y-6">
                                     <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4">
@@ -1561,6 +1870,12 @@ export default function CourseManager({
                                                             Module {moduleIndex + 1}
                                                         </span>
                                                         {module.title}
+                                                        {module.hasCertificate && (
+                                                            <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded text-xs flex items-center gap-1">
+                                                                <Award className="w-3 h-3" />
+                                                                شهادة
+                                                            </span>
+                                                        )}
                                                     </h6>
 
                                                     {module.description && (
@@ -1590,7 +1905,7 @@ export default function CourseManager({
                                                         <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                                             <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-1">
                                                                 <FileText className="w-3 h-3" />
-                                                                Blog Content Available:
+                                                                Module Blog Content Available:
                                                             </p>
                                                             <div className="flex gap-2">
                                                                 {module.blogBodyAr && (
@@ -1606,6 +1921,20 @@ export default function CourseManager({
                                                                     </span>
                                                                 )}
                                                             </div>
+                                                        </div>
+                                                    )}
+
+                                                    {module.hasCertificate && (
+                                                        <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                                                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-1 flex items-center gap-1">
+                                                                <Award className="w-3 h-3" />
+                                                                شهادة الموديول:
+                                                            </p>
+                                                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                                اللون: {CERTIFICATE_BACKGROUNDS.find(b => b.id === module.certificateBackground)?.label || module.certificateBackground}
+                                                                {" • "}
+                                                                التوقيع: {module.certificateSignatureName}
+                                                            </p>
                                                         </div>
                                                     )}
 
@@ -1628,6 +1957,41 @@ export default function CourseManager({
                                                                             >
                                                                                 {session.presentationUrl}
                                                                             </a>
+                                                                        </div>
+                                                                    )
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {module.sessions && module.sessions.some(s => s.blogBodyAr || s.blogBodyEn) && (
+                                                        <div className="mb-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                                            <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-2 flex items-center gap-1">
+                                                                <FileText className="w-3 h-3" />
+                                                                Session Blogs:
+                                                            </p>
+                                                            <div className="space-y-2">
+                                                                {module.sessions.map((session, sessionIdx) => (
+                                                                    (session.blogBodyAr || session.blogBodyEn) && (
+                                                                        <div key={sessionIdx} className="flex items-center gap-2 text-xs">
+                                                                            {session.blogImage && (
+                                                                                <img
+                                                                                    src={session.blogImage}
+                                                                                    alt=""
+                                                                                    className="w-6 h-6 rounded object-cover"
+                                                                                />
+                                                                            )}
+                                                                            <span className="font-medium">Session {session.sessionNumber}:</span>
+                                                                            {session.blogBodyAr && (
+                                                                                <span className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded flex items-center gap-1">
+                                                                                    <Globe className="w-3 h-3" /> AR
+                                                                                </span>
+                                                                            )}
+                                                                            {session.blogBodyEn && (
+                                                                                <span className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded flex items-center gap-1">
+                                                                                    <Globe className="w-3 h-3" /> EN
+                                                                                </span>
+                                                                            )}
                                                                         </div>
                                                                     )
                                                                 ))}

@@ -141,6 +141,9 @@ export default function RichTextEditor({
   const [codeData, setCodeData] = useState({
     code: ""
   });
+  const [imageUploadMode, setImageUploadMode] = useState<'upload' | 'url'>('upload');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
 
   // Update history when value changes from parent
   useEffect(() => {
@@ -243,7 +246,7 @@ export default function RichTextEditor({
     if (selectedText) {
       // إذا كان هناك نص محدد، تحويل كل سطر إلى اقتباس مع div container
       const lines = selectedText.split('\n').filter(line => line.trim());
-      const blockquoteContent = lines.map(line => 
+      const blockquoteContent = lines.map(line =>
         `<div class="blockquote-item"><blockquote>${line.trim()}</blockquote></div>`
       ).join('\n');
 
@@ -454,6 +457,7 @@ export default function RichTextEditor({
       height: "",
       className: ""
     });
+    setImageUploadMode('upload');
     setShowImageModal(true);
   };
 
@@ -463,12 +467,71 @@ export default function RichTextEditor({
       return;
     }
 
-    const imageMarkdown = `<img src="${imageData.url}" alt="${imageData.alt || ''}" style="max-width: 100%; height: auto;" />`;
+    // بناء الـ style حسب القيم المدخلة
+    const styleParts: string[] = [];
+
+    if (imageData.width?.trim()) {
+      const w = imageData.width.trim();
+      styleParts.push(`width: ${/^\d+$/.test(w) ? `${w}px` : w}`);
+    } else {
+      styleParts.push("max-width: 100%");
+    }
+
+    if (imageData.height?.trim()) {
+      const h = imageData.height.trim();
+      styleParts.push(`height: ${/^\d+$/.test(h) ? `${h}px` : h}`);
+    } else {
+      styleParts.push("height: auto");
+    }
+
+    const styleAttr = styleParts.join("; ");
+
+    const imageMarkdown = `<img src="${imageData.url}" alt="${imageData.alt || ''}" style="${styleAttr};" />`;
 
     insertAtCursor(imageMarkdown);
     setShowImageModal(false);
     setImageData({ url: "", alt: "", title: "", width: "", height: "", className: "" });
     toast.success(t("blogForm.imageAdded") || "Image added successfully");
+  };
+
+  const handleImageFileUpload = async (file: File) => {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file");
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("Image size must be less than 20MB");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "blog-content-images");
+
+      const res = await fetch("/api/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        setImageData(prev => ({ ...prev, url: json.imageUrl }));
+        toast.success("Image uploaded successfully");
+      } else {
+        toast.error(json.message || "Failed to upload image");
+      }
+    } catch (err) {
+      console.error("Error uploading image:", err);
+      toast.error("Failed to upload image");
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   // إدراج جدول محسن مع CSS
@@ -1196,20 +1259,126 @@ export default function RichTextEditor({
                 <X className="w-5 h-5" />
               </button>
             </div>
+
             <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                  {t("blogForm.imageUrl") || "Image URL"} *
-                </label>
-                <input
-                  type="url"
-                  value={imageData.url}
-                  onChange={(e) => setImageData({ ...imageData, url: e.target.value })}
-                  className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="https://example.com/image.jpg"
-                  required
-                />
+              {/* Tabs: Upload vs URL */}
+              <div className="flex gap-2 p-1 bg-gray-100 dark:bg-dark_input rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setImageUploadMode('upload')}
+                  className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${imageUploadMode === 'upload'
+                    ? "bg-white dark:bg-darkmode text-primary shadow-sm"
+                    : "text-gray-500 dark:text-gray-400"
+                    }`}
+                >
+                  Upload from device
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageUploadMode('url')}
+                  className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${imageUploadMode === 'url'
+                    ? "bg-white dark:bg-darkmode text-primary shadow-sm"
+                    : "text-gray-500 dark:text-gray-400"
+                    }`}
+                >
+                  Image URL
+                </button>
               </div>
+
+              {imageUploadMode === 'upload' ? (
+                <div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={imageFileInputRef}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImageFileUpload(file);
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+
+                  {imageData.url ? (
+                    <div className="relative">
+                      <img
+                        src={imageData.url}
+                        alt="Preview"
+                        className="w-full h-40 object-cover rounded-lg border-2 border-gray-200 dark:border-dark_border"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setImageData({ ...imageData, url: "" })}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-lg"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => imageFileInputRef.current?.click()}
+                      disabled={isUploadingImage}
+                      className="w-full h-32 border-2 border-dashed border-gray-300 dark:border-dark_border rounded-lg flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all text-gray-500 dark:text-gray-400"
+                    >
+                      {isUploadingImage ? (
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                      ) : (
+                        <>
+                          <ImageIcon className="w-6 h-6" />
+                          <span className="text-sm">Click to upload an image</span>
+                          <span className="text-xs text-gray-400">Max 20MB</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                    {t("blogForm.imageUrl") || "Image URL"} *
+                  </label>
+                  <input
+                    type="url"
+                    value={imageData.url}
+                    onChange={(e) => setImageData({ ...imageData, url: e.target.value })}
+                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="https://example.com/image.jpg"
+                  />
+                </div>
+              )}
+
+              {/* Width & Height Controls */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                    Width
+                  </label>
+                  <input
+                    type="text"
+                    value={imageData.width}
+                    onChange={(e) => setImageData({ ...imageData, width: e.target.value })}
+                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="e.g. 400 or 50%"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                    Height
+                  </label>
+                  <input
+                    type="text"
+                    value={imageData.height}
+                    onChange={(e) => setImageData({ ...imageData, height: e.target.value })}
+                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="e.g. 300 or auto"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+                Leave empty for automatic sizing. Numbers are treated as pixels (e.g. 400 → 400px).
+              </p>
+
               <div>
                 <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
                   {t("blogForm.altText") || "Alt Text"}
@@ -1223,6 +1392,7 @@ export default function RichTextEditor({
                 />
               </div>
             </div>
+
             <div className="flex justify-end gap-3 p-4 border-t border-PowderBlueBorder dark:border-dark_border">
               <button
                 onClick={() => setShowImageModal(false)}
@@ -1232,7 +1402,8 @@ export default function RichTextEditor({
               </button>
               <button
                 onClick={handleInsertImage}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                disabled={!imageData.url || isUploadingImage}
+                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
                 {t("blogForm.insertImage") || "Insert Image"}
               </button>
