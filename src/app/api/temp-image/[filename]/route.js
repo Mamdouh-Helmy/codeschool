@@ -14,7 +14,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { GENERATED_DIR } from "../../../../utils/generatedFilesPaths";
+import { GENERATED_DIR } from "@/app/utils/generatedFilesPaths";
 
 const MIME_TYPES = {
   ".png": "image/png",
@@ -43,7 +43,10 @@ export async function GET(request, { params }) {
       status: 200,
       headers: {
         "Content-Type": mime,
+        "Content-Length": String(fileBuffer.length),
+        "Content-Disposition": `inline; filename="${safeName}"`,
         "Cache-Control": "public, max-age=31536000, immutable",
+        "Accept-Ranges": "bytes",
       },
     });
   } catch (err) {
