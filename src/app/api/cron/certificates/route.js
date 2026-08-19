@@ -9,6 +9,7 @@ import path from "path";
 import { buildCertificateHtml } from "../../../../utils/certificateHtml";
 import { getBrowser } from "../../../../utils/browserPool";
 import { GENERATED_DIR } from "../../../../utils/generatedFilesPaths";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
 // ============================================================
 // ✅ حماية زي portfolio-inactivity بالظبط: لازم يبقى معاه CRON_SECRET
@@ -27,10 +28,6 @@ function isAuthorizedRequest(req, searchParams) {
 // ============================================================
 // ✅ توليد صورة الشهادة — بدون React/react-dom/server (متوافق مع
 // Route Handlers). راجع src/app/utils/certificateHtml.js للتفاصيل.
-//
-// ✅ بيرجع الاتنين: المسار المحلي الفعلي على الديسك (filePath) —
-// عشان نبعته لـ Wapilot كـ base64 مباشرة — والرابط العام (imageUrl)
-// اللي بنخزنه في الداتابيز/نعرضه للأدمن.
 // ============================================================
 async function generateCertificateImage(browser, data) {
   const { studentName, moduleTitle, achievements, signature, background, date } = data;
@@ -63,6 +60,63 @@ async function generateCertificateImage(browser, data) {
   }
 }
 
+// ============================================================
+// ✅ رفع الصورة على Cloudinary وتحويلها إلى رابط عام
+// ============================================================
+async function uploadCertificateToCloudinary(filePath) {
+  try {
+    const fileBuffer = await fs.readFile(filePath);
+    const base64 = `data:image/png;base64,${fileBuffer.toString("base64")}`;
+    const cloudinaryUrl = await uploadToCloudinary(base64, "certificates");
+    return cloudinaryUrl;
+  } catch (error) {
+    console.error("❌ Cloudinary upload error:", error.message);
+    return null;
+  }
+}
+
+// ============================================================
+// ✅ إرسال الشهادة عبر واتساب مع دعم Cloudinary كحل أساسي
+// ============================================================
+async function sendCertificateWithFallback(phoneNumber, filePath, caption, studentName = "") {
+  try {
+    // ✅ المحاولة الأولى: رفع على Cloudinary وإرسال الرابط
+    console.log(`📤 Uploading certificate to Cloudinary for ${studentName}...`);
+    const cloudinaryUrl = await uploadCertificateToCloudinary(filePath);
+    
+    if (cloudinaryUrl) {
+      console.log(`✅ Uploaded to Cloudinary: ${cloudinaryUrl}`);
+      
+      // إرسال عبر رابط Cloudinary
+      const result = await wapilotService.sendMediaMessage(
+        phoneNumber,
+        cloudinaryUrl,
+        caption
+      );
+      
+      if (result?.success) {
+        return result;
+      }
+      
+      console.warn(`⚠️ Cloudinary URL method failed, trying base64 fallback...`);
+    } else {
+      console.warn(`⚠️ Cloudinary upload failed, trying base64 fallback...`);
+    }
+    
+    // ✅ المحاولة الثانية: إرسال كـ base64 مباشرة (fallback)
+    const result = await wapilotService.sendMediaMessageFromFile(
+      phoneNumber,
+      filePath,
+      caption
+    );
+    
+    return result;
+  } catch (error) {
+    console.error(`❌ sendCertificateWithFallback error:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   if (!isAuthorizedRequest(request, searchParams)) {
@@ -82,6 +136,7 @@ export async function GET(request) {
       studentSent: 0,
       guardianSent: 0,
       pendingNoRecipient: 0,
+      cloudinaryUploads: 0,
       errors: 0,
     };
 
@@ -164,16 +219,13 @@ export async function GET(request) {
 
             const fullImageUrl = `${baseUrl}${imageUrl}`;
 
-            // ✅ اللغة المفضلة بتاعة الطالب — بتحكم في لغة رسالتي الطالب وولي الأمر
+            // ✅ اللغة المفضلة بتاعة الطالب
             const preferredLanguage = student.communicationPreferences?.preferredLanguage || "ar";
 
             let studentDelivered = studentAlreadyDelivered;
             let guardianDelivered = guardianAlreadyDelivered;
 
-            // ✅ بنبعت الصورة كـ base64 مباشرة (sendMediaMessageFromFile) بدل
-            // ما نديله رابط (sendMediaMessage) — عشان نتجنب مشكلة "Resource
-            // not found or not accessible" اللي كانت بتحصل لما Wapilot يحاول
-            // يعمل fetch للرابط بنفسه من برا.
+            // ✅ إرسال للطالب - باستخدام Cloudinary أولاً
             if (studentNeedsSend) {
               const caption = await wapilotService.prepareCertificateStudentMessage(
                 student.personalInfo.fullName,
@@ -182,15 +234,26 @@ export async function GET(request) {
                 module.title,
                 student.personalInfo.nickname,
               );
-              const result = await wapilotService.sendMediaMessageFromFile(studentNumber, filePath, caption);
+
+              const result = await sendCertificateWithFallback(
+                studentNumber,
+                filePath,
+                caption,
+                student.personalInfo.fullName
+              );
+
               studentDelivered = !!result?.success;
               if (studentDelivered) {
                 summary.studentSent++;
+                if (result?.cloudinaryUrl) {
+                  summary.cloudinaryUploads++;
+                }
               } else {
                 console.warn(`⚠️ فشل إرسال الشهادة للطالب ${student.personalInfo.fullName}: ${result?.error}`);
               }
             }
 
+            // ✅ إرسال لولي الأمر - باستخدام Cloudinary أولاً
             if (guardianNeedsSend) {
               const guardianCaption = await wapilotService.prepareCertificateGuardianMessage(
                 student.guardianInfo?.name,
@@ -202,10 +265,20 @@ export async function GET(request) {
                 student.personalInfo?.nickname,
                 module.title,
               );
-              const result = await wapilotService.sendMediaMessageFromFile(guardianNumber, filePath, guardianCaption);
+
+              const result = await sendCertificateWithFallback(
+                guardianNumber,
+                filePath,
+                guardianCaption,
+                student.personalInfo.fullName
+              );
+
               guardianDelivered = !!result?.success;
               if (guardianDelivered) {
                 summary.guardianSent++;
+                if (result?.cloudinaryUrl) {
+                  summary.cloudinaryUploads++;
+                }
               } else {
                 console.warn(`⚠️ فشل إرسال الشهادة لولي أمر ${student.personalInfo.fullName}: ${result?.error}`);
               }
@@ -213,6 +286,7 @@ export async function GET(request) {
 
             const now = new Date();
 
+            // ✅ تحديث قاعدة البيانات
             if (certRecord) {
               await Student.updateOne(
                 { _id: student._id, "issuedCertificates.moduleId": moduleId },
@@ -245,6 +319,14 @@ export async function GET(request) {
                   },
                 },
               });
+            }
+
+            // ✅ تنظيف: حذف الملف المحلي بعد الانتهاء
+            try {
+              await fs.remove(filePath);
+              console.log(`🗑️ Deleted local file: ${path.basename(filePath)}`);
+            } catch (cleanupError) {
+              // مش مشكلة لو متحذفش - ممكن يكون اتستخدم في مكان تاني
             }
 
             console.log(

@@ -1,8 +1,10 @@
+//api/admin/certificates/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Student from "../../../models/Student";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
 // ============================================================
 // GET /api/admin/certificates
@@ -84,6 +86,14 @@ export async function GET() {
             else if (partiallyDelivered) summary.partiallyDelivered++;
             else summary.pendingNoPhone++;
 
+            // ✅ محاولة جلب رابط Cloudinary بدلاً من الرابط المحلي
+            let imageUrl = certRecord.imageUrl;
+            // لو الرابط محلي (يبدأ بـ /api/temp-image/)، نحوله إلى Cloudinary
+            if (imageUrl && imageUrl.startsWith('/api/temp-image/')) {
+              // نحتفظ بالرابط المحلي، لكن ممكن نضيف رابط Cloudinary لو موجود
+              // في metadata تاني
+            }
+
             issued.push({
               studentId: student._id,
               studentName: student.personalInfo?.fullName || "",
@@ -95,7 +105,7 @@ export async function GET() {
               moduleId,
               moduleIndex,
               moduleTitle: module.title,
-              imageUrl: certRecord.imageUrl,
+              imageUrl: imageUrl,
               issuedAt: certRecord.issuedAt,
               student: {
                 phone: studentNumber || null,

@@ -1,9 +1,11 @@
+//api/admin/certificates/preview/route.js
 import { NextResponse } from "next/server";
 import fs from "fs-extra";
 import path from "path";
 import { buildCertificateHtml } from "../../../../../utils/certificateHtml";
 import { getBrowser } from "../../../../../utils/browserPool";
 import { GENERATED_DIR } from "../../../../../utils/generatedFilesPaths";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
 // ============================================================
 // POST /api/admin/certificates/preview
@@ -16,6 +18,7 @@ import { GENERATED_DIR } from "../../../../../utils/generatedFilesPaths";
 // ويقفل Chrome في كل request — أسرع بكتير وأقل استهلاك للموارد.
 // ✅ تحديث: الصور بقت base64 جوه الـ HTML نفسه (راجع certificateHtml.js)
 // فمفيش استنى لطلبات شبكة، فاستخدمنا "load" بدل "networkidle0".
+// ✅ تحديث جديد: رفع الصورة على Cloudinary وعرضها بدلاً من الرابط المحلي
 // ============================================================
 export async function POST(request) {
   let page = null;
@@ -29,6 +32,7 @@ export async function POST(request) {
       signatureName = "Aya Elnagar",
       background = "navy-orange",
       date,
+      uploadToCloudinary: shouldUploadToCloudinary = true, // ✅ خيار رفع على Cloudinary
     } = body;
 
     // achievements ممكن تيجي كـ array أو كنص متعدد الأسطر
@@ -74,7 +78,42 @@ export async function POST(request) {
     await fs.ensureDir(GENERATED_DIR);
     await page.screenshot({ path: filePath, fullPage: true });
 
-    return NextResponse.json({ success: true, imageUrl: `/api/temp-image/${fileName}` });
+    let imageUrl = `/api/temp-image/${fileName}`;
+    let cloudinaryUrl = null;
+
+    // ✅ رفع الصورة على Cloudinary (اختياري)
+    if (shouldUploadToCloudinary) {
+      try {
+        console.log("📤 Uploading preview to Cloudinary...");
+        const fileBuffer = await fs.readFile(filePath);
+        const base64 = `data:image/png;base64,${fileBuffer.toString("base64")}`;
+        cloudinaryUrl = await uploadToCloudinary(base64, "certificates/previews");
+        console.log(`✅ Uploaded to Cloudinary: ${cloudinaryUrl}`);
+        
+        // ✅ نستخدم رابط Cloudinary بدلاً من الرابط المحلي
+        imageUrl = cloudinaryUrl;
+        
+        // ✅ تنظيف: حذف الملف المحلي بعد الرفع
+        try {
+          await fs.remove(filePath);
+          console.log(`🗑️ Deleted local preview file: ${fileName}`);
+        } catch (cleanupError) {
+          // مش مشكلة لو متحذفش
+        }
+      } catch (cloudinaryError) {
+        console.error("❌ Cloudinary upload failed for preview:", cloudinaryError.message);
+        // نحتفظ بالرابط المحلي كـ fallback
+        imageUrl = `/api/temp-image/${fileName}`;
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      imageUrl: imageUrl,
+      cloudinaryUrl: cloudinaryUrl || null,
+      isCloudinary: !!cloudinaryUrl,
+      fileName: fileName,
+    });
   } catch (error) {
     console.error("❌ Error generating certificate preview:", error);
     return NextResponse.json(
