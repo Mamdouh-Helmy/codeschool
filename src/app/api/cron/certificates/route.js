@@ -26,6 +26,38 @@ function isAuthorizedRequest(req, searchParams) {
 }
 
 // ============================================================
+// ✅ بناء قائمة الإنجازات (achievements) للشهادة — بالاعتماد على
+// sessionNumber الحقيقي بتاع كل lesson، مش على تطابق نص العنوان.
+// ------------------------------------------------------------
+// ليه مش .map() بسيطة؟ لأن كل سيشن بيغطي 2 lessons (lessonIndexes
+// طولها 2 دايمًا — راجع Session.js)، وده بيخلي كل "سيشن" يظهر مرتين
+// في مصفوفة achievements لو استخدمنا map عادية. الحل: نجمّع الدروس
+// حسب sessionNumber بتاعها، وناخد عنوان واحد فقط يمثّل كل سيشن —
+// فيبقى عدد الإنجازات = عدد السيشنات الفعلية، مش عدد الدروس.
+//
+// ⚠️ ملحوظة: ده مش اعتماد على تطابق النص بالصدفة (زي [...new Set()])
+// اللي ممكن يحذف غلط لو اتفق عنوانين مختلفين فعلاً في نص واحد.
+// هنا الاعتماد على العلاقة البنيوية الحقيقية في الداتا.
+// ============================================================
+function buildAchievementsFromLessons(lessons) {
+  if (!lessons?.length) {
+    return ["Successfully completed all module requirements."];
+  }
+
+  const sortedLessons = [...lessons].sort((a, b) => a.order - b.order);
+
+  const bySession = sortedLessons.reduce((acc, lesson) => {
+    const key = lesson.sessionNumber ?? lesson.order;
+    if (!acc[key]) {
+      acc[key] = lesson.title;
+    }
+    return acc;
+  }, {});
+
+  return Object.values(bySession);
+}
+
+// ============================================================
 // ✅ توليد صورة الشهادة — بدون React/react-dom/server (متوافق مع
 // Route Handlers). راجع src/app/utils/certificateHtml.js للتفاصيل.
 // ============================================================
@@ -188,9 +220,10 @@ export async function GET(request) {
 
             console.log(`🎓 Generating certificate for ${student.personalInfo.fullName} - ${module.title}`);
 
-            const achievements = module.lessons?.length
-              ? module.lessons.map((l) => l.title)
-              : ["Successfully completed all module requirements."];
+            // ✅ استخدام الدالة الجديدة اللي بتجمّع الإنجازات حسب sessionNumber
+            // بدل ما تاخد title كل lesson لوحده (وده كان بيسبب تكرار كل
+            // إنجاز مرتين لأن كل سيشن بيغطي 2 lessons)
+            const achievements = buildAchievementsFromLessons(module.lessons);
 
             const browser = await getBrowser();
 
