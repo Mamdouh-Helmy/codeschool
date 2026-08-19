@@ -19,12 +19,36 @@ import fs from "fs";
 import path from "path";
 
 const BACKGROUND_THEMES = {
-  "navy-orange": { outerBg: "#0d2b3e", accentColor: "#ff6a00", stripeColor: "#123a52" },
-  "blue-orange": { outerBg: "#1c4e80", accentColor: "#ff6a00", stripeColor: "#2a5f94" },
-  "gold-teal": { outerBg: "#d4a017", accentColor: "#0f6b6b", stripeColor: "#c99310" },
-  "orange-teal": { outerBg: "#c9531e", accentColor: "#0f6b6b", stripeColor: "#b3481a" },
-  "teal-gold": { outerBg: "#0f6b6b", accentColor: "#d4a017", stripeColor: "#0c5757" },
-  "navy-gold": { outerBg: "#0d2b3e", accentColor: "#d4a017", stripeColor: "#123a52" },
+  "navy-orange": {
+    outerBg: "#0d2b3e",
+    accentColor: "#ff6a00",
+    stripeColor: "#123a52",
+  },
+  "blue-orange": {
+    outerBg: "#1c4e80",
+    accentColor: "#ff6a00",
+    stripeColor: "#2a5f94",
+  },
+  "gold-teal": {
+    outerBg: "#d4a017",
+    accentColor: "#0f6b6b",
+    stripeColor: "#c99310",
+  },
+  "orange-teal": {
+    outerBg: "#c9531e",
+    accentColor: "#0f6b6b",
+    stripeColor: "#b3481a",
+  },
+  "teal-gold": {
+    outerBg: "#0f6b6b",
+    accentColor: "#d4a017",
+    stripeColor: "#0c5757",
+  },
+  "navy-gold": {
+    outerBg: "#0d2b3e",
+    accentColor: "#d4a017",
+    stripeColor: "#123a52",
+  },
 };
 
 const MIME_TYPES = {
@@ -51,8 +75,42 @@ function imageToDataUri(imageName) {
     imageDataUriCache[imageName] = dataUri;
     return dataUri;
   } catch (err) {
-    console.error(`⚠️ Could not read image for certificate: ${imageName}`, err.message);
+    console.error(
+      `⚠️ Could not read image for certificate: ${imageName}`,
+      err.message,
+    );
     // بنرجع string فاضي بدل ما نكسر توليد الشهادة بالكامل بسبب صورة واحدة ناقصة
+    return "";
+  }
+}
+
+// ✅ نفس فكرة imageToDataUri بالظبط، لكن للخطوط. الخطوط دي (Alex Brush,
+// Playfair Display, Cormorant Garamond) اتحمّلت مرة واحدة يدويًا من Google
+// Fonts وبقت جوه public/fonts/certificate/ — بنقراها من الديسك ونحولها
+// base64 عشان نحطها جوه @font-face من غير أي استيراد شبكة وقت التوليد
+// (ده كان سبب الـ Navigation Timeout قبل كده).
+const fontDataUriCache = {};
+
+function fontToDataUri(fontFileName) {
+  if (fontDataUriCache[fontFileName]) return fontDataUriCache[fontFileName];
+
+  try {
+    const filePath = path.join(
+      process.cwd(),
+      "public",
+      "fonts",
+      "certificate",
+      fontFileName,
+    );
+    const fileBuffer = fs.readFileSync(filePath);
+    const dataUri = `data:font/woff2;base64,${fileBuffer.toString("base64")}`;
+    fontDataUriCache[fontFileName] = dataUri;
+    return dataUri;
+  } catch (err) {
+    console.error(
+      `⚠️ Could not read font for certificate: ${fontFileName}`,
+      err.message,
+    );
     return "";
   }
 }
@@ -80,19 +138,18 @@ export function buildCertificateHtml({
   moduleTitle = "Grade 5-6 Module 1 Chatbot Dev 1",
   signatureName = "Aya Elnagar",
   date = "15/12/2025",
-  achievements = [
-    "Successfully completed all module requirements.",
-  ],
+  achievements = ["Successfully completed all module requirements."],
   backgroundStyle = "navy-orange",
 } = {}) {
-  const theme = BACKGROUND_THEMES[backgroundStyle] || BACKGROUND_THEMES["navy-orange"];
+  const theme =
+    BACKGROUND_THEMES[backgroundStyle] || BACKGROUND_THEMES["navy-orange"];
 
   const achievementsHtml = achievements
     .map(
       (item) =>
         `<p style="font-size:23px;margin:12px 0;"><span style="font-weight:bold;">•</span> ${escapeHtml(
-          item
-        )}</p>`
+          item,
+        )}</p>`,
     )
     .join("");
 
@@ -102,7 +159,25 @@ export function buildCertificateHtml({
 <head>
   <meta charset="utf-8" />
   <style>
-    body { margin: 0; padding: 0; font-family: 'Georgia', 'Times New Roman', serif; }
+    @font-face {
+      font-family: 'Alex Brush';
+      font-style: normal;
+      font-weight: 400;
+      src: url(${fontToDataUri("alex-brush.woff2")}) format('woff2');
+    }
+    @font-face {
+      font-family: 'Playfair Display';
+      font-style: normal;
+      font-weight: 400;
+      src: url(${fontToDataUri("playfair-display.woff2")}) format('woff2');
+    }
+    @font-face {
+      font-family: 'Cormorant Garamond';
+      font-style: normal;
+      font-weight: 400;
+      src: url(${fontToDataUri("cormorant-garamond.woff2")}) format('woff2');
+    }
+    body { margin: 0; padding: 0; font-family: 'Georgia', 'Playfair Display', serif; }
   </style>
 </head>
 <body>
@@ -112,7 +187,7 @@ export function buildCertificateHtml({
       padding:45px;
       position:relative;
       box-sizing:border-box;
-      font-family:'Georgia',serif;
+      font-family:'Georgia','Playfair Display',serif;
       margin:0 auto;
       overflow:hidden;
     ">
@@ -154,7 +229,7 @@ export function buildCertificateHtml({
             color:#0d2b3e;
             margin:0;
             letter-spacing:4px;
-            font-family:'Georgia',serif;
+            font-family:'Playfair Display',serif;
             font-variant:small-caps;
             margin-bottom:40px;
           ">
@@ -170,13 +245,13 @@ export function buildCertificateHtml({
           color:${theme.accentColor};
           font-weight:bold;
           margin:22px 0;
-          font-family:'Georgia',serif;
+          font-family:'Playfair Display',serif;
         ">
         ${escapeHtml(studentName)}
       </h2>
 
       <div style="text-align:center;padding:0 30px;width:100%;color:#0d2b3e;">
-        <div style="display:inline-block;text-align:center;font-family:'Georgia',serif;">
+        <div style="display:inline-block;text-align:center;font-family:'Cormorant Garamond','Playfair Display',serif;">
           <p style="font-size:26px;margin:12px 0;">
             You have successfully completed <strong>${escapeHtml(moduleTitle)}</strong>
           </p>
@@ -208,11 +283,10 @@ export function buildCertificateHtml({
         <div style="text-align:center;padding-right:20px;">
           <p style="
               font-size:56px;
-              font-family:'Georgia',cursive;
+              font-family:'Alex Brush','Dancing Script','Great Vibes',cursive;
               color:#0d2b3e;
               margin:0 0 6px;
               font-weight:normal;
-              font-style:italic;
             ">
             ${escapeHtml(signatureName)}
           </p>

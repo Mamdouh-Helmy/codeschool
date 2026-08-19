@@ -28,10 +28,9 @@ function isAuthorizedRequest(req, searchParams) {
 // ✅ توليد صورة الشهادة — بدون React/react-dom/server (متوافق مع
 // Route Handlers). راجع src/app/utils/certificateHtml.js للتفاصيل.
 //
-// ✅ تحديث: بيستخدم browser instance مشترك (browserPool) بدل ما يفتح
-// Chrome process جديدة كل مرة، وبيقرأ الصور كـ base64 مباشرة (مفيش
-// baseUrl لتحميل صور الشهادة نفسها — baseUrl لسه مستخدم بعد كده بس
-// لبناء رابط الصورة النهائي اللي بيتبعت على واتساب).
+// ✅ بيرجع الاتنين: المسار المحلي الفعلي على الديسك (filePath) —
+// عشان نبعته لـ Wapilot كـ base64 مباشرة — والرابط العام (imageUrl)
+// اللي بنخزنه في الداتابيز/نعرضه للأدمن.
 // ============================================================
 async function generateCertificateImage(browser, data) {
   const { studentName, moduleTitle, achievements, signature, background, date } = data;
@@ -55,7 +54,10 @@ async function generateCertificateImage(browser, data) {
     await fs.ensureDir(GENERATED_DIR);
     await page.screenshot({ path: filePath, fullPage: true });
 
-    return `/api/temp-image/${fileName}`;
+    return {
+      filePath,
+      imageUrl: `/api/temp-image/${fileName}`,
+    };
   } finally {
     await page.close();
   }
@@ -149,7 +151,7 @@ export async function GET(request) {
 
             const browser = await getBrowser();
 
-            const imagePath = await generateCertificateImage(browser, {
+            const { filePath, imageUrl } = await generateCertificateImage(browser, {
               studentName: student.personalInfo.fullName,
               moduleTitle: module.title,
               achievements,
@@ -160,7 +162,7 @@ export async function GET(request) {
 
             summary.generated++;
 
-            const fullImageUrl = `${baseUrl}${imagePath}`;
+            const fullImageUrl = `${baseUrl}${imageUrl}`;
 
             // ✅ اللغة المفضلة بتاعة الطالب — بتحكم في لغة رسالتي الطالب وولي الأمر
             const preferredLanguage = student.communicationPreferences?.preferredLanguage || "ar";
@@ -168,6 +170,10 @@ export async function GET(request) {
             let studentDelivered = studentAlreadyDelivered;
             let guardianDelivered = guardianAlreadyDelivered;
 
+            // ✅ بنبعت الصورة كـ base64 مباشرة (sendMediaMessageFromFile) بدل
+            // ما نديله رابط (sendMediaMessage) — عشان نتجنب مشكلة "Resource
+            // not found or not accessible" اللي كانت بتحصل لما Wapilot يحاول
+            // يعمل fetch للرابط بنفسه من برا.
             if (studentNeedsSend) {
               const caption = await wapilotService.prepareCertificateStudentMessage(
                 student.personalInfo.fullName,
@@ -176,7 +182,7 @@ export async function GET(request) {
                 module.title,
                 student.personalInfo.nickname,
               );
-              const result = await wapilotService.sendMediaMessage(studentNumber, fullImageUrl, caption);
+              const result = await wapilotService.sendMediaMessageFromFile(studentNumber, filePath, caption);
               studentDelivered = !!result?.success;
               if (studentDelivered) {
                 summary.studentSent++;
@@ -196,7 +202,7 @@ export async function GET(request) {
                 student.personalInfo?.nickname,
                 module.title,
               );
-              const result = await wapilotService.sendMediaMessage(guardianNumber, fullImageUrl, guardianCaption);
+              const result = await wapilotService.sendMediaMessageFromFile(guardianNumber, filePath, guardianCaption);
               guardianDelivered = !!result?.success;
               if (guardianDelivered) {
                 summary.guardianSent++;

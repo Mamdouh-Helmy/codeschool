@@ -1375,6 +1375,76 @@ The Code School Team 💻`;
 
 فريق Code School 💻`;
   }
+
+  // ============================================================
+  // ✅ إرسال ميديا كـ base64 مباشرة (بدل رابط يروح Wapilot يجيبه بنفسه)
+  //
+  // السبب: sendMediaMessage الأصلية بتبعت رابط (mediaUrl) و Wapilot
+  // سيرفراتهم هي اللي بتعمل fetch للرابط ده بنفسها من برا. لو فيه أي
+  // عائق بين سيرفراتهم وسيرفرنا (فايروول، SSL، DNS، إلخ) بيرجع
+  // "Resource not found or not accessible" حتى لو الرابط شغال 100%
+  // من المتصفح أو من نفس السيرفر.
+  //
+  // الحل: نقرأ الصورة من الديسك مباشرة على سيرفرنا، ونحولها base64،
+  // ونحطها جوه الـ request نفسه بدل ما نديله رابط. كده مفيش أي "fetch
+  // من برا" مطلوب من Wapilot خالص، والمشكلة دي بتتلغي من جذورها.
+  // ============================================================
+  async sendMediaMessageFromFile(
+    phoneNumber,
+    filePath,
+    caption = "",
+    mediaType = "image",
+  ) {
+    try {
+      if (!this.apiToken || !this.instanceId) {
+        throw new Error("WhatsApp API Token or Instance ID not configured");
+      }
+
+      const fs = await import("fs/promises");
+      const path = await import("path");
+
+      const fileBuffer = await fs.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeMap = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+      };
+      const mime = mimeMap[ext] || "image/png";
+      const base64Data = `data:${mime};base64,${fileBuffer.toString("base64")}`;
+
+      const apiUrl = `${this.baseURL}/${this.instanceId}/send-media`;
+      const messagePayload = {
+        chat_id: phoneNumber.replace("+", ""),
+        media: base64Data,
+        type: mediaType,
+        caption,
+        priority: 0,
+      };
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: this.apiToken },
+        body: JSON.stringify(messagePayload),
+      });
+
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(`WhatsApp API media error: ${JSON.stringify(result)}`);
+
+      return {
+        success: true,
+        messageId: result.message_id || result.id || result.messageId,
+        data: result,
+        sentVia: "wapilot",
+        instanceId: this.instanceId,
+      };
+    } catch (error) {
+      console.error("❌ wapilot media (base64) error:", error.message);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export const wapilotService = new WapilotService();
