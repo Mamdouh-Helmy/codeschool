@@ -1270,7 +1270,7 @@ The Code School Team 💻`;
       const form = new FormData();
       form.append("chat_id", phoneNumber.replace("+", ""));
       form.append(
-        "image",
+        "media",
         new Blob([fileBuffer], { type: "image/png" }),
         path.basename(filePath),
       );
