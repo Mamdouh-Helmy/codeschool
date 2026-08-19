@@ -212,7 +212,7 @@ export function buildCertificateHtml({
         box-sizing:border-box;
       ">
       <div style="position:absolute;top:-30px;left:10px;z-index:10;">
-        <img src="${imageToDataUri("badge.png")}" alt="Badge" style="width:290px;" />
+        <img src="${imageToDataUri("badge.png")}" alt="Badge" style="width:350px;" />
       </div>
 
       <div style="margin-top:20px;">
@@ -220,7 +220,7 @@ export function buildCertificateHtml({
       </div>
 
       <div style="text-align:center;">
-        <p style="font-size:26px;color:#222;margin-bottom:4px;letter-spacing:1px;">
+        <p style="font-size:26px;color:#222;letter-spacing:1px;">
           Proudly present this official
         </p>
         <h1 style="
@@ -231,7 +231,7 @@ export function buildCertificateHtml({
             letter-spacing:4px;
             font-family:'Playfair Display',serif;
             font-variant:small-caps;
-            margin-bottom:40px;
+            margin-bottom:10px;
           ">
           Certificate
         </h1>

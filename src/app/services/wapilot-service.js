@@ -3,7 +3,6 @@ import Student from "../models/Student.js";
 import { connectDB } from "@/lib/mongodb";
 import TemplateVariable from "../models/TemplateVariable.js";
 import User from "../models/User.js";
-import { uploadToCloudinary } from "@/lib/cloudinary";
 
 const FORCE_PRODUCTION = true;
 
@@ -1251,56 +1250,39 @@ The Code School Team 💻`;
   }
 
   // ============================================================
-  // ✅ إرسال ميديا عبر Cloudinary (الحل الجديد)
+  // ✅ إرسال ميديا عبر multipart/form-data مباشرة (الطريقة الصحيحة
+  // حسب وثائق Wapilot الرسمية — الـ API بياخد الملف كـ file upload
+  // مباشرة، مش رابط URL). لا حاجة لـ Cloudinary في مرحلة الإرسال
+  // إطلاقاً — Cloudinary بيتستخدم بس لتخزين رابط دائم للعرض في
+  // الداشبورد، ده بيتعمل في الـ route نفسه (cron/route.js).
   // ============================================================
-
-  /**
-   * ✅ إرسال صورة شهادة عبر Cloudinary
-   * 
-   * المشكلة الأصلية: كانت base64 كبيرة جداً وبتسبب "Resource not found"
-   * الحل: نرفع الصورة على Cloudinary أولاً، ثم نرسل الرابط العام
-   * 
-   * @param {string} phoneNumber - رقم واتساب المستلم
-   * @param {string} filePath - المسار المحلي للصورة على السيرفر
-   * @param {string} caption - النص المرافق للصورة
-   * @param {string} mediaType - نوع الميديا (image, video, document)
-   * @returns {Promise<Object>} - نتيجة الإرسال
-   */
-  async sendCertificateViaCloudinary(
-    phoneNumber,
-    filePath,
-    caption = "",
-    mediaType = "image",
-  ) {
+  async sendImageFile(phoneNumber, filePath, caption = "") {
     try {
       if (!this.apiToken || !this.instanceId) {
         throw new Error("WhatsApp API Token or Instance ID not configured");
       }
 
-      // ✅ 1. قراءة الصورة من الديسك
       const fs = await import("fs/promises");
+      const path = await import("path");
       const fileBuffer = await fs.readFile(filePath);
-      const base64 = `data:image/png;base64,${fileBuffer.toString("base64")}`;
 
-      // ✅ 2. رفع الصورة على Cloudinary
-      console.log("📤 Uploading certificate to Cloudinary...");
-      const cloudinaryUrl = await uploadToCloudinary(base64, "certificates");
-      console.log(`✅ Uploaded to Cloudinary: ${cloudinaryUrl}`);
+      // Node 18+ بيدعم FormData و Blob بشكل native، بدون أي مكتبة إضافية
+      const form = new FormData();
+      form.append("chat_id", phoneNumber.replace("+", ""));
+      form.append(
+        "image",
+        new Blob([fileBuffer], { type: "image/png" }),
+        path.basename(filePath),
+      );
+      if (caption) form.append("caption", caption);
 
-      // ✅ 3. إرسال الصورة عبر Wapilot باستخدام رابط Cloudinary
-      const apiUrl = `${this.baseURL}/${this.instanceId}/send-media`;
-      const messagePayload = {
-        chat_id: phoneNumber.replace("+", ""),
-        media: cloudinaryUrl,
-        type: mediaType,
-        caption: caption,
-        priority: 0,
-      };
+      const apiUrl = `${this.baseURL}/${this.instanceId}/send-image`;
 
+      // ⚠️ مهم: متحطش Content-Type يدوي — fetch بيحدده تلقائياً مع الـ boundary الصحيح
       const response = await fetch(apiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", token: this.apiToken },
-        body: JSON.stringify(messagePayload),
+        headers: { token: this.apiToken },
+        body: form,
       });
 
       const result = await response.json();
@@ -1308,53 +1290,7 @@ The Code School Team 💻`;
         throw new Error(`WhatsApp API media error: ${JSON.stringify(result)}`);
       }
 
-      return {
-        success: true,
-        messageId: result.message_id || result.id || result.messageId,
-        data: result,
-        sentVia: "wapilot",
-        instanceId: this.instanceId,
-        cloudinaryUrl,
-      };
-    } catch (error) {
-      console.error("❌ wapilot media via Cloudinary error:", error.message);
-      return { success: false, error: error.message };
-    }
-  }
-
-  // ============================================================
-  // ✅ إرسال ميديا عبر رابط (للتوافق مع الكود القديم)
-  // ============================================================
-
-  async sendMediaMessage(
-    phoneNumber,
-    mediaUrl,
-    caption = "",
-    mediaType = "image",
-  ) {
-    try {
-      if (!this.apiToken || !this.instanceId) {
-        throw new Error("WhatsApp API Token or Instance ID not configured");
-      }
-
-      const apiUrl = `${this.baseURL}/${this.instanceId}/send-media`;
-      const messagePayload = {
-        chat_id: phoneNumber.replace("+", ""),
-        media: mediaUrl,
-        type: mediaType,
-        caption: caption,
-        priority: 0,
-      };
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", token: this.apiToken },
-        body: JSON.stringify(messagePayload),
-      });
-
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(`WhatsApp API media error: ${JSON.stringify(result)}`);
+      console.log("📦 Full wapilot response:", JSON.stringify(result, null, 2));
 
       return {
         success: true,
@@ -1364,7 +1300,7 @@ The Code School Team 💻`;
         instanceId: this.instanceId,
       };
     } catch (error) {
-      console.error("❌ wapilot media error:", error.message);
+      console.error("❌ wapilot sendImageFile error:", error.message);
       return { success: false, error: error.message };
     }
   }
@@ -1456,13 +1392,6 @@ The Code School Team 💻`;
 
 فريق Code School 💻`;
   }
-
-  // ============================================================
-  // ❌ الطريقة القديمة (base64) - تم إزالتها لأنها كانت تسبب المشكلة
-  // ============================================================
-  // تم إزالة sendMediaMessageFromFile لأنها كانت ترسل base64 كبيرة جداً
-  // وسببها مشكلة "Resource not found or not accessible"
-  // استخدم sendCertificateViaCloudinary بدلاً منها
 }
 
 export const wapilotService = new WapilotService();
