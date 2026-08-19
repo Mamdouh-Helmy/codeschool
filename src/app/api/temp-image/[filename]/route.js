@@ -14,7 +14,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { GENERATED_DIR } from "@/app/utils/generatedFilesPaths";
+import { GENERATED_DIR } from "../../../../utils/generatedFilesPaths";
 
 const MIME_TYPES = {
   ".png": "image/png",
