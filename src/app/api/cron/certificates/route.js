@@ -121,11 +121,14 @@ async function uploadCertificateToCloudinary(filePath) {
 // فريد جوه Portfolio.certificates عشان لو الكرون رجع اشتغل تاني على
 // نفس الموديول الشهادة متتضافش مرتين.
 //
-// ⚠️ بتفترض إن عند الطالب حقل `userId` بيربطه بحساب User اللي عليه
-// الـ Portfolio. لو الحقل عندك اسمه مختلف، غيّر `student.userId` بس هنا.
+// ⚠️ الحقل الصحيح اللي بيربط الطالب بحساب User هو authUserId (راجع
+// models/Student.js) — مش userId. الحقل ده sparse يعني مش كل طالب
+// هيكون عنده حساب User مرتبط أصلاً (خصوصًا الطلبة اللي اتسجلوا من
+// فورم التسجيل العادي من غير حساب دخول)، وفي الحالة دي بنتخطى
+// المزامنة بهدوء لأن Portfolio.userId مطلوب وunique أصلاً.
 // ============================================================
 async function syncCertificateToStudentPortfolio(student, moduleId, module, fullImageUrl) {
-  const userId = student.userId;
+  const userId = student.authUserId; // ✅ الحقل الصح (كان student.userId غلط)
   if (!userId) return { added: false, reason: "NO_LINKED_USER" };
 
   try {
@@ -195,7 +198,8 @@ export async function GET(request) {
       pendingNoRecipient: 0,
       cloudinaryUploads: 0,
       portfolioSynced: 0,
-      noAttendanceYet: 0, // ✅ جديد — بيتسجل بدل ما الـ continue يبقى صامت
+      portfolioSkippedNoUser: 0, // ✅ جديد — عدد الطلبة اللي معندهمش authUserId
+      noAttendanceYet: 0,
       errors: 0,
     };
 
@@ -310,7 +314,11 @@ export async function GET(request) {
               module,
               fullImageUrl,
             );
-            if (portfolioResult?.added) summary.portfolioSynced++;
+            if (portfolioResult?.added) {
+              summary.portfolioSynced++;
+            } else if (portfolioResult?.reason === "NO_LINKED_USER") {
+              summary.portfolioSkippedNoUser++;
+            }
 
             // ✅ اللغة المفضلة بتاعة الطالب
             const preferredLanguage = student.communicationPreferences?.preferredLanguage || "ar";
