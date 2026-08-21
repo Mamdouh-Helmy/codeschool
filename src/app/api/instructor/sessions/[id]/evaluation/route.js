@@ -118,6 +118,58 @@ async function getModuleData(groupId, moduleIndex) {
   }
 }
 
+// ─── Helper: جيب بيانات البلوج الخاصة بالسيشن دي من الكورس ───────────────────
+// بيدور على السيشن المطابقة (بنفس sessionNumber) جوه curriculum[moduleIndex].sessions
+// ولو مفيش محتوى بلوج خالص (لا عربي ولا إنجليزي) بيرجع null — يعني مفيش
+// أي لينك هيتضاف للرسالة أصلاً.
+async function getSessionBlogInfo(session) {
+  try {
+    console.log('🔍 [BlogInfo] session.courseId:', session?.courseId, '| moduleIndex:', session?.moduleIndex, '| sessionNumber:', session?.sessionNumber);
+
+    if (!session?.courseId || session.moduleIndex === undefined || !session.sessionNumber) {
+      console.log('🔍 [BlogInfo] Missing courseId/moduleIndex/sessionNumber — returning null');
+      return null;
+    }
+
+    const Course = (await import('../../../../../models/Course')).default;
+    const course = await Course.findById(session.courseId)
+      .select('curriculum')
+      .lean();
+
+    if (!course) {
+      console.log('🔍 [BlogInfo] Course not found for id:', session.courseId);
+      return null;
+    }
+
+    const moduleData = course.curriculum?.[session.moduleIndex];
+    console.log('🔍 [BlogInfo] moduleData found:', !!moduleData, '| sessions count in module:', moduleData?.sessions?.length || 0);
+    if (moduleData?.sessions?.length) {
+      console.log('🔍 [BlogInfo] sessionNumbers available in module:', moduleData.sessions.map(s => s.sessionNumber));
+    }
+
+    const sessionBlog = (moduleData?.sessions || []).find(
+      (s) => Number(s.sessionNumber) === Number(session.sessionNumber)
+    );
+
+    if (!sessionBlog) {
+      console.log('🔍 [BlogInfo] No matching sub-session found for sessionNumber:', session.sessionNumber);
+      return null;
+    }
+
+    const hasAr = !!sessionBlog.blogBodyAr?.trim();
+    const hasEn = !!sessionBlog.blogBodyEn?.trim();
+    console.log('🔍 [BlogInfo] Found sessionBlog — hasAr:', hasAr, '| hasEn:', hasEn);
+
+    // ✅ لو مفيش محتوى بلوج خالص (مش عربي ومش إنجليزي) — من غير لينك
+    if (!hasAr && !hasEn) return null;
+
+    return { hasAr, hasEn };
+  } catch (err) {
+    console.warn('⚠️ Could not fetch session blog info:', err.message);
+    return null;
+  }
+}
+
 // ─── Build rendered evaluation message ───────────────────────────────────────
 async function buildEvaluationMessage(student, decision, session, extra = {}) {
   const lang         = student.communicationPreferences?.preferredLanguage || 'ar';
@@ -250,6 +302,22 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
   Object.entries(variables).forEach(([key, value]) => {
     rendered = rendered.replace(new RegExp(`\\{${key}\\}`, 'g'), value ?? '');
   });
+
+  // ✅ لينك البلوج — بيضاف في آخر الرسالة، وبس لو فيه محتوى فعلاً باللغة
+  // اللي هتتبعت بيها الرسالة للطالب/ولي الأمر دي بالتحديد. لو مفيش بلوج
+  // خالص للسيشن دي، أو مفيش نسخة باللغة دي، مفيش أي لينك بيتضاف.
+  const blogInfo = extra.blogInfo;
+  console.log('🔍 [BlogLink] lang:', lang, '| blogInfo:', blogInfo);
+  if (blogInfo && ((lang === 'ar' && blogInfo.hasAr) || (lang === 'en' && blogInfo.hasEn))) {
+    console.log('✅ [BlogLink] Appending blog link to message');
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+    const blogUrl = `${baseUrl}/session-blog/${session._id}`;
+    const blogSection =
+      lang === 'ar'
+        ? `\n\n📝 تقدروا تقروا ملخص الجلسة كامل من هنا:\n${blogUrl}`
+        : `\n\n📝 You can read the full session summary here:\n${blogUrl}`;
+    rendered += blogSection;
+  }
 
   return {
     rendered,
@@ -463,6 +531,10 @@ export async function POST(req, { params }) {
       ? await getModuleData(session.groupId, session.moduleIndex ?? 0)
       : { moduleTitle: '', moduleDescription: '' };
 
+    // ✅ نفس بيانات البلوج اللي هتتضاف في الرسالة الحقيقية — عشان المعاينة
+    // تبقى مطابقة تمامًا لما هيتبعت فعليًا بعد الحفظ
+    const blogInfo = session ? await getSessionBlogInfo(session) : null;
+
     const { rendered, lang, isFallback, guardianPhone } = await buildEvaluationMessage(
       student, decision, session,
       {
@@ -473,6 +545,7 @@ export async function POST(req, { params }) {
         groupId:           session?.groupId,
         moduleTitle,
         moduleDescription,
+        blogInfo,
       }
     );
 
@@ -531,6 +604,10 @@ export async function PATCH(req, { params }) {
       ? await getModuleData(session.groupId._id, session.moduleIndex ?? 0)
       : { moduleTitle: '', moduleDescription: '' };
 
+    // ✅ جيب بيانات البلوج مرة واحدة بس لكل السيشن دي (نفسها لكل الطلاب)
+    // بدل ما تتجاب من جديد جوه الـ loop لكل طالب — نفس السيشن يعني نفس البلوج.
+    const blogInfo = await getSessionBlogInfo(session);
+
     const attendanceMap = {};
     (session.attendance || []).forEach((a) => { attendanceMap[a.studentId?.toString()] = a.status; });
 
@@ -575,6 +652,7 @@ export async function PATCH(req, { params }) {
           groupId:           session.groupId?._id,
           moduleTitle,
           moduleDescription,
+          blogInfo,
         }
       );
 
