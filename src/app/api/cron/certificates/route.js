@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/mongodb";
 import Student from "../../../models/Student";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
-import Portfolio from "../../../models/Portfolio"; // ✅ جديد
+import Portfolio from "../../../models/Portfolio";
 import { wapilotService } from "../../../services/wapilot-service";
 import fs from "fs-extra";
 import path from "path";
@@ -119,16 +119,14 @@ async function uploadCertificateToCloudinary(filePath) {
 // بتشتغل بغض النظر عن نجاح إرسال الواتساب من عدمه (طالما الشهادة
 // اتولدت فعلاً)، وبتعتمد على moduleId (course._id-moduleIndex) كمفتاح
 // فريد جوه Portfolio.certificates عشان لو الكرون رجع اشتغل تاني على
-// نفس الموديول (مثلاً وهو بيحاول يبعت لولي الأمر بعد ما الطالب استلم
-// شهادته من مرة سابقة) الشهادة متتضافش مرتين.
+// نفس الموديول الشهادة متتضافش مرتين.
 //
 // ⚠️ بتفترض إن عند الطالب حقل `userId` بيربطه بحساب User اللي عليه
-// الـ Portfolio (نفس نمط createdBy.id في Course/Group). لو الحقل
-// عندك اسمه مختلف، غيّر `student.userId` بس هنا.
+// الـ Portfolio. لو الحقل عندك اسمه مختلف، غيّر `student.userId` بس هنا.
 // ============================================================
 async function syncCertificateToStudentPortfolio(student, moduleId, module, fullImageUrl) {
   const userId = student.userId;
-  if (!userId) return; // الطالب مالوش حساب User مرتبط → مفيش بورتفوليو أصلاً
+  if (!userId) return { added: false, reason: "NO_LINKED_USER" };
 
   try {
     const { added } = await Portfolio.addModuleCertificateIfMissing(userId, {
@@ -143,9 +141,11 @@ async function syncCertificateToStudentPortfolio(student, moduleId, module, full
     if (added) {
       console.log(`🗂️  Added certificate to portfolio for ${student.personalInfo.fullName} (${moduleId})`);
     }
+    return { added };
   } catch (error) {
     // فشل مزامنة البورتفوليو مايوقفش باقي العملية (الإرسال والتحديث الأساسي)
     console.error(`⚠️ Portfolio sync failed for ${student.personalInfo?.fullName}:`, error.message);
+    return { added: false, reason: "ERROR" };
   }
 }
 
@@ -194,12 +194,20 @@ export async function GET(request) {
       guardianSent: 0,
       pendingNoRecipient: 0,
       cloudinaryUploads: 0,
-      portfolioSynced: 0, // ✅ جديد
+      portfolioSynced: 0,
+      noAttendanceYet: 0, // ✅ جديد — بيتسجل بدل ما الـ continue يبقى صامت
       errors: 0,
     };
 
     for (const student of students) {
-      const groups = await Group.find({ _id: { $in: student.academicInfo.groupIds }, isDeleted: false })
+      // ✅ الإصلاح: بدل ما نعتمد على student.academicInfo.groupIds (اللي
+      // ممكن يفضل مش متزامن لو الطالب اتضاف من واجهة الجروب مباشرة زي
+      // /add-student route)، بندوّر على الجروبات من مصدر الحقيقة الفعلي:
+      // أي جروب فيه الطالب ده جوه array الـ students بتاعته.
+      const groups = await Group.find({
+        students: student._id,
+        isDeleted: false,
+      })
         .populate("courseId")
         .lean();
 
@@ -240,7 +248,13 @@ export async function GET(request) {
               }
             }
 
-            if (!hasAttended) continue;
+            if (!hasAttended) {
+              summary.noAttendanceYet++;
+              console.log(
+                `⏭️ ${student.personalInfo.fullName} - ${module.title}: لا يوجد حضور (present/late/excused) في أي سيشن من سيشنات الموديول لسه`
+              );
+              continue;
+            }
 
             const studentNumber = student.personalInfo?.whatsappNumber;
             const guardianNumber = student.guardianInfo?.whatsappNumber;
