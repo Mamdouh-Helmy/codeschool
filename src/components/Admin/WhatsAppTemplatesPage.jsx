@@ -6,7 +6,7 @@ import {
   Edit, Clock, Bell, Calendar, Award, FileText,
   UserPlus, UserCog, Search, Star, RotateCcw, Video,
   Settings, ChevronDown, ChevronUp, Check, X,
-  BookOpen,
+  BookOpen, Menu, Info,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -79,7 +79,7 @@ const CATEGORIES = {
   attendance: { label: "الحضور", emoji: "📋" },
   completion: { label: "الإكمال", emoji: "🎉" },
   evaluation: { label: "التقييم", emoji: "⭐" },
-  portfolio: { label: "البورتفوليو", emoji: "💼" }, // ✅ جديد
+  portfolio: { label: "البورتفوليو", emoji: "💼" },
 };
 
 const VAR_GROUPS = {
@@ -93,7 +93,7 @@ const VAR_GROUPS = {
   completion: { label: "الإكمال", emoji: "🎉" },
   evaluation: { label: "التقييم", emoji: "⭐" },
   common: { label: "عامة", emoji: "📌" },
-  portfolio: { label: "البورتفوليو", emoji: "💼" }, // ✅ جديد
+  portfolio: { label: "البورتفوليو", emoji: "💼" },
 };
 
 const TEMPLATE_VARS = {
@@ -141,7 +141,6 @@ const TEMPLATE_VARS = {
   group_completion_student: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
   group_completion_guardian: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
 
-  // ✅ تم إضافة supervisorName و moduleTitle و moduleDescription لقوالب التقييم التلاتة
   evaluation_pass: [
     "guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus",
     "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation",
@@ -172,14 +171,6 @@ const TEMPLATE_VARS = {
     "time", "meetingLink", "username", "password", "groupName"
   ],
 
-  learning_supervisor_intro: ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
-  module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "moduleDescription", "supervisorName"],
-  portfolio_inactivity_reminder: ["ownerName", "portfolioLink"],
-  portfolio_update_broadcast: ["ownerName", "updateLink"],
-  portfolio_contact_form_notification: ["ownerName", "dashboardLink"],
-  portfolio_inactivity_reminder: ["ownerWelcome", "ownerName", "portfolioLink"],
-  portfolio_update_broadcast: ["ownerName", "updateLink"],
-  portfolio_contact_form_notification: ["ownerSalutation", "ownerName", "dashboardLink"],
   learning_supervisor_intro: ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
   module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "moduleDescription", "supervisorName"],
   portfolio_inactivity_reminder: ["ownerWelcome", "ownerName", "portfolioLink"],
@@ -284,7 +275,6 @@ function buildVals(variable) {
   };
 }
 
-// ✅ الفانكشن الجديدة — حطها هنا بالظبط
 function getRecipientType(tabId) {
   if (tabId.startsWith("portfolio_")) return "portfolio_owner";
   if (tabId.includes("student")) return "student";
@@ -332,7 +322,6 @@ function GenderContextSelector({ genderContext, setGenderContext }) {
 
       <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
 
-      {/* ✅ مجموعة جديدة — صاحب البورتفوليو */}
       <div className="flex items-center gap-1 flex-shrink-0">
         <span className="text-[10px] text-slate-400 ml-1">💼 صاحب البورتفوليو:</span>
         <button onClick={() => setGenderContext(p => ({ ...p, ownerGender: "male" }))} className={`${btnBase} ${ownerGender === "male" ? active : inactive}`}>♂ ذكر</button>
@@ -675,6 +664,117 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// TEMPLATE SIDEBAR — طبقة تنقل واحدة (بديل عن تصنيف + تابات)
+// ─────────────────────────────────────────────────────────────
+function TemplateSidebar({ byCategory, activeTab, onSelectTab, searchQ, setSearchQ, templates, isOpenMobile, onCloseMobile }) {
+  const [openCats, setOpenCats] = useState(() => {
+    const cat = TEMPLATE_TYPES.find(t => t.id === activeTab)?.category;
+    return new Set(cat ? [cat] : []);
+  });
+
+  useEffect(() => {
+    const cat = TEMPLATE_TYPES.find(t => t.id === activeTab)?.category;
+    if (cat) setOpenCats(p => new Set(p).add(cat));
+  }, [activeTab]);
+
+  const panel = (
+    <div className="flex flex-col h-full bg-white dark:bg-[#161b27]">
+      <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-shrink-0">
+        <div className="relative flex-1">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input
+            value={searchQ}
+            onChange={e => setSearchQ(e.target.value)}
+            placeholder="بحث عن قالب..."
+            className="w-full pr-9 pl-3 py-2 text-xs bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:text-slate-200 placeholder-slate-400"
+          />
+        </div>
+        <button onClick={onCloseMobile} className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 flex-shrink-0">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        {Object.entries(CATEGORIES).map(([key, cat]) => {
+          const items = byCategory[key] || [];
+          if (!items.length) return null;
+          const isOpen = openCats.has(key);
+          const hasActive = items.some(t => t.id === activeTab);
+          return (
+            <div key={key} className="border-b border-slate-50 dark:border-slate-800/60">
+              <button
+                onClick={() => setOpenCats(p => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; })}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-bold transition-colors ${hasActive ? "text-[#ff6700]" : "text-slate-600 dark:text-slate-300"} hover:bg-slate-50 dark:hover:bg-slate-800/40`}
+              >
+                <span className="flex items-center gap-2">
+                  <span>{cat.emoji}</span>{cat.label}
+                  <span className="text-slate-400 font-normal">({items.length})</span>
+                </span>
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              {isOpen && (
+                <div className="pb-1">
+                  {items.map(t => {
+                    const tc = C_MAP[t.color] || C_MAP.primary;
+                    const isActive = activeTab === t.id;
+                    const hasData = !!(templates[t.id]?.contentAr || templates[t.id]?.content);
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => onSelectTab(t.id)}
+                        className={`w-full flex items-center gap-2 pr-8 pl-3 py-2 text-xs transition-colors ${
+                          isActive
+                            ? `${tc.light} ${tc.text} font-bold border-r-2 border-current`
+                            : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                        }`}
+                      >
+                        <t.icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? tc.text : "text-slate-400"}`} />
+                        <span className="truncate flex-1 text-right">{t.emoji} {t.label}</span>
+                        {t.isNew && <span className="bg-[#ff6700] text-white text-[8px] font-bold px-1 py-0.5 rounded-full flex-shrink-0">NEW</span>}
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hasData ? "bg-[#004d59]" : "bg-slate-300 dark:bg-slate-600"}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {Object.values(byCategory).every(arr => !arr?.length) && (
+          <div className="flex flex-col items-center justify-center py-14 gap-2 px-4">
+            <Search className="w-7 h-7 text-slate-300" />
+            <p className="text-xs text-slate-400 text-center">لا توجد قوالب تطابق البحث</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop docked sidebar */}
+      <div className="hidden lg:block lg:w-72 flex-shrink-0 border-l border-slate-200 dark:border-slate-800 lg:sticky lg:top-14 lg:h-[calc(100vh-56px)]">
+        {panel}
+      </div>
+
+      {/* Mobile drawer */}
+      {isOpenMobile && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCloseMobile} />
+          <div className="absolute inset-y-0 right-0 w-[85%] max-w-xs shadow-2xl animate-[slideIn_0.22s_ease-out]">
+            {panel}
+          </div>
+          <style jsx>{`
+            @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+          `}</style>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────
 export default function WhatsAppTemplatesPage() {
@@ -691,7 +791,6 @@ export default function WhatsAppTemplatesPage() {
   const [selectedHint, setSelectedHint] = useState(0);
   const [cursorPos, setCursorPos] = useState(0);
   const [searchQ, setSearchQ] = useState("");
-  const [activeCat, setActiveCat] = useState("basic");
   const [mainTab, setMainTab] = useState("templates");
   const [dbVars, setDbVars] = useState([]);
   const [loadingVars, setLoadingVars] = useState(false);
@@ -702,6 +801,10 @@ export default function WhatsAppTemplatesPage() {
     ownerGender: "male",
   });
 
+  // 🆕 حالة التعديلات غير المحفوظة + حالة الـ sidebar على الموبايل
+  const [dirty, setDirty] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const textareaRef = useRef(null);
   const hintsRef = useRef(null);
   const [hintsPos, setHintsPos] = useState({ top: 0, left: 0, right: 0 });
@@ -709,6 +812,17 @@ export default function WhatsAppTemplatesPage() {
   useEffect(() => {
     if (SINGLE_CONTENT_TEMPLATES.includes(activeTab)) setTestLanguage("ar");
   }, [activeTab]);
+
+  // 🆕 تحذير عند إغلاق التاب/الصفحة ولسه فيه تعديلات غير محفوظة
+  useEffect(() => {
+    const handler = (e) => {
+      if (!dirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
 
   useEffect(() => {
     if (!showHints) return;
@@ -839,7 +953,7 @@ export default function WhatsAppTemplatesPage() {
         ? (instructorGender === "male" ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr
         : (instructorGender === "male" ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn;
     }
-    if (v.genderType === "portfolio_owner") { // ✅ جديد
+    if (v.genderType === "portfolio_owner") {
       return lang === "ar"
         ? (ownerGender === "male" ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr
         : (ownerGender === "male" ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn;
@@ -885,6 +999,7 @@ export default function WhatsAppTemplatesPage() {
   const updateContent = (val) => {
     const cur = templates[activeTab];
     if (!cur) return;
+    setDirty(true);
     if (isSingleContent) {
       setTemplates(p => ({ ...p, [activeTab]: { ...cur, content: val } }));
     } else {
@@ -912,6 +1027,27 @@ export default function WhatsAppTemplatesPage() {
     });
     return text;
   };
+
+  // 🆕 التنقل بين القوالب من الـ sidebar — بيحذر لو فيه تعديلات غير محفوظة
+  const handleSelectTab = useCallback((tabId) => {
+    if (tabId === activeTab) { setSidebarOpen(false); return; }
+    if (dirty) {
+      const proceed = window.confirm("لديك تعديلات لم تُحفظ على هذا القالب. هل تريد المتابعة وفقدانها؟");
+      if (!proceed) return;
+    }
+    setActiveTab(tabId);
+    setDirty(false);
+    setSidebarOpen(false);
+  }, [activeTab, dirty]);
+
+  // 🆕 التنقل بين "القوالب" و"المتغيرات" — بيحذر برضو
+  const handleMainTabChange = useCallback((id) => {
+    if (mainTab === "templates" && id !== "templates" && dirty) {
+      const proceed = window.confirm("لديك تعديلات لم تُحفظ. هل تريد المتابعة؟");
+      if (!proceed) return;
+    }
+    setMainTab(id);
+  }, [mainTab, dirty]);
 
   const saveTemplate = async () => {
     const cur = templates[activeTab];
@@ -947,7 +1083,7 @@ export default function WhatsAppTemplatesPage() {
             }),
           });
           const data = await res.json();
-          if (data.success) { await fetchTemplates(); toast.success("✅ تم حفظ القالب"); }
+          if (data.success) { await fetchTemplates(); setDirty(false); toast.success("✅ تم حفظ القالب"); }
           else toast.error(data.message || data.error || "فشل الحفظ");
           return;
         }
@@ -973,7 +1109,7 @@ export default function WhatsAppTemplatesPage() {
         if (cur.isFrontendFallback || !cur._id) {
           const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateType: dbType, name: activeTab === "language_confirmation" ? "تأكيد اللغة للطالب" : "تأكيد اللغة لولي الأمر", content: cur.contentAr || cur.content, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn || "", description: "", isDefault: true, isActive: true, setAsDefault: true }) });
           const data = await res.json();
-          if (data.success) { await fetchTemplates(); toast.success("✅ تم حفظ القالب"); }
+          if (data.success) { await fetchTemplates(); setDirty(false); toast.success("✅ تم حفظ القالب"); }
           else toast.error(data.message || data.error || "فشل الحفظ");
           return;
         }
@@ -996,7 +1132,7 @@ export default function WhatsAppTemplatesPage() {
             }),
           });
           const data = await res.json();
-          if (data.success) { await fetchTemplates(); toast.success("✅ تم حفظ القالب"); }
+          if (data.success) { await fetchTemplates(); setDirty(false); toast.success("✅ تم حفظ القالب"); }
           else toast.error(data.message || data.error || "فشل الحفظ");
           return;
         }
@@ -1014,7 +1150,7 @@ export default function WhatsAppTemplatesPage() {
 
       const res = await fetch(endpoint, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
-      if (data.success) { await fetchTemplates(); toast.success("✅ تم حفظ القالب"); }
+      if (data.success) { await fetchTemplates(); setDirty(false); toast.success("✅ تم حفظ القالب"); }
       else toast.error(data.message || data.error || "فشل الحفظ");
     } catch {
       toast.error("خطأ في الحفظ");
@@ -1062,6 +1198,15 @@ export default function WhatsAppTemplatesPage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // 🆕 فتح لوحة إدراج المتغيرات من زرار واضح (مش لازم تكتب @ يدوي)
+  const openVariablePicker = () => {
+    const pos = textareaRef.current ? textareaRef.current.selectionStart : textVal.length;
+    setCursorPos(pos);
+    setSelectedHint(0);
+    setShowHints(true);
+    textareaRef.current?.focus();
+  };
 
   const sendTest = async () => {
     if (!testPhone) { toast.error("أدخل رقم الهاتف"); return; }
@@ -1119,7 +1264,7 @@ export default function WhatsAppTemplatesPage() {
             ].map(({ id, icon: Icon, label, badge }) => (
               <button
                 key={id}
-                onClick={() => setMainTab(id)}
+                onClick={() => handleMainTabChange(id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mainTab === id ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400"}`}
               >
                 <Icon className="w-3 h-3" />
@@ -1135,33 +1280,21 @@ export default function WhatsAppTemplatesPage() {
 
           {mainTab === "templates" && (
             <>
-              <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-              <div className="flex-1 min-w-0 overflow-hidden">
-                <div className="flex gap-1 overflow-x-auto no-scrollbar">
-                  {Object.entries(CATEGORIES).map(([key, cat]) => {
-                    const items = byCategory[key] || [];
-                    if (!items.length) return null;
-                    const isCatActive = items.some(t => t.id === activeTab);
-                    const pill = C_MAP[items[0]?.color || "slate"]?.activePill || "bg-slate-500 text-white";
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => { setActiveCat(key); if (!isCatActive && items[0]) setActiveTab(items[0].id); }}
-                        className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${isCatActive ? `${pill} shadow-sm` : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"}`}
-                      >
-                        <span>{cat.emoji}</span>
-                        <span className="hidden sm:inline">{cat.label}</span>
-                        <span className={`hidden sm:inline text-[10px] px-1 py-0.5 rounded-full ${isCatActive ? "bg-white/20" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}>{items.length}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0 hidden lg:block" />
 
-              <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+              {/* موبايل: زرار فتح لوحة اختيار القالب (بديل التابات المزدوجة) */}
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex-1 min-w-0"
+              >
+                {activeType && <activeType.icon className="w-3.5 h-3.5 flex-shrink-0" />}
+                <span className="truncate flex-1 text-right">{activeType?.emoji} {activeType?.label}</span>
+                {dirty && <span className="w-2 h-2 rounded-full bg-[#feaf00] flex-shrink-0" />}
+                <Menu className="w-3.5 h-3.5 flex-shrink-0" />
+              </button>
 
               {!isSingleContent && (
-                <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 flex-shrink-0">
+                <div className="hidden lg:flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 flex-shrink-0">
                   {["ar", "en"].map(lang => (
                     <button
                       key={lang}
@@ -1178,330 +1311,381 @@ export default function WhatsAppTemplatesPage() {
 
           <button
             onClick={() => { fetchTemplates(); fetchVariables(); }}
-            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 flex-shrink-0 mr-auto"
+            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 flex-shrink-0 mr-auto lg:mr-0"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
 
-        {mainTab === "templates" && (
-          <div className="border-t border-slate-100 dark:border-slate-800/80 px-4 py-1.5 overflow-x-auto no-scrollbar">
-            <div className="flex gap-1">
-              {(byCategory[activeCat] || []).map(tmpl => {
-                const Icon = tmpl.icon;
-                const isActive = activeTab === tmpl.id;
-                const tc = C_MAP[tmpl.color] || C_MAP.primary;
-                const hasData = !!(templates[tmpl.id]?.contentAr || templates[tmpl.id]?.content);
-                return (
-                  <button
-                    key={tmpl.id}
-                    onClick={() => setActiveTab(tmpl.id)}
-                    className={`flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${isActive ? `${tc.light} ${tc.text} ${tc.border} border` : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60"}`}
-                  >
-                    <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? tc.text : "text-slate-400"}`} />
-                    <span>{tmpl.emoji} {tmpl.label}</span>
-                    {tmpl.isNew && <span className="bg-[#ff6700] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">NEW</span>}
-                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hasData ? "bg-[#004d59]" : "bg-slate-300 dark:bg-slate-600"}`} />
-                  </button>
-                );
-              })}
-
-              <div className="relative mr-auto flex-shrink-0">
-                <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                <input
-                  value={searchQ}
-                  onChange={e => setSearchQ(e.target.value)}
-                  placeholder="بحث..."
-                  className="pr-7 pl-3 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-[#ff6700]/50 rounded-xl focus:outline-none dark:text-slate-200 placeholder-slate-400 w-28 focus:w-40 transition-all"
-                />
-              </div>
+        {/* موبايل: صف اللغة (منقول من الديسكتوب) */}
+        {mainTab === "templates" && !isSingleContent && (
+          <div className="lg:hidden border-t border-slate-100 dark:border-slate-800/80 px-4 py-1.5 flex items-center gap-2">
+            <span className="text-[10px] text-slate-400 flex-shrink-0">اللغة:</span>
+            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+              {["ar", "en"].map(lang => (
+                <button
+                  key={lang}
+                  onClick={() => setTestLanguage(lang)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${testLanguage === lang ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400"}`}
+                >
+                  {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 EN"}
+                </button>
+              ))}
             </div>
           </div>
         )}
       </header>
 
-      {mainTab === "variables" && (
-        <VariablesTab dbVars={dbVars} setDbVars={setDbVars} loadingVars={loadingVars} />
-      )}
+      {/* ── Body ── */}
+      <div className="flex flex-1">
+        {mainTab === "templates" && (
+          <TemplateSidebar
+            byCategory={byCategory}
+            activeTab={activeTab}
+            onSelectTab={handleSelectTab}
+            searchQ={searchQ}
+            setSearchQ={setSearchQ}
+            templates={templates}
+            isOpenMobile={sidebarOpen}
+            onCloseMobile={() => setSidebarOpen(false)}
+          />
+        )}
 
-      {mainTab === "templates" && (
-        <div className="flex-1 p-3 sm:p-4 lg:p-5">
-
-          {activeType && (
-            <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border mb-4 ${C.light} ${C.border}`}>
-              <div className={`w-10 h-10 rounded-xl ${C.bg} flex items-center justify-center shadow-md flex-shrink-0`}>
-                <activeType.icon className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">{activeType.emoji} {activeType.label}</span>
-                  {activeType.isNew && <span className="bg-[#ff6700] text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEW</span>}
-                  {templates[activeTab]?.isFrontendFallback && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#feaf00]/20 text-[#feaf00] font-bold border border-[#feaf00]/20">⚡ Default — لم يُحفظ بعد</span>}
-                  {isSingleContent && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700">🌐 رسالة ثنائية اللغة</span>}
-                </div>
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {activeType.type.includes("student") && <span className={`text-[10px] px-2 py-0.5 rounded-full ${C.light} ${C.text} border ${C.border}`}>👤 للطالب</span>}
-                  {activeType.type.includes("guardian") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">👨‍👩‍👧 لولي الأمر</span>}
-                  {activeType.type.includes("instructor") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20">👨‍🏫 للمدرب</span>}
-                  {activeType.type.includes("group") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">👥 بيانات المجموعة</span>}
-                  {activeType.type.includes("session") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">📅 بيانات الحصة</span>}
-                  <span className="text-[10px] text-slate-400">{allVars.length} متغير</span>
-                </div>
-              </div>
-            </div>
+        <div className="flex-1 min-w-0">
+          {mainTab === "variables" && (
+            <VariablesTab dbVars={dbVars} setDbVars={setDbVars} loadingVars={loadingVars} />
           )}
 
-          <GenderContextSelector genderContext={genderContext} setGenderContext={setGenderContext} />
+          {mainTab === "templates" && (
+            <div className="flex-1 p-3 sm:p-4 lg:p-5 pb-24 lg:pb-5">
 
-          {isLangConfirmation && (
-            <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-secondary/20 bg-secondary/10 mb-4">
-              <Globe className="w-4 h-4 text-secondary flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-secondary">🌍 قالب باللغة المختارة فقط</p>
-                <p className="text-[11px] text-secondary/80 mt-0.5">هذا القالب بيتبعت <strong>باللغة اللي اختارها الطالب فعلاً</strong>.</p>
-              </div>
-            </div>
-          )}
-
-          <div className="grid xl:grid-cols-3 lg:grid-cols-2 gap-4">
-
-            {/* Editor column */}
-            <div className="xl:col-span-2 space-y-4">
-
-              <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                <div className={`flex items-center justify-between px-4 py-2.5 border-b ${C.light} ${C.border}`}>
-                  <div className="flex items-center gap-2">
-                    <Edit className={`w-3.5 h-3.5 ${C.text}`} />
-                    <span className={`text-xs font-bold ${C.text}`}>
-                      تحرير القالب{!isSingleContent && (testLanguage === "ar" ? " 🇸🇦 عربي" : " 🇬🇧 English")}
-                    </span>
+              {activeType && (
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border mb-3 ${C.light} ${C.border}`}>
+                  <div className={`w-10 h-10 rounded-xl ${C.bg} flex items-center justify-center shadow-md flex-shrink-0`}>
+                    <activeType.icon className="w-5 h-5 text-white" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${C.light} ${C.text} border ${C.border}`}>اكتب @ لإدراج مثال</span>
-                    <span className="text-[10px] text-slate-400">{textVal.length} حرف</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">{activeType.emoji} {activeType.label}</span>
+                      {activeType.isNew && <span className="bg-[#ff6700] text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEW</span>}
+                      {isSingleContent && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700">🌐 رسالة ثنائية اللغة</span>}
+                      {dirty && (
+                        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 font-bold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> تعديلات غير محفوظة
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {activeType.type.includes("student") && <span className={`text-[10px] px-2 py-0.5 rounded-full ${C.light} ${C.text} border ${C.border}`}>👤 للطالب</span>}
+                      {activeType.type.includes("guardian") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">👨‍👩‍👧 لولي الأمر</span>}
+                      {activeType.type.includes("instructor") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20">👨‍🏫 للمدرب</span>}
+                      {activeType.type.includes("group") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">👥 بيانات المجموعة</span>}
+                      {activeType.type.includes("session") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">📅 بيانات الحصة</span>}
+                      <span className="text-[10px] text-slate-400">{allVars.length} متغير</span>
+                    </div>
                   </div>
                 </div>
+              )}
 
-                <div className="relative p-4">
-                  <textarea
-                    ref={textareaRef}
-                    value={textVal}
-                    onChange={handleInput}
-                    onKeyDown={handleKeyDown}
-                    onClick={e => setCursorPos(e.target.selectionStart)}
-                    dir="ltr"
-                    placeholder={testLanguage === "ar" ? "اكتب الرسالة... اكتب @ لإدراج قيمة مثال" : "Write your message... type @ to insert example value"}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:focus:border-[#ff6700] dark:text-slate-100 resize-none h-52 sm:h-64 lg:h-80 text-sm font-mono leading-loose transition-all placeholder-slate-400"
-                  />
+              {/* 🆕 بانر واضح للقوالب اللي لسه مالهاش نسخة محفوظة في الداتابيز */}
+              {templates[activeTab]?.isFrontendFallback && (
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20 mb-3">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400">⚡ هذا القالب لسه معندهوش نسخة محفوظة في قاعدة البيانات</p>
+                    <p className="text-[11px] text-amber-600/80 dark:text-amber-500/80 mt-0.5">
+                      المعروض دلوقتي قيمة افتراضية جاهزة (Default) فقط. اضغط <strong>"حفظ التغييرات"</strong> تحت عشان تفعّل القالب فعليًا في النظام.
+                    </p>
+                  </div>
+                </div>
+              )}
 
-                  {showHints && allVars.length > 0 && (
-                    <div
-                      ref={hintsRef}
-                      className="fixed z-[9999] bg-white dark:bg-[#1a2236] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden"
-                      style={{ top: hintsPos.top, left: hintsPos.left, right: hintsPos.right, maxWidth: "calc(100vw - 16px)" }}
-                    >
-                      <div className={`flex items-center gap-2 px-3 py-2 ${C.light} border-b ${C.border}`}>
-                        <Zap className={`w-3 h-3 ${C.text}`} />
-                        <span className={`text-[10px] font-bold ${C.text}`}>اختر متغيراً — سيُدرج مثاله في النص</span>
+              <GenderContextSelector genderContext={genderContext} setGenderContext={setGenderContext} />
+
+              {isLangConfirmation && (
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-secondary/20 bg-secondary/10 mb-4">
+                  <Globe className="w-4 h-4 text-secondary flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-secondary">🌍 قالب باللغة المختارة فقط</p>
+                    <p className="text-[11px] text-secondary/80 mt-0.5">هذا القالب بيتبعت <strong>باللغة اللي اختارها الطالب فعلاً</strong>.</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid xl:grid-cols-3 lg:grid-cols-2 gap-4">
+
+                {/* Editor column */}
+                <div className="xl:col-span-2 space-y-4">
+
+                  <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className={`flex items-center justify-between gap-2 px-4 py-2.5 border-b ${C.light} ${C.border} flex-wrap`}>
+                      <div className="flex items-center gap-2">
+                        <Edit className={`w-3.5 h-3.5 ${C.text}`} />
+                        <span className={`text-xs font-bold ${C.text}`}>
+                          تحرير القالب{!isSingleContent && (testLanguage === "ar" ? " 🇸🇦 عربي" : " 🇬🇧 English")}
+                        </span>
                       </div>
-                      <div className="max-h-60 overflow-y-auto no-scrollbar">
-                        {allVars.map((v, idx) => (
+                      <div className="flex items-center gap-2">
+                        {/* 🆕 زرار واضح لإدراج متغير — بديل الاعتماد على معرفة كتابة @ */}
+                        <button
+                          onClick={openVariablePicker}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all hover:scale-105 active:scale-95 ${C.bg} text-white shadow-sm`}
+                        >
+                          <Zap className="w-3 h-3" /> إدراج متغير
+                        </button>
+                        <span className="text-[10px] text-slate-400">{textVal.length} حرف</span>
+                      </div>
+                    </div>
+
+                    <div className="relative p-4">
+                      <textarea
+                        ref={textareaRef}
+                        value={textVal}
+                        onChange={handleInput}
+                        onKeyDown={handleKeyDown}
+                        onClick={e => setCursorPos(e.target.selectionStart)}
+                        dir="ltr"
+                        placeholder={testLanguage === "ar" ? "اكتب الرسالة... اكتب @ أو اضغط \"إدراج متغير\"" : "Write your message... type @ or use \"Insert variable\""}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:focus:border-[#ff6700] dark:text-slate-100 resize-none h-52 sm:h-64 lg:h-80 text-sm font-mono leading-loose transition-all placeholder-slate-400"
+                      />
+
+                      {showHints && allVars.length > 0 && (
+                        <div
+                          ref={hintsRef}
+                          className="fixed z-[9999] bg-white dark:bg-[#1a2236] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden"
+                          style={{ top: hintsPos.top, left: hintsPos.left, right: hintsPos.right, maxWidth: "calc(100vw - 16px)" }}
+                        >
+                          <div className={`flex items-center gap-2 px-3 py-2 ${C.light} border-b ${C.border}`}>
+                            <Zap className={`w-3 h-3 ${C.text}`} />
+                            <span className={`text-[10px] font-bold ${C.text}`}>اختر متغيراً — سيُدرج مثاله في النص</span>
+                          </div>
+                          <div className="max-h-60 overflow-y-auto no-scrollbar">
+                            {allVars.map((v, idx) => (
+                              <button
+                                key={v.key}
+                                onClick={() => insertVariable(v)}
+                                className={`w-full px-3 py-2.5 flex items-center gap-3 text-right transition-colors ${idx === selectedHint ? C.light : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}
+                              >
+                                <span className="text-base flex-shrink-0">{v.icon}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className={`text-[10px] font-mono ${C.text} font-bold`}>{v.key}</span>
+                                    <span className="text-[10px] text-slate-400 dark:text-slate-500">{v.label}</span>
+                                  </div>
+                                  <div className="mt-0.5 flex items-center gap-1">
+                                    <span className="text-[9px] text-slate-400">يُدرج:</span>
+                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${C.light} ${C.text} font-mono`}>{v.example}</span>
+                                    {v.hasGender && <span className="text-[9px] px-1 py-0.5 rounded bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">⚧</span>}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400 text-center">
+                            ↑ ↓ للتنقل &bull; Enter للإدراج &bull; Esc للإغلاق
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20">
+                      <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> اضغط "إدراج متغير" أو اكتب @ لإدراج القيمة من الداتابيز
+                      </p>
+                      <button
+                        onClick={saveTemplate}
+                        disabled={saving}
+                        className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md ${saving ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed" : `${C.bg} text-white hover:opacity-90`}`}
+                      >
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        {saving ? "جاري الحفظ..." : "حفظ التغييرات"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {allVars.length > 0 && (
+                    <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Zap className={`w-3.5 h-3.5 ${C.text}`} />
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">إدراج سريع — انقر للإدراج في موضع الكرسر</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto no-scrollbar sm:max-h-none">
+                        {allVars.map(v => (
                           <button
                             key={v.key}
-                            onClick={() => insertVariable(v)}
-                            className={`w-full px-3 py-2.5 flex items-center gap-3 text-right transition-colors ${idx === selectedHint ? C.light : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}
+                            onClick={() => { const pos = textareaRef.current ? textareaRef.current.selectionStart : textVal.length; setCursorPos(pos); insertVariable(v); }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-medium border transition-all hover:scale-105 active:scale-95 ${C.light} ${C.text} ${C.border} hover:shadow-sm`}
                           >
-                            <span className="text-base flex-shrink-0">{v.icon}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className={`text-[10px] font-mono ${C.text} font-bold`}>{v.key}</span>
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500">{v.label}</span>
+                            <span>{v.icon}</span>
+                            <span className="font-mono">{v.example}</span>
+                            {v.hasGender && <span className="text-[8px] opacity-60">⚧</span>}
+                            <span className="text-[9px] text-slate-400 dark:text-slate-500 border-r border-current/20 pr-1 mr-0.5 opacity-60">{v.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 rounded-lg bg-[#004d59] flex items-center justify-center">
+                        <Send className="w-3 h-3 text-white" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">اختبار الإرسال</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="tel"
+                        value={testPhone}
+                        onChange={e => setTestPhone(e.target.value)}
+                        placeholder="+201234567890"
+                        dir="ltr"
+                        className="flex-1 px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#004d59]/20 focus:border-[#004d59] dark:text-slate-100 placeholder-slate-400"
+                      />
+                      <button
+                        onClick={sendTest}
+                        disabled={testing}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#004d59] to-[#ff6437] hover:from-[#003540] hover:to-[#ff6437] text-white rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        {testing ? "جاري..." : "إرسال تجريبي"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview column */}
+                <div className="space-y-4">
+
+                  <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div className={`flex items-center gap-2 px-4 py-2.5 border-b ${C.light} ${C.border}`}>
+                      <Eye className={`w-3.5 h-3.5 ${C.text}`} />
+                      <span className={`text-xs font-bold ${C.text}`}>معاينة مباشرة</span>
+                      <div className="mr-auto flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[10px] text-slate-400">مباشر</span>
+                      </div>
+                    </div>
+
+                    {/* 🆕 توضيح إن دي قيم تجريبية مش بيانات حقيقية */}
+                    <div className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800/40">
+                      <Info className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                      <p className="text-[10px] text-blue-600 dark:text-blue-400">هذه معاينة بقيم تجريبية — القيم الحقيقية تُستبدل وقت الإرسال الفعلي</p>
+                    </div>
+
+                    <div className="p-3">
+                      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                        <span className="text-[9px] text-slate-400">المعاينة لـ:</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20 font-bold">
+                          {genderContext.studentGender === "male" ? "♂ طالب" : "♀ طالبة"}
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20 font-bold">
+                          {genderContext.guardianType === "father" ? "👨 أب" : "👩 أم"}
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20 font-bold">
+                          {genderContext.instructorGender === "male" ? "♂ مدرب" : "♀ مدربة"}
+                        </span>
+                      </div>
+                      <div className="bg-[#e5ddd5] dark:bg-[#0d1117] rounded-xl p-3 min-h-44 relative overflow-hidden">
+                        <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23000' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")" }} />
+                        <div className="relative">
+                          {getPreview() ? (
+                            <div className="bg-white dark:bg-[#1e2535] rounded-xl rounded-tl-sm p-3 shadow-sm max-w-[94%] ml-auto">
+                              <pre className="text-[11px] text-slate-800 dark:text-slate-100 whitespace-pre-wrap font-sans leading-relaxed max-h-72 overflow-y-auto no-scrollbar">{getPreview()}</pre>
+                              <div className="flex justify-end mt-1.5 gap-1 items-center">
+                                <span className="text-[9px] text-slate-400">12:34</span>
+                                <CheckCircle className="w-3 h-3 text-sky-400" />
                               </div>
-                              <div className="mt-0.5 flex items-center gap-1">
-                                <span className="text-[9px] text-slate-400">يُدرج:</span>
-                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${C.light} ${C.text} font-mono`}>{v.example}</span>
-                                {v.hasGender && <span className="text-[9px] px-1 py-0.5 rounded bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">⚧</span>}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-12 gap-2">
+                              <div className="w-9 h-9 rounded-full bg-white/40 dark:bg-white/10 flex items-center justify-center">
+                                <MessageCircle className="w-4 h-4 text-slate-400" />
+                              </div>
+                              <p className="text-xs text-slate-400">اكتب الرسالة لترى المعاينة</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {allVars.length > 0 && (
+                    <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                      <div className={`flex items-center justify-between gap-2 px-4 py-2.5 border-b ${C.light} ${C.border}`}>
+                        <div className="flex items-center gap-2">
+                          <Zap className={`w-3.5 h-3.5 ${C.text}`} />
+                          <span className={`text-xs font-bold ${C.text}`}>متغيرات هذا القالب</span>
+                        </div>
+                        <button onClick={() => handleMainTabChange("variables")} className="text-[10px] text-[#ff6700] hover:text-[#f67d00] dark:hover:text-[#ff6700] font-bold flex items-center gap-1 transition-colors">
+                          <Settings className="w-3 h-3" /> تعديل القيم
+                        </button>
+                      </div>
+                      <div className="p-3 max-h-72 overflow-y-auto no-scrollbar space-y-0.5">
+                        {allVars.map(v => (
+                          <button
+                            key={v.key}
+                            onClick={() => { const pos = textareaRef.current ? textareaRef.current.selectionStart : textVal.length; setCursorPos(pos); insertVariable(v); }}
+                            className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-right"
+                          >
+                            <span className="text-sm flex-shrink-0">{v.icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className={`text-[10px] font-mono font-bold ${C.text}`}>{v.key}</span>
+                                <div className="flex items-center gap-1">
+                                  {v.hasGender && <span className="text-[8px] text-[#ff6700]">⚧</span>}
+                                  <span className="text-[9px] text-slate-400 truncate">{v.label}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span className="text-[9px] text-slate-400">مثال:</span>
+                                <span className={`text-[10px] font-semibold ${C.text} truncate`}>{v.example}</span>
                               </div>
                             </div>
                           </button>
                         ))}
                       </div>
-                      <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400 text-center">
-                        ↑ ↓ للتنقل &bull; Enter للإدراج &bull; Esc للإغلاق
-                      </div>
                     </div>
                   )}
-                </div>
 
-                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20">
-                  <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> الـ @ يُدرج القيمة من الداتابيز في النص والمعاينة
-                  </p>
-                  <button
-                    onClick={saveTemplate}
-                    disabled={saving}
-                    className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md ${saving ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed" : `${C.bg} text-white hover:opacity-90`}`}
-                  >
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    {saving ? "جاري الحفظ..." : "حفظ التغييرات"}
-                  </button>
-                </div>
-              </div>
-
-              {allVars.length > 0 && (
-                <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Zap className={`w-3.5 h-3.5 ${C.text}`} />
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">إدراج سريع — انقر للإدراج في موضع الكرسر</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto no-scrollbar sm:max-h-none">
-                    {allVars.map(v => (
-                      <button
-                        key={v.key}
-                        onClick={() => { const pos = textareaRef.current ? textareaRef.current.selectionStart : textVal.length; setCursorPos(pos); insertVariable(v); }}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-medium border transition-all hover:scale-105 active:scale-95 ${C.light} ${C.text} ${C.border} hover:shadow-sm`}
-                      >
-                        <span>{v.icon}</span>
-                        <span className="font-mono">{v.example}</span>
-                        {v.hasGender && <span className="text-[8px] opacity-60">⚧</span>}
-                        <span className="text-[9px] text-slate-400 dark:text-slate-500 border-r border-current/20 pr-1 mr-0.5 opacity-60">{v.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 rounded-lg bg-[#004d59] flex items-center justify-center">
-                    <Send className="w-3 h-3 text-white" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">اختبار الإرسال</span>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="tel"
-                    value={testPhone}
-                    onChange={e => setTestPhone(e.target.value)}
-                    placeholder="+201234567890"
-                    dir="ltr"
-                    className="flex-1 px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#004d59]/20 focus:border-[#004d59] dark:text-slate-100 placeholder-slate-400"
-                  />
-                  <button
-                    onClick={sendTest}
-                    disabled={testing}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#004d59] to-[#ff6437] hover:from-[#003540] hover:to-[#ff6437] text-white rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    {testing ? "جاري..." : "إرسال تجريبي"}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Preview column */}
-            <div className="space-y-4">
-
-              <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                <div className={`flex items-center gap-2 px-4 py-2.5 border-b ${C.light} ${C.border}`}>
-                  <Eye className={`w-3.5 h-3.5 ${C.text}`} />
-                  <span className={`text-xs font-bold ${C.text}`}>معاينة مباشرة</span>
-                  <div className="mr-auto flex items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-[10px] text-slate-400">مباشر</span>
-                  </div>
-                </div>
-                <div className="p-3">
-                  <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-                    <span className="text-[9px] text-slate-400">المعاينة لـ:</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20 font-bold">
-                      {genderContext.studentGender === "male" ? "♂ طالب" : "♀ طالبة"}
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20 font-bold">
-                      {genderContext.guardianType === "father" ? "👨 أب" : "👩 أم"}
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20 font-bold">
-                      {genderContext.instructorGender === "male" ? "♂ مدرب" : "♀ مدربة"}
-                    </span>
-                  </div>
-                  <div className="bg-[#e5ddd5] dark:bg-[#0d1117] rounded-xl p-3 min-h-44 relative overflow-hidden">
-                    <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23000' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")" }} />
-                    <div className="relative">
-                      {getPreview() ? (
-                        <div className="bg-white dark:bg-[#1e2535] rounded-xl rounded-tl-sm p-3 shadow-sm max-w-[94%] ml-auto">
-                          <pre className="text-[11px] text-slate-800 dark:text-slate-100 whitespace-pre-wrap font-sans leading-relaxed max-h-72 overflow-y-auto no-scrollbar">{getPreview()}</pre>
-                          <div className="flex justify-end mt-1.5 gap-1 items-center">
-                            <span className="text-[9px] text-slate-400">12:34</span>
-                            <CheckCircle className="w-3 h-3 text-sky-400" />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-12 gap-2">
-                          <div className="w-9 h-9 rounded-full bg-white/40 dark:bg-white/10 flex items-center justify-center">
-                            <MessageCircle className="w-4 h-4 text-slate-400" />
-                          </div>
-                          <p className="text-xs text-slate-400">اكتب الرسالة لترى المعاينة</p>
-                        </div>
-                      )}
+                  <div className="bg-gradient-to-br from-[#ff6700]/10 to-[#004d59]/10 border border-[#ff6700]/20 rounded-2xl p-3">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-[#ff6700] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[10px] font-bold text-[#ff6700] mb-1">💡 نصائح</p>
+                        <ul className="text-[10px] text-[#004d59] space-y-0.5">
+                          <li>• اضغط "إدراج متغير" أو اكتب @ لعرض المتغيرات — القيم من الداتابيز</li>
+                          <li>• المتغيرات برمز ⚧ تتغير حسب الجنس المختار أعلاه</li>
+                          <li>• غيّر الطالب (ذكر/أنثى)، ولي الأمر (أب/أم)، المدرب لرؤية المعاينة الصحيحة</li>
+                          <li>• انقر "تعديل القيم" لتعديل قيم الجنس من الداتابيز</li>
+                          {isSingleContent && <li>• 🌐 هذا القالب رسالة واحدة تحتوي عربي وإنجليزي معاً</li>}
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-
-              {allVars.length > 0 && (
-                <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                  <div className={`flex items-center justify-between gap-2 px-4 py-2.5 border-b ${C.light} ${C.border}`}>
-                    <div className="flex items-center gap-2">
-                      <Zap className={`w-3.5 h-3.5 ${C.text}`} />
-                      <span className={`text-xs font-bold ${C.text}`}>متغيرات هذا القالب</span>
-                    </div>
-                    <button onClick={() => setMainTab("variables")} className="text-[10px] text-[#ff6700] hover:text-[#f67d00] dark:hover:text-[#ff6700] font-bold flex items-center gap-1 transition-colors">
-                      <Settings className="w-3 h-3" /> تعديل القيم
-                    </button>
-                  </div>
-                  <div className="p-3 max-h-72 overflow-y-auto no-scrollbar space-y-0.5">
-                    {allVars.map(v => (
-                      <button
-                        key={v.key}
-                        onClick={() => { const pos = textareaRef.current ? textareaRef.current.selectionStart : textVal.length; setCursorPos(pos); insertVariable(v); }}
-                        className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-right"
-                      >
-                        <span className="text-sm flex-shrink-0">{v.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className={`text-[10px] font-mono font-bold ${C.text}`}>{v.key}</span>
-                            <div className="flex items-center gap-1">
-                              {v.hasGender && <span className="text-[8px] text-[#ff6700]">⚧</span>}
-                              <span className="text-[9px] text-slate-400 truncate">{v.label}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-[9px] text-slate-400">مثال:</span>
-                            <span className={`text-[10px] font-semibold ${C.text} truncate`}>{v.example}</span>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-gradient-to-br from-[#ff6700]/10 to-[#004d59]/10 border border-[#ff6700]/20 rounded-2xl p-3">
-                <div className="flex items-start gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-[#ff6700] flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[10px] font-bold text-[#ff6700] mb-1">💡 نصائح</p>
-                    <ul className="text-[10px] text-[#004d59] space-y-0.5">
-                      <li>• اكتب @ لعرض المتغيرات — القيم من الداتابيز</li>
-                      <li>• المتغيرات برمز ⚧ تتغير حسب الجنس المختار أعلاه</li>
-                      <li>• غيّر الطالب (ذكر/أنثى)، ولي الأمر (أب/أم)، المدرب لرؤية المعاينة الصحيحة</li>
-                      <li>• انقر "تعديل القيم" لتعديل قيم الجنس من الداتابيز</li>
-                      {isSingleContent && <li>• 🌐 هذا القالب رسالة واحدة تحتوي عربي وإنجليزي معاً</li>}
-                    </ul>
-                  </div>
-                </div>
-              </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* 🆕 Sticky save bar على الموبايل — بيظهر بس لما فيه تعديلات غير محفوظة */}
+      {mainTab === "templates" && dirty && (
+        <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 p-3">
+          <div className="bg-white/95 dark:bg-[#161b27]/95 backdrop-blur-md rounded-2xl border border-amber-200 dark:border-amber-800/40 shadow-xl p-3 flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 flex-1 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+              <span className="truncate">لديك تعديلات غير محفوظة</span>
+            </span>
+            <button
+              onClick={saveTemplate}
+              disabled={saving}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white flex-shrink-0 ${saving ? "bg-slate-300" : C.bg}`}
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {saving ? "جاري الحفظ..." : "حفظ الآن"}
+            </button>
           </div>
         </div>
       )}

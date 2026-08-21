@@ -16,7 +16,7 @@ const EVALUATION_TEMPLATE_MAP = {
 };
 
 // 🆕 الطلاب اللي حالة حضورهم من ضمن الـ array دي مايدخلوش خطوة التقييم خالص:
-// مش بيظهروا في الـ GET، ومش بياخدوا أي تقييم/رسالة/لينك تسجيل حتى لو
+// مش بيظهروا في الـ GET، ومش بياخدوا أي تقييم/رسالة/لينك تسجيل/بلوج حتى لو
 // اتبعتوا في الـ PATCH لأي سبب (تأمين مزدوج — الفرونت أصلاً مش هيبعتهم
 // لأنهم مش هيظهروا، بس الـ backend بيتأكد بنفسه كمان).
 const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'excused'];
@@ -121,7 +121,7 @@ async function getModuleData(groupId, moduleIndex) {
 // ─── Helper: جيب بيانات البلوج الخاصة بالسيشن دي من الكورس ───────────────────
 // بيدور على السيشن المطابقة (بنفس sessionNumber) جوه curriculum[moduleIndex].sessions
 // ولو مفيش محتوى بلوج خالص (لا عربي ولا إنجليزي) بيرجع null — يعني مفيش
-// أي لينك هيتضاف للرسالة أصلاً.
+// أي رسالة بلوج هتتبعت أصلاً.
 async function getSessionBlogInfo(session) {
   try {
     console.log('🔍 [BlogInfo] session.courseId:', session?.courseId, '| moduleIndex:', session?.moduleIndex, '| sessionNumber:', session?.sessionNumber);
@@ -160,7 +160,7 @@ async function getSessionBlogInfo(session) {
     const hasEn = !!sessionBlog.blogBodyEn?.trim();
     console.log('🔍 [BlogInfo] Found sessionBlog — hasAr:', hasAr, '| hasEn:', hasEn);
 
-    // ✅ لو مفيش محتوى بلوج خالص (مش عربي ومش إنجليزي) — من غير لينك
+    // ✅ لو مفيش محتوى بلوج خالص (مش عربي ومش إنجليزي) — من غير رسالة
     if (!hasAr && !hasEn) return null;
 
     return { hasAr, hasEn };
@@ -171,6 +171,8 @@ async function getSessionBlogInfo(session) {
 }
 
 // ─── Build rendered evaluation message ───────────────────────────────────────
+// ⛔️ ملحوظة مهمة: الرسالة دي بقت مالهاش أي علاقة بلينك البلوج خالص —
+// اللينك بقى جوه رسالة مستقلة تمامًا (buildBlogMessage تحت).
 async function buildEvaluationMessage(student, decision, session, extra = {}) {
   const lang         = student.communicationPreferences?.preferredLanguage || 'ar';
   const gender       = (student.personalInfo?.gender || 'male').toLowerCase();
@@ -303,22 +305,6 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     rendered = rendered.replace(new RegExp(`\\{${key}\\}`, 'g'), value ?? '');
   });
 
-  // ✅ لينك البلوج — بيضاف في آخر الرسالة، وبس لو فيه محتوى فعلاً باللغة
-  // اللي هتتبعت بيها الرسالة للطالب/ولي الأمر دي بالتحديد. لو مفيش بلوج
-  // خالص للسيشن دي، أو مفيش نسخة باللغة دي، مفيش أي لينك بيتضاف.
-  const blogInfo = extra.blogInfo;
-  console.log('🔍 [BlogLink] lang:', lang, '| blogInfo:', blogInfo);
-  if (blogInfo && ((lang === 'ar' && blogInfo.hasAr) || (lang === 'en' && blogInfo.hasEn))) {
-    console.log('✅ [BlogLink] Appending blog link to message');
-    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
-    const blogUrl = `${baseUrl}/session-blog/${session._id}`;
-    const blogSection =
-      lang === 'ar'
-        ? `\n\n📝 تقدروا تقروا ملخص الجلسة كامل من هنا:\n${blogUrl}`
-        : `\n\n📝 You can read the full session summary here:\n${blogUrl}`;
-    rendered += blogSection;
-  }
-
   return {
     rendered,
     lang,
@@ -378,6 +364,49 @@ async function buildRecordingMessage(student, session, recordingLink) {
   });
 
   return { rendered, lang, isFallback: result.isFallback };
+}
+
+// ─── 🆕 Build session blog (summary) message — رسالة مستقلة تمامًا ──────────
+// دي رسالة منفصلة بالكامل عن رسالة التقييم ورسالة التسجيل — بتحتوي بس على
+// تحية لولي الأمر + لينك ملخص الجلسة. بترجع null لو مفيش محتوى بلوج فعلاً
+// باللغة اللي هتتبعت بيها الرسالة (عربي/إنجليزي) عشان مفيش رسالة فاضية تتبعت.
+async function buildBlogMessage(student, session, blogInfo) {
+  const lang = student.communicationPreferences?.preferredLanguage || 'ar';
+
+  console.log('🔍 [BlogMessage] lang:', lang, '| blogInfo:', blogInfo);
+
+  if (!blogInfo || !((lang === 'ar' && blogInfo.hasAr) || (lang === 'en' && blogInfo.hasEn))) {
+    console.log('🔍 [BlogMessage] No matching blog content for this language — skipping');
+    return null;
+  }
+
+  const dbVars       = await loadDbVars();
+  const gender       = (student.personalInfo?.gender || 'male').toLowerCase();
+  const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase();
+  const isFather     = relationship !== 'mother';
+  const genderCtx    = { studentGender: gender, guardianType: relationship };
+
+  const guardianFirstName =
+    lang === 'ar'
+      ? student.guardianInfo?.nickname?.ar?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
+      : student.guardianInfo?.nickname?.en?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
+
+  const guardianSalutationFromDB = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
+  const guardianSalutation = guardianSalutationFromDB
+    ? guardianSalutationFromDB.replace(/\{guardianName\}/g, guardianFirstName)
+    : buildGuardianSalutation(guardianFirstName, isFather, lang);
+
+  const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+  const blogUrl = `${baseUrl}/session-blog/${session._id}`;
+
+  const rendered =
+    lang === 'ar'
+      ? `${guardianSalutation}،\n\n📝 تقدروا تقروا ملخص الجلسة كامل من هنا:\n${blogUrl}`
+      : `${guardianSalutation},\n\n📝 You can read the full session summary here:\n${blogUrl}`;
+
+  console.log('✅ [BlogMessage] Built standalone blog message');
+
+  return { rendered, lang };
 }
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
@@ -446,7 +475,7 @@ export async function GET(req, { params }) {
 
     // 🆕 الطلاب اللي "غايب" أو "معذور" في الحضور مايدخلوش خطوة التقييم خالص —
     // بيتفلتروا هنا قبل ما يترجعوا للفرونت، فمش هيظهروا في الصفحة أصلاً
-    // ومش هياخدوا أي تقييم أو رسالة أو لينك تسجيل.
+    // ومش هياخدوا أي تقييم أو رسالة أو لينك تسجيل أو بلوج.
     const studentsForEval = students
       .filter((s) => {
         const status = attendanceMap[s._id.toString()] || null;
@@ -531,8 +560,8 @@ export async function POST(req, { params }) {
       ? await getModuleData(session.groupId, session.moduleIndex ?? 0)
       : { moduleTitle: '', moduleDescription: '' };
 
-    // ✅ نفس بيانات البلوج اللي هتتضاف في الرسالة الحقيقية — عشان المعاينة
-    // تبقى مطابقة تمامًا لما هيتبعت فعليًا بعد الحفظ
+    // ✅ نفس بيانات البلوج اللي هتتستخدم فعليًا في الرسالة الحقيقية — عشان
+    // المعاينة تبقى مطابقة تمامًا لما هيتبعت فعليًا بعد الحفظ
     const blogInfo = session ? await getSessionBlogInfo(session) : null;
 
     const { rendered, lang, isFallback, guardianPhone } = await buildEvaluationMessage(
@@ -545,14 +574,17 @@ export async function POST(req, { params }) {
         groupId:           session?.groupId,
         moduleTitle,
         moduleDescription,
-        blogInfo,
       }
     );
+
+    // 🆕 معاينة رسالة ملخص الجلسة (البلوج) كرسالة مستقلة تمامًا في response منفصل
+    const blogMessage = session ? await buildBlogMessage(student, session, blogInfo) : null;
 
     return NextResponse.json({
       success: true,
       data: {
         content:      rendered,
+        blogContent:  blogMessage?.rendered || null,   // 🆕 رسالة الملخص المستقلة
         lang,
         isFallback,
         guardianPhone,
@@ -620,8 +652,9 @@ export async function PATCH(req, { params }) {
       const attendanceStatus = attendanceMap[studentId?.toString()] || 'absent';
 
       // 🆕 تأمين مزدوج: لو الطالب غايب أو معذور، اتخطاه تمامًا — مفيش تقييم
-      // يتسجل، مفيش رسالة تقييم، ومفيش لينك تسجيل يتبعت له، حتى لو وصل
-      // ضمن الـ evaluations array لأي سبب (مثلاً تاب قديم مفتوح في الفرونت).
+      // يتسجل، مفيش رسالة تقييم، ومفيش لينك تسجيل ولا رسالة بلوج تتبعت له،
+      // حتى لو وصل ضمن الـ evaluations array لأي سبب (مثلاً تاب قديم مفتوح
+      // في الفرونت).
       if (EXCLUDED_FROM_EVALUATION_STATUSES.includes(attendanceStatus)) {
         results.push({
           studentId,
@@ -629,6 +662,7 @@ export async function PATCH(req, { params }) {
           attendanceStatus,
           messageSent: false,
           recordingLinkSent: false,
+          blogSent: false,
           skipped: true,
           skipReason: 'excluded_attendance_status',
         });
@@ -652,7 +686,6 @@ export async function PATCH(req, { params }) {
           groupId:           session.groupId?._id,
           moduleTitle,
           moduleDescription,
-          blogInfo,
         }
       );
 
@@ -690,12 +723,13 @@ export async function PATCH(req, { params }) {
 
       const remainingHours = student.creditSystem?.currentPackage?.remainingHours ?? 0;
       if (remainingHours <= 0) {
-        results.push({ studentId, decision, attendanceStatus, messageSent: false, recordingLinkSent: false, skipped: true });
+        results.push({ studentId, decision, attendanceStatus, messageSent: false, recordingLinkSent: false, blogSent: false, skipped: true });
         continue;
       }
 
       let messageSent       = false;
       let recordingLinkSent = false;
+      let blogSent          = false; // 🆕
 
       if (guardianPhone && rendered) {
         let evalResult = null;
@@ -748,12 +782,38 @@ export async function PATCH(req, { params }) {
 
             recordingLinkSent = linkResult?.success || false;
           }
+
+          // 🆕 رسالة ملخص الجلسة (البلوج) — مستقلة تمامًا عن رسالة التقييم،
+          // بتتبعت هنا جنب لينك التسجيل (مش شرط وجود recordingLink)، وبس
+          // لو فيه محتوى بلوج فعلاً باللغة اللي بيتكلمها ولي الأمر.
+          const blogMessage = await buildBlogMessage(student, session, blogInfo);
+          if (blogMessage?.rendered) {
+            try {
+              const blogResult = await wapilotService.sendAndLogMessage({
+                studentId,
+                phoneNumber: guardianPhone,
+                messageContent: blogMessage.rendered,
+                messageType: "session_blog",
+                language: blogMessage.lang,
+                metadata: {
+                  sessionId: id,
+                  sessionTitle: session.title,
+                  recipientType: "guardian",
+                  remainingHours,
+                },
+              });
+
+              blogSent = blogResult?.success || false;
+            } catch (blogErr) {
+              console.error("❌ BLOG SEND ERROR:", blogErr);
+            }
+          }
         } catch (err) {
           console.error("❌ SEND ERROR:", err);
         }
       }
 
-      results.push({ studentId, decision, attendanceStatus, messageSent, recordingLinkSent });
+      results.push({ studentId, decision, attendanceStatus, messageSent, recordingLinkSent, blogSent });
     }
 
     // ✅ حدّث الـ status بس لو مش completed
@@ -775,9 +835,10 @@ export async function PATCH(req, { params }) {
       console.log(`⏭️ Session already completed — skipping status update and instructor hours`);
     }
 
-    const evalSent = results.filter((r) => r.messageSent).length;
-    const linkSent = results.filter((r) => r.recordingLinkSent).length;
-    const skipped  = results.filter((r) => r.skipped).length;
+    const evalSent      = results.filter((r) => r.messageSent).length;
+    const linkSent      = results.filter((r) => r.recordingLinkSent).length;
+    const blogSentCount = results.filter((r) => r.blogSent).length; // 🆕
+    const skipped       = results.filter((r) => r.skipped).length;
 
     return NextResponse.json({
       success: true,
@@ -786,7 +847,7 @@ export async function PATCH(req, { params }) {
         results,
         sessionCompleted: true,
         alreadyWasCompleted: wasAlreadyCompleted,
-        summary: { total: results.length, evalSent, linkSent, skipped },
+        summary: { total: results.length, evalSent, linkSent, blogSent: blogSentCount, skipped },
       },
     });
 

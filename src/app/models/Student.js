@@ -108,6 +108,7 @@ const whatsappMessageSchema = new mongoose.Schema(
         "guardian_notification",
         "reminder_15min_student",
         "reminder_15min_guardian",
+        "session_blog",
       ],
       required: true,
     },
