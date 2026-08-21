@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/mongodb";
 import Student from "../../../models/Student";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
+import Portfolio from "../../../models/Portfolio"; // ✅ جديد
 import { wapilotService } from "../../../services/wapilot-service";
 import fs from "fs-extra";
 import path from "path";
@@ -113,6 +114,42 @@ async function uploadCertificateToCloudinary(filePath) {
 }
 
 // ============================================================
+// ✅ مزامنة الشهادة مع بورتفوليو الطالب (قسم certificates) — بدون تكرار.
+// ------------------------------------------------------------
+// بتشتغل بغض النظر عن نجاح إرسال الواتساب من عدمه (طالما الشهادة
+// اتولدت فعلاً)، وبتعتمد على moduleId (course._id-moduleIndex) كمفتاح
+// فريد جوه Portfolio.certificates عشان لو الكرون رجع اشتغل تاني على
+// نفس الموديول (مثلاً وهو بيحاول يبعت لولي الأمر بعد ما الطالب استلم
+// شهادته من مرة سابقة) الشهادة متتضافش مرتين.
+//
+// ⚠️ بتفترض إن عند الطالب حقل `userId` بيربطه بحساب User اللي عليه
+// الـ Portfolio (نفس نمط createdBy.id في Course/Group). لو الحقل
+// عندك اسمه مختلف، غيّر `student.userId` بس هنا.
+// ============================================================
+async function syncCertificateToStudentPortfolio(student, moduleId, module, fullImageUrl) {
+  const userId = student.userId;
+  if (!userId) return; // الطالب مالوش حساب User مرتبط → مفيش بورتفوليو أصلاً
+
+  try {
+    const { added } = await Portfolio.addModuleCertificateIfMissing(userId, {
+      moduleId,
+      title: module.title,
+      description: `تم إنجاز موديول "${module.title}" بنجاح`,
+      imageUrl: fullImageUrl,
+      issuer: module.certificateSignatureName || "Aya Elnagar",
+      issueDate: new Date(),
+    });
+
+    if (added) {
+      console.log(`🗂️  Added certificate to portfolio for ${student.personalInfo.fullName} (${moduleId})`);
+    }
+  } catch (error) {
+    // فشل مزامنة البورتفوليو مايوقفش باقي العملية (الإرسال والتحديث الأساسي)
+    console.error(`⚠️ Portfolio sync failed for ${student.personalInfo?.fullName}:`, error.message);
+  }
+}
+
+// ============================================================
 // ✅ إرسال الشهادة عبر واتساب — multipart مباشرة بالملف المحلي
 // ------------------------------------------------------------
 // ⚠️ ملحوظة تاريخية: كان فيه محاولة إرسال عبر رابط Cloudinary
@@ -157,6 +194,7 @@ export async function GET(request) {
       guardianSent: 0,
       pendingNoRecipient: 0,
       cloudinaryUploads: 0,
+      portfolioSynced: 0, // ✅ جديد
       errors: 0,
     };
 
@@ -249,6 +287,16 @@ export async function GET(request) {
               );
             }
             const fullImageUrl = cloudinaryUrl || `${baseUrl}${imageUrl}`;
+
+            // ✅ مزامنة مع البورتفوليو — مرة واحدة بس لكل moduleId (dedupe
+            // جوه الدالة نفسها)، بغض النظر عن نتيجة إرسال الواتساب تحت
+            const portfolioResult = await syncCertificateToStudentPortfolio(
+              student,
+              moduleId,
+              module,
+              fullImageUrl,
+            );
+            if (portfolioResult?.added) summary.portfolioSynced++;
 
             // ✅ اللغة المفضلة بتاعة الطالب
             const preferredLanguage = student.communicationPreferences?.preferredLanguage || "ar";

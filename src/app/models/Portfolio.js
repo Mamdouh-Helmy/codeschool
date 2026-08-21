@@ -70,6 +70,14 @@ const portfolioSchema = new mongoose.Schema(
         issuer: { type: String, trim: true, default: "" },
         issueDate: { type: Date, default: null },
         credentialUrl: { type: String, trim: true, default: "" },
+
+        // ✅ مفتاح داخلي فقط (مش بيتعرض في أي فورم يدوي) — بيتحط تلقائيًا
+        // لما الشهادة تيجي من كرون الشهادات (course._id + moduleIndex)،
+        // وبيُستخدم فقط عشان نمنع تكرار نفس الشهادة لو الكرون اشتغل
+        // أكتر من مرة على نفس الموديول (مثلاً وهو بيحاول يبعت لولي الأمر
+        // بعد ما بعت للطالب بنجاح في مرة سابقة). الشهادات المُضافة يدويًا
+        // من الأدمن مش بيتحطلها القيمة دي، فمش بتتأثر خالص.
+        moduleId: { type: String, default: null, index: true },
       },
     ],
     experience: [
@@ -154,6 +162,39 @@ portfolioSchema.methods.incrementViews = async function () {
 
 portfolioSchema.statics.findPublished = function () {
   return this.find({ isPublished: true }).sort({ createdAt: -1 });
+};
+
+// ✅ يضيف شهادة كرون الشهادات (LMS) لبورتفوليو الطالب — من غير تكرار.
+// الـ update شرطه إن الـ moduleId ده لسه مش موجود جوه مصفوفة certificates؛
+// فلو اتنفذت الدالة أكتر من مرة على نفس moduleId (زي إعادة محاولة الإرسال)،
+// الـ $push مش هيحصل تاني لأن الشرط في الـ filter مش هيتحقق.
+portfolioSchema.statics.addModuleCertificateIfMissing = async function (
+  userId,
+  { moduleId, title, description = "", imageUrl = "", issuer = "", issueDate = null },
+) {
+  if (!userId || !moduleId) return { added: false, reason: "MISSING_KEYS" };
+
+  const result = await this.updateOne(
+    {
+      userId,
+      "certificates.moduleId": { $ne: moduleId },
+    },
+    {
+      $push: {
+        certificates: {
+          title,
+          description,
+          image: { url: imageUrl, alt: title },
+          issuer,
+          issueDate: issueDate || new Date(),
+          credentialUrl: "",
+          moduleId,
+        },
+      },
+    },
+  );
+
+  return { added: result.modifiedCount > 0 };
 };
 
 portfolioSchema.pre("save", async function () {
