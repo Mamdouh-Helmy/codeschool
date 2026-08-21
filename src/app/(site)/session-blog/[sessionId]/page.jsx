@@ -245,10 +245,13 @@ export default function SessionBlogPage() {
         .blog-content li::marker { color: #ff6700; font-weight: 700; }
 
         .blog-content img {
-  margin: 1.4em auto !important;
-  display: block;
-  max-width: 100%;
-}
+          margin: 1.4em auto !important;
+          display: block;
+          max-width: 100%;
+          border: none !important;
+          outline: none !important;
+          box-shadow: none !important;
+        }
 
         .blog-content blockquote,
         .blog-content .blockquote-container blockquote {
