@@ -248,6 +248,11 @@ export default function AttendanceModal({
   const initialLoadDone = useRef(false);
   const fetchQueue      = useRef(new Set());
 
+  // ✅ الطلاب اللي أصلاً ليهم سجل حضور في السيشن دي من قبل ما المودال يتفتح.
+  // دول بالفعل اتخصمت منهم الساعتين، فأي تعديل على حالتهم بعد كده متلمسش
+  // الرصيد تاني — بغض النظر عن الرصيد الحالي.
+  const initialRecordedStudentIds = useRef(new Set());
+
   // ── Fetch DB template variables on mount ──────────────────────────────────
   useEffect(() => {
     fetch("/api/whatsapp/template-variables")
@@ -289,7 +294,7 @@ export default function AttendanceModal({
 
   const checkStudentBalance = useCallback((student) => {
     if (!student?.creditSystem)
-      return { hasBalance: false, remainingHours: 0, isBlocked: true };
+      return { hasBalance: false, remainingHours: 0, isZeroBalance: true };
 
     const remainingHours =
       student.creditSystem.currentPackage?.remainingHours || 0;
@@ -301,9 +306,23 @@ export default function AttendanceModal({
         (!e.endDate || new Date() <= new Date(e.endDate))
     );
 
-    const isBlocked = hasActiveFreeze || remainingHours <= 0;
-    return { hasBalance: remainingHours > 0, remainingHours, isBlocked };
+    const isZeroBalance = hasActiveFreeze || remainingHours <= 0;
+    return { hasBalance: remainingHours > 0, remainingHours, isZeroBalance };
   }, []);
+
+  // ✅ هل اختيار أي حالة للطالب ده دلوقتي ممنوع؟
+  // ممنوع بس لو: (1) السيشن دي أول مرة تتسجل له فيها حضور، و(2) رصيده صفر/مجمد.
+  // لو أصلاً متسجل له حضور قبل كده، يفضل يقدر يعدل الحالة براحته لأن الساعتين
+  // خلاص اتخصمت وده مش هيغيّر في الرصيد.
+  const isStudentLocked = useCallback(
+    (student) => {
+      const studentId = student?._id?.toString();
+      if (!studentId) return true;
+      if (initialRecordedStudentIds.current.has(studentId)) return false;
+      return checkStudentBalance(student).isZeroBalance;
+    },
+    [checkStudentBalance]
+  );
 
   // ── Build rendered message (raw template + real student variables) ─────────
   const buildRenderedMessage = useCallback(
@@ -486,13 +505,15 @@ export default function AttendanceModal({
       const student = groupStudents.find(
         (s) => s._id?.toString() === studentId?.toString()
       );
-      const { isBlocked, remainingHours } = checkStudentBalance(student);
 
-      if (isBlocked && ["present", "late"].includes(status)) {
+      // ✅ منع منتشرة على كل الحالات: لو أول مرة يتسجل له حضور في السيشن دي
+      // ورصيده صفر، امنعه أيًا كانت الحالة اللي هيختارها.
+      if (isStudentLocked(student)) {
+        const { remainingHours } = checkStudentBalance(student);
         toast.error(
           isRTL
-            ? `لا يمكن تسجيل حضور - الرصيد صفر (${remainingHours}h)`
-            : `Cannot mark attendance - Zero balance (${remainingHours}h)`
+            ? `لا يمكن تسجيل الحضور - الرصيد صفر (${remainingHours}h)`
+            : `Cannot record attendance - Zero balance (${remainingHours}h)`
         );
         return;
       }
@@ -523,7 +544,7 @@ export default function AttendanceModal({
         setManuallyEdited((prev)    => { const n = { ...prev }; delete n[studentId]; return n; });
       }
     },
-    [fetchTemplateForStudent, manuallyEdited, groupStudents, checkStudentBalance, isRTL]
+    [fetchTemplateForStudent, manuallyEdited, groupStudents, isStudentLocked, checkStudentBalance, isRTL]
   );
 
   const updateStudentNotes = useCallback((studentId, notes) => {
@@ -639,18 +660,33 @@ export default function AttendanceModal({
 
   // ── Effects ────────────────────────────────────────────────────────────────
 
-  // Initialise attendance from DB or student list
+  // Initialise attendance from DB or student list, and freeze which students
+  // already had a record for this session BEFORE this modal session started
   useEffect(() => {
     if (initialLoadDone.current) return;
+
+    // ✅ منع الـ race condition: لو لسه بنستنى بيانات الحضور من السيرفر
+    // (loading === true)، ماتعملش أي تهيئة دلوقتي. من غيرها ممكن الـ
+    // effect يشتغل بـ attendanceData لسه فاضي (لأنه وصل بعد groupStudents)
+    // فيحط كل حاجة "غايب" افتراضيًا ويقفل initialLoadDone قبل ما البيانات
+    // الحقيقية توصل أصلاً — وده اللي بيخلي الحالة الحقيقية (حاضر) تتفقد
+    // بمجرد ما تقفل وتفتح المودال تاني.
+    if (loading) return;
+
     if (attendanceData?.attendance?.length > 0) {
       setAttendance(attendanceData.attendance);
+      initialRecordedStudentIds.current = new Set(
+        attendanceData.attendance.map((a) =>
+          (a.studentId?._id || a.studentId?.id || a.studentId)?.toString()
+        )
+      );
     } else if (groupStudents.length > 0) {
       setAttendance(
         groupStudents.map((s) => ({ studentId: s._id, status: "absent", notes: "" }))
       );
     }
     initialLoadDone.current = true;
-  }, [attendanceData, groupStudents]);
+  }, [attendanceData, groupStudents, loading]);
 
   // Fetch templates for already-absent/late/excused students
   useEffect(() => {
@@ -755,7 +791,7 @@ export default function AttendanceModal({
     absent:  attendance.filter((a) => a.status === "absent").length,
     late:    attendance.filter((a) => a.status === "late").length,
     excused: attendance.filter((a) => a.status === "excused").length,
-    blocked: groupStudents.filter((s) => checkStudentBalance(s).isBlocked).length,
+    blocked: groupStudents.filter((s) => isStudentLocked(s)).length,
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -819,7 +855,8 @@ export default function AttendanceModal({
               const gender       = (student.personalInfo?.gender       || "male").toLowerCase().trim();
               const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
 
-              const { remainingHours, isBlocked } = checkStudentBalance(student);
+              const { remainingHours } = checkStudentBalance(student);
+              const isLocked = isStudentLocked(student);
 
               // Live variables (DB-powered) for preview and context card
               const currentVars = buildVariables(student, status, session, dbVars);
@@ -832,7 +869,7 @@ export default function AttendanceModal({
                 <div
                   key={studentId}
                   className={`border rounded-lg overflow-hidden ${
-                    isBlocked
+                    isLocked
                       ? "border-gray-300 dark:border-gray-700 opacity-75"
                       : "border-PowderBlueBorder dark:border-dark_border"
                   }`}
@@ -840,7 +877,7 @@ export default function AttendanceModal({
                   {/* ── Student row + select ── */}
                   <div
                     className={`flex items-center justify-between p-4 ${
-                      isBlocked
+                      isLocked
                         ? "bg-gray-100 dark:bg-gray-800"
                         : "bg-white dark:bg-darkmode"
                     }`}
@@ -850,7 +887,7 @@ export default function AttendanceModal({
                         <p className="font-medium text-MidnightNavyText dark:text-white">
                           {student.personalInfo?.fullName}
                         </p>
-                        {isBlocked && (
+                        {isLocked && (
                           <span className="flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs">
                             <Ban className="w-3 h-3" />
                             {isRTL ? "محظور" : "Blocked"}
@@ -896,7 +933,7 @@ export default function AttendanceModal({
                         )}
                       </div>
 
-                      {!isBlocked && remainingHours <= 2 && remainingHours > 0 && (
+                      {!isLocked && remainingHours <= 2 && remainingHours > 0 && (
                         <p className="flex items-center gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
                           <AlertTriangle className="w-3 h-3" />
                           {isRTL
@@ -909,22 +946,22 @@ export default function AttendanceModal({
                     <select
                       value={status}
                       onChange={(e) => updateAttendanceStatus(studentId, e.target.value)}
-                      disabled={isBlocked}
+                      disabled={isLocked}
                       className={`px-3 py-2 text-sm border rounded-lg dark:bg-dark_input dark:text-white ${
-                        isBlocked
+                        isLocked
                           ? "border-gray-300 dark:border-gray-700 opacity-50 cursor-not-allowed"
                           : "border-PowderBlueBorder dark:border-dark_border"
                       }`}
                     >
-                      <option value="present" disabled={isBlocked}>{isRTL ? "حاضر"  : "Present"}</option>
-                      <option value="absent">                       {isRTL ? "غائب"  : "Absent" }</option>
-                      <option value="late"    disabled={isBlocked}>{isRTL ? "متأخر" : "Late"   }</option>
-                      <option value="excused">                      {isRTL ? "معتذر" : "Excused"}</option>
+                      <option value="present">{isRTL ? "حاضر"  : "Present"}</option>
+                      <option value="absent">{isRTL ? "غائب"  : "Absent" }</option>
+                      <option value="late">{isRTL ? "متأخر" : "Late"   }</option>
+                      <option value="excused">{isRTL ? "معتذر" : "Excused"}</option>
                     </select>
                   </div>
 
-                  {/* ── Message editor (absent/late/excused, not blocked) ── */}
-                  {!isBlocked && needsMessage && (
+                  {/* ── Message editor (absent/late/excused, not locked) ── */}
+                  {!isLocked && needsMessage && (
                     <div className="bg-purple-50 dark:bg-purple-900/20 border-t border-purple-200 dark:border-purple-800 p-4">
                       <div className="flex items-start gap-3">
                         <MessageCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
@@ -1121,8 +1158,8 @@ export default function AttendanceModal({
                     </div>
                   )}
 
-                  {/* ── Blocked + needs message ── */}
-                  {isBlocked && needsMessage && (
+                  {/* ── Locked + needs message ── */}
+                  {isLocked && needsMessage && (
                     <div className="bg-gray-100 dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 p-4 text-center">
                       <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
                         <Ban className="w-4 h-4" />

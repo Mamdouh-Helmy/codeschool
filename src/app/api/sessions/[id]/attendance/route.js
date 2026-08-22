@@ -1,16 +1,17 @@
 // /api/sessions/[id]/attendance/route.js
-// ✅ منطق الخصم:
-// - حاضر / متأخر  → خصم ساعتين (مرة واحدة فقط للسيشن)
-// - غائب / معتذر  → مفيش خصم
-// - لو رجع من حاضر → متأخر: مفيش خصم تاني
-// - لو رجع من حاضر → غائب: إرجاع الساعتين
-// - لو رجع من غايب → حاضر: خصم ساعتين
+// ✅ منطق الخصم (الجديد - أبسط):
+// - أول ما تتسجل حالة حضور لطالب في السيشن دي (أي حالة: حاضر/غايب/متأخر/معتذر)
+//   → يتخصم ساعتين مرة واحدة بس.
+// - أي تعديل بعد كده على نفس الطالب في نفس السيشن (يقلبها لأي حالة تانية)
+//   → مفيش أي خصم أو إرجاع تاني. الساعتين ثابتة زي ما هي.
+// - يعني الخصم مربوط بـ"هل الطالب متسجل له حضور في السيشن دي قبل كده ولا لأ"
+//   مش مربوط بالحالة نفسها.
 
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Session from '../../../../models/Session';
 import Student from '../../../../models/Student';
-import Group from '../../../../models/Group';
+import Group from '../../../../models/Group'; // مطلوب لتسجيل الـ schema عشان الـ populate يشتغل
 import { requireAdmin } from '@/utils/authMiddleware';
 import {
   onAttendanceSubmitted,
@@ -19,28 +20,24 @@ import {
 } from '../../../../services/groupAutomation';
 import mongoose from 'mongoose';
 
-// ✅ Helper: هل الحالة "يخصم" ساعات؟
-const isDeductibleStatus = (status) => ['present', 'late'].includes(status);
+// ✅ مهم جدًا: يمنع Next.js من عمل cache للراوت ده (GET أو POST).
+// من غيره، ممكن ترجع بيانات قديمة بعد الحفظ لحد ما الـ cache ينتهي لوحده.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-// ✅ Helper: هل الحالة "ما تخصمش" ساعات؟
-const isNonDeductibleStatus = (status) => ['absent', 'excused'].includes(status);
+const HOURS_PER_SESSION = 2;
 
 export async function POST(req, { params }) {
   try {
     const { id } = await params;
-    console.log(`\n🎯 ATTENDANCE SUBMISSION ==========`);
-    console.log(`📋 Session ID: ${id}`);
 
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      return authCheck.response;
-    }
-
+    if (!authCheck.authorized) return authCheck.response;
     const adminUser = authCheck.user;
+
     await connectDB();
 
     const { attendance, customMessages } = await req.json();
-    console.log(`📊 Attendance Records: ${attendance?.length || 0}`);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -49,26 +46,17 @@ export async function POST(req, { params }) {
       );
     }
 
-    const session = await Session.findOne({ _id: id, isDeleted: false })
-      .populate('groupId');
-
+    const session = await Session.findOne({ _id: id, isDeleted: false }).populate('groupId');
     if (!session) {
-      return NextResponse.json(
-        { success: false, error: 'Session not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
     }
 
     const group = session.groupId;
 
-    // ✅ بناء Map للحضور السابق (الموجود في DB قبل هذه العملية)
-    const previousAttendanceMap = new Map();
-    (session.attendance || []).forEach(record => {
-      previousAttendanceMap.set(
-        record.studentId.toString(),
-        record.status
-      );
-    });
+    // ── مين اللي أصلاً متسجل له حضور في السيشن دي قبل الحفظة الحالية ─────────
+    const alreadyRecordedStudentIds = new Set(
+      (session.attendance || []).map((record) => record.studentId.toString())
+    );
 
     const creditDeductions = [];
     const lowBalanceStudents = [];
@@ -77,185 +65,63 @@ export async function POST(req, { params }) {
     for (const record of attendance) {
       const studentId = record.studentId?.toString();
       const newStatus = record.status;
-      const previousStatus = previousAttendanceMap.get(studentId) || null;
 
-      console.log(`\n👤 Student: ${studentId}`);
-      console.log(`   Previous: ${previousStatus || 'none (first time)'} → New: ${newStatus}`);
+      // ✅ لو الطالب ده أصلاً متسجل له حضور في السيشن دي من قبل، يبقى اتخصم
+      // منه فعلاً ساعتين مهما كانت الحالة القديمة أو الجديدة → متلمسش الرصيد
+      if (alreadyRecordedStudentIds.has(studentId)) continue;
 
-      // ✅ لو الحالة ماتغيرتش خالص، skip
-      if (previousStatus === newStatus) {
-        console.log(`   ⏭️ No change, skipping`);
-        continue;
-      }
-
-      // ✅ تحديد نوع التغيير المطلوب في الساعات
-      let hoursChange = 0; // موجب = إضافة، سالب = خصم
-
-      if (!previousStatus) {
-        // ===== أول مرة تتسجل للسيشن دي =====
-        if (isDeductibleStatus(newStatus)) {
-          hoursChange = -2; // خصم ساعتين
-        }
-        // لو غايب أو معتذر من أول وهلة → مفيش خصم
-      } else if (isNonDeductibleStatus(previousStatus) && isDeductibleStatus(newStatus)) {
-        // ===== من (غايب/معتذر) → (حاضر/متأخر) =====
-        // = بدأ يحضر بعد ما كان غايب → خصم ساعتين
-        hoursChange = -2;
-      } else if (isDeductibleStatus(previousStatus) && isNonDeductibleStatus(newStatus)) {
-        // ===== من (حاضر/متأخر) → (غايب/معتذر) =====
-        // = كان بيحضر والآن بقى غايب → رجّع الساعتين
-        hoursChange = +2;
-      } else if (isDeductibleStatus(previousStatus) && isDeductibleStatus(newStatus)) {
-        // ===== من (حاضر → متأخر) أو (متأخر → حاضر) =====
-        // = الاتنين بيخصموا → مفيش خصم إضافي
-        hoursChange = 0;
-        console.log(`   ✅ Both statuses deductible (present↔late), no extra charge`);
-      } else if (isNonDeductibleStatus(previousStatus) && isNonDeductibleStatus(newStatus)) {
-        // ===== من (غايب → معتذر) أو (معتذر → غايب) =====
-        // = الاتنين ماتخصموش → مفيش تغيير
-        hoursChange = 0;
-        console.log(`   ✅ Both statuses non-deductible, no change`);
-      }
-
-      console.log(`   💰 Hours change: ${hoursChange > 0 ? '+' : ''}${hoursChange}`);
-
-      if (hoursChange === 0) continue;
-
-      // ✅ جيب الطالب من DB
+      // ✅ أول مرة يتسجل له حضور في السيشن دي → اخصم ساعتين، مهما كانت الحالة
       const student = await Student.findById(studentId);
-      if (!student) {
-        console.log(`   ❌ Student not found`);
-        continue;
+      if (!student?.creditSystem?.currentPackage) continue;
+
+      const deductionResult = await student.deductCreditHours({
+        hours: HOURS_PER_SESSION,
+        sessionId: session._id,
+        groupId: group._id,
+        sessionTitle: session.title,
+        groupName: group.name,
+        attendanceStatus: newStatus,
+        notes: `Attendance recorded: ${newStatus}`
+      });
+
+      if (!deductionResult.success) continue;
+
+      const remainingHours = deductionResult.remainingHours;
+      creditDeductions.push({
+        studentId,
+        action: 'deduct',
+        hoursDeducted: HOURS_PER_SESSION,
+        remainingHours,
+        reason: `First record for this session: ${newStatus}`
+      });
+
+      if (remainingHours <= 5 && remainingHours > 0) {
+        lowBalanceStudents.push({ studentId, student, remainingHours });
       }
-
-      if (!student.creditSystem?.currentPackage) {
-        console.log(`   ⚠️ No active package for student`);
-        continue;
-      }
-
-      if (hoursChange < 0) {
-        // ===== خصم ساعتين =====
-        const hoursToDeduct = Math.abs(hoursChange);
-        const effectiveRemaining = student.getEffectiveRemainingHours();
-
-        console.log(`   📊 Effective remaining: ${effectiveRemaining}h`);
-
-        if (effectiveRemaining < hoursToDeduct) {
-          console.log(`   ⚠️ Insufficient hours (${effectiveRemaining}h < ${hoursToDeduct}h) - proceeding anyway with zero`);
-        }
-
-        const deductionResult = await student.deductCreditHours({
-          hours: hoursToDeduct,
-          sessionId: session._id,
-          groupId: group._id,
-          sessionTitle: session.title,
-          groupName: group.name,
-          attendanceStatus: newStatus,
-          notes: `Attendance: ${previousStatus || 'first_time'} → ${newStatus}`
-        });
-
-        if (deductionResult.success) {
-          const newRemaining = deductionResult.remainingHours;
-          creditDeductions.push({
-            studentId,
-            action: 'deduct',
-            hoursDeducted: hoursToDeduct,
-            remainingHours: newRemaining,
-            reason: `${previousStatus || 'new'} → ${newStatus}`
-          });
-
-          console.log(`   ✅ Deducted ${hoursToDeduct}h → remaining: ${newRemaining}h`);
-
-          // ✅ تحذير رصيد منخفض
-          if (newRemaining <= 5 && newRemaining > 0) {
-            lowBalanceStudents.push({ studentId, student, remainingHours: newRemaining });
-          }
-
-          // ✅ تعطيل الإشعارات لو الرصيد صفر
-          if (newRemaining <= 0) {
-            zeroBalanceStudents.push({ studentId, student, remainingHours: 0 });
-          }
-        } else {
-          console.log(`   ❌ Deduction failed: ${deductionResult.error}`);
-        }
-
-      } else {
-        // ===== إرجاع ساعتين (كان حاضر والآن غايب) =====
-        const hoursToReturn = hoursChange;
-        const currentPkg = student.creditSystem.currentPackage;
-
-        currentPkg.remainingHours += hoursToReturn;
-        student.creditSystem.stats.totalHoursRemaining = student.getEffectiveRemainingHours();
-        student.creditSystem.stats.totalHoursUsed = Math.max(
-          0,
-          (student.creditSystem.stats.totalHoursUsed || 0) - hoursToReturn
-        );
-        student.creditSystem.stats.totalSessionsAttended = Math.max(
-          0,
-          (student.creditSystem.stats.totalSessionsAttended || 0) - 1
-        );
-
-        // ✅ لو الرصيد عاد للحياة، فعّل الإشعارات
-        if (currentPkg.remainingHours > 0 &&
-          student.communicationPreferences?.notificationChannels) {
-          student.communicationPreferences.notificationChannels.whatsapp = true;
-          if (currentPkg.status === 'completed') {
-            currentPkg.status = 'active';
-            student.creditSystem.status = 'active';
-          }
-        }
-
-        // ✅ سجّل في usageHistory
-        if (!student.creditSystem.usageHistory) student.creditSystem.usageHistory = [];
-        student.creditSystem.usageHistory.push({
-          sessionId: session._id,
-          groupId: group._id,
-          date: new Date(),
-          hoursDeducted: -hoursToReturn, // سالب = إرجاع
-          sessionTitle: session.title,
-          groupName: group.name,
-          attendanceStatus: 'refund',
-          notes: `Refund: ${previousStatus} → ${newStatus}`,
-          deductedFromExceptions: 0,
-          deductedFromPackage: hoursToReturn
-        });
-
-        await student.save();
-
-        creditDeductions.push({
-          studentId,
-          action: 'refund',
-          hoursReturned: hoursToReturn,
-          remainingHours: currentPkg.remainingHours,
-          reason: `${previousStatus} → ${newStatus}`
-        });
-
-        console.log(`   ✅ Returned ${hoursToReturn}h → remaining: ${currentPkg.remainingHours}h`);
+      if (remainingHours <= 0) {
+        zeroBalanceStudents.push({ studentId, student, remainingHours: 0 });
       }
     }
 
-    // ✅ تنبيهات رصيد منخفض
     if (lowBalanceStudents.length > 0) {
-      console.log(`\n⚠️ Sending low balance alerts for ${lowBalanceStudents.length} students`);
       try {
         await sendLowBalanceAlerts(lowBalanceStudents);
       } catch (err) {
-        console.error(`❌ Low balance alerts error:`, err);
+        console.error('Low balance alerts error:', err);
       }
     }
 
-    // ✅ تعطيل إشعارات الرصيد صفر
     if (zeroBalanceStudents.length > 0) {
-      console.log(`\n🔕 Disabling notifications for ${zeroBalanceStudents.length} students`);
       try {
         await disableZeroBalanceNotifications(zeroBalanceStudents);
       } catch (err) {
-        console.error(`❌ Disable notifications error:`, err);
+        console.error('Disable notifications error:', err);
       }
     }
 
-    // ✅ حفظ الغياب في DB
-    const attendanceRecords = attendance.map(record => ({
+    // ── حفظ الحضور الجديد على الجلسة (الحالة نفسها بتتحدث دايمًا حتى لو
+    //    الرصيد متلمسش) ────────────────────────────────────────────────────
+    const attendanceRecords = attendance.map((record) => ({
       studentId: record.studentId,
       status: record.status,
       notes: record.notes || '',
@@ -276,29 +142,26 @@ export async function POST(req, { params }) {
       { new: true }
     );
 
-    console.log(`\n✅ Attendance saved successfully`);
-
-    // ✅ إرسال إشعارات الغياب
+    // ── إشعارات الغياب/التأخير/الاعتذار ─────────────────────────────────────
     let automationResult = { successCount: 0, failCount: 0 };
-    const studentsNeedingMessages = attendance.filter(r =>
+    const studentsNeedingMessages = attendance.filter((r) =>
       ['absent', 'late', 'excused'].includes(r.status)
     );
 
     if (studentsNeedingMessages.length > 0) {
-      console.log(`📤 Triggering notifications for ${studentsNeedingMessages.length} students...`);
       try {
         automationResult = await onAttendanceSubmitted(id, customMessages || {});
       } catch (err) {
-        console.error(`❌ Automation error:`, err);
+        console.error('Automation error:', err);
       }
     }
 
     const stats = {
       total: attendanceRecords.length,
-      present: attendanceRecords.filter(a => a.status === 'present').length,
-      absent: attendanceRecords.filter(a => a.status === 'absent').length,
-      late: attendanceRecords.filter(a => a.status === 'late').length,
-      excused: attendanceRecords.filter(a => a.status === 'excused').length
+      present: attendanceRecords.filter((a) => a.status === 'present').length,
+      absent: attendanceRecords.filter((a) => a.status === 'absent').length,
+      late: attendanceRecords.filter((a) => a.status === 'late').length,
+      excused: attendanceRecords.filter((a) => a.status === 'excused').length
     };
 
     return NextResponse.json({
@@ -321,39 +184,31 @@ export async function POST(req, { params }) {
         customMessagesUsed: Object.keys(customMessages || {}).length
       }
     });
-
   } catch (error) {
-    console.error('❌ Error:', error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    console.error('Attendance POST error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
 export async function GET(req, { params }) {
   try {
     const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) {
-      return authCheck.response;
-    }
+    if (!authCheck.authorized) return authCheck.response;
 
     await connectDB();
 
     const { id } = await params;
 
+    // ── جلسة واحدة بس، بكل الـ populate اللي محتاجينه ─────────────────────────
     const session = await Session.findOne({ _id: id, isDeleted: false })
       .populate('groupId', 'name code')
+      .populate('attendance.studentId', '_id')
       .lean();
 
     if (!session) {
-      return NextResponse.json(
-        { success: false, error: 'Session not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
     }
 
-    // ✅ الطلاب من المجموعة مع الرصيد
     const groupStudents = await Student.find({
       'academicInfo.groupIds': session.groupId._id,
       isDeleted: false
@@ -361,35 +216,31 @@ export async function GET(req, { params }) {
       .select('personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem')
       .lean();
 
-    const fullSession = await Session.findOne({ _id: id, isDeleted: false })
-      .populate({ path: 'attendance.studentId', select: '_id' })
-      .lean();
-
     const attendanceMap = new Map();
-    if (fullSession?.attendance) {
-      fullSession.attendance.forEach(record => {
-        if (record.studentId) {
-          attendanceMap.set(record.studentId._id.toString(), {
-            status: record.status,
-            notes: record.notes || ''
-          });
-        }
+    const attendance = [];
+    (session.attendance || []).forEach((record) => {
+      if (!record.studentId) return;
+      const studentId = record.studentId._id.toString();
+      attendanceMap.set(studentId, { status: record.status, notes: record.notes || '' });
+      attendance.push({
+        studentId: record.studentId._id,
+        status: record.status,
+        notes: record.notes || '',
+        markedAt: record.markedAt,
+        markedBy: record.markedBy
       });
-    }
+    });
 
-    const students = groupStudents.map(student => {
+    const students = groupStudents.map((student) => {
       const attendanceRecord = attendanceMap.get(student._id.toString());
 
-      if (!student.creditSystem) {
-        student.creditSystem = {
-          currentPackage: null,
-          status: 'no_package',
-          stats: { totalHoursPurchased: 0, totalHoursUsed: 0, totalHoursRemaining: 0 }
-        };
-      }
-
-      if (!student.creditSystem.currentPackage) {
-        student.creditSystem.currentPackage = {
+      const creditSystem = student.creditSystem || {
+        currentPackage: null,
+        status: 'no_package',
+        stats: { totalHoursPurchased: 0, totalHoursUsed: 0, totalHoursRemaining: 0 }
+      };
+      if (!creditSystem.currentPackage) {
+        creditSystem.currentPackage = {
           remainingHours: 0,
           totalHours: 0,
           packageType: null,
@@ -404,33 +255,18 @@ export async function GET(req, { params }) {
         personalInfo: student.personalInfo || {},
         guardianInfo: student.guardianInfo || {},
         communicationPreferences: student.communicationPreferences || { preferredLanguage: 'ar' },
-        creditSystem: student.creditSystem,
+        creditSystem,
         attendanceStatus: attendanceRecord?.status || null,
         attendanceNotes: attendanceRecord?.notes || ''
       };
     });
 
-    const attendance = [];
-    if (fullSession?.attendance) {
-      fullSession.attendance.forEach(record => {
-        if (record.studentId) {
-          attendance.push({
-            studentId: record.studentId._id,
-            status: record.status,
-            notes: record.notes || '',
-            markedAt: record.markedAt,
-            markedBy: record.markedBy
-          });
-        }
-      });
-    }
-
     const stats = {
       total: students.length,
-      present: attendance.filter(a => a.status === 'present').length,
-      absent: attendance.filter(a => a.status === 'absent').length,
-      late: attendance.filter(a => a.status === 'late').length,
-      excused: attendance.filter(a => a.status === 'excused').length
+      present: attendance.filter((a) => a.status === 'present').length,
+      absent: attendance.filter((a) => a.status === 'absent').length,
+      late: attendance.filter((a) => a.status === 'late').length,
+      excused: attendance.filter((a) => a.status === 'excused').length
     };
 
     return NextResponse.json({
@@ -446,12 +282,8 @@ export async function GET(req, { params }) {
         group: session.groupId
       }
     });
-
   } catch (error) {
-    console.error('❌ Error fetching attendance:', error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    console.error('Attendance GET error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
