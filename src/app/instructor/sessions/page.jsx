@@ -828,7 +828,7 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             </div>
           )}
 
-          {/* 🆕 بانر توضيحي لو فيه طلب إعادة فتح قيد المراجعة على السيشن دي بالتحديد */}
+                    {/* 🆕 بانر توضيحي لو فيه طلب إعادة فتح قيد المراجعة على السيشن دي بالتحديد */}
           {hasPendingReopenRequest && (
             <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
               <div className="w-9 h-9 rounded-xl bg-[#feaf00]/20 dark:bg-[#feaf00]/10 flex items-center justify-center flex-shrink-0 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
@@ -843,6 +843,18 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
                 </p>
               </div>
             </div>
+          )}
+
+          {/* 🆕 معاينة محتوى (موديول حالي أو withNext) لسيشن لسه مش مكتملة —
+              نفس زرار طلب الفتح العادي، من غير ما يكون لازم تكون completed */}
+          {isPartial && !isCompleted && !hasPendingReopenRequest && onRequestAccess && (
+            <button
+              onClick={() => onRequestAccess(session)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-[#004d59] dark:text-teal-400 border border-[#004d59]/30 dark:border-[#004d59]/30 hover:bg-[#004d59]/5 dark:hover:bg-[#004d59]/10 transition-all"
+            >
+              <CalendarClock className="w-4 h-4" />
+              {t("طلب فتح الجلسة", "Request Session Access")}
+            </button>
           )}
 
           <SessionDescriptionCard session={session} isAr={isAr} />

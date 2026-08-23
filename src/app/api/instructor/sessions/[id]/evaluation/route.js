@@ -19,7 +19,7 @@ const EVALUATION_TEMPLATE_MAP = {
 // مش بيظهروا في الـ GET، ومش بياخدوا أي تقييم/رسالة/لينك تسجيل/بلوج حتى لو
 // اتبعتوا في الـ PATCH لأي سبب (تأمين مزدوج — الفرونت أصلاً مش هيبعتهم
 // لأنهم مش هيظهروا، بس الـ backend بيتأكد بنفسه كمان).
-const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'excused'];
+const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'late', 'excused'];
 
 // ─── Helper: resolve var from DB ─────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = 'ar', genderContext = {}) {

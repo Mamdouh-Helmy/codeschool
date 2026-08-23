@@ -86,6 +86,63 @@ export async function GET(req) {
       };
     });
 
+        // ── 1.5 🆕 Compute the "current module" for each group ─────────────────
+    // الموديول "اللي الدور عليه" = أول موديول (بترتيب moduleIndex) لسه مش كل
+    // سيشناته الموجودة فعليًا في الـ DB status = "completed".
+    //
+    // ⚠️ العدد الكلي لسيشنات كل موديول بياخد من عدد سيشنات الـ DB الفعلية
+    // (progressSessions) مش من curriculum[moduleIndex].totalSessions — لأن
+    // حقل totalSessions في موديول الكورس ممكن يكون مش متسجل خالص (زي ما
+    // ظهر في الداتا الفعلية: كائن الموديول فيه بس title/order/lessons).
+    // الاعتماد على عدد سيشنات الـ DB الحقيقي أضمن ومتوافق تلقائيًا مع أي
+    // عدد سيشنات لكل موديول (3 أو غيره) من غير ما نحتاج نثق في بيانات
+    // المنهج بره الـ Session collection.
+    //
+    // ⚠️ وبرضو معتمدين على status مش attendanceTaken لتحديد "خلصت" — لأن
+    // attendanceTaken ممكن يبقى true حتى لو الـ status لسه "scheduled"
+    // (مستقلين عن بعض عمدًا في النظام ده).
+    const progressSessions = await Session.find({
+      groupId: { $in: groupIds },
+      isDeleted: false,
+    })
+      .select("groupId moduleIndex status")
+      .lean();
+
+    // groupId → { moduleIndex → { total, completed } }
+    const moduleStatsMap = {};
+    progressSessions.forEach((s) => {
+      const gid = s.groupId.toString();
+      if (!moduleStatsMap[gid]) moduleStatsMap[gid] = {};
+      if (!moduleStatsMap[gid][s.moduleIndex]) {
+        moduleStatsMap[gid][s.moduleIndex] = { total: 0, completed: 0 };
+      }
+      moduleStatsMap[gid][s.moduleIndex].total += 1;
+      if (s.status === "completed") {
+        moduleStatsMap[gid][s.moduleIndex].completed += 1;
+      }
+    });
+
+    // groupId → moduleIndex الحالي، أو null لو مفيش سيشنات أو كل الموديولات خلصت
+    const currentModuleIndexMap = {};
+    Object.keys(moduleStatsMap).forEach((gid) => {
+      const stats = moduleStatsMap[gid];
+      const moduleIndexes = Object.keys(stats)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+      let current = null;
+      for (const mIdx of moduleIndexes) {
+        const { total, completed } = stats[mIdx];
+        // total دايمًا > 0 هنا لأننا بنيناه من سيشنات فعلية بس — الشرط
+        // موجود للأمان في حالة أي تعديل مستقبلي على المنطق ده
+        if (total > 0 && completed < total) {
+          current = mIdx;
+          break;
+        }
+      }
+      currentModuleIndexMap[gid] = current;
+    });
+
     // ── 2. Build session query ─────────────────────────────────────────────
     const query = {
       groupId: groupIdFilter ? groupIdFilter : { $in: groupIds },
@@ -159,15 +216,7 @@ export async function GET(req) {
       // ── Effective "today" = real today OR an active early-access grant ──
       const isEffectivelyToday = isToday || hasActiveEarlyAccess;
 
-      // ── Show join button? ──────────────────────────────────────────────
-      const [endH = 23, endM = 59] = (session.endTime || "23:59")
-        .split(":")
-        .map(Number);
-      const sessionEndTime = new Date(sessionDate);
-      sessionEndTime.setHours(endH, endM, 0, 0);
-
-      const sessionStillActive = true
-        
+      const sessionStillActive = true;
 
       // ✅ الـ attendanceTaken دايمًا بياخد قيمته الحقيقية من DB
       // مش sensitive data — مجرد flag بيقول "الحضور اتسجل"
@@ -177,17 +226,9 @@ export async function GET(req) {
       // 🆕 الحضور بيقفل الوصول العادي، إلا لو:
       //   - فيه earlyAccess فعّال دلوقتي، أو
       //   - السيشن دي معادها الحقيقي (الخام، مش effective) هو النهاردة فعلاً
-      // ✅ الاستثناء الجديد (isToday الخام) بيضمن إن أي سيشن معادها الحقيقي
-      // النهاردة تتفتح عادي (لينك + حضور) حتى لو attendanceTaken كانت true
-      // من قبل (مثلاً بعد swap رجّعها تبقى سيشن اليوم من غير earlyAccess
-      // منفصل). ده مقصور على isToday الخام عشان محدش يستخدمه كـ bypass
-      // عن طريق earlyAccess وحده على سيشن مش معادها فعلاً النهاردة.
       const attendanceBlocksAccess =
         attendanceAlreadyTaken && !hasActiveEarlyAccess && !isToday;
 
-      // ✅ كل الحالات (scheduled/cancelled/postponed/completed) بقت زي
-      // بعضها بالظبط: لو معادها الفعلي = النهارده والحضور مش مقفول، الجوين
-      // بتاعها يظهر
       const showJoinButton =
         isEffectivelyToday &&
         sessionStillActive &&
@@ -195,29 +236,38 @@ export async function GET(req) {
         !!session.meetingLink;
 
       // ── 🔐 SECURITY: Can user view FULL details (link + credentials + attendance)? ──
-      // True only if the session is effectively "today" (real date today, or
-      // an approved early-access grant) AND it's still within its active
-      // window AND the attendance lock isn't in effect. هنا لينك الميتنج
-      // والباسورد لازم يفضلوا مربوطين بـ "اليوم" (أو earlyAccess صريح من
-      // الأدمن) — ده أمان حقيقي.
       const canViewDetails =
         isEffectivelyToday && sessionStillActive && !attendanceBlocksAccess;
 
-      // 🆕 ── مراجعة إحصائيات حضور سيشن خلصت بالفعل — مالهاش علاقة بـ "اليوم" ──
-      // ده مختلف تمامًا عن canViewDetails: هنا مفيش لينك ميتنج ولا كريدنشيلز
-      // بنبعتهم، بس المدرس المفروض يقدر يراجع مين حضر ومين غاب في أي سيشن
-      // completed اتسجل عليها حضور، مهما كان تاريخها. (لو حصل earlyAccess
-      // أو السيشن معادها الحقيقي النهاردة، canViewDetails هيبقى true أصلاً
-      // وهياخد الأولوية ويجيب كل حاجة).
+      // 🆕 ── مراجعة إحصائيات حضور سيشن خلصت بالفعل ──
       const canViewAttendanceHistory =
         session.status === "completed" && attendanceAlreadyTaken;
 
-      // ── 🔓 Partial details (content/lessons only, no link/attendance) ───
+      // ── 🔓 Partial details، مصدرين مستقلين تمامًا عن بعض:
+      //   1) وافق الأدمن على طلب "withNext" وده لسه من غير حضور
+      //   2) 🆕 السيشن دي جوه "الموديول الحالي" (اللي الدور عليه في المنهج)
+      //      ولسه مش completed — بيتفتح كـ معاينة محتوى بس بغض النظر عن أي
+      //      طلب/تاريخ، طول ما الموديولات اللي قبله خلصت بالكامل
+      //
+      // 🔧 بنستخدم status !== "completed" مش !attendanceAlreadyTaken، لأن
+      // attendanceTaken ممكن يبقى true حتى لو الـ status لسه "scheduled"
+      // (مستقلين عن بعض عمدًا في النظام ده). السيشن المكتملة أصلاً ليها
+      // مسار تاني (canViewAttendanceHistory) فمفيش داعي نمنع المعاينة هنا
+      // بسبب فلاج حضور ممكن يكون متسجل على سيشن لسه مجدولة.
       const wasApprovedWithNext =
         session.pendingReschedule?.status === "approved" &&
         session.pendingReschedule?.viewMode === "withNext";
+
+      const currentModuleIndexForGroup = currentModuleIndexMap[gid];
+      const isCurrentModuleSession =
+        currentModuleIndexForGroup !== null &&
+        currentModuleIndexForGroup !== undefined &&
+        session.moduleIndex === currentModuleIndexForGroup;
+
       const canViewPartialDetails =
-        !canViewDetails && wasApprovedWithNext && !attendanceAlreadyTaken;
+        !canViewDetails &&
+        session.status !== "completed" &&
+        (wasApprovedWithNext || isCurrentModuleSession);
 
       // ── Session description from curriculum ────────────────────────────
       const sessionPresentationData = (moduleData.sessions || []).find(
@@ -247,20 +297,12 @@ export async function GET(req) {
         : null;
 
       // ── 🔐 SECURITY: Sensitive data (link + credentials + roster) ────────
-      // meetingLink / meetingCredentials → لازم يفضلوا مقصورين على اليوم
-      // (أو earlyAccess صريح). attendance → ليها مصدرين دلوقتي:
-      //   1) canViewDetails       → سيشن اليوم (الحقيقي أو effective عن طريق
-      //                              earlyAccess) قبل/بعد تسجيل الحضور
-      //   2) canViewAttendanceHistory → سيشن completed خلصت واتاخد فيها
-      //                              حضور بالفعل (بدون earlyAccess ولا كونها
-      //                              معادها الحقيقي النهاردة)
       let meetingCredentials = null;
       let attendance = null;
       let meetingLink = null;
       let meetingPlatform = null;
 
       if (canViewDetails) {
-        // Only send credentials for active sessions
         const rawCreds =
           session.meetingCredentials?.username ||
           session.meetingCredentials?.password
@@ -278,7 +320,6 @@ export async function GET(req) {
         meetingLink = session.meetingLink || null;
         meetingPlatform = session.meetingPlatform || null;
       } else if (canViewAttendanceHistory) {
-        // 🆕 مراجعة بس — بيانات الحضور من غير أي لينك أو كريدنشيلز
         attendance = session.attendance || [];
       }
 
@@ -294,9 +335,7 @@ export async function GET(req) {
         moduleName: moduleData.title || `الوحدة ${session.moduleIndex + 1}`,
         sessionNumber: session.sessionNumber,
         lessons,
-        // ✅ دايمًا بقيمته الحقيقية — مش sensitive data
         attendanceTaken: attendanceAlreadyTaken,
-        // 🔐 Sensitive: null إلا لو canViewDetails أو canViewAttendanceHistory
         attendance,
         meetingLink,
         meetingPlatform,
@@ -307,12 +346,10 @@ export async function GET(req) {
         isToday,
         isEffectivelyToday,
         showJoinButton,
-        // 🔐 Access flags for frontend
         canViewDetails,
         canViewPartialDetails,
         canViewAttendanceHistory,
         hasActiveEarlyAccess,
-        // 🔄 Reschedule request state
         pendingReschedule: session.pendingReschedule
           ? {
               status: session.pendingReschedule.status,
@@ -335,7 +372,6 @@ export async function GET(req) {
     });
 
     // ── 4. Stats ───────────────────────────────────────────────────────────
-    // ✅ دلوقتي needsAttendance هيشتغل صح لأن attendanceTaken بقيمته الحقيقية
     const all = processedSessions;
     const stats = {
       total: all.length,
