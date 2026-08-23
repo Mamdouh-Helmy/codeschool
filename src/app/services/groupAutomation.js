@@ -3778,7 +3778,7 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
     content = content.replace(new RegExp(`\\{${key}\\}`, "g"), value ?? "");
   });
 
-  return await wapilotService.sendAndLogMessage({
+    return await wapilotService.sendAndLogEvalMessage({
     studentId: student._id,
     phoneNumber: guardianPhone,
     messageContent: content,
