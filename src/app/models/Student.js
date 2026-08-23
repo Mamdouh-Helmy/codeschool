@@ -379,6 +379,16 @@ const StudentSchema = new mongoose.Schema(
       },
     ],
 
+    moduleOverviewsSent: [
+  {
+    groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group" },
+    courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+    moduleIndex: { type: Number, required: true },
+    moduleTitle: { type: String, default: "" },
+    sentAt: { type: Date, default: Date.now },
+  },
+],
+
     metadata: {
       createdAt: { type: Date, default: Date.now },
       updatedAt: { type: Date, default: Date.now },
@@ -439,6 +449,9 @@ const StudentSchema = new mongoose.Schema(
     strict: true,
   },
 );
+
+// ✅ Index لتسريع البحث عن module overviews المرسلة لكل جروب
+StudentSchema.index({ "moduleOverviewsSent.groupId": 1 });
 
 // =============================================
 // ✅ CREDIT SYSTEM METHODS

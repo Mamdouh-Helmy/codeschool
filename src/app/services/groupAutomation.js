@@ -49,7 +49,7 @@ function extractSessionShortName(title) {
 /**
  * ✅ التحقق من صلاحية الطالب لاستقبال الرسائل
  */
-async function canSendMessage(student) {
+export async function canSendMessage(student) {
   if (!student) return false;
 
   if (!student.creditSystem?.currentPackage) {
@@ -364,7 +364,7 @@ export async function onGroupActivated(groupId, userId, selectedLinkIds = []) {
   }
 }
 
-async function getMessageTemplate(
+export async function getMessageTemplate(
   templateType,
   language = "ar",
   recipientType = "guardian",
@@ -3704,4 +3704,180 @@ async function getFirstSessionMeetingLink(groupId) {
     console.error("❌ Error fetching first session meeting link:", error);
     return "";
   }
+}
+
+
+/**
+ * ✅ يحدد أي موديولات اتكملت فعلاً (كل السيشنات بتاعتها status = completed)
+ */
+async function getCompletedModuleIndexes(groupId) {
+  const sessions = await Session.find({ groupId, isDeleted: false }).lean();
+
+  const byModule = {};
+  sessions.forEach((s) => {
+    if (!byModule[s.moduleIndex]) byModule[s.moduleIndex] = [];
+    byModule[s.moduleIndex].push(s);
+  });
+
+  const completed = [];
+  Object.entries(byModule).forEach(([idx, moduleSessions]) => {
+    const allDone =
+      moduleSessions.length > 0 &&
+      moduleSessions.every((s) => s.status === "completed");
+    if (allDone) completed.push(Number(idx));
+  });
+
+  return completed.sort((a, b) => a - b);
+}
+
+/**
+ * ✅ يبني ويبعت رسالة Module Overview لولي أمر طالب واحد
+ */
+async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) {
+  const language = student.communicationPreferences?.preferredLanguage || "ar";
+  const gender = student.personalInfo?.gender || "male";
+  const relationship = student.guardianInfo?.relationship || "father";
+  const guardianName = student.guardianInfo?.name || "";
+  const guardianNickname = student.guardianInfo?.nickname || null;
+  const studentNickname = student.personalInfo?.nickname || null;
+  const studentName = student.personalInfo?.fullName || "";
+
+  const guardianPhone =
+    student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
+  if (!guardianPhone) return { success: false, skipped: true, reason: "no_guardian_phone" };
+
+  const template = await getMessageTemplate("module_overview", language, "guardian");
+
+  const guardianSalutation = await wapilotService.getGuardianSalutation(
+    guardianName,
+    relationship,
+    guardianNickname,
+    language,
+  );
+  const childTitle = await wapilotService.getStudentChildTitle(gender, language);
+  const supervisorName = (await wapilotService.getDbVariable("supervisorName", language)) || "";
+
+  const studentDisplayName =
+    (language === "ar" ? studentNickname?.ar : studentNickname?.en) ||
+    studentName.split(" ")[0] ||
+    studentName;
+
+  const vars = {
+    guardianSalutation,
+    childTitle,
+    studentName: studentDisplayName,
+    moduleTitle: moduleData?.title || "",
+    moduleDescription: moduleData?.description || "",
+    supervisorName,
+    courseName: group.courseSnapshot?.title || "",
+    groupName: group.name || "",
+  };
+
+  let content = template.content;
+  Object.entries(vars).forEach(([key, value]) => {
+    content = content.replace(new RegExp(`\\{${key}\\}`, "g"), value ?? "");
+  });
+
+  return await wapilotService.sendAndLogMessage({
+    studentId: student._id,
+    phoneNumber: guardianPhone,
+    messageContent: content,
+    messageType: "module_overview",
+    language,
+    metadata: {
+      groupId: group._id,
+      groupName: group.name,
+      moduleIndex: moduleIdx,
+      moduleTitle: moduleData?.title,
+      recipientType: "guardian",
+      automationType: "module_progress_cron",
+    },
+  });
+}
+
+/**
+ * ✅ EVENT (Cron): يفحص كل الجروبات الأكتف، ولو موديول خلص يبعت
+ * overview عن الموديول اللي بعده لكل طالب (لو لسه ما اتبعتلوش)
+ */
+export async function checkAndSendModuleOverviewNotifications() {
+  const groups = await Group.find({
+    status: "active",
+    isDeleted: false,
+    sessionsGenerated: true,
+  })
+    .populate({ path: "courseId", select: "title curriculum" })
+    .populate("students");
+
+  const results = [];
+
+  for (const group of groups) {
+    try {
+      const curriculum =
+        group.courseId?.curriculum?.length > 0
+          ? group.courseId.curriculum
+          : group.courseSnapshot?.curriculum || [];
+
+      if (!curriculum.length) continue;
+
+      const completedModules = await getCompletedModuleIndexes(group._id);
+      if (completedModules.length === 0) continue;
+
+      const highestCompleted = Math.max(...completedModules);
+      const studentsInGroup = group.students || [];
+
+      for (const student of studentsInGroup) {
+        if (!student) continue;
+
+        const alreadySentSet = new Set(
+          (student.moduleOverviewsSent || [])
+            .filter((m) => String(m.groupId) === String(group._id))
+            .map((m) => m.moduleIndex),
+        );
+
+        // بيتشيك من موديول 1 لحد أعلى موديول اتكمل + 1
+        // (كاتش-أب تلقائي لو الكرون فات على موديول من غير ما يبعت)
+        for (let moduleIdx = 1; moduleIdx <= highestCompleted + 1; moduleIdx++) {
+          if (moduleIdx >= curriculum.length) continue;
+          if (alreadySentSet.has(moduleIdx)) continue;
+
+          const eligible = await canSendMessage(student);
+          if (!eligible) continue;
+
+          const moduleData = curriculum[moduleIdx];
+          const sendResult = await sendModuleOverviewMessage(
+            student,
+            group,
+            moduleData,
+            moduleIdx,
+          );
+
+          if (sendResult?.success) {
+            await Student.findByIdAndUpdate(student._id, {
+              $push: {
+                moduleOverviewsSent: {
+                  groupId: group._id,
+                  courseId: group.courseId?._id,
+                  moduleIndex: moduleIdx,
+                  moduleTitle: moduleData?.title,
+                  sentAt: new Date(),
+                },
+              },
+            });
+          }
+
+          results.push({
+            studentId: student._id,
+            groupId: group._id,
+            moduleIndex: moduleIdx,
+            success: !!sendResult?.success,
+          });
+        }
+      }
+    } catch (groupErr) {
+      console.error(`❌ Error checking group ${group._id}:`, groupErr.message);
+    }
+  }
+
+  console.log(`\n✅ MODULE OVERVIEW CRON DONE — sent: ${results.filter(r => r.success).length}/${results.length}`);
+  return { processed: results.length, sent: results.filter((r) => r.success).length, results };
 }
