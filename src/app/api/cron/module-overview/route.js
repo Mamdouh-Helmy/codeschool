@@ -5,10 +5,10 @@ import { checkAndSendModuleOverviewNotifications } from "../../../services/group
 
 export async function GET(req) {
   try {
-    const { searchParams } = new URL(req.url);
-    const secret = searchParams.get("secret");
+    const authHeader = req.headers.get("authorization");
+    const expected = `Bearer ${process.env.CRON_SECRET}`;
 
-    if (secret !== process.env.CRON_SECRET) {
+    if (authHeader !== expected) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 },
