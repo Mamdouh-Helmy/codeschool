@@ -5,12 +5,23 @@
 // شغالة على طبقة "react-server"، ومينفعش تستورد فيها كومبوننت عليه
 // "use client" وتستخدم react-dom/server في نفس الوقت.
 //
-// ✅ تحديث مهم: الصور دلوقتي بتتقرأ مباشرة من الـ filesystem وتتحول
-// لـ base64 (data URI) بدل ما تتطلب بـ HTTP request. السبب: على السيرفر،
-// Puppeteer كان بيحاول يطلب الصور عن طريق الدومين العام (baseUrl) حتى لو
-// كانت الصور على نفس السيرفر، وده كان بيسبب مشاكل توقف/تعليق (hairpin NAT /
-// شبكة). بقراءة الصور محليًا، بنضمن إن توليد الشهادة ميعتمدش على الشبكة
-// خالص لجزء الصور، وبيبقى أسرع وأكثر استقرارًا.
+// ✅ الصور دلوقتي بتتقرأ مباشرة من الـ filesystem وتتحول لـ base64 (data
+// URI) بدل ما تتطلب بـ HTTP request محلي، عشان نضمن استقرار Puppeteer.
+//
+// ✅ جديد: أي صورة من الصور الثابتة (badge, logo, stem, iAIDL, finland,
+// kidsafe) ممكن تتبدّل من الأدمن (CertificateSettings في الداتابيز عبر
+// /api/admin/certificate-assets). لو الأدمن رفع صورة بديلة، بنجيبها من
+// Cloudinary ونحولها base64 برضه (عشان تفضل نفس فلسفة "مفيش شبكة وقت
+// setContent")، ولو مفيش حاجة مخصصة أو فشل الجلب، بترجع تلقائيًا للصورة
+// المحلية الافتراضية زي ما كانت.
+//
+// ✅ جديد كمان: باراميتر "interactive" (افتراضيًا false). لما يبقى true
+// (بيتفعل بس في معاينة مودال الأدمن /api/admin/certificates/preview-html)،
+// كل صورة قابلة للتخصيص بتتلف بـ overlay وبتقبل الدوس عليها؛ الدوسة بتبعت
+// postMessage لصفحة الأدمن اللي برا الـ iframe عشان تفتح نفس الـ file input
+// بتاع الصورة دي مباشرة. الوضع ده مالوش أي علاقة بتوليد الشهادة الحقيقية
+// (الكرون بيفضل يستخدم interactive=false زي ما هو، فمفيش أي تأثير على
+// الصورة اللي بتتبعت فعليًا للطلبة عبر Puppeteer).
 //
 // لو غيّرت تصميم CertificateTemplate.jsx (الكومبوننت اللي بتتعرض في
 // المتصفح)، لازم تحدّث الدالة دي هنا كمان عشان يفضلوا متطابقين.
@@ -59,8 +70,7 @@ const MIME_TYPES = {
   ".svg": "image/svg+xml",
 };
 
-// ✅ Cache في الميموري عشان منقراش نفس الملف من الديسك في كل طلب —
-// الصور دي ثابتة (badge, logo, partners) فمفيش داعي نعيد القراءة كل مرة.
+// ✅ Cache في الميموري عشان منقراش نفس الملف المحلي من الديسك في كل طلب.
 const imageDataUriCache = {};
 
 function imageToDataUri(imageName) {
@@ -75,42 +85,59 @@ function imageToDataUri(imageName) {
     imageDataUriCache[imageName] = dataUri;
     return dataUri;
   } catch (err) {
-    console.error(
-      `⚠️ Could not read image for certificate: ${imageName}`,
-      err.message,
-    );
-    // بنرجع string فاضي بدل ما نكسر توليد الشهادة بالكامل بسبب صورة واحدة ناقصة
+    console.error(`⚠️ Could not read image for certificate: ${imageName}`, err.message);
     return "";
   }
 }
 
-// ✅ نفس فكرة imageToDataUri بالظبط، لكن للخطوط. الخطوط دي (Alex Brush,
-// Playfair Display, Cormorant Garamond) اتحمّلت مرة واحدة يدويًا من Google
-// Fonts وبقت جوه public/fonts/certificate/ — بنقراها من الديسك ونحولها
-// base64 عشان نحطها جوه @font-face من غير أي استيراد شبكة وقت التوليد
-// (ده كان سبب الـ Navigation Timeout قبل كده).
+// ✅ Cache للصور المرفوعة من الأدمن (URL -> data URI). المفتاح هو رابط
+// Cloudinary نفسه، فلو الأدمن رفع صورة جديدة هيبقى ليها رابط مختلف تلقائي
+// (Cloudinary بيديله public_id جديد)، فالـ cache القديم مش بيسبب مشكلة —
+// مفيش داعي لأي invalidation يدوي.
+const remoteImageCache = {};
+
+async function remoteImageToDataUri(url) {
+  if (!url) return null;
+  if (remoteImageCache[url]) return remoteImageCache[url];
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const contentType = res.headers.get("content-type") || "image/png";
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const dataUri = `data:${contentType};base64,${buffer.toString("base64")}`;
+    remoteImageCache[url] = dataUri;
+    return dataUri;
+  } catch (err) {
+    console.error(`⚠️ Could not fetch custom certificate asset: ${url}`, err.message);
+    return null;
+  }
+}
+
+// ✅ بيحاول ياخد الصورة المخصصة (لو موجودة في الداتابيز)، ولو فشل أو مش
+// موجودة، بيرجع تلقائي للصورة المحلية الافتراضية.
+async function resolveAsset(customUrl, defaultFileName) {
+  if (customUrl) {
+    const dataUri = await remoteImageToDataUri(customUrl);
+    if (dataUri) return dataUri;
+  }
+  return imageToDataUri(defaultFileName);
+}
+
+// ✅ نفس فكرة imageToDataUri بالظبط، لكن للخطوط.
 const fontDataUriCache = {};
 
 function fontToDataUri(fontFileName) {
   if (fontDataUriCache[fontFileName]) return fontDataUriCache[fontFileName];
 
   try {
-    const filePath = path.join(
-      process.cwd(),
-      "public",
-      "fonts",
-      "certificate",
-      fontFileName,
-    );
+    const filePath = path.join(process.cwd(), "public", "fonts", "certificate", fontFileName);
     const fileBuffer = fs.readFileSync(filePath);
     const dataUri = `data:font/woff2;base64,${fileBuffer.toString("base64")}`;
     fontDataUriCache[fontFileName] = dataUri;
     return dataUri;
   } catch (err) {
-    console.error(
-      `⚠️ Could not read font for certificate: ${fontFileName}`,
-      err.message,
-    );
+    console.error(`⚠️ Could not read font for certificate: ${fontFileName}`, err.message);
     return "";
   }
 }
@@ -131,18 +158,23 @@ function escapeHtml(str = "") {
  * @param {string} data.date
  * @param {string[]} data.achievements
  * @param {string} data.backgroundStyle
- * @returns {string} full HTML document ready for page.setContent()
+ * @param {Object} [data.assets] - روابط Cloudinary المخصصة (اختياري):
+ *   { badge, logo, stem, iAIDL, finland, kidsafe }
+ * @param {boolean} [data.interactive] - لو true، الصور القابلة للتخصيص
+ *   بتتعرض بـ overlay قابل للدوس (مستخدم بس في معاينة مودال الأدمن).
+ * @returns {Promise<string>} full HTML document ready for page.setContent()
  */
-export function buildCertificateHtml({
+export async function buildCertificateHtml({
   studentName = "Youssef Mourad",
   moduleTitle = "Grade 5-6 Module 1 Chatbot Dev 1",
   signatureName = "Aya Elnagar",
   date = "15/12/2025",
   achievements = ["Successfully completed all module requirements."],
   backgroundStyle = "navy-orange",
+  assets = {},
+  interactive = false,
 } = {}) {
-  const theme =
-    BACKGROUND_THEMES[backgroundStyle] || BACKGROUND_THEMES["navy-orange"];
+  const theme = BACKGROUND_THEMES[backgroundStyle] || BACKGROUND_THEMES["navy-orange"];
 
   const achievementsHtml = achievements
     .map(
@@ -152,6 +184,56 @@ export function buildCertificateHtml({
         )}</p>`,
     )
     .join("");
+
+  // ✅ حل كل الصور (مخصصة أو افتراضية) مع بعض بـ Promise.all
+  const [badgeSrc, logoSrc, stemSrc, iaidlSrc, finlandSrc, kidsafeSrc] = await Promise.all([
+    resolveAsset(assets.badge, "badge.png"),
+    resolveAsset(assets.logo, "code-logo.png"),
+    resolveAsset(assets.stem, "stem.png"),
+    resolveAsset(assets.iAIDL, "iAIDL.png"),
+    resolveAsset(assets.finland, "finland.png"),
+    resolveAsset(assets.kidsafe, "kidsafe.png"),
+  ]);
+
+  // ✅ بيلف أي صورة قابلة للتخصيص بـ div فيه data-asset-key + overlay،
+  // بس لو interactive=true. لو false بيرجع نفس الـ <img> من غير أي تغيير
+  // — عشان التوليد الحقيقي بـ Puppeteer يفضل بالظبط زي ما كان.
+  const editable = (key, label, imgHtml) => {
+    if (!interactive) return imgHtml;
+    return `<div class="cert-editable" data-asset-key="${key}">
+      ${imgHtml}
+      <div class="cert-editable-overlay"><span>✎ ${escapeHtml(label)}</span></div>
+    </div>`;
+  };
+
+  const interactiveStyle = interactive
+    ? `
+    .cert-editable { position: relative; display: inline-block; cursor: pointer; line-height: 0; }
+    .cert-editable img { display: block; border-radius: 8px; transition: filter 150ms ease, outline 150ms ease; }
+    .cert-editable:hover img { filter: brightness(0.5); outline: 3px dashed #ff6a00; outline-offset: 4px; }
+    .cert-editable-overlay {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 150ms ease; pointer-events: none;
+      font-family: Arial, sans-serif; font-size: 15px; font-weight: 700; color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.7); text-align: center; padding: 6px;
+    }
+    .cert-editable:hover .cert-editable-overlay { opacity: 1; }
+  `
+    : "";
+
+  const interactiveScript = interactive
+    ? `
+  <script>
+    document.querySelectorAll('.cert-editable').forEach(function (el) {
+      el.addEventListener('click', function () {
+        window.parent.postMessage(
+          { type: 'cert-asset-click', key: el.getAttribute('data-asset-key') },
+          '*'
+        );
+      });
+    });
+  </script>`
+    : "";
 
   return `
 <!DOCTYPE html>
@@ -178,6 +260,7 @@ export function buildCertificateHtml({
       src: url(${fontToDataUri("cormorant-garamond.woff2")}) format('woff2');
     }
     body { margin: 0; padding: 0; font-family: 'Georgia', 'Playfair Display', serif; }
+    ${interactiveStyle}
   </style>
 </head>
 <body>
@@ -212,11 +295,11 @@ export function buildCertificateHtml({
         box-sizing:border-box;
       ">
       <div style="position:absolute;top:-30px;left:10px;z-index:10;">
-        <img src="${imageToDataUri("badge.png")}" alt="Badge" style="width:350px;" />
+        ${editable("badge", "تغيير الشارة", `<img src="${badgeSrc}" alt="Badge" style="width:350px;" />`)}
       </div>
 
       <div style="margin-top:20px;">
-        <img src="${imageToDataUri("code-logo.png")}" alt="Code School" style="width:350px;" />
+        ${editable("logo", "تغيير اللوجو", `<img src="${logoSrc}" alt="Code School" style="width:350px;" />`)}
       </div>
 
       <div style="text-align:center;">
@@ -269,10 +352,10 @@ export function buildCertificateHtml({
       </div>
 
       <div style="display:flex;justify-content:center;align-items:center;margin-top:35px;">
-        <img src="${imageToDataUri("stem.png")}" alt="STEM" style="width:130px;" />
-        <img src="${imageToDataUri("iAIDL.png")}" alt="iAIDL" style="width:130px;" />
-        <img src="${imageToDataUri("finland.png")}" alt="Finland" style="width:130px;" />
-        <img src="${imageToDataUri("kidsafe.png")}" alt="KidSAFE" style="width:130px;" />
+        ${editable("stem", "تغيير الشعار", `<img src="${stemSrc}" alt="STEM" style="width:130px;" />`)}
+        ${editable("iAIDL", "تغيير الشعار", `<img src="${iaidlSrc}" alt="iAIDL" style="width:130px;" />`)}
+        ${editable("finland", "تغيير الشعار", `<img src="${finlandSrc}" alt="Finland" style="width:130px;" />`)}
+        ${editable("kidsafe", "تغيير الشعار", `<img src="${kidsafeSrc}" alt="KidSAFE" style="width:130px;" />`)}
       </div>
 
       <div style="display:flex;justify-content:space-between;width:82%;margin-top:40px;color:#0d2b3e;">
@@ -296,6 +379,7 @@ export function buildCertificateHtml({
       </div>
     </div>
   </div>
+  ${interactiveScript}
 </body>
 </html>
 `;

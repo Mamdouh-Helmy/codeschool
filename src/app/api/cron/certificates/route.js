@@ -4,6 +4,8 @@ import Student from "../../../models/Student";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
 import Portfolio from "../../../models/Portfolio";
+// ✅ جديد: إعدادات الصور/الشعارات الثابتة القابلة للتخصيص من الأدمن
+import CertificateSettings from "../../../models/CertificateSettings";
 import { wapilotService } from "../../../services/wapilot-service";
 import fs from "fs-extra";
 import path from "path";
@@ -29,16 +31,6 @@ function isAuthorizedRequest(req, searchParams) {
 // ============================================================
 // ✅ بناء قائمة الإنجازات (achievements) للشهادة — بالاعتماد على
 // sessionNumber الحقيقي بتاع كل lesson، مش على تطابق نص العنوان.
-// ------------------------------------------------------------
-// ليه مش .map() بسيطة؟ لأن كل سيشن بيغطي 2 lessons (lessonIndexes
-// طولها 2 دايمًا — راجع Session.js)، وده بيخلي كل "سيشن" يظهر مرتين
-// في مصفوفة achievements لو استخدمنا map عادية. الحل: نجمّع الدروس
-// حسب sessionNumber بتاعها، وناخد عنوان واحد فقط يمثّل كل سيشن —
-// فيبقى عدد الإنجازات = عدد السيشنات الفعلية، مش عدد الدروس.
-//
-// ⚠️ ملحوظة: ده مش اعتماد على تطابق النص بالصدفة (زي [...new Set()])
-// اللي ممكن يحذف غلط لو اتفق عنوانين مختلفين فعلاً في نص واحد.
-// هنا الاعتماد على العلاقة البنيوية الحقيقية في الداتا.
 // ============================================================
 function buildAchievementsFromLessons(lessons) {
   if (!lessons?.length) {
@@ -59,19 +51,21 @@ function buildAchievementsFromLessons(lessons) {
 }
 
 // ============================================================
-// ✅ توليد صورة الشهادة — بدون React/react-dom/server (متوافق مع
-// Route Handlers). راجع src/app/utils/certificateHtml.js للتفاصيل.
+// ✅ توليد صورة الشهادة — بدون React/react-dom/server. جديد: بياخد
+// كمان "assets" (الصور المخصصة من الأدمن) ويمررها لـ buildCertificateHtml
+// اللي بقت async دلوقتي.
 // ============================================================
 async function generateCertificateImage(browser, data) {
-  const { studentName, moduleTitle, achievements, signature, background, date } = data;
+  const { studentName, moduleTitle, achievements, signature, background, date, assets } = data;
 
-  const fullHtml = buildCertificateHtml({
+  const fullHtml = await buildCertificateHtml({
     studentName,
     moduleTitle,
     signatureName: signature,
     date,
     achievements,
     backgroundStyle: background,
+    assets,
   });
 
   const page = await browser.newPage();
@@ -95,11 +89,6 @@ async function generateCertificateImage(browser, data) {
 
 // ============================================================
 // ✅ رفع الصورة على Cloudinary وتحويلها إلى رابط عام
-// ------------------------------------------------------------
-// ⚠️ الاستخدام الوحيد لده هو الحفظ في قاعدة البيانات عشان يظهر
-// في داشبورد الأدمن، لأن الملف المحلي بيتمسح بعد الإرسال. مالوش
-// أي علاقة بإرسال الرسالة على واتساب — ده بيتم بالملف المحلي
-// مباشرة عبر sendImageFile (multipart).
 // ============================================================
 async function uploadCertificateToCloudinary(filePath) {
   try {
@@ -115,20 +104,9 @@ async function uploadCertificateToCloudinary(filePath) {
 
 // ============================================================
 // ✅ مزامنة الشهادة مع بورتفوليو الطالب (قسم certificates) — بدون تكرار.
-// ------------------------------------------------------------
-// بتشتغل بغض النظر عن نجاح إرسال الواتساب من عدمه (طالما الشهادة
-// اتولدت فعلاً)، وبتعتمد على moduleId (course._id-moduleIndex) كمفتاح
-// فريد جوه Portfolio.certificates عشان لو الكرون رجع اشتغل تاني على
-// نفس الموديول الشهادة متتضافش مرتين.
-//
-// ⚠️ الحقل الصحيح اللي بيربط الطالب بحساب User هو authUserId (راجع
-// models/Student.js) — مش userId. الحقل ده sparse يعني مش كل طالب
-// هيكون عنده حساب User مرتبط أصلاً (خصوصًا الطلبة اللي اتسجلوا من
-// فورم التسجيل العادي من غير حساب دخول)، وفي الحالة دي بنتخطى
-// المزامنة بهدوء لأن Portfolio.userId مطلوب وunique أصلاً.
 // ============================================================
 async function syncCertificateToStudentPortfolio(student, moduleId, module, fullImageUrl) {
-  const userId = student.authUserId; // ✅ الحقل الصح (كان student.userId غلط)
+  const userId = student.authUserId;
   if (!userId) return { added: false, reason: "NO_LINKED_USER" };
 
   try {
@@ -146,7 +124,6 @@ async function syncCertificateToStudentPortfolio(student, moduleId, module, full
     }
     return { added };
   } catch (error) {
-    // فشل مزامنة البورتفوليو مايوقفش باقي العملية (الإرسال والتحديث الأساسي)
     console.error(`⚠️ Portfolio sync failed for ${student.personalInfo?.fullName}:`, error.message);
     return { added: false, reason: "ERROR" };
   }
@@ -154,13 +131,6 @@ async function syncCertificateToStudentPortfolio(student, moduleId, module, full
 
 // ============================================================
 // ✅ إرسال الشهادة عبر واتساب — multipart مباشرة بالملف المحلي
-// ------------------------------------------------------------
-// ⚠️ ملحوظة تاريخية: كان فيه محاولة إرسال عبر رابط Cloudinary
-// (endpoint /send-media) وكانت بترجع "Resource not found or not
-// accessible" لأن الـ endpoint ده مش موجود أصلاً في Wapilot API v2.
-// الطريقة الصحيحة حسب الوثائق الرسمية هي رفع الملف كـ
-// multipart/form-data مباشرة لـ /send-image — وده اللي بيعمله
-// wapilotService.sendImageFile دلوقتي.
 // ============================================================
 async function sendCertificateWithFallback(phoneNumber, filePath, caption, studentName = "") {
   try {
@@ -187,6 +157,18 @@ export async function GET(request) {
     await connectDB();
     console.log("🚀 Running Certificate Cron Job...");
 
+    // ✅ جديد: نجيب إعدادات الصور المخصصة مرة واحدة بس قبل اللوب (مش لكل
+    // طالب) — أداء أفضل، ونفس الإعدادات بتتطبق على كل الشهادات في نفس الدورة
+    const certSettings = await CertificateSettings.getSingleton();
+    const certAssets = {
+      badge: certSettings.badge,
+      logo: certSettings.logo,
+      stem: certSettings.stem,
+      iAIDL: certSettings.iAIDL,
+      finland: certSettings.finland,
+      kidsafe: certSettings.kidsafe,
+    };
+
     const students = await Student.find({ isDeleted: false }).lean();
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -198,16 +180,12 @@ export async function GET(request) {
       pendingNoRecipient: 0,
       cloudinaryUploads: 0,
       portfolioSynced: 0,
-      portfolioSkippedNoUser: 0, // ✅ جديد — عدد الطلبة اللي معندهمش authUserId
+      portfolioSkippedNoUser: 0,
       noAttendanceYet: 0,
       errors: 0,
     };
 
     for (const student of students) {
-      // ✅ الإصلاح: بدل ما نعتمد على student.academicInfo.groupIds (اللي
-      // ممكن يفضل مش متزامن لو الطالب اتضاف من واجهة الجروب مباشرة زي
-      // /add-student route)، بندوّر على الجروبات من مصدر الحقيقة الفعلي:
-      // أي جروب فيه الطالب ده جوه array الـ students بتاعته.
       const groups = await Group.find({
         students: student._id,
         isDeleted: false,
@@ -276,9 +254,6 @@ export async function GET(request) {
 
             console.log(`🎓 Generating certificate for ${student.personalInfo.fullName} - ${module.title}`);
 
-            // ✅ استخدام الدالة الجديدة اللي بتجمّع الإنجازات حسب sessionNumber
-            // بدل ما تاخد title كل lesson لوحده (وده كان بيسبب تكرار كل
-            // إنجاز مرتين لأن كل سيشن بيغطي 2 lessons)
             const achievements = buildAchievementsFromLessons(module.lessons);
 
             const browser = await getBrowser();
@@ -290,12 +265,11 @@ export async function GET(request) {
               signature: module.certificateSignatureName || "Aya Elnagar",
               background: module.certificateBackground || "navy-orange",
               date: new Date().toLocaleDateString("en-GB"),
+              assets: certAssets, // ✅ جديد
             });
 
             summary.generated++;
 
-            // ✅ ارفع نسخة دائمة على Cloudinary — للحفظ في الداتابيز وعرضها
-            // في داشبورد الأدمن (بديل عن الرابط المحلي اللي هيتمسح بعد شوية)
             const cloudinaryUrl = await uploadCertificateToCloudinary(filePath);
             if (cloudinaryUrl) {
               summary.cloudinaryUploads++;
@@ -306,8 +280,6 @@ export async function GET(request) {
             }
             const fullImageUrl = cloudinaryUrl || `${baseUrl}${imageUrl}`;
 
-            // ✅ مزامنة مع البورتفوليو — مرة واحدة بس لكل moduleId (dedupe
-            // جوه الدالة نفسها)، بغض النظر عن نتيجة إرسال الواتساب تحت
             const portfolioResult = await syncCertificateToStudentPortfolio(
               student,
               moduleId,
@@ -320,13 +292,11 @@ export async function GET(request) {
               summary.portfolioSkippedNoUser++;
             }
 
-            // ✅ اللغة المفضلة بتاعة الطالب
             const preferredLanguage = student.communicationPreferences?.preferredLanguage || "ar";
 
             let studentDelivered = studentAlreadyDelivered;
             let guardianDelivered = guardianAlreadyDelivered;
 
-            // ✅ إرسال للطالب - multipart بالملف المحلي مباشرة
             if (studentNeedsSend) {
               const caption = await wapilotService.prepareCertificateStudentMessage(
                 student.personalInfo.fullName,
@@ -351,7 +321,6 @@ export async function GET(request) {
               }
             }
 
-            // ✅ إرسال لولي الأمر - multipart بالملف المحلي مباشرة
             if (guardianNeedsSend) {
               const guardianCaption = await wapilotService.prepareCertificateGuardianMessage(
                 student.guardianInfo?.name,
@@ -381,7 +350,6 @@ export async function GET(request) {
 
             const now = new Date();
 
-            // ✅ تحديث قاعدة البيانات
             if (certRecord) {
               await Student.updateOne(
                 { _id: student._id, "issuedCertificates.moduleId": moduleId },
@@ -416,12 +384,11 @@ export async function GET(request) {
               });
             }
 
-            // ✅ تنظيف: حذف الملف المحلي بعد الانتهاء من الإرسال والرفع
             try {
               await fs.remove(filePath);
               console.log(`🗑️ Deleted local file: ${path.basename(filePath)}`);
             } catch (cleanupError) {
-              // مش مشكلة لو متحذفش - ممكن يكون اتستخدم في مكان تاني
+              // مش مشكلة لو متحذفش
             }
 
             console.log(
