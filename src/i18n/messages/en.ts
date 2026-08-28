@@ -4592,6 +4592,15 @@ const en = {
   "certificates.management": "Certificate Management",
   "certificates.managementDescription":
     "Manage certificates and track their details",
+  "portfolio.builder.upToDate": "Up to date",
+  "portfolio.builder.autosaving": "Autosaving",
+  "portfolio.builder.unsavedChanges": "Unsaved changes",
+  "portfolio.basic.cvHint": "Upload your CV in PDF format",
+  "portfolio.basic.uploadingCvHint": "Uploading CV...",
+  "portfolio.basic.viewCv": "View CV",
+  "portfolio.basic.downloadCv": "Download CV",
+  "portfolio.basic.replaceCv": "Replace CV",
+  "portfolio.basic.confirmRemove": "Are you sure you want to remove the CV?",
 };
 
 export default en;

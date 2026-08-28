@@ -4706,6 +4706,15 @@ const ar = {
   "dashboard.certificates": "الشهادات",
   "certificates.management": "إدارة الشهادات",
   "certificates.managementDescription": "إدارة الشهادات ومتابعة بياناتها",
+  "portfolio.builder.upToDate": "محدث حتى الآن",
+  "portfolio.builder.autosaving": "جاري الحفظ تلقائيًا",
+  "portfolio.builder.unsavedChanges": "تغييرات غير محفوظة",
+  "portfolio.basic.cvHint": "ارفع سيرتك الذاتية بصيغة PDF",
+  "portfolio.basic.uploadingCvHint": "جاري رفع السيرة الذاتية...",
+  "portfolio.basic.viewCv": "عرض السيرة الذاتية",
+  "portfolio.basic.downloadCv": "تحميل السيرة الذاتية",
+  "portfolio.basic.replaceCv": "استبدال السيرة الذاتية",
+  "portfolio.basic.confirmRemove": "هل أنت متأكد من إزالة السيرة الذاتية؟",
 };
 
 export default ar;

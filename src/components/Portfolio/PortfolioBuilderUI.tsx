@@ -1,10 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Save, Eye, EyeOff, Settings, User, Code, FolderGit2,
+  Eye, EyeOff, Settings, User, Code, FolderGit2,
   Link2, LayoutDashboard, Menu, X, ExternalLink, RefreshCw,
-  CheckCircle2, TrendingUp, Globe, ChevronRight, Loader2,
-  Sparkles, Award, Briefcase, GraduationCap, Wrench,
+  TrendingUp, Globe, ChevronRight, Loader2,
+  Sparkles, Award, Briefcase, GraduationCap, Wrench, CloudCheck, CloudAlert,
 } from "lucide-react";
 import BasicInfoSection from "./sections/BasicInfoSection";
 import SkillsSection from "./sections/SkillsSection";
@@ -44,18 +44,13 @@ const SECTIONS: Section[] = [
 ];
 
 const DEFAULT_STATS = { yearsOfExperience: 0, codeCommits: 0 };
+const AUTOSAVE_DEBOUNCE_MS = 1200;
 
-/* ── Reusable Tailwind class strings (kept out of JSX to avoid repetition) ── */
 const NAV_ITEM_BASE =
   "flex items-center gap-2.5 px-3 py-[9px] rounded-lg cursor-pointer border-none bg-transparent " +
   "text-[13px] w-full text-left relative transition-colors duration-150 " +
   "text-[#4a5568] dark:text-darkmuted hover:bg-[#f1f3f5] dark:hover:bg-dark_input hover:text-[#1a202c] dark:hover:text-white";
 const NAV_ITEM_ACTIVE = "bg-primary/[0.18] text-primary hover:bg-primary/[0.18] hover:text-primary";
-
-const BTN_PRIMARY =
-  "flex items-center justify-center gap-[7px] w-full px-4 py-2.5 text-white border-none rounded-lg " +
-  "text-[13px] font-semibold font-inherit cursor-pointer transition-colors duration-150 active:scale-[0.98] " +
-  "disabled:opacity-50 disabled:cursor-not-allowed";
 
 const BTN_OUTLINE =
   "flex items-center justify-center gap-[7px] w-full px-4 py-2 bg-transparent rounded-lg text-xs font-inherit " +
@@ -66,7 +61,59 @@ const BTN_GHOST =
   "border border-[#e2e8f0] dark:border-dark_border text-[#4a5568] dark:text-darkmuted cursor-pointer transition-all duration-150 " +
   "hover:text-[#1a202c] dark:hover:text-white hover:border-[#cbd5e0] dark:hover:border-dark_border hover:bg-[#f1f3f5] dark:hover:bg-dark_input";
 
-export default function PortfolioBuilderUI({ portfolio, onSave, saving }: PortfolioBuilderUIProps) {
+/* ─────────────────────────────────────────────────────────────
+   ✅ مؤشر الحفظ — من غير اللون الأخضر، بيستخدم لون الـ primary
+   بتاع الابليكيشن في كل الحالات ويفرّق بينهم بالـ icon/الحركة بس.
+───────────────────────────────────────────────────────────── */
+type AutosaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
+
+function AutosaveIndicator({ status, compact = false }: { status: AutosaveStatus; compact?: boolean }) {
+  const { t } = useI18n();
+
+  const config: Record<AutosaveStatus, { icon: React.ReactNode; text: string }> = {
+    idle: {
+      icon: <span className="pb-save-dot pb-save-dot--idle" />,
+      text: t("portfolio.builder.upToDate") || "كل حاجة متزامنة",
+    },
+    dirty: {
+      icon: <span className="pb-save-dot pb-save-dot--pending" />,
+      text: t("portfolio.builder.unsavedChanges") || "في تعديلات لسه هتتحفظ",
+    },
+    saving: {
+      icon: <Loader2 size={compact ? 12 : 14} className="animate-spin" />,
+      text: t("portfolio.builder.autosaving") || "بيحفظ دلوقتي…",
+    },
+    saved: {
+      icon: <CloudCheck size={compact ? 12 : 14} />,
+      text: t("portfolio.status.saved") || "اتحفظ",
+    },
+    error: {
+      icon: <CloudAlert size={compact ? 12 : 14} />,
+      text: t("portfolio.status.saveFailed") || "حصلت مشكلة في الحفظ",
+    },
+  };
+
+  const { icon, text } = config[status];
+  const isError = status === "error";
+
+  return (
+    <div
+      className={
+        (compact
+          ? "flex items-center gap-1.5 px-2 py-1 rounded-full text-[10.5px] font-medium "
+          : "flex items-center gap-2 w-full px-3 py-2 rounded-lg text-[12px] font-medium border ") +
+        (isError
+          ? "text-red-500 bg-red-500/[0.07] border-red-500/20"
+          : "text-[#4a5568] dark:text-darkmuted bg-[#f1f3f5] dark:bg-dark_input border-[#e2e8f0] dark:border-dark_border")
+      }
+    >
+      {icon}
+      <span className="truncate">{text}</span>
+    </div>
+  );
+}
+
+export default function PortfolioBuilderUI({ portfolio, onSave }: PortfolioBuilderUIProps) {
   const { t } = useI18n();
   const [activeSection, setActiveSection] = useState<string>("basic");
 
@@ -95,47 +142,142 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [iframeKey, setIframeKey] = useState<number>(0);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
-  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
+  const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>("idle");
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idlePillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ✅ ده المصدر الحقيقي لمعرفة لو فيه تغييرات لسه مش متحفظة.
+  const dirtyRef = useRef<boolean>(false);
+
+  // ✅ hydrate مرة واحدة بس لكل بورتفوليو (على أساس الـ _id)، مش كل
+  // مرة الأوبجكت بتاع الـ prop يتغيّر reference (زي بعد كل autosave).
+  const hydratedIdRef = useRef<string | null>(null);
+
+  // ✅ الفيكس النهائي: فلاج متزامن (sync) بدل الاعتماد على setTimeout.
+  // بيتحط true جوه effect الـ hydration مباشرة قبل ما نعمل setFormData،
+  // وeffect الـ autosave بيقراه ويطفيه في نفس الدورة (من غير أي تايمر
+  // ممكن يتلغي بسبب React StrictMode في وضع التطوير، وده كان سبب
+  // المشكلة اللي خلت الحفظ يوقف يشتغل خالص).
+  const skipNextAutosaveRef = useRef<boolean>(true);
+
+  /* ── تحميل بيانات البورتفوليو من السيرفر (أول مرة بس لكل _id) ── */
   useEffect(() => {
-    if (portfolio) {
-      setFormData({
-        title: portfolio.title || t("portfolio.basic.titlePlaceholder"),
-        description: portfolio.description || "",
-        ownerRole: portfolio.ownerRole || "",
-        ownerImage: portfolio.ownerImage || "",
-        cvUrl: (portfolio as any).cvUrl || "",
-        stats: (portfolio as any).stats || DEFAULT_STATS,
-        skills: portfolio.skills || [],
-        projects: portfolio.projects || [],
-        certificates: portfolio.certificates || [],
-        experience: portfolio.experience || [],
-        education: portfolio.education || [],
-        services: portfolio.services || [],
-        socialLinks: portfolio.socialLinks || {},
-        contactInfo: portfolio.contactInfo || { email: "", phone: "", location: "" },
-        isPublished: portfolio.isPublished || false,
-        views: portfolio.views || 0,
-        settings: portfolio.settings || { theme: "dark", layout: "standard" },
-        userId:
-          (portfolio.userId as any)?._id ||
-          (portfolio.userId as any)?.id ||
-          (portfolio.userId as string) || "",
-      });
-    }
+    if (!portfolio) return;
+
+    const pid = (portfolio as any)._id || (portfolio as any).id || null;
+
+    // لو حصل hydrate للبورتفوليو ده قبل كده، تجاهل أي echo راجع من
+    // autosave — formData المحلي هو مصدر الحقيقة دلوقتي، مش رد السيرفر.
+    if (pid && hydratedIdRef.current === pid) return;
+
+    hydratedIdRef.current = pid;
+
+    // ✅ نعلّم إن التحديث الجاي على formData مش تعديل من اليوزر
+    skipNextAutosaveRef.current = true;
+
+    setFormData({
+      title: portfolio.title || t("portfolio.basic.titlePlaceholder"),
+      description: portfolio.description || "",
+      ownerRole: portfolio.ownerRole || "",
+      ownerImage: portfolio.ownerImage || "",
+      cvUrl: (portfolio as any).cvUrl || "",
+      stats: (portfolio as any).stats || DEFAULT_STATS,
+      skills: portfolio.skills || [],
+      projects: portfolio.projects || [],
+      certificates: portfolio.certificates || [],
+      experience: portfolio.experience || [],
+      education: portfolio.education || [],
+      services: portfolio.services || [],
+      socialLinks: portfolio.socialLinks || {},
+      contactInfo: portfolio.contactInfo || { email: "", phone: "", location: "" },
+      isPublished: portfolio.isPublished || false,
+      views: portfolio.views || 0,
+      settings: portfolio.settings || { theme: "dark", layout: "standard" },
+      userId:
+        (portfolio.userId as any)?._id ||
+        (portfolio.userId as any)?.id ||
+        (portfolio.userId as string) || "",
+    });
+
+    dirtyRef.current = false;
+    if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+    setAutosaveStatus("idle");
   }, [portfolio, t]);
 
   const updateFormData = (updates: Partial<PortfolioFormData>): void => {
     setFormData((prev) => ({ ...prev, ...updates }));
   };
 
-  const handleSave = async (): Promise<void> => {
-    const success = await onSave(formData);
-    if (success) {
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2500);
+  const performSave = useCallback(
+    async (dataToSave: PortfolioFormData) => {
+      setAutosaveStatus("saving");
+      const success = await onSave(dataToSave);
+
+      if (success) {
+        setAutosaveStatus("saved");
+        if (idlePillTimerRef.current) clearTimeout(idlePillTimerRef.current);
+        idlePillTimerRef.current = setTimeout(() => {
+          setAutosaveStatus((curr) => (curr === "saved" ? "idle" : curr));
+        }, 2000);
+
+        if (showPreview) {
+          setPreviewLoading(true);
+          setIframeKey((prev) => prev + 1);
+        }
+      } else {
+        setAutosaveStatus("error");
+      }
+    },
+    [onSave, showPreview]
+  );
+
+  /* ── ✅ Autosave: أي تغيير حقيقي في formData يعلّم dirty ويجدول save ── */
+  useEffect(() => {
+    // ✅ ده مش تعديل من اليوزر (ده echo من الـ hydration) — تجاهله
+    // وصفّر الفلاج، من غير ما نلمس أي تايمر.
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
     }
-  };
+
+    dirtyRef.current = true;
+    setAutosaveStatus((curr) => (curr === "saving" ? curr : "dirty"));
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      dirtyRef.current = false;
+      performSave(formData);
+    }, AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (idlePillTimerRef.current) clearTimeout(idlePillTimerRef.current);
+    };
+  }, []);
+
+  // ✅ تحذير الخروج "زكي": بيتفعل بس لو فعلاً فيه تعديل معلّق (dirty)
+  // أو الحفظ شغال فعليًا دلوقتي.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current || autosaveStatus === "saving") {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [autosaveStatus]);
 
   const getPortfolioId = (): string | null => {
     if (!portfolio) return null;
@@ -143,25 +285,16 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
   };
 
   const portfolioId = getPortfolioId();
-  // ✅ إضافة theme إلى query param لتمريره إلى صفحة المعاينة
   const previewUrl = portfolioId
     ? `/portfolio/${portfolioId}?theme=${formData.settings?.theme || 'dark'}`
     : null;
 
+  // ✅ اسم صاحب البورتفوليو — جاي من populate بتاع userId في الـ API،
+  // وبنمرره لـ BasicInfoSection عشان يبني بيه اسم ملف الـ CV.
+  const ownerName = (portfolio as any)?.userId?.name || "";
+
   const handleOpenInNewTab = () => {
     if (previewUrl) window.open(previewUrl, "_blank");
-  };
-
-  const handleSaveAndRefreshPreview = async () => {
-    const success = await onSave(formData);
-    if (success) {
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2500);
-      if (showPreview) {
-        setPreviewLoading(true);
-        setIframeKey((prev) => prev + 1);
-      }
-    }
   };
 
   const handleRefreshPreview = () => {
@@ -174,7 +307,7 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
   const renderSection = (): React.ReactNode => {
     const props = { data: formData, onChange: updateFormData };
     switch (activeSection) {
-      case "basic": return <BasicInfoSection    {...props} />;
+      case "basic": return <BasicInfoSection {...props} ownerName={ownerName} />;
       case "experience": return <ExperienceSection   {...props} />;
       case "education": return <EducationSection    {...props} />;
       case "skills": return <SkillsSection       {...props} />;
@@ -183,15 +316,31 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
       case "certificates": return <CertificatesSection {...props} />;
       case "social": return <SocialLinksSection  {...props} />;
       case "settings": return <SettingsSection     {...props} />;
-      default: return <BasicInfoSection    {...props} />;
+      default: return <BasicInfoSection    {...props} ownerName={ownerName} />;
     }
   };
 
-  const saveButtonClasses = `${BTN_PRIMARY} ${saveSuccess ? "bg-[#238636] hover:bg-[#238636]" : "bg-primary hover:bg-orange-deep"}`;
-
   return (
     <div className="pb-root">
-      {/* Mobile overlay */}
+      <style>{`
+        .pb-save-dot {
+          width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0;
+          background: currentColor; opacity: .55;
+        }
+        .pb-save-dot--pending {
+          background: var(--pf-primary, #ff6437);
+          opacity: 1;
+          box-shadow: 0 0 0 0 rgba(255,100,55,.5);
+          animation: pb-dot-pulse 1.4s ease-out infinite;
+        }
+        .pb-save-dot--idle { opacity: .35; }
+        @keyframes pb-dot-pulse {
+          0%   { box-shadow: 0 0 0 0 rgba(255,100,55,.45); }
+          70%  { box-shadow: 0 0 0 6px rgba(255,100,55,0); }
+          100% { box-shadow: 0 0 0 0 rgba(255,100,55,0); }
+        }
+      `}</style>
+
       <div
         className={mobileMenuOpen ? "fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] lg:hidden" : "hidden"}
         onClick={() => setMobileMenuOpen(false)}
@@ -209,14 +358,7 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
           <LayoutDashboard size={16} className="text-primary" />
           {t("portfolio.builder.title")}
         </span>
-        <button
-          onClick={showPreview ? handleSaveAndRefreshPreview : handleSave}
-          disabled={saving}
-          className={`${saveButtonClasses} w-auto px-3.5 py-1.5 text-xs`}
-        >
-          {saving ? <Loader2 size={13} className="animate-spin" /> : saveSuccess ? <CheckCircle2 size={13} /> : <Save size={13} />}
-          {saving ? t("portfolio.builder.saving") : saveSuccess ? t("portfolio.status.saved") || "Saved!" : t("portfolio.builder.save")}
-        </button>
+        <AutosaveIndicator status={autosaveStatus} compact />
       </div>
 
       <div className="flex h-screen bg-[#f8f9fa] dark:bg-darkmode font-sans text-[#1a202c] dark:text-white overflow-hidden">
@@ -285,14 +427,7 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
               )}
             </div>
 
-            <button
-              onClick={showPreview ? handleSaveAndRefreshPreview : handleSave}
-              disabled={saving}
-              className={saveButtonClasses}
-            >
-              {saving ? <Loader2 size={15} className="animate-spin" /> : saveSuccess ? <CheckCircle2 size={15} /> : <Save size={15} />}
-              {saving ? t("portfolio.builder.saving") : saveSuccess ? t("portfolio.status.saved") || "Saved!" : t("portfolio.builder.save")}
-            </button>
+            <AutosaveIndicator status={autosaveStatus} />
 
             {previewUrl ? (
               <>
@@ -316,7 +451,7 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
             ) : (
               <div className="text-[11px] text-[#a0aec0] dark:text-dark_border text-center bg-[#f1f3f5] dark:bg-dark_input border border-dashed border-[#e2e8f0] dark:border-dark_border rounded-lg px-3.5 py-2.5 leading-relaxed">
                 <Sparkles size={13} className="inline mr-1 align-middle" />
-                {t("portfolio.builder.saveToPreview") || "Save your portfolio to enable live preview"}
+                {t("portfolio.builder.saveToPreview") || "Your first save will enable live preview"}
               </div>
             )}
           </div>
@@ -334,12 +469,13 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
               </div>
             </div>
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center gap-1.5 text-[11px] text-[#4a5568] dark:text-darkmuted">
+              <div className="hidden md:flex items-center gap-1.5 text-[11px] text-[#4a5568] dark:text-darkmuted">
                 <Globe size={11} />
                 <span>{t("portfolio.builder.title")}</span>
                 <ChevronRight size={10} />
                 <span className="text-primary font-medium">{t(activeSecData?.label || "portfolio.builder.basicInfo")}</span>
               </div>
+              <AutosaveIndicator status={autosaveStatus} compact />
             </div>
           </div>
 
@@ -406,7 +542,7 @@ export default function PortfolioBuilderUI({ portfolio, onSave, saving }: Portfo
                 </div>
 
                 <div className="px-4 py-2 text-center bg-white dark:bg-darklight border-t border-[#e2e8f0] dark:border-dark_border text-[11px] text-[#a0aec0] dark:text-dark_border flex-shrink-0">
-                  {t("portfolio.builder.previewNote") || "Save changes then refresh to see the latest version"}
+                  {t("portfolio.builder.previewNote") || "Preview refreshes automatically after each autosave"}
                 </div>
               </div>
             )}

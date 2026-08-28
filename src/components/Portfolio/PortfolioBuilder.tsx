@@ -175,7 +175,6 @@ export default function PortfolioBuilder() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success(t("portfolio.status.saved"));
         setPortfolio({
           ...data.portfolio,
           certificates: data.portfolio.certificates || [],
@@ -185,7 +184,7 @@ export default function PortfolioBuilder() {
         });
         return true;
       } else {
-        toast.error(data.message || t("portfolio.status.saveFailed"));
+        toast.error(data.message || t("portfolio.status.saveFailed")); // ✅ سيبت دي — مهمة لو الحفظ فشل فعلاً
         return false;
       }
     } catch (error) {
