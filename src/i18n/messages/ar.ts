@@ -4715,6 +4715,7 @@ const ar = {
   "portfolio.basic.downloadCv": "تحميل السيرة الذاتية",
   "portfolio.basic.replaceCv": "استبدال السيرة الذاتية",
   "portfolio.basic.confirmRemove": "هل أنت متأكد من إزالة السيرة الذاتية؟",
+  "notifications.title": "الإشعارات",
 };
 
 export default ar;

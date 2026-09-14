@@ -162,12 +162,23 @@ const whatsappMessageSchema = new mongoose.Schema(
 );
 
 // ✅ Credit Hours Package Schema
+// 🆕 الباقات بقت قابلة للتعديل من الأدمن عبر PackagePlan model بدل enum ثابت.
+// كل باكدج بتتخصص لطالب بتاخد "snapshot" من الـ PackagePlan وقت الإنشاء
+// (packageType/packageName/months) عشان تفضل ثابتة تاريخيًا حتى لو الأدمن
+// عدّل أو مسح الباقة الأصلية بعدين — بالظبط زي courseSnapshot في Group.js.
 const creditPackageSchema = new mongoose.Schema({
+  packagePlanId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "PackagePlan",
+    default: null,
+  },
   packageType: {
     type: String,
-    enum: ["3months", "6months", "9months", "12months"],
     required: true,
+    // ✅ من غير enum تاني — القيمة بتيجي من PackagePlan.slug ديناميكيًا
   },
+  packageName: { type: String, default: "" }, // اسم الباقة وقت الإنشاء (snapshot)
+  months: { type: Number, default: 0 }, // مدة الباقة بالشهور وقت الإنشاء (snapshot)
   totalHours: { type: Number, required: true },
   remainingHours: { type: Number, required: true },
   startDate: { type: Date, default: Date.now, required: true },
@@ -562,40 +573,50 @@ StudentSchema.methods.getBalanceStatus = function () {
 };
 
 // ✅ إضافة حزمة ساعات جديدة
+// 🆕 بقت بتاخد packagePlanId بدل packageType ثابت — الباقة نفسها (شهور/ساعات)
+// بتتجاب ديناميكيًا من PackagePlan model اللي الأدمن يقدر يديره من لوحة التحكم.
+// السعر لسه ممكن يتخصص/يتغير وقت التخصيص لطالب معين (خصومات مثلًا).
 StudentSchema.methods.addCreditPackage = async function (packageData) {
   try {
-    const packageTypes = {
-      "3months": 24,
-      "6months": 48,
-      "9months": 72,
-      "12months": 96,
-    };
+    // ✅ استيراد ديناميكي لتفادي أي circular imports بين الموديلات
+    const PackagePlan = (await import("./PackagePlan")).default;
 
-    const totalHours = packageTypes[packageData.packageType];
-    if (!totalHours) {
-      throw new Error("Invalid package type");
+    if (!packageData.packagePlanId) {
+      throw new Error("packagePlanId is required");
     }
+
+    const plan = await PackagePlan.findOne({
+      _id: packageData.packagePlanId,
+      isActive: true,
+    });
+
+    if (!plan) {
+      throw new Error("Invalid or inactive package plan");
+    }
+
+    const totalHours = plan.totalHours;
+    const months = plan.months;
+
+    // ✅ لو الأدمن مبعتش سعر مخصص، ناخد السعر الافتراضي من الباقة
+    const price =
+      packageData.price !== undefined && packageData.price !== null
+        ? Number(packageData.price)
+        : plan.price;
 
     const startDate = packageData.startDate || new Date();
     const endDate = new Date(startDate);
-
-    const months =
-      {
-        "3months": 3,
-        "6months": 6,
-        "9months": 9,
-        "12months": 12,
-      }[packageData.packageType] || 0;
-
     endDate.setMonth(endDate.getMonth() + months);
 
     const newPackage = {
-      packageType: packageData.packageType,
+      packagePlanId: plan._id,
+      packageType: plan.slug, // snapshot
+      packageName: plan.name, // snapshot
+      months, // snapshot
       totalHours: totalHours,
       remainingHours: totalHours,
       startDate: startDate,
       endDate: endDate,
-      price: packageData.price || 0,
+      price: price,
       isActive: true,
       status: "active",
     };
@@ -814,6 +835,10 @@ StudentSchema.methods.endCreditException = async function (exceptionId) {
 };
 
 // ✅ خصم ساعات من الرصيد
+// 🆕 دلوقتي دي كمان مسؤولة عن تفعيل بداية عدّ الإسكرو (14 يوم) على فاتورة
+// الجروب ده — أول ما يحصل أول خصم ساعات فعلي للطالب في الجروب، بغض النظر
+// تمامًا عن حالة الحضور (present/absent/late/excused) — لأن المهم إن السيشن
+// "اتسحبت" (اتخصم منها ساعات)، مش إن الطالب حضر بالفعل.
 StudentSchema.methods.deductCreditHours = async function (deductionData) {
   try {
     const effectiveRemaining = this.getEffectiveRemainingHours();
@@ -899,6 +924,15 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
       this.creditSystem.usageHistory = [];
     }
 
+    // ✅ NEW: نتأكد قبل ما نضيف السجل الجديد هل ده أول خصم ساعات للطالب في
+    // الجروب ده — لو كذلك، ده اللي هيفعّل بداية عدّ الإسكرو على فاتورة الجروب
+    const isFirstUsageForGroup = deductionData.groupId
+      ? !this.creditSystem.usageHistory.some(
+          (u) =>
+            u.groupId && u.groupId.toString() === deductionData.groupId.toString(),
+        )
+      : false;
+
     const usageRecord = {
       sessionId: deductionData.sessionId || null,
       groupId: deductionData.groupId || null,
@@ -924,6 +958,24 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
     this.creditSystem.stats.lastUsageDate = new Date();
 
     await this.save();
+
+    // ✅ NEW: تفعيل بداية الإسكرو (14 يوم) لو ده أول سيشن بتتخصم منها ساعات
+    // في الجروب ده — بأي حالة حضور. العملية غير حرجة: لو فشلت متأثرش على
+    // نجاح خصم الساعات نفسه.
+    if (isFirstUsageForGroup && deductionData.groupId) {
+      try {
+        const { handleFirstSessionForBilling } = await import("@/lib/billing");
+        await handleFirstSessionForBilling({
+          studentId: this._id,
+          groupId: deductionData.groupId,
+        });
+      } catch (billingError) {
+        console.error(
+          "⚠️ Failed to start escrow for billing:",
+          billingError.message,
+        );
+      }
+    }
 
     return {
       success: true,

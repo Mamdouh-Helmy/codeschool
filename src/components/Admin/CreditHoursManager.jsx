@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
     Clock,
     Calendar,
@@ -74,6 +74,43 @@ import {
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 
+// ─── Billing helpers (خارج الكومبوننت — مفيش state) ─────────────────────────
+
+const INVOICE_STATUS_CFG = {
+    Paid: { label: "مدفوعة بالكامل", color: "text-green-600", bg: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400", icon: BadgeCheck },
+    Pending: { label: "قيد الدفع", color: "text-amber-600", bg: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400", icon: BadgeAlert },
+    Suspended: { label: "موقوفة", color: "text-red-600", bg: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400", icon: Ban },
+    Escrow: { label: "قيد التحقق (إسكرو)", color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400", icon: Landmark },
+    Voided: { label: "ملغاة", color: "text-gray-500", bg: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: BadgeX },
+};
+
+const ESCROW_STATUS_CFG = {
+    not_started: { label: "لم يبدأ بعد", bg: "bg-gray-100 dark:bg-gray-800 text-gray-500" },
+    in_escrow: { label: "قيد الانتظار (إسكرو)", bg: "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" },
+    recognized: { label: "معترف به (إيراد)", bg: "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" },
+    refunded: { label: "مسترجع", bg: "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400" },
+};
+
+const PAYMENT_OPTIONS = [
+    { id: "full", label: "دفع كامل", icon: BadgeCheck, color: "green" },
+    { id: "partial", label: "دفع جزء", icon: PiggyBank, color: "amber" },
+    { id: "none", label: "بدون دفع", icon: Ban, color: "gray" },
+];
+
+function getPaymentBadge(invoice) {
+    if (!invoice) return { label: "لا يوجد فاتورة", bg: "bg-gray-100 dark:bg-gray-800 text-gray-400", icon: Info };
+    const paid = invoice.paidAmount || 0;
+    const total = invoice.totalAmount || 0;
+    if (invoice.status === "Voided") return { label: "ملغاة", bg: "bg-gray-100 dark:bg-gray-800 text-gray-500", icon: BadgeX };
+    if (total > 0 && paid >= total) return { label: "مدفوع بالكامل", bg: "bg-green-100 dark:bg-green-900/30 text-green-600", icon: BadgeCheck };
+    if (paid > 0) return { label: "عربون / دفع جزئي", bg: "bg-amber-100 dark:bg-amber-900/30 text-amber-600", icon: PiggyBank };
+    return { label: "لم يدفع بعد", bg: "bg-red-100 dark:bg-red-900/30 text-red-600", icon: BadgeX };
+}
+
+function formatMoney(n) {
+    return `${Number(n || 0).toLocaleString("en-US")} EGP`;
+}
+
 export default function CreditHoursManager({ student, onClose, onUpdate }) {
     const { t, locale } = useI18n();
     const [loading, setLoading] = useState(false);
@@ -87,6 +124,22 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
     // ✅ استخدام state داخلي للطالب للتحديث الفوري
     const [currentStudent, setCurrentStudent] = useState(student);
 
+    // ── ✅ Package Plans (ديناميكي من الأدمن بدل enum ثابت) ──────────────────
+    const [packagePlans, setPackagePlans] = useState([]);
+    const [plansLoading, setPlansLoading] = useState(true);
+
+    // ── ✅ NEW: Billing / Invoices / Payments state ──────────────────────────
+    const [billingLoading, setBillingLoading] = useState(false);
+    const [invoices, setInvoices] = useState([]); // كل فواتير الطالب (الأحدث أولًا)
+    const [currentInvoice, setCurrentInvoice] = useState(null); // آخر فاتورة فعّالة (بالدفعات)
+    const [showAddPayment, setShowAddPayment] = useState(false);
+    const [showRefund, setShowRefund] = useState(false);
+    const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+    const [refundSubmitting, setRefundSubmitting] = useState(false);
+    const [expandedInvoice, setExpandedInvoice] = useState(null);
+    const [newPayment, setNewPayment] = useState({ amount: "", method: "cash", notes: "" });
+    const [refundData, setRefundData] = useState({ amount: "", reason: "" });
+
     // ✅ تحديث currentStudent عند تغيير student من الخارج
     useEffect(() => {
         setCurrentStudent(student);
@@ -94,9 +147,6 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
 
     // ✅ التحقق من صحة student object
     useEffect(() => {
-        console.log("🎯 CreditHoursManager mounted with student:", currentStudent);
-        console.log("🎯 Student ID:", currentStudent?._id || currentStudent?.id);
-
         if (!currentStudent?._id && !currentStudent?.id) {
             console.error("❌ No valid student ID found!");
             toast.error("Student ID is missing");
@@ -104,12 +154,76 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
         }
     }, [currentStudent, onClose]);
 
+    // ✅ جلب باقات الساعات النشطة اللي الأدمن ضبطها في صفحة الباقات
+    const fetchPackagePlans = useCallback(async () => {
+        setPlansLoading(true);
+        try {
+            const res = await fetch("/api/package-plans?activeOnly=true");
+            const data = await res.json();
+            if (data.success) setPackagePlans(data.data || []);
+        } catch (error) {
+            console.error("❌ Error fetching package plans:", error);
+        } finally {
+            setPlansLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchPackagePlans();
+    }, [fetchPackagePlans]);
+
+    const getPlanBySlug = useCallback(
+        (slug) => packagePlans.find((p) => p.slug === slug),
+        [packagePlans]
+    );
+
+    // ✅ عرض تفاصيل أي باكدج (حالي أو قديم) بشكل آمن سواء الباقة لسه موجودة في
+    // الأدمن أو اتشالت/اتغيرت — بيعتمد أولًا على الـ snapshot المخزن على الباكدج
+    // نفسه (packageName / months) واللي بيفضل صحيح تاريخيًا مهما اتغير بعدين.
+    const describePackage = (pkg) => {
+        const plan = getPlanBySlug(pkg?.packageType);
+        return {
+            label: pkg?.packageName || plan?.name || pkg?.packageType || "باقة",
+            months: pkg?.months ?? plan?.months ?? "-",
+        };
+    };
+
     // State for new package
     const [newPackage, setNewPackage] = useState({
-        packageType: "3months",
+        packagePlanId: "",
         price: 0,
+        paymentOption: "full", // "full" | "partial" | "none"
+        amountPaid: 0,
+        dueDate: "",
         startDate: new Date().toISOString().split('T')[0]
     });
+
+    // ✅ أول ما الباقات تتحمل، نختار أول باقة كافتراضي ونجيب سعرها
+    useEffect(() => {
+        if (packagePlans.length > 0 && !newPackage.packagePlanId) {
+            const first = packagePlans[0];
+            setNewPackage((prev) => ({
+                ...prev,
+                packagePlanId: first._id,
+                price: first.price,
+                amountPaid: first.price,
+            }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [packagePlans]);
+
+    const selectedPlan = packagePlans.find((p) => p._id === newPackage.packagePlanId) || null;
+
+    // ✅ لما paymentOption يتغير، نظبط amountPaid تلقائيًا (كامل / صفر) ونمسح
+    // dueDate لو دفع كامل (مش مطلوبة)
+    const handlePaymentOptionChange = (option) => {
+        setNewPackage((prev) => ({
+            ...prev,
+            paymentOption: option,
+            amountPaid: option === "full" ? Number(prev.price) || 0 : option === "none" ? 0 : prev.amountPaid,
+            dueDate: option === "full" ? "" : prev.dueDate,
+        }));
+    };
 
     // State for new exception
     const [newException, setNewException] = useState({
@@ -120,14 +234,6 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
         endDate: "",
         notes: ""
     });
-
-    // Package types with their hours
-    const packageTypes = {
-        "3months": { label: t("credit.packages.3months"), hours: 24, icon: "🌱", color: "green" },
-        "6months": { label: t("credit.packages.6months"), hours: 48, icon: "🌿", color: "blue" },
-        "9months": { label: t("credit.packages.9months"), hours: 72, icon: "🌳", color: "purple" },
-        "12months": { label: t("credit.packages.12months"), hours: 96, icon: "🌲", color: "amber" }
-    };
 
     // Exception types
     const exceptionTypes = {
@@ -200,6 +306,47 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
         return currentStudent?._id || currentStudent?.id;
     };
 
+    // ── ✅ NEW: جلب بيانات الفوترة (الفواتير + الدفعات) ──────────────────────
+    const fetchBilling = useCallback(async () => {
+        const studentId = currentStudent?._id || currentStudent?.id;
+        if (!studentId) return;
+
+        setBillingLoading(true);
+        try {
+            const res = await fetch(`/api/invoices?studentId=${studentId}`);
+            const data = await res.json();
+
+            if (data.success) {
+                const list = data.data || [];
+                setInvoices(list);
+
+                // ✅ آخر فاتورة مش ملغاة (أو أحدث فاتورة لو كلهم ملغيين)
+                const latest = list.find(inv => inv.status !== "Voided") || list[0] || null;
+
+                if (latest) {
+                    const detailRes = await fetch(`/api/invoices/${latest._id}`);
+                    const detailData = await detailRes.json();
+                    if (detailData.success) {
+                        setCurrentInvoice(detailData.data);
+                    }
+                } else {
+                    setCurrentInvoice(null);
+                }
+            }
+        } catch (error) {
+            console.error("❌ Error fetching billing data:", error);
+        } finally {
+            setBillingLoading(false);
+        }
+    }, [currentStudent]);
+
+    // ✅ نجيب بيانات الفوترة أول ما الطالب يتحدد أو يتغير (مش بس لما يفتح تاب الفوترة)
+    // عشان نقدر نعرض تنبيه سريع في الـOverview كمان
+    useEffect(() => {
+        fetchBilling();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentStudent?._id, currentStudent?.id]);
+
     // ✅ Handle deleting package
     const handleDeletePackage = async () => {
         const studentId = getStudentId();
@@ -220,8 +367,6 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
 
         setDeleting(true);
         try {
-            console.log("🗑️ Deleting package for student ID:", studentId);
-
             const response = await fetch(`/api/students/${studentId}/credit-package`, {
                 method: "DELETE",
                 headers: {
@@ -230,7 +375,6 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
             });
 
             const data = await response.json();
-            console.log("🗑️ Server response:", data);
 
             if (data.success) {
                 toast.success("Package deleted successfully");
@@ -270,24 +414,59 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
             return;
         }
 
+        if (!newPackage.packagePlanId) {
+            toast.error("اختار باقة أولًا");
+            return;
+        }
+
+        const amountPaidNum = Number(newPackage.amountPaid) || 0;
+        const priceNum = Number(newPackage.price) || 0;
+
+        if (amountPaidNum > priceNum) {
+            toast.error("المبلغ المدفوع لا يمكن أن يكون أكبر من سعر الباكدج");
+            return;
+        }
+
+        if (newPackage.paymentOption === "partial" && (amountPaidNum <= 0 || amountPaidNum >= priceNum)) {
+            toast.error("في حالة الدفع الجزئي، المبلغ لازم يكون أكبر من 0 وأقل من السعر الكامل");
+            return;
+        }
+
+        if (newPackage.paymentOption !== "full" && !newPackage.dueDate) {
+            toast.error("حدد تاريخ استحقاق باقي المبلغ");
+            return;
+        }
+
         setLoading(true);
         try {
-            console.log("📦 Adding package for student ID:", studentId);
-
             const response = await fetch(`/api/students/${studentId}/credit-package`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(newPackage)
+                body: JSON.stringify({
+                    packagePlanId: newPackage.packagePlanId,
+                    price: priceNum,
+                    startDate: newPackage.startDate,
+                    paymentOption: newPackage.paymentOption,
+                    amountPaid: newPackage.paymentOption === "partial" ? amountPaidNum : 0,
+                    dueDate: newPackage.paymentOption === "full" ? undefined : newPackage.dueDate,
+                })
             });
 
             const data = await response.json();
-            console.log("📦 Server response:", data);
 
             if (data.success) {
                 toast.success(t("credit.packageAdded"));
                 setShowAddPackage(false);
+                setNewPackage({
+                    packagePlanId: packagePlans[0]?._id || "",
+                    price: packagePlans[0]?.price || 0,
+                    paymentOption: "full",
+                    amountPaid: packagePlans[0]?.price || 0,
+                    dueDate: "",
+                    startDate: new Date().toISOString().split('T')[0],
+                });
 
                 // ✅ تحديث currentStudent فوراً بالبيانات الجديدة
                 if (data.student) {
@@ -298,6 +477,9 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                         onUpdate(data.student);
                     }
                 }
+
+                // ✅ NEW: تحديث بيانات الفوترة عشان الفاتورة الجديدة تظهر فورًا
+                fetchBilling();
             } else {
                 toast.error(data.message || t("common.error"));
             }
@@ -320,8 +502,6 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
 
         setLoading(true);
         try {
-            console.log("📝 Adding exception for student ID:", studentId);
-
             const response = await fetch(`/api/students/${studentId}/credit-exception`, {
                 method: "POST",
                 headers: {
@@ -331,7 +511,6 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
             });
 
             const data = await response.json();
-            console.log("📝 Server response:", data);
 
             if (data.success) {
                 toast.success(t("credit.exceptionAdded"));
@@ -375,14 +554,11 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
 
         setLoading(true);
         try {
-            console.log("🔚 Ending exception:", { studentId, exceptionId });
-
             const response = await fetch(`/api/students/${studentId}/credit-exception/${exceptionId}/end`, {
                 method: "POST"
             });
 
             const data = await response.json();
-            console.log("🔚 Server response:", data);
 
             if (data.success) {
                 toast.success(t("credit.exceptionEnded"));
@@ -404,6 +580,102 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
             toast.error(error.message || t("common.error"));
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ── ✅ NEW: تسجيل دفعة جديدة على الفاتورة الحالية ────────────────────────
+    const handleAddPayment = async () => {
+        if (!currentInvoice?._id) {
+            toast.error("لا يوجد فاتورة لتسجيل الدفعة عليها");
+            return;
+        }
+
+        const amount = Number(newPayment.amount);
+        if (!amount || amount <= 0) {
+            toast.error("ادخل مبلغ صحيح");
+            return;
+        }
+
+        const remaining = (currentInvoice.totalAmount || 0) - (currentInvoice.paidAmount || 0);
+        if (amount > remaining) {
+            toast.error(`المبلغ أكبر من المتبقي (${formatMoney(remaining)})`);
+            return;
+        }
+
+        setPaymentSubmitting(true);
+        try {
+            const res = await fetch(`/api/invoices/${currentInvoice._id}/payments`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    amount,
+                    method: newPayment.method,
+                    notes: newPayment.notes,
+                }),
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                toast.success("تم تسجيل الدفعة بنجاح");
+                setShowAddPayment(false);
+                setNewPayment({ amount: "", method: "cash", notes: "" });
+                fetchBilling();
+            } else {
+                toast.error(data.message || "حدث خطأ أثناء تسجيل الدفعة");
+            }
+        } catch (error) {
+            console.error("❌ Error adding payment:", error);
+            toast.error(error.message || "حدث خطأ أثناء تسجيل الدفعة");
+        } finally {
+            setPaymentSubmitting(false);
+        }
+    };
+
+    // ── ✅ NEW: استرجاع مبلغ من الفاتورة الحالية ─────────────────────────────
+    const handleRefund = async () => {
+        if (!currentInvoice?._id) {
+            toast.error("لا يوجد فاتورة لعمل استرجاع منها");
+            return;
+        }
+
+        const amount = Number(refundData.amount);
+        if (!amount || amount <= 0) {
+            toast.error("ادخل مبلغ صحيح");
+            return;
+        }
+
+        if (amount > (currentInvoice.paidAmount || 0)) {
+            toast.error(`لا يمكن استرجاع أكثر من المبلغ المدفوع فعليًا (${formatMoney(currentInvoice.paidAmount)})`);
+            return;
+        }
+
+        if (!refundData.reason.trim()) {
+            toast.error("سبب الاسترجاع مطلوب");
+            return;
+        }
+
+        setRefundSubmitting(true);
+        try {
+            const res = await fetch(`/api/invoices/${currentInvoice._id}/refund`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ amount, reason: refundData.reason }),
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                toast.success("تم تنفيذ الاسترجاع بنجاح");
+                setShowRefund(false);
+                setRefundData({ amount: "", reason: "" });
+                fetchBilling();
+            } else {
+                toast.error(data.message || "حدث خطأ أثناء الاسترجاع");
+            }
+        } catch (error) {
+            console.error("❌ Error refunding payment:", error);
+            toast.error(error.message || "حدث خطأ أثناء الاسترجاع");
+        } finally {
+            setRefundSubmitting(false);
         }
     };
 
@@ -447,6 +719,15 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
         return days > 0 ? days : 0;
     };
 
+    // ✅ حساب المتبقي على الفاتورة الحالية بشكل آمن (fallback لو الـvirtual متجاش)
+    const currentInvoiceRemaining = currentInvoice
+        ? Math.max(0, (currentInvoice.totalAmount || 0) - (currentInvoice.paidAmount || 0))
+        : 0;
+    const isInvoiceOverdue = currentInvoice
+        && currentInvoice.status === "Pending"
+        && new Date(currentInvoice.dueDate) < new Date();
+    const paymentBadge = getPaymentBadge(currentInvoice);
+
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-darkmode rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -457,12 +738,19 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                             <Package className="w-6 h-6 text-white" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
+                            <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-2 flex-wrap">
                                 {t("credit.management")}
                                 {stats.hasPackage && (
                                     <span className={`text-sm px-3 py-1 rounded-full ${getStatusColor(stats.status)} flex items-center gap-1`}>
                                         {getStatusIcon(stats.status)}
                                         {t(`credit.status.${stats.status}`)}
+                                    </span>
+                                )}
+                                {/* ✅ NEW: شارة حالة الدفع سريعة بجانب حالة الباكدج */}
+                                {currentInvoice && (
+                                    <span className={`text-sm px-3 py-1 rounded-full ${paymentBadge.bg} flex items-center gap-1`}>
+                                        <paymentBadge.icon className="w-4 h-4" />
+                                        {paymentBadge.label}
                                     </span>
                                 )}
                             </h2>
@@ -481,23 +769,28 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
 
                 {/* Tabs */}
                 <div className="px-6 pt-4 border-b border-PowderBlueBorder dark:border-dark_border">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 overflow-x-auto">
                         {[
                             { id: "overview", label: t("credit.tabs.overview"), icon: Eye },
                             { id: "packages", label: t("credit.tabs.packages"), icon: Package },
+                            { id: "billing", label: "الفوترة", icon: Wallet }, // ✅ NEW
                             { id: "exceptions", label: t("credit.tabs.exceptions"), icon: AlertCircle },
                             { id: "history", label: t("credit.tabs.history"), icon: History }
                         ].map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 transition-colors ${activeTab === tab.id
+                                className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 transition-colors whitespace-nowrap ${activeTab === tab.id
                                     ? "bg-primary text-white"
                                     : "hover:bg-gray-100 dark:hover:bg-gray-800 text-MidnightNavyText dark:text-white"
                                     }`}
                             >
                                 <tab.icon className="w-4 h-4" />
                                 {tab.label}
+                                {/* ✅ NEW: نقطة تنبيه حمرا على تاب الفوترة لو فيه فاتورة متأخرة */}
+                                {tab.id === "billing" && isInvoiceOverdue && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                )}
                             </button>
                         ))}
                     </div>
@@ -508,6 +801,35 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                     {/* Overview Tab */}
                     {activeTab === "overview" && (
                         <div className="space-y-6">
+
+                            {/* ✅ NEW: بانر سريع لحالة الفاتورة */}
+                            {currentInvoice && currentInvoice.status !== "Paid" && currentInvoice.status !== "Voided" && (
+                                <div className={`rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap ${isInvoiceOverdue
+                                    ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+                                    : "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800"
+                                    }`}>
+                                    <div className="flex items-center gap-3">
+                                        <AlertTriangle className={`w-5 h-5 shrink-0 ${isInvoiceOverdue ? "text-red-600" : "text-amber-600"}`} />
+                                        <div>
+                                            <p className={`text-sm font-semibold ${isInvoiceOverdue ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300"}`}>
+                                                {isInvoiceOverdue
+                                                    ? `متأخر في السداد — متبقي ${formatMoney(currentInvoiceRemaining)}`
+                                                    : `متبقي على الطالب ${formatMoney(currentInvoiceRemaining)} من إجمالي ${formatMoney(currentInvoice.totalAmount)}`}
+                                            </p>
+                                            <p className="text-xs text-SlateBlueText dark:text-darktext mt-0.5">
+                                                تاريخ الاستحقاق: {formatDate(currentInvoice.dueDate)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setActiveTab("billing")}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-dark_input border border-current text-inherit hover:opacity-80 transition-opacity"
+                                    >
+                                        عرض الفوترة
+                                    </button>
+                                </div>
+                            )}
+
                             {/* Main Stats Cards */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 {/* Total Hours */}
@@ -605,7 +927,7 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                                         <div>
                                             <p className="text-xs text-SlateBlueText dark:text-darktext">{t("credit.packageType")}</p>
                                             <p className="text-lg font-semibold text-MidnightNavyText dark:text-white">
-                                                {packageTypes[stats.packageType]?.icon} {packageTypes[stats.packageType]?.label}
+                                                📦 {describePackage(currentStudent.creditSystem.currentPackage).label}
                                             </p>
                                         </div>
                                         <div>
@@ -750,10 +1072,17 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                             {/* Current Package */}
                             {stats.hasPackage && (
                                 <div className="bg-white dark:bg-dark_input rounded-xl border border-PowderBlueBorder dark:border-dark_border p-6">
-                                    <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                                         <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
                                             <Crown className="w-5 h-5 text-amber-500" />
                                             {t("credit.currentPackage")}
+                                            {/* ✅ NEW: شارة حالة الدفع بجانب الباكدج مباشرة */}
+                                            {currentInvoice && currentInvoice.packageId === stats.packageId && (
+                                                <span className={`text-xs px-2.5 py-1 rounded-full ${paymentBadge.bg} flex items-center gap-1 font-medium`}>
+                                                    <paymentBadge.icon className="w-3.5 h-3.5" />
+                                                    {paymentBadge.label}
+                                                </span>
+                                            )}
                                         </h3>
                                         <button
                                             onClick={handleDeletePackage}
@@ -771,7 +1100,7 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                                     <PackageCard
                                         pkg={currentStudent.creditSystem.currentPackage}
                                         stats={stats}
-                                        packageTypes={packageTypes}
+                                        describePackage={describePackage}
                                         formatDate={formatDate}
                                     />
                                 </div>
@@ -797,7 +1126,7 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                                                             ? Math.round((pkg.totalHours - pkg.remainingHours) / pkg.totalHours * 100)
                                                             : 0
                                                     }}
-                                                    packageTypes={packageTypes}
+                                                    describePackage={describePackage}
                                                     formatDate={formatDate}
                                                 />
                                             </div>
@@ -818,6 +1147,199 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                                     </span>
                                 </div>
                             </button>
+                        </div>
+                    )}
+
+                    {/* ✅ NEW: Billing Tab — الفوترة والدفعات والإسكرو */}
+                    {activeTab === "billing" && (
+                        <div className="space-y-6">
+                            {billingLoading && !currentInvoice ? (
+                                <div className="flex items-center justify-center py-16">
+                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                </div>
+                            ) : !currentInvoice ? (
+                                <div className="bg-white dark:bg-dark_input rounded-xl border border-PowderBlueBorder dark:border-dark_border p-8 text-center">
+                                    <Receipt className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-2">
+                                        لا يوجد فاتورة لهذا الطالب
+                                    </h3>
+                                    <p className="text-sm text-SlateBlueText dark:text-darktext">
+                                        الفاتورة بتتعمل تلقائيًا عند إضافة باكدج جديدة لهذا الطالب.
+                                    </p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Invoice header + status */}
+                                    <div className="bg-white dark:bg-dark_input rounded-xl border border-PowderBlueBorder dark:border-dark_border p-6">
+                                        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+                                            <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
+                                                <Receipt className="w-5 h-5 text-primary" />
+                                                فاتورة الباكدج الحالية
+                                            </h3>
+                                            <span className={`text-sm px-3 py-1 rounded-full flex items-center gap-1.5 font-medium ${INVOICE_STATUS_CFG[currentInvoice.status]?.bg || "bg-gray-100 text-gray-500"
+                                                }`}>
+                                                {INVOICE_STATUS_CFG[currentInvoice.status]?.icon && (
+                                                    (() => {
+                                                        const Icon = INVOICE_STATUS_CFG[currentInvoice.status].icon;
+                                                        return <Icon className="w-4 h-4" />;
+                                                    })()
+                                                )}
+                                                {INVOICE_STATUS_CFG[currentInvoice.status]?.label || currentInvoice.status}
+                                            </span>
+                                        </div>
+
+                                        {/* Amounts grid */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                                            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 text-center">
+                                                <CircleDollarSign className="w-5 h-5 text-primary mx-auto mb-1.5" />
+                                                <p className="text-xs text-SlateBlueText dark:text-darktext">إجمالي السعر</p>
+                                                <p className="text-lg font-bold text-MidnightNavyText dark:text-white">{formatMoney(currentInvoice.totalAmount)}</p>
+                                            </div>
+                                            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 text-center">
+                                                <Wallet className="w-5 h-5 text-green-600 mx-auto mb-1.5" />
+                                                <p className="text-xs text-SlateBlueText dark:text-darktext">المدفوع فعليًا</p>
+                                                <p className="text-lg font-bold text-green-600">{formatMoney(currentInvoice.paidAmount)}</p>
+                                            </div>
+                                            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 text-center">
+                                                <PiggyBank className="w-5 h-5 text-amber-600 mx-auto mb-1.5" />
+                                                <p className="text-xs text-SlateBlueText dark:text-darktext">المتبقي</p>
+                                                <p className="text-lg font-bold text-amber-600">{formatMoney(currentInvoiceRemaining)}</p>
+                                            </div>
+                                            <div className={`rounded-lg p-4 text-center ${isInvoiceOverdue ? "bg-red-50 dark:bg-red-900/20" : "bg-gray-50 dark:bg-gray-800"}`}>
+                                                <CalendarDays className={`w-5 h-5 mx-auto mb-1.5 ${isInvoiceOverdue ? "text-red-600" : "text-blue-600"}`} />
+                                                <p className="text-xs text-SlateBlueText dark:text-darktext">تاريخ الاستحقاق</p>
+                                                <p className={`text-lg font-bold ${isInvoiceOverdue ? "text-red-600" : "text-MidnightNavyText dark:text-white"}`}>
+                                                    {currentInvoice.dueDate ? formatDate(currentInvoice.dueDate) : "مدفوعة بالكامل"}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Progress bar */}
+                                        <div className="mb-5">
+                                            <div className="flex items-center justify-between mb-1.5 text-xs text-SlateBlueText dark:text-darktext">
+                                                <span>نسبة السداد</span>
+                                                <span>
+                                                    {currentInvoice.totalAmount > 0
+                                                        ? Math.round((currentInvoice.paidAmount / currentInvoice.totalAmount) * 100)
+                                                        : 0}%
+                                                </span>
+                                            </div>
+                                            <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-green-600 transition-all"
+                                                    style={{
+                                                        width: `${currentInvoice.totalAmount > 0
+                                                            ? Math.min(100, Math.round((currentInvoice.paidAmount / currentInvoice.totalAmount) * 100))
+                                                            : 0
+                                                            }%`,
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="flex gap-3 flex-wrap">
+                                            <button
+                                                onClick={() => setShowAddPayment(true)}
+                                                disabled={currentInvoiceRemaining <= 0 || currentInvoice.status === "Voided"}
+                                                className="flex-1 min-w-[140px] bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-lg font-semibold inline-flex items-center justify-center gap-2 transition-colors"
+                                            >
+                                                <CreditCard className="w-4 h-4" />
+                                                تسجيل دفعة جديدة
+                                            </button>
+                                            <button
+                                                onClick={() => setShowRefund(true)}
+                                                disabled={(currentInvoice.paidAmount || 0) <= 0 || currentInvoice.status === "Voided"}
+                                                className="flex-1 min-w-[140px] bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 disabled:opacity-40 disabled:cursor-not-allowed text-rose-600 dark:text-rose-400 px-4 py-2.5 rounded-lg font-semibold inline-flex items-center justify-center gap-2 transition-colors"
+                                            >
+                                                <Minus className="w-4 h-4" />
+                                                استرجاع مبلغ
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Payments history */}
+                                    <div className="bg-white dark:bg-dark_input rounded-xl border border-PowderBlueBorder dark:border-dark_border p-6">
+                                        <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-4 flex items-center gap-2">
+                                            <History className="w-5 h-5 text-primary" />
+                                            سجل الدفعات ({(currentInvoice.payments || []).length})
+                                        </h3>
+
+                                        {(currentInvoice.payments || []).length > 0 ? (
+                                            <div className="space-y-2">
+                                                {currentInvoice.payments.map((payment) => {
+                                                    const isRefund = payment.type === "refund" || payment.amount < 0;
+                                                    const escrowCfg = ESCROW_STATUS_CFG[payment.escrow?.status || "not_started"];
+                                                    return (
+                                                        <div key={payment._id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg flex-wrap gap-2">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isRefund ? "bg-rose-100 dark:bg-rose-900/30 text-rose-600" : "bg-green-100 dark:bg-green-900/30 text-green-600"
+                                                                    }`}>
+                                                                    {isRefund ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                                                </div>
+                                                                <div>
+                                                                    <p className={`font-semibold ${isRefund ? "text-rose-600" : "text-MidnightNavyText dark:text-white"}`}>
+                                                                        {isRefund ? "استرجاع" : "دفعة"} — {formatMoney(Math.abs(payment.amount))}
+                                                                    </p>
+                                                                    <p className="text-xs text-SlateBlueText dark:text-darktext">
+                                                                        {formatDate(payment.date)} • {payment.method || "cash"}
+                                                                        {payment.notes ? ` • ${payment.notes}` : ""}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            {!isRefund && (
+                                                                <span className={`text-[11px] px-2 py-1 rounded-full font-medium ${escrowCfg.bg}`}>
+                                                                    {escrowCfg.label}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6 italic">
+                                                لا يوجد دفعات مسجلة على الفاتورة دي لحد دلوقتي
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Invoices history (لو فيه أكتر من فاتورة للطالب) */}
+                                    {invoices.length > 1 && (
+                                        <div className="bg-white dark:bg-dark_input rounded-xl border border-PowderBlueBorder dark:border-dark_border p-6">
+                                            <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white mb-4 flex items-center gap-2">
+                                                <Landmark className="w-5 h-5 text-purple-500" />
+                                                فواتير سابقة
+                                            </h3>
+                                            <div className="space-y-2">
+                                                {invoices
+                                                    .filter(inv => inv._id !== currentInvoice._id)
+                                                    .map((inv) => {
+                                                        const cfg = INVOICE_STATUS_CFG[inv.status] || {};
+                                                        return (
+                                                            <button
+                                                                key={inv._id}
+                                                                onClick={() => setExpandedInvoice(expandedInvoice === inv._id ? null : inv._id)}
+                                                                className="w-full text-left p-3 bg-gray-50 dark:bg-gray-800 rounded-lg flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                            >
+                                                                <div>
+                                                                    <p className="text-sm font-medium text-MidnightNavyText dark:text-white">
+                                                                        {formatMoney(inv.totalAmount)} — مدفوع {formatMoney(inv.paidAmount)}
+                                                                    </p>
+                                                                    <p className="text-xs text-SlateBlueText dark:text-darktext">
+                                                                        {formatDate(inv.createdAt)}
+                                                                    </p>
+                                                                </div>
+                                                                <span className={`text-xs px-2 py-1 rounded-full ${cfg.bg || "bg-gray-100 text-gray-500"}`}>
+                                                                    {cfg.label || inv.status}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
                     )}
 
@@ -987,8 +1509,8 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
             {/* Add Package Modal */}
             {showAddPackage && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 p-4">
-                    <div className="bg-white dark:bg-darkmode rounded-xl w-full max-w-md">
-                        <div className="p-4 border-b border-PowderBlueBorder dark:border-dark_border flex items-center justify-between">
+                    <div className="bg-white dark:bg-darkmode rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+                        <div className="p-4 border-b border-PowderBlueBorder dark:border-dark_border flex items-center justify-between sticky top-0 bg-white dark:bg-darkmode z-10">
                             <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
                                 <Package className="w-5 h-5 text-primary" />
                                 {t("credit.addPackage")}
@@ -999,87 +1521,185 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                         </div>
 
                         <div className="p-4 space-y-4">
-                            {/* Package Type */}
-                            <div>
-                                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                                    {t("credit.packageType")}
-                                </label>
-                                <select
-                                    value={newPackage.packageType}
-                                    onChange={(e) => setNewPackage({ ...newPackage, packageType: e.target.value })}
-                                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
-                                >
-                                    {Object.entries(packageTypes).map(([key, value]) => (
-                                        <option key={key} value={key}>
-                                            {value.icon} {value.label} ({value.hours} {t("credit.hours")})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* Price */}
-                            <div>
-                                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                                    {t("credit.price")} (EGP)
-                                </label>
-                                <input
-                                    type="number"
-                                    value={newPackage.price}
-                                    onChange={(e) => setNewPackage({ ...newPackage, price: Number(e.target.value) })}
-                                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
-                                    min="0"
-                                />
-                            </div>
-
-                            {/* Start Date */}
-                            <div>
-                                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                                    {t("credit.startDate")}
-                                </label>
-                                <input
-                                    type="date"
-                                    value={newPackage.startDate}
-                                    onChange={(e) => setNewPackage({ ...newPackage, startDate: e.target.value })}
-                                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
-                                />
-                            </div>
-
-                            {/* Summary */}
-                            <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-4 rounded-lg">
-                                <p className="text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                                    {t("credit.packageSummary")}
-                                </p>
-                                <div className="space-y-1 text-sm">
-                                    <div className="flex justify-between">
-                                        <span className="text-SlateBlueText dark:text-darktext">{t("credit.totalHours")}:</span>
-                                        <span className="font-semibold text-MidnightNavyText dark:text-white">
-                                            {packageTypes[newPackage.packageType]?.hours} {t("credit.hours")}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-SlateBlueText dark:text-darktext">{t("credit.duration")}:</span>
-                                        <span className="font-semibold text-MidnightNavyText dark:text-white">
-                                            {newPackage.packageType === "3months" ? "3" :
-                                                newPackage.packageType === "6months" ? "6" :
-                                                    newPackage.packageType === "9months" ? "9" : "12"} {t("credit.months")}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-SlateBlueText dark:text-darktext">{t("credit.endDate")}:</span>
-                                        <span className="font-semibold text-MidnightNavyText dark:text-white">
-                                            {new Date(new Date(newPackage.startDate).setMonth(
-                                                new Date(newPackage.startDate).getMonth() +
-                                                (newPackage.packageType === "3months" ? 3 :
-                                                    newPackage.packageType === "6months" ? 6 :
-                                                        newPackage.packageType === "9months" ? 9 : 12)
-                                            )).toLocaleDateString()}
-                                        </span>
-                                    </div>
+                            {plansLoading ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
                                 </div>
-                            </div>
+                            ) : packagePlans.length === 0 ? (
+                                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-300">
+                                    لسه مفيش باقات متاحة. من فضلك أضف باقة أولًا من صفحة "باقات الساعات".
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Package Plan */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                            {t("credit.packageType")}
+                                        </label>
+                                        <select
+                                            value={newPackage.packagePlanId}
+                                            onChange={(e) => {
+                                                const plan = packagePlans.find((p) => p._id === e.target.value);
+                                                setNewPackage((prev) => ({
+                                                    ...prev,
+                                                    packagePlanId: e.target.value,
+                                                    price: plan?.price || 0,
+                                                    amountPaid: prev.paymentOption === "full" ? (plan?.price || 0) : prev.paymentOption === "none" ? 0 : prev.amountPaid,
+                                                }));
+                                            }}
+                                            className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                        >
+                                            {packagePlans.map((plan) => (
+                                                <option key={plan._id} value={plan._id}>
+                                                    {plan.name} — {plan.months} شهر — {plan.totalHours} {t("credit.hours")}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Price */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                            {t("credit.price")} (EGP)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={newPackage.price}
+                                            onChange={(e) => setNewPackage({ ...newPackage, price: Number(e.target.value) })}
+                                            className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                            min="0"
+                                        />
+                                    </div>
+
+                                    {/* ✅ خيارات الدفع الثلاثة */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                            طريقة الدفع
+                                        </label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {PAYMENT_OPTIONS.map((opt) => {
+                                                const Icon = opt.icon;
+                                                const active = newPackage.paymentOption === opt.id;
+                                                return (
+                                                    <button
+                                                        key={opt.id}
+                                                        type="button"
+                                                        onClick={() => handlePaymentOptionChange(opt.id)}
+                                                        className={`p-3 border rounded-lg text-center transition-all ${active
+                                                            ? "border-primary bg-primary/10"
+                                                            : "border-PowderBlueBorder dark:border-dark_border hover:bg-gray-50 dark:hover:bg-gray-800"
+                                                            }`}
+                                                    >
+                                                        <Icon className={`w-5 h-5 mx-auto mb-1 ${active ? "text-primary" : "text-gray-500"}`} />
+                                                        <span className={`text-xs font-medium ${active ? "text-primary" : "text-MidnightNavyText dark:text-white"}`}>
+                                                            {opt.label}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* المبلغ المدفوع الآن — بس لو دفع جزئي */}
+                                    {newPackage.paymentOption === "partial" && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                                المبلغ المدفوع الآن (EGP)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={newPackage.amountPaid}
+                                                onChange={(e) => setNewPackage({ ...newPackage, amountPaid: Number(e.target.value) })}
+                                                className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                                min="1"
+                                                max={newPackage.price - 1}
+                                            />
+                                            {(Number(newPackage.amountPaid) <= 0 || Number(newPackage.amountPaid) >= Number(newPackage.price)) && (
+                                                <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
+                                                    <AlertTriangle className="w-3 h-3" /> لازم يكون أكبر من 0 وأقل من السعر الكامل
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* تاريخ استحقاق باقي المبلغ — بس لو مش دفع كامل */}
+                                    {newPackage.paymentOption !== "full" && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                                تاريخ استحقاق باقي المبلغ <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={newPackage.dueDate}
+                                                onChange={(e) => setNewPackage({ ...newPackage, dueDate: e.target.value })}
+                                                className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                            />
+                                            <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-1">
+                                                بعد التاريخ ده، لو مدفعش الباقي، هيوصل تنبيه للأدمن في صفحة "تنبيهات الفوترة".
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Start Date */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                            {t("credit.startDate")}
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={newPackage.startDate}
+                                            onChange={(e) => setNewPackage({ ...newPackage, startDate: e.target.value })}
+                                            className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                        />
+                                    </div>
+
+                                    {/* Summary */}
+                                    <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-4 rounded-lg">
+                                        <p className="text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                            {t("credit.packageSummary")}
+                                        </p>
+                                        <div className="space-y-1 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-SlateBlueText dark:text-darktext">{t("credit.totalHours")}:</span>
+                                                <span className="font-semibold text-MidnightNavyText dark:text-white">
+                                                    {selectedPlan?.totalHours ?? 0} {t("credit.hours")}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-SlateBlueText dark:text-darktext">{t("credit.duration")}:</span>
+                                                <span className="font-semibold text-MidnightNavyText dark:text-white">
+                                                    {selectedPlan?.months ?? 0} {t("credit.months")}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-SlateBlueText dark:text-darktext">{t("credit.endDate")}:</span>
+                                                <span className="font-semibold text-MidnightNavyText dark:text-white">
+                                                    {selectedPlan
+                                                        ? new Date(
+                                                            new Date(newPackage.startDate).setMonth(
+                                                                new Date(newPackage.startDate).getMonth() + selectedPlan.months
+                                                            )
+                                                        ).toLocaleDateString()
+                                                        : "-"}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between pt-1 mt-1 border-t border-primary/20">
+                                                <span className="text-SlateBlueText dark:text-darktext">المدفوع الآن:</span>
+                                                <span className="font-semibold text-green-600">{formatMoney(newPackage.amountPaid)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-SlateBlueText dark:text-darktext">المتبقي:</span>
+                                                <span className="font-semibold text-amber-600">
+                                                    {formatMoney(Math.max(0, (Number(newPackage.price) || 0) - (Number(newPackage.amountPaid) || 0)))}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
-                        <div className="p-4 border-t border-PowderBlueBorder dark:border-dark_border flex gap-3">
+                        <div className="p-4 border-t border-PowderBlueBorder dark:border-dark_border flex gap-3 sticky bottom-0 bg-white dark:bg-darkmode">
                             <button
                                 onClick={() => setShowAddPackage(false)}
                                 className="flex-1 px-4 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -1088,11 +1708,170 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                             </button>
                             <button
                                 onClick={handleAddPackage}
-                                disabled={loading}
+                                disabled={loading || packagePlans.length === 0 || Number(newPackage.amountPaid) > Number(newPackage.price)}
                                 className="flex-1 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
                             >
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                 {loading ? t("common.saving") : t("common.save")}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ NEW: Add Payment Modal */}
+            {showAddPayment && currentInvoice && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 p-4">
+                    <div className="bg-white dark:bg-darkmode rounded-xl w-full max-w-md">
+                        <div className="p-4 border-b border-PowderBlueBorder dark:border-dark_border flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
+                                <CreditCard className="w-5 h-5 text-primary" />
+                                تسجيل دفعة جديدة
+                            </h3>
+                            <button onClick={() => setShowAddPayment(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm">
+                                <p className="text-amber-700 dark:text-amber-300">
+                                    المتبقي على الفاتورة: <strong>{formatMoney(currentInvoiceRemaining)}</strong>
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                    المبلغ (EGP) <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    value={newPayment.amount}
+                                    onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
+                                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                    min="1"
+                                    max={currentInvoiceRemaining}
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                    طريقة الدفع
+                                </label>
+                                <select
+                                    value={newPayment.method}
+                                    onChange={(e) => setNewPayment({ ...newPayment, method: e.target.value })}
+                                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                >
+                                    <option value="cash">كاش</option>
+                                    <option value="instapay">Instapay</option>
+                                    <option value="vodafone_cash">فودافون كاش</option>
+                                    <option value="bank_transfer">تحويل بنكي</option>
+                                    <option value="other">أخرى</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                    ملاحظات (اختياري)
+                                </label>
+                                <textarea
+                                    value={newPayment.notes}
+                                    onChange={(e) => setNewPayment({ ...newPayment, notes: e.target.value })}
+                                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                    rows="2"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-PowderBlueBorder dark:border-dark_border flex gap-3">
+                            <button
+                                onClick={() => setShowAddPayment(false)}
+                                className="flex-1 px-4 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                            >
+                                إلغاء
+                            </button>
+                            <button
+                                onClick={handleAddPayment}
+                                disabled={paymentSubmitting}
+                                className="flex-1 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {paymentSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                {paymentSubmitting ? "جارِ الحفظ..." : "تسجيل الدفعة"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ NEW: Refund Modal */}
+            {showRefund && currentInvoice && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 p-4">
+                    <div className="bg-white dark:bg-darkmode rounded-xl w-full max-w-md">
+                        <div className="p-4 border-b border-PowderBlueBorder dark:border-dark_border flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
+                                <Minus className="w-5 h-5 text-rose-500" />
+                                استرجاع مبلغ
+                            </h3>
+                            <button onClick={() => setShowRefund(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                            <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg p-3 text-sm">
+                                <p className="text-rose-700 dark:text-rose-300">
+                                    الحد الأقصى للاسترجاع = المبلغ المدفوع فعليًا: <strong>{formatMoney(currentInvoice.paidAmount)}</strong>
+                                </p>
+                                <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1">
+                                    (مينفعش تسترجع مبلغ اتحول بالفعل لإيراد معترف به بعد فترة الإسكرو)
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                    المبلغ المسترجع (EGP) <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    value={refundData.amount}
+                                    onChange={(e) => setRefundData({ ...refundData, amount: e.target.value })}
+                                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                    min="1"
+                                    max={currentInvoice.paidAmount}
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
+                                    السبب <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    value={refundData.reason}
+                                    onChange={(e) => setRefundData({ ...refundData, reason: e.target.value })}
+                                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                                    rows="2"
+                                    placeholder="سبب الاسترجاع..."
+                                />
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-PowderBlueBorder dark:border-dark_border flex gap-3">
+                            <button
+                                onClick={() => setShowRefund(false)}
+                                className="flex-1 px-4 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                            >
+                                إلغاء
+                            </button>
+                            <button
+                                onClick={handleRefund}
+                                disabled={refundSubmitting}
+                                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {refundSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                {refundSubmitting ? "جارِ التنفيذ..." : "تأكيد الاسترجاع"}
                             </button>
                         </div>
                     </div>
@@ -1280,8 +2059,9 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
 }
 
 // Package Card Component
-function PackageCard({ pkg, stats, packageTypes, formatDate }) {
+function PackageCard({ pkg, stats, describePackage, formatDate }) {
     const { t } = useI18n();
+    const info = describePackage(pkg);
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -1298,10 +2078,10 @@ function PackageCard({ pkg, stats, packageTypes, formatDate }) {
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <span className="text-2xl">{packageTypes[pkg.packageType]?.icon}</span>
+                    <span className="text-2xl">📦</span>
                     <div>
                         <p className="font-semibold text-MidnightNavyText dark:text-white">
-                            {packageTypes[pkg.packageType]?.label}
+                            {info.label}
                         </p>
                         <p className="text-xs text-SlateBlueText dark:text-darktext">
                             {formatDate(pkg.startDate)} - {formatDate(pkg.endDate)}

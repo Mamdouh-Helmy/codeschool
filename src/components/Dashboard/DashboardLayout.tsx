@@ -232,6 +232,16 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           href: "/admin/subscriptions",
           icon: "ion:card-outline",
         },
+        {
+          label: "باقات الساعات",
+          href: "/admin/package-plans",
+          icon: "ion:pricetags-outline",
+        },
+        {
+          label: "تنبيهات الفوترة",
+          href: "/admin/billing-alerts",
+          icon: "ion:alert-circle-outline",
+        },
       ]
     },
     {

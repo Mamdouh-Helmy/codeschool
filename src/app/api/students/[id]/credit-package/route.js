@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Student from "../../../../models/Student";
+import PackagePlan from "../../../../models/PackagePlan";
+import { createInvoiceForPackage } from "@/lib/billing";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
 export async function POST(req, { params }) {
   try {
     console.log("📦 Starting credit package addition...");
-    
+
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
       console.log("❌ Admin authorization failed");
@@ -20,83 +22,164 @@ export async function POST(req, { params }) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid student ID" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const packageData = await req.json();
+    const body = await req.json();
+    const {
+      packagePlanId,
+      price, // اختياري — لو مبعتش، بناخد سعر الباقة الافتراضي
+      startDate,
+      paymentOption, // "full" | "none" | "partial"
+      amountPaid = 0, // مطلوب لو paymentOption = "partial"
+      dueDate, // مطلوب لو paymentOption != "full"
+    } = body;
+
+    if (!packagePlanId || !mongoose.Types.ObjectId.isValid(packagePlanId)) {
+      return NextResponse.json(
+        { success: false, message: "packagePlanId is required and must be valid" },
+        { status: 400 },
+      );
+    }
+
+    if (!["full", "none", "partial"].includes(paymentOption)) {
+      return NextResponse.json(
+        { success: false, message: "paymentOption must be 'full', 'none', or 'partial'" },
+        { status: 400 },
+      );
+    }
+
+    if (paymentOption !== "full" && !dueDate) {
+      return NextResponse.json(
+        { success: false, message: "dueDate is required unless paymentOption is 'full'" },
+        { status: 400 },
+      );
+    }
 
     await connectDB();
 
-    const student = await Student.findOne({ 
-      _id: id,
-      isDeleted: false 
-    });
+    const [student, plan] = await Promise.all([
+      Student.findOne({ _id: id, isDeleted: false }),
+      PackagePlan.findOne({ _id: packagePlanId, isActive: true }),
+    ]);
 
     if (!student) {
       return NextResponse.json(
         { success: false, message: "Student not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    const result = await student.addCreditPackage(packageData);
+    if (!plan) {
+      return NextResponse.json(
+        { success: false, message: "Package plan not found or inactive" },
+        { status: 404 },
+      );
+    }
 
-    if (result.success) {
-      // ✅ إحضار البيانات المحدثة بالكامل
-      const updatedStudent = await Student.findById(id)
-        .lean();
+    const finalPrice = price !== undefined && price !== null ? Number(price) : plan.price;
 
-      // تنسيق البيانات للإرسال
-      const formattedStudent = {
-        _id: updatedStudent._id,
-        id: updatedStudent._id,
-        enrollmentNumber: updatedStudent.enrollmentNumber,
-        personalInfo: updatedStudent.personalInfo,
-        guardianInfo: updatedStudent.guardianInfo,
-        creditSystem: updatedStudent.creditSystem || {
-          currentPackage: null,
-          packagesHistory: [],
-          exceptions: [],
-          usageHistory: [],
-          stats: {
-            totalHoursPurchased: 0,
-            totalHoursUsed: 0,
-            totalHoursRemaining: 0,
-            totalSessionsAttended: 0,
-            totalExceptions: 0,
-            activeExceptions: 0
+    if (paymentOption === "partial") {
+      const paidNum = Number(amountPaid) || 0;
+      if (paidNum <= 0 || paidNum >= finalPrice) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Partial payment amount must be greater than 0 and less than the price",
           },
-          status: "no_package"
-        }
-      };
-      
-      return NextResponse.json({ 
-        success: true, 
-        data: result.data,
-        student: formattedStudent,
-        message: "Package added successfully" 
-      });
-    } else {
+          { status: 400 },
+        );
+      }
+    }
+
+    // ✅ منطق الساعات — من غير أي شرط دفع، الطالب بياخد الساعات كاملة فورًا
+    const result = await student.addCreditPackage({
+      packagePlanId,
+      price: finalPrice,
+      startDate,
+    });
+
+    if (!result.success) {
       return NextResponse.json(
         { success: false, message: result.error },
-        { status: 400 }
+        { status: 400 },
       );
     }
+
+    // ✅ إنشاء الفاتورة المرتبطة — منفصلة تمامًا عن منح الساعات
+    let invoice;
+    try {
+      invoice = await createInvoiceForPackage({
+        studentId: id,
+        packageId: student.creditSystem.currentPackage._id,
+        groupId: student.academicInfo?.groupIds?.[0] || null,
+        totalAmount: finalPrice,
+        paymentOption,
+        amountPaidNow: paymentOption === "partial" ? Number(amountPaid) : 0,
+        dueDate: paymentOption === "full" ? null : dueDate,
+        createdBy: authCheck.user.id,
+      });
+    } catch (invoiceError) {
+      // ✅ الساعات اتضافت بالفعل — الفاتورة فشلت. منرجعش الساعات تلقائيًا
+      // لتجنب race conditions، بس نبلغ الأدمن بوضوح إن الفاتورة محتاجة متابعة يدوية
+      console.error("❌ Package hours granted but invoice creation failed:", invoiceError);
+      return NextResponse.json(
+        {
+          success: false,
+          message: `تم منح الساعات للطالب لكن فشل إنشاء الفاتورة: ${invoiceError.message}. راجع الفاتورة يدويًا.`,
+        },
+        { status: 500 },
+      );
+    }
+
+    const updatedStudent = await Student.findById(id).lean();
+
+    const formattedStudent = {
+      _id: updatedStudent._id,
+      id: updatedStudent._id,
+      enrollmentNumber: updatedStudent.enrollmentNumber,
+      personalInfo: updatedStudent.personalInfo,
+      guardianInfo: updatedStudent.guardianInfo,
+      creditSystem: updatedStudent.creditSystem || {
+        currentPackage: null,
+        packagesHistory: [],
+        exceptions: [],
+        usageHistory: [],
+        stats: {
+          totalHoursPurchased: 0,
+          totalHoursUsed: 0,
+          totalHoursRemaining: 0,
+          totalSessionsAttended: 0,
+          totalExceptions: 0,
+          activeExceptions: 0,
+        },
+        status: "no_package",
+      },
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: result.data,
+      student: formattedStudent,
+      invoice,
+      message: "Package and invoice created successfully",
+    });
   } catch (error) {
     console.error("❌ Error adding credit package:", error);
     return NextResponse.json(
       { success: false, message: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-// ✅ DELETE route لحذف الحزمة - بدون إضافة للتاريخ
+// ✅ DELETE — زي ما هو تمامًا من غير أي تعديل (الفاتورة مش بتتلغى هنا عمدًا؛
+// الإلغاء المالي بيتم عبر /api/invoices/[id]/refund بشكل مستقل)
 export async function DELETE(req, { params }) {
   try {
     console.log("🗑️ Deleting credit package...");
-    
+
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) {
       return authCheck.response;
@@ -108,72 +191,61 @@ export async function DELETE(req, { params }) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid student ID" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     await connectDB();
 
-    const student = await Student.findOne({ 
-      _id: id,
-      isDeleted: false 
-    });
+    const student = await Student.findOne({ _id: id, isDeleted: false });
 
     if (!student) {
       return NextResponse.json(
         { success: false, message: "Student not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // ✅ حذف الحزمة الحالية
     if (student.creditSystem?.currentPackage) {
-      
-      // ✅ حفظ الحزمة في التاريخ أولاً (بدون تغيير الـ status)
       if (!student.creditSystem.packagesHistory) {
         student.creditSystem.packagesHistory = [];
       }
-      
-      // إضافة نسخة من الحزمة الحالية إلى التاريخ بدون تغيير status
+
       student.creditSystem.packagesHistory.push({
         ...student.creditSystem.currentPackage.toObject(),
-        deletedAt: new Date() // فقط نضيف حقل deletedAt إضافي
+        deletedAt: new Date(),
       });
 
-      // ✅ إزالة الحزمة الحالية
       student.creditSystem.currentPackage = null;
       student.creditSystem.status = "no_package";
-      
-      // تحديث الإحصائيات
+
       if (student.creditSystem.stats) {
         student.creditSystem.stats.totalHoursRemaining = 0;
       }
 
       await student.save();
 
-      // إحضار البيانات المحدثة
       const updatedStudent = await Student.findById(id).lean();
 
-      return NextResponse.json({ 
-        success: true, 
+      return NextResponse.json({
+        success: true,
         message: "Package deleted successfully",
         student: {
           _id: updatedStudent._id,
-          creditSystem: updatedStudent.creditSystem
-        }
+          creditSystem: updatedStudent.creditSystem,
+        },
       });
     }
 
     return NextResponse.json(
       { success: false, message: "No active package found" },
-      { status: 404 }
+      { status: 404 },
     );
-
   } catch (error) {
     console.error("❌ Error deleting credit package:", error);
     return NextResponse.json(
       { success: false, message: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

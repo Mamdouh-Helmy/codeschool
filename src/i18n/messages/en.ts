@@ -4601,6 +4601,7 @@ const en = {
   "portfolio.basic.downloadCv": "Download CV",
   "portfolio.basic.replaceCv": "Replace CV",
   "portfolio.basic.confirmRemove": "Are you sure you want to remove the CV?",
+  "notifications.title": "Notifications",
 };
 
 export default en;

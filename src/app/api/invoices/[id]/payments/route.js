@@ -1,0 +1,39 @@
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongodb";
+import { addPaymentToInvoice } from "@/lib/billing";
+import { requireAdmin } from "@/utils/authMiddleware";
+import mongoose from "mongoose";
+
+export async function POST(req, { params }) {
+  try {
+    const authCheck = await requireAdmin(req);
+    if (!authCheck.authorized) return authCheck.response;
+
+    const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid invoice ID" },
+        { status: 400 },
+      );
+    }
+
+    const { amount, method, notes } = await req.json();
+
+    await connectDB();
+
+    const { invoice, payment } = await addPaymentToInvoice(id, {
+      amount: Number(amount),
+      method,
+      notes,
+      recordedBy: authCheck.user.id,
+    });
+
+    return NextResponse.json({ success: true, data: { invoice, payment } });
+  } catch (error) {
+    console.error("❌ POST /api/invoices/[id]/payments:", error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 400 },
+    );
+  }
+}
