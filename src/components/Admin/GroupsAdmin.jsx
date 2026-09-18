@@ -10,12 +10,14 @@ import {
     UserPlus, PlayCircle, Hash, Target, Info, Filter, X,
     SlidersHorizontal, ChevronDown, CalendarDays, GraduationCap,
     UserCheck, Layers, Tag, Sparkles, FolderOpen,
+    Link2Off, // ✅ أيقونة تحذير اللينكات
 } from "lucide-react";
 import Modal from "./Modal";
 import GroupForm from "./GroupForm";
 import AddStudentsToGroup from "./AddStudentsToGroup";
 import InstructorNotificationModal from "./InstructorNotificationModal";
 import MeetingLinksCheckModal from "./MeetingLinksCheckModal";
+import FixGroupLinksModal from "./FixGroupLinksModal"; // ✅ جديد
 import GroupDetailsPage from "./GroupDetailsPage";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -135,6 +137,7 @@ export default function GroupsAdmin() {
     const [addStudentsModalOpen, setAddStudentsModalOpen] = useState(false);
     const [selectedGroupForStudents, setSelectedGroupForStudents] = useState(null);
     const [meetingLinksModal, setMeetingLinksModal] = useState({ open: false, groupId: null });
+    const [fixLinksModal, setFixLinksModal] = useState({ open: false, groupId: null }); // ✅ جديد
     const [instructorNotificationModal, setInstructorNotificationModal] = useState({
         open: false, groupData: null, instructors: [],
     });
@@ -446,6 +449,11 @@ export default function GroupsAdmin() {
         setAddStudentsModalOpen(true);
     }, []);
 
+    // ✅ فتح مودال إصلاح لينكات الاجتماعات (جلسة بدون لينك أو لينك اتمسح)
+    const onFixLinks = useCallback((groupId) => {
+        setFixLinksModal({ open: true, groupId });
+    }, []);
+
     // ── Tag Management Functions ──────────────────────────────────────────────
     const handleAddTag = async () => {
         if (!newTagName.trim()) {
@@ -529,6 +537,10 @@ export default function GroupsAdmin() {
     const closeInstructorModal = useCallback(() => {
         setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
         setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "" });
+    }, []);
+
+    const closeFixLinksModal = useCallback(() => {
+        setFixLinksModal({ open: false, groupId: null });
     }, []);
 
     // ── Loading State ──────────────────────────────────────────────────────────
@@ -925,6 +937,7 @@ export default function GroupsAdmin() {
                                     onViewSessions={(id) => router.push(`/admin/sessions?groupId=${id}`)}
                                     onEdit={onEdit}
                                     onDelete={onDelete}
+                                    onFixLinks={onFixLinks}
                                 />
                             ))}
                         </tbody>
@@ -981,6 +994,14 @@ export default function GroupsAdmin() {
                 groupId={meetingLinksModal.groupId}
                 onClose={() => setMeetingLinksModal({ open: false, groupId: null })}
                 onConfirm={onMeetingLinksCheckConfirmed}
+            />
+
+            {/* ✅ مودال إصلاح لينكات الاجتماعات (جلسة بدون لينك / لينك اتمسح من الداتابيز) */}
+            <FixGroupLinksModal
+                isOpen={fixLinksModal.open}
+                groupId={fixLinksModal.groupId}
+                onClose={closeFixLinksModal}
+                onFixed={loadGroups}
             />
 
             <InstructorNotificationModal
@@ -1132,8 +1153,13 @@ function DateRangeFilter({ label, icon, fromValue, toValue, onFromChange, onToCh
     );
 }
 
-// ✅ تم تعديل GroupRow لعرض الوسوم
-function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate, onAddStudents, onViewSessions, onEdit, onDelete }) {
+// ✅ تم تعديل GroupRow لعرض الوسوم + تحذير لينكات الاجتماعات المفقودة/المعطوبة
+function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate, onAddStudents, onViewSessions, onEdit, onDelete, onFixLinks }) {
+    const hasLinkIssue = !!group.linkHealth?.hasIssue;
+    const linkIssueLabel = group.linkHealth?.orphanedCount > 0
+        ? (t("groups.links.orphaned") || "لينك محذوف من الداتابيز")
+        : (t("groups.links.missing") || "جلسات بدون لينك");
+
     return (
         <tr className="group hover:bg-gray-50/80 dark:hover:bg-dark_input/60 transition-colors">
 
@@ -1143,6 +1169,26 @@ function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate
                 <p className="text-xs text-SlateBlueText dark:text-darktext flex items-center gap-1 mt-0.5">
                     <Hash className="w-3 h-3" />{group.code}
                 </p>
+
+                {/* ✅ تحذير جميل لو فيه مشكلة في لينكات الجروب: مفيش لينك خالص، أو
+                    اللينك كان موجود واتحذف من الداتابيز */}
+                {hasLinkIssue && (
+                    <button
+                        type="button"
+                        onClick={() => onFixLinks(group.id)}
+                        title={linkIssueLabel}
+                        className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20 transition-colors"
+                    >
+                        <Link2Off className="w-3 h-3" />
+                        {linkIssueLabel}
+                        {(group.linkHealth.missingCount + group.linkHealth.orphanedCount) > 0 && (
+                            <span className="tabular-nums">
+                                ({group.linkHealth.missingCount + group.linkHealth.orphanedCount})
+                            </span>
+                        )}
+                    </button>
+                )}
+
                 {/* ✅ عرض الوسوم */}
                 {group.tags && group.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
@@ -1222,6 +1268,12 @@ function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate
                     {group.status === "active" && !group.isFull && (
                         <ActionButton onClick={() => onAddStudents(group.id)} hoverColor="blue" title={t("groups.actions.addStudents") || "Add Students"}>
                             <UserPlus className="w-4 h-4 text-blue-600" />
+                        </ActionButton>
+                    )}
+                    {/* ✅ زرار سريع لإصلاح اللينكات لو فيه مشكلة (متاح لأي جروب مش draft محتاج لينكات) */}
+                    {hasLinkIssue && (
+                        <ActionButton onClick={() => onFixLinks(group.id)} hoverColor="red" title={t("groups.actions.fixLinks") || "إصلاح لينكات الاجتماعات"}>
+                            <Link2Off className="w-4 h-4 text-amber-600" />
                         </ActionButton>
                     )}
                     {group.sessionsGenerated && (

@@ -441,7 +441,7 @@ export async function getUpcomingReservations(days = 7) {
  * @param {String} [excludeGroupId] - لو الحجز الحالي لنفس الجروب ده، منعتبروش تعارض
  * @returns {Object|null} تفاصيل التعارض، أو null لو مفيش تعارض
  */
-function findScheduleConflict(link, newSchedule, excludeGroupId = null) {
+export function findScheduleConflict(link, newSchedule, excludeGroupId = null) {
   const now = new Date();
 
   for (const res of link.reservations || []) {
@@ -483,6 +483,124 @@ function findScheduleConflict(link, newSchedule, excludeGroupId = null) {
   }
 
   return null;
+}
+
+/**
+ * ✅ ينضف الحجوزات اليتيمة (orphaned) اللي بتشاور على جروب اتمسح فعليًا من
+ * الداتابيز — بيحصل لو جروب اتشال (hard delete) من غير ما حد يفك حجز
+ * اللينكات المرتبطة بسيشناته الأول. من غير التنضيف ده، اللينك بيفضل شكله
+ * "محجوز" لجروب مبقاش موجود، ويمنع جروبات تانية محتاجة نفس الميعاد فعليًا.
+ * بيرجع نسخة منضّفة من نفس الـ links array (وبيحفظ التنضيف في الداتابيز
+ * كمان — self-healing).
+ */
+export async function pruneOrphanedReservations(links) {
+  const allGroupIds = [
+    ...new Set(
+      links.flatMap((l) =>
+        (l.reservations || []).map((r) => r.groupId?.toString()).filter(Boolean),
+      ),
+    ),
+  ];
+  if (allGroupIds.length === 0) return links;
+
+  const GroupModel = (await import("../app/models/Group")).default;
+  const liveGroups = await GroupModel.find({
+    _id: { $in: allGroupIds },
+    isDeleted: false,
+  })
+    .select("_id")
+    .lean();
+  const liveGroupIds = new Set(liveGroups.map((g) => g._id.toString()));
+
+  const cleaned = [];
+  for (const link of links) {
+    const hasOrphan = (link.reservations || []).some(
+      (r) => r.groupId && !liveGroupIds.has(r.groupId.toString()),
+    );
+
+    if (hasOrphan) {
+      try {
+        const doc = await MeetingLink.findById(link._id);
+        if (doc) {
+          const before = doc.reservations.length;
+          doc.reservations = doc.reservations.filter(
+            (r) => !r.groupId || liveGroupIds.has(r.groupId.toString()),
+          );
+          doc.status = doc.reservations.length > 0 ? "reserved" : "available";
+          doc.metadata.updatedAt = new Date();
+          await doc.save();
+          console.log(
+            `🧹 Pruned ${before - doc.reservations.length} orphaned reservation(s) on link ${link.name}`,
+          );
+        }
+      } catch (e) {
+        console.error("⚠️ prune orphaned reservations failed:", e.message);
+      }
+    }
+
+    cleaned.push({
+      ...link,
+      reservations: (link.reservations || []).filter(
+        (r) => !r.groupId || liveGroupIds.has(r.groupId.toString()),
+      ),
+    });
+  }
+  return cleaned;
+}
+
+/**
+ * ✅ يفحص صحة اللينكات لمجموعة جروبات دفعة واحدة (query واحد على Session
+ * وواحد على MeetingLink، مش N+1) — بيرجع Map<groupId, {missingCount,
+ * orphanedCount, hasIssue}>. بيتستخدم في شاشة الليستة (GroupsAdmin) عشان
+ * نعرض تحذير على الجروب اللي فيه سيشن من غير لينك، أو سيشن لينكها اتمسح.
+ */
+export async function getSessionsLinkHealthForGroups(groupIds) {
+  if (!groupIds?.length) return new Map();
+
+  const Session = (await import("../app/models/Session")).default;
+
+  const sessions = await Session.find({
+    groupId: { $in: groupIds },
+    isDeleted: false,
+    status: { $ne: "completed" },
+    deliveryMode: { $ne: "offline" }, // ✅ الأوفلاين مالوش لينكات أصلاً
+  })
+    .select("groupId meetingLink meetingLinkId")
+    .lean();
+
+  const referencedLinkIds = [
+    ...new Set(sessions.filter((s) => s.meetingLinkId).map((s) => s.meetingLinkId.toString())),
+  ];
+
+  const existingLinkIds = referencedLinkIds.length
+    ? new Set(
+        (
+          await MeetingLink.find({ _id: { $in: referencedLinkIds }, isDeleted: false })
+            .select("_id")
+            .lean()
+        ).map((l) => l._id.toString()),
+      )
+    : new Set();
+
+  const health = new Map();
+
+  for (const s of sessions) {
+    const gid = s.groupId.toString();
+    if (!health.has(gid)) health.set(gid, { missingCount: 0, orphanedCount: 0, hasIssue: false });
+    const entry = health.get(gid);
+
+    if (s.meetingLinkId) {
+      if (!existingLinkIds.has(s.meetingLinkId.toString())) {
+        entry.orphanedCount++;
+        entry.hasIssue = true;
+      }
+    } else if (!s.meetingLink) {
+      entry.missingCount++;
+      entry.hasIssue = true;
+    }
+  }
+
+  return health;
 }
 
 /**

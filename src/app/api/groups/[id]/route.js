@@ -239,6 +239,27 @@ export async function DELETE(req, { params }) {
       );
     }
 
+    // ✅ FIX: لازم نفك حجز أي لينك مستخدم في سيشنات الجروب ده قبل ما نمسح
+    // الجروب والسيشنات نهائيًا. من غير الخطوة دي، اللينكات بتفضل شايلة
+    // reservation entry بتاعة جروب مبقاش موجود أصلاً (orphaned reservation)،
+    // وده بيمنع جروبات تانية فعليًا محتاجة نفس الميعاد من استخدام اللينك.
+    const MeetingLink = (await import("../../../models/MeetingLink")).default;
+    const linkedSessions = await Session.find({
+      groupId: id,
+      isDeleted: false,
+      meetingLinkId: { $ne: null },
+    }).select("meetingLinkId").lean();
+
+    const linkIdsUsed = [...new Set(linkedSessions.map((s) => s.meetingLinkId.toString()))];
+    for (const linkId of linkIdsUsed) {
+      try {
+        const link = await MeetingLink.findById(linkId);
+        if (link) await link.releaseReservation(id);
+      } catch (e) {
+        console.warn(`⚠️ Could not release link ${linkId} before group delete:`, e.message);
+      }
+    }
+
     const deletedGroup = await Group.findByIdAndDelete(id);
     await Session.deleteMany({ groupId: id });
     await Student.updateMany(
@@ -246,7 +267,7 @@ export async function DELETE(req, { params }) {
       { $pull: { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) } }
     );
 
-    console.log(`✅ Group permanently deleted: ${deletedGroup?.code || id}`);
+    console.log(`✅ Group permanently deleted: ${deletedGroup?.code || id} (released ${linkIdsUsed.length} link reservation(s))`);
     return NextResponse.json({
       success: true,
       message: "Group permanently deleted from database",
@@ -254,6 +275,7 @@ export async function DELETE(req, { params }) {
         id: deletedGroup?._id || id,
         name: deletedGroup?.name,
         code: deletedGroup?.code,
+        linksReleased: linkIdsUsed.length,
       },
     });
   } catch (error) {

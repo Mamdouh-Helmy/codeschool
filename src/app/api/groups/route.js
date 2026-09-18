@@ -10,6 +10,7 @@ import {
   calculateTotalSessions,
   getSessionDistributionSummary,
 } from "@/utils/sessionGenerator";
+import { getSessionsLinkHealthForGroups } from "@/utils/checkMeetingLinks"; // ✅
 
 // ─── Helper: Check instructor schedule conflicts (unchanged) ──────────────
 async function checkInstructorConflicts(
@@ -169,40 +170,59 @@ export async function GET(req) {
 
     console.log("✅ Groups fetched:", groups.length, "of", total);
 
-    const formattedGroups = groups.map((group) => ({
-      id: group._id,
-      name: group.name,
-      code: group.code,
-      status: group.status,
-      course: {
-        id: group.courseId?._id,
-        title: group.courseId?.title,
-        level: group.courseId?.level,
-      },
-      instructors: (group.instructors || []).map((i) => ({
-        _id: i.userId?._id || i.userId,
-        id: i.userId?._id || i.userId,
-        name: i.userId?.name || "",
-        email: i.userId?.email || "",
-        countTime: i.countTime || 0,
-      })),
-      studentsCount: group.currentStudentsCount,
-      maxStudents: group.maxStudents,
-      availableSeats: group.maxStudents - group.currentStudentsCount,
-      isFull: group.currentStudentsCount >= group.maxStudents,
-      schedule: group.schedule,
-      deliveryMode: group.deliveryMode || "online",
-      location: group.location || "",
-      locationDetails: group.locationDetails || null, // ✅
-      automation: group.automation,
-      moduleSelection: group.moduleSelection,
-      sessionsGenerated: group.sessionsGenerated,
-      totalSessions: group.totalSessionsCount,
-      createdBy: group.createdBy,
-      createdAt: group.createdAt,
-      updatedAt: group.updatedAt,
-      tags: group.tags || [], // ✅
-    }));
+    // ✅ فحص صحة اللينكات (مفيش لينك / اللينك اتمسح) لكل جروبات الصفحة دي
+    // دفعة واحدة (query واحد على Session وواحد على MeetingLink) — عشان
+    // منعملش N+1 query لكل جروب لوحده
+    const groupIds = groups.map((g) => g._id);
+    const linkHealthMap = await getSessionsLinkHealthForGroups(groupIds);
+
+    const formattedGroups = groups.map((group) => {
+      const health = linkHealthMap.get(group._id.toString()) || {
+        missingCount: 0,
+        orphanedCount: 0,
+        hasIssue: false,
+      };
+
+      return {
+        id: group._id,
+        name: group.name,
+        code: group.code,
+        status: group.status,
+        course: {
+          id: group.courseId?._id,
+          title: group.courseId?.title,
+          level: group.courseId?.level,
+        },
+        instructors: (group.instructors || []).map((i) => ({
+          _id: i.userId?._id || i.userId,
+          id: i.userId?._id || i.userId,
+          name: i.userId?.name || "",
+          email: i.userId?.email || "",
+          countTime: i.countTime || 0,
+        })),
+        studentsCount: group.currentStudentsCount,
+        maxStudents: group.maxStudents,
+        availableSeats: group.maxStudents - group.currentStudentsCount,
+        isFull: group.currentStudentsCount >= group.maxStudents,
+        schedule: group.schedule,
+        deliveryMode: group.deliveryMode || "online",
+        location: group.location || "",
+        locationDetails: group.locationDetails || null, // ✅
+        automation: group.automation,
+        moduleSelection: group.moduleSelection,
+        sessionsGenerated: group.sessionsGenerated,
+        totalSessions: group.totalSessionsCount,
+        createdBy: group.createdBy,
+        createdAt: group.createdAt,
+        updatedAt: group.updatedAt,
+        tags: group.tags || [], // ✅
+        linkHealth: {
+          hasIssue: health.hasIssue,
+          missingCount: health.missingCount,
+          orphanedCount: health.orphanedCount,
+        }, // ✅ فيه جلسة بدون لينك أو لينك اتمسح من الداتابيز؟
+      };
+    });
 
     const statsQuery = { ...query };
     delete statsQuery.$or;

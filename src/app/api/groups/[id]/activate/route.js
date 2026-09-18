@@ -11,6 +11,7 @@ import {
   sendInstructorWelcomeMessages,
 } from "../../../../services/groupAutomation";
 import mongoose from "mongoose";
+import { findScheduleConflict, pruneOrphanedReservations } from "@/utils/checkMeetingLinks";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: build simulated session list for preview (no DB writes)
@@ -114,111 +115,64 @@ export async function GET(req, { params }) {
       return NextResponse.json({ success: false, error: "Group not found" }, { status: 404 });
     }
 
-    const allLinks = await MeetingLink.find({
+    let allLinks = await MeetingLink.find({
       isDeleted: false,
       status: { $in: ["available", "reserved", "in_use"] },
-    }).lean();
+    })
+      .sort({ "stats.totalUses": 1 })
+      .lean();
 
-    const now = new Date();
-    const newSchedule = group.schedule; // { daysOfWeek, timeFrom, timeTo, ... }
+    // ✅ تنضيف الحجوزات اليتيمة (لجروبات اتحذفت) قبل أي فحص تعارض
+    allLinks = await pruneOrphanedReservations(allLinks);
 
-    // ✅ FIX: تحقق من إن حجوزات اللينكات لسه "حية" فعلاً — يعني السيشن والجروب
-    // اللي حاجزين اللينك لسه موجودين وغير محذوفين/ملغيين. من غيرها، لو جروب
-    // اتمسح (soft delete) وكان بيستخدم لينك، اللينك ده هيفضل شكله "محجوز" حسب
-    // اللوجيك القديم حتى بعد ما مفيش حاجة فعليًا بتستخدمه — وهو بالظبط اللي
-    // كان بيسبب رسالة "اللينك محجوز" وقت الـ activate رغم إن الجروب صاحب
-    // الحجز اتمسح خالص. الفحص ده بيتم مرة واحدة هنا (batched) قبل ما ندخل
-    // على hasRealConflict لكل لينك، عشان منعملش query لكل لينك لوحده.
-    const reservationSessionIds = allLinks
-      .map((l) => l.currentReservation?.sessionId)
-      .filter(Boolean);
+    const { daysOfWeek, timeFrom, timeTo } = group.schedule;
+    const newSchedule = { daysOfWeek, timeFrom, timeTo };
 
-    const liveSessionsMap = new Map();
-    if (reservationSessionIds.length > 0) {
-      const liveSessions = await Session.find({
-        _id: { $in: reservationSessionIds },
-        isDeleted: false,
-      })
-        .select("_id groupId status")
-        .populate({ path: "groupId", select: "_id isDeleted status" })
-        .lean();
+    const availableLinks = [];
+    const reservedLinks = [];
 
-      liveSessions.forEach((s) => liveSessionsMap.set(s._id.toString(), s));
+    for (const link of allLinks) {
+      // ✅ الفحص بيقارن مع كل الحجوزات النشطة (array) على اللينك، ومستثنى
+      // منه أي حجز لنفس الجروب ده (excludeGroupId = group._id) — عشان لو
+      // الجروب أصلاً بيستخدم اللينك ده مش هيتحسب "متعارض مع نفسه"
+      const conflict = findScheduleConflict(link, newSchedule, group._id);
+
+      if (conflict) {
+        reservedLinks.push({
+          id: link._id,
+          name: link.name,
+          platform: link.platform,
+          link: link.link,
+          reservedDays: conflict.conflictingDays || [],
+          reservedTime: conflict.conflictingTime,
+          reservedFor: { groupId: conflict.conflictingGroupId },
+        });
+      } else {
+        availableLinks.push(link);
+      }
     }
 
-    // ✅ FIX: فحص التعارض الفعلي بناءً على الجدول الأسبوعي (يوم + وقت)
-    // مش بناءً على "هل النطاق الزمني الكامل للحجز انتهى ولا لأ"
-    function hasRealConflict(link) {
-      const res = link.currentReservation;
-      if (!res?.sessionId) return false;
-      if (new Date(res.endTime) < now) return false; // الحجز انتهى خالص
-
-      // ✅ FIX: لو السيشن اللي حاجزة اللينك اتمسحت (soft-deleted) أو مش
-      // موجودة أصلاً، أو الجروب بتاعها اتمسح/اتلغى — الحجز يبقى يتيم
-      // (stale) ومينفعش يتحسب تعارض حقيقي، حتى لو التاريخ المتخزن في
-      // الحجز نفسه لسه مانتهاش
-      const liveSession = liveSessionsMap.get(res.sessionId.toString());
-      if (!liveSession) return false; // السيشن اتمسحت أو مش موجودة
-      if (liveSession.status === "cancelled") return false;
-
-      const reservationGroup = liveSession.groupId;
-      if (!reservationGroup || reservationGroup.isDeleted || reservationGroup.status === "cancelled") {
-        return false;
-      }
-
-      if (!res.daysOfWeek?.length || !res.timeFrom || !res.timeTo) {
-        // حجز قديم من غير بيانات تكرار (قبل التحديث) - افترض تعارض للأمان
-        return true;
-      }
-
-      const dayOverlap = newSchedule.daysOfWeek.some((d) => res.daysOfWeek.includes(d));
-      if (!dayOverlap) return false;
-
-      const newFrom = newSchedule.timeFrom.replace(":", "");
-      const newTo = newSchedule.timeTo.replace(":", "");
-      const existFrom = res.timeFrom.replace(":", "");
-      const existTo = res.timeTo.replace(":", "");
-
-      return !(newTo <= existFrom || newFrom >= existTo);
-    }
-
-    const availableLinks = allLinks.filter((l) => !hasRealConflict(l));
-    const reservedLinks = allLinks.filter((l) => hasRealConflict(l));
-
+    // ✅ بناء بريفيو السيشنات (نفس اللوجيك القديم)
     const sessions = previewSessions(group);
     const totalSessions = sessions.length;
 
     const sessionsWithLinks = availableLinks.length > 0 ? totalSessions : 0;
-    const sessionsWithout   = availableLinks.length > 0 ? 0 : totalSessions;
+    const sessionsWithout = availableLinks.length > 0 ? 0 : totalSessions;
 
     return NextResponse.json({
       success: true,
       data: {
         totalSessions,
-        totalLinks:          allLinks.length,
+        totalLinks: allLinks.length,
         availableLinksCount: availableLinks.length,
-        reservedLinksCount:  reservedLinks.length,
-        hasNoLinks:          allLinks.length === 0,
-        hasAvailableLinks:   availableLinks.length > 0,
+        reservedLinksCount: reservedLinks.length,
+        hasNoLinks: allLinks.length === 0,
+        hasAvailableLinks: availableLinks.length > 0,
         sessionsWithLinks,
         sessionsWithout,
         sessions,
         availableLinks,
-        reservedLinks: reservedLinks.map((l) => ({
-          id:            l._id,
-          name:          l.name,
-          platform:      l.platform,
-          link:          l.link,
-          reservedUntil: l.currentReservation?.endTime,
-          reservedDays:  l.currentReservation?.daysOfWeek || [],
-          reservedTime:  l.currentReservation?.timeFrom && l.currentReservation?.timeTo
-            ? `${l.currentReservation.timeFrom} - ${l.currentReservation.timeTo}`
-            : null,
-          reservedFor: {
-            sessionId: l.currentReservation?.sessionId,
-            groupId:   l.currentReservation?.groupId,
-          },
-        })),
+        reservedLinks,
       },
     });
   } catch (error) {
@@ -263,22 +217,22 @@ export async function POST(req, { params }) {
 
     // ── Release reserved links if requested ──────────────────────────────
     if (releaseReserved) {
-      const reservedLinks = await MeetingLink.find({
-        isDeleted: false,
-        status: "reserved",
-        "currentReservation.sessionId": { $exists: true },
-        "currentReservation.endTime": { $gte: new Date() },
-      });
-
-      for (const link of reservedLinks) {
-        try {
-          await link.releaseLink();
-        } catch (e) {
-          console.warn(`⚠️ Could not release link ${link.name}:`, e.message);
-        }
+  const group = await Group.findById(id).select("schedule");
+  const allLinks = await MeetingLink.find({ isDeleted: false, status: "reserved" });
+  let released = 0;
+  for (const link of allLinks) {
+    const conflict = findScheduleConflict(link, group.schedule, id);
+    if (conflict?.conflictingGroupId) {
+      try {
+        await link.releaseReservation(conflict.conflictingGroupId);
+        released++;
+      } catch (e) {
+        console.warn(`⚠️ Could not release link ${link.name}:`, e.message);
       }
-      console.log(`✅ Released ${reservedLinks.length} reserved links`);
     }
+  }
+  console.log(`✅ Released ${released} conflicting reservation(s)`);
+}
 
     // ── Validations ──────────────────────────────────────────────────────
     let isReactivation = false;

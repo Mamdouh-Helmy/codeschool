@@ -115,8 +115,8 @@ function LinkSelector({ availableLinks, reservedLinks, selectedIds, onToggle, on
                   key={id}
                   onClick={() => onToggle(id, !checked)}
                   className={`w-full flex items-center gap-3 px-5 py-3.5 text-right transition-all duration-200 ${checked
-                      ? "bg-teal-brand/5 dark:bg-teal-brand/10 border-r-4 border-teal-brand"
-                      : "hover:bg-gray-50 dark:hover:bg-darkhover/30"
+                    ? "bg-teal-brand/5 dark:bg-teal-brand/10 border-r-4 border-teal-brand"
+                    : "hover:bg-gray-50 dark:hover:bg-darkhover/30"
                     }`}
                 >
                   <div className={`w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center border-2 transition-all ${checked ? "bg-teal-brand border-teal-brand shadow-sm" : "border-gray-300 dark:border-gray-600 bg-white dark:bg-darkmid"
@@ -340,7 +340,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
       const res = await fetch("/api/groups/release-links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ linkIds: ids }),
+        body: JSON.stringify({ linkIds: ids, forGroupId: groupId }), // ✅
       });
       const data = await res.json();
       if (!data.success) { toast.error(data.error || "فشل الإلغاء"); return; }
