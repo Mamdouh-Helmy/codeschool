@@ -4620,6 +4620,7 @@ const en = {
   "groups.form.mapHint": "Pin the location on the map accurately",
   "groups.form.searchFailed": "Failed to search for the location",
   "groups.form.searching": "Searching...",
+  "groups.links.orphaned": "Orphaned Links",
 };
 
 export default en;

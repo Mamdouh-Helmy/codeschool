@@ -150,14 +150,14 @@ export async function PUT(req, { params }) {
   }
 }
 
-// DELETE: Soft delete meeting link
+// DELETE: Hard delete meeting link (permanently remove from DB)
 export async function DELETE(req, { params }) {
   try {
     await connectDB();
 
     const { id } = await params;
 
-    console.log("🗑️ Deleting meeting link:", id);
+    console.log("🗑️ Permanently deleting meeting link:", id);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
@@ -166,19 +166,8 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // Soft delete
-    const deletedLink = await MeetingLink.findByIdAndUpdate(
-      id,
-      {
-        $set: {
-          isDeleted: true,
-          deletedAt: new Date(),
-          status: "inactive",
-          "metadata.updatedAt": new Date(),
-        },
-      },
-      { new: true },
-    );
+    // ✅ حذف نهائي من الداتابيز
+    const deletedLink = await MeetingLink.findByIdAndDelete(id);
 
     if (!deletedLink) {
       return NextResponse.json(
@@ -187,11 +176,11 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    console.log("✅ Deleted meeting link:", deletedLink.name);
+    console.log("✅ Permanently deleted meeting link:", deletedLink.name);
 
     return NextResponse.json({
       success: true,
-      message: "Meeting link deleted successfully",
+      message: "Meeting link deleted permanently",
     });
   } catch (error) {
     console.error("❌ Error deleting meeting link:", error);

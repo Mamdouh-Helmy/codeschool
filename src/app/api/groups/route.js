@@ -5,12 +5,13 @@ import Group from "../../models/Group";
 import Student from "../../models/Student";
 import Session from "../../models/Session";
 import Course from "../../models/Course";
+import Tag from "../../models/Tag"; // ✅ لازم يتسجل قبل أي .populate("tags")
 import { requireAdmin } from "@/utils/authMiddleware";
 import {
   calculateTotalSessions,
   getSessionDistributionSummary,
 } from "@/utils/sessionGenerator";
-import { getSessionsLinkHealthForGroups } from "@/utils/checkMeetingLinks"; // ✅
+import { getSessionsLinkHealthForGroups } from "@/utils/checkMeetingLinks";
 
 // ─── Helper: Check instructor schedule conflicts (unchanged) ──────────────
 async function checkInstructorConflicts(

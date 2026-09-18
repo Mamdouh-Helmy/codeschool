@@ -4734,6 +4734,7 @@ const ar = {
   "groups.form.unnamedPlace": "مكان بدون اسم",
   "groups.form.searchFailed": "فشل البحث عن المكان",
   "groups.form.searching": "جاري البحث...",
+  "groups.links.orphaned": "الروابط اليتيمة",
 };
 
 export default ar;
