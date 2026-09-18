@@ -4,12 +4,88 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Session from '../../../models/Session';
 import {
+  // ✅ ONLINE
   sendManualSessionReminder,
   sendInstructorSessionReminder,
+  // ✅ OFFLINE
+  sendOfflineLocationReminder,
+  sendOfflineDropoffAlert,
+  sendOfflinePreAttendancePing,
+  sendInstructorOfflineReminder,
 } from '../../../services/groupAutomation';
 
 const CRON_SECRET = process.env.CRON_SECRET || 'your-secret-key-change-this';
 
+// ============================================================
+// ✅ WINDOWS — كل reminder ليه نافذة زمنية محددة
+// ============================================================
+const WINDOWS = {
+  // ONLINE
+  reminder24h:     { min: 23,   max: 25,   unit: 'hours' },
+  reminder15min:   { min: 12,   max: 18,   unit: 'minutes' },
+
+  // OFFLINE
+  reminder24hOffline:   { min: 23, max: 25, unit: 'hours' },
+  reminder30minOffline: { min: 27, max: 33, unit: 'minutes' },
+  preAttendancePing:    { min: 3,  max: 8,  unit: 'minutes' },
+};
+
+// ============================================================
+// ✅ Helper: تحديد نوع الجلسة (offline / online)
+// الـ session.deliveryMode بيتاخد الأول، وبعدين الـ group
+// ============================================================
+function getSessionDeliveryMode(session) {
+  const sessionMode = session?.deliveryMode;
+  if (sessionMode === 'offline' || sessionMode === 'online') {
+    return sessionMode;
+  }
+  const groupMode = session?.groupId?.deliveryMode;
+  if (groupMode === 'offline' || groupMode === 'online') {
+    return groupMode;
+  }
+  return 'online'; // default
+}
+
+// ============================================================
+// ✅ Helper: Atomic lock — بيمنع تكرار الإرسال نهائيًا
+// بيرجع الـ session لو الـ lock نجح، أو null لو حد تاني عمل lock
+// ============================================================
+async function lockSessionFlag(sessionId, flagField) {
+  const result = await Session.findOneAndUpdate(
+    {
+      _id: sessionId,
+      isDeleted: false,
+      [flagField]: { $ne: true }, // 🔒 شرط أساسي: مش متعلم قبل كده
+    },
+    {
+      $set: {
+        [flagField]: true,
+        [`${flagField}At`]: new Date(),
+      },
+    },
+    { new: true },
+  );
+  return result; // null لو حد تاني كان قد lock عمله
+}
+
+// ============================================================
+// ✅ Helper: يفتح الـ lock (في حالة الفشل الكامل عشان يعيد المحاولة بعدين)
+// ملاحظة: بنستخدمها بس لو الإرسال فشل بالكامل ومفيش أي رسالة وصلت
+// ============================================================
+async function unlockSessionFlag(sessionId, flagField) {
+  try {
+    await Session.updateOne(
+      { _id: sessionId },
+      { $unset: { [flagField]: '' }, $set: { [`${flagField}At`]: null } },
+    );
+  } catch (err) {
+    console.error(`⚠️ Failed to unlock ${flagField} for ${sessionId}:`, err.message);
+  }
+}
+
+// ============================================================
+// ✅ GET — نقطة الدخول للكرون
+// ============================================================
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -17,8 +93,7 @@ export async function GET(req) {
     const authHeader = req.headers.get('authorization');
 
     const isAuthorized =
-      secret === CRON_SECRET ||
-      authHeader === `Bearer ${CRON_SECRET}`;
+      secret === CRON_SECRET || authHeader === `Bearer ${CRON_SECRET}`;
 
     if (!isAuthorized) {
       console.warn('⛔ Unauthorized cron request');
@@ -32,13 +107,37 @@ export async function GET(req) {
     console.log(`🕐 Cairo time: ${now.toLocaleString('en-EG', { timeZone: 'Africa/Cairo' })}`);
 
     const results = {
-      timestamp:     now.toISOString(),
-      cairoTime:     now.toLocaleString('en-EG', { timeZone: 'Africa/Cairo' }),
-      reminder24h:   { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [], instructorsSent: 0 },
-      reminder15min: { checked: 0, sent: 0, skipped: 0, failed: 0, sessions: [], instructorsSent: 0 },
+      timestamp: now.toISOString(),
+      cairoTime: now.toLocaleString('en-EG', { timeZone: 'Africa/Cairo' }),
+
+      // 🌐 ONLINE
+      reminder24h: {
+        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
+        sessions: [], instructorsSent: 0,
+      },
+      reminder15min: {
+        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
+        sessions: [], instructorsSent: 0,
+      },
+
+      // 📍 OFFLINE
+      reminder24hOffline: {
+        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
+        sessions: [], instructorsSent: 0,
+      },
+      reminder30minOffline: {
+        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
+        sessions: [], instructorsSent: 0,
+      },
+      preAttendancePing: {
+        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
+        sessions: [], instructorsSent: 0,
+      },
     };
 
-    // ── نافذة 3 أيام ─────────────────────────────────────────────────────
+    // ============================================================
+    // ✅ نافذة 3 أيام — نجيب كل المرشحين مرة واحدة
+    // ============================================================
     const dayStart = new Date(now);
     dayStart.setUTCHours(0, 0, 0, 0);
 
@@ -46,180 +145,180 @@ export async function GET(req) {
     dayEnd.setDate(dayEnd.getDate() + 3);
     dayEnd.setUTCHours(23, 59, 59, 999);
 
-    // ============================================================
-    // 1) تذكير 24 ساعة — نافذة 23-25 ساعة
-    // ✅ الفلتر بقى status !== 'completed' بدل status === 'scheduled'
-    //    عشان السيشنات المؤجلة (postponed) أو الملغية (cancelled) برضو
-    //    تاخد تذكير طالما مكتملتش — المكتملة (completed) بس هي اللي
-    //    مفيش داعي تتبعتلها تذكير.
-    // ============================================================
-    const sessions24h = await Session.find({
-      status:        { $ne: 'completed' },
-      isDeleted:     false,
+    const allCandidates = await Session.find({
+      status: { $ne: 'completed' },
+      isDeleted: false,
       scheduledDate: { $gte: dayStart, $lte: dayEnd },
-      'automationEvents.reminder24hSent': { $ne: true },
-    }).lean();
+    })
+      .populate('groupId', 'deliveryMode location locationDetails name code')
+      .lean();
 
-    results.reminder24h.checked = sessions24h.length;
-    console.log(`\n⏰ [24h] Candidates: ${sessions24h.length}`);
+    console.log(`\n📋 Total candidates in window: ${allCandidates.length}`);
 
-    for (const session of sessions24h) {
-      try {
-        const sessionDateTime = buildSessionDateTime(session);
-        const diffHours       = (sessionDateTime - now) / (1000 * 60 * 60);
+    // ============================================================
+    // ✅ نقسم المرشحين: Online / Offline
+    // ============================================================
+    const onlineSessions  = [];
+    const offlineSessions = [];
 
-        console.log(`   Session: "${session.title}" | status: ${session.status}`);
-        console.log(`   sessionDateTime (UTC): ${sessionDateTime.toISOString()}`);
-        console.log(`   diff: ${diffHours.toFixed(2)}h`);
+    for (const s of allCandidates) {
+      if (getSessionDeliveryMode(s) === 'offline') {
+        offlineSessions.push(s);
+      } else {
+        onlineSessions.push(s);
+      }
+    }
 
-        if (diffHours < 23 || diffHours > 25) {
-          results.reminder24h.skipped++;
-          console.log(`   ⏭️ Skipped (outside 23-25h window)`);
-          continue;
-        }
+    console.log(`   🌐 Online: ${onlineSessions.length}`);
+    console.log(`   📍 Offline: ${offlineSessions.length}`);
 
-        await Session.findByIdAndUpdate(session._id, {
-          $set: {
-            'automationEvents.reminder24hSent':   true,
-            'automationEvents.reminder24hSentAt': new Date(),
-          },
-        });
-        console.log(`   🔒 Marked reminder24hSent = true`);
-
-        // ── طلاب وأولياء الأمور ──
-        const result = await sendManualSessionReminder(
+    // ============================================================
+    // 🌐 ONLINE FLOW — 24h
+    // ============================================================
+    await processReminder({
+      label: 'ONLINE 24h',
+      sessions: onlineSessions,
+      now,
+      window: WINDOWS.reminder24h,
+      flagField: 'automationEvents.reminder24hSent',
+      resultsBucket: results.reminder24h,
+      sendFn: async (session) => {
+        return await sendManualSessionReminder(
           session._id.toString(),
           '24hours',
           null,
-          { automatedCron: true }
+          { automatedCron: true },
         );
-
-        if (result.success) {
-          results.reminder24h.sent++;
-          results.reminder24h.sessions.push({
-            id:               session._id,
-            title:            session.title,
-            status:           session.status,
-            scheduledDate:    session.scheduledDate,
-            studentsNotified: result.successCount,
-          });
-          console.log(`   ✅ 24h students sent: ${result.successCount}`);
-
-          await Session.findByIdAndUpdate(session._id, {
-            $set: {
-              'automationEvents.reminder24hStudentsNotified': result.successCount,
-            },
-          });
-        } else {
-          results.reminder24h.failed++;
-          console.log(`   ❌ 24h students send failed`);
-        }
-
-        // ── المدرسين ──
-        try {
-          const instructorResult = await sendInstructorSessionReminder(
-            session._id.toString(),
-            '24hours',
-            { automatedCron: true }
-          );
-          results.reminder24h.instructorsSent += instructorResult.successCount || 0;
-          console.log(`   👨‍🏫 24h instructors sent: ${instructorResult.successCount || 0}`);
-        } catch (instrErr) {
-          console.error(`   ❌ 24h instructor reminder error:`, instrErr.message);
-        }
-
-      } catch (err) {
-        results.reminder24h.failed++;
-        console.error(`   ❌ 24h error for ${session._id}:`, err.message);
-      }
-    }
+      },
+      instructorFn: async (session) => {
+        return await sendInstructorSessionReminder(
+          session._id.toString(),
+          '24hours',
+          { automatedCron: true },
+        );
+      },
+      studentsCountField: 'automationEvents.reminder24hStudentsNotified',
+      instructorsCountField: null, // online مش عندنا count للمدرس
+      extraFields: {
+        'automationEvents.reminderSent': true,
+        'automationEvents.reminderSentAt': new Date(),
+      },
+    });
 
     // ============================================================
-    // 2) تذكير 15 دقيقة — نافذة 12-18 دقيقة
-    // ✅ نفس الفكرة: status !== 'completed' بدل status === 'scheduled'
+    // 🌐 ONLINE FLOW — 15min
     // ============================================================
-    const sessions15min = await Session.find({
-      status:        { $ne: 'completed' },
-      isDeleted:     false,
-      scheduledDate: { $gte: dayStart, $lte: dayEnd },
-      'automationEvents.reminder15minSent': { $ne: true },
-    }).lean();
-
-    results.reminder15min.checked = sessions15min.length;
-    console.log(`\n⏰ [15min] Candidates: ${sessions15min.length}`);
-
-    for (const session of sessions15min) {
-      try {
-        const sessionDateTime = buildSessionDateTime(session);
-        const diffMinutes     = (sessionDateTime - now) / (1000 * 60);
-
-        console.log(`   Session: "${session.title}" | status: ${session.status}`);
-        console.log(`   sessionDateTime (UTC): ${sessionDateTime.toISOString()}`);
-        console.log(`   diff: ${diffMinutes.toFixed(1)}min`);
-
-        if (diffMinutes < 12 || diffMinutes > 18) {
-          results.reminder15min.skipped++;
-          console.log(`   ⏭️ Skipped (outside 12-18min window)`);
-          continue;
-        }
-
-        await Session.findByIdAndUpdate(session._id, {
-          $set: {
-            'automationEvents.reminder15minSent':   true,
-            'automationEvents.reminder15minSentAt': new Date(),
-            'automationEvents.reminder1hSent':      true,
-            'automationEvents.reminder1hSentAt':    new Date(),
-          },
-        });
-        console.log(`   🔒 Marked reminder15minSent = true`);
-
-        // ── طلاب وأولياء الأمور ──
-        const result = await sendManualSessionReminder(
+    await processReminder({
+      label: 'ONLINE 15min',
+      sessions: onlineSessions,
+      now,
+      window: WINDOWS.reminder15min,
+      flagField: 'automationEvents.reminder15minSent',
+      resultsBucket: results.reminder15min,
+      sendFn: async (session) => {
+        return await sendManualSessionReminder(
           session._id.toString(),
           '15min',
           null,
-          { automatedCron: true }
+          { automatedCron: true },
         );
+      },
+      instructorFn: async (session) => {
+        return await sendInstructorSessionReminder(
+          session._id.toString(),
+          '15min',
+          { automatedCron: true },
+        );
+      },
+      studentsCountField: 'automationEvents.reminder15minStudentsNotified',
+      instructorsCountField: null,
+      extraFields: {
+        // للتوافق مع الكود القديم
+        'automationEvents.reminder1hSent': true,
+        'automationEvents.reminder1hSentAt': new Date(),
+      },
+    });
 
-        if (result.success) {
-          results.reminder15min.sent++;
-          results.reminder15min.sessions.push({
-            id:               session._id,
-            title:            session.title,
-            status:           session.status,
-            scheduledDate:    session.scheduledDate,
-            studentsNotified: result.successCount,
-          });
-          console.log(`   ✅ 15min students sent: ${result.successCount}`);
+    // ============================================================
+    // 📍 OFFLINE FLOW — 24h (Maps / Location)
+    // ============================================================
+    await processReminder({
+      label: 'OFFLINE 24h',
+      sessions: offlineSessions,
+      now,
+      window: WINDOWS.reminder24hOffline,
+      flagField: 'automationEvents.reminder24hOfflineSent',
+      resultsBucket: results.reminder24hOffline,
+      sendFn: async (session) => {
+        return await sendOfflineLocationReminder(
+          session._id.toString(),
+          { automatedCron: true },
+        );
+      },
+      instructorFn: async (session) => {
+        return await sendInstructorOfflineReminder(
+          session._id.toString(),
+          '24hours_offline',
+          { automatedCron: true },
+        );
+      },
+      studentsCountField: 'automationEvents.reminder24hOfflineStudentsNotified',
+      instructorsCountField: 'automationEvents.reminder24hOfflineInstructorsNotified',
+    });
 
-          await Session.findByIdAndUpdate(session._id, {
-            $set: {
-              'automationEvents.reminder15minStudentsNotified': result.successCount,
-            },
-          });
-        } else {
-          results.reminder15min.failed++;
-          console.log(`   ❌ 15min students send failed`);
-        }
+    // ============================================================
+    // 📍 OFFLINE FLOW — 30min (Drop-off Alert)
+    // ============================================================
+    await processReminder({
+      label: 'OFFLINE 30min',
+      sessions: offlineSessions,
+      now,
+      window: WINDOWS.reminder30minOffline,
+      flagField: 'automationEvents.reminder30minOfflineSent',
+      resultsBucket: results.reminder30minOffline,
+      sendFn: async (session) => {
+        return await sendOfflineDropoffAlert(
+          session._id.toString(),
+          { automatedCron: true },
+        );
+      },
+      instructorFn: async (session) => {
+        return await sendInstructorOfflineReminder(
+          session._id.toString(),
+          '30min_offline',
+          { automatedCron: true },
+        );
+      },
+      studentsCountField: 'automationEvents.reminder30minOfflineStudentsNotified',
+      instructorsCountField: 'automationEvents.reminder30minOfflineInstructorsNotified',
+    });
 
-        // ── المدرسين ──
-        try {
-          const instructorResult = await sendInstructorSessionReminder(
-            session._id.toString(),
-            '15min',
-            { automatedCron: true }
-          );
-          results.reminder15min.instructorsSent += instructorResult.successCount || 0;
-          console.log(`   👨‍🏫 15min instructors sent: ${instructorResult.successCount || 0}`);
-        } catch (instrErr) {
-          console.error(`   ❌ 15min instructor reminder error:`, instrErr.message);
-        }
-
-      } catch (err) {
-        results.reminder15min.failed++;
-        console.error(`   ❌ 15min error for ${session._id}:`, err.message);
-      }
-    }
+    // ============================================================
+    // 📍 OFFLINE FLOW — Pre-Attendance Ping
+    // ============================================================
+    await processReminder({
+      label: 'OFFLINE Ping',
+      sessions: offlineSessions,
+      now,
+      window: WINDOWS.preAttendancePing,
+      flagField: 'automationEvents.preAttendancePingSent',
+      resultsBucket: results.preAttendancePing,
+      sendFn: async (session) => {
+        return await sendOfflinePreAttendancePing(
+          session._id.toString(),
+          { automatedCron: true },
+        );
+      },
+      instructorFn: async (session) => {
+        return await sendInstructorOfflineReminder(
+          session._id.toString(),
+          'pre_attendance_ping',
+          { automatedCron: true },
+        );
+      },
+      studentsCountField: 'automationEvents.preAttendancePingStudentsNotified',
+      instructorsCountField: 'automationEvents.preAttendancePingInstructorsNotified',
+    });
 
     console.log('\n📊 Cron Summary:', JSON.stringify(results, null, 2));
     return NextResponse.json({ success: true, data: results });
@@ -230,9 +329,132 @@ export async function GET(req) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ============================================================
+// ✅ processReminder — دالة موحدة لكل الأنواع
+// 1. بتفلتر السيشنات على أساس النافذة الزمنية
+// 2. بتعمل atomic lock لكل سيشن (يمنع التكرار تمامًا)
+// 3. بتبعت للطلاب والمدرسين
+// 4. لو الإرسال فشل بالكامل — بتفك الـ lock (عشان الجولة اللي بعدها)
+// ============================================================
+async function processReminder({
+  label,
+  sessions,
+  now,
+  window,
+  flagField,
+  resultsBucket,
+  sendFn,
+  instructorFn,
+  studentsCountField,
+  instructorsCountField,
+  extraFields = {},
+}) {
+  // ✅ نفلتر السيشنات اللي لسه مش متعلم عليها
+  const flagKey = flagField.split('.').pop(); // "reminder24hSent" مثلاً
+  const candidates = sessions.filter(
+    (s) => s.automationEvents?.[flagKey] !== true,
+  );
+
+  resultsBucket.checked = candidates.length;
+  console.log(`\n⏰ [${label}] Candidates: ${candidates.length}`);
+
+  for (const session of candidates) {
+    try {
+      const sessionDateTime = buildSessionDateTime(session);
+      const diff = computeDiff(sessionDateTime, now, window.unit);
+
+      if (diff < window.min || diff > window.max) {
+        resultsBucket.skipped++;
+        continue;
+      }
+
+      // 🔒 ATOMIC LOCK — نمنع التكرار نهائيًا حتى لو الكرون اشتغل مرتين مع بعض
+      const locked = await lockSessionFlag(session._id, flagField);
+      if (!locked) {
+        resultsBucket.duplicates++;
+        console.log(`   🔒 Already locked by another run — skipping`);
+        continue;
+      }
+
+      console.log(`   🔒 Locked: ${session.title} | diff: ${diff.toFixed(2)} ${window.unit}`);
+
+      // ── إرسال للطلاب ──
+      let studentResult = null;
+      try {
+        studentResult = await sendFn(session);
+      } catch (err) {
+        console.error(`   ❌ Student send error:`, err.message);
+        studentResult = { success: false, error: err.message };
+      }
+
+      // ── إرسال للمدرس ──
+      let instructorResult = null;
+      try {
+        instructorResult = await instructorFn(session);
+      } catch (err) {
+        console.error(`   ❌ Instructor send error:`, err.message);
+        instructorResult = { success: false, error: err.message };
+      }
+
+      // ── تقييم النتيجة ──
+      const studentsSent = studentResult?.successCount || 0;
+      const instructorsSent = instructorResult?.successCount || 0;
+      const anySuccess = studentResult?.success === true || instructorsSent > 0;
+
+      if (anySuccess) {
+        resultsBucket.sent++;
+        resultsBucket.instructorsSent += instructorsSent;
+        resultsBucket.sessions.push({
+          id: session._id,
+          title: session.title,
+          status: session.status,
+          scheduledDate: session.scheduledDate,
+          deliveryMode: getSessionDeliveryMode(session),
+          studentsNotified: studentsSent,
+          instructorsNotified: instructorsSent,
+        });
+
+        // ✅ نسجل الأعداد النهائية
+        await Session.findByIdAndUpdate(session._id, {
+          $set: {
+            [studentsCountField]: studentsSent,
+            ...(instructorsCountField ? { [instructorsCountField]: instructorsSent } : {}),
+            ...extraFields,
+          },
+        });
+
+        console.log(`   ✅ ${label} — students: ${studentsSent} | instructors: ${instructorsSent}`);
+      } else {
+        // ❌ فشل كامل — بنفك الـ lock عشان نحاول تاني في الجولة اللي بعدها
+        resultsBucket.failed++;
+        await unlockSessionFlag(session._id, flagField);
+        console.log(`   ❌ ${label} — total failure, unlocked for retry`);
+      }
+
+    } catch (err) {
+      resultsBucket.failed++;
+      console.error(`   ❌ ${label} error for ${session._id}:`, err.message);
+
+      // لو حصل خطأ غير متوقع، نفك الـ lock عشان نحاول تاني
+      try {
+        await unlockSessionFlag(session._id, flagField);
+      } catch (_) {}
+    }
+  }
+}
+
+// ============================================================
+// ✅ computeDiff — بيحسب الفرق بوحدات (hours/minutes)
+// ============================================================
+function computeDiff(sessionDateTime, now, unit) {
+  const diffMs = sessionDateTime - now;
+  if (unit === 'hours') return diffMs / (1000 * 60 * 60);
+  return diffMs / (1000 * 60); // minutes
+}
+
+// ============================================================
 // buildSessionDateTime
-// ─────────────────────────────────────────────────────────────────────────────
+// ============================================================
 function buildSessionDateTime(session) {
   try {
     const date = new Date(session.scheduledDate);
@@ -252,23 +474,16 @@ function buildSessionDateTime(session) {
 
     const isoString = `${cairoDateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${offsetStr}`;
 
-    const result = new Date(isoString);
-
-    console.log(`   [buildSessionDateTime] cairoDateStr: ${cairoDateStr}`);
-    console.log(`   [buildSessionDateTime] cairoOffset: UTC${offsetStr}`);
-    console.log(`   [buildSessionDateTime] isoString: ${isoString}`);
-    console.log(`   [buildSessionDateTime] result UTC: ${result.toISOString()}`);
-
-    return result;
+    return new Date(isoString);
   } catch (err) {
     console.error('❌ buildSessionDateTime error:', err.message);
     return new Date(session.scheduledDate);
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ============================================================
 // getCairoUTCOffset
-// ─────────────────────────────────────────────────────────────────────────────
+// ============================================================
 function getCairoUTCOffset() {
   try {
     const now      = new Date();

@@ -960,10 +960,9 @@ export default function GroupsAdmin() {
                 )}
             </div>
 
-            {/* ── Modals ── */}
-            <Modal open={modalOpen} title={editingGroup ? t("groups.edit") : t("groups.createNew")} onClose={closeGroupModal} size="xl">
-                <GroupForm initial={editingGroup} onClose={closeGroupModal} onSaved={onSaved} />
-            </Modal>
+            <Modal open={modalOpen} onClose={closeGroupModal} size="2xl" noPadding>
+  <GroupForm initial={editingGroup} onClose={closeGroupModal} onSaved={onSaved} />
+</Modal>
 
             <Modal open={viewDetailsModal.open} title="" onClose={closeViewDetailsModal} size="full">
                 <GroupDetailsPage groupId={viewDetailsModal.groupId} onClose={closeViewDetailsModal} />

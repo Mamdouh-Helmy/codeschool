@@ -238,6 +238,18 @@ const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }
           icon: "ion:pricetags-outline",
         },
         {
+          label: "أسعار المدرسين",
+          href: "/admin/instructor-rates",
+          icon: "ion:cash-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
+        {
+          label: "كشف المرتبات",
+          href: "/admin/payroll",
+          icon: "ion:wallet-outline",
+          badge: createBadge(t('common.new') || "New"),
+        },
+        {
           label: "تنبيهات الفوترة",
           href: "/admin/billing-alerts",
           icon: "ion:alert-circle-outline",

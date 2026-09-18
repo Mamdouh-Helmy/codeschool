@@ -109,6 +109,9 @@ const whatsappMessageSchema = new mongoose.Schema(
         "reminder_15min_student",
         "reminder_15min_guardian",
         "session_blog",
+        "reminder_24h_offline",
+        "reminder_30min_offline",
+        "pre_attendance_ping",
       ],
       required: true,
     },
@@ -377,7 +380,7 @@ const StudentSchema = new mongoose.Schema(
 
     // ✅ NEW: Certificates issued to the student
     // تخزين معرفات الشهادات التي تم إرسالها للطالب لمنع التكرار
-      issuedCertificates: [
+    issuedCertificates: [
       {
         moduleId: { type: String, required: true },
         courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
@@ -391,14 +394,14 @@ const StudentSchema = new mongoose.Schema(
     ],
 
     moduleOverviewsSent: [
-  {
-    groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group" },
-    courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
-    moduleIndex: { type: Number, required: true },
-    moduleTitle: { type: String, default: "" },
-    sentAt: { type: Date, default: Date.now },
-  },
-],
+      {
+        groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group" },
+        courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+        moduleIndex: { type: Number, required: true },
+        moduleTitle: { type: String, default: "" },
+        sentAt: { type: Date, default: Date.now },
+      },
+    ],
 
     metadata: {
       createdAt: { type: Date, default: Date.now },
@@ -929,7 +932,8 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
     const isFirstUsageForGroup = deductionData.groupId
       ? !this.creditSystem.usageHistory.some(
           (u) =>
-            u.groupId && u.groupId.toString() === deductionData.groupId.toString(),
+            u.groupId &&
+            u.groupId.toString() === deductionData.groupId.toString(),
         )
       : false;
 

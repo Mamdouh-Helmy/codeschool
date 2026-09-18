@@ -3881,3 +3881,477 @@ export async function checkAndSendModuleOverviewNotifications() {
   console.log(`\n✅ MODULE OVERVIEW CRON DONE — sent: ${results.filter(r => r.success).length}/${results.length}`);
   return { processed: results.length, sent: results.filter((r) => r.success).length, results };
 }
+
+
+// ============================================================
+// ✅ Helper: بناء لينك الـ Maps من الـ Group
+// ============================================================
+function buildMapsLink(group, session) {
+  const loc = group?.locationDetails || {};
+
+  if (loc.lat != null && loc.lng != null) {
+    return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+  }
+  if (loc.address) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.address)}`;
+  }
+  if (loc.placeName || group?.location) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      loc.placeName || group.location,
+    )}`;
+  }
+  return "";
+}
+
+// ============================================================
+// ✅ يجهز المتغيرات الخاصة بالـ Offline (location/maps)
+// ============================================================
+async function prepareOfflineLocationVariables(group, session, language = "ar") {
+  const loc = group?.locationDetails || {};
+
+  const placeName =
+    loc.placeName ||
+    group?.location ||
+    (language === "ar" ? "مقر Code School" : "Code School Campus");
+
+  const address =
+    loc.address ||
+    loc.extraDetails ||
+    (language === "ar" ? "يرجى مراجعة الإدارة" : "Please contact admin");
+
+  const mapsLink = buildMapsLink(group, session);
+
+  return { placeName, address, mapsLink };
+}
+
+// ============================================================
+// ✅ OFFLINE: تذكير قبل 24 ساعة (Maps / Location Reminder)
+// ============================================================
+export async function sendOfflineLocationReminder(
+  sessionId,
+  metadata = {},
+) {
+  try {
+    console.log(`\n📍 OFFLINE 24h Reminder ==========`);
+    console.log(`📋 Session: ${sessionId}`);
+
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
+    if (!session) throw new Error("Session not found");
+
+    const group = await Group.findById(session.groupId._id || session.groupId)
+      .populate("instructors.userId", "name email gender language profile")
+      .lean();
+    if (!group) throw new Error("Group not found");
+
+    // ✅ حماية: لو الجروب Online مش هتبعت
+    const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
+    if (deliveryMode !== "offline") {
+      return {
+        success: false,
+        reason: "not_offline",
+        message: "Session is not offline",
+      };
+    }
+
+    const students = await Student.find({
+      "academicInfo.groupIds": group._id,
+      isDeleted: false,
+    }).lean();
+
+    console.log(`👥 Found ${students.length} students`);
+
+    let sentCount = 0;
+    let failCount = 0;
+    const results = [];
+
+    for (const student of students) {
+      try {
+        const eligible = await canSendMessage(student);
+        if (!eligible) {
+          failCount++;
+          continue;
+        }
+
+        const { variables, language } = await prepareStudentVariables(
+          student,
+          group,
+          session,
+        );
+
+        // ✅ حقن متغيرات المكان
+        const locVars = await prepareOfflineLocationVariables(
+          group,
+          session,
+          language,
+        );
+        Object.assign(variables, locVars);
+
+        // ── رسالة الطالب ──
+        const studentTemplateType = "reminder_24h_offline_student";
+        const studentTpl = await getMessageTemplate(
+          studentTemplateType,
+          language,
+          "student",
+        );
+        const finalStudentMessage = replaceVariables(
+          studentTpl.content,
+          variables,
+        );
+
+        // ── رسالة ولي الأمر ──
+        const guardianTemplateType = "reminder_24h_offline_guardian";
+        const guardianTpl = await getMessageTemplate(
+          guardianTemplateType,
+          language,
+          "guardian",
+        );
+        const finalGuardianMessage = replaceVariables(
+          guardianTpl.content,
+          variables,
+        );
+
+        const result = await sendToStudentWithLogging({
+          studentId: student._id,
+          student,
+          studentMessage: finalStudentMessage,
+          guardianMessage: finalGuardianMessage,
+          messageType: "reminder_24h_offline",
+          metadata: {
+            sessionId,
+            sessionTitle: session.title,
+            groupId: group._id,
+            reminderType: "24hours_offline",
+            mapsLink: locVars.mapsLink,
+            placeName: locVars.placeName,
+          },
+        });
+
+        if (result.success) {
+          sentCount++;
+          results.push({ studentId: student._id, status: "sent" });
+        } else {
+          failCount++;
+        }
+      } catch (err) {
+        console.error(`❌ Error for student ${student._id}:`, err.message);
+        failCount++;
+      }
+    }
+
+    return {
+      success: sentCount > 0,
+      totalStudents: students.length,
+      successCount: sentCount,
+      failCount,
+      results,
+    };
+  } catch (error) {
+    console.error("❌ Error in sendOfflineLocationReminder:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================
+// ✅ OFFLINE: Drop-off Alert قبل 30 دقيقة
+// ============================================================
+export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
+  try {
+    console.log(`\n🚗 OFFLINE 30min Drop-off Alert ==========`);
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
+    if (!session) throw new Error("Session not found");
+
+    const group = await Group.findById(session.groupId._id || session.groupId)
+      .populate("instructors.userId", "name email gender language profile")
+      .lean();
+    if (!group) throw new Error("Group not found");
+
+    const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
+    if (deliveryMode !== "offline") {
+      return { success: false, reason: "not_offline" };
+    }
+
+    const students = await Student.find({
+      "academicInfo.groupIds": group._id,
+      isDeleted: false,
+    }).lean();
+
+    let sentCount = 0;
+    let failCount = 0;
+    const results = [];
+
+    for (const student of students) {
+      try {
+        const eligible = await canSendMessage(student);
+        if (!eligible) { failCount++; continue; }
+
+        const { variables, language } = await prepareStudentVariables(
+          student,
+          group,
+          session,
+        );
+
+        const locVars = await prepareOfflineLocationVariables(
+          group,
+          session,
+          language,
+        );
+        Object.assign(variables, locVars);
+
+        const studentTpl = await getMessageTemplate(
+          "reminder_30min_offline_student",
+          language,
+          "student",
+        );
+        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
+
+        const guardianTpl = await getMessageTemplate(
+          "reminder_30min_offline_guardian",
+          language,
+          "guardian",
+        );
+        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+
+        const result = await sendToStudentWithLogging({
+          studentId: student._id,
+          student,
+          studentMessage: finalStudentMessage,
+          guardianMessage: finalGuardianMessage,
+          messageType: "reminder_30min_offline",
+          metadata: {
+            sessionId,
+            sessionTitle: session.title,
+            groupId: group._id,
+            reminderType: "30min_offline",
+            mapsLink: locVars.mapsLink,
+            placeName: locVars.placeName,
+          },
+        });
+
+        if (result.success) { sentCount++; results.push({ studentId: student._id, status: "sent" }); }
+        else { failCount++; }
+      } catch (err) {
+        console.error(`❌ Error for student ${student._id}:`, err.message);
+        failCount++;
+      }
+    }
+
+    return { success: sentCount > 0, totalStudents: students.length, successCount: sentCount, failCount, results };
+  } catch (error) {
+    console.error("❌ Error in sendOfflineDropoffAlert:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================
+// ✅ OFFLINE: Pre-Attendance Ping
+// ============================================================
+export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
+  try {
+    console.log(`\n✅ OFFLINE Pre-Attendance Ping ==========`);
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
+    if (!session) throw new Error("Session not found");
+
+    const group = await Group.findById(session.groupId._id || session.groupId)
+      .populate("instructors.userId", "name email gender language profile")
+      .lean();
+    if (!group) throw new Error("Group not found");
+
+    const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
+    if (deliveryMode !== "offline") {
+      return { success: false, reason: "not_offline" };
+    }
+
+    const students = await Student.find({
+      "academicInfo.groupIds": group._id,
+      isDeleted: false,
+    }).lean();
+
+    let sentCount = 0;
+    let failCount = 0;
+    const results = [];
+
+    for (const student of students) {
+      try {
+        const eligible = await canSendMessage(student);
+        if (!eligible) { failCount++; continue; }
+
+        const { variables, language } = await prepareStudentVariables(
+          student,
+          group,
+          session,
+        );
+
+        const studentTpl = await getMessageTemplate(
+          "pre_attendance_ping_student",
+          language,
+          "student",
+        );
+        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
+
+        const guardianTpl = await getMessageTemplate(
+          "pre_attendance_ping_guardian",
+          language,
+          "guardian",
+        );
+        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+
+        const result = await sendToStudentWithLogging({
+          studentId: student._id,
+          student,
+          studentMessage: finalStudentMessage,
+          guardianMessage: finalGuardianMessage,
+          messageType: "pre_attendance_ping",
+          metadata: {
+            sessionId,
+            sessionTitle: session.title,
+            groupId: group._id,
+            reminderType: "pre_attendance_ping",
+          },
+        });
+
+        if (result.success) { sentCount++; results.push({ studentId: student._id, status: "sent" }); }
+        else { failCount++; }
+      } catch (err) {
+        console.error(`❌ Error for student ${student._id}:`, err.message);
+        failCount++;
+      }
+    }
+
+    return { success: sentCount > 0, totalStudents: students.length, successCount: sentCount, failCount, results };
+  } catch (error) {
+    console.error("❌ Error in sendOfflinePreAttendancePing:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================
+// ✅ OFFLINE: إرسال تذكير للمدرس (24h / 30min / ping)
+// ============================================================
+export async function sendInstructorOfflineReminder(
+  sessionId,
+  reminderType, // "24hours_offline" | "30min_offline" | "pre_attendance_ping"
+  metadata = {},
+) {
+  try {
+    console.log(`\n👨‍🏫 Instructor OFFLINE Reminder | Type: ${reminderType}`);
+
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
+    if (!session) throw new Error("Session not found");
+
+    const group = await Group.findById(session.groupId._id || session.groupId)
+      .populate("instructors.userId", "name email gender language profile")
+      .lean();
+    if (!group) throw new Error("Group not found");
+
+    const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
+    if (deliveryMode !== "offline") {
+      return { success: false, reason: "not_offline" };
+    }
+
+    if (!group.instructors || group.instructors.length === 0) {
+      return { success: false, reason: "no_instructors" };
+    }
+
+    // ✅ اسمح للـ DB template يحدد النوع، وإلا fallback
+    const WhatsAppTemplateInstructor = (
+      await import("../models/WhatsAppTemplateInstructor")
+    ).default;
+
+    const dbTemplateTypeMap = {
+      "24hours_offline": "reminder_24h_offline",
+      "30min_offline":   "reminder_30min_offline",
+      "pre_attendance_ping": "pre_attendance_ping",
+    };
+
+    const dbTemplateType = dbTemplateTypeMap[reminderType] || reminderType;
+    const dbTemplate = await WhatsAppTemplateInstructor.findOne({
+      templateType: dbTemplateType,
+      isActive: true,
+    }).lean();
+
+    let successCount = 0;
+    let failCount = 0;
+    const results = [];
+
+    for (const instructorEntry of group.instructors) {
+      const instructor = instructorEntry.userId;
+      if (!instructor?._id) { failCount++; continue; }
+
+      const instructorPhone = instructor.profile?.phone?.trim();
+      if (!instructorPhone) {
+        failCount++;
+        results.push({ instructorId: instructor._id, status: "skipped", reason: "no_phone" });
+        continue;
+      }
+
+      try {
+        const { variables, language } = await prepareInstructorVariables(
+          instructor,
+          group,
+          session,
+        );
+
+        const locVars = await prepareOfflineLocationVariables(group, session, language);
+        Object.assign(variables, locVars);
+
+        let messageContent = "";
+
+        if (dbTemplate) {
+          messageContent =
+            language === "ar"
+              ? dbTemplate.contentAr || dbTemplate.content || ""
+              : dbTemplate.contentEn || dbTemplate.contentAr || "";
+        } else {
+          // Fallback hardcoded
+          if (reminderType === "24hours_offline") {
+            messageContent =
+              language === "ar"
+                ? `{instructorSalutation} 👋\n\nتذكير: عندك حصة *{sessionName}* بكرة إن شاء الله (Offline)\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 {address}\n🗺️ {mapsLink}\n\n👥 المجموعة: {groupName}\n🔢 عدد الطلاب: {studentCount}\n\nفريق Code School 💻`
+                : `{instructorSalutation} 👋\n\nReminder: You have an *offline* session *{sessionName}* tomorrow\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 {address}\n🗺️ {mapsLink}\n\n👥 Group: {groupName}\n🔢 Students: {studentCount}\n\nCode School 💻`;
+          } else if (reminderType === "30min_offline") {
+            messageContent =
+              language === "ar"
+                ? `{instructorSalutation} 👋\n\n⏰ فاضل 30 دقيقة على بداية حصة *{sessionName}*\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\n👥 المجموعة: {groupName}\n\nفريق Code School 💻`
+                : `{instructorSalutation} 👋\n\n⏰ 30 minutes until *{sessionName}* starts\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\n👥 Group: {groupName}\n\nCode School 💻`;
+          } else {
+            // pre_attendance_ping
+            messageContent =
+              language === "ar"
+                ? `{instructorSalutation} 👋\n\nالحصة *{sessionName}* هتبدأ دلوقتي، ياريت نتأكد إن الطلاب موجودين وجاهزين ونسجل الحضور ✨\n\nفريق Code School 💻`
+                : `{instructorSalutation} 👋\n\n*{sessionName}* is about to start, please make sure students are present and take attendance ✨\n\nCode School 💻`;
+          }
+        }
+
+        const finalMessage = replaceVariables(messageContent, variables);
+        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
+        if (!preparedPhone) throw new Error("Invalid phone number");
+
+        const sendResult = await wapilotService.sendTextMessage(preparedPhone, finalMessage);
+
+        if (sendResult?.success) {
+          successCount++;
+          results.push({ instructorId: instructor._id, instructorName: instructor.name, status: "sent" });
+        } else {
+          throw new Error(sendResult?.error || "Send failed");
+        }
+      } catch (err) {
+        failCount++;
+        results.push({ instructorId: instructor._id, instructorName: instructor.name, status: "failed", reason: err.message });
+        console.error(`❌ Failed for ${instructor.name}:`, err.message);
+      }
+    }
+
+    return { success: successCount > 0, successCount, failCount, results };
+  } catch (error) {
+    console.error("❌ Error in sendInstructorOfflineReminder:", error);
+    return { success: false, error: error.message };
+  }
+}

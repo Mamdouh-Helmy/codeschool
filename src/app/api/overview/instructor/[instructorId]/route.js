@@ -8,7 +8,31 @@ import Session from "../../../../models/Session";
 import User from "../../../../models/User";
 import { requireAdmin } from "@/utils/authMiddleware";
 
-const SESSION_HOURS = 2;
+// ── Helpers ──
+// ✅ بيحول "HH:mm" لعدد دقايق من نص الليل
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// ✅ مدة السيشن الفعلية بالدقيقة — بيفضّل actualStartTime/actualEndTime
+// وبيرجع لـ startTime/endTime المجدولة لو مفيش وقت فعلي متسجل.
+// 🆕 بدل الافتراض الثابت "كل سيشن = 2 ساعة"، كل سيشن بقى ليها مدتها الحقيقية.
+function getSessionDurationMinutes(session) {
+  const start = timeToMinutes(session.actualStartTime) ?? timeToMinutes(session.startTime);
+  const end = timeToMinutes(session.actualEndTime) ?? timeToMinutes(session.endTime);
+
+  if (start === null || end === null) return 0;
+
+  let diff = end - start;
+  if (diff < 0) diff += 24 * 60; // احتياط لو السيشن عدّت نص الليل
+  return diff;
+}
+
+function minutesToHoursDecimal(minutes) {
+  return Math.round(((minutes || 0) / 60) * 100) / 100;
+}
 
 export async function GET(req, { params }) {
   try {
@@ -48,13 +72,14 @@ export async function GET(req, { params }) {
     const groupIds = groups.map((g) => g._id);
 
     // ✅ كل السيشنات المكتملة في مجموعاته (كامل الهيستوري، مش محدود بعدد)
+    // 🆕 ضفنا actualStartTime/actualEndTime عشان نحسب مدة كل سيشن الفعلية
     const completedSessions = await Session.find({
       groupId: { $in: groupIds },
       status: "completed",
       isDeleted: false,
     })
       .select(
-        "groupId title moduleIndex sessionNumber scheduledDate startTime endTime attendance attendanceTaken"
+        "groupId title moduleIndex sessionNumber scheduledDate startTime endTime actualStartTime actualEndTime attendance attendanceTaken"
       )
       .sort({ scheduledDate: -1 })
       .lean();
@@ -66,6 +91,9 @@ export async function GET(req, { params }) {
       const monthKey = `${dateObj.getFullYear()}-${String(
         dateObj.getMonth() + 1
       ).padStart(2, "0")}`;
+
+      // 🆕 مدة السيشن الفعلية بالدقيقة، بدل SESSION_HOURS الثابتة
+      const durationMinutes = getSessionDurationMinutes(sess);
 
       return {
         sessionId: sess._id,
@@ -80,7 +108,9 @@ export async function GET(req, { params }) {
         monthKey,
         startTime: sess.startTime,
         endTime: sess.endTime,
-        hours: SESSION_HOURS,
+        // 🆕 الدقايق الخام — المصدر اللي الفرونت اند هيبني منه "ساعة ودقيقة"
+        durationMinutes,
+        hours: minutesToHoursDecimal(durationMinutes), // decimal — للتوافق
         attendanceTaken: sess.attendanceTaken,
         presentCount: (sess.attendance || []).filter((a) => a.status === "present").length,
         absentCount: (sess.attendance || []).filter((a) => a.status === "absent").length,
@@ -96,12 +126,13 @@ export async function GET(req, { params }) {
         monthsMap[s.monthKey] = {
           monthKey: s.monthKey,
           sessionsCount: 0,
-          totalHours: 0,
+          totalMinutes: 0,
           groupsSet: new Set(),
         };
       }
       monthsMap[s.monthKey].sessionsCount += 1;
-      monthsMap[s.monthKey].totalHours += SESSION_HOURS;
+      // 🆕 مجموع الدقايق الفعلية بدل sessionsCount * SESSION_HOURS
+      monthsMap[s.monthKey].totalMinutes += s.durationMinutes;
       monthsMap[s.monthKey].groupsSet.add(s.groupName);
     });
 
@@ -109,7 +140,8 @@ export async function GET(req, { params }) {
       .map((m) => ({
         monthKey: m.monthKey,
         sessionsCount: m.sessionsCount,
-        totalHours: m.totalHours,
+        totalMinutes: m.totalMinutes,
+        totalHours: minutesToHoursDecimal(m.totalMinutes), // decimal — للتوافق
         groups: Array.from(m.groupsSet),
       }))
       .sort((a, b) => (a.monthKey < b.monthKey ? 1 : -1));
@@ -119,13 +151,13 @@ export async function GET(req, { params }) {
       ? allSessions.filter((s) => s.monthKey === monthFilter)
       : allSessions;
 
-    // ✅ إجمالي الساعات من countTime الفعلي المخزن في كل جروب (المصدر الرسمي)
-    const totalHoursFromGroups = groups.reduce((sum, g) => {
-      const inst = g.instructors?.find(
-        (i) => i.userId?.toString() === instructorId
-      );
-      return sum + (inst?.countTime || 0);
-    }, 0);
+    // ✅ إجمالي الساعات — 🆕 بقى بيتحسب من مجموع الدقايق الفعلية لكل
+    // السيشنات المكتملة في مجموعات المدرس ده، بدل countTime الثابت أو
+    // SESSION_HOURS الثابتة، عشان يفضل مطابق تمامًا لقائمة السيشنات المعروضة
+    const totalMinutes = allSessions.reduce(
+      (sum, s) => sum + s.durationMinutes,
+      0
+    );
 
     return NextResponse.json(
       {
@@ -136,7 +168,8 @@ export async function GET(req, { params }) {
           email: instructorUser.email,
           gender: instructorUser.gender,
           jobTitle: instructorUser.profile?.jobTitle || "مدرس",
-          totalHours: totalHoursFromGroups,
+          totalMinutes,
+          totalHours: minutesToHoursDecimal(totalMinutes), // decimal — للتوافق
           totalSessions: allSessions.length,
           totalGroups: groups.length,
           monthsSummary,

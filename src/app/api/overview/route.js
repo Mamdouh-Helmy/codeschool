@@ -9,7 +9,32 @@ import Session from "../../models/Session";
 import User from "../../models/User";
 import { requireAdmin } from "@/utils/authMiddleware";
 
-const SESSION_HOURS = 2; // كل سيشن = ساعتين
+// ── Helpers ──
+// ✅ بيحول "HH:mm" لعدد دقايق من نص الليل
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// ✅ مدة السيشن الفعلية بالدقيقة — بيفضّل actualStartTime/actualEndTime (لو
+// السيشن اتسجل لها وقت فعلي مختلف عن المجدول بعد التعديل) وبيرجع لـ
+// startTime/endTime المجدولة لو مفيش وقت فعلي متسجل.
+// 🆕 بدل الافتراض الثابت "كل سيشن = 2 ساعة"، كل سيشن بقى ليها مدتها الحقيقية.
+function getSessionDurationMinutes(session) {
+  const start = timeToMinutes(session.actualStartTime) ?? timeToMinutes(session.startTime);
+  const end = timeToMinutes(session.actualEndTime) ?? timeToMinutes(session.endTime);
+
+  if (start === null || end === null) return 0;
+
+  let diff = end - start;
+  if (diff < 0) diff += 24 * 60; // احتياط لو السيشن عدّت نص الليل
+  return diff;
+}
+
+function minutesToHoursDecimal(minutes) {
+  return Math.round(((minutes || 0) / 60) * 100) / 100;
+}
 
 export async function GET(req) {
   try {
@@ -112,12 +137,16 @@ export async function GET(req) {
     // =============================================
     const groupIds = groups.map((g) => g._id);
 
+    // 🆕 ضفنا actualStartTime/actualEndTime عشان نحسب مدة كل سيشن الفعلية
+    // بالدقيقة بدل افتراض ثابت (كان بيفترض كل سيشن = 2 ساعة بالظبط)
     const completedSessions = await Session.find({
       groupId: { $in: groupIds },
       status: "completed",
       isDeleted: false,
     })
-      .select("groupId moduleIndex sessionNumber title scheduledDate startTime endTime attendanceTaken attendance")
+      .select(
+        "groupId moduleIndex sessionNumber title scheduledDate startTime endTime actualStartTime actualEndTime attendanceTaken attendance"
+      )
       .lean();
 
     // ✅ تنظيم السيشنات حسب الـ groupId
@@ -136,6 +165,14 @@ export async function GET(req) {
     groups.forEach((group) => {
       const groupSessions = sessionsByGroup[group._id.toString()] || [];
 
+      // 🆕 مجموع الدقايق الفعلية لكل السيشنات المكتملة في الجروب ده — نفس
+      // المدة دي بتتحسب لكل مدرسين الجروب (زي منطق addInstructorHours في
+      // الـ Group model اللي بيضيف نفس المدة لكل مدرسين الجروب مع بعض)
+      const groupMinutesTotal = groupSessions.reduce(
+        (sum, s) => sum + getSessionDurationMinutes(s),
+        0
+      );
+
       group.instructors?.forEach((inst) => {
         if (!inst.userId) return;
 
@@ -153,14 +190,14 @@ export async function GET(req) {
             image: userData?.image || "",
             jobTitle: userData?.profile?.jobTitle || "مدرس",
             groups: [],
-            totalHours: 0,
+            // 🆕 الدقايق الخام هي المصدر الأساسي دلوقتي
+            totalMinutes: 0,
+            totalHours: 0, // decimal — لسه موجود للتوافق مع أي كود قديم
             totalSessions: 0,
             lastSession: null,
           };
         }
 
-        // ✅ الساعات من countTime في الـ Group (كل سيشن = 2 ساعة)
-        const hoursInGroup = inst.countTime || 0;
         const sessionsInGroup = groupSessions.length;
 
         // ✅ آخر سيشن لهذا المدرس في هذه المجموعة
@@ -178,7 +215,10 @@ export async function GET(req) {
             group.courseId?.title ||
             "دورة غير محددة",
           groupStatus: group.status,
-          hoursInGroup,
+          // 🆕 الدقايق الفعلية — العرض في الفرونت اند هيبني منها "ساعة ودقيقة"
+          hoursInGroupMinutes: groupMinutesTotal,
+          // decimal — لسه موجود للتوافق
+          hoursInGroup: minutesToHoursDecimal(groupMinutesTotal),
           sessionsCount: sessionsInGroup,
           studentsCount: group.students?.length || 0,
           lastSession: lastSess
@@ -197,7 +237,7 @@ export async function GET(req) {
           })),
         });
 
-        instructorsMap[userId].totalHours += hoursInGroup;
+        instructorsMap[userId].totalMinutes += groupMinutesTotal;
         instructorsMap[userId].totalSessions += sessionsInGroup;
 
         // ✅ تحديث آخر سيشن عام للمدرس
@@ -218,8 +258,13 @@ export async function GET(req) {
       });
     });
 
+    // ✅ حساب totalHours (decimal) النهائي لكل مدرس من totalMinutes — للتوافق
+    Object.values(instructorsMap).forEach((inst) => {
+      inst.totalHours = minutesToHoursDecimal(inst.totalMinutes);
+    });
+
     const formattedInstructors = Object.values(instructorsMap).sort(
-      (a, b) => b.totalHours - a.totalHours
+      (a, b) => b.totalMinutes - a.totalMinutes
     );
 
     // =============================================
@@ -251,15 +296,24 @@ export async function GET(req) {
     );
 
     const totalInstructors = formattedInstructors.length;
-    const totalInstructorHours = formattedInstructors.reduce(
-      (s, i) => s + i.totalHours,
+    // 🆕 من الدقايق الخام بدل جمع decimal hours مباشرة (أدق)
+    const totalInstructorMinutes = formattedInstructors.reduce(
+      (s, i) => s + i.totalMinutes,
       0
     );
+    const totalInstructorHours = minutesToHoursDecimal(totalInstructorMinutes);
     const totalInstructorSessions = formattedInstructors.reduce(
       (s, i) => s + i.totalSessions,
       0
     );
+
+    // 🆕 إجمالي دقايق كل السيشنات المكتملة (لكل المجموعات) — بدل
+    // totalCompletedSessions * SESSION_HOURS الثابتة
     const totalCompletedSessions = completedSessions.length;
+    const totalCompletedMinutes = completedSessions.reduce(
+      (sum, s) => sum + getSessionDurationMinutes(s),
+      0
+    );
 
     const stats = {
       students: {
@@ -292,7 +346,9 @@ export async function GET(req) {
       },
       instructors: {
         total: totalInstructors,
-        totalHours: totalInstructorHours,
+        // 🆕 الدقايق الخام — المصدر اللي الفرونت اند هيبني منه العرض
+        totalMinutes: totalInstructorMinutes,
+        totalHours: totalInstructorHours, // decimal — للتوافق
         totalSessions: totalInstructorSessions,
         avgHoursPerInstructor:
           totalInstructors > 0
@@ -301,7 +357,9 @@ export async function GET(req) {
       },
       sessions: {
         totalCompleted: totalCompletedSessions,
-        totalHours: totalCompletedSessions * SESSION_HOURS,
+        // 🆕 مدة حقيقية بالدقيقة بدل totalCompletedSessions * 2 الثابتة
+        totalMinutes: totalCompletedMinutes,
+        totalHours: minutesToHoursDecimal(totalCompletedMinutes), // decimal — للتوافق
       },
       groups: {
         total: groups.length,
@@ -318,7 +376,6 @@ export async function GET(req) {
           instructors: formattedInstructors,
           students: formattedStudents,
           stats,
-          sessionHours: SESSION_HOURS,
         },
       },
       { status: 200 }

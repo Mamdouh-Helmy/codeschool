@@ -33,7 +33,7 @@ export async function GET(req) {
 
     const total    = await Session.countDocuments(query);
     const sessions = await Session.find(query)
-      .populate("groupId",  "name code")
+      .populate("groupId",  "name code deliveryMode")
       .populate("courseId", "title level")
       .populate("attendance.studentId", "personalInfo.fullName enrollmentNumber")
       .sort({ scheduledDate: 1, startTime: 1 })
@@ -62,11 +62,16 @@ export async function GET(req) {
         status:          session.status,
         meetingLink:     session.meetingLink,
         meetingPlatform: session.meetingPlatform,
-        // ✅ FIX: كانت ناقصة تمامًا من الـ response — عشان كده الأدمن كان
-        // شايف اللينك بس من غير اليوزرنيم/الباسورد، لأي سيشن مش بس الملغاة
         meetingCredentials: session.meetingCredentials || null,
         recordingLink:   session.recordingLink,
         attendanceTaken: session.attendanceTaken,
+
+        // ✅ بيانات المرتب — الوقت الفعلي ونوع السيشن وحالة المعالجة
+        deliveryMode:    session.deliveryMode || session.groupId?.deliveryMode || "online",
+        actualStartTime: session.actualStartTime || "",
+        actualEndTime:   session.actualEndTime || "",
+        payroll: session.payroll || { processed: false, durationMinutes: 0, entriesCount: 0 },
+
         attendance: {
           total:   attendance.length,
           present: attendance.filter((a) => a.status === "present").length,
@@ -91,9 +96,9 @@ export async function GET(req) {
     const stats = {
       total,
       scheduled: await Session.countDocuments({ ...query, status: "scheduled" }),
-      completed:  await Session.countDocuments({ ...query, status: "completed"  }),
-      cancelled:  await Session.countDocuments({ ...query, status: "cancelled"  }),
-      postponed:  await Session.countDocuments({ ...query, status: "postponed"  }),
+      completed: await Session.countDocuments({ ...query, status: "completed" }),
+      cancelled: await Session.countDocuments({ ...query, status: "cancelled" }),
+      postponed: await Session.countDocuments({ ...query, status: "postponed" }),
     };
 
     return NextResponse.json({
@@ -153,6 +158,9 @@ export async function POST(req) {
       );
     }
 
+    // ✅ نوع السيشن snapshot من الجروب وقت الإنشاء
+    const group = await Group.findById(groupId).select("deliveryMode").lean();
+
     const session = await Session.create({
       groupId, courseId, moduleIndex, sessionNumber, lessonIndexes,
       title, description: description || "",
@@ -161,6 +169,7 @@ export async function POST(req) {
       status:         "scheduled",
       meetingLink:    meetingLink || "",
       meetingPlatform: meetingPlatform || null,
+      deliveryMode:   group?.deliveryMode || "online",
       attendanceTaken: false,
       attendance:      [],
       metadata: {
@@ -252,6 +261,11 @@ export async function PUT(req, { params }) {
       "metadata.updatedAt": new Date(),
     };
 
+    // ✅ الوقت الفعلي للسيشن — أساس حساب مرتب المدرس بالدقيقة.
+    // الأدمن ممكن يبعته وهو بيقفل السيشن، ولو مبعتش بنقع على الوقت المجدول.
+    if (updateData.actualStartTime) basePayload.actualStartTime = updateData.actualStartTime;
+    if (updateData.actualEndTime)   basePayload.actualEndTime   = updateData.actualEndTime;
+
     // ✅ حفظ metadata في الـ DB (studentMessages, guardianMessages) للـ audit trail
     if (updateData.metadata && Object.keys(updateData.metadata).length > 0) {
       basePayload["metadata.lastNotificationMessages"] = updateData.metadata;
@@ -261,8 +275,6 @@ export async function PUT(req, { params }) {
     let updatedSession = null;
 
     if (isNewlyCancelled) {
-      // ✅ الإلغاء + ترحيل كل اللي بعدها أسبوع لقدام (ما عدا المكتملة/الملغية)
-      // status بتتظبط جوه cascadeShiftOnCancel نفسها — هنا بس باقي الحقول
       try {
         cascadeResult = await Session.cascadeShiftOnCancel(id, adminUser.id, 7);
         console.log(
@@ -280,11 +292,10 @@ export async function PUT(req, { params }) {
         new:           true,
         runValidators: true,
       })
-        .populate("groupId",  "name code automation courseSnapshot instructors")
+        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode")
         .populate("courseId", "title");
 
     } else if (isPostponedWithDate) {
-      // ✅ تأجيل بتاريخ/وقت جديد — بيتحفظ فعليًا في scheduledDate/startTime/endTime
       const oldStart = existingSession.startTime;
       const oldEnd   = existingSession.endTime;
       const newStart = updateData.newTime || oldStart;
@@ -298,35 +309,72 @@ export async function PUT(req, { params }) {
         new:           true,
         runValidators: true,
       })
-        .populate("groupId",  "name code automation courseSnapshot instructors")
+        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode")
         .populate("courseId", "title");
 
     } else {
-      // باقي الحالات (scheduled / completed / تعديل عادي من غير تغيير تاريخ)
       basePayload.status = newStatus;
 
       updatedSession = await Session.findByIdAndUpdate(id, basePayload, {
         new:           true,
         runValidators: true,
       })
-        .populate("groupId",  "name code automation courseSnapshot instructors")
+        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode")
         .populate("courseId", "title");
     }
 
     console.log(`✅ Session updated: ${updatedSession.title} | ${oldStatus} → ${newStatus}`);
 
-    // ── Add instructor hours when session completed ────────────────────────
-    let instructorHoursResult = null;
+    // ── Instructor hours + Payroll on completion ───────────────────────────
+        let instructorHoursResult = null;
+    let payrollResult = null;
+
     if (newStatus === "completed" && oldStatus !== "completed") {
-      console.log(`\n⏱️ Session completed! Adding 2 hours to group instructors...`);
+      // ✅ الـ payroll الأول — هو اللي بيحدد المدة الفعلية للسيشن
+      try {
+        const { processSessionPayroll } = await import("@/lib/payroll");
+        payrollResult = await processSessionPayroll({
+          sessionId: id,
+          actualStartTime: updateData.actualStartTime || null,
+          actualEndTime:   updateData.actualEndTime   || null,
+          actedBy: adminUser.id,
+          source: "admin_complete",
+        });
+      } catch (payrollError) {
+        console.error("⚠️ Payroll processing failed:", payrollError.message);
+        payrollResult = { success: false, error: payrollError.message };
+      }
+
+      // ✅ عداد ساعات التدريس بنفس المدة الفعلية
       try {
         const group = await Group.findById(existingSession.groupId._id || existingSession.groupId);
-        if (group && group.instructors && group.instructors.length > 0) {
-          instructorHoursResult = await group.addInstructorHours(2);
-          console.log(`✅ Instructor hours added:`, instructorHoursResult);
+        if (group?.instructors?.length) {
+          instructorHoursResult = await group.addInstructorHours(
+            payrollResult?.durationMinutes || 0
+          );
         }
       } catch (err) {
-        console.error(`❌ Error adding instructor hours:`, err);
+        console.error("❌ Error adding instructor hours:", err);
+      }
+    }
+
+    // ✅ لو سيشن كانت completed ورجعت ملغية/مؤجلة → نلغي سطور المرتب
+    // (مش بنمسحها — cancelled عشان الـ audit trail يفضل)
+    if (
+      oldStatus === "completed" &&
+      newStatus &&
+      newStatus !== "completed" &&
+      ["cancelled", "postponed"].includes(newStatus)
+    ) {
+      try {
+        const { cancelSessionPayroll } = await import("@/lib/payroll");
+        const cancelRes = await cancelSessionPayroll(id, {
+          actedBy: adminUser.id,
+          reason: `تم تغيير حالة السيشن من completed إلى ${newStatus}`,
+        });
+        console.log(`💸 Payroll cancelled: ${cancelRes.cancelledCount} entry(ies)`);
+      } catch (err) {
+        console.error("⚠️ Failed to cancel payroll entries:", err.message);
       }
     }
 
@@ -337,22 +385,16 @@ export async function PUT(req, { params }) {
       (newStatus === "cancelled" || newStatus === "postponed")
     ) {
       console.log(`🔄 Triggering ${newStatus} notifications...`);
-      console.log(`📝 Student messages:  ${Object.keys(updateData.metadata?.studentMessages  || {}).length}`);
-      console.log(`📝 Guardian messages: ${Object.keys(updateData.metadata?.guardianMessages || {}).length}`);
 
       setTimeout(async () => {
         try {
-          // ✅ FIX: نمرر metadata كامل لـ onSessionStatusChanged
-          // اللي بتقرأ:
-          //   metadata.studentMessages[studentId]  — rendered message للطالب
-          //   metadata.guardianMessages[studentId] — rendered message لولي الأمر
           const automationResult = await onSessionStatusChanged(
             id,
             newStatus,
-            null,                                                    // customMessage (global) — مش بنستخدمه
-            newStatus === "postponed" ? updateData.newDate : null,   // newDate
-            newStatus === "postponed" ? updateData.newTime : null,   // newTime
-            updateData.metadata || {}                                // ✅ { studentMessages, guardianMessages }
+            null,
+            newStatus === "postponed" ? updateData.newDate : null,
+            newStatus === "postponed" ? updateData.newTime : null,
+            updateData.metadata || {}
           );
 
           console.log("✅ Automation completed:", {
@@ -370,6 +412,7 @@ export async function PUT(req, { params }) {
         message: "Session updated successfully",
         data:    updatedSession,
         instructorHours: instructorHoursResult,
+        payroll: payrollResult,
         cascade: cascadeResult,
         automation: {
           triggered: true,
@@ -385,6 +428,7 @@ export async function PUT(req, { params }) {
       message: "Session updated successfully",
       data:    updatedSession,
       instructorHours: instructorHoursResult,
+      payroll: payrollResult,
       cascade: cascadeResult,
     });
 
@@ -397,7 +441,6 @@ export async function PUT(req, { params }) {
 // ============================================================
 // DELETE
 // ============================================================
-
 export async function DELETE(req, { params }) {
   try {
     const { id } = await params;
@@ -419,6 +462,17 @@ export async function DELETE(req, { params }) {
 
     if (!deletedSession) {
       return NextResponse.json({ success: false, error: "Session not found" }, { status: 404 });
+    }
+
+    // ✅ إلغاء أي سطور مرتب مرتبطة بالسيشن دي
+    try {
+      const { cancelSessionPayroll } = await import("@/lib/payroll");
+      await cancelSessionPayroll(id, {
+        actedBy: authCheck.user.id,
+        reason: "تم حذف السيشن",
+      });
+    } catch (err) {
+      console.error("⚠️ Failed to cancel payroll on delete:", err.message);
     }
 
     return NextResponse.json({

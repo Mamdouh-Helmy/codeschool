@@ -27,17 +27,26 @@ const MessageTemplateSchema = new mongoose.Schema(
         "evaluation_review",
         "evaluation_repeat",
         "session_recording",
-        "learning_supervisor_intro", // ✅ جديد
-        "module_overview", // ✅ جديد
-        "portfolio_inactivity_reminder", // ✅ جديد
-        "portfolio_update_broadcast", // ✅ جديد
-        "portfolio_contact_form_notification", // ✅ جديد
+        "learning_supervisor_intro",
+        "module_overview",
+        "portfolio_inactivity_reminder",
+        "portfolio_update_broadcast",
+        "portfolio_contact_form_notification",
+
+        // ✅ OFFLINE — Student & Guardian فقط
+        // (رسائل المدرس بتتحفظ في WhatsAppTemplateInstructor مش هنا)
+        "reminder_24h_offline_student",
+        "reminder_24h_offline_guardian",
+        "reminder_30min_offline_student",
+        "reminder_30min_offline_guardian",
+        "pre_attendance_ping_student",
+        "pre_attendance_ping_guardian",
       ],
     },
 
     recipientType: {
       type: String,
-      enum: ["student", "guardian", "portfolio_owner"], // ✅ إضافة portfolio_owner
+      enum: ["student", "guardian", "portfolio_owner"],
       required: true,
     },
 
@@ -174,10 +183,19 @@ MessageTemplateSchema.methods.getExample = function (language = "ar") {
       language === "ar"
         ? "Real-Life Mobile Solutions"
         : "Real-Life Mobile Solutions",
-    ownerName: language === "ar" ? "أحمد" : "Ahmed", // ✅ جديد
-    portfolioLink: "https://codeschool.com/portfolio/ahmed", // ✅ جديد
-    updateLink: "https://codeschool.com/portfolio/ahmed", // ✅ جديد
-    dashboardLink: "https://codeschool.com/dashboard", // ✅ جديد
+    ownerName: language === "ar" ? "أحمد" : "Ahmed",
+    portfolioLink: "https://codeschool.com/portfolio/ahmed",
+    updateLink: "https://codeschool.com/portfolio/ahmed",
+    dashboardLink: "https://codeschool.com/dashboard",
+
+    // ✅ جديد — متغيرات الـ Offline
+    placeName:
+      language === "ar" ? "Code School - المعادي" : "Code School - Maadi",
+    address:
+      language === "ar"
+        ? "شارع 9، المعادي، القاهرة"
+        : "Street 9, Maadi, Cairo",
+    mapsLink: "https://www.google.com/maps?q=29.9603,31.2569",
   };
   return this.render(examples, language);
 };
@@ -251,6 +269,25 @@ function getFallbackTemplates() {
       key: "recordingLink",
       label: "رابط التسجيل",
       example: "🎥 رابط التسجيل: https://...",
+    },
+  ];
+
+  // ── المتغيرات المشتركة بين قوالب الـ Offline ──────────────────────────────
+  const offlineLocationVariables = [
+    {
+      key: "placeName",
+      label: "اسم المكان",
+      example: "Code School - المعادي",
+    },
+    {
+      key: "address",
+      label: "العنوان التفصيلي",
+      example: "شارع 9، المعادي، القاهرة",
+    },
+    {
+      key: "mapsLink",
+      label: "رابط الخريطة",
+      example: "https://maps.google.com/...",
     },
   ];
 
@@ -530,6 +567,8 @@ Learning Supervisor`,
       ar: `{guardianSalutation}،\n\n⏳ تذكير: حصة {childTitle} *{studentName}* - *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
       en: `{guardianSalutation},\n\n⏳ Reminder: {childTitle} *{studentName}*'s session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
     },
+
+    // ── portfolio_inactivity_reminder ─────────────────────────────────────────
     portfolio_inactivity_reminder: {
       variables: [
         { key: "ownerName", label: "اسم صاحب البورتفوليو", example: "أحمد" },
@@ -619,6 +658,230 @@ To ensure privacy and data confidentiality, all messages are automatically route
 
 To view the message and reply, please log in to your Dashboard:
 🔗 {dashboardLink}`,
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ OFFLINE TEMPLATES — 24h Maps Reminder
+    // ═══════════════════════════════════════════════════════════════
+    reminder_24h_offline_student: {
+      variables: [
+        {
+          key: "salutation_ar",
+          label: "تحية الطالب (عربي)",
+          example: "عزيزي الطالب ممدوح",
+        },
+        {
+          key: "salutation_en",
+          label: "تحية الطالب (إنجليزي)",
+          example: "Dear student Mamdouh",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00 - 08:30 مساءً" },
+        ...offlineLocationVariables,
+      ],
+      ar: `{salutation_ar} 👋
+
+تذكير: حصتك *{sessionName}* بكرة إن شاء الله ✨
+
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+📍 المكان: {placeName}
+📌 العنوان: {address}
+
+🗺️ اللوكيشن على الخريطة:
+{mapsLink}
+
+منتظرينك في الميعاد 💻
+Code School`,
+      en: `{salutation_en} 👋
+
+Reminder: Your session *{sessionName}* is tomorrow, God willing ✨
+
+📅 Date: {date}
+⏰ Time: {time}
+
+📍 Location: {placeName}
+📌 Address: {address}
+
+🗺️ Location on Maps:
+{mapsLink}
+
+See you there 💻
+Code School`,
+    },
+
+    reminder_24h_offline_guardian: {
+      variables: [
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00 - 08:30 مساءً" },
+        ...offlineLocationVariables,
+      ],
+      ar: `{guardianSalutation} 👋
+
+تذكير: حصة {childTitle} *{studentName}* بكرة إن شاء الله ✨
+
+📘 الـ Session: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+📍 المكان: {placeName}
+📌 العنوان: {address}
+
+🗺️ اللوكيشن على الخريطة:
+{mapsLink}
+
+ياريت تجهز {childTitle} للوصول في الميعاد 🙏
+Code School 💻`,
+      en: `{guardianSalutation} 👋
+
+Reminder: {childTitle} *{studentName}*'s session is tomorrow ✨
+
+📘 Session: {sessionName}
+📅 Date: {date}
+⏰ Time: {time}
+
+📍 Location: {placeName}
+📌 Address: {address}
+
+🗺️ Location on Maps:
+{mapsLink}
+
+Please prepare {childTitle} to arrive on time 🙏
+Code School 💻`,
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ OFFLINE TEMPLATES — 30min Drop-off Alert
+    // ═══════════════════════════════════════════════════════════════
+    reminder_30min_offline_student: {
+      variables: [
+        { key: "salutation_ar", label: "تحية الطالب", example: "عزيزي ممدوح" },
+        {
+          key: "salutation_en",
+          label: "Student Salutation (EN)",
+          example: "Dear Mamdouh",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        {
+          key: "mapsLink",
+          label: "لينك الخريطة",
+          example: "https://maps.google.com/...",
+        },
+      ],
+      ar: `{salutation_ar} 👋
+
+⏰ فاضل 30 دقيقة على بداية الحصة *{sessionName}*
+
+📍 المكان: {placeName}
+🗺️ {mapsLink}
+
+يلا استعد للنزول 👍
+Code School 💻`,
+      en: `{salutation_en} 👋
+
+⏰ 30 minutes left until *{sessionName}*
+
+📍 Location: {placeName}
+🗺️ {mapsLink}
+
+Get ready to head out 👍
+Code School 💻`,
+    },
+
+    reminder_30min_offline_guardian: {
+      variables: [
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        {
+          key: "mapsLink",
+          label: "لينك الخريطة",
+          example: "https://maps.google.com/...",
+        },
+      ],
+      ar: `{guardianSalutation} 👋
+
+🚗 تنبيه: حصة {childTitle} *{studentName}* هتبدأ بعد 30 دقيقة
+
+⏰ الوقت: {time}
+📍 المكان: {placeName}
+🗺️ {mapsLink}
+
+ياريت تجهز {childTitle} للنزول في الميعاد 🙏
+Code School 💻`,
+      en: `{guardianSalutation} 👋
+
+🚗 Heads-up: {childTitle} *{studentName}*'s session starts in 30 minutes
+
+⏰ Time: {time}
+📍 Location: {placeName}
+🗺️ {mapsLink}
+
+Please prepare {childTitle} to head out on time 🙏
+Code School 💻`,
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ Pre-Attendance Ping
+    // ═══════════════════════════════════════════════════════════════
+    pre_attendance_ping_student: {
+      variables: [
+        { key: "salutation_ar", label: "تحية الطالب", example: "عزيزي ممدوح" },
+        {
+          key: "salutation_en",
+          label: "Student Salutation (EN)",
+          example: "Dear Mamdouh",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+      ],
+      ar: `{salutation_ar} 👋
+
+بنستعد نبدأ حصة *{sessionName}* دلوقتي، ياريت نتأكد إنك موجود وجاهز ✨
+Code School 💻`,
+      en: `{salutation_en} 👋
+
+We're about to start *{sessionName}* now, please make sure you're ready ✨
+Code School 💻`,
+    },
+
+    pre_attendance_ping_guardian: {
+      variables: [
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+      ],
+      ar: `{guardianSalutation} 👋
+
+بنستعد نبدأ حصة {childTitle} *{studentName}* دلوقتي، ياريت نتأكد إنه موجود وجاهز ✨
+Code School 💻`,
+      en: `{guardianSalutation} 👋
+
+We're about to start {childTitle} *{studentName}*'s session now, please make sure they're ready ✨
+Code School 💻`,
     },
   };
 }

@@ -119,7 +119,8 @@ export async function GET(req) {
     }
     if (startDateFrom || startDateTo) {
       query["schedule.startDate"] = {};
-      if (startDateFrom) query["schedule.startDate"].$gte = new Date(startDateFrom);
+      if (startDateFrom)
+        query["schedule.startDate"].$gte = new Date(startDateFrom);
       if (startDateTo) {
         const endDate = new Date(startDateTo);
         endDate.setHours(23, 59, 59, 999);
@@ -190,6 +191,9 @@ export async function GET(req) {
       availableSeats: group.maxStudents - group.currentStudentsCount,
       isFull: group.currentStudentsCount >= group.maxStudents,
       schedule: group.schedule,
+      deliveryMode: group.deliveryMode || "online",
+      location: group.location || "",
+      locationDetails: group.locationDetails || null, // ✅
       automation: group.automation,
       moduleSelection: group.moduleSelection,
       sessionsGenerated: group.sessionsGenerated,
@@ -229,7 +233,8 @@ export async function GET(req) {
       {
         success: false,
         error: error.message || "Failed to fetch groups",
-        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+        details:
+          process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     );
@@ -257,14 +262,18 @@ export async function POST(req) {
       schedule,
       automation,
       moduleSelection,
-      tags, // ✅
+      tags,
+      deliveryMode, // ✅ "online" | "offline"
+      location, // ✅ نص مركّب (fallback / نص جاهز للعرض)
+      locationDetails, // ✅ { lat, lng, placeName, country, address, extraDetails }
     } = body;
 
     if (!name || !courseId || !maxStudents || !schedule) {
       return NextResponse.json(
         {
           success: false,
-          error: "Missing required fields: name, courseId, maxStudents, schedule",
+          error:
+            "Missing required fields: name, courseId, maxStudents, schedule",
         },
         { status: 400 },
       );
@@ -292,19 +301,27 @@ export async function POST(req) {
 
     if (!schedule.daysOfWeek?.length || schedule.daysOfWeek.length > 3) {
       return NextResponse.json(
-        { success: false, error: "Schedule must have between 1 and 3 days selected" },
+        {
+          success: false,
+          error: "Schedule must have between 1 and 3 days selected",
+        },
         { status: 400 },
       );
     }
     const uniqueDays = [...new Set(schedule.daysOfWeek)];
     if (uniqueDays.length !== schedule.daysOfWeek.length) {
       return NextResponse.json(
-        { success: false, error: "Schedule days must be unique (no duplicates)" },
+        {
+          success: false,
+          error: "Schedule days must be unique (no duplicates)",
+        },
         { status: 400 },
       );
     }
     const startDate = new Date(schedule.startDate);
-    const startDayName = startDate.toLocaleDateString("en-US", { weekday: "long" });
+    const startDayName = startDate.toLocaleDateString("en-US", {
+      weekday: "long",
+    });
     if (!schedule.daysOfWeek.includes(startDayName)) {
       return NextResponse.json(
         {
@@ -314,15 +331,46 @@ export async function POST(req) {
         { status: 400 },
       );
     }
-    if (moduleSelection?.mode === "specific" && !moduleSelection.selectedModules?.length) {
+    if (
+      moduleSelection?.mode === "specific" &&
+      !moduleSelection.selectedModules?.length
+    ) {
       return NextResponse.json(
-        { success: false, error: "When selecting specific modules, you must select at least one module" },
+        {
+          success: false,
+          error:
+            "When selecting specific modules, you must select at least one module",
+        },
+        { status: 400 },
+      );
+    }
+
+    // ✅ نوع الجروب — بيتحكم في بدل مواصلات المدرس (offline بس بياخد بدل)
+    const normalizedDeliveryMode = ["online", "offline"].includes(deliveryMode)
+      ? deliveryMode
+      : "online";
+
+    // ✅ لازم يبقى فيه اسم مكان أو إحداثيات محفوظة من الماب في حالة الـ offline
+    const hasLocationInfo =
+      location?.trim() ||
+      locationDetails?.placeName?.trim() ||
+      (locationDetails?.lat && locationDetails?.lng);
+
+    if (normalizedDeliveryMode === "offline" && !hasLocationInfo) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "لازم تحدد مكان الجروب على الماب في حالة الـ Offline",
+        },
         { status: 400 },
       );
     }
 
     if (instructorUserIds.length > 0) {
-      const conflicts = await checkInstructorConflicts(instructorUserIds, schedule);
+      const conflicts = await checkInstructorConflicts(
+        instructorUserIds,
+        schedule,
+      );
       if (conflicts.length > 0) {
         return NextResponse.json(
           {
@@ -351,7 +399,10 @@ export async function POST(req) {
     }
 
     let totalSessions;
-    if (moduleSelection?.mode === "specific" && moduleSelection.selectedModules.length > 0) {
+    if (
+      moduleSelection?.mode === "specific" &&
+      moduleSelection.selectedModules.length > 0
+    ) {
       totalSessions = moduleSelection.selectedModules.reduce(
         (sum, idx) => sum + (course.curriculum[idx]?.totalSessions || 3),
         0,
@@ -375,11 +426,12 @@ export async function POST(req) {
       curriculum: course.curriculum.map((m) => ({
         title: m.title,
         order: m.order,
-        lessons: m.lessons?.map((l) => ({
-          title: l.title,
-          order: l.order,
-          sessionsCount: l.sessionsCount || 2,
-        })) || [],
+        lessons:
+          m.lessons?.map((l) => ({
+            title: l.title,
+            order: l.order,
+            sessionsCount: l.sessionsCount || 2,
+          })) || [],
       })),
     };
 
@@ -404,6 +456,26 @@ export async function POST(req) {
         timeTo: schedule.timeTo,
         timezone: schedule.timezone || "Africa/Cairo",
       },
+      deliveryMode: normalizedDeliveryMode,
+      location: normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
+      locationDetails:
+        normalizedDeliveryMode === "offline"
+          ? {
+              lat: locationDetails?.lat ?? null,
+              lng: locationDetails?.lng ?? null,
+              placeName: locationDetails?.placeName || "",
+              country: locationDetails?.country || "",
+              address: locationDetails?.address || "",
+              extraDetails: locationDetails?.extraDetails || "",
+            }
+          : {
+              lat: null,
+              lng: null,
+              placeName: "",
+              country: "",
+              address: "",
+              extraDetails: "",
+            },
       pricing: {
         price: 0,
         paymentType: "full",
@@ -490,7 +562,8 @@ export async function POST(req) {
       {
         success: false,
         error: error.message || "Failed to create group",
-        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+        details:
+          process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     );
@@ -508,7 +581,18 @@ export async function PUT(req, { params }) {
 
     const body = await req.json();
 
-    const { name, instructors, maxStudents, schedule, automation, moduleSelection, tags } = body;
+    const {
+      name,
+      instructors,
+      maxStudents,
+      schedule,
+      automation,
+      moduleSelection,
+      tags,
+      deliveryMode,
+      location, // ✅
+      locationDetails, // ✅
+    } = body;
 
     const normalizedInstructors = (instructors || []).map((i) => ({
       userId: i?.userId || i,
@@ -533,15 +617,26 @@ export async function PUT(req, { params }) {
       }
     }
 
-    if (moduleSelection?.mode === "specific" && !moduleSelection.selectedModules?.length) {
+    if (
+      moduleSelection?.mode === "specific" &&
+      !moduleSelection.selectedModules?.length
+    ) {
       return NextResponse.json(
-        { success: false, error: "When selecting specific modules, you must select at least one module" },
+        {
+          success: false,
+          error:
+            "When selecting specific modules, you must select at least one module",
+        },
         { status: 400 },
       );
     }
 
     if (instructorUserIds.length > 0 && schedule) {
-      const conflicts = await checkInstructorConflicts(instructorUserIds, schedule, id);
+      const conflicts = await checkInstructorConflicts(
+        instructorUserIds,
+        schedule,
+        id,
+      );
       if (conflicts.length > 0) {
         return NextResponse.json(
           {
@@ -571,7 +666,10 @@ export async function PUT(req, { params }) {
 
     let totalSessionsCount = group.totalSessionsCount;
     if (moduleSelection && group.courseSnapshot?.curriculum) {
-      if (moduleSelection.mode === "specific" && moduleSelection.selectedModules.length > 0) {
+      if (
+        moduleSelection.mode === "specific" &&
+        moduleSelection.selectedModules.length > 0
+      ) {
         totalSessionsCount = moduleSelection.selectedModules.reduce(
           (sum, idx) =>
             sum + (group.courseSnapshot.curriculum[idx]?.totalSessions || 3),
@@ -587,13 +685,35 @@ export async function PUT(req, { params }) {
 
     const mergedInstructors = normalizedInstructors.map((newInstructor) => {
       const existingEntry = group.instructors?.find(
-        (e) => (e.userId?.toString() || e.userId) === (newInstructor.userId?.toString() || newInstructor.userId)
+        (e) =>
+          (e.userId?.toString() || e.userId) ===
+          (newInstructor.userId?.toString() || newInstructor.userId),
       );
       return {
         userId: newInstructor.userId,
         countTime: existingEntry?.countTime || 0,
       };
     });
+
+    const normalizedDeliveryMode = ["online", "offline"].includes(deliveryMode)
+      ? deliveryMode
+      : group.deliveryMode || "online";
+
+    // ✅ لازم يبقى فيه اسم مكان أو إحداثيات محفوظة من الماب في حالة الـ offline
+    const hasLocationInfo =
+      location?.trim() ||
+      locationDetails?.placeName?.trim() ||
+      (locationDetails?.lat && locationDetails?.lng);
+
+    if (normalizedDeliveryMode === "offline" && !hasLocationInfo) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "لازم تحدد مكان الجروب على الماب في حالة الـ Offline",
+        },
+        { status: 400 },
+      );
+    }
 
     const updateData = {
       $set: {
@@ -607,20 +727,59 @@ export async function PUT(req, { params }) {
           timeTo: schedule.timeTo,
           timezone: schedule.timezone || "Africa/Cairo",
         },
+        deliveryMode: normalizedDeliveryMode,
+        location: normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
+        locationDetails:
+          normalizedDeliveryMode === "offline"
+            ? {
+                lat: locationDetails?.lat ?? null,
+                lng: locationDetails?.lng ?? null,
+                placeName: locationDetails?.placeName || "",
+                country: locationDetails?.country || "",
+                address: locationDetails?.address || "",
+                extraDetails: locationDetails?.extraDetails || "",
+              }
+            : {
+                lat: null,
+                lng: null,
+                placeName: "",
+                country: "",
+                address: "",
+                extraDetails: "",
+              },
         automation,
-        moduleSelection: moduleSelection || { mode: "all", selectedModules: [] },
+        moduleSelection: moduleSelection || {
+          mode: "all",
+          selectedModules: [],
+        },
         totalSessionsCount,
         updatedAt: new Date(),
         tags: tags || [], // ✅
       },
     };
 
-    const updatedGroup = await Group.findByIdAndUpdate(id, updateData, { new: true })
+    const updatedGroup = await Group.findByIdAndUpdate(id, updateData, {
+      new: true,
+    })
       .populate("courseId", "title level")
       .populate("instructors.userId", "name email")
       .populate("createdBy", "name email")
-      .populate("tags") // ✅
+      .populate("tags")
       .lean();
+
+    // 🔄 تحديث deliveryMode للـ Sessions غير المكتملة
+    await Session.updateMany(
+      {
+        groupId: id,
+        isDeleted: false,
+        status: { $ne: "completed" },
+      },
+      {
+        $set: {
+          deliveryMode: normalizedDeliveryMode,
+        },
+      },
+    );
 
     const responseData = {
       ...updatedGroup,

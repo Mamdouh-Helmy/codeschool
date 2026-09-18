@@ -38,6 +38,8 @@ interface InstructorUser {
 }
 
 interface Stats {
+  // 🆕 الدقايق الخام لإجمالي ساعات التدريس — المصدر الأساسي للعرض بالساعة/دقيقة
+  totalTeachingMinutes: number;
   totalTeachingHours: number;
   totalGroups: number;
   activeGroups: number;
@@ -94,6 +96,8 @@ interface GroupProgress {
   completedSessions: number;
   remainingSessions: number;
   progress: number;
+  // 🆕 الدقايق الخام لساعات المدرس في الجروب ده
+  myTeachingMinutes: number;
   myTeachingHours: number;
 }
 
@@ -148,9 +152,36 @@ interface ApiResponse {
   error?: string;
 }
 
+// ── Duration formatting (hours + minutes) ──
+// 🆕 بيحول عدد الدقايق الخام لنص "ساعة ودقيقة" مقروء، بدل الساعة العشرية
+// (زي 3.5) اللي مش بتعبر عن الدقيقة الفعلية بدقة.
+const formatDuration = (totalMinutes: number, isRTL: boolean) => {
+  const mins = Math.max(0, Math.round(totalMinutes || 0));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+
+  if (isRTL) {
+    if (h === 0) return `${m}د`;
+    if (m === 0) return `${h}س`;
+    return `${h}س ${m}د`;
+  }
+
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+};
+
 // ── Animated Counter ──
 
-const AnimatedCounter = ({ value, duration = 1800 }: { value: number; duration?: number }) => {
+const AnimatedCounter = ({
+  value,
+  duration = 1800,
+  formatter,
+}: {
+  value: number;
+  duration?: number;
+  formatter?: (n: number) => string;
+}) => {
   const [count, setCount] = useState(0);
   useEffect(() => {
     let startTime: number;
@@ -165,7 +196,7 @@ const AnimatedCounter = ({ value, duration = 1800 }: { value: number; duration?:
     frame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frame);
   }, [value, duration]);
-  return <span>{count.toLocaleString()}</span>;
+  return <span>{formatter ? formatter(count) : count.toLocaleString()}</span>;
 };
 
 // ── Skeleton ──
@@ -454,8 +485,12 @@ export default function InstructorDashboard() {
                         {isRTL ? "ساعات" : "Hours"}
                       </span>
                     </div>
+                    {/* 🆕 بتعرض "Xh Ym" / "Xس Yد" بدل ساعة عشرية، وبتفضل متحركة زي الأول */}
                     <h3 className="text-3xl font-black text-gray-900 dark:text-[#e6edf3] mb-1">
-                      <AnimatedCounter value={stats?.totalTeachingHours || 0} />
+                      <AnimatedCounter
+                        value={stats?.totalTeachingMinutes || 0}
+                        formatter={(minutes) => formatDuration(minutes, isRTL)}
+                      />
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-[#8b949e]">
                       {isRTL ? "إجمالي ساعات التدريس" : "Total Teaching Hours"}
@@ -674,6 +709,12 @@ export default function InstructorDashboard() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                       {progressData.summaryCards.map((card, idx) => {
                         const StatIcon = getStatIcon(card.icon);
+                        // 🆕 كارت "ساعات التدريس" بيتعرض بالساعة والدقيقة من
+                        // stats.totalTeachingMinutes بدل card.value (العشري)
+                        const displayValue =
+                          card.id === "teaching_hours"
+                            ? formatDuration(stats?.totalTeachingMinutes || 0, isRTL)
+                            : card.value;
                         return (
                           <div
                             key={card.id}
@@ -693,7 +734,7 @@ export default function InstructorDashboard() {
                             </div>
                             <div className="relative z-10 flex-1 min-w-0">
                               <h4 className="text-3xl font-black text-gray-900 dark:text-[#e6edf3] mb-0.5">
-                                {card.value}
+                                {displayValue}
                               </h4>
                               <p className="text-xs text-gray-500 dark:text-[#8b949e]">
                                 {isRTL ? card.titleAr : card.title}
@@ -794,9 +835,10 @@ export default function InstructorDashboard() {
                               <BookOpen className="w-4 h-4" />
                               <span>{group.completedSessions}/{group.totalSessions} {isRTL ? "جلسة" : "sessions"}</span>
                             </div>
+                            {/* 🆕 عرض ساعات المدرس في الجروب بالساعة والدقيقة */}
                             <div className="flex items-center gap-1.5 font-black" style={{ color: "#ff6700" }}>
                               <Clock className="w-4 h-4" />
-                              <span>{group.myTeachingHours}h</span>
+                              <span>{formatDuration(group.myTeachingMinutes || 0, isRTL)}</span>
                             </div>
                           </div>
                         </div>

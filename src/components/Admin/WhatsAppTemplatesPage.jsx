@@ -6,7 +6,7 @@ import {
   Edit, Clock, Bell, Calendar, Award, FileText,
   UserPlus, UserCog, Search, Star, RotateCcw, Video,
   Settings, ChevronDown, ChevronUp, Check, X,
-  BookOpen, Menu, Info,
+  BookOpen, Menu, Info, MapPin, Car,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -45,7 +45,7 @@ const TEMPLATE_TYPES = [
   { id: "module_overview", label: "نظرة عامة على الموديول", icon: BookOpen, color: "secondary", emoji: "📚", category: "basic", type: "guardian_only", api: "message", isNew: true },
   {
     id: "instructor_reminder_24h",
-    label: "تذكير المدرب 24 ساعة",
+    label: "تذكير المدرب 24 ساعة (Online)",
     icon: Clock,
     color: "sky",
     emoji: "⏰",
@@ -56,7 +56,7 @@ const TEMPLATE_TYPES = [
   },
   {
     id: "instructor_reminder_15min",
-    label: "تذكير المدرب 15 دقيقة",
+    label: "تذكير المدرب 15 دقيقة (Online)",
     icon: Clock,
     color: "accent",
     emoji: "⏳",
@@ -65,6 +65,25 @@ const TEMPLATE_TYPES = [
     api: "instructor",
     isNew: true
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ OFFLINE FLOW — Student & Guardian
+  // ═══════════════════════════════════════════════════════════════
+  { id: "reminder_24h_offline_student", label: "تذكير الطالب 24 ساعة (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "offline", type: "student_with_session", api: "message", isNew: true },
+  { id: "reminder_24h_offline_guardian", label: "تذكير ولي الأمر 24 ساعة (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "offline", type: "guardian_with_session", api: "message", isNew: true },
+  { id: "reminder_30min_offline_student", label: "تنبيه الطالب قبل 30 دقيقة (Drop-off)", icon: Car, color: "amber", emoji: "🚗", category: "offline", type: "student_with_session", api: "message", isNew: true },
+  { id: "reminder_30min_offline_guardian", label: "تنبيه ولي الأمر قبل 30 دقيقة (Drop-off)", icon: Car, color: "amber", emoji: "🚗", category: "offline", type: "guardian_with_session", api: "message", isNew: true },
+  { id: "pre_attendance_ping_student", label: "Pre-Attendance Ping - الطالب", icon: Bell, color: "amber", emoji: "✅", category: "offline", type: "student_with_session", api: "message", isNew: true },
+  { id: "pre_attendance_ping_guardian", label: "Pre-Attendance Ping - ولي الأمر", icon: Bell, color: "amber", emoji: "✅", category: "offline", type: "guardian_with_session", api: "message", isNew: true },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ OFFLINE FLOW — Instructor
+  // ═══════════════════════════════════════════════════════════════
+  { id: "instructor_reminder_24h_offline", label: "تذكير المدرب 24 ساعة (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
+  { id: "instructor_reminder_30min_offline", label: "تنبيه المدرب قبل 30 دقيقة (Offline)", icon: Car, color: "amber", emoji: "🚗", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
+  { id: "instructor_pre_attendance_ping", label: "Pre-Attendance Ping - المدرب", icon: Bell, color: "amber", emoji: "✅", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
+
+  // ── Portfolio ──
   { id: "portfolio_inactivity_reminder", label: "تذكير عدم تحديث البورتفوليو", icon: RefreshCw, color: "amber", emoji: "💼", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
   { id: "portfolio_update_broadcast", label: "إعلان تحديث النظام", icon: Zap, color: "secondary", emoji: "📢", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
   { id: "portfolio_contact_form_notification", label: "إشعار رسالة Contact Form", icon: MessageCircle, color: "sky", emoji: "📩", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
@@ -74,7 +93,8 @@ const CATEGORIES = {
   basic: { label: "أساسية", emoji: "📌" },
   group: { label: "المجموعات", emoji: "👥" },
   instructor: { label: "المدربين", emoji: "👨‍🏫" },
-  reminder: { label: "التذكيرات", emoji: "⏰" },
+  reminder: { label: "التذكيرات (Online)", emoji: "⏰" },
+  offline: { label: "Offline - الحصص الحضورية", emoji: "📍" },
   session: { label: "الحصص", emoji: "📅" },
   attendance: { label: "الحضور", emoji: "📋" },
   completion: { label: "الإكمال", emoji: "🎉" },
@@ -94,6 +114,7 @@ const VAR_GROUPS = {
   evaluation: { label: "التقييم", emoji: "⭐" },
   common: { label: "عامة", emoji: "📌" },
   portfolio: { label: "البورتفوليو", emoji: "💼" },
+  offline: { label: "Offline (الموقع)", emoji: "📍" }, // ✅ جديد
 };
 
 const TEMPLATE_VARS = {
@@ -171,6 +192,43 @@ const TEMPLATE_VARS = {
     "time", "meetingLink", "username", "password", "groupName"
   ],
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ OFFLINE VARS
+  // ═══════════════════════════════════════════════════════════════
+  reminder_24h_offline_student: [
+    "salutation_ar", "salutation_en", "sessionName",
+    "date", "time", "placeName", "address", "mapsLink",
+  ],
+  reminder_24h_offline_guardian: [
+    "guardianSalutation", "childTitle", "studentName", "sessionName",
+    "date", "time", "placeName", "address", "mapsLink",
+  ],
+  reminder_30min_offline_student: [
+    "salutation_ar", "salutation_en", "sessionName",
+    "time", "placeName", "mapsLink",
+  ],
+  reminder_30min_offline_guardian: [
+    "guardianSalutation", "childTitle", "studentName", "sessionName",
+    "time", "placeName", "mapsLink",
+  ],
+  pre_attendance_ping_student: [
+    "salutation_ar", "salutation_en", "sessionName",
+  ],
+  pre_attendance_ping_guardian: [
+    "guardianSalutation", "childTitle", "studentName", "sessionName",
+  ],
+  instructor_reminder_24h_offline: [
+    "instructorSalutation", "sessionName", "date", "time",
+    "placeName", "address", "mapsLink", "groupName", "studentCount",
+  ],
+  instructor_reminder_30min_offline: [
+    "instructorSalutation", "sessionName", "time",
+    "placeName", "mapsLink", "groupName",
+  ],
+  instructor_pre_attendance_ping: [
+    "instructorSalutation", "sessionName",
+  ],
+
   learning_supervisor_intro: ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
   module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "moduleDescription", "supervisorName"],
   portfolio_inactivity_reminder: ["ownerWelcome", "ownerName", "portfolioLink"],
@@ -227,6 +285,51 @@ const FRONTEND_FALLBACKS = {
     ar: `{instructorSalutation} 👋\nحبيت أفكرك إن ميعادنا هيبدأ خلال *15 دقيقة* إن شاء الله ✨\n\n📘 الـ Session: {sessionName}\n📝 وصف السيشن: {sessionDescription}\n⏰ الوقت: {time}\n🔗 لينك الحصة:\n{meetingLink}\n\n🔐 بيانات الدخول:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 المجموعة: {groupName}\n\nمتحمسين نشوفك دلوقتي 💻🚀\nفريق Code School`,
     en: `{instructorSalutation} 👋\nJust a reminder that our session starts in *15 minutes*, God willing ✨\n\n📘 Session: {sessionName}\n📝 Session Overview: {sessionDescription}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n🔐 Login Details:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 Group: {groupName}\n\nCan't wait to see you now 💻🚀\nCode School Team`,
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ OFFLINE — Student & Guardian
+  // ═══════════════════════════════════════════════════════════════
+  reminder_24h_offline_student: {
+    ar: `{salutation_ar} 👋\n\nتذكير: حصتك *{sessionName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n\n🗺️ اللوكيشن على الخريطة:\n{mapsLink}\n\nمنتظرينك في الميعاد 💻\nCode School`,
+    en: `{salutation_en} 👋\n\nReminder: Your session *{sessionName}* is tomorrow, God willing ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n\n🗺️ Location on Maps:\n{mapsLink}\n\nSee you there 💻\nCode School`,
+  },
+  reminder_24h_offline_guardian: {
+    ar: `{guardianSalutation} 👋\n\nتذكير: حصة {childTitle} *{studentName}* بكرة إن شاء الله ✨\n\n📘 الـ Session: {sessionName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n\n🗺️ اللوكيشن على الخريطة:\n{mapsLink}\n\nياريت تجهز {childTitle} للوصول في الميعاد 🙏\nCode School 💻`,
+    en: `{guardianSalutation} 👋\n\nReminder: {childTitle} *{studentName}*'s session is tomorrow ✨\n\n📘 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n\n🗺️ Location on Maps:\n{mapsLink}\n\nPlease prepare {childTitle} to arrive on time 🙏\nCode School 💻`,
+  },
+  reminder_30min_offline_student: {
+    ar: `{salutation_ar} 👋\n\n⏰ فاضل 30 دقيقة على بداية الحصة *{sessionName}*\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nيلا استعد للنزول 👍\nCode School 💻`,
+    en: `{salutation_en} 👋\n\n⏰ 30 minutes left until *{sessionName}*\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGet ready to head out 👍\nCode School 💻`,
+  },
+  reminder_30min_offline_guardian: {
+    ar: `{guardianSalutation} 👋\n\n🚗 تنبيه: حصة {childTitle} *{studentName}* هتبدأ بعد 30 دقيقة\n\n⏰ الوقت: {time}\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nياريت تجهز {childTitle} للنزول في الميعاد 🙏\nCode School 💻`,
+    en: `{guardianSalutation} 👋\n\n🚗 Heads-up: {childTitle} *{studentName}*'s session starts in 30 minutes\n\n⏰ Time: {time}\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nPlease prepare {childTitle} to head out on time 🙏\nCode School 💻`,
+  },
+  pre_attendance_ping_student: {
+    ar: `{salutation_ar} 👋\n\nبنستعد نبدأ حصة *{sessionName}* دلوقتي، ياريت نتأكد إنك موجود وجاهز ✨\nCode School 💻`,
+    en: `{salutation_en} 👋\n\nWe're about to start *{sessionName}* now, please make sure you're ready ✨\nCode School 💻`,
+  },
+  pre_attendance_ping_guardian: {
+    ar: `{guardianSalutation} 👋\n\nبنستعد نبدأ حصة {childTitle} *{studentName}* دلوقتي، ياريت نتأكد إنه موجود وجاهز ✨\nCode School 💻`,
+    en: `{guardianSalutation} 👋\n\nWe're about to start {childTitle} *{studentName}*'s session now, please make sure they're ready ✨\nCode School 💻`,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ OFFLINE — Instructor
+  // ═══════════════════════════════════════════════════════════════
+  instructor_reminder_24h_offline: {
+    ar: `{instructorSalutation} 👋\n\nتذكير: عندك حصة *{sessionName}* بكرة إن شاء الله (Offline) ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ {mapsLink}\n\n👥 المجموعة: {groupName}\n🔢 عدد الطلاب: {studentCount}\n\nفريق Code School 💻`,
+    en: `{instructorSalutation} 👋\n\nReminder: You have an *offline* session *{sessionName}* tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ {mapsLink}\n\n👥 Group: {groupName}\n🔢 Students: {studentCount}\n\nCode School Team 💻`,
+  },
+  instructor_reminder_30min_offline: {
+    ar: `{instructorSalutation} 👋\n\n⏰ فاضل 30 دقيقة على بداية حصة *{sessionName}*\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\n👥 المجموعة: {groupName}\n\nفريق Code School 💻`,
+    en: `{instructorSalutation} 👋\n\n⏰ 30 minutes until *{sessionName}* starts\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\n👥 Group: {groupName}\n\nCode School Team 💻`,
+  },
+  instructor_pre_attendance_ping: {
+    ar: `{instructorSalutation} 👋\n\nالحصة *{sessionName}* هتبدأ دلوقتي، ياريت نتأكد إن الطلاب موجودين وجاهزين ونسجل الحضور ✨\n\nفريق Code School 💻`,
+    en: `{instructorSalutation} 👋\n\n*{sessionName}* is about to start, please make sure students are present and take attendance ✨\n\nCode School Team 💻`,
+  },
+
   portfolio_inactivity_reminder: {
     ar: `أهلاً بيك يا {ownerName}،\n\nعارفين إن الـ Personal Portfolio بتاعك مش مجرد صفحة على النت، ده واجهة الـ Business بتاعك والمكان اللي بيعكس مجهودك وشغلك.\n\nعشان كده، صممنا البورتفوليو بتاعك ليكون صديق لمحركات البحث ومُحسن للـ SEO والـ GEO.. وده معناه Visibility أعلى وعملاء أكتر يقدروا يوصلولك بسهولة.\n\nادخل دلوقتي وضيف أي Updates جديدة في الـ Projects بتاعتك عشان تفضل دايماً في الصدارة والـ Ranking بتاعك يعلى!\n\nلينك البورتفوليو بتاعك:\n{portfolioLink}`,
     en: `Hi {ownerName},\n\nYour Personal Portfolio isn't just a page online — it's the face of your business and the place that reflects your effort and work.\n\nThat's why we designed your portfolio to be search-engine friendly and optimized for SEO & GEO.. which means higher visibility and more clients finding you easily.\n\nLog in now and add any new Updates to your Projects to stay ahead and keep your Ranking climbing!\n\nYour portfolio link:\n{portfolioLink}`,
@@ -280,6 +383,38 @@ function getRecipientType(tabId) {
   if (tabId.includes("student")) return "student";
   return "guardian";
 }
+
+// ✅ NEW: نحدد هل القالب instructor (بيتحفظ في WhatsAppTemplateInstructor)
+function isInstructorTemplate(tabId) {
+  return (
+    tabId === "instructor_group_activation" ||
+    tabId === "instructor_reminder_24h" ||
+    tabId === "instructor_reminder_15min" ||
+    tabId === "instructor_reminder_24h_offline" ||
+    tabId === "instructor_reminder_30min_offline" ||
+    tabId === "instructor_pre_attendance_ping"
+  );
+}
+
+// ✅ NEW: mapping بين UI id و DB templateType للمدرب
+const INSTRUCTOR_TYPE_MAP = {
+  instructor_group_activation: "group_activation",
+  instructor_reminder_24h: "reminder_24h",
+  instructor_reminder_15min: "reminder_15min",
+  instructor_reminder_24h_offline: "reminder_24h_offline",
+  instructor_reminder_30min_offline: "reminder_30min_offline",
+  instructor_pre_attendance_ping: "pre_attendance_ping",
+};
+
+// ✅ NEW: mapping معاكس (DB → UI) للاستخدام في fetchTemplates
+const INSTRUCTOR_DB_TO_UI = {
+  group_activation: "instructor_group_activation",
+  reminder_24h: "instructor_reminder_24h",
+  reminder_15min: "instructor_reminder_15min",
+  reminder_24h_offline: "instructor_reminder_24h_offline",
+  reminder_30min_offline: "instructor_reminder_30min_offline",
+  pre_attendance_ping: "instructor_pre_attendance_ping",
+};
 
 // ─────────────────────────────────────────────────────────────
 // GENDER CONTEXT SELECTOR
@@ -664,7 +799,7 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// TEMPLATE SIDEBAR — طبقة تنقل واحدة (بديل عن تصنيف + تابات)
+// TEMPLATE SIDEBAR
 // ─────────────────────────────────────────────────────────────
 function TemplateSidebar({ byCategory, activeTab, onSelectTab, searchQ, setSearchQ, templates, isOpenMobile, onCloseMobile }) {
   const [openCats, setOpenCats] = useState(() => {
@@ -801,7 +936,6 @@ export default function WhatsAppTemplatesPage() {
     ownerGender: "male",
   });
 
-  // 🆕 حالة التعديلات غير المحفوظة + حالة الـ sidebar على الموبايل
   const [dirty, setDirty] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -813,7 +947,6 @@ export default function WhatsAppTemplatesPage() {
     if (SINGLE_CONTENT_TEMPLATES.includes(activeTab)) setTestLanguage("ar");
   }, [activeTab]);
 
-  // 🆕 تحذير عند إغلاق التاب/الصفحة ولسه فيه تعديلات غير محفوظة
   useEffect(() => {
     const handler = (e) => {
       if (!dirty) return;
@@ -873,13 +1006,8 @@ export default function WhatsAppTemplatesPage() {
       const id = await iRes.json();
       if (id.success && id.data) {
         const list = Array.isArray(id.data) ? id.data : [id.data];
-        const typeMap = {
-          group_activation: "instructor_group_activation",
-          reminder_24h: "instructor_reminder_24h",
-          reminder_15min: "instructor_reminder_15min",
-        };
         list.forEach(d => {
-          const uiKey = typeMap[d.templateType];
+          const uiKey = INSTRUCTOR_DB_TO_UI[d.templateType];
           if (uiKey && !map[uiKey]) {
             map[uiKey] = {
               ...d,
@@ -1028,7 +1156,6 @@ export default function WhatsAppTemplatesPage() {
     return text;
   };
 
-  // 🆕 التنقل بين القوالب من الـ sidebar — بيحذر لو فيه تعديلات غير محفوظة
   const handleSelectTab = useCallback((tabId) => {
     if (tabId === activeTab) { setSidebarOpen(false); return; }
     if (dirty) {
@@ -1040,7 +1167,6 @@ export default function WhatsAppTemplatesPage() {
     setSidebarOpen(false);
   }, [activeTab, dirty]);
 
-  // 🆕 التنقل بين "القوالب" و"المتغيرات" — بيحذر برضو
   const handleMainTabChange = useCallback((id) => {
     if (mainTab === "templates" && id !== "templates" && dirty) {
       const proceed = window.confirm("لديك تعديلات لم تُحفظ. هل تريد المتابعة؟");
@@ -1056,25 +1182,18 @@ export default function WhatsAppTemplatesPage() {
     try {
       let endpoint, payload;
 
-      if (
-        activeTab === "instructor_group_activation" ||
-        activeTab === "instructor_reminder_24h" ||
-        activeTab === "instructor_reminder_15min"
-      ) {
+      // ✅ Instructor templates (كل الـ 6 أنواع)
+      if (isInstructorTemplate(activeTab)) {
         endpoint = "/api/whatsapp/instructor-templates";
 
-        const typeMap = {
-          instructor_group_activation: "group_activation",
-          instructor_reminder_24h: "reminder_24h",
-          instructor_reminder_15min: "reminder_15min",
-        };
+        const dbType = INSTRUCTOR_TYPE_MAP[activeTab];
 
         if (cur.isFrontendFallback || !cur._id) {
           const res = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              templateType: typeMap[activeTab],
+              templateType: dbType,
               name: activeType?.label || activeTab,
               contentAr: cur.contentAr || cur.content,
               contentEn: cur.contentEn || "",
@@ -1090,7 +1209,7 @@ export default function WhatsAppTemplatesPage() {
 
         payload = {
           id: cur._id,
-          templateType: typeMap[activeTab],
+          templateType: dbType,
           contentAr: cur.contentAr || cur.content,
           contentEn: cur.contentEn || "",
           setAsDefault: true,
@@ -1199,7 +1318,6 @@ export default function WhatsAppTemplatesPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // 🆕 فتح لوحة إدراج المتغيرات من زرار واضح (مش لازم تكتب @ يدوي)
   const openVariablePicker = () => {
     const pos = textareaRef.current ? textareaRef.current.selectionStart : textVal.length;
     setCursorPos(pos);
@@ -1282,7 +1400,6 @@ export default function WhatsAppTemplatesPage() {
             <>
               <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0 hidden lg:block" />
 
-              {/* موبايل: زرار فتح لوحة اختيار القالب (بديل التابات المزدوجة) */}
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="lg:hidden flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex-1 min-w-0"
@@ -1317,7 +1434,6 @@ export default function WhatsAppTemplatesPage() {
           </button>
         </div>
 
-        {/* موبايل: صف اللغة (منقول من الديسكتوب) */}
         {mainTab === "templates" && !isSingleContent && (
           <div className="lg:hidden border-t border-slate-100 dark:border-slate-800/80 px-4 py-1.5 flex items-center gap-2">
             <span className="text-[10px] text-slate-400 flex-shrink-0">اللغة:</span>
@@ -1381,13 +1497,13 @@ export default function WhatsAppTemplatesPage() {
                       {activeType.type.includes("instructor") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20">👨‍🏫 للمدرب</span>}
                       {activeType.type.includes("group") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">👥 بيانات المجموعة</span>}
                       {activeType.type.includes("session") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">📅 بيانات الحصة</span>}
+                      {activeType.category === "offline" && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20">📍 Offline</span>}
                       <span className="text-[10px] text-slate-400">{allVars.length} متغير</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* 🆕 بانر واضح للقوالب اللي لسه مالهاش نسخة محفوظة في الداتابيز */}
               {templates[activeTab]?.isFrontendFallback && (
                 <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20 mb-3">
                   <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
@@ -1414,7 +1530,6 @@ export default function WhatsAppTemplatesPage() {
 
               <div className="grid xl:grid-cols-3 lg:grid-cols-2 gap-4">
 
-                {/* Editor column */}
                 <div className="xl:col-span-2 space-y-4">
 
                   <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -1426,7 +1541,6 @@ export default function WhatsAppTemplatesPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {/* 🆕 زرار واضح لإدراج متغير — بديل الاعتماد على معرفة كتابة @ */}
                         <button
                           onClick={openVariablePicker}
                           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all hover:scale-105 active:scale-95 ${C.bg} text-white shadow-sm`}
@@ -1554,7 +1668,6 @@ export default function WhatsAppTemplatesPage() {
                   </div>
                 </div>
 
-                {/* Preview column */}
                 <div className="space-y-4">
 
                   <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
@@ -1567,7 +1680,6 @@ export default function WhatsAppTemplatesPage() {
                       </div>
                     </div>
 
-                    {/* 🆕 توضيح إن دي قيم تجريبية مش بيانات حقيقية */}
                     <div className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800/40">
                       <Info className="w-3 h-3 text-blue-500 flex-shrink-0" />
                       <p className="text-[10px] text-blue-600 dark:text-blue-400">هذه معاينة بقيم تجريبية — القيم الحقيقية تُستبدل وقت الإرسال الفعلي</p>
@@ -1659,6 +1771,7 @@ export default function WhatsAppTemplatesPage() {
                           <li>• غيّر الطالب (ذكر/أنثى)، ولي الأمر (أب/أم)، المدرب لرؤية المعاينة الصحيحة</li>
                           <li>• انقر "تعديل القيم" لتعديل قيم الجنس من الداتابيز</li>
                           {isSingleContent && <li>• 🌐 هذا القالب رسالة واحدة تحتوي عربي وإنجليزي معاً</li>}
+                          {activeType?.category === "offline" && <li>• 📍 قوالب Offline تحتوي على متغيرات الموقع (placeName، address، mapsLink)</li>}
                         </ul>
                       </div>
                     </div>
@@ -1670,7 +1783,6 @@ export default function WhatsAppTemplatesPage() {
         </div>
       </div>
 
-      {/* 🆕 Sticky save bar على الموبايل — بيظهر بس لما فيه تعديلات غير محفوظة */}
       {mainTab === "templates" && dirty && (
         <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 p-3">
           <div className="bg-white/95 dark:bg-[#161b27]/95 backdrop-blur-md rounded-2xl border border-amber-200 dark:border-amber-800/40 shadow-xl p-3 flex items-center gap-3">

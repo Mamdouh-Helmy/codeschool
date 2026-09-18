@@ -598,7 +598,7 @@ export async function POST(req, { params }) {
   }
 }
 
-// ─── PATCH: احفظ التقييمات + ابعت الرسائل ────────────────────────────────────
+// ─── PATCH: احفظ التقييمات + ابعت الرسائل + احسب مرتب المدرس ─────────────────
 export async function PATCH(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -612,13 +612,17 @@ export async function PATCH(req, { params }) {
     try { const t = await req.text(); if (t?.trim()) body = JSON.parse(t); }
     catch { return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { evaluations } = body;
+    // 🆕 actualStartTime / actualEndTime: الوقت الفعلي اللي المدرس بدأ وخلص فيه
+    // ("19:00" / "20:30"). اختياريين — لو مجوش بنقع على الوقت المجدول تلقائيًا
+    // جوه lib/payroll.
+    const { evaluations, actualStartTime, actualEndTime } = body;
+
     if (!Array.isArray(evaluations) || evaluations.length === 0) {
       return NextResponse.json({ success: false, error: 'evaluations array required' }, { status: 400 });
     }
 
     const session = await Session.findById(id)
-      .populate({ path: 'groupId', select: 'name instructors' })
+      .populate({ path: 'groupId', select: 'name instructors deliveryMode' })
       .select('+recordingLink');
     if (!session) return NextResponse.json({ success: false, message: 'الجلسة غير موجودة' }, { status: 404 });
 
@@ -636,8 +640,6 @@ export async function PATCH(req, { params }) {
       ? await getModuleData(session.groupId._id, session.moduleIndex ?? 0)
       : { moduleTitle: '', moduleDescription: '' };
 
-    // ✅ جيب بيانات البلوج مرة واحدة بس لكل السيشن دي (نفسها لكل الطلاب)
-    // بدل ما تتجاب من جديد جوه الـ loop لكل طالب — نفس السيشن يعني نفس البلوج.
     const blogInfo = await getSessionBlogInfo(session);
 
     const attendanceMap = {};
@@ -651,20 +653,11 @@ export async function PATCH(req, { params }) {
 
       const attendanceStatus = attendanceMap[studentId?.toString()] || 'absent';
 
-      // 🆕 تأمين مزدوج: لو الطالب غايب أو معذور، اتخطاه تمامًا — مفيش تقييم
-      // يتسجل، مفيش رسالة تقييم، ومفيش لينك تسجيل ولا رسالة بلوج تتبعت له،
-      // حتى لو وصل ضمن الـ evaluations array لأي سبب (مثلاً تاب قديم مفتوح
-      // في الفرونت).
       if (EXCLUDED_FROM_EVALUATION_STATUSES.includes(attendanceStatus)) {
         results.push({
-          studentId,
-          decision,
-          attendanceStatus,
-          messageSent: false,
-          recordingLinkSent: false,
-          blogSent: false,
-          skipped: true,
-          skipReason: 'excluded_attendance_status',
+          studentId, decision, attendanceStatus,
+          messageSent: false, recordingLinkSent: false, blogSent: false,
+          skipped: true, skipReason: 'excluded_attendance_status',
         });
         continue;
       }
@@ -698,11 +691,6 @@ export async function PATCH(req, { params }) {
         participation: ratings?.participation ?? perfScore,
       };
 
-      // ✅ FIX: الـ upsert بقى بمفتاح { groupId, studentId, sessionId } بدل
-      // { groupId, studentId } بس — قبل كده أي تقييم جديد لنفس الطالب في
-      // نفس الجروب كان بيدهس (overwrite) تقييم أي سيشن سابقة لنفس الطالب،
-      // فكان فعليًا بيتسجل تقييم واحد بس لكل (جروب+طالب) بدل تقييم منفصل
-      // لكل سيشن. دلوقتي كل سيشن ليها تقييمها المستقل الخاص بيها.
       await StudentEvaluation.findOneAndUpdate(
         { groupId: session.groupId?._id, studentId, sessionId: session._id },
         {
@@ -729,17 +717,13 @@ export async function PATCH(req, { params }) {
 
       let messageSent       = false;
       let recordingLinkSent = false;
-      let blogSent          = false; // 🆕
+      let blogSent          = false;
 
       if (guardianPhone && rendered) {
-        let evalResult = null;
-
         try {
-          const { wapilotService } = await import(
-            "../../../../../services/wapilot-service"
-          );
+          const { wapilotService } = await import("../../../../../services/wapilot-service");
 
-          evalResult = await wapilotService.sendAndLogEvalMessage({
+          const evalResult = await wapilotService.sendAndLogEvalMessage({
             studentId,
             phoneNumber: guardianPhone,
             messageContent: rendered,
@@ -760,11 +744,7 @@ export async function PATCH(req, { params }) {
           messageSent = evalResult?.success || false;
 
           if (recordingLink?.trim()) {
-            const { rendered: recRendered } = await buildRecordingMessage(
-              student,
-              session,
-              recordingLink
-            );
+            const { rendered: recRendered } = await buildRecordingMessage(student, session, recordingLink);
 
             const linkResult = await wapilotService.sendAndLogMessage({
               studentId,
@@ -783,9 +763,6 @@ export async function PATCH(req, { params }) {
             recordingLinkSent = linkResult?.success || false;
           }
 
-          // 🆕 رسالة ملخص الجلسة (البلوج) — مستقلة تمامًا عن رسالة التقييم،
-          // بتتبعت هنا جنب لينك التسجيل (مش شرط وجود recordingLink)، وبس
-          // لو فيه محتوى بلوج فعلاً باللغة اللي بيتكلمها ولي الأمر.
           const blogMessage = await buildBlogMessage(student, session, blogInfo);
           if (blogMessage?.rendered) {
             try {
@@ -816,28 +793,49 @@ export async function PATCH(req, { params }) {
       results.push({ studentId, decision, attendanceStatus, messageSent, recordingLinkSent, blogSent });
     }
 
-    // ✅ حدّث الـ status بس لو مش completed
+    // ── إكمال السيشن + ساعات المدرس + المرتب ────────────────────────────────
+    let payrollResult = null;
+
     if (!wasAlreadyCompleted) {
       session.status = 'completed';
+
+      // ✅ الوقت الفعلي — بيتحفظ على السيشن نفسها عشان يفضل مرجع دايم
+      if (actualStartTime) session.actualStartTime = actualStartTime;
+      if (actualEndTime)   session.actualEndTime   = actualEndTime;
+
       await session.save();
 
-      // ✅ ضيف ساعتين للمدرس مرة واحدة بس
+            // ✅ الـ payroll الأول
+      try {
+        const { processSessionPayroll } = await import('@/lib/payroll');
+        payrollResult = await processSessionPayroll({
+          sessionId: id,
+          actualStartTime: actualStartTime || null,
+          actualEndTime:   actualEndTime   || null,
+          actedBy: user.id,
+          source: 'instructor_evaluation',
+        });
+      } catch (payrollError) {
+        console.error('⚠️ Payroll processing failed:', payrollError.message);
+        payrollResult = { success: false, error: payrollError.message };
+      }
+
+      // ✅ ساعات التدريس بنفس المدة الفعلية
       try {
         const group = await Group.findById(session.groupId?._id || session.groupId);
         if (group) {
-          await group.addInstructorHours(2);
-          console.log(`✅ Added 2h to instructors (first completion)`);
+          await group.addInstructorHours(payrollResult?.durationMinutes || 0);
         }
       } catch (err) {
         console.error('⚠️ addInstructorHours failed:', err.message);
       }
     } else {
-      console.log(`⏭️ Session already completed — skipping status update and instructor hours`);
+      console.log(`⏭️ Session already completed — skipping status, hours and payroll`);
     }
 
     const evalSent      = results.filter((r) => r.messageSent).length;
     const linkSent      = results.filter((r) => r.recordingLinkSent).length;
-    const blogSentCount = results.filter((r) => r.blogSent).length; // 🆕
+    const blogSentCount = results.filter((r) => r.blogSent).length;
     const skipped       = results.filter((r) => r.skipped).length;
 
     return NextResponse.json({
@@ -847,6 +845,14 @@ export async function PATCH(req, { params }) {
         results,
         sessionCompleted: true,
         alreadyWasCompleted: wasAlreadyCompleted,
+        payroll: payrollResult
+          ? {
+              processed: !!payrollResult.success,
+              durationMinutes: payrollResult.durationMinutes || 0,
+              entriesCount: payrollResult.createdCount || 0,
+              deliveryMode: payrollResult.deliveryMode || null,
+            }
+          : null,
         summary: { total: results.length, evalSent, linkSent, blogSent: blogSentCount, skipped },
       },
     });

@@ -120,6 +120,25 @@ const groupSchema = new mongoose.Schema(
       default: "",
     },
 
+        // ✅ نوع الجروب: أونلاين ولا أوفلاين — بيتورّث للسيشنات وبيتحكم في بدل المواصلات
+        deliveryMode: {
+      type: String,
+      enum: ["online", "offline"],
+      default: "online",
+    },
+    location: {
+      type: String,
+      default: "",
+    },
+    locationDetails: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+      placeName: { type: String, default: "" },
+      country: { type: String, default: "" },
+      address: { type: String, default: "" },
+      extraDetails: { type: String, default: "" },
+    },
+
     // Pricing
     pricing: {
       price: {
@@ -306,17 +325,23 @@ groupSchema.methods.isFull = function () {
   return this.currentStudentsCount >= this.maxStudents;
 };
 
-groupSchema.methods.addInstructorHours = async function (hoursToAdd = 2) {
+// ✅ بقت بتاخد المدة الفعلية بالدقايق بدل رقم ساعات ثابت — نفس المدة اللي
+// الـ payroll بيحسب بيها، عشان countTime يفضل متطابق مع كشف المرتبات.
+groupSchema.methods.addInstructorHours = async function (durationMinutes = 0) {
   if (!this.instructors || this.instructors.length === 0) {
     console.log("⚠️ No instructors in group to add hours to");
     return { success: false, reason: "no_instructors" };
   }
 
+  const hoursToAdd = Math.round(((Number(durationMinutes) || 0) / 60) * 100) / 100;
+
+  if (hoursToAdd <= 0) {
+    return { success: false, reason: "invalid_duration" };
+  }
+
   for (const instructor of this.instructors) {
-    instructor.countTime = (instructor.countTime || 0) + hoursToAdd;
-    console.log(
-      `✅ Added ${hoursToAdd}h to instructor ${instructor.userId} → total: ${instructor.countTime}h`
-    );
+    instructor.countTime =
+      Math.round(((instructor.countTime || 0) + hoursToAdd) * 100) / 100;
   }
 
   await this.save();
@@ -324,6 +349,7 @@ groupSchema.methods.addInstructorHours = async function (hoursToAdd = 2) {
     success: true,
     instructorsUpdated: this.instructors.length,
     hoursAdded: hoursToAdd,
+    durationMinutes,
   };
 };
 

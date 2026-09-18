@@ -4602,6 +4602,24 @@ const en = {
   "portfolio.basic.replaceCv": "Replace CV",
   "portfolio.basic.confirmRemove": "Are you sure you want to remove the CV?",
   "notifications.title": "Notifications",
+  "groups.form.deliveryMode": "Delivery Mode",
+  "groups.form.location": "Location",
+  "groups.form.delivery.online": "Online",
+  "groups.form.delivery.offline": "Offline",
+  "groups.form.delivery.offlineDesc": "Attend at the training location",
+  "groups.form.locationPlaceholder": "Enter the training location",
+  "groups.form.delivery.onlineDesc": "Learn online from anywhere",
+  "groups.form.noLocationYet": "No location selected yet",
+  "groups.form.locationExtraDetails": "Additional Location Details",
+  "groups.form.locationSearchPlaceholder": "Search for a location...",
+  "groups.form.locationExtraDetailsPlaceholder":
+    "Enter any additional details about the location...",
+  "groups.form.noResults": "No results",
+  "groups.form.noResultsHint": "No places matching your search were found",
+  "groups.form.unnamedPlace": "Unnamed place",
+  "groups.form.mapHint": "Pin the location on the map accurately",
+  "groups.form.searchFailed": "Failed to search for the location",
+  "groups.form.searching": "Searching...",
 };
 
 export default en;

@@ -15,6 +15,17 @@ function formatDate(d) {
   }
 }
 
+// 🆕 بيحول عدد الدقايق الخام لنص "ساعة ودقيقة" مقروء (عربي — نفس الصفحة
+// كلها ثابتة بالعربي، من غير توجل RTL/LTR)
+function formatHM(totalMinutes) {
+  const mins = Math.max(0, Math.round(totalMinutes || 0));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}د`;
+  if (m === 0) return `${h}س`;
+  return `${h}س ${m}د`;
+}
+
 const ARABIC_MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 
 function formatMonthLabel(monthKey) {
@@ -105,7 +116,8 @@ export default function InstructorHistoryModal({ instructorId, instructorName, o
         ) : (
           <div className="p-4 space-y-5">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
-              <SummaryCard label="إجمالي الساعات" value={`${data.totalHours} س`} icon={Clock} iconCls="bg-primary/10 text-primary" />
+              {/* 🆕 إجمالي الساعات بالساعة والدقيقة بدل رقم عشري */}
+              <SummaryCard label="إجمالي الساعات" value={formatHM(data.totalMinutes)} icon={Clock} iconCls="bg-primary/10 text-primary" />
               <SummaryCard label="إجمالي الجلسات" value={data.totalSessions} icon={CheckCircle} iconCls="bg-green-100 dark:bg-green-900/30 text-green-600" />
               <SummaryCard label="المجموعات" value={data.totalGroups} icon={Users} iconCls="bg-blue-100 dark:bg-blue-900/30 text-blue-600" />
             </div>
@@ -143,7 +155,8 @@ export default function InstructorHistoryModal({ instructorId, instructorName, o
                 return (
                   <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-xs">
                     <p className="text-MidnightNavyText dark:text-white font-medium mb-1">
-                      {formatMonthLabel(selectedMonth)}: {monthData.sessionsCount} جلسة · {monthData.totalHours} ساعة
+                      {/* 🆕 مدة الشهر بالساعة والدقيقة بدل رقم ثابت مبني على sessionsCount × 2 */}
+                      {formatMonthLabel(selectedMonth)}: {monthData.sessionsCount} جلسة · {formatHM(monthData.totalMinutes)}
                     </p>
                     <p className="text-SlateBlueText dark:text-darktext">المجموعات: {monthData.groups.join("، ")}</p>
                   </div>
@@ -172,7 +185,8 @@ export default function InstructorHistoryModal({ instructorId, instructorName, o
                       <p className="text-[10px] text-SlateBlueText dark:text-darktext">غياب</p>
                       <p className="font-medium text-red-600">{s.absentCount}</p>
                     </div>
-                    <span className="font-semibold text-primary whitespace-nowrap">{s.hours}س</span>
+                    {/* 🆕 مدة السيشن الفعلية بالساعة والدقيقة بدل "2س" ثابتة */}
+                    <span className="font-semibold text-primary whitespace-nowrap">{formatHM(s.durationMinutes)}</span>
                     <span className="text-SlateBlueText dark:text-darktext whitespace-nowrap">{formatDate(s.date)}</span>
                   </div>
                 ))

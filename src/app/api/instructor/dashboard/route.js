@@ -51,32 +51,17 @@ export async function GET(req) {
 
     console.log(`✅ Found ${groups.length} groups for instructor ${user.id}`);
 
-    // ── Extract instructor's countTime from each group ──
-    const groupsWithHours = groups.map((group) => {
-      const myInstructor = group.instructors?.find(
-        (i) => i.userId?._id?.toString() === user.id || i.userId?.toString() === user.id
-      );
-      return {
-        ...group,
-        myCountTime: myInstructor?.countTime || 0,
-      };
-    });
-
     const groupIds = groups.map((g) => g._id);
 
-    // ── Total teaching hours = sum of countTime across all groups ──
-    // countTime في كل مجموعة = عدد الساعات الفعلية التي درّسها المدرس (مثلاً 2 ساعة لكل جلسة)
-    const totalTeachingHours = groupsWithHours.reduce(
-      (sum, g) => sum + (g.myCountTime || 0),
-      0
-    );
-
-    // ── Sessions stats ──
+    // ── Sessions (with actual start/end time for real duration calculation) ──
+    // ✅ ضفنا actualStartTime/actualEndTime عشان نحسب مدة كل سيشن الفعلية بالدقيقة
     const allSessions = await Session.find({
       groupId: { $in: groupIds },
       isDeleted: false,
     })
-      .select("status attendanceTaken attendance scheduledDate startTime endTime title groupId moduleIndex sessionNumber")
+      .select(
+        "status attendanceTaken attendance scheduledDate startTime endTime actualStartTime actualEndTime title groupId moduleIndex sessionNumber"
+      )
       .lean();
 
     const completedSessions = allSessions.filter((s) => s.status === "completed");
@@ -87,6 +72,31 @@ export async function GET(req) {
     const totalSessionsCount = allSessions.length;
     const completedSessionsCount = completedSessions.length;
     const scheduledSessionsCount = scheduledSessions.length;
+
+    // ── Total teaching time = مجموع مدة كل سيشن مكتملة بالدقيقة الفعلية ──
+    // ✅ بنحسبها من الـ Session مباشرة (مش من countTime المتراكم في الجروب)،
+    // عشان لو سيشن اتعدلت بعد ما اتقفلت، الرقم يفضل مطابق للواقع دايمًا.
+    // بتفضّل actualStartTime/actualEndTime لو موجودين، وبترجع لـ startTime/endTime
+    // المجدولة لو مفيش وقت فعلي متسجل.
+    //
+    // 🆕 دلوقتي بنفضل شغالين بالدقيقة الصحيحة (integer) لحد آخر لحظة، وبنبعتها
+    // زي ما هي للفرونت اند (totalTeachingMinutes / myTeachingMinutes) عشان
+    // تتعرض "ساعة ودقيقة" بدل ساعة عشرية (زي 3.5) اللي مش دقيقة فعليًا.
+    // بنسيب totalTeachingHours / myTeachingHours (decimal) موجودين برضو
+    // للتوافق مع أي صفحة تانية (زي /instructor/reports) بتستخدمهم.
+    let totalTeachingMinutes = 0;
+    const minutesByGroup = {};
+
+    completedSessions.forEach((session) => {
+      const minutes = getSessionDurationMinutes(session);
+      totalTeachingMinutes += minutes;
+
+      const gId = session.groupId.toString();
+      minutesByGroup[gId] = (minutesByGroup[gId] || 0) + minutes;
+    });
+
+    totalTeachingMinutes = Math.round(totalTeachingMinutes);
+    const totalTeachingHours = Math.round((totalTeachingMinutes / 60) * 100) / 100;
 
     // ── Attendance analytics ──
     let totalPresent = 0;
@@ -198,9 +208,10 @@ export async function GET(req) {
           const groupTotal = groupSessions.length;
           const progress = groupTotal > 0 ? Math.round((groupCompleted / groupTotal) * 100) : 0;
 
-          const myInstructor = group.instructors?.find(
-            (i) => i.userId?._id?.toString() === user.id || i.userId?.toString() === user.id
-          );
+          // ✅ ساعات المدرس في الجروب ده = مجموع مدة السيشنات المكتملة الفعلية
+          // بالدقيقة (نفس مصدر totalTeachingHours)، مش countTime المتراكم
+          const groupMinutes = Math.round(minutesByGroup[group._id.toString()] || 0);
+          const myTeachingHours = Math.round((groupMinutes / 60) * 100) / 100;
 
           return {
             _id: group._id,
@@ -217,7 +228,11 @@ export async function GET(req) {
             completedSessions: groupCompleted,
             remainingSessions: groupTotal - groupCompleted,
             progress,
-            myTeachingHours: myInstructor?.countTime || 0,
+            // 🆕 الدقايق الخام — المصدر الوحيد اللي الفرونت اند هيعرض منه
+            // "ساعة ودقيقة" بشكل دقيق
+            myTeachingMinutes: groupMinutes,
+            // decimal — لسه موجود للتوافق مع أي كود قديم
+            myTeachingHours,
           };
         })
     );
@@ -308,6 +323,10 @@ export async function GET(req) {
           role: user.role,
         },
         stats: {
+          // 🆕 الدقايق الخام لإجمالي ساعات التدريس — المصدر اللي الفرونت اند
+          // هيبني منه عرض "Xh Ym" / "Xس Yد" بدقة كاملة
+          totalTeachingMinutes,
+          // decimal — لسه موجود للتوافق
           totalTeachingHours,
           totalGroups: groups.length,
           activeGroups: groups.filter((g) => g.status === "active").length,
@@ -332,6 +351,8 @@ export async function GET(req) {
               id: "teaching_hours",
               title: "Teaching Hours",
               titleAr: "ساعات التدريس",
+              // 🆕 value هنا بيفضل عشان أي كود قديم، لكن الفرونت اند دلوقتي
+              // بيبني القيمة المعروضة (ساعة:دقيقة) بنفسه من stats.totalTeachingMinutes
               value: totalTeachingHours,
               icon: "Clock",
               iconColor: "text-blue-600 dark:text-blue-400",
@@ -397,6 +418,27 @@ function formatTime(timeStr) {
   const period = hours >= 12 ? "PM" : "AM";
   const hour12 = hours % 12 || 12;
   return `${hour12}:${minutes.toString().padStart(2, "0")} ${period}`;
+}
+
+// ✅ بيحول "HH:mm" لعدد دقايق من نص الليل
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// ✅ مدة السيشن الفعلية بالدقيقة — بيفضّل actualStartTime/actualEndTime (لو
+// السيشن اتسجل لها وقت فعلي مختلف عن المجدول بعد التعديل) وبيرجع لـ
+// startTime/endTime المجدولة لو مفيش وقت فعلي متسجل
+function getSessionDurationMinutes(session) {
+  const start = timeToMinutes(session.actualStartTime) ?? timeToMinutes(session.startTime);
+  const end   = timeToMinutes(session.actualEndTime)   ?? timeToMinutes(session.endTime);
+
+  if (start === null || end === null) return 0;
+
+  let diff = end - start;
+  if (diff < 0) diff += 24 * 60; // احتياط لو السيشن عدّت نص الليل
+  return diff;
 }
 
 function formatSession(session) {

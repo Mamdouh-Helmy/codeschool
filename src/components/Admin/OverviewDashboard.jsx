@@ -33,11 +33,20 @@ import {
 import StudentHistoryModal from "./StudentHistoryModal";
 import InstructorHistoryModal from "./InstructorHistoryModal";
 
-const SESSION_HOURS = 2;
-
 // =============================================
 // ✅ HELPERS
 // =============================================
+
+// 🆕 بيحول عدد الدقايق الخام لنص "ساعة ودقيقة" مقروء (عربي بس، الصفحة دي
+// مالهاش توجل RTL/LTR — كل النصوص فيها ثابتة بالعربي).
+function formatHM(totalMinutes) {
+  const mins = Math.max(0, Math.round(totalMinutes || 0));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}د`;
+  if (m === 0) return `${h}س`;
+  return `${h}س ${m}د`;
+}
 
 function formatDate(d) {
   if (!d) return "—";
@@ -248,16 +257,14 @@ function InstructorRow({ instructor, idx, onOpenHistory }) {
         </td>
 
         <td className="py-3 px-4">
+          {/* 🆕 عرض إجمالي ساعات المدرس بالساعة والدقيقة بدل رقم ساعات صحيح فقط */}
           <div className="flex items-baseline gap-1">
             <span className="text-xl font-bold text-MidnightNavyText dark:text-white">
-              {instructor.totalHours}
-            </span>
-            <span className="text-xs text-SlateBlueText dark:text-darktext">
-              ساعة
+              {formatHM(instructor.totalMinutes)}
             </span>
           </div>
           <p className="text-[11px] text-SlateBlueText dark:text-darktext">
-            {instructor.totalSessions} جلسة × {SESSION_HOURS}س
+            {instructor.totalSessions} جلسة مكتملة
           </p>
         </td>
 
@@ -336,12 +343,10 @@ function InstructorRow({ instructor, idx, onOpenHistory }) {
             </td>
 
             <td className="py-2.5 px-4">
+              {/* 🆕 ساعات المدرس في الجروب ده بالساعة والدقيقة */}
               <div className="flex items-baseline gap-1">
                 <span className="text-sm font-semibold text-primary">
-                  {group.hoursInGroup}
-                </span>
-                <span className="text-[11px] text-SlateBlueText dark:text-darktext">
-                  ساعة
+                  {formatHM(group.hoursInGroupMinutes)}
                 </span>
               </div>
               <p className="text-[10px] text-SlateBlueText dark:text-darktext">
@@ -688,14 +693,14 @@ export default function OverviewDashboard() {
         <StatCard
           label="المدرسون"
           value={stats.instructors.total}
-          sub={`${stats.instructors.totalHours} ساعة إجمالاً`}
+          sub={`${formatHM(stats.instructors.totalMinutes)} إجمالاً`}
           icon={GraduationCap}
           iconCls="bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400"
         />
         <StatCard
           label="جلسات مكتملة"
           value={stats.sessions.totalCompleted}
-          sub={`${stats.sessions.totalHours} ساعة تدريس`}
+          sub={`${formatHM(stats.sessions.totalMinutes)} تدريس`}
           icon={CheckCircle}
           iconCls="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
         />
@@ -860,7 +865,9 @@ export default function OverviewDashboard() {
             </p>
             <p className="text-xs font-medium text-primary">
               إجمالي الساعات:{" "}
-              {filteredInstructors.reduce((s, i) => s + i.totalHours, 0)} ساعة
+              {formatHM(
+                filteredInstructors.reduce((s, i) => s + (i.totalMinutes || 0), 0)
+              )}
             </p>
           </div>
         </div>

@@ -4716,6 +4716,24 @@ const ar = {
   "portfolio.basic.replaceCv": "استبدال السيرة الذاتية",
   "portfolio.basic.confirmRemove": "هل أنت متأكد من إزالة السيرة الذاتية؟",
   "notifications.title": "الإشعارات",
+  "groups.form.deliveryMode": "نوع الحضور",
+  "groups.form.location": "الموقع",
+  "groups.form.delivery.online": "أونلاين",
+  "groups.form.delivery.offline": "حضوري",
+  "groups.form.delivery.offlineDesc": "الحضور في مقر التدريب",
+  "groups.form.locationPlaceholder": "أدخل موقع التدريب",
+  "groups.form.delivery.onlineDesc": "التعلم عبر الإنترنت من أي مكان",
+  "groups.form.noLocationYet": "لم يتم تحديد الموقع بعد",
+  "groups.form.locationExtraDetails": "تفاصيل إضافية عن الموقع",
+  "groups.form.locationSearchPlaceholder": "ابحث عن الموقع...",
+  "groups.form.locationExtraDetailsPlaceholder":
+    "اكتب أي تفاصيل إضافية عن الموقع...",
+  "groups.form.mapHint": "حدد موقع المكان على الخريطة بدقة",
+  "groups.form.noResults": "لا توجد نتائج",
+  "groups.form.noResultsHint": "لم يتم العثور على أي أماكن مطابقة لبحثك",
+  "groups.form.unnamedPlace": "مكان بدون اسم",
+  "groups.form.searchFailed": "فشل البحث عن المكان",
+  "groups.form.searching": "جاري البحث...",
 };
 
 export default ar;

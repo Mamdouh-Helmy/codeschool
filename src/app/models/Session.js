@@ -1,4 +1,4 @@
-// models/Session.js - ENHANCED WITH MEETING LINK SUPPORT + CASCADE RESCHEDULE REQUESTS + SWAP-TODAY
+// models/Session.js - ENHANCED WITH MEETING LINK SUPPORT + CASCADE RESCHEDULE REQUESTS + SWAP-TODAY + OFFLINE FLOW
 import mongoose from "mongoose";
 
 const attendanceRecordSchema = new mongoose.Schema(
@@ -189,6 +189,25 @@ const SessionSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // ✅ Snapshot من نوع الجروب وقت إنشاء السيشن (لو null بيتقرا من الجروب وقت الحساب)
+    deliveryMode: {
+      type: String,
+      enum: ["online", "offline", null],
+      default: null,
+    },
+
+    // ✅ الوقت الفعلي للسيشن — أساس حساب مرتب المدرس بالدقيقة
+    actualStartTime: { type: String, default: null }, // "19:00"
+    actualEndTime: { type: String, default: null },   // "20:30"
+
+    payroll: {
+      processed: { type: Boolean, default: false },
+      processedAt: { type: Date },
+      durationMinutes: { type: Number, default: 0 },
+      entriesCount: { type: Number, default: 0 },
+      lastError: { type: String, default: "" },
+    },
+
     // Attendance
     attendanceTaken: {
       type: Boolean,
@@ -218,7 +237,9 @@ const SessionSchema = new mongoose.Schema(
 
     // Automation Tracking
     automationEvents: {
-      // Reminders
+      // ─────────────────────────────────────────────────────────
+      // 🌐 ONLINE FLOW — Reminders
+      // ─────────────────────────────────────────────────────────
       reminderSent: {
         type: Boolean,
         default: false,
@@ -249,20 +270,59 @@ const SessionSchema = new mongoose.Schema(
       },
       meetingLinkAssignedAt: Date,
 
-      // Reminder details
+      // ✅ 24h Reminder (online)
       reminder24hSent: { type: Boolean, default: false },
       reminder24hSentAt: Date,
       reminder24hStudentsNotified: { type: Number, default: 0 },
 
+      // ✅ 1h Reminder (legacy — بيتسجل مع 15min)
       reminder1hSent: { type: Boolean, default: false },
       reminder1hSentAt: Date,
       reminder1hStudentsNotified: { type: Number, default: 0 },
+
+      // ✅ 15min Reminder (online) — كانت بتتستخدم في الـ cron بس مش متعرّفة هنا
+      // قبل كده (وكانت بتتجاهل لأن strict:true) — دلوقتي بقت متعرّفة رسميًا.
+      reminder15minSent: { type: Boolean, default: false },
+      reminder15minSentAt: Date,
+      reminder15minStudentsNotified: { type: Number, default: 0 },
 
       reminderStats: {
         total24hSent: { type: Number, default: 0 },
         total24hFailed: { type: Number, default: 0 },
         total1hSent: { type: Number, default: 0 },
         total1hFailed: { type: Number, default: 0 },
+      },
+
+      // ─────────────────────────────────────────────────────────
+      // 📍 OFFLINE FLOW — Reminders
+      // ─────────────────────────────────────────────────────────
+
+      // 📍 تذكير قبل 24 ساعة (Maps / Location Reminder)
+      reminder24hOfflineSent: { type: Boolean, default: false },
+      reminder24hOfflineSentAt: Date,
+      reminder24hOfflineStudentsNotified: { type: Number, default: 0 },
+      reminder24hOfflineInstructorsNotified: { type: Number, default: 0 },
+
+      // 🚗 تنبيه الـ Drop-off قبل 30 دقيقة
+      reminder30minOfflineSent: { type: Boolean, default: false },
+      reminder30minOfflineSentAt: Date,
+      reminder30minOfflineStudentsNotified: { type: Number, default: 0 },
+      reminder30minOfflineInstructorsNotified: { type: Number, default: 0 },
+
+      // ✅ Pre-Attendance Ping (قبل الحضور بـ 5 دقايق)
+      preAttendancePingSent: { type: Boolean, default: false },
+      preAttendancePingSentAt: Date,
+      preAttendancePingStudentsNotified: { type: Number, default: 0 },
+      preAttendancePingInstructorsNotified: { type: Number, default: 0 },
+
+      // ✅ إحصائيات الـ offline
+      reminderStatsOffline: {
+        total24hSent: { type: Number, default: 0 },
+        total24hFailed: { type: Number, default: 0 },
+        total30minSent: { type: Number, default: 0 },
+        total30minFailed: { type: Number, default: 0 },
+        totalPingSent: { type: Number, default: 0 },
+        totalPingFailed: { type: Number, default: 0 },
       },
     },
 
@@ -345,6 +405,13 @@ SessionSchema.index({ "pendingReschedule.batchId": 1 });
 
 // ✅ Early access index — يساعد في تنظيف/فلترة السيشنات اللي عندها فتح فوري شغال
 SessionSchema.index({ "earlyAccess.enabled": 1 });
+
+SessionSchema.index({ "payroll.processed": 1, status: 1 });
+
+// ✅ Offline automation indexes — تسريع فلترة السيشنات في الكرون
+SessionSchema.index({ "automationEvents.reminder24hOfflineSent": 1 });
+SessionSchema.index({ "automationEvents.reminder30minOfflineSent": 1 });
+SessionSchema.index({ "automationEvents.preAttendancePingSent": 1 });
 
 // ✅ Unique constraint: one session per group/module/sessionNumber
 SessionSchema.index(
@@ -535,6 +602,18 @@ SessionSchema.virtual("hasActiveEarlyAccess").get(function () {
   return !!(this.earlyAccess?.enabled && !this.earlyAccess?.consumedAt);
 });
 
+// ✅ هل السيشن دي Offline فعليًا؟ (snapshot من الجروب، fallback للجروب)
+SessionSchema.virtual("isOffline").get(function () {
+  const mode = this.deliveryMode || this.populated?.groupId?.deliveryMode;
+  return mode === "offline";
+});
+
+// ✅ هل السيشن دي Online فعليًا؟
+SessionSchema.virtual("isOnline").get(function () {
+  const mode = this.deliveryMode || this.populated?.groupId?.deliveryMode;
+  return mode !== "offline"; // default: online
+});
+
 // ==================== METHODS ====================
 
 // Check if session is in the past
@@ -571,6 +650,24 @@ SessionSchema.methods.isEffectivelyToday = function () {
 
 // Get session summary
 SessionSchema.methods.getSummary = function () {
+  // ✅ نبني معلومات المكان لو السيشن offline
+  const isOfflineMode =
+    (this.deliveryMode ||
+      this.populated?.groupId?.deliveryMode) === "offline";
+
+  const groupLoc = this.populated?.groupId?.locationDetails || {};
+  const groupLocation = this.populated?.groupId?.location || "";
+
+  const locationInfo = isOfflineMode
+    ? {
+        placeName: groupLoc.placeName || groupLocation || "",
+        address: groupLoc.address || groupLoc.extraDetails || "",
+        country: groupLoc.country || "",
+        lat: groupLoc.lat ?? null,
+        lng: groupLoc.lng ?? null,
+      }
+    : null;
+
   return {
     id: this._id,
     title: this.title,
@@ -594,11 +691,36 @@ SessionSchema.methods.getSummary = function () {
     isToday: this.isToday(),
     moduleIndex: this.moduleIndex,
     modulePosition: this.modulePosition,
+
+    // ✅ Delivery mode + Location
+    deliveryMode: this.deliveryMode || null,
+    isOffline: isOfflineMode,
+    locationInfo,
+
+    // ✅ Meeting (online only)
     meetingLink: this.meetingLink,
     meetingPlatform: this.meetingPlatform,
     meetingPlatformIcon: this.meetingPlatformIcon,
     hasMeetingLink: this.hasMeetingLink,
+
+    // ✅ Recording (online only)
     recordingLink: this.recordingLink,
+
+    // ✅ Offline automation status
+    automationEventsOffline: {
+      reminder24hOfflineSent:
+        this.automationEvents?.reminder24hOfflineSent || false,
+      reminder24hOfflineSentAt:
+        this.automationEvents?.reminder24hOfflineSentAt || null,
+      reminder30minOfflineSent:
+        this.automationEvents?.reminder30minOfflineSent || false,
+      reminder30minOfflineSentAt:
+        this.automationEvents?.reminder30minOfflineSentAt || null,
+      preAttendancePingSent:
+        this.automationEvents?.preAttendancePingSent || false,
+      preAttendancePingSentAt:
+        this.automationEvents?.preAttendancePingSentAt || null,
+    },
   };
 };
 
@@ -608,6 +730,13 @@ SessionSchema.methods.getDisplayDetails = function () {
   const lessonsText = this.lessonIndexes
     .map((idx) => `Lesson ${idx + 1}`)
     .join(" & ");
+
+  const isOfflineMode =
+    (this.deliveryMode ||
+      this.populated?.groupId?.deliveryMode) === "offline";
+
+  const groupLoc = this.populated?.groupId?.locationDetails || {};
+  const groupLocation = this.populated?.groupId?.location || "";
 
   return {
     id: this._id,
@@ -627,12 +756,30 @@ SessionSchema.methods.getDisplayDetails = function () {
     isUpcoming: this.isUpcoming(),
     isToday: this.isToday(),
     attendanceTaken: this.attendanceTaken,
+
+    // ✅ Delivery mode + Location
+    deliveryMode: this.deliveryMode || null,
+    isOffline: isOfflineMode,
+    locationInfo: isOfflineMode
+      ? {
+          placeName: groupLoc.placeName || groupLocation || "",
+          address: groupLoc.address || groupLoc.extraDetails || "",
+          country: groupLoc.country || "",
+          lat: groupLoc.lat ?? null,
+          lng: groupLoc.lng ?? null,
+        }
+      : null,
+
+    // ✅ Meeting (online only)
     meetingLink: this.meetingLink,
     meetingPlatform: this.meetingPlatform,
     meetingPlatformIcon: this.meetingPlatformIcon,
     hasMeetingLink: this.hasMeetingLink,
     credentialsDisplay: this.credentialsDisplay,
+
+    // ✅ Recording (online only)
     recordingLink: this.recordingLink,
+
     instructorNotes: this.instructorNotes,
     materials: this.materials || [],
   };

@@ -38,7 +38,7 @@ const TemplateVariableSchema = new mongoose.Schema(
 
     // هل يدعم هذا المتغير التمييز بالجنس؟
     hasGender: { type: Boolean, default: false },
-    // نوع الجنس: "student" | "guardian" | "instructor"
+    // نوع الجنس: "student" | "guardian" | "instructor" | "portfolio_owner"
     genderType: {
       type: String,
       enum: ["student", "guardian", "instructor", "portfolio_owner", null],
@@ -58,6 +58,7 @@ const TemplateVariableSchema = new mongoose.Schema(
         "completion",
         "evaluation",
         "portfolio",
+        "offline", // ✅ جديد — للمتغيرات الخاصة بالـ Offline flow
         "common",
       ],
       default: "common",
@@ -77,7 +78,7 @@ TemplateVariableSchema.index({ isActive: 1 });
 /**
  * Static: بيجيب كل المتغيرات كـ map جاهز للاستخدام في render
  * @param {string} lang - "ar" | "en"
- * @param {object} genderContext - { studentGender: "male"|"female", guardianType: "father"|"mother", instructorGender: "male"|"female" }
+ * @param {object} genderContext - { studentGender: "male"|"female", guardianType: "father"|"mother", instructorGender: "male"|"female", ownerGender: "male"|"female" }
  */
 TemplateVariableSchema.statics.getVarsMap = async function (
   lang = "ar",
@@ -88,7 +89,7 @@ TemplateVariableSchema.statics.getVarsMap = async function (
     studentGender = "male",
     guardianType = "father",
     instructorGender = "male",
-    ownerGender = "male", // ✅ جديد
+    ownerGender = "male",
   } = genderContext;
 
   const map = {};
@@ -117,7 +118,6 @@ TemplateVariableSchema.statics.getVarsMap = async function (
             : (instructorGender === "male" ? v.valueMaleEn : v.valueFemaleEn) ||
               v.valueEn;
       } else if (v.genderType === "portfolio_owner") {
-        // ✅ جديد
         val =
           lang === "ar"
             ? (ownerGender === "male" ? v.valueMaleAr : v.valueFemaleAr) ||
@@ -832,6 +832,46 @@ export function getDefaultVariables() {
       valueEn: "Schedule conflict",
       hasGender: false,
       group: "session",
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // OFFLINE — متغيرات المكان/اللوكيشن (جديد)
+    // ══════════════════════════════════════════════════════════
+    {
+      key: "placeName",
+      labelAr: "اسم المكان (Offline)",
+      labelEn: "Location Name (Offline)",
+      icon: "📍",
+      valueAr: "Code School - المعادي",
+      valueEn: "Code School - Maadi",
+      hasGender: false,
+      group: "offline",
+      description:
+        "بيتستخدم في رسائل الـ Offline عشان يوضح اسم المكان للطالب/ولي الأمر/المدرب",
+    },
+    {
+      key: "address",
+      labelAr: "العنوان التفصيلي (Offline)",
+      labelEn: "Full Address (Offline)",
+      icon: "📌",
+      valueAr: "شارع 9، المعادي، القاهرة",
+      valueEn: "Street 9, Maadi, Cairo",
+      hasGender: false,
+      group: "offline",
+      description:
+        "العنوان الكامل اللي بيظهر جوه رسائل الـ Offline مع لينك الخريطة",
+    },
+    {
+      key: "mapsLink",
+      labelAr: "رابط الخريطة (Google Maps)",
+      labelEn: "Maps Link",
+      icon: "🗺️",
+      valueAr: "https://www.google.com/maps?q=29.9603,31.2569",
+      valueEn: "https://www.google.com/maps?q=29.9603,31.2569",
+      hasGender: false,
+      group: "offline",
+      description:
+        "لينك اللوكيشن اللي بيتبعت للطالب/ولي الأمر/المدرب قبل الحصة الأوفلاين",
     },
 
     // ══════════════════════════════════════════════════════════

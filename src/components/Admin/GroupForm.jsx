@@ -5,10 +5,11 @@ import {
   Users, Calendar, Save, X,
   User, Bell, CheckCircle, Hash, AlertCircle, ChevronDown,
   ChevronRight, ChevronLeft, Layers, Copy, Tag,
-  MessageCircle, Sparkles, Clock, GraduationCap, Mail,
+  MessageCircle, Sparkles, Clock, GraduationCap, Mail, Globe, MapPin, Building2
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
+import MapLocationPicker from "./MapLocationPicker";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 // Every color below is one of the 4 brand hues defined in tailwind.config.js:
@@ -112,6 +113,15 @@ function buildInitialForm(initial) {
       timeTo: initial?.schedule?.timeTo || "20:00",
       timezone: initial?.schedule?.timezone || "Africa/Cairo",
     },
+        deliveryMode: initial?.deliveryMode || "online",
+    locationDetails: {
+      lat: initial?.locationDetails?.lat ?? null,
+      lng: initial?.locationDetails?.lng ?? null,
+      placeName: initial?.locationDetails?.placeName || "",
+      country: initial?.locationDetails?.country || "",
+      address: initial?.locationDetails?.address || "",
+      extraDetails: initial?.locationDetails?.extraDetails || initial?.location || "",
+    },
     automation: {
       whatsappEnabled: initial?.automation?.whatsappEnabled ?? true,
       welcomeMessage: initial?.automation?.welcomeMessage ?? true,
@@ -139,6 +149,70 @@ function SectionHeading({ icon: Icon, title, badge, badgeTone = "primary" }) {
         <h4 className="text-sm font-semibold text-MidnightNavyText dark:text-white">{title}</h4>
       </div>
       {badge != null && <span className={`text-xs px-2 py-1 rounded-full font-medium ${toneCls}`}>{badge}</span>}
+    </div>
+  );
+}
+
+// ─── Delivery Mode Selector (Online / Offline) ────────────────────────────────
+// ✅ الاختيار ده بيتحكم في بدل مواصلات المدرس: الـ offline بس بياخد بدل،
+// ولأول سيشن في اليوم بس. الـ online مفيهوش بدل خالص.
+function DeliveryModeSelector({ mode, locationDetails, onChangeMode, onChangeLocationDetails, t }) {
+  const MODES = [
+    {
+      value: "online",
+      icon: Globe,
+      label: t("groups.form.delivery.online") || "أونلاين",
+      desc: t("groups.form.delivery.onlineDesc") || "الجلسات برابط ميتنج — بدون بدل مواصلات",
+    },
+    {
+      value: "offline",
+      icon: MapPin,
+      label: t("groups.form.delivery.offline") || "أوفلاين (حضوري)",
+      desc: t("groups.form.delivery.offlineDesc") || "الجلسات في المقر — بدل مواصلات لأول جلسة في اليوم",
+    },
+  ];
+
+  return (
+    <div className={`${cardCls} p-4`}>
+      <SectionHeading icon={Building2} title={t("groups.form.deliveryMode") || "نوع الجروب"} />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {MODES.map((m) => {
+          const Icon = m.icon;
+          const active = mode === m.value;
+          return (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => onChangeMode(m.value)}
+              className={`text-start flex items-start gap-3 p-3.5 rounded-2xl border transition-all ${active
+                  ? "border-primary/50 bg-primary/5 dark:bg-primary/15 shadow-sm"
+                  : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"
+                }`}
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${active ? "bg-gradient-to-br from-primary to-orange-deep" : "bg-primary/10 dark:bg-primary/20"}`}>
+                <Icon className={`w-4.5 h-4.5 ${active ? "text-white" : "text-primary"}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-MidnightNavyText dark:text-white">{m.label}</p>
+                <p className="text-[11px] text-SlateBlueText dark:text-darktext leading-relaxed mt-0.5">{m.desc}</p>
+              </div>
+              {active && <CheckCircle className="w-4 h-4 text-primary flex-shrink-0 ms-auto" />}
+            </button>
+          );
+        })}
+      </div>
+
+      {mode === "offline" && (
+        <div className="mt-4 pt-4 border-t border-PowderBlueBorder dark:border-dark_border">
+          <label className={labelCls}>{t("groups.form.location") || "مكان الجروب"} *</label>
+          <MapLocationPicker value={locationDetails} onChange={onChangeLocationDetails} t={t} />
+          <p className="text-[11px] text-orange-deep dark:text-amber-brand mt-2 flex items-center gap-1">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            بدل المواصلات بيتحسب للمدرس لأول جلسة أوفلاين في اليوم بس — قيمته بتتحدد من صفحة أسعار المدرسين.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -203,8 +277,8 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
               type="button"
               onClick={() => setSelectedModules({ mode, selectedModules: [] })}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${active
-                  ? "bg-gradient-to-r from-secondary to-teal-dark text-white shadow-sm"
-                  : "text-SlateBlueText dark:text-darktext hover:bg-white dark:hover:bg-black/20"
+                ? "bg-gradient-to-r from-secondary to-teal-dark text-white shadow-sm"
+                : "text-SlateBlueText dark:text-darktext hover:bg-white dark:hover:bg-black/20"
                 }`}
             >
               {t(`groups.form.${mode === "all" ? "allModules" : "specificModules"}`)}
@@ -694,12 +768,21 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       }
     }
 
+        const hasLocation = form.locationDetails?.placeName?.trim() || (form.locationDetails?.lat && form.locationDetails?.lng);
+    if (form.deliveryMode === "offline" && !hasLocation) {
+      toast.error(t("groups.form.errors.locationRequired") || "لازم تحدد مكان الجروب على الماب في حالة الأوفلاين");
+      setStep(0);
+      return;
+    }
+
     setLoading(true);
     setScheduleConflicts([]); // ✅ تصفير التعارضات القديمة قبل كل محاولة جديدة
     setLinkConflicts([]);     // ✅
     const toastId = toast.loading(initial ? t("groups.form.messages.updating") : t("groups.form.messages.creating"));
 
     try {
+      const composeLocationString = (ld) =>
+  ld ? [ld.extraDetails, ld.placeName, ld.country].filter(Boolean).join(" — ") : "";
       const basePayload = {
         name: form.name,
         courseId: form.courseId,
@@ -708,6 +791,9 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         moduleSelection: form.moduleSelection,
         automation: form.automation,
         tags: form.tags,
+              deliveryMode: form.deliveryMode,
+        location: form.deliveryMode === "offline" ? composeLocationString(form.locationDetails) : "",
+        locationDetails: form.deliveryMode === "offline" ? form.locationDetails : null,
       };
 
       if (!isActiveWithSessions) {
@@ -806,8 +892,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
               <button key={s.id} type="button" onClick={() => goTo(i)}
                 className="relative z-10 flex flex-col items-center gap-1.5 transition-all group">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-darkmode ${done ? `bg-gradient-to-br ${dc.btn} text-white shadow-md` :
-                    active ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg scale-110` :
-                      "bg-gray-100 dark:bg-dark_input text-gray-400 dark:text-darkmuted group-hover:bg-gray-200 dark:group-hover:bg-dark_border"
+                  active ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg scale-110` :
+                    "bg-gray-100 dark:bg-dark_input text-gray-400 dark:text-darkmuted group-hover:bg-gray-200 dark:group-hover:bg-dark_border"
                   }`}>
                   {done ? <CheckCircle className="w-4.5 h-4.5" /> : <Icon className="w-4.5 h-4.5" />}
                 </div>
@@ -825,7 +911,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
 
       {/* Slide area */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-5 max-w-2xl mx-auto" style={{ animation: visible ? `slideIn${animDir > 0 ? "Right" : "Left"} 0.22s cubic-bezier(.22,.68,0,1.2) both` : "none" }}>
+        <div className="p-5 max-w-2x mx-auto" style={{ animation: visible ? `slideIn${animDir > 0 ? "Right" : "Left"} 0.22s cubic-bezier(.22,.68,0,1.2) both` : "none" }}>
 
           {/* Step header */}
           <div className={`flex items-center gap-3 mb-5 p-4 rounded-2xl bg-gradient-to-br ${c.panel} border ${c.border}`}>
@@ -889,6 +975,13 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                     initial={initial} onClose={onClose} t={t} />
                 </>
               )}
+              <DeliveryModeSelector
+                mode={form.deliveryMode}
+                locationDetails={form.locationDetails}
+                onChangeMode={(v) => onChange("deliveryMode", v)}
+                onChangeLocationDetails={(v) => onChange("locationDetails", v)}
+                t={t}
+              />
 
               {/* Tags Selection */}
               <div className={`${cardCls} p-4`}>
@@ -911,8 +1004,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                           onClick={() => toggleTag(tagItem._id)}
                           style={selected ? { backgroundColor: tagItem.color, borderColor: tagItem.color } : { borderColor: tagItem.color }}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border flex items-center gap-1.5 ${selected
-                              ? "text-white shadow-sm"
-                              : "bg-white dark:bg-darklight text-gray-600 dark:text-gray-300 hover:bg-IcyBreeze dark:hover:bg-dark_input"
+                            ? "text-white shadow-sm"
+                            : "bg-white dark:bg-darklight text-gray-600 dark:text-gray-300 hover:bg-IcyBreeze dark:hover:bg-dark_input"
                             }`}
                         >
                           <span
@@ -1138,9 +1231,9 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         </div>
       </div>
 
-      {/* Footer */}
+     {/* Footer */}
       <div className="sticky bottom-0 bg-white dark:bg-darkmode border-t border-PowderBlueBorder dark:border-dark_border px-5 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
-        <div className="flex gap-3 max-w-2xl mx-auto">
+        <div className="flex gap-3 max-w-5xl mx-auto">
           {step === 0 ? (
             <button type="button" onClick={onClose} disabled={loading}
               className="flex-1 border border-PowderBlueBorder dark:border-dark_border py-2.5 px-4 rounded-xl font-semibold text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 disabled:opacity-50 transition-all text-14">

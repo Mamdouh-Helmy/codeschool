@@ -1,6 +1,8 @@
+// /lib/billing.js
 import Invoice from "../app/models/Invoice";
 import Payment from "../app/models/Payment";
 import BillingAlert from "../app/models/BillingAlert";
+import { sendDueDateReminders } from "./billing-reminders";
 
 const ESCROW_DAYS = 14;
 
@@ -288,14 +290,20 @@ export async function resolveEscrowAlert(alertId, { action, refundAmount, reason
 
   const now = new Date();
 
+  // ✅ بنحسب المبلغ مرة واحدة بس ونستخدمه في التنفيذ وفي التسجيل — بدل ما
+  // يتحسب مرتين بنفس المعادلة وممكن يختلفوا لو الكود اتغير بعدين
+  const resolvedRefundAmount = Math.min(
+    Number(refundAmount) || payment.amount,
+    payment.amount,
+  );
+
   if (action === "recognize") {
     payment.escrow.status = "recognized";
     payment.escrow.recognizedAt = now;
     await payment.save();
   } else if (action === "refund") {
-    const amount = Math.min(Number(refundAmount) || payment.amount, payment.amount);
     await refundInvoicePayment(alert.invoiceId, {
-      amount,
+      amount: resolvedRefundAmount,
       reason: reason || "استرجاع بعد مراجعة الإسكرو",
       actedBy,
     });
@@ -306,7 +314,7 @@ export async function resolveEscrowAlert(alertId, { action, refundAmount, reason
   alert.status = "resolved";
   alert.resolution = {
     action,
-    refundAmount: action === "refund" ? Math.min(Number(refundAmount) || payment.amount, payment.amount) : undefined,
+    refundAmount: action === "refund" ? resolvedRefundAmount : undefined,
     reason: reason || "",
     actedBy,
     actedAt: now,
@@ -317,8 +325,12 @@ export async function resolveEscrowAlert(alertId, { action, refundAmount, reason
 }
 
 // ─── الكرون اليومي الموحّد ───────────────────────────────────────────────────
+// 🆕 FIX: كانت الدالة دي معرّفة مرتين في نفس الملف بـ export — ده Duplicate
+// declaration وبيمنع تحميل الموديول كله. دي النسخة الوحيدة الصح (بتشغّل
+// الإسكرو + تنبيهات التأخير + رسايل الواتساب).
 export async function runDailyBillingCron() {
   const escrowResult = await flagDueEscrowsForReview();
   const overdueResult = await checkOverdueInvoices();
-  return { escrowResult, overdueResult };
+  const reminderResult = await sendDueDateReminders();
+  return { escrowResult, overdueResult, reminderResult };
 }

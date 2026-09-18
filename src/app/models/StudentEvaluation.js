@@ -399,9 +399,9 @@ studentEvaluationSchema.methods.generateAIAnalysis = function() {
       analysis.summary = 'طالب يحتاج إعادة الكورس مع دعم إضافي.';
       analysis.suggestedMessage = `🔄 ${studentName}، علشان تستفيد 100%
 بنقترح إعادة ${courseName} مع:
-• دعم إضافي شخصي
-• خصم 40% على الإعادة
-• مراجعة جميع المشاريع
+- دعم إضافي شخصي
+- خصم 40% على الإعادة
+- مراجعة جميع المشاريع
 مستعد للانطلاق من جديد?`;
       analysis.priority = 'high';
       break;
@@ -536,5 +536,37 @@ studentEvaluationSchema.methods.triggerMarketingFollowup = async function(userId
 };
 
 const StudentEvaluation = mongoose.models.StudentEvaluation || mongoose.model('StudentEvaluation', studentEvaluationSchema);
+
+// ✅ Self-healing index sync — بيحل مشكلة الـ legacy unique index تلقائيًا
+// من غير أي تدخل يدوي في الداتابيز.
+//
+// السبب: mongoose بيضيف أي index جديد معرّف في الـ schema، لكنه أبدًا
+// مابيمسحش أي index قديم موجود فعليًا في الكولكشن حتى لو اتغيّر تعريفه في
+// الكود (زي هنا: { groupId, studentId } القديم اتحول لـ
+// { groupId, studentId, sessionId }). فالـ index القديم بيفضل موجود وبيرفض
+// أي إنسرت لتقييم تاني لنفس الطالب في نفس الجروب حتى لو السيشن مختلفة.
+//
+// syncIndexes() بتحل ده بالظبط: بتمسح أي index في الداتابيز مش متعرّف في
+// الـ schema الحالي، وبتضيف أي index ناقص — يعني الداتابيز بترجع تتطابق مع
+// الـ schema أوتوماتيك. بتتنفذ مرة واحدة بس أول ما الاتصال بالداتابيز يبقى
+// جاهز (مش مع كل request).
+let evaluationIndexesSynced = false;
+async function syncEvaluationIndexes() {
+  if (evaluationIndexesSynced) return;
+  evaluationIndexesSynced = true;
+  try {
+    await StudentEvaluation.syncIndexes();
+    console.log('✅ [StudentEvaluation] Indexes synced with schema');
+  } catch (err) {
+    console.error('❌ [StudentEvaluation] Index sync failed:', err.message);
+    evaluationIndexesSynced = false; // اسمح بمحاولة تانية لو الاتصال فشل هنا
+  }
+}
+
+if (mongoose.connection.readyState === 1) {
+  syncEvaluationIndexes();
+} else {
+  mongoose.connection.once('connected', syncEvaluationIndexes);
+}
 
 export default StudentEvaluation;
