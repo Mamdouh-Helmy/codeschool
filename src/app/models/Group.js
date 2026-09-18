@@ -120,8 +120,8 @@ const groupSchema = new mongoose.Schema(
       default: "",
     },
 
-        // ✅ نوع الجروب: أونلاين ولا أوفلاين — بيتورّث للسيشنات وبيتحكم في بدل المواصلات
-        deliveryMode: {
+    // ✅ نوع الجروب: أونلاين ولا أوفلاين
+    deliveryMode: {
       type: String,
       enum: ["online", "offline"],
       default: "online",
@@ -251,6 +251,24 @@ const groupSchema = new mongoose.Schema(
       instructorNotificationsSentAt: Date,
       instructorNotificationResults: Array,
       instructorNotificationsSummary: Object,
+
+      // ✅ جديد — إتمام الدورة
+      completionNotification: {
+        sent: { type: Boolean, default: false },
+        sentAt: Date,
+        studentsNotified: { type: Number, default: 0 },
+        studentsFailed: { type: Number, default: 0 },
+        feedbackLink: { type: String, default: "" },
+        results: { type: Array, default: [] },
+      },
+      completionNotifiedAt: Date,
+
+      // ✅ وقت ما الأدمن علّم الجروب كـ completed
+      completedAt: Date,
+      completedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+      // ✅ لينك الاستبيان الافتراضي للجروب
+      feedbackLink: { type: String, default: "" },
     },
 
     // ✅ الحقل الجديد: الوسوم
@@ -325,8 +343,7 @@ groupSchema.methods.isFull = function () {
   return this.currentStudentsCount >= this.maxStudents;
 };
 
-// ✅ بقت بتاخد المدة الفعلية بالدقايق بدل رقم ساعات ثابت — نفس المدة اللي
-// الـ payroll بيحسب بيها، عشان countTime يفضل متطابق مع كشف المرتبات.
+// ✅ بقت بتاخد المدة الفعلية بالدقايق بدل رقم ساعات ثابت
 groupSchema.methods.addInstructorHours = async function (durationMinutes = 0) {
   if (!this.instructors || this.instructors.length === 0) {
     console.log("⚠️ No instructors in group to add hours to");
@@ -369,7 +386,7 @@ groupSchema.statics.findActive = function () {
   })
     .populate("courseId")
     .populate("instructors.userId", "name email gender profile")
-    .populate("tags"); // ✅ أضفنا populate للوسوم
+    .populate("tags");
 };
 
 groupSchema.statics.findByCourse = function (courseId) {
@@ -378,7 +395,7 @@ groupSchema.statics.findByCourse = function (courseId) {
     isDeleted: false,
   })
     .populate("instructors.userId", "name email")
-    .populate("tags"); // ✅ أضفنا populate للوسوم
+    .populate("tags");
 };
 
 const Group = mongoose.models.Group || mongoose.model("Group", groupSchema);

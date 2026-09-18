@@ -32,15 +32,16 @@ const MessageTemplateSchema = new mongoose.Schema(
         "portfolio_inactivity_reminder",
         "portfolio_update_broadcast",
         "portfolio_contact_form_notification",
-
-        // ✅ OFFLINE — Student & Guardian فقط
-        // (رسائل المدرس بتتحفظ في WhatsAppTemplateInstructor مش هنا)
         "reminder_24h_offline_student",
         "reminder_24h_offline_guardian",
         "reminder_30min_offline_student",
         "reminder_30min_offline_guardian",
         "pre_attendance_ping_student",
         "pre_attendance_ping_guardian",
+        "credit_low_balance_4h_student",
+        "credit_low_balance_4h_guardian",
+        "credit_low_balance_2h_student",
+        "credit_low_balance_2h_guardian",
       ],
     },
 
@@ -164,6 +165,10 @@ MessageTemplateSchema.methods.getExample = function (language = "ar") {
     starsUnderstanding: "⭐⭐⭐⭐",
     starsTaskExecution: "⭐⭐⭐⭐",
     starsParticipation: "⭐⭐⭐⭐",
+    // ✅ جديد — متغيرات الرصيد
+packageName: language === "ar" ? "الباقة الشهرية (12 ساعة)" : "Monthly Package (12 hours)",
+remainingHours: "4",
+threshold: "4",
     instructorComment:
       language === "ar"
         ? "أداء ممتاز، استمر هكذا!"
@@ -192,9 +197,7 @@ MessageTemplateSchema.methods.getExample = function (language = "ar") {
     placeName:
       language === "ar" ? "Code School - المعادي" : "Code School - Maadi",
     address:
-      language === "ar"
-        ? "شارع 9، المعادي، القاهرة"
-        : "Street 9, Maadi, Cairo",
+      language === "ar" ? "شارع 9، المعادي، القاهرة" : "Street 9, Maadi, Cairo",
     mapsLink: "https://www.google.com/maps?q=29.9603,31.2569",
   };
   return this.render(examples, language);
@@ -567,6 +570,127 @@ Learning Supervisor`,
       ar: `{guardianSalutation}،\n\n⏳ تذكير: حصة {childTitle} *{studentName}* - *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
       en: `{guardianSalutation},\n\n⏳ Reminder: {childTitle} *{studentName}*'s session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
     },
+
+    // ═══════════════════════════════════════════════════════════════
+// ✅ CREDIT / BILLING — تنبيهات الرصيد المنخفض
+// ═══════════════════════════════════════════════════════════════
+credit_low_balance_4h_student: {
+  variables: [
+    { key: "salutation_ar",   label: "تحية الطالب (عربي)",  example: "عزيزي الطالب ممدوح" },
+    { key: "salutation_en",   label: "تحية الطالب (إنجليزي)", example: "Dear student Mamdouh" },
+    { key: "remainingHours",  label: "الساعات المتبقية",     example: "4" },
+    { key: "packageName",     label: "اسم الباقة",           example: "الباقة الشهرية (12 ساعة)" },
+  ],
+  ar: `{salutation_ar} 👋
+
+⚠️ تنبيه: رصيد الساعات المتبقية في باقتك قارب على الانتهاء.
+
+🔋 الساعات المتبقية: *{remainingHours}* ساعة
+📦 الباقة: {packageName}
+
+لتجنب توقف الجلسات، بننصحك بتجديد الباقة قبل ما الرصيد ينفذ.
+
+فريق Code School 💻`,
+  en: `{salutation_en} 👋
+
+⚠️ Heads-up: Your remaining credit hours are running low.
+
+🔋 Remaining hours: *{remainingHours}*
+📦 Package: {packageName}
+
+To avoid any session interruption, we recommend renewing your package before the balance runs out.
+
+Code School Team 💻`,
+},
+
+credit_low_balance_4h_guardian: {
+  variables: [
+    { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+    { key: "childTitle",         label: "صلة القرابة",     example: "ابنك" },
+    { key: "studentName",        label: "اسم الطالب",      example: "ممدوح" },
+    { key: "remainingHours",     label: "الساعات المتبقية", example: "4" },
+    { key: "packageName",        label: "اسم الباقة",       example: "الباقة الشهرية (12 ساعة)" },
+  ],
+  ar: `{guardianSalutation} 👋
+
+⚠️ تنبيه: رصيد ساعات {childTitle} *{studentName}* قارب على الانتهاء.
+
+🔋 الساعات المتبقية: *{remainingHours}* ساعة
+📦 الباقة: {packageName}
+
+لتجنب توقف الجلسات، بننصح حضرتك بتجديد الباقة قبل ما الرصيد ينفذ.
+
+فريق Code School 💻`,
+  en: `{guardianSalutation} 👋
+
+⚠️ Heads-up: {childTitle} *{studentName}*'s credit hours are running low.
+
+🔋 Remaining hours: *{remainingHours}*
+📦 Package: {packageName}
+
+To avoid any session interruption, we recommend renewing the package before the balance runs out.
+
+Code School Team 💻`,
+},
+
+credit_low_balance_2h_student: {
+  variables: [
+    { key: "salutation_ar",   label: "تحية الطالب (عربي)",  example: "عزيزي الطالب ممدوح" },
+    { key: "salutation_en",   label: "تحية الطالب (إنجليزي)", example: "Dear student Mamdouh" },
+    { key: "remainingHours",  label: "الساعات المتبقية",     example: "2" },
+    { key: "packageName",     label: "اسم الباقة",           example: "الباقة الشهرية (12 ساعة)" },
+  ],
+  ar: `{salutation_ar} 🚨
+
+🚨 تنبيه عاجل: رصيد ساعاتك أوشك على النفاذ.
+
+🔋 الساعات المتبقية: *{remainingHours}* ساعة فقط
+📦 الباقة: {packageName}
+
+برجاء التواصل مع الإدارة فورًا لتجديد الباقة، عشان ما توقفش الجلسات.
+
+فريق Code School 💻`,
+  en: `{salutation_en} 🚨
+
+🚨 Urgent: Your credit hours are almost exhausted.
+
+🔋 Remaining hours: *{remainingHours}* only
+📦 Package: {packageName}
+
+Please contact the administration immediately to renew your package, so your sessions don't stop.
+
+Code School Team 💻`,
+},
+
+credit_low_balance_2h_guardian: {
+  variables: [
+    { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+    { key: "childTitle",         label: "صلة القرابة",     example: "ابنك" },
+    { key: "studentName",        label: "اسم الطالب",      example: "ممدوح" },
+    { key: "remainingHours",     label: "الساعات المتبقية", example: "2" },
+    { key: "packageName",        label: "اسم الباقة",       example: "الباقة الشهرية (12 ساعة)" },
+  ],
+  ar: `{guardianSalutation} 🚨
+
+🚨 تنبيه عاجل: رصيد ساعات {childTitle} *{studentName}* أوشك على النفاذ.
+
+🔋 الساعات المتبقية: *{remainingHours}* ساعة فقط
+📦 الباقة: {packageName}
+
+برجاء التواصل مع الإدارة فورًا لتجديد الباقة، عشان ما توقفش جلسات {childTitle}.
+
+فريق Code School 💻`,
+  en: `{guardianSalutation} 🚨
+
+🚨 Urgent: {childTitle} *{studentName}*'s credit hours are almost exhausted.
+
+🔋 Remaining hours: *{remainingHours}* only
+📦 Package: {packageName}
+
+Please contact the administration immediately to renew the package, so {childTitle}'s sessions don't stop.
+
+Code School Team 💻`,
+},
 
     // ── portfolio_inactivity_reminder ─────────────────────────────────────────
     portfolio_inactivity_reminder: {

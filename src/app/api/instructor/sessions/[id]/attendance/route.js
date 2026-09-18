@@ -5,6 +5,9 @@ import { getUserFromRequest } from '@/lib/auth';
 import {
   getAttendanceTemplatesForFrontend,
   sendAbsenceNotifications,
+  // ✅ جديد — تنبيهات الرصيد
+  sendLowBalanceAlerts,
+  disableZeroBalanceNotifications,
 } from '../../../../../services/groupAutomation';
 import Session from '../../../../../models/Session';
 import Student from '../../../../../models/Student';
@@ -214,6 +217,10 @@ export async function POST(req, { params }) {
 //   2) submit "حاضر" (oldStatus="absent")  → nothing (مفيش تغيير في الساعات)
 //   3) submit "معذور" (oldStatus="present")→ nothing (برضو مفيش تغيير)
 // الساعات المخصومة فضلت 2 بس طول الوقت، مهما اتبدلت الحالة بين التلاتة دول.
+//
+// ✅ جديد: تنبيهات الرصيد المنخفض (4h / 2h) + تنبيه النفاذ الكامل
+// - تُجمع الـ students اللي "عبرت" حد معين بعد الخصم
+// - التنبيهات تُرسل مرة واحدة بس لكل عبور (يعني مش هتتبعت كل حصة)
 export async function PATCH(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -330,6 +337,92 @@ export async function PATCH(req, { params }) {
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ جمع الطلاب اللي محتاجين تنبيه رصيد (4h / 2h) + طلاب الرصيد صفر
+    //
+    // المنطق: بنلف على نتايج الحضور، وبنحدد للطالب اللي اتعمله 'deduct' فعلاً
+    // (أول مرة يتسجل حضوره في السيشن دي)، هل الرصيد "عبر" حد معين:
+    //   - 🟡 4h: كان > 4 قبل الخصم، بقى ≤ 4 بعده (وفي نطاق 3-4)
+    //   - 🔴 2h: كان > 2 قبل الخصم، بقى ≤ 2 بعده (وفي نطاق 1-2)
+    //   - ⛔ 0h:  بقى صفر أو أقل
+    //
+    // ملاحظة مهمة: بنستخدم `wasDeductedNow` عشان نمنع إرسال تنبيهات مكررة
+    // لو الطالب اتعمله تحديث حالته من غير خصم (already deducted before).
+    // ═══════════════════════════════════════════════════════════════════
+    const lowBalanceStudents  = [];
+    const zeroBalanceStudents = [];
+
+    for (const record of results) {
+      if (record.action !== 'updated') continue;
+
+      const student = studentMap[record.studentId];
+      if (!student?.creditSystem?.currentPackage) continue;
+
+      const remainingHours =
+        student.creditSystem.currentPackage.remainingHours || 0;
+
+      const wasDeductedNow = record.creditAction === 'deduct';
+      const previousBalance = wasDeductedNow
+        ? remainingHours + CREDIT_DEDUCTION
+        : remainingHours;
+
+      // 🟡 عبور حد الـ 4 ساعات
+      if (
+        wasDeductedNow &&
+        previousBalance > 4 &&
+        remainingHours <= 4 &&
+        remainingHours > 2
+      ) {
+        lowBalanceStudents.push({
+          studentId: record.studentId,
+          student,
+          remainingHours,
+          alertType: '4h',
+        });
+      }
+
+      // 🔴 عبور حد الـ 2 ساعة
+      if (
+        wasDeductedNow &&
+        previousBalance > 2 &&
+        remainingHours <= 2 &&
+        remainingHours > 0
+      ) {
+        lowBalanceStudents.push({
+          studentId: record.studentId,
+          student,
+          remainingHours,
+          alertType: '2h',
+        });
+      }
+
+      // ⛔ نفاذ كامل للرصيد
+      if (remainingHours <= 0) {
+        zeroBalanceStudents.push({
+          studentId: record.studentId,
+          student,
+          remainingHours: 0,
+        });
+      }
+    }
+
+    // ✅ إرسال تنبيهات الرصيد المنخفض
+    if (lowBalanceStudents.length > 0) {
+      try {
+        await sendLowBalanceAlerts(lowBalanceStudents);
+      } catch (err) {
+        console.error('⚠️ Low balance alerts error:', err.message);
+      }
+    }
+
+    if (zeroBalanceStudents.length > 0) {
+      try {
+        await disableZeroBalanceNotifications(zeroBalanceStudents);
+      } catch (err) {
+        console.error('⚠️ Zero balance notifications error:', err.message);
+      }
+    }
+
     session.attendanceTaken = true;
 
     if (session.earlyAccess?.enabled && !session.earlyAccess?.consumedAt) {
@@ -344,7 +437,13 @@ export async function PATCH(req, { params }) {
 
     return NextResponse.json({
       success: true,
-      data: { results },
+      data: {
+        results,
+        creditUpdates: {
+          lowBalanceAlerts: lowBalanceStudents.length,
+          zeroBalanceAlerts: zeroBalanceStudents.length,
+        },
+      },
     });
 
   } catch (error) {

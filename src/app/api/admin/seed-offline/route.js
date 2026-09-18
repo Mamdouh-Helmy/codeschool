@@ -32,17 +32,29 @@ async function handleSeed(req) {
       variables: { created: [], skipped: [] },
       messageTemplates: { created: [], skipped: [] },
       instructorTemplates: { created: [], skipped: [] },
+      billingTemplates: { created: [], skipped: [] }, // ✅ جديد
     };
 
     // ═══════════════════════════════════════════════════════════
-    // 1️⃣ Seed TemplateVariable — Offline Location Variables
+    // 1️⃣ Seed TemplateVariable
+    //    - Offline Location Variables
+    //    - Billing Variables (جديد)
     // ═══════════════════════════════════════════════════════════
     const TemplateVariableModule = await import("../../../models/TemplateVariable");
     const allDefaults = TemplateVariableModule.getDefaultVariables();
 
-    const offlineVarKeys = ["placeName", "address", "mapsLink"];
+    // ✅ جمع كل المتغيرات اللي محتاجين نعمللها seed
+    const variablesToSeed = [
+      // Offline
+      "placeName",
+      "address",
+      "mapsLink",
+      // Billing (جديد)
+      "packageName",
+      "remainingHours",
+    ];
 
-    for (const key of offlineVarKeys) {
+    for (const key of variablesToSeed) {
       const varDef = allDefaults.find((v) => v.key === key);
       if (!varDef) continue;
 
@@ -133,9 +145,62 @@ async function handleSeed(req) {
       result.instructorTemplates.created.push(type);
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // 4️⃣ Seed MessageTemplate — Billing / Credit Alerts (جديد)
+    //    - credit_low_balance_4h_student / guardian
+    //    - credit_low_balance_2h_student / guardian
+    // ═══════════════════════════════════════════════════════════
+    const billingTemplateTypes = [
+      "credit_low_balance_4h_student",
+      "credit_low_balance_4h_guardian",
+      "credit_low_balance_2h_student",
+      "credit_low_balance_2h_guardian",
+    ];
+
+    for (const type of billingTemplateTypes) {
+      const existing = await MessageTemplate.findOne({
+        templateType: type,
+        isDefault: true,
+      });
+      if (existing) {
+        result.billingTemplates.skipped.push(type);
+        continue;
+      }
+
+      const fb = fallbacks[type];
+      if (!fb) continue;
+
+      const recipientType = type.includes("student") ? "student" : "guardian";
+
+      await MessageTemplate.create({
+        templateType: type,
+        recipientType,
+        name: type,
+        contentAr: fb.ar,
+        contentEn: fb.en,
+        variables: fb.variables || [],
+        description: `Credit alert template — ${type}`,
+        isDefault: true,
+        isActive: true,
+      });
+      result.billingTemplates.created.push(type);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ Summary
+    // ═══════════════════════════════════════════════════════════
+    const totalCreated =
+      result.variables.created.length +
+      result.messageTemplates.created.length +
+      result.instructorTemplates.created.length +
+      result.billingTemplates.created.length;
+
     return NextResponse.json({
       success: true,
-      message: "✅ Offline seed completed",
+      message:
+        totalCreated > 0
+          ? `✅ Seed completed — ${totalCreated} new items created`
+          : "✅ Seed completed — everything was already seeded (nothing to create)",
       result,
       hint: "روح للـ UI واعمل Hard Refresh (Ctrl+Shift+R) عشان تشوف الجديد",
     });

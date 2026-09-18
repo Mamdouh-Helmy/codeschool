@@ -6,6 +6,11 @@
 //   → مفيش أي خصم أو إرجاع تاني. الساعتين ثابتة زي ما هي.
 // - يعني الخصم مربوط بـ"هل الطالب متسجل له حضور في السيشن دي قبل كده ولا لأ"
 //   مش مربوط بالحالة نفسها.
+//
+// ✅ جديد: تنبيهات الرصيد المنخفض (4h / 2h) + تنبيه النفاذ الكامل
+// - 🟡 تنبيه 4 ساعات: يُرسل مرة واحدة لما الرصيد يعبر من >4 لـ ≤4
+// - 🔴 تنبيه 2 ساعة: يُرسل مرة واحدة لما الرصيد يعبر من >2 لـ ≤2
+// - ⛔ نفاذ كامل: يُرسل لما الرصيد يوصل ≤0
 
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
@@ -87,6 +92,7 @@ export async function POST(req, { params }) {
       if (!deductionResult.success) continue;
 
       const remainingHours = deductionResult.remainingHours;
+
       creditDeductions.push({
         studentId,
         action: 'deduct',
@@ -95,14 +101,47 @@ export async function POST(req, { params }) {
         reason: `First record for this session: ${newStatus}`
       });
 
-      if (remainingHours <= 5 && remainingHours > 0) {
-        lowBalanceStudents.push({ studentId, student, remainingHours });
+      // ═══════════════════════════════════════════════════════════════
+      // ✅ Threshold detection — نحدد إذا الرصيد "عبر" حد معين دلوقتي
+      //    الرصيد قبل الخصم = remainingHours + HOURS_PER_SESSION
+      // ═══════════════════════════════════════════════════════════════
+      const previousBalance = remainingHours + HOURS_PER_SESSION;
+
+      // 🟡 عبور حد الـ 4 ساعات: كان > 4، بقى في نطاق (2, 4]
+      if (
+        previousBalance > 4 &&
+        remainingHours <= 4 &&
+        remainingHours > 2
+      ) {
+        lowBalanceStudents.push({
+          studentId,
+          student,
+          remainingHours,
+          alertType: '4h',
+        });
       }
+
+      // 🔴 عبور حد الـ 2 ساعة: كان > 2، بقى في نطاق (0, 2]
+      if (
+        previousBalance > 2 &&
+        remainingHours <= 2 &&
+        remainingHours > 0
+      ) {
+        lowBalanceStudents.push({
+          studentId,
+          student,
+          remainingHours,
+          alertType: '2h',
+        });
+      }
+
+      // ⛔ نفاذ كامل للرصيد
       if (remainingHours <= 0) {
         zeroBalanceStudents.push({ studentId, student, remainingHours: 0 });
       }
     }
 
+    // ── إرسال تنبيهات الرصيد المنخفض ────────────────────────────────────────
     if (lowBalanceStudents.length > 0) {
       try {
         await sendLowBalanceAlerts(lowBalanceStudents);

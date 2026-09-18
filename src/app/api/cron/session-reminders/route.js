@@ -12,6 +12,9 @@ import {
   sendOfflineDropoffAlert,
   sendOfflinePreAttendancePing,
   sendInstructorOfflineReminder,
+  // ✅ AUTOMATIONS
+  checkAndSendModuleOverviewNotifications,
+  checkAndSendGroupCompletionNotifications,
 } from '../../../services/groupAutomation';
 
 const CRON_SECRET = process.env.CRON_SECRET || 'your-secret-key-change-this';
@@ -20,11 +23,8 @@ const CRON_SECRET = process.env.CRON_SECRET || 'your-secret-key-change-this';
 // ✅ WINDOWS — كل reminder ليه نافذة زمنية محددة
 // ============================================================
 const WINDOWS = {
-  // ONLINE
-  reminder24h:     { min: 23,   max: 25,   unit: 'hours' },
-  reminder15min:   { min: 12,   max: 18,   unit: 'minutes' },
-
-  // OFFLINE
+  reminder24h:          { min: 23, max: 25, unit: 'hours' },
+  reminder15min:        { min: 12, max: 18, unit: 'minutes' },
   reminder24hOffline:   { min: 23, max: 25, unit: 'hours' },
   reminder30minOffline: { min: 27, max: 33, unit: 'minutes' },
   preAttendancePing:    { min: 3,  max: 8,  unit: 'minutes' },
@@ -32,7 +32,6 @@ const WINDOWS = {
 
 // ============================================================
 // ✅ Helper: تحديد نوع الجلسة (offline / online)
-// الـ session.deliveryMode بيتاخد الأول، وبعدين الـ group
 // ============================================================
 function getSessionDeliveryMode(session) {
   const sessionMode = session?.deliveryMode;
@@ -43,19 +42,18 @@ function getSessionDeliveryMode(session) {
   if (groupMode === 'offline' || groupMode === 'online') {
     return groupMode;
   }
-  return 'online'; // default
+  return 'online';
 }
 
 // ============================================================
-// ✅ Helper: Atomic lock — بيمنع تكرار الإرسال نهائيًا
-// بيرجع الـ session لو الـ lock نجح، أو null لو حد تاني عمل lock
+// ✅ Helper: Atomic lock — يمنع تكرار الإرسال نهائيًا
 // ============================================================
 async function lockSessionFlag(sessionId, flagField) {
   const result = await Session.findOneAndUpdate(
     {
       _id: sessionId,
       isDeleted: false,
-      [flagField]: { $ne: true }, // 🔒 شرط أساسي: مش متعلم قبل كده
+      [flagField]: { $ne: true },
     },
     {
       $set: {
@@ -65,12 +63,11 @@ async function lockSessionFlag(sessionId, flagField) {
     },
     { new: true },
   );
-  return result; // null لو حد تاني كان قد lock عمله
+  return result;
 }
 
 // ============================================================
-// ✅ Helper: يفتح الـ lock (في حالة الفشل الكامل عشان يعيد المحاولة بعدين)
-// ملاحظة: بنستخدمها بس لو الإرسال فشل بالكامل ومفيش أي رسالة وصلت
+// ✅ Helper: يفتح الـ lock (في حالة الفشل الكامل)
 // ============================================================
 async function unlockSessionFlag(sessionId, flagField) {
   try {
@@ -133,6 +130,10 @@ export async function GET(req) {
         checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
         sessions: [], instructorsSent: 0,
       },
+
+      // ✅ AUTOMATIONS
+      moduleOverview: { processed: 0, sent: 0, results: [] },
+      groupCompletion: { processed: 0, sent: 0, groups: [] },
     };
 
     // ============================================================
@@ -198,7 +199,7 @@ export async function GET(req) {
         );
       },
       studentsCountField: 'automationEvents.reminder24hStudentsNotified',
-      instructorsCountField: null, // online مش عندنا count للمدرس
+      instructorsCountField: null,
       extraFields: {
         'automationEvents.reminderSent': true,
         'automationEvents.reminderSentAt': new Date(),
@@ -233,7 +234,6 @@ export async function GET(req) {
       studentsCountField: 'automationEvents.reminder15minStudentsNotified',
       instructorsCountField: null,
       extraFields: {
-        // للتوافق مع الكود القديم
         'automationEvents.reminder1hSent': true,
         'automationEvents.reminder1hSentAt': new Date(),
       },
@@ -320,6 +320,42 @@ export async function GET(req) {
       instructorsCountField: 'automationEvents.preAttendancePingInstructorsNotified',
     });
 
+    // ============================================================
+    // ✅ MODULE OVERVIEW — يفحص كل الجروبات الأكتف
+    // ============================================================
+    try {
+      const moduleResult = await checkAndSendModuleOverviewNotifications();
+      results.moduleOverview = {
+        processed: moduleResult.processed || 0,
+        sent: moduleResult.sent || 0,
+        results: moduleResult.results || [],
+      };
+      console.log(
+        `\n📚 MODULE OVERVIEW: processed ${moduleResult.processed}, sent ${moduleResult.sent}`,
+      );
+    } catch (moduleErr) {
+      console.error('❌ Module overview cron error:', moduleErr.message);
+      results.moduleOverview = { error: moduleErr.message };
+    }
+
+    // ============================================================
+    // ✅ GROUP COMPLETION — يفحص كل الجروبات اللي خلصت
+    // ============================================================
+    try {
+      const completionResult = await checkAndSendGroupCompletionNotifications();
+      results.groupCompletion = {
+        processed: completionResult.processed || 0,
+        sent: completionResult.sent || 0,
+        groups: completionResult.results || [],
+      };
+      console.log(
+        `\n🎓 GROUP COMPLETION: processed ${completionResult.processed}, sent ${completionResult.sent}`,
+      );
+    } catch (completionErr) {
+      console.error('❌ Group completion cron error:', completionErr.message);
+      results.groupCompletion = { error: completionErr.message };
+    }
+
     console.log('\n📊 Cron Summary:', JSON.stringify(results, null, 2));
     return NextResponse.json({ success: true, data: results });
 
@@ -331,10 +367,6 @@ export async function GET(req) {
 
 // ============================================================
 // ✅ processReminder — دالة موحدة لكل الأنواع
-// 1. بتفلتر السيشنات على أساس النافذة الزمنية
-// 2. بتعمل atomic lock لكل سيشن (يمنع التكرار تمامًا)
-// 3. بتبعت للطلاب والمدرسين
-// 4. لو الإرسال فشل بالكامل — بتفك الـ lock (عشان الجولة اللي بعدها)
 // ============================================================
 async function processReminder({
   label,
@@ -349,8 +381,7 @@ async function processReminder({
   instructorsCountField,
   extraFields = {},
 }) {
-  // ✅ نفلتر السيشنات اللي لسه مش متعلم عليها
-  const flagKey = flagField.split('.').pop(); // "reminder24hSent" مثلاً
+  const flagKey = flagField.split('.').pop();
   const candidates = sessions.filter(
     (s) => s.automationEvents?.[flagKey] !== true,
   );
@@ -368,7 +399,6 @@ async function processReminder({
         continue;
       }
 
-      // 🔒 ATOMIC LOCK — نمنع التكرار نهائيًا حتى لو الكرون اشتغل مرتين مع بعض
       const locked = await lockSessionFlag(session._id, flagField);
       if (!locked) {
         resultsBucket.duplicates++;
@@ -396,7 +426,6 @@ async function processReminder({
         instructorResult = { success: false, error: err.message };
       }
 
-      // ── تقييم النتيجة ──
       const studentsSent = studentResult?.successCount || 0;
       const instructorsSent = instructorResult?.successCount || 0;
       const anySuccess = studentResult?.success === true || instructorsSent > 0;
@@ -414,7 +443,6 @@ async function processReminder({
           instructorsNotified: instructorsSent,
         });
 
-        // ✅ نسجل الأعداد النهائية
         await Session.findByIdAndUpdate(session._id, {
           $set: {
             [studentsCountField]: studentsSent,
@@ -425,7 +453,6 @@ async function processReminder({
 
         console.log(`   ✅ ${label} — students: ${studentsSent} | instructors: ${instructorsSent}`);
       } else {
-        // ❌ فشل كامل — بنفك الـ lock عشان نحاول تاني في الجولة اللي بعدها
         resultsBucket.failed++;
         await unlockSessionFlag(session._id, flagField);
         console.log(`   ❌ ${label} — total failure, unlocked for retry`);
@@ -435,7 +462,6 @@ async function processReminder({
       resultsBucket.failed++;
       console.error(`   ❌ ${label} error for ${session._id}:`, err.message);
 
-      // لو حصل خطأ غير متوقع، نفك الـ lock عشان نحاول تاني
       try {
         await unlockSessionFlag(session._id, flagField);
       } catch (_) {}
@@ -449,7 +475,7 @@ async function processReminder({
 function computeDiff(sessionDateTime, now, unit) {
   const diffMs = sessionDateTime - now;
   if (unit === 'hours') return diffMs / (1000 * 60 * 60);
-  return diffMs / (1000 * 60); // minutes
+  return diffMs / (1000 * 60);
 }
 
 // ============================================================

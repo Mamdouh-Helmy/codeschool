@@ -5,7 +5,8 @@ import Group from "../../../../models/Group";
 import Session from "../../../../models/Session";
 import Student from "../../../../models/Student";
 import { requireAdmin } from "@/utils/authMiddleware";
-import { wapilotService } from "@/app/services/wapilot-service";
+import { wapilotService } from "../../../../services/wapilot-service";
+import { onGroupCompleted } from "../../../../services/groupAutomation";
 import mongoose from "mongoose";
 
 export async function POST(req, { params }) {
@@ -31,11 +32,12 @@ export async function POST(req, { params }) {
       singleStudent = null,
       feedbackLink = null,
       autoDetected = false,
+      sendToAll = false,
     } = body;
 
-    // ============================================================
-    // MODE 1: إرسال لطالب واحد فقط - الباك مش بيعمل حاجة تانية
-    // ============================================================
+    // ═══════════════════════════════════════════════════════════
+    // MODE 1: إرسال لطالب واحد فقط (يُستخدم من الـ Modal بعدّاد)
+    // ═══════════════════════════════════════════════════════════
     if (singleStudent) {
       const { studentId, studentMessage, guardianMessage } = singleStudent;
 
@@ -53,7 +55,6 @@ export async function POST(req, { params }) {
         );
       }
 
-      // جيب الطالب ده بس
       const student = await Student.findById(studentId).lean();
       if (!student) {
         return NextResponse.json(
@@ -62,11 +63,11 @@ export async function POST(req, { params }) {
         );
       }
 
-      const language = student.communicationPreferences?.preferredLanguage || "ar";
+      const language =
+        student.communicationPreferences?.preferredLanguage || "ar";
       const sentTo = { student: false, guardian: false };
       const errors = {};
 
-      // بعت للطالب لو عنده رقم ورسالة
       if (studentMessage?.trim() && student.personalInfo?.whatsappNumber) {
         try {
           await wapilotService.sendAndLogMessage({
@@ -84,11 +85,13 @@ export async function POST(req, { params }) {
           console.log(`✅ Student msg sent → ${student.personalInfo?.fullName}`);
         } catch (e) {
           errors.student = e.message;
-          console.error(`❌ Student msg failed → ${student.personalInfo?.fullName}:`, e.message);
+          console.error(
+            `❌ Student msg failed → ${student.personalInfo?.fullName}:`,
+            e.message
+          );
         }
       }
 
-      // بعت لولي الأمر لو عنده رقم ورسالة
       if (guardianMessage?.trim() && student.guardianInfo?.whatsappNumber) {
         try {
           await wapilotService.sendAndLogMessage({
@@ -107,7 +110,10 @@ export async function POST(req, { params }) {
           console.log(`✅ Guardian msg sent → ${student.guardianInfo?.name}`);
         } catch (e) {
           errors.guardian = e.message;
-          console.error(`❌ Guardian msg failed → ${student.guardianInfo?.name}:`, e.message);
+          console.error(
+            `❌ Guardian msg failed → ${student.guardianInfo?.name}:`,
+            e.message
+          );
         }
       }
 
@@ -120,10 +126,12 @@ export async function POST(req, { params }) {
       });
     }
 
-    // ============================================================
-    // MODE 2: تعليم الغروب كـ completed فقط (markOnly)
-    // ============================================================
-    const group = await Group.findById(id).populate("courseId", "title level").lean();
+    // ═══════════════════════════════════════════════════════════
+    // نجيب الجروب + نتأكد إنه موجود
+    // ═══════════════════════════════════════════════════════════
+    const group = await Group.findById(id)
+      .populate("courseId", "title level curriculum hasCertificate")
+      .lean();
 
     if (!group) {
       return NextResponse.json(
@@ -132,8 +140,14 @@ export async function POST(req, { params }) {
       );
     }
 
-    // التحقق من الجلسات
-    const sessions = await Session.find({ groupId: id, isDeleted: false }).lean();
+    // ═══════════════════════════════════════════════════════════
+    // نتأكد إن كل السيشنات خلصت (مكتملة أو ملغية)
+    // ═══════════════════════════════════════════════════════════
+    const sessions = await Session.find({
+      groupId: id,
+      isDeleted: false,
+    }).lean();
+
     const incompleteSessions = sessions.filter(
       (s) => s.status !== "completed" && s.status !== "cancelled"
     );
@@ -153,28 +167,91 @@ export async function POST(req, { params }) {
       );
     }
 
-    // عمل الغروب completed لو مش completed
-    if (group.status !== "completed") {
-      await Group.findByIdAndUpdate(id, {
-        $set: {
-          status: "completed",
-          "metadata.updatedAt": new Date(),
-          "metadata.completedAt": new Date(),
-          "metadata.completedBy": adminUser.id,
-        },
+    // ═══════════════════════════════════════════════════════════
+    // MODE 2: إرسال لكل الطلاب تلقائيًا (Auto / Cron-style)
+    // ═══════════════════════════════════════════════════════════
+    let automationResult = null;
+
+    if (sendToAll && !markOnly) {
+      console.log(`\n🚀 [MODE 2] Sending to ALL students via onGroupCompleted`);
+
+      automationResult = await onGroupCompleted(
+        id,
+        null,
+        feedbackLink || group.metadata?.feedbackLink || null,
+        {}
+      );
+
+      console.log(`✅ Auto-send result:`, {
+        successCount: automationResult.successCount,
+        failCount: automationResult.failCount,
       });
-      console.log(`✅ Group ${group.code} → 'completed'`);
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // نحدّث حالة الجروب
+    // ═══════════════════════════════════════════════════════════
+    const updates = {
+      "metadata.updatedAt": new Date(),
+    };
+
+    if (group.status !== "completed") {
+      updates.status = "completed";
+      updates["metadata.completedAt"] = new Date();
+      updates["metadata.completedBy"] = adminUser.id;
+    }
+
+    if (feedbackLink) {
+      updates["metadata.feedbackLink"] = feedbackLink;
+    }
+
+    // ✅ لو بعتنا للكل دلوقتي، نسجّل إن الـ cron مش محتاج يبعت تاني
+    if (automationResult && automationResult.success) {
+      updates["metadata.completionNotification"] = {
+        sent: true,
+        sentAt: new Date(),
+        studentsNotified: automationResult.successCount || 0,
+        studentsFailed: automationResult.failCount || 0,
+        feedbackLink: feedbackLink || "",
+        results: automationResult.notificationResults || [],
+      };
+      updates["metadata.completionNotifiedAt"] = new Date();
+    }
+
+    // ✅ في markOnly mode: نمنع الـ cron من إعادة الإرسال
+    //    لأن الأدمن بعت يدويًا من الـ Modal لطالب-طالب
+    if (markOnly) {
+      updates["metadata.completionNotification.sent"] = true;
+      updates["metadata.completionNotification.sentAt"] = new Date();
+      updates["metadata.completionNotification.feedbackLink"] =
+        feedbackLink || "";
+      updates["metadata.completionNotifiedAt"] = new Date();
+    }
+
+    await Group.findByIdAndUpdate(id, { $set: updates });
+
+    console.log(`✅ Group ${group.code} → 'completed'`);
 
     return NextResponse.json({
       success: true,
-      message: "Group marked as completed",
+      message: markOnly
+        ? "Group marked as completed (messages sent manually)"
+        : sendToAll
+          ? "Group completed + messages sent to all students"
+          : "Group marked as completed",
       data: {
         groupId: id,
         groupName: group.name,
         groupCode: group.code,
         status: "completed",
         completedAt: new Date(),
+        automation: automationResult
+          ? {
+              totalStudents: automationResult.totalStudents,
+              successCount: automationResult.successCount,
+              failCount: automationResult.failCount,
+            }
+          : null,
       },
     });
   } catch (error) {
@@ -225,7 +302,11 @@ export async function GET(req, { params }) {
       });
     }
 
-    const sessions = await Session.find({ groupId: id, isDeleted: false }).lean();
+    const sessions = await Session.find({
+      groupId: id,
+      isDeleted: false,
+    }).lean();
+
     const doneSessions = sessions.filter(
       (s) => s.status === "completed" || s.status === "cancelled"
     ).length;
@@ -244,8 +325,8 @@ export async function GET(req, { params }) {
         currentStatus: group.status,
         canComplete: allDone && group.status !== "completed",
         alreadyCompleted: group.status === "completed",
-        messagesSent: group.metadata?.completionMessagesSent || false,
-        sentAt: group.metadata?.completionMessagesSentAt || null,
+        messagesSent: group.metadata?.completionNotification?.sent || false,
+        sentAt: group.metadata?.completionNotification?.sentAt || null,
         totalStudents: studentsCount,
         sessions: {
           total: totalSessions,
@@ -265,15 +346,19 @@ export async function GET(req, { params }) {
         })),
         automation: {
           enabled: group.automation?.whatsappEnabled || false,
-          completionMessageEnabled: group.automation?.completionMessage || false,
+          completionMessageEnabled:
+            group.automation?.completionMessage || false,
         },
-        summary: group.metadata?.completionMessagesSummary || null,
+        summary: group.metadata?.completionNotification || null,
       },
     });
   } catch (error) {
     console.error("❌ Error checking group completion status:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to check completion status" },
+      {
+        success: false,
+        error: error.message || "Failed to check completion status",
+      },
       { status: 500 }
     );
   }

@@ -7,6 +7,7 @@ import {
   UserPlus, UserCog, Search, Star, RotateCcw, Video,
   Settings, ChevronDown, ChevronUp, Check, X,
   BookOpen, Menu, Info, MapPin, Car,
+  Coins, AlertTriangle, // ✅ جديد
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -87,6 +88,31 @@ const TEMPLATE_TYPES = [
   { id: "portfolio_inactivity_reminder", label: "تذكير عدم تحديث البورتفوليو", icon: RefreshCw, color: "amber", emoji: "💼", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
   { id: "portfolio_update_broadcast", label: "إعلان تحديث النظام", icon: Zap, color: "secondary", emoji: "📢", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
   { id: "portfolio_contact_form_notification", label: "إشعار رسالة Contact Form", icon: MessageCircle, color: "sky", emoji: "📩", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
+
+  {
+    id: "credit_low_balance_4h_student",
+    label: "تنبيه رصيد منخفض (4 ساعات) - الطالب",
+    icon: Coins, color: "amber", emoji: "🟡",
+    category: "billing", type: "student_only", api: "message", isNew: true,
+  },
+  {
+    id: "credit_low_balance_4h_guardian",
+    label: "تنبيه رصيد منخفض (4 ساعات) - ولي الأمر",
+    icon: Coins, color: "amber", emoji: "🟡",
+    category: "billing", type: "guardian_only", api: "message", isNew: true,
+  },
+  {
+    id: "credit_low_balance_2h_student",
+    label: "تنبيه رصيد عاجل (2 ساعة) - الطالب",
+    icon: AlertTriangle, color: "rose", emoji: "🔴",
+    category: "billing", type: "student_only", api: "message", isNew: true,
+  },
+  {
+    id: "credit_low_balance_2h_guardian",
+    label: "تنبيه رصيد عاجل (2 ساعة) - ولي الأمر",
+    icon: AlertTriangle, color: "rose", emoji: "🔴",
+    category: "billing", type: "guardian_only", api: "message", isNew: true,
+  },
 ];
 
 const CATEGORIES = {
@@ -99,6 +125,7 @@ const CATEGORIES = {
   attendance: { label: "الحضور", emoji: "📋" },
   completion: { label: "الإكمال", emoji: "🎉" },
   evaluation: { label: "التقييم", emoji: "⭐" },
+  billing: { label: "الرصيد والباقات", emoji: "💳" }, // ✅ جديد
   portfolio: { label: "البورتفوليو", emoji: "💼" },
 };
 
@@ -115,6 +142,7 @@ const VAR_GROUPS = {
   common: { label: "عامة", emoji: "📌" },
   portfolio: { label: "البورتفوليو", emoji: "💼" },
   offline: { label: "Offline (الموقع)", emoji: "📍" }, // ✅ جديد
+  billing: { label: "الرصيد والباقة", emoji: "💳" },
 };
 
 const TEMPLATE_VARS = {
@@ -159,8 +187,22 @@ const TEMPLATE_VARS = {
   late_notification: ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
   excused_notification: ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
 
-  group_completion_student: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
-  group_completion_guardian: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
+group_completion_student: [
+  "salutation_ar", "salutation_en", "guardianSalutation",
+  "studentName", "guardianName", "childTitle",
+  "groupName", "groupCode", "courseName", "enrollmentNumber",
+  "feedbackLink",
+  "totalSessions",     // ✅ جديد
+  "completionDate",    // ✅ جديد
+],
+group_completion_guardian: [
+  "salutation_ar", "salutation_en", "guardianSalutation",
+  "studentName", "guardianName", "childTitle",
+  "groupName", "groupCode", "courseName", "enrollmentNumber",
+  "feedbackLink",
+  "totalSessions",     // ✅ جديد
+  "completionDate",    // ✅ جديد
+],
 
   evaluation_pass: [
     "guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus",
@@ -234,6 +276,20 @@ const TEMPLATE_VARS = {
   portfolio_inactivity_reminder: ["ownerWelcome", "ownerName", "portfolioLink"],
   portfolio_update_broadcast: ["ownerName", "updateLink"],
   portfolio_contact_form_notification: ["ownerSalutation", "ownerName", "dashboardLink"],
+  credit_low_balance_4h_student: [
+    "salutation_ar", "salutation_en", "remainingHours", "packageName",
+  ],
+  credit_low_balance_4h_guardian: [
+    "guardianSalutation", "childTitle", "studentName",
+    "remainingHours", "packageName",
+  ],
+  credit_low_balance_2h_student: [
+    "salutation_ar", "salutation_en", "remainingHours", "packageName",
+  ],
+  credit_low_balance_2h_guardian: [
+    "guardianSalutation", "childTitle", "studentName",
+    "remainingHours", "packageName",
+  ],
 };
 
 const FRONTEND_FALLBACKS = {
@@ -342,6 +398,24 @@ const FRONTEND_FALLBACKS = {
     ar: `عزيزي {ownerName}،\n\nيعلمك نظام الإشعارات الآلي بتلقي رسالة جديدة عبر الـ Contact Form الخاص بالـ Personal Portfolio الخاص بك.\n\nلضمان الخصوصية وسرية البيانات، يتم توجيه جميع الرسائل وتشفيرها آلياً إلى حسابك دون أي تدخل بشري.\n\nلعرض محتوى الرسالة والرد عليها، برجاء تسجيل الدخول إلى الـ Dashboard:\n🔗 {dashboardLink}`,
     en: `Dear {ownerName},\n\nOur automated notification system informs you that a new message has been received via the Contact Form on your Personal Portfolio.\n\nTo ensure privacy and data confidentiality, all messages are automatically routed and encrypted to your account without any human intervention.\n\nTo view the message and reply, please log in to your Dashboard:\n🔗 {dashboardLink}`,
   },
+
+  credit_low_balance_4h_student: {
+    ar: `{salutation_ar} 👋\n\n⚠️ تنبيه: رصيد الساعات المتبقية في باقتك قارب على الانتهاء.\n\n🔋 الساعات المتبقية: *{remainingHours}* ساعة\n📦 الباقة: {packageName}\n\nلتجنب توقف الجلسات، بننصحك بتجديد الباقة قبل ما الرصيد ينفذ.\n\nفريق Code School 💻`,
+    en: `{salutation_en} 👋\n\n⚠️ Heads-up: Your remaining credit hours are running low.\n\n🔋 Remaining hours: *{remainingHours}*\n📦 Package: {packageName}\n\nTo avoid any session interruption, we recommend renewing your package before the balance runs out.\n\nCode School Team 💻`,
+  },
+  credit_low_balance_4h_guardian: {
+    ar: `{guardianSalutation} 👋\n\n⚠️ تنبيه: رصيد ساعات {childTitle} *{studentName}* قارب على الانتهاء.\n\n🔋 الساعات المتبقية: *{remainingHours}* ساعة\n📦 الباقة: {packageName}\n\nلتجنب توقف الجلسات، بننصح حضرتك بتجديد الباقة قبل ما الرصيد ينفذ.\n\nفريق Code School 💻`,
+    en: `{guardianSalutation} 👋\n\n⚠️ Heads-up: {childTitle} *{studentName}*'s credit hours are running low.\n\n🔋 Remaining hours: *{remainingHours}*\n📦 Package: {packageName}\n\nTo avoid any session interruption, we recommend renewing the package before the balance runs out.\n\nCode School Team 💻`,
+  },
+  credit_low_balance_2h_student: {
+    ar: `{salutation_ar} 🚨\n\n🚨 تنبيه عاجل: رصيد ساعاتك أوشك على النفاذ.\n\n🔋 الساعات المتبقية: *{remainingHours}* ساعة فقط\n📦 الباقة: {packageName}\n\nبرجاء التواصل مع الإدارة فورًا لتجديد الباقة، عشان ما توقفش الجلسات.\n\nفريق Code School 💻`,
+    en: `{salutation_en} 🚨\n\n🚨 Urgent: Your credit hours are almost exhausted.\n\n🔋 Remaining hours: *{remainingHours}* only\n📦 Package: {packageName}\n\nPlease contact the administration immediately to renew your package, so your sessions don't stop.\n\nCode School Team 💻`,
+  },
+  credit_low_balance_2h_guardian: {
+    ar: `{guardianSalutation} 🚨\n\n🚨 تنبيه عاجل: رصيد ساعات {childTitle} *{studentName}* أوشك على النفاذ.\n\n🔋 الساعات المتبقية: *{remainingHours}* ساعة فقط\n📦 الباقة: {packageName}\n\nبرجاء التواصل مع الإدارة فورًا لتجديد الباقة، عشان ما توقفش جلسات {childTitle}.\n\nفريق Code School 💻`,
+    en: `{guardianSalutation} 🚨\n\n🚨 Urgent: {childTitle} *{studentName}*'s credit hours are almost exhausted.\n\n🔋 Remaining hours: *{remainingHours}* only\n📦 Package: {packageName}\n\nPlease contact the administration immediately to renew the package, so {childTitle}'s sessions don't stop.\n\nCode School Team 💻`,
+  },
+
 };
 
 // ── Color map with brand colors ──
@@ -857,11 +931,10 @@ function TemplateSidebar({ byCategory, activeTab, onSelectTab, searchQ, setSearc
                       <button
                         key={t.id}
                         onClick={() => onSelectTab(t.id)}
-                        className={`w-full flex items-center gap-2 pr-8 pl-3 py-2 text-xs transition-colors ${
-                          isActive
+                        className={`w-full flex items-center gap-2 pr-8 pl-3 py-2 text-xs transition-colors ${isActive
                             ? `${tc.light} ${tc.text} font-bold border-r-2 border-current`
                             : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                        }`}
+                          }`}
                       >
                         <t.icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? tc.text : "text-slate-400"}`} />
                         <span className="truncate flex-1 text-right">{t.emoji} {t.label}</span>

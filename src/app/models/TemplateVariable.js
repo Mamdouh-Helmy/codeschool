@@ -58,7 +58,8 @@ const TemplateVariableSchema = new mongoose.Schema(
         "completion",
         "evaluation",
         "portfolio",
-        "offline", // ✅ جديد — للمتغيرات الخاصة بالـ Offline flow
+        "offline",
+        "billing", 
         "common",
       ],
       default: "common",
@@ -1197,6 +1198,28 @@ export function getDefaultVariables() {
       hasGender: true,
       genderType: "portfolio_owner",
       group: "portfolio",
+    },
+    {
+      key: "packageName",
+      labelAr: "اسم الباقة",
+      labelEn: "Package Name",
+      icon: "📦",
+      valueAr: "الباقة الشهرية (12 ساعة)",
+      valueEn: "Monthly Package (12 hours)",
+      hasGender: false,
+      group: "billing",
+      description: "بيتستخدم في رسائل تنبيهات الرصيد المنخفض",
+    },
+    {
+      key: "remainingHours",
+      labelAr: "الساعات المتبقية",
+      labelEn: "Remaining Hours",
+      icon: "🔋",
+      valueAr: "4",
+      valueEn: "4",
+      hasGender: false,
+      group: "billing",
+      description: "عدد الساعات المتبقية في باقة الطالب وقت إرسال التنبيه",
     },
   ];
 }

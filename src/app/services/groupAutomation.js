@@ -1060,6 +1060,98 @@ We look forward to seeing {studentName}'s progress! 🚀
 
 Code School Team 💻`,
     },
+
+        // ══════════════════════════════════════════════════════════
+    // ✅ BILLING — تنبيهات الرصيد المنخفض
+    // ══════════════════════════════════════════════════════════
+    credit_low_balance_4h_student: {
+      ar: `{salutation_ar} 👋
+
+⚠️ تنبيه: رصيد الساعات المتبقية في باقتك قارب على الانتهاء.
+
+🔋 الساعات المتبقية: *{remainingHours}* ساعة
+📦 الباقة: {packageName}
+
+لتجنب توقف الجلسات، بننصحك بتجديد الباقة قبل ما الرصيد ينفذ.
+
+فريق Code School 💻`,
+      en: `{salutation_en} 👋
+
+⚠️ Heads-up: Your remaining credit hours are running low.
+
+🔋 Remaining hours: *{remainingHours}*
+📦 Package: {packageName}
+
+To avoid any session interruption, we recommend renewing your package before the balance runs out.
+
+Code School Team 💻`,
+    },
+    credit_low_balance_4h_guardian: {
+      ar: `{guardianSalutation} 👋
+
+⚠️ تنبيه: رصيد ساعات {childTitle} *{studentName}* قارب على الانتهاء.
+
+🔋 الساعات المتبقية: *{remainingHours}* ساعة
+📦 الباقة: {packageName}
+
+لتجنب توقف الجلسات، بننصح حضرتك بتجديد الباقة قبل ما الرصيد ينفذ.
+
+فريق Code School 💻`,
+      en: `{guardianSalutation} 👋
+
+⚠️ Heads-up: {childTitle} *{studentName}*'s credit hours are running low.
+
+🔋 Remaining hours: *{remainingHours}*
+📦 Package: {packageName}
+
+To avoid any session interruption, we recommend renewing the package before the balance runs out.
+
+Code School Team 💻`,
+    },
+    credit_low_balance_2h_student: {
+      ar: `{salutation_ar} 🚨
+
+🚨 تنبيه عاجل: رصيد ساعاتك أوشك على النفاذ.
+
+🔋 الساعات المتبقية: *{remainingHours}* ساعة فقط
+📦 الباقة: {packageName}
+
+برجاء التواصل مع الإدارة فورًا لتجديد الباقة، عشان ما توقفش الجلسات.
+
+فريق Code School 💻`,
+      en: `{salutation_en} 🚨
+
+🚨 Urgent: Your credit hours are almost exhausted.
+
+🔋 Remaining hours: *{remainingHours}* only
+📦 Package: {packageName}
+
+Please contact the administration immediately to renew your package, so your sessions don't stop.
+
+Code School Team 💻`,
+    },
+    credit_low_balance_2h_guardian: {
+      ar: `{guardianSalutation} 🚨
+
+🚨 تنبيه عاجل: رصيد ساعات {childTitle} *{studentName}* أوشك على النفاذ.
+
+🔋 الساعات المتبقية: *{remainingHours}* ساعة فقط
+📦 الباقة: {packageName}
+
+برجاء التواصل مع الإدارة فورًا لتجديد الباقة، عشان ما توقفش جلسات {childTitle}.
+
+فريق Code School 💻`,
+      en: `{guardianSalutation} 🚨
+
+🚨 Urgent: {childTitle} *{studentName}*'s credit hours are almost exhausted.
+
+🔋 Remaining hours: *{remainingHours}* only
+📦 Package: {packageName}
+
+Please contact the administration immediately to renew the package, so {childTitle}'s sessions don't stop.
+
+Code School Team 💻`,
+    },
   };
 
   const noSuffixTypes = [
@@ -1575,55 +1667,120 @@ export async function sendLowBalanceAlerts(students) {
           continue;
         }
 
-        let alertMessage = "";
-        if (remainingHours <= 2) {
-          alertMessage =
-            language === "ar"
-              ? `⚠️ تنبيه عاجل: رصيد الساعات الخاص بك على وشك النفاذ. الساعات المتبقية: ${remainingHours} ساعة فقط. يرجى التواصل مع الإدارة فوراً لتجديد الباقة.`
-              : `⚠️ Urgent Alert: Your credit hours are almost exhausted. Remaining hours: ${remainingHours} only. Please contact administration immediately to renew your package.`;
-        } else {
-          alertMessage =
-            language === "ar"
-              ? `⚠️ تنبيه: رصيد الساعات الخاص بك على وشك النفاذ. الساعات المتبقية: ${remainingHours} ساعة. يرجى التواصل مع الإدارة لتجديد الباقة.`
-              : `⚠️ Alert: Your credit hours are running low. Remaining hours: ${remainingHours}. Please contact administration to renew your package.`;
-        }
+        // ✅ تحديد القالب المناسب حسب الرصيد:
+        //   - 2 ساعة أو أقل → تنبيه عاجل
+        //   - 4 ساعات أو أقل → تنبيه تحذيري
+        //   - أكبر من 4 ساعات → نتخطى (مش المفروض يتم استدعاؤها أصلاً)
+        const isCritical = remainingHours <= 2;
+        const templateKey = isCritical ? "2h" : "4h";
 
+        const studentTemplateType = `credit_low_balance_${templateKey}_student`;
+        const guardianTemplateType = `credit_low_balance_${templateKey}_guardian`;
+
+        // ── تجهيز المتغيرات ──
+        const packageName =
+          student.creditSystem?.currentPackage?.packageName ||
+          student.creditSystem?.currentPackage?.packageType ||
+          (language === "ar" ? "الباقة" : "Package");
+
+        // guardianSalutation
+        const relationship = student.guardianInfo?.relationship || "father";
+        const isFather = relationship !== "mother";
+        const guardianSalutation_ar = isFather
+          ? `عزيزي الأستاذ ${guardianFirstName}`
+          : `عزيزتي السيدة ${guardianFirstName}`;
+        const guardianSalutation_en = isFather
+          ? `Dear Mr. ${guardianFirstName}`
+          : `Dear Mrs. ${guardianFirstName}`;
+        const guardianSalutation =
+          language === "ar" ? guardianSalutation_ar : guardianSalutation_en;
+
+        const gender = student.personalInfo?.gender || "male";
+        const isMale = gender !== "female";
+        const childTitle =
+          language === "ar"
+            ? isMale ? "ابنك" : "ابنتك"
+            : isMale ? "your son" : "your daughter";
+
+        const salutationBase_ar = isMale ? "عزيزي الطالب" : "عزيزتي الطالبة";
+        const salutation_en = `Dear ${studentFirstName}`;
+
+        const variables = {
+          salutation_ar: `${salutationBase_ar} ${studentFirstName}`,
+          salutation_en,
+          guardianSalutation,
+          childTitle,
+          studentName: studentFirstName,
+          guardianName: guardianFirstName,
+          remainingHours: String(remainingHours),
+          packageName,
+        };
+
+        // ── إرسال رسالة الطالب ──
         if (studentPhone) {
-          await wapilotService.sendAndLogMessage({
-            studentId: student._id,
-            phoneNumber: studentPhone,
-            messageContent: alertMessage,
-            messageType: "credit_alert",
-            language: language,
-            metadata: {
-              remainingHours,
-              alertType: remainingHours <= 2 ? "critical" : "low_balance",
-              recipientType: "student",
-              studentName: studentFirstName,
-            },
-          });
+          try {
+            const studentTpl = await getMessageTemplate(
+              studentTemplateType,
+              language,
+              "student",
+            );
+            const studentMsg = replaceVariables(studentTpl.content, variables);
+
+            await wapilotService.sendAndLogMessage({
+              studentId: student._id,
+              phoneNumber: studentPhone,
+              messageContent: studentMsg,
+              messageType: studentTemplateType,
+              language,
+              metadata: {
+                remainingHours,
+                alertType: isCritical ? "critical_2h" : "low_balance_4h",
+                recipientType: "student",
+                studentName: studentFirstName,
+                packageName,
+                threshold: isCritical ? "2h" : "4h",
+              },
+            });
+          } catch (err) {
+            console.error(
+              `❌ Error sending student credit alert for ${student._id}:`,
+              err.message,
+            );
+          }
         }
 
+        // ── إرسال رسالة ولي الأمر ──
         if (guardianPhone) {
-          const guardianMessage =
-            language === "ar"
-              ? `⚠️ تنبيه: رصيد ساعات ${studentFirstName} على وشك النفاذ. الساعات المتبقية: ${remainingHours} ساعة. يرجى التواصل مع الإدارة لتجديد الباقة.`
-              : `⚠️ Alert: ${studentFirstName}'s credit hours are running low. Remaining hours: ${remainingHours}. Please contact administration to renew the package.`;
+          try {
+            const guardianTpl = await getMessageTemplate(
+              guardianTemplateType,
+              language,
+              "guardian",
+            );
+            const guardianMsg = replaceVariables(guardianTpl.content, variables);
 
-          await wapilotService.sendAndLogMessage({
-            studentId: student._id,
-            phoneNumber: guardianPhone,
-            messageContent: guardianMessage,
-            messageType: "credit_alert",
-            language: language,
-            metadata: {
-              remainingHours,
-              alertType: remainingHours <= 2 ? "critical" : "low_balance",
-              recipientType: "guardian",
-              studentName: studentFirstName,
-              guardianName: guardianFirstName,
-            },
-          });
+            await wapilotService.sendAndLogMessage({
+              studentId: student._id,
+              phoneNumber: guardianPhone,
+              messageContent: guardianMsg,
+              messageType: guardianTemplateType,
+              language,
+              metadata: {
+                remainingHours,
+                alertType: isCritical ? "critical_2h" : "low_balance_4h",
+                recipientType: "guardian",
+                studentName: studentFirstName,
+                guardianName: guardianFirstName,
+                packageName,
+                threshold: isCritical ? "2h" : "4h",
+              },
+            });
+          } catch (err) {
+            console.error(
+              `❌ Error sending guardian credit alert for ${student._id}:`,
+              err.message,
+            );
+          }
         }
 
         successCount++;
@@ -1631,9 +1788,12 @@ export async function sendLowBalanceAlerts(students) {
           studentId: student._id,
           status: "sent",
           remainingHours,
+          threshold: isCritical ? "2h" : "4h",
         });
 
-        await student.logLowBalanceAlert();
+        if (typeof student.logLowBalanceAlert === "function") {
+          await student.logLowBalanceAlert();
+        }
       } catch (error) {
         console.error(
           `❌ Error sending low balance alert to student ${student._id}:`,
@@ -3030,7 +3190,7 @@ export async function onGroupCompleted(
     console.log(`\n🎯 Group Completed ==========`);
 
     const group = await Group.findById(groupId)
-      .populate("courseId", "title level")
+      .populate("courseId", "title level curriculum hasCertificate")
       .lean();
     if (!group) return { success: false, error: "Group not found" };
 
@@ -3039,12 +3199,35 @@ export async function onGroupCompleted(
       isDeleted: false,
     })
       .select(
-        "personalInfo guardianInfo communicationPreferences enrollmentNumber",
+        "personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem issuedCertificates",
       )
       .lean();
 
     if (students.length === 0)
       return { success: false, error: "No students in group" };
+
+    // ✅ عدد الحصص الكلي
+    const totalSessions =
+      group.totalSessionsCount ||
+      (await Session.countDocuments({
+        groupId,
+        isDeleted: false,
+        status: "completed",
+      }));
+
+    // ✅ تاريخ الإتمام = آخر سيشن مكتملة
+    const lastSession = await Session.findOne({
+      groupId,
+      isDeleted: false,
+      status: "completed",
+    })
+      .sort({ scheduledDate: -1 })
+      .select("scheduledDate")
+      .lean();
+
+    const completionDate = lastSession?.scheduledDate
+      ? new Date(lastSession.scheduledDate)
+      : new Date();
 
     let successCount = 0;
     let failCount = 0;
@@ -3059,37 +3242,108 @@ export async function onGroupCompleted(
           { feedbackLink: feedbackLink || "" },
         );
 
+        const courseName =
+          group.courseId?.title || group.courseSnapshot?.title || "";
+
+        const completionDateFormatted = completionDate.toLocaleDateString(
+          language === "ar" ? "ar-EG" : "en-US",
+          {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          },
+        );
+
+        // ✅ المتغيرات المحسّنة
+        const enhancedVars = {
+          ...variables,
+          courseName,
+          totalSessions: String(totalSessions),
+          completionDate: completionDateFormatted,
+          groupName: group.name || "",
+          groupCode: group.code || "",
+          feedbackLink: feedbackLink || "",
+        };
+
+        // ✅ لينكات الشهادات
+        const certificates = await getStudentCertificates(
+          student,
+          group,
+          group.courseId,
+        );
+
+        let certificateLine = "";
+        if (certificates.length > 0) {
+          if (language === "ar") {
+            certificateLine =
+              certificates.length === 1
+                ? `\n\n🏆 شهادتك جاهزة!\n${certificates[0].moduleTitle}: ${certificates[0].imageUrl}`
+                : `\n\n🏆 شهاداتك جاهزة (${certificates.length}):\n` +
+                  certificates
+                    .map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`)
+                    .join("\n");
+          } else {
+            certificateLine =
+              certificates.length === 1
+                ? `\n\n🏆 Your certificate is ready!\n${certificates[0].moduleTitle}: ${certificates[0].imageUrl}`
+                : `\n\n🏆 Your certificates are ready (${certificates.length}):\n` +
+                  certificates
+                    .map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`)
+                    .join("\n");
+          }
+        }
+
+        // ── رسالة الطالب ──
+        let finalStudentMessage = "";
         const studentIdStr = student._id.toString();
         const perStudentMsgs = customMessages[studentIdStr];
 
-        let finalStudentMessage = "";
         if (perStudentMsgs?.student?.trim()) {
           finalStudentMessage = perStudentMsgs.student;
         } else if (customMessage) {
-          finalStudentMessage = replaceVariables(customMessage, variables);
+          finalStudentMessage = replaceVariables(customMessage, enhancedVars);
         } else {
           const template = await getMessageTemplate(
             "group_completion_student",
             language,
             "student",
           );
-          finalStudentMessage = replaceVariables(template.content, variables);
+          finalStudentMessage = replaceVariables(
+            template.content,
+            enhancedVars,
+          );
         }
 
+        // ── رسالة ولي الأمر ──
         let finalGuardianMessage = "";
         if (perStudentMsgs?.guardian?.trim()) {
           finalGuardianMessage = perStudentMsgs.guardian;
         } else if (customMessage) {
-          finalGuardianMessage = replaceVariables(customMessage, variables);
+          finalGuardianMessage = replaceVariables(customMessage, enhancedVars);
         } else {
           const template = await getMessageTemplate(
             "group_completion_guardian",
             language,
             "guardian",
           );
-          finalGuardianMessage = replaceVariables(template.content, variables);
+          finalGuardianMessage = replaceVariables(
+            template.content,
+            enhancedVars,
+          );
         }
 
+        // ✅ إضافة لينك الشهادة
+        if (certificateLine) {
+          if (!finalStudentMessage.includes("🏆")) {
+            finalStudentMessage += certificateLine;
+          }
+          if (!finalGuardianMessage.includes("🏆")) {
+            finalGuardianMessage += certificateLine;
+          }
+        }
+
+        // ✅ إضافة لينك الاستبيان
         if (feedbackLink) {
           const feedbackSuffix =
             language === "ar"
@@ -3114,6 +3368,8 @@ export async function onGroupCompleted(
             groupId: group._id,
             groupName: group.name,
             groupCode: group.code,
+            certificatesCount: certificates.length,
+            totalSessions,
           },
         });
 
@@ -3125,6 +3381,7 @@ export async function onGroupCompleted(
             status: "sent",
             sentTo: result.sentTo,
             language,
+            certificatesSent: certificates.length,
           });
         } else {
           failCount++;
@@ -3141,6 +3398,8 @@ export async function onGroupCompleted(
       successCount,
       failCount,
       successRate: ((successCount / students.length) * 100).toFixed(1),
+      totalSessions,
+      completionDate,
       notificationResults,
     };
   } catch (error) {
@@ -3882,6 +4141,173 @@ export async function checkAndSendModuleOverviewNotifications() {
   return { processed: results.length, sent: results.filter((r) => r.success).length, results };
 }
 
+// ============================================================
+// ✅ Helper: يحدد لو الجروب خلص فعليًا
+//    - عنده سيشنات
+//    - كل السيشنات status إما completed أو cancelled
+//    - مفيش أي سيشن لسه scheduled أو postponed
+// ============================================================
+async function isGroupFullyCompleted(groupId) {
+  const sessions = await Session.find({
+    groupId,
+    isDeleted: false,
+  })
+    .select("status")
+    .lean();
+
+  if (sessions.length === 0) return false;
+
+  return sessions.every((s) =>
+    ["completed", "cancelled"].includes(s.status),
+  );
+}
+
+// ============================================================
+// ✅ Helper: يبني قائمة لينكات الشهادات المتاحة للطالب
+// ============================================================
+async function getStudentCertificates(student, group, course) {
+  try {
+    const issued = student.issuedCertificates || [];
+    if (issued.length === 0) return [];
+
+    const courseIdStr = course?._id?.toString();
+    if (!courseIdStr) return [];
+
+    const curriculum =
+      course.curriculum?.length > 0
+        ? course.curriculum
+        : group.courseSnapshot?.curriculum || [];
+
+    const certificates = [];
+
+    for (const cert of issued) {
+      if (cert.courseId?.toString() !== courseIdStr) continue;
+      if (!cert.imageUrl) continue;
+
+      const moduleIdStr = cert.moduleId?.toString();
+      let moduleTitle = "";
+      let moduleIndex = -1;
+
+      for (let i = 0; i < curriculum.length; i++) {
+        if (curriculum[i]?._id?.toString() === moduleIdStr) {
+          moduleTitle = curriculum[i].title || "";
+          moduleIndex = i;
+          break;
+        }
+      }
+
+      if (moduleIndex === -1 && moduleIdStr?.startsWith("module-")) {
+        const parsed = parseInt(moduleIdStr.replace("module-", ""), 10);
+        if (!isNaN(parsed) && curriculum[parsed]) {
+          moduleTitle = curriculum[parsed].title || "";
+          moduleIndex = parsed;
+        }
+      }
+
+      certificates.push({
+        moduleTitle: moduleTitle || `Module ${moduleIndex + 1}`,
+        imageUrl: cert.imageUrl,
+        moduleIndex,
+      });
+    }
+
+    certificates.sort((a, b) => a.moduleIndex - b.moduleIndex);
+    return certificates;
+  } catch (err) {
+    console.error("❌ getStudentCertificates error:", err.message);
+    return [];
+  }
+}
+
+// ============================================================
+// ✅ EVENT (Cron): يفحص كل الجروبات، ولو خلصت يبعت
+//    رسالة إتمام الدورة لكل طالب وولي أمر (مرة واحدة بس)
+// ============================================================
+export async function checkAndSendGroupCompletionNotifications() {
+  console.log(`\n🎓 Checking for completed groups...`);
+
+  const groups = await Group.find({
+    isDeleted: false,
+    status: { $in: ["active", "completed"] },
+    "metadata.completionNotification.sent": { $ne: true },
+  })
+    .populate({
+      path: "courseId",
+      select: "title curriculum hasCertificate",
+    })
+    .populate("students");
+
+  console.log(`📋 Found ${groups.length} candidate group(s)`);
+
+  const results = [];
+
+  for (const group of groups) {
+    try {
+      const fullyCompleted = await isGroupFullyCompleted(group._id);
+      if (!fullyCompleted) continue;
+
+      console.log(
+        `\n🎓 Group "${group.name}" is fully completed — sending notifications`,
+      );
+
+      const feedbackLink = group.metadata?.feedbackLink || null;
+
+      const sendResult = await onGroupCompleted(
+        group._id,
+        null,
+        feedbackLink,
+        {},
+      );
+
+      await Group.findByIdAndUpdate(group._id, {
+        $set: {
+          "metadata.completionNotification": {
+            sent: sendResult.success,
+            sentAt: new Date(),
+            studentsNotified: sendResult.successCount || 0,
+            studentsFailed: sendResult.failCount || 0,
+            feedbackLink: feedbackLink || "",
+            results: sendResult.notificationResults || [],
+          },
+          "metadata.completionNotifiedAt": new Date(),
+          status: "completed",
+        },
+      });
+
+      results.push({
+        groupId: group._id,
+        groupName: group.name,
+        groupCode: group.code,
+        success: sendResult.success,
+        successCount: sendResult.successCount || 0,
+        failCount: sendResult.failCount || 0,
+      });
+    } catch (groupErr) {
+      console.error(
+        `❌ Error processing group ${group._id}:`,
+        groupErr.message,
+      );
+      results.push({
+        groupId: group._id,
+        groupName: group.name,
+        success: false,
+        error: groupErr.message,
+      });
+    }
+  }
+
+  console.log(
+    `\n✅ GROUP COMPLETION CRON DONE — sent: ${
+      results.filter((r) => r.success).length
+    }/${results.length}`,
+  );
+
+  return {
+    processed: results.length,
+    sent: results.filter((r) => r.success).length,
+    results,
+  };
+}
 
 // ============================================================
 // ✅ Helper: بناء لينك الـ Maps من الـ Group
