@@ -20,6 +20,8 @@ import {
   CalendarClock, Hourglass, SkipForward, ArrowRightCircle,
   Send, BadgeCheck, BadgeAlert, MessageSquareWarning,
   Repeat,
+  MapPin, // ✅ جديد
+  Navigation, // ✅ جديد
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -106,24 +108,14 @@ function AnimatedCounter({ value, duration = 1200 }) {
 }
 
 // ─── 🔓 Request Access Modal ───────────────────────────────────────────────────
-// لما المدرس يدوس على سيشن مش متاحة دلوقتي (أو يطلب إعادة فتح سيشن مكتملة)،
-// بدل الرفض المباشر، نعرض عليه:
-//  - لو فيه سيشن "اليوم فعليًا" في نفس الجروب → واجهة "استبدال" (زرار واحد):
-//    السيشن المطلوبة تتفتح فورًا، وسيشن اليوم تترحل أسبوع مكانها.
-//  - لو مفيش → الخيارين العاديين (فتح دي بس / فتح دي واللي بعدها).
-//  - أو نعرض حالة الطلب لو فيه طلب pending شغال بالفعل على الجروب ده، أو
-//    سبب رفض آخر طلب لو كان فيه واحد على نفس السيشن.
-// ✅ كل ده شغال بغض النظر عن status/attendanceTaken بتاع السيشن — حتى لو
-// completed واتاخد فيها حضور قبل كده، تقدر تطلب فتحها/استبدالها تاني عادي.
 function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
   const t = (ar, en) => isAr ? ar : en;
   const [checking, setChecking] = useState(true);
-  const [statusInfo, setStatusInfo] = useState(null); // { status, reviewNotes, swapCandidate, ... }
-  const [selectedMode, setSelectedMode] = useState(null); // "single" | "withNext" | "swap"
+  const [statusInfo, setStatusInfo] = useState(null);
+  const [selectedMode, setSelectedMode] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
-  // بعد ما يشوف سبب الرفض، يقدر يضغط "تقديم طلب جديد" فيرجع لاختيار الوضع
   const [showOptionsAfterRejection, setShowOptionsAfterRejection] = useState(false);
 
   useEffect(() => {
@@ -131,7 +123,6 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  // ── Check current request status for this session/group ────────────────
   useEffect(() => {
     let active = true;
     (async () => {
@@ -145,7 +136,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
           setStatusInfo(json.data);
         }
       } catch {
-        // fail silently — instructor can still try to submit, server re-validates
+        // fail silently
       } finally {
         if (active) setChecking(false);
       }
@@ -158,8 +149,6 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
     setSubmitting(true);
     setError("");
     try {
-      // ✅ الباك إند بيقرر لوحده لو الحالة دي "استبدال" (لو فيه سيشن اليوم)
-      // بغض النظر عن الـ viewMode المبعوت — فالقيمة هنا مجرد افتراضي آمن.
       const viewMode = mode === "withNext" ? "withNext" : "single";
       const res = await fetch(`/api/instructor/sessions/${session._id}/request-reschedule`, {
         method: "POST",
@@ -191,7 +180,6 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
 
       <div className="relative w-full sm:max-w-lg max-h-[94vh] overflow-y-auto bg-white dark:bg-[#0d1117] rounded-t-3xl sm:rounded-3xl shadow-2xl border border-gray-100 dark:border-[#21262d]">
 
-        {/* Header */}
         <div className="relative overflow-hidden flex-shrink-0 p-6" style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)" }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
           <div className="relative z-10 flex items-start justify-between">
@@ -215,7 +203,6 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
         </div>
 
         <div className="p-5 space-y-4">
-
           {checking && (
             <div className="flex items-center justify-center gap-2 py-6 text-gray-400">
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -277,7 +264,6 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
             </div>
           )}
 
-          {/* حالة الرفض — تعرض السبب لو موجود، وتسمح بتقديم طلب جديد */}
           {!checking && !success && wasRejected && (
             <div className="text-center py-2">
               <div className="w-16 h-16 mx-auto rounded-2xl bg-red-50 dark:bg-red-900/10 flex items-center justify-center mb-4 border border-red-200 dark:border-red-800/30">
@@ -332,7 +318,6 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
           {!checking && !success && !hasPending && !wasRejected && (
             <>
               {swapCandidate ? (
-                // 🆕 فيه سيشن "اليوم فعليًا" في نفس الجروب → واجهة استبدال
                 <>
                   <p className="text-sm text-gray-500 dark:text-[#8b949e] leading-relaxed">
                     {t(
@@ -375,7 +360,6 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
                     )}
                   </p>
 
-                  {/* Option 1: single */}
                   <button
                     onClick={() => handleSubmit("single")}
                     disabled={submitting}
@@ -401,7 +385,6 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
                     </div>
                   </button>
 
-                  {/* Option 2: withNext */}
                   <button
                     onClick={() => handleSubmit("withNext")}
                     disabled={submitting}
@@ -442,6 +425,68 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ✅ Location Card (Offline sessions) ─────────────────────────────────────
+function LocationCard({ session, isAr }) {
+  const loc = session.locationInfo;
+  if (!loc) return null;
+  const t = (ar, en) => (isAr ? ar : en);
+
+  const hasAnyInfo = loc.placeName || loc.address || loc.mapsLink;
+  if (!hasAnyInfo) return null;
+
+  return (
+    <div className="rounded-2xl overflow-hidden border border-[#ff6700]/30 dark:border-[#ff6700]/20 bg-gradient-to-br from-orange-50/80 to-amber-50/50 dark:from-[#ff6700]/5 dark:to-[#feaf00]/5">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#ff6700]/20 dark:border-[#ff6700]/10 bg-gradient-to-r from-[#ff6700]/10 to-transparent dark:from-[#ff6700]/10">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md">
+          <MapPin className="w-4 h-4 text-white" />
+        </div>
+        <div className="flex-1">
+          <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
+            {t("موقع الجلسة", "Session Location")}
+          </span>
+          <p className="text-[10px] text-[#ff6700] font-bold">Offline Session</p>
+        </div>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/15 text-[#ff6700] border border-[#ff6700]/30 font-black">
+          📍 {t("حضوري", "On-site")}
+        </span>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {loc.placeName && (
+          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-[#161b22]/50 border border-gray-200/60 dark:border-[#30363d]/60">
+            <MapPin className="w-4 h-4 text-[#004d59] dark:text-[#ff6437] flex-shrink-0" />
+            <span className="flex-1 text-xs text-gray-700 dark:text-[#c9d1d9] font-bold truncate">
+              {loc.placeName}
+            </span>
+          </div>
+        )}
+
+        {loc.address && (
+          <div className="flex items-start gap-2 p-2.5 rounded-xl bg-white/70 dark:bg-[#161b22]/50 border border-gray-200/60 dark:border-[#30363d]/60">
+            <Navigation className="w-4 h-4 text-[#004d59] dark:text-[#8b949e] flex-shrink-0 mt-0.5" />
+            <span className="flex-1 text-xs text-gray-700 dark:text-[#c9d1d9] leading-relaxed">
+              {loc.address}
+            </span>
+          </div>
+        )}
+
+        {loc.mapsLink && (
+          <a
+            href={loc.mapsLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-black text-sm text-white bg-gradient-to-r from-[#ff6700] to-[#feaf00] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
+          >
+            <MapPin className="w-4 h-4" />
+            {t("افتح الموقع على الخريطة", "Open Location on Maps")}
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
       </div>
     </div>
   );
@@ -702,34 +747,15 @@ function CourseInfoSection({ session, isAr }) {
 }
 
 // ─── Session Detail Modal ─────────────────────────────────────────────────────
-// يعمل في وضعين:
-//  - full mode  (canViewDetails): كل المحتوى زي ما كان (لينك + حضور + كل حاجة)
-//  - partial mode (canViewPartialDetails): نفس المودال بس بدون MeetingCredentials
-//    وبدون زرارات تسجيل الحضور — وبانر يوضح إن الجلسة لسه مقفولة
-// 🆕 كمان بيعرض زرار "طلب إعادة فتح" للسيشنات المكتملة اللي معندهاش earlyAccess
-// فعّال ولا طلب pending، عن طريق onRequestAccess.
 function SessionModal({ session, onClose, isAr, onRequestAccess }) {
   const cfg = STATUS_CFG[session.status] || STATUS_CFG.scheduled;
   const isCompleted = session.status === "completed";
   const attRate = getAttendanceRate(session);
   const t = (ar, en) => isAr ? ar : en;
   const isActuallyToday = session.isEffectivelyToday ?? session.isToday;
-  // ✅ كل الحالات (scheduled/cancelled/postponed/completed) بقت زي بعضها
-  // بالظبط: لو معادها الفعلي (بعد أي ترحيل/earlyAccess) = النهارده، تتفتح
-  // كاملة. completed بقت جوه القاعدة دي عشان تقدر تتفتح تاني لو الأدمن وافق
-  // على طلب إعادة فتحها (earlyAccess)، بغض النظر إن الحضور اتسجل عليها قبل كده.
   const isOpenToday = isActuallyToday;
   const isPartial = !!session.canViewPartialDetails;
   const hasEarlyAccess = !!session.hasActiveEarlyAccess;
-  // 🆕 الحضور يفضل "مقفول" (منمنعش تسجيل/إعادة تسجيل) إلا لو:
-  //   - فيه earlyAccess فعّال دلوقتي، أو
-  //   - السيشن دي معادها الحقيقي (session.isToday الخام، مش effective) هو
-  //     النهاردة فعلاً — ده بيسمح بتسجيل/إعادة تسجيل الحضور لأي سيشن
-  //     بتاريخها الحقيقي النهاردة حتى لو attendanceTaken كانت true قديمًا
-  //     (مثلاً بعد swap رجعها تبقى سيشن اليوم من غير earlyAccess منفصل).
-  //     مهم إننا نستخدم session.isToday الخام هنا مش isActuallyToday، عشان
-  //     الاستثناء يفضل مقصور على "معادها فعلاً النهاردة" مش أي حالة effective
-  //     (اللي أصلاً بتفكها لوحدها عن طريق hasEarlyAccess).
   const attendanceLocked =
     session.attendanceTaken && !hasEarlyAccess && !session.isToday;
   const canManageAttendance = !isPartial && isOpenToday && !attendanceLocked;
@@ -756,7 +782,6 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
 
       <div className="relative w-full sm:max-w-2xl max-h-[94vh] overflow-y-auto bg-white dark:bg-[#0d1117] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col border border-gray-100 dark:border-[#21262d]">
 
-        {/* ── Modal Header ── */}
         <div className="relative overflow-hidden flex-shrink-0" style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)" }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
           <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full opacity-20" style={{ background: "#feaf00" }} />
@@ -772,6 +797,11 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
                 {isActuallyToday && !isPartial && (
                   <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40">
                     ✨ {t("اليوم", "Today")}
+                  </span>
+                )}
+                {session.isOffline && (
+                  <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />{t("Offline", "Offline")}
                   </span>
                 )}
                 {isPartial && (
@@ -805,10 +835,8 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
           </div>
         </div>
 
-        {/* ── Modal Body ── */}
         <div className="p-5 space-y-4 bg-gray-50/50 dark:bg-[#0d1117]">
 
-          {/* 🔓 Partial-preview notice — يوضح إن الجلسة لسه مقفولة عمليًا */}
           {isPartial && (
             <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#004d59]/5 dark:bg-[#004d59]/10 border border-[#004d59]/20 dark:border-[#004d59]/30">
               <div className="w-9 h-9 rounded-xl bg-[#004d59]/10 dark:bg-[#004d59]/20 flex items-center justify-center flex-shrink-0 border border-[#004d59]/20">
@@ -828,7 +856,6 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             </div>
           )}
 
-                    {/* 🆕 بانر توضيحي لو فيه طلب إعادة فتح قيد المراجعة على السيشن دي بالتحديد */}
           {hasPendingReopenRequest && (
             <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
               <div className="w-9 h-9 rounded-xl bg-[#feaf00]/20 dark:bg-[#feaf00]/10 flex items-center justify-center flex-shrink-0 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
@@ -845,8 +872,6 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             </div>
           )}
 
-          {/* 🆕 معاينة محتوى (موديول حالي أو withNext) لسيشن لسه مش مكتملة —
-              نفس زرار طلب الفتح العادي، من غير ما يكون لازم تكون completed */}
           {isPartial && !isCompleted && !hasPendingReopenRequest && onRequestAccess && (
             <button
               onClick={() => onRequestAccess(session)}
@@ -859,14 +884,24 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
 
           <SessionDescriptionCard session={session} isAr={isAr} />
 
-          {!isPartial && isOpenToday && session.meetingLink && (
+          {/* ✅ Online → Meeting Credentials | Offline → Location Card */}
+          {!isPartial && isOpenToday && !session.isOffline && session.meetingLink && (
             <MeetingCredentials session={session} isAr={isAr} />
           )}
 
-          {/* 🆕 زرار واحد موحّد لتسجيل/إعادة تسجيل الحضور — بيظهر لو السيشن
-              مفتوحة فعليًا (isOpenToday) والحضور مش مقفول */}
+          {!isPartial && isOpenToday && session.isOffline && session.locationInfo && (
+            <LocationCard session={session} isAr={isAr} />
+          )}
+
+          {/* زرار الحضور */}
           {canManageAttendance && (
-            session.meetingLink ? (
+            session.isOffline ? (
+              <Link href={`/instructor/attendance?session=${session._id}`}
+                className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-[#004d59] to-[#ff6700] text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+                <ClipboardList className="w-5 h-5" />
+                {t(session.attendanceTaken ? "إعادة تسجيل الحضور الآن" : "تسجيل الحضور الآن", session.attendanceTaken ? "Re-take Attendance Now" : "Take Attendance Now")}
+              </Link>
+            ) : session.meetingLink ? (
               <Link href={`/instructor/attendance?session=${session._id}`}
                 className="flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all">
                 <ClipboardList className="w-4 h-4" />
@@ -881,8 +916,6 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             )
           )}
 
-          {/* 🆕 سيشن مكتملة ومعندهاش earlyAccess فعّال ولا طلب قيد المراجعة —
-              زرار "طلب إعادة فتح" يودّي المدرس لنفس مسار طلب الوصول العادي */}
           {isCompleted && !hasEarlyAccess && !hasPendingReopenRequest && onRequestAccess && (
             <button
               onClick={() => onRequestAccess(session)}
@@ -900,7 +933,6 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             </a>
           )}
 
-          {/* Attendance Breakdown */}
           {attBreakdown && (
             <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] bg-white dark:bg-[#161b22] overflow-hidden shadow-sm">
               <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-[#30363d] bg-gray-50/80 dark:bg-[#0d1117]/40">
@@ -939,7 +971,6 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             </div>
           )}
 
-          {/* Lessons */}
           {lessons.length > 0 && (
             <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] bg-white dark:bg-[#161b22] overflow-hidden shadow-sm">
               <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-[#30363d] bg-gray-50/80 dark:bg-[#0d1117]/40">
@@ -1019,19 +1050,14 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   const cfg = STATUS_CFG[session.status] || STATUS_CFG.scheduled;
   const isCompleted = session.status === "completed";
   const isEffectivelyToday = session.isEffectivelyToday ?? session.isToday;
-  // ✅ مؤجلة/ملغاة تتعامل زي مجدولة بس لو معادها الفعلي (بعد أي ترحيل) = النهارده
   const isToday = isEffectivelyToday && ["scheduled", "cancelled", "postponed"].includes(session.status);
   const attRate = getAttendanceRate(session);
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const t = (ar, en) => isAr ? ar : en;
   const sessionNum = (session.moduleIndex ?? 0) * 3 + (session.sessionNumber ?? 1);
 
-  // ── Determine clickability: full access, partial preview, or needs a request ──
   const canOpenFull = session.canViewDetails;
   const canOpenPartial = session.canViewPartialDetails;
-  // ✅ السيشن المكتملة تتفتح عادي دايمًا (تعرض تفاصيلها/إحصائياتها، وممكن
-  // من جوه المودال تطلب "إعادة فتح" لو حابب). ملغاة/مؤجلة تتفتح بس لو
-  // النهارده معادها الفعلي.
   const isClickable =
     canOpenFull ||
     canOpenPartial ||
@@ -1066,7 +1092,6 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
             ? "border-emerald-200/60 dark:border-emerald-800/30 hover:shadow-emerald-500/5"
             : "border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/30 dark:hover:border-[#004d59]/40"}`}
     >
-      {/* Icon */}
       <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 shadow-md bg-gradient-to-br ${iconColors[session.status] || iconColors.scheduled} text-white`}>
         {isCompleted
           ? <CheckCircle className="w-5 h-5" />
@@ -1075,7 +1100,6 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
             : <span className="text-sm font-black">{sessionNum}</span>}
       </div>
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
           {isToday && (
@@ -1094,6 +1118,12 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
             <span className="text-[10px] font-black text-[#f67d00] dark:text-[#feaf00] flex items-center gap-1">
               <Hourglass className="w-2.5 h-2.5" />
               {t("قيد المراجعة", "Pending Review")}
+            </span>
+          )}
+          {session.isOffline && (
+            <span className="text-[10px] font-black text-[#f67d00] dark:text-[#feaf00] flex items-center gap-1">
+              <MapPin className="w-2.5 h-2.5" />
+              {t("Offline", "Offline")}
             </span>
           )}
           <h3 className="font-black text-sm truncate text-gray-900 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors duration-200">
@@ -1121,7 +1151,18 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
           </div>
         )}
 
-        {session.showJoinButton && (
+        {/* ✅ زرار حضور سريع للسيشنات Offline اللي معادها النهاردة */}
+        {session.showAttendanceButton && (
+          <Link href={`/instructor/attendance?session=${session._id}`}
+            onClick={e => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+            <ClipboardList className="w-3.5 h-3.5" />{t("حضور", "Attendance")}
+          </Link>
+        )}
+
+        {/* Online → Start button */}
+        {session.showJoinButton && !session.isOffline && (
           <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
@@ -1274,8 +1315,6 @@ export default function InstructorSessionsPage() {
     router.push("/");
   };
 
-  // 🆕 يفتح مودال طلب الوصول ابتداءً من داخل مودال تفاصيل السيشن — بيقفل
-  // مودال التفاصيل الأول عشان مانفتحش مودالين فوق بعض
   const handleRequestAccessFromModal = useCallback((session) => {
     setModal(null);
     setRequestAccessSession(session);
@@ -1320,11 +1359,10 @@ export default function InstructorSessionsPage() {
     { id: "cancelled", labelAr: "ملغاة/مؤجلة", labelEn: "Cancelled", count: sessions.filter(s => s.status === "cancelled" || s.status === "postponed").length },
   ];
 
-  const todayJoinable = sessions.filter(s => s.showJoinButton);
+  const todayJoinable = sessions.filter(s => s.showJoinButton || s.showAttendanceButton);
   const currentUser = user || { name: isAr ? "مدرس" : "Instructor", email: "", role: "instructor" };
 
   const handleRequestSubmitted = useCallback(() => {
-    // بعد التقديم بنجاح، نعمل refresh خفيف عشان الـ pendingReschedule badge يظهر فورًا
     fetchData(true);
   }, [fetchData]);
 
@@ -1357,7 +1395,7 @@ export default function InstructorSessionsPage() {
           onRefresh={() => fetchData(true)}
         />
 
-        {/* ── Sticky Toolbar ── */}
+        {/* Sticky Toolbar */}
         <div className="sticky top-0 z-20 bg-white/95 dark:bg-[#0d1117]/95 backdrop-blur-xl border-b border-gray-200/80 dark:border-[#21262d]">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between py-4 gap-3">
@@ -1435,7 +1473,7 @@ export default function InstructorSessionsPage() {
           </div>
         </div>
 
-        {/* ── Content ── */}
+        {/* Content */}
         <div className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
 
           {/* Stat Cards */}
@@ -1459,14 +1497,34 @@ export default function InstructorSessionsPage() {
                   <Zap className="w-5 h-5 text-[#feaf00]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-white/60 font-bold">{t("جلسة اليوم جاهزة", "Today's Session Ready")}</p>
+                  <p className="text-xs text-white/60 font-bold">
+                    {todayJoinable[0].isOffline
+                      ? t("جلسة اليوم (Offline)", "Today's Session (Offline)")
+                      : t("جلسة اليوم جاهزة", "Today's Session Ready")}
+                  </p>
                   <p className="font-black text-sm truncate">{todayJoinable[0].title}</p>
+                  {todayJoinable[0].isOffline && todayJoinable[0].locationInfo?.placeName && (
+                    <p className="text-[11px] text-white/70 truncate mt-0.5">
+                      📍 {todayJoinable[0].locationInfo.placeName}
+                    </p>
+                  )}
                 </div>
-                <a href={todayJoinable[0].meetingLink} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
-                  style={{ color: "#ff6700" }}>
-                  <Video className="w-4 h-4" />{t("ابدأ الآن", "Start Now")}
-                </a>
+
+                {/* Online → Start | Offline → Attendance */}
+                {!todayJoinable[0].isOffline && todayJoinable[0].meetingLink && (
+                  <a href={todayJoinable[0].meetingLink} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
+                    style={{ color: "#ff6700" }}>
+                    <Video className="w-4 h-4" />{t("ابدأ الآن", "Start Now")}
+                  </a>
+                )}
+                {todayJoinable[0].isOffline && (
+                  <Link href={`/instructor/attendance?session=${todayJoinable[0]._id}`}
+                    className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
+                    style={{ color: "#ff6700" }}>
+                    <ClipboardList className="w-4 h-4" />{t("تسجيل الحضور", "Attendance")}
+                  </Link>
+                )}
               </div>
             </div>
           )}

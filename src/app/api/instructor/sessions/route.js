@@ -23,11 +23,7 @@ export async function GET(req) {
 
     if (user.role !== "instructor" && user.role !== "admin") {
       return NextResponse.json(
-        {
-          success: false,
-          message: "هذه الصفحة للمدرسين فقط",
-          code: "FORBIDDEN",
-        },
+        { success: false, message: "هذه الصفحة للمدرسين فقط", code: "FORBIDDEN" },
         { status: 403 },
       );
     }
@@ -44,7 +40,8 @@ export async function GET(req) {
         path: "courseId",
         select: "title level curriculum description grade subject duration",
       })
-      .select("_id name code courseId")
+      // ✅ نضيف حقول الموقع ونوع الجروب
+      .select("_id name code courseId location locationDetails deliveryMode")
       .lean();
 
     const groupIds = groups.map((g) => g._id);
@@ -54,14 +51,7 @@ export async function GET(req) {
         success: true,
         data: {
           sessions: [],
-          stats: {
-            total: 0,
-            completed: 0,
-            scheduled: 0,
-            cancelled: 0,
-            postponed: 0,
-            needsAttendance: 0,
-          },
+          stats: { total: 0, completed: 0, scheduled: 0, cancelled: 0, postponed: 0, needsAttendance: 0 },
         },
       });
     }
@@ -72,6 +62,10 @@ export async function GET(req) {
       groupMap[g._id.toString()] = {
         name: g.name,
         code: g.code,
+        // ✅ جديد: بيانات الموقع ونوع الجروب
+        location: g.location || "",
+        locationDetails: g.locationDetails || {},
+        deliveryMode: g.deliveryMode || "online",
         curriculum: g.courseId?.curriculum || [],
         course: g.courseId
           ? {
@@ -86,21 +80,7 @@ export async function GET(req) {
       };
     });
 
-        // ── 1.5 🆕 Compute the "current module" for each group ─────────────────
-    // الموديول "اللي الدور عليه" = أول موديول (بترتيب moduleIndex) لسه مش كل
-    // سيشناته الموجودة فعليًا في الـ DB status = "completed".
-    //
-    // ⚠️ العدد الكلي لسيشنات كل موديول بياخد من عدد سيشنات الـ DB الفعلية
-    // (progressSessions) مش من curriculum[moduleIndex].totalSessions — لأن
-    // حقل totalSessions في موديول الكورس ممكن يكون مش متسجل خالص (زي ما
-    // ظهر في الداتا الفعلية: كائن الموديول فيه بس title/order/lessons).
-    // الاعتماد على عدد سيشنات الـ DB الحقيقي أضمن ومتوافق تلقائيًا مع أي
-    // عدد سيشنات لكل موديول (3 أو غيره) من غير ما نحتاج نثق في بيانات
-    // المنهج بره الـ Session collection.
-    //
-    // ⚠️ وبرضو معتمدين على status مش attendanceTaken لتحديد "خلصت" — لأن
-    // attendanceTaken ممكن يبقى true حتى لو الـ status لسه "scheduled"
-    // (مستقلين عن بعض عمدًا في النظام ده).
+    // ── 1.5 Compute the "current module" for each group ─────────────────────
     const progressSessions = await Session.find({
       groupId: { $in: groupIds },
       isDeleted: false,
@@ -108,7 +88,6 @@ export async function GET(req) {
       .select("groupId moduleIndex status")
       .lean();
 
-    // groupId → { moduleIndex → { total, completed } }
     const moduleStatsMap = {};
     progressSessions.forEach((s) => {
       const gid = s.groupId.toString();
@@ -122,19 +101,13 @@ export async function GET(req) {
       }
     });
 
-    // groupId → moduleIndex الحالي، أو null لو مفيش سيشنات أو كل الموديولات خلصت
     const currentModuleIndexMap = {};
     Object.keys(moduleStatsMap).forEach((gid) => {
       const stats = moduleStatsMap[gid];
-      const moduleIndexes = Object.keys(stats)
-        .map(Number)
-        .sort((a, b) => a - b);
-
+      const moduleIndexes = Object.keys(stats).map(Number).sort((a, b) => a - b);
       let current = null;
       for (const mIdx of moduleIndexes) {
         const { total, completed } = stats[mIdx];
-        // total دايمًا > 0 هنا لأننا بنيناه من سيشنات فعلية بس — الشرط
-        // موجود للأمان في حالة أي تعديل مستقبلي على المنطق ده
         if (total > 0 && completed < total) {
           current = mIdx;
           break;
@@ -156,7 +129,8 @@ export async function GET(req) {
       .select(
         "title description status scheduledDate startTime endTime moduleIndex sessionNumber " +
           "lessonIndexes attendanceTaken attendance meetingLink meetingPlatform meetingCredentials " +
-          "meetingLinkId recordingLink materials instructorNotes groupId pendingReschedule earlyAccess",
+          "meetingLinkId recordingLink materials instructorNotes groupId pendingReschedule earlyAccess " +
+          "deliveryMode", // ✅ جديد
       )
       .sort({ scheduledDate: 1, startTime: 1 })
       .limit(limit)
@@ -170,13 +144,43 @@ export async function GET(req) {
     todayEnd.setHours(23, 59, 59, 999);
 
     const processedSessions = allSessions.map((session) => {
-      const gid =
-        session.groupId?._id?.toString() || session.groupId?.toString();
+      const gid = session.groupId?._id?.toString() || session.groupId?.toString();
       const grp = groupMap[gid] || {};
       const curriculum = grp.curriculum || [];
       const moduleData = curriculum[session.moduleIndex] || {};
 
-      // ── Lessons from curriculum (by sessionNumber) ─────────────────────
+      // ── ✅ Delivery Mode + Location Info ─────────────────────────────
+      const deliveryMode = session.deliveryMode || grp.deliveryMode || "online";
+      const isOffline = deliveryMode === "offline";
+
+      // ── Build location info for offline sessions ─────────────────────
+      let locationInfo = null;
+      if (isOffline) {
+        const loc = grp.locationDetails || {};
+        const placeName = loc.placeName || grp.location || "";
+        const address = loc.address || loc.extraDetails || "";
+        const country = loc.country || "";
+
+        let mapsLink = "";
+        if (loc.lat != null && loc.lng != null) {
+          mapsLink = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+        } else if (address) {
+          mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+        } else if (placeName) {
+          mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeName)}`;
+        }
+
+        locationInfo = {
+          placeName,
+          address,
+          country,
+          lat: loc.lat ?? null,
+          lng: loc.lng ?? null,
+          mapsLink,
+        };
+      }
+
+      // ── Lessons ────────────────────────────────────────────────────
       const bySessionNum = (moduleData.lessons || []).filter(
         (l) => l.sessionNumber === session.sessionNumber,
       );
@@ -185,7 +189,6 @@ export async function GET(req) {
       );
       const rawLessons = bySessionNum.length > 0 ? bySessionNum : byIndexes;
 
-      // Deduplicate lessons by title
       const seenTitles = new Set();
       const lessons = rawLessons
         .filter((l) => {
@@ -200,60 +203,44 @@ export async function GET(req) {
           order: l.order,
         }));
 
-      // ── Is today (by raw scheduled date)? ────────────────────────────────
+      // ── Is today? ────────────────────────────────────────────────────
       const sessionDate = new Date(session.scheduledDate);
       const isToday = sessionDate >= todayStart && sessionDate <= todayEnd;
 
-      // ── 🔐 Early access: admin approved a "open this session now" request.
-      //     This bypasses the date AND the attendance-taken lock entirely
-      //     until consumed (attendance taken/retaken or manually revoked).
-      //     Independent from isToday. Works even if the session is
-      //     "completed" and already had attendance recorded before.
+      // ── Early access ─────────────────────────────────────────────────
       const hasActiveEarlyAccess = !!(
         session.earlyAccess?.enabled && !session.earlyAccess?.consumedAt
       );
 
-      // ── Effective "today" = real today OR an active early-access grant ──
       const isEffectivelyToday = isToday || hasActiveEarlyAccess;
-
       const sessionStillActive = true;
-
-      // ✅ الـ attendanceTaken دايمًا بياخد قيمته الحقيقية من DB
-      // مش sensitive data — مجرد flag بيقول "الحضور اتسجل"
-      // محتاجه دايمًا في الـ stats وفي الـ session row
       const attendanceAlreadyTaken = !!session.attendanceTaken;
 
-      // 🆕 الحضور بيقفل الوصول العادي، إلا لو:
-      //   - فيه earlyAccess فعّال دلوقتي، أو
-      //   - السيشن دي معادها الحقيقي (الخام، مش effective) هو النهاردة فعلاً
       const attendanceBlocksAccess =
         attendanceAlreadyTaken && !hasActiveEarlyAccess && !isToday;
 
+      // ✅ زرار بدء الحصة (Join) — للأونلاين بس
       const showJoinButton =
         isEffectivelyToday &&
         sessionStillActive &&
         !attendanceBlocksAccess &&
+        !isOffline &&
         !!session.meetingLink;
 
-      // ── 🔐 SECURITY: Can user view FULL details (link + credentials + attendance)? ──
+      // 🆕 زرار "تسجيل الحضور" المباشر — للـ Offline بس
+      const showAttendanceButton =
+        isOffline &&
+        isEffectivelyToday &&
+        sessionStillActive &&
+        !attendanceBlocksAccess;
+
+      // ── Access permissions ───────────────────────────────────────────
       const canViewDetails =
         isEffectivelyToday && sessionStillActive && !attendanceBlocksAccess;
 
-      // 🆕 ── مراجعة إحصائيات حضور سيشن خلصت بالفعل ──
       const canViewAttendanceHistory =
         session.status === "completed" && attendanceAlreadyTaken;
 
-      // ── 🔓 Partial details، مصدرين مستقلين تمامًا عن بعض:
-      //   1) وافق الأدمن على طلب "withNext" وده لسه من غير حضور
-      //   2) 🆕 السيشن دي جوه "الموديول الحالي" (اللي الدور عليه في المنهج)
-      //      ولسه مش completed — بيتفتح كـ معاينة محتوى بس بغض النظر عن أي
-      //      طلب/تاريخ، طول ما الموديولات اللي قبله خلصت بالكامل
-      //
-      // 🔧 بنستخدم status !== "completed" مش !attendanceAlreadyTaken، لأن
-      // attendanceTaken ممكن يبقى true حتى لو الـ status لسه "scheduled"
-      // (مستقلين عن بعض عمدًا في النظام ده). السيشن المكتملة أصلاً ليها
-      // مسار تاني (canViewAttendanceHistory) فمفيش داعي نمنع المعاينة هنا
-      // بسبب فلاج حضور ممكن يكون متسجل على سيشن لسه مجدولة.
       const wasApprovedWithNext =
         session.pendingReschedule?.status === "approved" &&
         session.pendingReschedule?.viewMode === "withNext";
@@ -269,14 +256,13 @@ export async function GET(req) {
         session.status !== "completed" &&
         (wasApprovedWithNext || isCurrentModuleSession);
 
-      // ── Session description from curriculum ────────────────────────────
+      // ── Course info ──────────────────────────────────────────────────
       const sessionPresentationData = (moduleData.sessions || []).find(
         (s) => s.sessionNumber === session.sessionNumber,
       );
 
       const sessionDescription = session.description || "";
 
-      // ── Build courseInfo payload ───────────────────────────────────────
       const courseInfo = grp.course
         ? {
             title: grp.course.title,
@@ -296,29 +282,26 @@ export async function GET(req) {
           }
         : null;
 
-      // ── 🔐 SECURITY: Sensitive data (link + credentials + roster) ────────
+      // ── Sensitive data ───────────────────────────────────────────────
       let meetingCredentials = null;
       let attendance = null;
       let meetingLink = null;
       let meetingPlatform = null;
 
       if (canViewDetails) {
-        const rawCreds =
-          session.meetingCredentials?.username ||
-          session.meetingCredentials?.password
-            ? session.meetingCredentials
-            : session.meetingLinkId?.credentials || null;
+        if (!isOffline) {
+          const rawCreds =
+            session.meetingCredentials?.username || session.meetingCredentials?.password
+              ? session.meetingCredentials
+              : session.meetingLinkId?.credentials || null;
 
-        meetingCredentials = rawCreds
-          ? {
-              username: rawCreds.username || null,
-              password: rawCreds.password || null,
-            }
-          : null;
-
+          meetingCredentials = rawCreds
+            ? { username: rawCreds.username || null, password: rawCreds.password || null }
+            : null;
+          meetingLink = session.meetingLink || null;
+          meetingPlatform = session.meetingPlatform || null;
+        }
         attendance = session.attendance || [];
-        meetingLink = session.meetingLink || null;
-        meetingPlatform = session.meetingPlatform || null;
       } else if (canViewAttendanceHistory) {
         attendance = session.attendance || [];
       }
@@ -346,10 +329,17 @@ export async function GET(req) {
         isToday,
         isEffectivelyToday,
         showJoinButton,
+        showAttendanceButton, // ✅ جديد
         canViewDetails,
         canViewPartialDetails,
         canViewAttendanceHistory,
         hasActiveEarlyAccess,
+
+        // ✅ جديد: delivery mode + location
+        deliveryMode,
+        isOffline,
+        locationInfo,
+
         pendingReschedule: session.pendingReschedule
           ? {
               status: session.pendingReschedule.status,
@@ -379,9 +369,7 @@ export async function GET(req) {
       scheduled: all.filter((s) => s.status === "scheduled").length,
       cancelled: all.filter((s) => s.status === "cancelled").length,
       postponed: all.filter((s) => s.status === "postponed").length,
-      needsAttendance: all.filter(
-        (s) => s.status === "completed" && !s.attendanceTaken,
-      ).length,
+      needsAttendance: all.filter((s) => s.status === "completed" && !s.attendanceTaken).length,
     };
 
     return NextResponse.json({

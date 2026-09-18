@@ -10,6 +10,7 @@ import {
   Zap, RefreshCw,
   Video, Sparkles, TrendingUp, BarChart3,
   Pencil, MessageSquarePlus, Link2, Check,
+  MapPin, // ✅ جديد
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
 
@@ -121,7 +122,7 @@ function AnimatedCounter({ value, duration = 800 }) {
   return <span>{count}</span>;
 }
 
-// ─── Comment Editor Modal (يفتح لما تدوس على تعليق المدرس) ───────────────────
+// ─── Comment Editor Modal ─────────────────────────────────────────────────────
 function CommentEditorModal({ student, decision, initialValue, isAr, onClose, onSave }) {
   const [value, setValue] = useState(initialValue || "");
   const textareaRef = useRef(null);
@@ -146,7 +147,6 @@ function CommentEditorModal({ student, decision, initialValue, isAr, onClose, on
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full sm:max-w-lg bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-[slideUp_0.25s_ease-out]">
 
-        {/* Header */}
         <div className="relative p-5 overflow-hidden flex-shrink-0"
           style={{ background: `linear-gradient(135deg, ${cfg.solidColor}, ${cfg.solidTo})` }}>
           <div className="absolute inset-0 opacity-10"
@@ -166,7 +166,6 @@ function CommentEditorModal({ student, decision, initialValue, isAr, onClose, on
           </div>
         </div>
 
-        {/* Body */}
         <div className="p-4">
           <textarea
             ref={textareaRef}
@@ -188,7 +187,6 @@ function CommentEditorModal({ student, decision, initialValue, isAr, onClose, on
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex gap-2 p-4 border-t border-gray-100 dark:border-[#30363d]">
           <button onClick={onClose}
             className="flex-1 py-3 rounded-xl text-sm font-bold bg-gray-100 dark:bg-[#21262d] text-gray-700 dark:text-[#8b949e] hover:bg-gray-200 dark:hover:bg-[#30363d] transition-all">
@@ -236,7 +234,6 @@ function StudentEvalCard({
         style={{ background: cfg ? `linear-gradient(135deg, ${cfg.solidColor}, ${cfg.solidTo})` : "linear-gradient(135deg, #004d59, #ff6700)" }} />
 
       <div className="relative z-10 p-4">
-        {/* Student info row */}
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-base flex-shrink-0 shadow-md transition-transform duration-300 group-hover/card:scale-110"
             style={cfg
@@ -262,7 +259,6 @@ function StudentEvalCard({
           )}
         </div>
 
-        {/* Decision buttons */}
         <div className="grid grid-cols-3 gap-2">
           {Object.entries(DECISIONS).map(([key, c]) => {
             const BtnIcon = c.icon;
@@ -289,7 +285,6 @@ function StudentEvalCard({
           })}
         </div>
 
-        {/* Star Ratings */}
         {cfg && (
           <div className="mt-3 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d] space-y-2">
             <p className="text-[10px] font-black text-gray-500 dark:text-[#6e7681] uppercase tracking-wide mb-2">
@@ -311,7 +306,6 @@ function StudentEvalCard({
           </div>
         )}
 
-        {/* تعليق المدرس — يفتح مودال واسع بدل ما يكتب في مكان ضيق */}
         {cfg && (
           <button
             type="button"
@@ -341,7 +335,7 @@ function StudentEvalCard({
   );
 }
 
-// ─── Global Recording Link Card (لينك واحد بيتبعت لكل الطلاب) ────────────────
+// ─── Global Recording Link Card ────────────────────────────────────────────────
 function GlobalRecordingLinkCard({ value, onChange, isAr, disabled }) {
   const t = (ar, en) => isAr ? ar : en;
   const hasValue = !!value?.trim();
@@ -426,8 +420,8 @@ export default function InstructorEvaluationPage() {
   const [sessionData, setSessionData]   = useState(null);
   const [students, setStudents]         = useState([]);
   const [decisions, setDecisions]       = useState({});
-  const [commentModal, setCommentModal] = useState(null); // { student, decision }
-  const [recordingLink, setRecordingLink] = useState(""); // لينك واحد للكل
+  const [commentModal, setCommentModal] = useState(null);
+  const [recordingLink, setRecordingLink] = useState("");
   const [submitSummary, setSubmitSummary]   = useState(null);
   const [animateProgress, setAnimateProgress] = useState(false);
   const [ratings, setRatings]   = useState({});
@@ -436,6 +430,11 @@ export default function InstructorEvaluationPage() {
   const [moduleTitle, setModuleTitle]           = useState("");
   const [moduleDescription, setModuleDescription] = useState("");
   const [supervisorName, setSupervisorName]     = useState("");
+
+  // ✅ هل السيشن Offline؟
+  const isOfflineSession =
+    sessionData?.isOffline === true ||
+    sessionData?.deliveryMode === "offline";
 
   const fetchData = useCallback(async () => {
     if (!sessionId) { setError(t("لم يتم تحديد جلسة", "No session specified")); setLoading(false); return; }
@@ -668,9 +667,15 @@ export default function InstructorEvaluationPage() {
                 style={{ background: "#ff6437", opacity: 0.1 }} />
               <div className="relative z-10 flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <Sparkles className="w-4 h-4 text-[#feaf00] animate-pulse" />
                     <span className="text-[#feaf00] font-medium text-xs">{t("تقييم الأداء", "Performance Evaluation")}</span>
+                    {/* ✅ Badge Offline */}
+                    {isOfflineSession && (
+                      <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-[10px] font-black px-2 py-0.5 rounded-full border border-[#feaf00]/40 flex items-center gap-1">
+                        <MapPin className="w-2.5 h-2.5" /> {t("Offline", "Offline")}
+                      </span>
+                    )}
                   </div>
                   <h2 className="text-xl font-black text-white mb-1 truncate">{sessionData.title}</h2>
                   <p className="text-white/70 text-sm truncate">{sessionData.group?.name}</p>
@@ -779,13 +784,35 @@ export default function InstructorEvaluationPage() {
               </div>
             </div>
 
-            {/* Global Recording Link — لينك واحد بيتبعت لكل الطلاب */}
-            <GlobalRecordingLinkCard
-              value={recordingLink}
-              onChange={setRecordingLink}
-              isAr={isAr}
-              disabled={submitting}
-            />
+            {/* ✅ Recording Link — للأونلاين بس (الـ Offline مفيش تسجيل) */}
+            {!isOfflineSession && (
+              <GlobalRecordingLinkCard
+                value={recordingLink}
+                onChange={setRecordingLink}
+                isAr={isAr}
+                disabled={submitting}
+              />
+            )}
+
+            {/* ✅ بادج لو السيشن Offline */}
+            {isOfflineSession && (
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+                <div className="w-9 h-9 rounded-xl bg-[#feaf00]/20 dark:bg-[#feaf00]/10 flex items-center justify-center flex-shrink-0 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+                  <MapPin className="w-4 h-4 text-[#f67d00] dark:text-[#feaf00]" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-black text-[#f67d00] dark:text-[#feaf00]">
+                    {t("جلسة Offline (حضورية)", "Offline Session")}
+                  </p>
+                  <p className="text-xs text-[#f67d00]/80 dark:text-[#feaf00]/70 mt-0.5 leading-relaxed">
+                    {t(
+                      "دي جلسة حضورية — مفيش لينك تسجيل، بس التقييم والرسائل شغالين عادي.",
+                      "This is an on-site session — no recording link, but evaluation & messages work normally."
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Student cards grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
