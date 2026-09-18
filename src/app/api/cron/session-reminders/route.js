@@ -13,7 +13,6 @@ import {
   sendOfflinePreAttendancePing,
   sendInstructorOfflineReminder,
   // ✅ AUTOMATIONS
-  checkAndSendModuleOverviewNotifications,
   checkAndSendGroupCompletionNotifications,
 } from '../../../services/groupAutomation';
 
@@ -35,13 +34,17 @@ const WINDOWS = {
 // ============================================================
 function getSessionDeliveryMode(session) {
   const sessionMode = session?.deliveryMode;
+
   if (sessionMode === 'offline' || sessionMode === 'online') {
     return sessionMode;
   }
+
   const groupMode = session?.groupId?.deliveryMode;
+
   if (groupMode === 'offline' || groupMode === 'online') {
     return groupMode;
   }
+
   return 'online';
 }
 
@@ -63,6 +66,7 @@ async function lockSessionFlag(sessionId, flagField) {
     },
     { new: true },
   );
+
   return result;
 }
 
@@ -73,10 +77,16 @@ async function unlockSessionFlag(sessionId, flagField) {
   try {
     await Session.updateOne(
       { _id: sessionId },
-      { $unset: { [flagField]: '' }, $set: { [`${flagField}At`]: null } },
+      {
+        $unset: { [flagField]: '' },
+        $set: { [`${flagField}At`]: null },
+      },
     );
   } catch (err) {
-    console.error(`⚠️ Failed to unlock ${flagField} for ${sessionId}:`, err.message);
+    console.error(
+      `⚠️ Failed to unlock ${flagField} for ${sessionId}:`,
+      err.message
+    );
   }
 }
 
@@ -86,80 +96,142 @@ async function unlockSessionFlag(sessionId, flagField) {
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-    const secret     = searchParams.get('secret');
+
+    const secret = searchParams.get('secret');
     const authHeader = req.headers.get('authorization');
 
     const isAuthorized =
-      secret === CRON_SECRET || authHeader === `Bearer ${CRON_SECRET}`;
+      secret === CRON_SECRET ||
+      authHeader === `Bearer ${CRON_SECRET}`;
 
     if (!isAuthorized) {
       console.warn('⛔ Unauthorized cron request');
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Unauthorized',
+        },
+        {
+          status: 401,
+        }
+      );
     }
 
     await connectDB();
 
     const now = new Date();
+
     console.log(`\n🕐 Cron running at UTC: ${now.toISOString()}`);
-    console.log(`🕐 Cairo time: ${now.toLocaleString('en-EG', { timeZone: 'Africa/Cairo' })}`);
+
+    console.log(
+      `🕐 Cairo time: ${now.toLocaleString('en-EG', {
+        timeZone: 'Africa/Cairo',
+      })}`
+    );
 
     const results = {
       timestamp: now.toISOString(),
-      cairoTime: now.toLocaleString('en-EG', { timeZone: 'Africa/Cairo' }),
+
+      cairoTime: now.toLocaleString('en-EG', {
+        timeZone: 'Africa/Cairo',
+      }),
 
       // 🌐 ONLINE
       reminder24h: {
-        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
-        sessions: [], instructorsSent: 0,
+        checked: 0,
+        sent: 0,
+        skipped: 0,
+        failed: 0,
+        duplicates: 0,
+        sessions: [],
+        instructorsSent: 0,
       },
+
       reminder15min: {
-        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
-        sessions: [], instructorsSent: 0,
+        checked: 0,
+        sent: 0,
+        skipped: 0,
+        failed: 0,
+        duplicates: 0,
+        sessions: [],
+        instructorsSent: 0,
       },
 
       // 📍 OFFLINE
       reminder24hOffline: {
-        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
-        sessions: [], instructorsSent: 0,
+        checked: 0,
+        sent: 0,
+        skipped: 0,
+        failed: 0,
+        duplicates: 0,
+        sessions: [],
+        instructorsSent: 0,
       },
+
       reminder30minOffline: {
-        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
-        sessions: [], instructorsSent: 0,
+        checked: 0,
+        sent: 0,
+        skipped: 0,
+        failed: 0,
+        duplicates: 0,
+        sessions: [],
+        instructorsSent: 0,
       },
+
       preAttendancePing: {
-        checked: 0, sent: 0, skipped: 0, failed: 0, duplicates: 0,
-        sessions: [], instructorsSent: 0,
+        checked: 0,
+        sent: 0,
+        skipped: 0,
+        failed: 0,
+        duplicates: 0,
+        sessions: [],
+        instructorsSent: 0,
       },
 
       // ✅ AUTOMATIONS
-      moduleOverview: { processed: 0, sent: 0, results: [] },
-      groupCompletion: { processed: 0, sent: 0, groups: [] },
+      groupCompletion: {
+        processed: 0,
+        sent: 0,
+        groups: [],
+      },
     };
 
     // ============================================================
     // ✅ نافذة 3 أيام — نجيب كل المرشحين مرة واحدة
     // ============================================================
     const dayStart = new Date(now);
+
     dayStart.setUTCHours(0, 0, 0, 0);
 
     const dayEnd = new Date(now);
+
     dayEnd.setDate(dayEnd.getDate() + 3);
+
     dayEnd.setUTCHours(23, 59, 59, 999);
 
     const allCandidates = await Session.find({
       status: { $ne: 'completed' },
       isDeleted: false,
-      scheduledDate: { $gte: dayStart, $lte: dayEnd },
+      scheduledDate: {
+        $gte: dayStart,
+        $lte: dayEnd,
+      },
     })
-      .populate('groupId', 'deliveryMode location locationDetails name code')
+      .populate(
+        'groupId',
+        'deliveryMode location locationDetails name code'
+      )
       .lean();
 
-    console.log(`\n📋 Total candidates in window: ${allCandidates.length}`);
+    console.log(
+      `\n📋 Total candidates in window: ${allCandidates.length}`
+    );
 
     // ============================================================
     // ✅ نقسم المرشحين: Online / Offline
     // ============================================================
-    const onlineSessions  = [];
+    const onlineSessions = [];
     const offlineSessions = [];
 
     for (const s of allCandidates) {
@@ -183,23 +255,33 @@ export async function GET(req) {
       window: WINDOWS.reminder24h,
       flagField: 'automationEvents.reminder24hSent',
       resultsBucket: results.reminder24h,
+
       sendFn: async (session) => {
         return await sendManualSessionReminder(
           session._id.toString(),
           '24hours',
           null,
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
+
       instructorFn: async (session) => {
         return await sendInstructorSessionReminder(
           session._id.toString(),
           '24hours',
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
-      studentsCountField: 'automationEvents.reminder24hStudentsNotified',
+
+      studentsCountField:
+        'automationEvents.reminder24hStudentsNotified',
+
       instructorsCountField: null,
+
       extraFields: {
         'automationEvents.reminderSent': true,
         'automationEvents.reminderSentAt': new Date(),
@@ -216,23 +298,33 @@ export async function GET(req) {
       window: WINDOWS.reminder15min,
       flagField: 'automationEvents.reminder15minSent',
       resultsBucket: results.reminder15min,
+
       sendFn: async (session) => {
         return await sendManualSessionReminder(
           session._id.toString(),
           '15min',
           null,
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
+
       instructorFn: async (session) => {
         return await sendInstructorSessionReminder(
           session._id.toString(),
           '15min',
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
-      studentsCountField: 'automationEvents.reminder15minStudentsNotified',
+
+      studentsCountField:
+        'automationEvents.reminder15minStudentsNotified',
+
       instructorsCountField: null,
+
       extraFields: {
         'automationEvents.reminder1hSent': true,
         'automationEvents.reminder1hSentAt': new Date(),
@@ -249,21 +341,31 @@ export async function GET(req) {
       window: WINDOWS.reminder24hOffline,
       flagField: 'automationEvents.reminder24hOfflineSent',
       resultsBucket: results.reminder24hOffline,
+
       sendFn: async (session) => {
         return await sendOfflineLocationReminder(
           session._id.toString(),
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
+
       instructorFn: async (session) => {
         return await sendInstructorOfflineReminder(
           session._id.toString(),
           '24hours_offline',
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
-      studentsCountField: 'automationEvents.reminder24hOfflineStudentsNotified',
-      instructorsCountField: 'automationEvents.reminder24hOfflineInstructorsNotified',
+
+      studentsCountField:
+        'automationEvents.reminder24hOfflineStudentsNotified',
+
+      instructorsCountField:
+        'automationEvents.reminder24hOfflineInstructorsNotified',
     });
 
     // ============================================================
@@ -276,21 +378,31 @@ export async function GET(req) {
       window: WINDOWS.reminder30minOffline,
       flagField: 'automationEvents.reminder30minOfflineSent',
       resultsBucket: results.reminder30minOffline,
+
       sendFn: async (session) => {
         return await sendOfflineDropoffAlert(
           session._id.toString(),
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
+
       instructorFn: async (session) => {
         return await sendInstructorOfflineReminder(
           session._id.toString(),
           '30min_offline',
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
-      studentsCountField: 'automationEvents.reminder30minOfflineStudentsNotified',
-      instructorsCountField: 'automationEvents.reminder30minOfflineInstructorsNotified',
+
+      studentsCountField:
+        'automationEvents.reminder30minOfflineStudentsNotified',
+
+      instructorsCountField:
+        'automationEvents.reminder30minOfflineInstructorsNotified',
     });
 
     // ============================================================
@@ -303,65 +415,82 @@ export async function GET(req) {
       window: WINDOWS.preAttendancePing,
       flagField: 'automationEvents.preAttendancePingSent',
       resultsBucket: results.preAttendancePing,
+
       sendFn: async (session) => {
         return await sendOfflinePreAttendancePing(
           session._id.toString(),
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
+
       instructorFn: async (session) => {
         return await sendInstructorOfflineReminder(
           session._id.toString(),
           'pre_attendance_ping',
-          { automatedCron: true },
+          {
+            automatedCron: true,
+          }
         );
       },
-      studentsCountField: 'automationEvents.preAttendancePingStudentsNotified',
-      instructorsCountField: 'automationEvents.preAttendancePingInstructorsNotified',
-    });
 
-    // ============================================================
-    // ✅ MODULE OVERVIEW — يفحص كل الجروبات الأكتف
-    // ============================================================
-    try {
-      const moduleResult = await checkAndSendModuleOverviewNotifications();
-      results.moduleOverview = {
-        processed: moduleResult.processed || 0,
-        sent: moduleResult.sent || 0,
-        results: moduleResult.results || [],
-      };
-      console.log(
-        `\n📚 MODULE OVERVIEW: processed ${moduleResult.processed}, sent ${moduleResult.sent}`,
-      );
-    } catch (moduleErr) {
-      console.error('❌ Module overview cron error:', moduleErr.message);
-      results.moduleOverview = { error: moduleErr.message };
-    }
+      studentsCountField:
+        'automationEvents.preAttendancePingStudentsNotified',
+
+      instructorsCountField:
+        'automationEvents.preAttendancePingInstructorsNotified',
+    });
 
     // ============================================================
     // ✅ GROUP COMPLETION — يفحص كل الجروبات اللي خلصت
     // ============================================================
     try {
-      const completionResult = await checkAndSendGroupCompletionNotifications();
+      const completionResult =
+        await checkAndSendGroupCompletionNotifications();
+
       results.groupCompletion = {
         processed: completionResult.processed || 0,
         sent: completionResult.sent || 0,
         groups: completionResult.results || [],
       };
+
       console.log(
-        `\n🎓 GROUP COMPLETION: processed ${completionResult.processed}, sent ${completionResult.sent}`,
+        `\n🎓 GROUP COMPLETION: processed ${completionResult.processed}, sent ${completionResult.sent}`
       );
     } catch (completionErr) {
-      console.error('❌ Group completion cron error:', completionErr.message);
-      results.groupCompletion = { error: completionErr.message };
+      console.error(
+        '❌ Group completion cron error:',
+        completionErr.message
+      );
+
+      results.groupCompletion = {
+        error: completionErr.message,
+      };
     }
 
-    console.log('\n📊 Cron Summary:', JSON.stringify(results, null, 2));
-    return NextResponse.json({ success: true, data: results });
+    console.log(
+      '\n📊 Cron Summary:',
+      JSON.stringify(results, null, 2)
+    );
+
+    return NextResponse.json({
+      success: true,
+      data: results,
+    });
 
   } catch (error) {
     console.error('❌ Cron job error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message,
+      },
+      {
+        status: 500,
+      }
+    );
   }
 }
 
@@ -382,88 +511,166 @@ async function processReminder({
   extraFields = {},
 }) {
   const flagKey = flagField.split('.').pop();
+
   const candidates = sessions.filter(
-    (s) => s.automationEvents?.[flagKey] !== true,
+    (s) => s.automationEvents?.[flagKey] !== true
   );
 
   resultsBucket.checked = candidates.length;
-  console.log(`\n⏰ [${label}] Candidates: ${candidates.length}`);
+
+  console.log(
+    `\n⏰ [${label}] Candidates: ${candidates.length}`
+  );
 
   for (const session of candidates) {
     try {
-      const sessionDateTime = buildSessionDateTime(session);
-      const diff = computeDiff(sessionDateTime, now, window.unit);
+      const sessionDateTime =
+        buildSessionDateTime(session);
 
-      if (diff < window.min || diff > window.max) {
+      const diff = computeDiff(
+        sessionDateTime,
+        now,
+        window.unit
+      );
+
+      if (
+        diff < window.min ||
+        diff > window.max
+      ) {
         resultsBucket.skipped++;
         continue;
       }
 
-      const locked = await lockSessionFlag(session._id, flagField);
+      const locked = await lockSessionFlag(
+        session._id,
+        flagField
+      );
+
       if (!locked) {
         resultsBucket.duplicates++;
-        console.log(`   🔒 Already locked by another run — skipping`);
+
+        console.log(
+          `   🔒 Already locked by another run — skipping`
+        );
+
         continue;
       }
 
-      console.log(`   🔒 Locked: ${session.title} | diff: ${diff.toFixed(2)} ${window.unit}`);
+      console.log(
+        `   🔒 Locked: ${session.title} | diff: ${diff.toFixed(
+          2
+        )} ${window.unit}`
+      );
 
       // ── إرسال للطلاب ──
       let studentResult = null;
+
       try {
         studentResult = await sendFn(session);
       } catch (err) {
-        console.error(`   ❌ Student send error:`, err.message);
-        studentResult = { success: false, error: err.message };
+        console.error(
+          `   ❌ Student send error:`,
+          err.message
+        );
+
+        studentResult = {
+          success: false,
+          error: err.message,
+        };
       }
 
       // ── إرسال للمدرس ──
       let instructorResult = null;
+
       try {
         instructorResult = await instructorFn(session);
       } catch (err) {
-        console.error(`   ❌ Instructor send error:`, err.message);
-        instructorResult = { success: false, error: err.message };
+        console.error(
+          `   ❌ Instructor send error:`,
+          err.message
+        );
+
+        instructorResult = {
+          success: false,
+          error: err.message,
+        };
       }
 
-      const studentsSent = studentResult?.successCount || 0;
-      const instructorsSent = instructorResult?.successCount || 0;
-      const anySuccess = studentResult?.success === true || instructorsSent > 0;
+      const studentsSent =
+        studentResult?.successCount || 0;
+
+      const instructorsSent =
+        instructorResult?.successCount || 0;
+
+      const anySuccess =
+        studentResult?.success === true ||
+        instructorsSent > 0;
 
       if (anySuccess) {
         resultsBucket.sent++;
-        resultsBucket.instructorsSent += instructorsSent;
+
+        resultsBucket.instructorsSent +=
+          instructorsSent;
+
         resultsBucket.sessions.push({
           id: session._id,
           title: session.title,
           status: session.status,
           scheduledDate: session.scheduledDate,
-          deliveryMode: getSessionDeliveryMode(session),
+          deliveryMode:
+            getSessionDeliveryMode(session),
           studentsNotified: studentsSent,
           instructorsNotified: instructorsSent,
         });
 
-        await Session.findByIdAndUpdate(session._id, {
-          $set: {
-            [studentsCountField]: studentsSent,
-            ...(instructorsCountField ? { [instructorsCountField]: instructorsSent } : {}),
-            ...extraFields,
-          },
-        });
+        await Session.findByIdAndUpdate(
+          session._id,
+          {
+            $set: {
+              [studentsCountField]: studentsSent,
 
-        console.log(`   ✅ ${label} — students: ${studentsSent} | instructors: ${instructorsSent}`);
+              ...(instructorsCountField
+                ? {
+                    [instructorsCountField]:
+                      instructorsSent,
+                  }
+                : {}),
+
+              ...extraFields,
+            },
+          }
+        );
+
+        console.log(
+          `   ✅ ${label} — students: ${studentsSent} | instructors: ${instructorsSent}`
+        );
+
       } else {
         resultsBucket.failed++;
-        await unlockSessionFlag(session._id, flagField);
-        console.log(`   ❌ ${label} — total failure, unlocked for retry`);
+
+        await unlockSessionFlag(
+          session._id,
+          flagField
+        );
+
+        console.log(
+          `   ❌ ${label} — total failure, unlocked for retry`
+        );
       }
 
     } catch (err) {
       resultsBucket.failed++;
-      console.error(`   ❌ ${label} error for ${session._id}:`, err.message);
+
+      console.error(
+        `   ❌ ${label} error for ${session._id}:`,
+        err.message
+      );
 
       try {
-        await unlockSessionFlag(session._id, flagField);
+        await unlockSessionFlag(
+          session._id,
+          flagField
+        );
       } catch (_) {}
     }
   }
@@ -472,9 +679,18 @@ async function processReminder({
 // ============================================================
 // ✅ computeDiff — بيحسب الفرق بوحدات (hours/minutes)
 // ============================================================
-function computeDiff(sessionDateTime, now, unit) {
-  const diffMs = sessionDateTime - now;
-  if (unit === 'hours') return diffMs / (1000 * 60 * 60);
+function computeDiff(
+  sessionDateTime,
+  now,
+  unit
+) {
+  const diffMs =
+    sessionDateTime - now;
+
+  if (unit === 'hours') {
+    return diffMs / (1000 * 60 * 60);
+  }
+
   return diffMs / (1000 * 60);
 }
 
@@ -483,27 +699,58 @@ function computeDiff(sessionDateTime, now, unit) {
 // ============================================================
 function buildSessionDateTime(session) {
   try {
-    const date = new Date(session.scheduledDate);
+    const date =
+      new Date(session.scheduledDate);
 
-    if (!session.startTime) return date;
+    if (!session.startTime) {
+      return date;
+    }
 
-    const [hours, minutes] = session.startTime.split(':').map(Number);
+    const [hours, minutes] =
+      session.startTime
+        .split(':')
+        .map(Number);
 
-    const cairoDateStr = date.toLocaleDateString('en-CA', {
-      timeZone: 'Africa/Cairo',
-    });
+    const cairoDateStr =
+      date.toLocaleDateString('en-CA', {
+        timeZone: 'Africa/Cairo',
+      });
 
-    const cairoOffset = getCairoUTCOffset();
-    const sign        = cairoOffset >= 0 ? '+' : '-';
-    const absOffset   = Math.abs(cairoOffset);
-    const offsetStr   = `${sign}${String(absOffset).padStart(2, '0')}:00`;
+    const cairoOffset =
+      getCairoUTCOffset();
 
-    const isoString = `${cairoDateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${offsetStr}`;
+    const sign =
+      cairoOffset >= 0 ? '+' : '-';
+
+    const absOffset =
+      Math.abs(cairoOffset);
+
+    const offsetStr =
+      `${sign}${String(absOffset).padStart(
+        2,
+        '0'
+      )}:00`;
+
+    const isoString =
+      `${cairoDateStr}T${String(hours).padStart(
+        2,
+        '0'
+      )}:${String(minutes).padStart(
+        2,
+        '0'
+      )}:00${offsetStr}`;
 
     return new Date(isoString);
+
   } catch (err) {
-    console.error('❌ buildSessionDateTime error:', err.message);
-    return new Date(session.scheduledDate);
+    console.error(
+      '❌ buildSessionDateTime error:',
+      err.message
+    );
+
+    return new Date(
+      session.scheduledDate
+    );
   }
 }
 
@@ -512,17 +759,34 @@ function buildSessionDateTime(session) {
 // ============================================================
 function getCairoUTCOffset() {
   try {
-    const now      = new Date();
-    const utcStr   = now.toLocaleString('en-US', { timeZone: 'UTC' });
-    const cairoStr = now.toLocaleString('en-US', { timeZone: 'Africa/Cairo' });
+    const now = new Date();
 
-    const utcDate   = new Date(utcStr);
-    const cairoDate = new Date(cairoStr);
+    const utcStr =
+      now.toLocaleString('en-US', {
+        timeZone: 'UTC',
+      });
 
-    const diffMs    = cairoDate - utcDate;
-    const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+    const cairoStr =
+      now.toLocaleString('en-US', {
+        timeZone: 'Africa/Cairo',
+      });
+
+    const utcDate =
+      new Date(utcStr);
+
+    const cairoDate =
+      new Date(cairoStr);
+
+    const diffMs =
+      cairoDate - utcDate;
+
+    const diffHours =
+      Math.round(
+        diffMs / (1000 * 60 * 60)
+      );
 
     return diffHours;
+
   } catch {
     return 2;
   }

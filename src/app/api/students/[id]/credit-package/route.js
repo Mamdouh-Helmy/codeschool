@@ -174,6 +174,123 @@ export async function POST(req, { params }) {
   }
 }
 
+// ✅ NEW — PATCH: تعديل بيانات الباكدج الحالي (تصحيح غلطة أدمن) من غير ما
+// يترحّل للهيستوري ومن غير ما ينشئ فاتورة جديدة. الفاتورة الحالية (لو موجودة)
+// مش بتتلمس تلقائيًا حتى لو السعر اتغيّر — العملية دي منفصلة عمدًا عن الفوترة
+// (زي ما DELETE منفصل عن /api/invoices/[id]/refund) عشان منكسرش أي دفعات
+// أو حسابات إسكرو اتسجلت بالفعل على الفاتورة القديمة.
+export async function PATCH(req, { params }) {
+  try {
+    const authCheck = await requireAdmin(req);
+    if (!authCheck.authorized) return authCheck.response;
+
+    const resolvedParams = await params;
+    const { id } = resolvedParams;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid student ID" },
+        { status: 400 },
+      );
+    }
+
+    const body = await req.json();
+    const { packagePlanId, totalHours, months, price, startDate, endDate, reason } = body;
+
+    if (packagePlanId && !mongoose.Types.ObjectId.isValid(packagePlanId)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid packagePlanId" },
+        { status: 400 },
+      );
+    }
+
+    if (totalHours !== undefined && totalHours !== null) {
+      const hoursNum = Number(totalHours);
+      if (!Number.isFinite(hoursNum) || hoursNum < 0) {
+        return NextResponse.json(
+          { success: false, message: "totalHours must be a non-negative number" },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (price !== undefined && price !== null) {
+      const priceNum = Number(price);
+      if (!Number.isFinite(priceNum) || priceNum < 0) {
+        return NextResponse.json(
+          { success: false, message: "price must be a non-negative number" },
+          { status: 400 },
+        );
+      }
+    }
+
+    await connectDB();
+
+    const student = await Student.findOne({ _id: id, isDeleted: false });
+    if (!student) {
+      return NextResponse.json(
+        { success: false, message: "Student not found" },
+        { status: 404 },
+      );
+    }
+
+    if (!student.creditSystem?.currentPackage) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Student has no active package to edit",
+          code: "NO_ACTIVE_PACKAGE",
+        },
+        { status: 400 },
+      );
+    }
+
+    const result = await student.editCreditPackage({
+      packagePlanId,
+      totalHours,
+      months,
+      price,
+      startDate,
+      endDate,
+      reason: (reason || "").trim(),
+      editedBy: authCheck.user.id,
+    });
+
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, message: result.error || "Failed to edit package" },
+        { status: 400 },
+      );
+    }
+
+    const updatedStudent = await Student.findById(id).lean();
+
+    const formattedStudent = {
+      _id: updatedStudent._id,
+      id: updatedStudent._id,
+      enrollmentNumber: updatedStudent.enrollmentNumber,
+      personalInfo: updatedStudent.personalInfo,
+      guardianInfo: updatedStudent.guardianInfo,
+      creditSystem: updatedStudent.creditSystem,
+      metadata: updatedStudent.metadata,
+    };
+
+    return NextResponse.json({
+      success: true,
+      message: "Package updated successfully",
+      priceChanged: result.priceChanged,
+      remainingHours: result.remainingHours,
+      student: formattedStudent,
+    });
+  } catch (error) {
+    console.error("❌ Error editing credit package:", error);
+    return NextResponse.json(
+      { success: false, message: error.message || "Failed to edit credit package" },
+      { status: 500 },
+    );
+  }
+}
+
 // ✅ DELETE — زي ما هو تمامًا من غير أي تعديل (الفاتورة مش بتتلغى هنا عمدًا؛
 // الإلغاء المالي بيتم عبر /api/invoices/[id]/refund بشكل مستقل)
 export async function DELETE(req, { params }) {

@@ -1,10 +1,10 @@
+// /src/app/api/cron/certificates/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Student from "../../../models/Student";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
 import Portfolio from "../../../models/Portfolio";
-// ✅ جديد: إعدادات الصور/الشعارات الثابتة القابلة للتخصيص من الأدمن
 import CertificateSettings from "../../../models/CertificateSettings";
 import { wapilotService } from "../../../services/wapilot-service";
 import fs from "fs-extra";
@@ -14,10 +14,11 @@ import { getBrowser } from "../../../../utils/browserPool";
 import { GENERATED_DIR } from "../../../../utils/generatedFilesPaths";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 
+// ✅ فك أي generation claim قديم اتعلق أكتر من ساعتين
+const STALE_CERT_CLAIM_MS = 2 * 60 * 60 * 1000;
+
 // ============================================================
-// ✅ حماية زي portfolio-inactivity بالظبط: لازم يبقى معاه CRON_SECRET
-// (كـ Authorization: Bearer <secret> أو ?secret=<secret> في الرابط)
-// وإلا يترفض. ده بيمنع أي حد يضرب الرابط من برا ويولد/يبعت شهادات.
+// ✅ حماية بـ CRON_SECRET
 // ============================================================
 function isAuthorizedRequest(req, searchParams) {
   const authHeader = req.headers.get("authorization");
@@ -29,8 +30,129 @@ function isAuthorizedRequest(req, searchParams) {
 }
 
 // ============================================================
-// ✅ بناء قائمة الإنجازات (achievements) للشهادة — بالاعتماد على
-// sessionNumber الحقيقي بتاع كل lesson، مش على تطابق نص العنوان.
+// ✅ Atomic Claim للشهادة — يمنع التكرار حتى لو الكرون اشتغل بالتوازي
+//    بيدعم 3 حالات:
+//    1. الطالب مش عنده entry خالص → نضيفها بـ generating
+//    2. عنده entry و status = idle → نحوّلها لـ generating
+//    3. عنده entry و status = generating → نرفض (حد تاني سبقنا)
+// ============================================================
+async function claimCertificateGeneration(studentId, moduleId, courseId) {
+  const now = new Date();
+
+  try {
+    // الحالة 1: مفيش entry خالص → نضيفها بـ generating
+    const insertResult = await Student.findOneAndUpdate(
+      {
+        _id: studentId,
+        "issuedCertificates.moduleId": { $ne: moduleId },
+      },
+      {
+        $push: {
+          issuedCertificates: {
+            moduleId,
+            courseId,
+            imageUrl: "",
+            issuedAt: now,
+            studentDelivered: false,
+            guardianDelivered: false,
+            generationStatus: "generating",
+            generationClaimedAt: now,
+          },
+        },
+      },
+      { new: true },
+    );
+    if (insertResult) return true;
+
+    // الحالة 2: موجودة و idle → نحوّلها لـ generating
+    const updateResult = await Student.findOneAndUpdate(
+      {
+        _id: studentId,
+        issuedCertificates: {
+          $elemMatch: {
+            moduleId,
+            generationStatus: { $ne: "generating" },
+          },
+        },
+      },
+      {
+        $set: {
+          "issuedCertificates.$.generationStatus": "generating",
+          "issuedCertificates.$.generationClaimedAt": now,
+        },
+      },
+      { new: true },
+    );
+    if (updateResult) return true;
+
+    // الحالة 3: حد تاني بيولّد دلوقتي → نرفض
+    return false;
+  } catch (err) {
+    console.error(
+      `❌ claimCertificateGeneration error [${studentId}/${moduleId}]:`,
+      err.message,
+    );
+    return false;
+  }
+}
+
+// ✅ بعد الإرسال أو الفشل → نفكّ القفل
+async function releaseCertificateClaim(studentId, moduleId) {
+  try {
+    await Student.updateOne(
+      {
+        _id: studentId,
+        issuedCertificates: {
+          $elemMatch: { moduleId, generationStatus: "generating" },
+        },
+      },
+      {
+        $set: { "issuedCertificates.$.generationStatus": "idle" },
+      },
+    );
+  } catch (err) {
+    console.error(
+      `⚠️ releaseCertificateClaim error [${studentId}/${moduleId}]:`,
+      err.message,
+    );
+  }
+}
+
+// ✅ تنظيف الـ claims القديمة (failover لو السيرفر وقع في النص)
+async function cleanupStaleCertificateClaims() {
+  try {
+    const threshold = new Date(Date.now() - STALE_CERT_CLAIM_MS);
+    const result = await Student.updateMany(
+      { "issuedCertificates.generationStatus": "generating" },
+      {
+        $set: {
+          "issuedCertificates.$[elem].generationStatus": "idle",
+        },
+      },
+      {
+        arrayFilters: [
+          {
+            "elem.generationStatus": "generating",
+            "elem.generationClaimedAt": { $lt: threshold },
+          },
+        ],
+      },
+    );
+    if (result.modifiedCount > 0) {
+      console.log(
+        `🧹 Cleaned up ${result.modifiedCount} stale certificate claims`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      "⚠️ cleanupStaleCertificateClaims error:",
+      err.message,
+    );
+  }
+}
+
+// ============================================================
+// ✅ بناء قائمة الإنجازات
 // ============================================================
 function buildAchievementsFromLessons(lessons) {
   if (!lessons?.length) {
@@ -51,12 +173,18 @@ function buildAchievementsFromLessons(lessons) {
 }
 
 // ============================================================
-// ✅ توليد صورة الشهادة — بدون React/react-dom/server. جديد: بياخد
-// كمان "assets" (الصور المخصصة من الأدمن) ويمررها لـ buildCertificateHtml
-// اللي بقت async دلوقتي.
+// ✅ توليد صورة الشهادة
 // ============================================================
 async function generateCertificateImage(browser, data) {
-  const { studentName, moduleTitle, achievements, signature, background, date, assets } = data;
+  const {
+    studentName,
+    moduleTitle,
+    achievements,
+    signature,
+    background,
+    date,
+    assets,
+  } = data;
 
   const fullHtml = await buildCertificateHtml({
     studentName,
@@ -71,9 +199,14 @@ async function generateCertificateImage(browser, data) {
   const page = await browser.newPage();
   try {
     await page.setViewport({ width: 1200, height: 900 });
-    await page.setContent(fullHtml, { waitUntil: "load", timeout: 30000 });
+    await page.setContent(fullHtml, {
+      waitUntil: "load",
+      timeout: 30000,
+    });
 
-    const fileName = `cert-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`;
+    const fileName = `cert-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 7)}.png`;
     const filePath = path.join(GENERATED_DIR, fileName);
     await fs.ensureDir(GENERATED_DIR);
     await page.screenshot({ path: filePath, fullPage: true });
@@ -88,7 +221,7 @@ async function generateCertificateImage(browser, data) {
 }
 
 // ============================================================
-// ✅ رفع الصورة على Cloudinary وتحويلها إلى رابط عام
+// ✅ رفع الصورة على Cloudinary
 // ============================================================
 async function uploadCertificateToCloudinary(filePath) {
   try {
@@ -103,9 +236,14 @@ async function uploadCertificateToCloudinary(filePath) {
 }
 
 // ============================================================
-// ✅ مزامنة الشهادة مع بورتفوليو الطالب (قسم certificates) — بدون تكرار.
+// ✅ مزامنة الشهادة مع بورتفوليو الطالب
 // ============================================================
-async function syncCertificateToStudentPortfolio(student, moduleId, module, fullImageUrl) {
+async function syncCertificateToStudentPortfolio(
+  student,
+  moduleId,
+  module,
+  fullImageUrl,
+) {
   const userId = student.authUserId;
   if (!userId) return { added: false, reason: "NO_LINKED_USER" };
 
@@ -120,24 +258,40 @@ async function syncCertificateToStudentPortfolio(student, moduleId, module, full
     });
 
     if (added) {
-      console.log(`🗂️  Added certificate to portfolio for ${student.personalInfo.fullName} (${moduleId})`);
+      console.log(
+        `🗂️  Added certificate to portfolio for ${student.personalInfo.fullName} (${moduleId})`,
+      );
     }
     return { added };
   } catch (error) {
-    console.error(`⚠️ Portfolio sync failed for ${student.personalInfo?.fullName}:`, error.message);
+    console.error(
+      `⚠️ Portfolio sync failed for ${student.personalInfo?.fullName}:`,
+      error.message,
+    );
     return { added: false, reason: "ERROR" };
   }
 }
 
 // ============================================================
-// ✅ إرسال الشهادة عبر واتساب — multipart مباشرة بالملف المحلي
+// ✅ إرسال الشهادة عبر واتساب
 // ============================================================
-async function sendCertificateWithFallback(phoneNumber, filePath, caption, studentName = "") {
+async function sendCertificateWithFallback(
+  phoneNumber,
+  filePath,
+  caption,
+  studentName = "",
+) {
   try {
-    const result = await wapilotService.sendImageFile(phoneNumber, filePath, caption);
+    const result = await wapilotService.sendImageFile(
+      phoneNumber,
+      filePath,
+      caption,
+    );
 
     if (!result?.success) {
-      console.warn(`⚠️ Wapilot failed for ${studentName}: ${result?.error}`);
+      console.warn(
+        `⚠️ Wapilot failed for ${studentName}: ${result?.error}`,
+      );
     }
 
     return result;
@@ -147,18 +301,26 @@ async function sendCertificateWithFallback(phoneNumber, filePath, caption, stude
   }
 }
 
+// ============================================================
+// ✅ GET — نقطة الدخول للكرون
+// ============================================================
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   if (!isAuthorizedRequest(request, searchParams)) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
   }
 
   try {
     await connectDB();
     console.log("🚀 Running Certificate Cron Job...");
 
-    // ✅ جديد: نجيب إعدادات الصور المخصصة مرة واحدة بس قبل اللوب (مش لكل
-    // طالب) — أداء أفضل، ونفس الإعدادات بتتطبق على كل الشهادات في نفس الدورة
+    // ✅ فك الـ claims القديمة قبل ما نبدأ
+    await cleanupStaleCertificateClaims();
+
+    // ✅ نجيب إعدادات الصور مرة واحدة
     const certSettings = await CertificateSettings.getSingleton();
     const certAssets = {
       badge: certSettings.badge,
@@ -170,7 +332,8 @@ export async function GET(request) {
     };
 
     const students = await Student.find({ isDeleted: false }).lean();
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+    const baseUrl =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
     const summary = {
       checked: 0,
@@ -182,6 +345,7 @@ export async function GET(request) {
       portfolioSynced: 0,
       portfolioSkippedNoUser: 0,
       noAttendanceYet: 0,
+      alreadyClaimed: 0,
       errors: 0,
     };
 
@@ -197,20 +361,43 @@ export async function GET(request) {
         const course = group.courseId;
         if (!course || !course.curriculum) continue;
 
-        for (let moduleIndex = 0; moduleIndex < course.curriculum.length; moduleIndex++) {
+        for (
+          let moduleIndex = 0;
+          moduleIndex < course.curriculum.length;
+          moduleIndex++
+        ) {
           const module = course.curriculum[moduleIndex];
 
           if (!module.hasCertificate) continue;
 
           const moduleId = `${course._id}-${moduleIndex}`;
 
-          const certRecord = student.issuedCertificates?.find((c) => c.moduleId === moduleId);
-          const studentAlreadyDelivered = certRecord?.studentDelivered === true;
-          const guardianAlreadyDelivered = certRecord?.guardianDelivered === true;
+          const certRecord = student.issuedCertificates?.find(
+            (c) => c.moduleId === moduleId,
+          );
+          const studentAlreadyDelivered =
+            certRecord?.studentDelivered === true;
+          const guardianAlreadyDelivered =
+            certRecord?.guardianDelivered === true;
 
           if (studentAlreadyDelivered && guardianAlreadyDelivered) continue;
 
           summary.checked++;
+
+          // ✅ الحجز الـ atomic — قبل أي شغل تقيل
+          const claimed = await claimCertificateGeneration(
+            student._id,
+            moduleId,
+            course._id,
+          );
+
+          if (!claimed) {
+            summary.alreadyClaimed++;
+            console.log(
+              `🔒 Certificate already being generated for ${student.personalInfo?.fullName} - ${module.title}`,
+            );
+            continue;
+          }
 
           try {
             const sessions = await Session.find({
@@ -222,9 +409,13 @@ export async function GET(request) {
             let hasAttended = false;
             for (const session of sessions) {
               const attendance = session.attendance.find(
-                (a) => a.studentId.toString() === student._id.toString()
+                (a) =>
+                  a.studentId.toString() === student._id.toString(),
               );
-              if (attendance && ["present", "late", "excused"].includes(attendance.status)) {
+              if (
+                attendance &&
+                ["present", "late", "excused"].includes(attendance.status)
+              ) {
                 hasAttended = true;
                 break;
               }
@@ -233,173 +424,203 @@ export async function GET(request) {
             if (!hasAttended) {
               summary.noAttendanceYet++;
               console.log(
-                `⏭️ ${student.personalInfo.fullName} - ${module.title}: لا يوجد حضور (present/late/excused) في أي سيشن من سيشنات الموديول لسه`
+                `⏭️ ${student.personalInfo.fullName} - ${module.title}: لا يوجد حضور لسه`,
               );
+              await releaseCertificateClaim(student._id, moduleId);
               continue;
             }
 
             const studentNumber = student.personalInfo?.whatsappNumber;
             const guardianNumber = student.guardianInfo?.whatsappNumber;
 
-            const studentNeedsSend = !!studentNumber && !studentAlreadyDelivered;
-            const guardianNeedsSend = !!guardianNumber && !guardianAlreadyDelivered;
+            const studentNeedsSend =
+              !!studentNumber && !studentAlreadyDelivered;
+            const guardianNeedsSend =
+              !!guardianNumber && !guardianAlreadyDelivered;
 
             if (!studentNeedsSend && !guardianNeedsSend) {
               summary.pendingNoRecipient++;
               console.log(
-                `⏳ ${student.personalInfo.fullName} - ${module.title}: مفيش رقم واتساب متاح حاليًا، هنحاول تاني`
+                `⏳ ${student.personalInfo.fullName} - ${module.title}: مفيش رقم واتساب متاح`,
               );
+              await releaseCertificateClaim(student._id, moduleId);
               continue;
             }
 
-            console.log(`🎓 Generating certificate for ${student.personalInfo.fullName} - ${module.title}`);
+            console.log(
+              `🎓 Generating certificate for ${student.personalInfo.fullName} - ${module.title}`,
+            );
 
-            const achievements = buildAchievementsFromLessons(module.lessons);
+            const achievements = buildAchievementsFromLessons(
+              module.lessons,
+            );
 
             const browser = await getBrowser();
 
-            const { filePath, imageUrl } = await generateCertificateImage(browser, {
-              studentName: student.personalInfo.fullName,
-              moduleTitle: module.title,
-              achievements,
-              signature: module.certificateSignatureName || "Aya Elnagar",
-              background: module.certificateBackground || "navy-orange",
-              date: new Date().toLocaleDateString("en-GB"),
-              assets: certAssets, // ✅ جديد
-            });
+            const { filePath, imageUrl } = await generateCertificateImage(
+              browser,
+              {
+                studentName: student.personalInfo.fullName,
+                moduleTitle: module.title,
+                achievements,
+                signature:
+                  module.certificateSignatureName || "Aya Elnagar",
+                background: module.certificateBackground || "navy-orange",
+                date: new Date().toLocaleDateString("en-GB"),
+                assets: certAssets,
+              },
+            );
 
             summary.generated++;
 
-            const cloudinaryUrl = await uploadCertificateToCloudinary(filePath);
+            const cloudinaryUrl =
+              await uploadCertificateToCloudinary(filePath);
             if (cloudinaryUrl) {
               summary.cloudinaryUploads++;
             } else {
               console.warn(
-                `⚠️ Cloudinary upload failed for ${student.personalInfo.fullName} - سيبقى الرابط المحلي المؤقت في الداتابيز`
+                `⚠️ Cloudinary upload failed for ${student.personalInfo.fullName}`,
               );
             }
-            const fullImageUrl = cloudinaryUrl || `${baseUrl}${imageUrl}`;
+            const fullImageUrl =
+              cloudinaryUrl || `${baseUrl}${imageUrl}`;
 
-            const portfolioResult = await syncCertificateToStudentPortfolio(
-              student,
-              moduleId,
-              module,
-              fullImageUrl,
-            );
+            const portfolioResult =
+              await syncCertificateToStudentPortfolio(
+                student,
+                moduleId,
+                module,
+                fullImageUrl,
+              );
             if (portfolioResult?.added) {
               summary.portfolioSynced++;
             } else if (portfolioResult?.reason === "NO_LINKED_USER") {
               summary.portfolioSkippedNoUser++;
             }
 
-            const preferredLanguage = student.communicationPreferences?.preferredLanguage || "ar";
+            const preferredLanguage =
+              student.communicationPreferences?.preferredLanguage || "ar";
 
             let studentDelivered = studentAlreadyDelivered;
             let guardianDelivered = guardianAlreadyDelivered;
 
             if (studentNeedsSend) {
-              const caption = await wapilotService.prepareCertificateStudentMessage(
-                student.personalInfo.fullName,
-                student.personalInfo.gender,
-                preferredLanguage,
-                module.title,
-                student.personalInfo.nickname,
-              );
+              const caption =
+                await wapilotService.prepareCertificateStudentMessage(
+                  student.personalInfo.fullName,
+                  student.personalInfo.gender,
+                  preferredLanguage,
+                  module.title,
+                  student.personalInfo.nickname,
+                );
 
               const result = await sendCertificateWithFallback(
                 studentNumber,
                 filePath,
                 caption,
-                student.personalInfo.fullName
+                student.personalInfo.fullName,
               );
 
               studentDelivered = !!result?.success;
               if (studentDelivered) {
                 summary.studentSent++;
               } else {
-                console.warn(`⚠️ فشل إرسال الشهادة للطالب ${student.personalInfo.fullName}: ${result?.error}`);
+                console.warn(
+                  `⚠️ فشل إرسال الشهادة للطالب ${student.personalInfo.fullName}: ${result?.error}`,
+                );
               }
             }
 
             if (guardianNeedsSend) {
-              const guardianCaption = await wapilotService.prepareCertificateGuardianMessage(
-                student.guardianInfo?.name,
-                student.guardianInfo?.relationship,
-                student.personalInfo.fullName,
-                student.personalInfo.gender,
-                preferredLanguage,
-                student.guardianInfo?.nickname,
-                student.personalInfo?.nickname,
-                module.title,
-              );
+              const guardianCaption =
+                await wapilotService.prepareCertificateGuardianMessage(
+                  student.guardianInfo?.name,
+                  student.guardianInfo?.relationship,
+                  student.personalInfo.fullName,
+                  student.personalInfo.gender,
+                  preferredLanguage,
+                  student.guardianInfo?.nickname,
+                  student.personalInfo?.nickname,
+                  module.title,
+                );
 
               const result = await sendCertificateWithFallback(
                 guardianNumber,
                 filePath,
                 guardianCaption,
-                student.personalInfo.fullName
+                student.personalInfo.fullName,
               );
 
               guardianDelivered = !!result?.success;
               if (guardianDelivered) {
                 summary.guardianSent++;
               } else {
-                console.warn(`⚠️ فشل إرسال الشهادة لولي أمر ${student.personalInfo.fullName}: ${result?.error}`);
+                console.warn(
+                  `⚠️ فشل إرسال الشهادة لولي أمر ${student.personalInfo.fullName}: ${result?.error}`,
+                );
               }
             }
 
             const now = new Date();
 
-            if (certRecord) {
-              await Student.updateOne(
-                { _id: student._id, "issuedCertificates.moduleId": moduleId },
-                {
-                  $set: {
-                    "issuedCertificates.$.imageUrl": fullImageUrl,
-                    "issuedCertificates.$.studentDelivered": studentDelivered,
-                    "issuedCertificates.$.guardianDelivered": guardianDelivered,
-                    ...(studentDelivered && !studentAlreadyDelivered
-                      ? { "issuedCertificates.$.studentDeliveredAt": now }
-                      : {}),
-                    ...(guardianDelivered && !guardianAlreadyDelivered
-                      ? { "issuedCertificates.$.guardianDeliveredAt": now }
-                      : {}),
-                  },
-                }
-              );
-            } else {
-              await Student.findByIdAndUpdate(student._id, {
-                $push: {
-                  issuedCertificates: {
-                    moduleId,
-                    courseId: course._id,
-                    imageUrl: fullImageUrl,
-                    issuedAt: now,
+            // ✅ تحديث الـ entry الموجودة (اتعملت في claimCertificateGeneration)
+            await Student.updateOne(
+              {
+                _id: student._id,
+                "issuedCertificates.moduleId": moduleId,
+              },
+              {
+                $set: {
+                  "issuedCertificates.$.imageUrl": fullImageUrl,
+                  "issuedCertificates.$.studentDelivered":
                     studentDelivered,
-                    studentDeliveredAt: studentDelivered ? now : undefined,
+                  "issuedCertificates.$.guardianDelivered":
                     guardianDelivered,
-                    guardianDeliveredAt: guardianDelivered ? now : undefined,
-                  },
+                  ...(studentDelivered && !studentAlreadyDelivered
+                    ? {
+                        "issuedCertificates.$.studentDeliveredAt": now,
+                      }
+                    : {}),
+                  ...(guardianDelivered && !guardianAlreadyDelivered
+                    ? {
+                        "issuedCertificates.$.guardianDeliveredAt": now,
+                      }
+                    : {}),
                 },
-              });
-            }
+              },
+            );
 
+            // ✅ نفك القفل بعد الإرسال
+            await releaseCertificateClaim(student._id, moduleId);
+
+            // ✅ تنظيف الملف المحلي
             try {
               await fs.remove(filePath);
-              console.log(`🗑️ Deleted local file: ${path.basename(filePath)}`);
+              console.log(
+                `🗑️ Deleted local file: ${path.basename(filePath)}`,
+              );
             } catch (cleanupError) {
               // مش مشكلة لو متحذفش
             }
 
             console.log(
-              `✅ ${student.personalInfo.fullName} - ${module.title}: الطالب=${studentDelivered ? "اتبعتله" : "لسه معلّق"}, ولي الأمر=${guardianDelivered ? "اتبعتله" : "لسه معلّق"}`
+              `✅ ${student.personalInfo.fullName} - ${module.title}: الطالب=${
+                studentDelivered ? "اتبعتله" : "لسه معلّق"
+              }, ولي الأمر=${
+                guardianDelivered ? "اتبعتله" : "لسه معلّق"
+              }`,
             );
           } catch (moduleError) {
             summary.errors++;
             console.error(
               `❌ Error with certificate for ${student.personalInfo?.fullName} - ${module?.title}:`,
-              moduleError
+              moduleError,
             );
+
+            // ✅ نفك القفل حتى لو حصل خطأ
+            try {
+              await releaseCertificateClaim(student._id, moduleId);
+            } catch (_) {}
           }
         }
       }
@@ -407,9 +628,16 @@ export async function GET(request) {
 
     console.log("📊 Certificate Cron Summary:", summary);
 
-    return NextResponse.json({ success: true, message: "Cron job completed.", summary });
+    return NextResponse.json({
+      success: true,
+      message: "Cron job completed.",
+      summary,
+    });
   } catch (error) {
     console.error("❌ Cron Job Error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
   }
 }

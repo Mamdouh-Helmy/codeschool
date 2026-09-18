@@ -4054,10 +4054,125 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
   });
 }
 
+
+// ============================================================
+// ✅ Atomic Claim — يضمن إن process واحد بس ياخد حق الإرسال
+//    (يمنع تكرار الرسائل حتى لو الكرون اشتغل بالتوازي)
+// ============================================================
+
 /**
- * ✅ EVENT (Cron): يفحص كل الجروبات الأكتف، ولو موديول خلص يبعت
- * overview عن الموديول اللي بعده لكل طالب (لو لسه ما اتبعتلوش)
+ * يحاول يحجز "slot" للرسالة في الـ DB بشكل atomic.
+ * @returns true  → احنا اللي هنبعت
+ *          false → حد تاني حجزها قبلاً (تخطاها)
  */
+async function claimModuleOverviewSlot(
+  studentId,
+  groupId,
+  courseId,
+  moduleIdx,
+  moduleTitle,
+) {
+  try {
+    const updated = await Student.findOneAndUpdate(
+      {
+        _id: studentId,
+        // ✅ الشرط الحاسم: لازم ميكونش فيه entry بنفس (groupId + moduleIndex)
+        moduleOverviewsSent: {
+          $not: {
+            $elemMatch: {
+              groupId: groupId,
+              moduleIndex: moduleIdx,
+            },
+          },
+        },
+      },
+      {
+        $push: {
+          moduleOverviewsSent: {
+            groupId,
+            courseId,
+            moduleIndex: moduleIdx,
+            moduleTitle,
+            sentAt: new Date(),
+            status: "sending", // مؤقت لحد ما الإرسال ينجح
+          },
+        },
+      },
+      { new: true },
+    );
+
+    return !!updated;
+  } catch (err) {
+    console.error(
+      `❌ claimModuleOverviewSlot error [student=${studentId}, module=${moduleIdx}]:`,
+      err.message,
+    );
+    return false;
+  }
+}
+
+/**
+ * بعد نجاح الإرسال → نحوّل الحالة من "sending" لـ "sent"
+ */
+async function markModuleOverviewSent(studentId, groupId, moduleIdx) {
+  try {
+    await Student.updateOne(
+      {
+        _id: studentId,
+        moduleOverviewsSent: {
+          $elemMatch: {
+            groupId,
+            moduleIndex: moduleIdx,
+            status: "sending",
+          },
+        },
+      },
+      {
+        $set: { "moduleOverviewsSent.$.status": "sent" },
+      },
+    );
+  } catch (err) {
+    console.error(
+      `⚠️ markModuleOverviewSent error [student=${studentId}, module=${moduleIdx}]:`,
+      err.message,
+    );
+  }
+}
+
+/**
+ * لو الإرسال فشل → نلغي الحجز عشان يحاول تاني في الـ cron اللي بعده
+ */
+async function releaseModuleOverviewClaim(studentId, groupId, moduleIdx) {
+  try {
+    await Student.updateOne(
+      {
+        _id: studentId,
+        moduleOverviewsSent: {
+          $elemMatch: {
+            groupId,
+            moduleIndex: moduleIdx,
+            status: "sending",
+          },
+        },
+      },
+      {
+        $pull: {
+          moduleOverviewsSent: {
+            groupId,
+            moduleIndex: moduleIdx,
+            status: "sending",
+          },
+        },
+      },
+    );
+  } catch (err) {
+    console.error(
+      `⚠️ releaseModuleOverviewClaim error [student=${studentId}, module=${moduleIdx}]:`,
+      err.message,
+    );
+  }
+}
+
 export async function checkAndSendModuleOverviewNotifications() {
   const groups = await Group.find({
     status: "active",
@@ -4087,41 +4202,62 @@ export async function checkAndSendModuleOverviewNotifications() {
       for (const student of studentsInGroup) {
         if (!student) continue;
 
-        const alreadySentSet = new Set(
-          (student.moduleOverviewsSent || [])
-            .filter((m) => String(m.groupId) === String(group._id))
-            .map((m) => m.moduleIndex),
-        );
-
-        // بيتشيك من موديول 1 لحد أعلى موديول اتكمل + 1
-        // (كاتش-أب تلقائي لو الكرون فات على موديول من غير ما يبعت)
-        for (let moduleIdx = 1; moduleIdx <= highestCompleted + 1; moduleIdx++) {
+        // كاتش-أب تلقائي من موديول 1 لحد أعلى موديول اتكمل + 1
+        for (
+          let moduleIdx = 1;
+          moduleIdx <= highestCompleted + 1;
+          moduleIdx++
+        ) {
           if (moduleIdx >= curriculum.length) continue;
-          if (alreadySentSet.has(moduleIdx)) continue;
 
           const eligible = await canSendMessage(student);
           if (!eligible) continue;
 
           const moduleData = curriculum[moduleIdx];
-          const sendResult = await sendModuleOverviewMessage(
-            student,
-            group,
-            moduleData,
+
+          // ✅ الحجز الـ atomic — هو ده اللي بيمنع التكرار
+          const claimed = await claimModuleOverviewSlot(
+            student._id,
+            group._id,
+            group.courseId?._id,
             moduleIdx,
+            moduleData?.title,
           );
 
-          if (sendResult?.success) {
-            await Student.findByIdAndUpdate(student._id, {
-              $push: {
-                moduleOverviewsSent: {
-                  groupId: group._id,
-                  courseId: group.courseId?._id,
-                  moduleIndex: moduleIdx,
-                  moduleTitle: moduleData?.title,
-                  sentAt: new Date(),
-                },
-              },
+          if (!claimed) {
+            // حد تاني (كرون تاني / نفس الكرون بالتوازي) سبقنا → تخطى
+            results.push({
+              studentId: student._id,
+              groupId: group._id,
+              moduleIndex: moduleIdx,
+              success: false,
+              skipped: "already_claimed",
             });
+            continue;
+          }
+
+          // ✅ دلوقتي احنا الوحيدين اللي هنبعت
+          let sendResult;
+          try {
+            sendResult = await sendModuleOverviewMessage(
+              student,
+              group,
+              moduleData,
+              moduleIdx,
+            );
+          } catch (sendErr) {
+            console.error(
+              `❌ sendModuleOverviewMessage threw [student=${student._id}, module=${moduleIdx}]:`,
+              sendErr.message,
+            );
+            sendResult = { success: false, error: sendErr.message };
+          }
+
+          if (sendResult?.success) {
+            await markModuleOverviewSent(student._id, group._id, moduleIdx);
+          } else {
+            // فشل الإرسال → نلغي الحجز عشان يحاول تاني بعدين
+            await releaseModuleOverviewClaim(student._id, group._id, moduleIdx);
           }
 
           results.push({
@@ -4137,8 +4273,16 @@ export async function checkAndSendModuleOverviewNotifications() {
     }
   }
 
-  console.log(`\n✅ MODULE OVERVIEW CRON DONE — sent: ${results.filter(r => r.success).length}/${results.length}`);
-  return { processed: results.length, sent: results.filter((r) => r.success).length, results };
+  console.log(
+    `\n✅ MODULE OVERVIEW CRON DONE — sent: ${
+      results.filter((r) => r.success).length
+    }/${results.length}`,
+  );
+  return {
+    processed: results.length,
+    sent: results.filter((r) => r.success).length,
+    results,
+  };
 }
 
 // ============================================================

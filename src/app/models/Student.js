@@ -197,6 +197,24 @@ const creditPackageSchema = new mongoose.Schema({
     enum: ["active", "expired", "completed", "suspended"],
     default: "active",
   },
+  // ✅ NEW: سجل تدقيق لأي تعديل يدوي يعمله الأدمن على الباكدج بعد إنشائه
+  // (تصحيح غلطة في الساعات/السعر/التواريخ) — بيحتفظ بالقيم القديمة والسبب
+  // من غير ما يأثر على منطق الفوترة أو يترحّل الباقة للهيستوري.
+  editLog: [
+    {
+      editedAt: { type: Date, default: Date.now },
+      editedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      reason: { type: String, default: "" },
+      previousValues: {
+        totalHours: Number,
+        price: Number,
+        startDate: Date,
+        endDate: Date,
+        packageType: String,
+        packageName: String,
+      },
+    },
+  ],
 });
 
 // ✅ Credit Hours Exception Schema
@@ -385,17 +403,24 @@ const StudentSchema = new mongoose.Schema(
     // ✅ NEW: Certificates issued to the student
     // تخزين معرفات الشهادات التي تم إرسالها للطالب لمنع التكرار
     issuedCertificates: [
-      {
-        moduleId: { type: String, required: true },
-        courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
-        imageUrl: { type: String },
-        issuedAt: { type: Date, default: Date.now },
-        studentDelivered: { type: Boolean, default: false },
-        studentDeliveredAt: { type: Date },
-        guardianDelivered: { type: Boolean, default: false },
-        guardianDeliveredAt: { type: Date },
-      },
-    ],
+  {
+    moduleId: { type: String, required: true },
+    courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+    imageUrl: { type: String },
+    issuedAt: { type: Date, default: Date.now },
+    studentDelivered: { type: Boolean, default: false },
+    studentDeliveredAt: { type: Date },
+    guardianDelivered: { type: Boolean, default: false },
+    guardianDeliveredAt: { type: Date },
+    // ✅ جديد: قفل يمنع التكرار حتى لو الكرون اشتغل بالتوازي
+    generationStatus: {
+      type: String,
+      enum: ["idle", "generating"],
+      default: "idle",
+    },
+    generationClaimedAt: { type: Date, default: null },
+  },
+],
 
     moduleOverviewsSent: [
       {
@@ -404,6 +429,11 @@ const StudentSchema = new mongoose.Schema(
         moduleIndex: { type: Number, required: true },
         moduleTitle: { type: String, default: "" },
         sentAt: { type: Date, default: Date.now },
+        status: {
+          type: String,
+          enum: ["sending", "sent"],
+          default: "sent",
+        },
       },
     ],
 
@@ -672,6 +702,158 @@ StudentSchema.methods.addCreditPackage = async function (packageData) {
     return { success: true, data: newPackage };
   } catch (error) {
     console.error("❌ Error adding credit package:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// ✅ NEW: تعديل بيانات الباكدج الحالي (تصحيح غلطة أدمن — نوع/ساعات/سعر/تواريخ)
+// من غير ما يترحّل الباقة القديمة للهيستوري ومن غير ما ينشئ فاتورة جديدة.
+// بيحافظ على الساعات المستخدمة فعليًا (مينفعش تنزل الساعات الكلية تحتها) وبيسجّل
+// كل تعديل في editLog بالقيم القديمة والسبب للمراجعة لاحقًا.
+StudentSchema.methods.editCreditPackage = async function (updates) {
+  try {
+    if (!this.creditSystem?.currentPackage) {
+      return { success: false, error: "No active package to edit" };
+    }
+
+    const pkg = this.creditSystem.currentPackage;
+
+    // ✅ Snapshot القيم قبل التعديل — يتسجل في editLog ويُستخدم لحساب الفرق
+    const before = {
+      totalHours: pkg.totalHours || 0,
+      remainingHours: pkg.remainingHours || 0,
+      price: pkg.price || 0,
+      startDate: pkg.startDate,
+      endDate: pkg.endDate,
+      packageType: pkg.packageType,
+      packageName: pkg.packageName,
+    };
+
+    const hoursAlreadyUsed = Math.max(
+      0,
+      before.totalHours - before.remainingHours,
+    );
+
+    let newTotalHours = before.totalHours;
+    let newMonths = pkg.months;
+
+    // ✅ لو الأدمن غيّر نوع الباقة نفسها (packagePlanId) — ناخد snapshot جديد
+    if (
+      updates.packagePlanId &&
+      String(updates.packagePlanId) !== String(pkg.packagePlanId || "")
+    ) {
+      const PackagePlan = (await import("./PackagePlan")).default;
+      const plan = await PackagePlan.findOne({
+        _id: updates.packagePlanId,
+        isActive: true,
+      });
+      if (!plan) {
+        return { success: false, error: "Invalid or inactive package plan" };
+      }
+      pkg.packagePlanId = plan._id;
+      pkg.packageType = plan.slug;
+      pkg.packageName = plan.name;
+      newMonths = plan.months;
+      newTotalHours =
+        updates.totalHours !== undefined && updates.totalHours !== null
+          ? Number(updates.totalHours)
+          : plan.totalHours;
+    } else if (
+      updates.totalHours !== undefined &&
+      updates.totalHours !== null
+    ) {
+      // ✅ تعديل الساعات يدويًا من غير تغيير نوع الباقة
+      newTotalHours = Number(updates.totalHours);
+    }
+
+    if (!Number.isFinite(newTotalHours) || newTotalHours < 0) {
+      return {
+        success: false,
+        error: "totalHours must be a valid non-negative number",
+      };
+    }
+
+    if (newTotalHours < hoursAlreadyUsed) {
+      return {
+        success: false,
+        error: `Cannot set total hours below what's already used (${hoursAlreadyUsed}h used)`,
+      };
+    }
+
+    if (updates.months !== undefined && updates.months !== null) {
+      newMonths = Number(updates.months);
+    }
+
+    // ✅ تاريخ البداية / النهاية
+    const startDate = updates.startDate
+      ? new Date(updates.startDate)
+      : pkg.startDate;
+    let endDate;
+    if (updates.endDate) {
+      endDate = new Date(updates.endDate);
+    } else {
+      endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + (newMonths || 0));
+    }
+
+    if (endDate <= startDate) {
+      return { success: false, error: "endDate must be after startDate" };
+    }
+
+    // ✅ تطبيق التعديلات
+    pkg.totalHours = newTotalHours;
+    pkg.remainingHours = newTotalHours - hoursAlreadyUsed;
+    pkg.months = newMonths;
+    pkg.startDate = startDate;
+    pkg.endDate = endDate;
+
+    const priceChanged = updates.price !== undefined && updates.price !== null;
+    if (priceChanged) {
+      pkg.price = Number(updates.price);
+    }
+
+    // ✅ لو رجّعنا الرصيد المتبقي لأكتر من صفر بعد ما كان خلص
+    if (pkg.remainingHours > 0 && pkg.status === "completed") {
+      pkg.status = "active";
+      this.creditSystem.status = "active";
+      if (this.communicationPreferences?.notificationChannels) {
+        this.communicationPreferences.notificationChannels.whatsapp = true;
+      }
+    }
+
+    // ✅ تصحيح إحصائية إجمالي الساعات المشتراة بمقدار الفرق
+    this.creditSystem.stats.totalHoursPurchased = Math.max(
+      0,
+      (this.creditSystem.stats.totalHoursPurchased || 0) +
+        (newTotalHours - before.totalHours),
+    );
+    this.creditSystem.stats.totalHoursRemaining =
+      this.getEffectiveRemainingHours();
+
+    // ✅ تسجيل التعديل في سجل التدقيق
+    if (!pkg.editLog) pkg.editLog = [];
+    pkg.editLog.push({
+      editedAt: new Date(),
+      editedBy: updates.editedBy || null,
+      reason: updates.reason || "",
+      previousValues: before,
+    });
+
+    this.metadata.lastModifiedBy =
+      updates.editedBy || this.metadata.lastModifiedBy;
+    this.metadata.updatedAt = new Date();
+
+    await this.save();
+
+    return {
+      success: true,
+      data: pkg,
+      remainingHours: this.getEffectiveRemainingHours(),
+      priceChanged,
+      newPrice: pkg.price,
+    };
+  } catch (error) {
+    console.error("❌ Error editing credit package:", error);
     return { success: false, error: error.message };
   }
 };

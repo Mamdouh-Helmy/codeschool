@@ -19,6 +19,10 @@ import wapilotService from "../app/services/wapilot-service";
 
 const CAIRO_TZ = "Africa/Cairo";
 
+// ✅ أي reminder معلّق أكتر من المدة دي → نعتبره stale ونمسحه
+// (لو السيرفر وقع في نص الإرسال قبل ما نعمل commit)
+const STALE_REMINDER_MS = 30 * 60 * 1000; // 30 دقيقة
+
 // ✅ مراحل التذكير — قبل الاستحقاق (موجب)، يوم الاستحقاق (0)، بعده (سالب)
 const STAGES = [
   { key: "due_in_7", daysUntilDue: 7, reminderType: "upcoming" },
@@ -69,6 +73,29 @@ function formatArabicDays(n) {
 
 function stageFor(daysUntilDue) {
   return STAGES.find((s) => s.daysUntilDue === daysUntilDue) || null;
+}
+
+// ============================================================
+// ✅ Cleanup — يمسح الـ pending records القديمة (failover)
+//    بيتنادى في بداية كل تشغيل عشان يحرر أي حجز اتعلق
+// ============================================================
+async function cleanupStaleReminders() {
+  try {
+    const threshold = new Date(Date.now() - STALE_REMINDER_MS);
+
+    const result = await BillingReminder.deleteMany({
+      status: "pending",
+      createdAt: { $lt: threshold },
+    });
+
+    if (result.deletedCount > 0) {
+      console.log(
+        `🧹 Cleaned up ${result.deletedCount} stale billing reminder(s)`,
+      );
+    }
+  } catch (err) {
+    console.error("⚠️ cleanupStaleReminders error:", err.message);
+  }
 }
 
 // ─── بناء نص الرسالة ────────────────────────────────────────────────────────
@@ -184,6 +211,9 @@ ${bodyAr}
 
 // ─── الدالة الرئيسية — بتتنادى من الكرون اليومي ─────────────────────────────
 export async function sendDueDateReminders({ now = new Date() } = {}) {
+  // ✅ أول حاجة: نمسح أي حجز قديم اتعلق (failover)
+  await cleanupStaleReminders();
+
   const from = new Date(now);
   from.setDate(from.getDate() - (WINDOW_DAYS + 1));
   const to = new Date(now);
@@ -311,24 +341,36 @@ export async function sendDueDateReminders({ now = new Date() } = {}) {
         result = { success: false, error: sendError.message };
       }
 
-      reminder.recipients = [
-        {
-          recipientType: "guardian",
-          phone: target.phone,
-          status: result?.success ? "sent" : "failed",
-          messageId: result?.messageId || "",
-          error: result?.success ? "" : result?.error || "Unknown error",
-        },
-      ];
+      const recipientRecord = {
+        recipientType: "guardian",
+        phone: target.phone,
+        status: result?.success ? "sent" : "failed",
+        messageId: result?.messageId || "",
+        error: result?.success ? "" : result?.error || "Unknown error",
+      };
 
       if (result?.success) {
-        reminder.status = "sent";
-        await reminder.save();
+        // ✅ Atomic Commit — بنحدّث بس لو السجل لسه "pending"
+        // (شرط الأمان ده يضمن مفيش عملية تانية بتعدّل نفس السجل)
+        await BillingReminder.updateOne(
+          { _id: reminder._id, status: "pending" },
+          {
+            $set: {
+              status: "sent",
+              recipients: [recipientRecord],
+              sentAt: new Date(),
+            },
+          },
+        );
         sent++;
       } else {
-        // ✅ فشل الإرسال → نمسح السجل عشان الكرون يعيد المحاولة بكرة
         failed++;
-        await BillingReminder.deleteOne({ _id: reminder._id });
+        // ✅ Atomic Rollback — نمسح السجل عشان الكرون يعيد المحاولة بكرة
+        // (بس بشرط يكون لسه "pending" — عشان مفيش عملية تانية عمال تعدّله)
+        await BillingReminder.deleteOne({
+          _id: reminder._id,
+          status: "pending",
+        });
       }
 
       details.push({
