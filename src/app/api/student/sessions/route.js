@@ -42,16 +42,22 @@ export async function GET(req) {
       });
     }
 
-    // ── جلب الجروبات مع الـ curriculum لجلب الدروس ──────────────────────────
+    // ── جلب الجروبات مع الـ curriculum + hold + status ──────────────────────
     const groups = await Group.find({ _id: { $in: groupIds }, isDeleted: false })
       .populate({ path: "courseId", select: "title level curriculum" })
-      .select("_id name code courseId")
+      .select("_id name code courseId hold status")
       .lean();
 
-    // Map: groupId → curriculum
+    // Map: groupId → curriculum + hold info + status
     const groupCurriculumMap = {};
+    const groupHoldMap = {};
+    const groupStatusMap = {};
+
     groups.forEach((g) => {
-      groupCurriculumMap[g._id.toString()] = g.courseId?.curriculum || [];
+      const gid = g._id.toString();
+      groupCurriculumMap[gid] = g.courseId?.curriculum || [];
+      groupHoldMap[gid] = !!g.hold?.isHeld;
+      groupStatusMap[gid] = g.status || "draft";
     });
 
     // ── Build query ──────────────────────────────────────────────────────────
@@ -63,7 +69,7 @@ export async function GET(req) {
 
     // ── جلب الجلسات ──────────────────────────────────────────────────────────
     const allSessions = await Session.find(query)
-      .populate({ path: "groupId", select: "name code courseId" })
+      .populate({ path: "groupId", select: "name code courseId hold status" })
       .populate({ path: "courseId", select: "title level" })
       .select(
         "title status scheduledDate startTime endTime moduleIndex sessionNumber " +
@@ -105,9 +111,28 @@ export async function GET(req) {
       const isFirst      = sessionIdx === 0;
       const prevSession  = sessionIdx > 0 ? groupOrder[sessionIdx - 1] : null;
       const prevCompleted = isFirst || (prevSession && prevSession.status === "completed");
-      const canAccess    =
+
+      // ✅ هل الجروب على Hold؟ (من الـ session.groupId أو من الـ map)
+      const sessionGroupHold = !!session.groupId?.hold?.isHeld;
+      const groupIsOnHold =
+        sessionGroupHold || !!groupHoldMap[gid];
+
+      // ✅ هل الجروب فعّال أصلًا؟
+      const sessionGroupStatus = session.groupId?.status || groupStatusMap[gid] || "draft";
+      const groupIsActive = sessionGroupStatus === "active";
+
+      // ✅ canAccess الأساسي
+      let canAccess =
         session.status === "completed" ||
         (prevCompleted && session.status !== "cancelled");
+
+      // ✅ OVERRIDE: لو الجروب على Hold أو مش active → مفيش وصول لأي سيشن
+      // (ما عدا السيشنات المكتملة — دي تاريخية ويشوفوها عادي)
+      if (session.status !== "completed") {
+        if (groupIsOnHold || !groupIsActive) {
+          canAccess = false;
+        }
+      }
 
       // Attendance
       const attRecord = session.attendance?.find(
@@ -127,18 +152,22 @@ export async function GET(req) {
       const sessionEndTime = new Date(sessionDate);
       sessionEndTime.setHours(endH, endM, 0, 0);
 
-      const showJoinButton =
+      // ✅ showJoinButton: لازم الجروب مش على Hold ومش inactive
+      let showJoinButton =
         prevCompleted &&
         session.status === "scheduled" &&
         isToday &&
         sessionEndTime > now &&
         !!session.meetingLink;
 
+      if (groupIsOnHold || !groupIsActive) {
+        showJoinButton = false;
+      }
+
       // ── الدروس من الـ curriculum ──────────────────────────────────────────
       const curriculum  = groupCurriculumMap[gid] || [];
       const moduleData  = curriculum[session.moduleIndex] || {};
 
-      // فلتر بـ sessionNumber أولًا، fallback على lessonIndexes
       const bySessionNum = (moduleData.lessons || []).filter(
         (l) => l.sessionNumber === session.sessionNumber
       );
@@ -147,8 +176,19 @@ export async function GET(req) {
       );
       const rawLessons = bySessionNum.length > 0 ? bySessionNum : byIndexes;
 
-      // ✅ اسم الدرس فقط — بدون تكرار، بدون مدة فردية
       const lessons = rawLessons.map((l) => ({ title: l.title }));
+
+      // ✅ Recording: للسيشنات المكتملة بس (Hold مش بيأثر على التاريخي)
+      const recordingLink =
+        session.status === "completed" ? session.recordingLink : null;
+
+      // ✅ materials: بس للسيشنات اللي الطالب عنده وصول ليها
+      const materials =
+        (session.status === "completed" || canAccess) && !groupIsOnHold
+          ? session.materials || []
+          : session.status === "completed"
+            ? session.materials || []
+            : [];
 
       return {
         _id:              session._id,
@@ -161,17 +201,22 @@ export async function GET(req) {
         moduleIndex:      session.moduleIndex,
         moduleName:       moduleData.title || `الوحدة ${session.moduleIndex + 1}`,
         sessionNumber:    session.sessionNumber,
-        lessons,                                          // ✅ اسم فقط
+        lessons,
         attendanceTaken:  session.attendanceTaken,
         studentAttendance,
         meetingLink:      canAccess ? session.meetingLink : null,
         meetingPlatform:  session.meetingPlatform,
-        recordingLink:    session.status === "completed" ? session.recordingLink : null,
-        materials:        (session.status === "completed" || canAccess) ? (session.materials || []) : [],
+        recordingLink,
+        materials,
         instructorNotes:  session.status === "completed" ? session.instructorNotes : null,
         canAccess,
         isToday,
         showJoinButton,
+
+        // ✅ Hold info — جديد
+        groupIsOnHold,
+        groupIsActive,
+
         group: {
           _id:  session.groupId?._id || session.groupId,
           name: session.groupId?.name || "",
@@ -187,7 +232,15 @@ export async function GET(req) {
     const statsAll = await Session.find({
       groupId: { $in: groupIds },
       isDeleted: false,
-    }).select("status").lean();
+    }).select("status groupId").lean();
+
+    // ✅ إحصائيات الـ Hold — جديد
+    const heldGroupIds = Object.keys(groupHoldMap).filter(
+      (gid) => groupHoldMap[gid]
+    );
+    const heldSessions = statsAll.filter((s) =>
+      heldGroupIds.includes(s.groupId?.toString())
+    );
 
     const stats = {
       total:     statsAll.length,
@@ -195,6 +248,9 @@ export async function GET(req) {
       scheduled: statsAll.filter((s) => s.status === "scheduled").length,
       cancelled: statsAll.filter((s) => s.status === "cancelled").length,
       postponed: statsAll.filter((s) => s.status === "postponed").length,
+
+      // ✅ جديد: كم سيشن متأثر بالـ Hold
+      onHold: heldSessions.filter((s) => s.status !== "completed").length,
     };
 
     return NextResponse.json({

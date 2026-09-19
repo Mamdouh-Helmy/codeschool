@@ -4621,6 +4621,85 @@ const en = {
   "groups.form.searchFailed": "Failed to search for the location",
   "groups.form.searching": "Searching...",
   "groups.links.orphaned": "Orphaned Links",
+  "groups.form.reschedule.conflictTitle": "Rescheduling Conflict Title",
+  "groups.hold.modalTitle": "Hold Group",
+  "groups.stats.onHold": "On Hold",
+  // ── GroupsAdmin ───────────────────────────────────────────────────────
+  "groups.actions.hold": "Put on hold",
+  "groups.actions.release": "Release hold",
+  "groups.actions.fixLinks": "Fix meeting links",
+  "groups.links.missing": "Sessions without a link",
+  "groups.hold.confirmRelease":
+    'Are you sure you want to release the hold on "{name}"?',
+  "groups.hold.releasing": "Releasing hold...",
+  "groups.hold.releaseSuccess": "Hold released successfully",
+  "groups.hold.releaseFailed": "Failed to release hold",
+
+  // Status badges in the table
+  "groups.hold.indefinite": "Hold — Indefinite",
+  "groups.hold.sessions": "Hold by sessions",
+  "groups.hold.untilSession": "Hold until a specific session",
+  "groups.hold.duration": "Hold",
+  "groups.hold.days": "days",
+
+  // ── GroupHoldModal ────────────────────────────────────────────────────
+  "groups.hold.pausedTitle": "This group will be paused",
+  "groups.hold.effect.noMessages": "No messages",
+  "groups.hold.effect.noCredit": "No credit deduction",
+  "groups.hold.effect.noAttendance": "No attendance",
+
+  "groups.hold.type.label": "Hold type",
+  "groups.hold.type.duration.title": "For a duration",
+  "groups.hold.type.duration.desc": "Set a number of days",
+  "groups.hold.type.sessions.title": "For a number of sessions",
+  "groups.hold.type.sessions.desc": "Ends after N sessions are held",
+  "groups.hold.type.untilSession.title": "Until a specific session",
+  "groups.hold.type.untilSession.desc": "Choose the session it ends on",
+  "groups.hold.type.indefinite.title": "Indefinite",
+  "groups.hold.type.indefinite.desc": "Until you release it",
+
+  "groups.hold.daysCount": "Number of days",
+  "groups.hold.sessionsCount": "Number of sessions",
+  "groups.hold.unit.days": "days",
+  "groups.hold.unit.sessions": "sessions",
+
+  "groups.hold.targetSession": "Target session",
+  "groups.hold.module": "Module",
+  "groups.hold.session": "Session",
+  "groups.hold.noSessions": "No scheduled sessions for this group currently",
+  "groups.hold.loadFailed":
+    "Couldn't load sessions. Close this window and try again.",
+  "groups.hold.shiftNote":
+    "Sessions from that date onward shift forward by one week.",
+
+  "groups.hold.reason": "Reason",
+  "groups.hold.reasonOptional": "optional",
+  "groups.hold.reasonPlaceholder":
+    "e.g., public holiday, special circumstances...",
+
+  "groups.hold.shift.title": "Shift scheduled sessions",
+  "groups.hold.shift.desc": "Upcoming sessions move forward automatically",
+
+  // Summary before activating
+  "groups.hold.summary.duration": "Released automatically after {days} day(s)",
+  "groups.hold.summary.sessions":
+    "Released after attendance is recorded for {count} session(s)",
+  "groups.hold.summary.untilSession":
+    'Released when attendance is recorded for "{title}"',
+  "groups.hold.summary.pickSession":
+    "Pick the session where the hold should end",
+  "groups.hold.summary.indefinite": "Stays on until you release it manually",
+
+  // Buttons & messages
+  "groups.hold.activate": "Activate hold",
+  "groups.hold.activating": "Activating...",
+  "groups.hold.success": "Group put on hold successfully",
+  "groups.hold.failed": "Failed to put group on hold",
+  "groups.hold.connectionError": "Connection error",
+  "groups.hold.invalidDays": "Invalid days count",
+  "groups.hold.invalidSessions": "Invalid sessions count",
+  "groups.hold.selectSession": "You must select a target session",
+  "group.holdGroup": "Hold Group",
 };
 
 export default en;

@@ -1,29 +1,52 @@
-//api/instructor/sessions/[id]/attendance/route.js
-import { NextResponse } from 'next/server';
-import { connectDB } from '@/lib/mongodb';
-import { getUserFromRequest } from '@/lib/auth';
+// app/api/instructor/sessions/[id]/attendance/route.js
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongodb";
+import { getUserFromRequest } from "@/lib/auth";
 import {
   getAttendanceTemplatesForFrontend,
   sendAbsenceNotifications,
-  // ✅ جديد — تنبيهات الرصيد
   sendLowBalanceAlerts,
   disableZeroBalanceNotifications,
-} from '../../../../../services/groupAutomation';
-import Session from '../../../../../models/Session';
-import Student from '../../../../../models/Student';
+} from "../../../../../services/groupAutomation";
+import Session from "../../../../../models/Session";
+import Student from "../../../../../models/Student";
+import Group from "../../../../../models/Group";
 
 // ─── Constants ───────────────────────────────────────────
-// ⚠️ مهم جدًا: present / late / absent / excused كلهم في نفس الـ array دي —
-// يعني كلهم "معدودين" بنفس المستوى بالنسبة لمنطق الخصم تحت. الأثر العملي:
-// لو الطالب اتسجل بأي حالة منهم قبل كده وبعدين اتغيرت لحالة تانية من نفس
-// الـ array (مثلاً من "حاضر" لـ "غايب" أو العكس)، مفيش أي خصم إضافي ولا
-// استرجاع بيحصل — لأنه أصلاً كان "محسوب" وبقى "محسوب"، بس بقيمة مختلفة.
-// الخصم بيحصل مرة واحدة بس: أول مرة تتسجل حالة للطالب في الجلسة دي
-// (null → أي حالة من دول). لو حبيت مستقبلاً تضيف status جديد لازم يترسم
-// بوضوح هل هو "محسوب" (يتضاف هنا) ولا لأ، وإلا هتفتح باب لخصم/استرجاع غير
-// متوقع.
-const DEDUCT_STATUSES = ['present', 'late', 'absent', 'excused'];
+const DEDUCT_STATUSES = ["present", "late", "absent", "excused"];
 const CREDIT_DEDUCTION = 2;
+
+// ─── Helper: التحقق من صلاحية الجروب (مش على Hold) ─────────────────
+async function checkGroupAvailability(session) {
+  const groupId = session?.groupId?._id || session?.groupId;
+  if (!groupId) return { ok: false, error: "Session has no group" };
+
+  const group = await Group.findById(groupId)
+    .select("name code status hold")
+    .lean();
+
+  if (!group) return { ok: false, error: "Group not found" };
+
+  if (group.hold?.isHeld) {
+    return {
+      ok: false,
+      code: "GROUP_ON_HOLD",
+      error: "الجروب على Hold حاليًا — مينفعش تسجل حضور",
+      group,
+    };
+  }
+
+  if (group.status !== "active" && group.status !== "completed") {
+    return {
+      ok: false,
+      code: "GROUP_NOT_ACTIVE",
+      error: `الجروب حالته "${group.status}" — مينفعش تسجل حضور`,
+      group,
+    };
+  }
+
+  return { ok: true, group };
+}
 
 // ─── GET ─────────────────────────────────────────────────
 export async function GET(req, { params }) {
@@ -35,67 +58,85 @@ export async function GET(req, { params }) {
     const { id } = await params;
 
     const session = await Session.findById(id)
-      .populate({ path: 'groupId', select: 'name code students instructors' })
+      .populate({
+        path: "groupId",
+        select: "name code students instructors hold status",
+      })
       .lean();
 
     if (!session) {
-      return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Session not found" },
+        { status: 404 },
+      );
     }
 
-    const studentIds = (session.groupId?.students || []).map(s => s.studentId || s);
+    const group = session.groupId;
+    const isOnHold = !!group?.hold?.isHeld;
+
+    const studentIds = (group?.students || []).map((s) => s.studentId || s);
 
     const students = await Student.find({ _id: { $in: studentIds } })
       .select(
-        '_id enrollmentNumber personalInfo.fullName personalInfo.gender personalInfo.nickname ' +
-        'guardianInfo.name guardianInfo.phone guardianInfo.whatsappNumber guardianInfo.relationship guardianInfo.nickname ' +
-        'communicationPreferences.preferredLanguage creditSystem.currentPackage.remainingHours creditSystem.status whatsappMessages'
+        "_id enrollmentNumber personalInfo.fullName personalInfo.gender personalInfo.nickname " +
+          "guardianInfo.name guardianInfo.phone guardianInfo.whatsappNumber guardianInfo.relationship guardianInfo.nickname " +
+          "communicationPreferences.preferredLanguage creditSystem.currentPackage.remainingHours creditSystem.status whatsappMessages",
       )
       .lean();
 
     const existingAttendance = {};
-    (session.attendance || []).forEach(a => {
+    (session.attendance || []).forEach((a) => {
       existingAttendance[a.studentId?.toString()] = a.status;
     });
 
-    const studentsWithAttendance = students.map(s => {
+    const studentsWithAttendance = students.map((s) => {
       const absenceMessages = (s.whatsappMessages || []).filter(
-        m => m.messageType === 'absence_notification'
+        (m) => m.messageType === "absence_notification",
       );
 
       return {
-        _id:                s._id,
-        name:               s.personalInfo?.fullName || 'بدون اسم',
-        enrollmentNumber:   s.enrollmentNumber || '',
+        _id: s._id,
+        name: s.personalInfo?.fullName || "بدون اسم",
+        enrollmentNumber: s.enrollmentNumber || "",
 
-        nicknameAr:         s.personalInfo?.nickname?.ar?.trim() || '',
-        nicknameEn:         s.personalInfo?.nickname?.en?.trim() || '',
+        nicknameAr: s.personalInfo?.nickname?.ar?.trim() || "",
+        nicknameEn: s.personalInfo?.nickname?.en?.trim() || "",
 
-        guardianNicknameAr: s.guardianInfo?.nickname?.ar?.trim() || '',
-        guardianNicknameEn: s.guardianInfo?.nickname?.en?.trim() || '',
+        guardianNicknameAr: s.guardianInfo?.nickname?.ar?.trim() || "",
+        guardianNicknameEn: s.guardianInfo?.nickname?.en?.trim() || "",
 
-        gender:             s.personalInfo?.gender || 'male',
+        gender: s.personalInfo?.gender || "male",
 
-        guardianName:         s.guardianInfo?.name || '',
-        guardianPhone:        s.guardianInfo?.phone || s.guardianInfo?.whatsappNumber || '',
-        guardianRelationship: s.guardianInfo?.relationship || 'father',
+        guardianName: s.guardianInfo?.name || "",
+        guardianPhone:
+          s.guardianInfo?.phone || s.guardianInfo?.whatsappNumber || "",
+        guardianRelationship: s.guardianInfo?.relationship || "father",
 
-        preferredLanguage: s.communicationPreferences?.preferredLanguage || 'ar',
-        credits:           s.creditSystem?.currentPackage?.remainingHours ?? 0,
-        creditStatus:      s.creditSystem?.status || 'no_package',
+        preferredLanguage:
+          s.communicationPreferences?.preferredLanguage || "ar",
+        credits: s.creditSystem?.currentPackage?.remainingHours ?? 0,
+        creditStatus: s.creditSystem?.status || "no_package",
 
-        absenceCount:  absenceMessages.length,
+        absenceCount: absenceMessages.length,
         currentStatus: existingAttendance[s._id.toString()] || null,
       };
     });
 
     return NextResponse.json({
       success: true,
-      data: { session, students: studentsWithAttendance },
+      data: {
+        session,
+        students: studentsWithAttendance,
+        groupIsOnHold: isOnHold,
+        groupHold: group?.hold || null,
+      },
     });
-
   } catch (error) {
-    console.error('❌ GET attendance error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("❌ GET attendance error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -113,78 +154,110 @@ export async function POST(req, { params }) {
       const text = await req.text();
       if (text) body = JSON.parse(text);
     } catch {
-      return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
-    }
-
-    const { attendanceStatus, studentId, extraData = {}, sendNow = false } = body;
-
-    if (!studentId || !attendanceStatus) {
       return NextResponse.json(
-        { success: false, error: 'studentId and attendanceStatus are required' },
-        { status: 400 }
+        { success: false, error: "Invalid JSON" },
+        { status: 400 },
       );
     }
 
-    // 🆕 sendNow: إرسال فوري لرسالة الواتساب بس — بدون أي لمس لـ attendance
-    // بتاع السيشن ولا لأي ساعات credits. مستخدم في خطوة "الحضور المبدئي" لما
-    // المدرس يحدد طالب "متأخر": الرسالة تتبعت فورًا لولي الأمر، وفي نفس
-    // الوقت "متأخر" هنا مابيتسجلش خالص في الـ DB ولا بيخصم أي ساعات — الخصم
-    // بيحصل بس في خطوة التأكيد النهائي (present/absent/excused) عبر الـ
-    // PATCH تحت. ✅ ده هو الضمان إن "الحضور المبدئي" مش بيحسب ساعات خالص.
+    const {
+      attendanceStatus,
+      studentId,
+      extraData = {},
+      sendNow = false,
+    } = body;
+
+    if (!studentId || !attendanceStatus) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "studentId and attendanceStatus are required",
+        },
+        { status: 400 },
+      );
+    }
+
+    // ✅ افحص هل الجروب على Hold
+    const sessionCheck = await Session.findById(id)
+      .populate({ path: "groupId", select: "hold status name code" })
+      .lean();
+
+    if (sessionCheck?.groupId?.hold?.isHeld) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "الجروب على Hold حاليًا",
+          code: "GROUP_ON_HOLD",
+        },
+        { status: 403 },
+      );
+    }
+
+    // 🆕 sendNow: إرسال فوري لرسالة الواتساب بس
     if (sendNow) {
       try {
-        await sendAbsenceNotifications(id, [{ studentId, status: attendanceStatus }]);
+        await sendAbsenceNotifications(id, [
+          { studentId, status: attendanceStatus },
+        ]);
         return NextResponse.json({ success: true, data: { sent: true } });
       } catch (sendError) {
-        console.error('❌ [sendNow] notification error:', sendError);
+        console.error("❌ [sendNow] notification error:", sendError);
         return NextResponse.json(
-          { success: false, error: sendError.message || 'Failed to send notification' },
-          { status: 500 }
+          {
+            success: false,
+            error: sendError.message || "Failed to send notification",
+          },
+          { status: 500 },
         );
       }
     }
 
     const [student, session] = await Promise.all([
       Student.findById(studentId)
-        .select('personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem')
+        .select(
+          "personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem",
+        )
         .lean(),
       Session.findById(id)
-        .populate({ path: 'groupId', select: 'name code' })
+        .populate({ path: "groupId", select: "name code" })
         .lean(),
     ]);
 
     if (!student) {
-      return NextResponse.json({ success: false, error: 'Student not found' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Student not found" },
+        { status: 404 },
+      );
     }
 
     const templates = await getAttendanceTemplatesForFrontend(
       attendanceStatus,
       studentId,
-      extraData
+      extraData,
     );
 
     const metadata = {
-      language:     student.communicationPreferences?.preferredLanguage || 'ar',
-      gender:       student.personalInfo?.gender || 'male',
-      relationship: student.guardianInfo?.relationship || 'father',
+      language: student.communicationPreferences?.preferredLanguage || "ar",
+      gender: student.personalInfo?.gender || "male",
+      relationship: student.guardianInfo?.relationship || "father",
 
-      studentFullName:  student.personalInfo?.fullName || '',
-      guardianFullName: student.guardianInfo?.name || '',
+      studentFullName: student.personalInfo?.fullName || "",
+      guardianFullName: student.guardianInfo?.name || "",
 
-      studentNicknameAr:  student.personalInfo?.nickname?.ar?.trim() || '',
-      studentNicknameEn:  student.personalInfo?.nickname?.en?.trim() || '',
-      guardianNicknameAr: student.guardianInfo?.nickname?.ar?.trim() || '',
-      guardianNicknameEn: student.guardianInfo?.nickname?.en?.trim() || '',
+      studentNicknameAr: student.personalInfo?.nickname?.ar?.trim() || "",
+      studentNicknameEn: student.personalInfo?.nickname?.en?.trim() || "",
+      guardianNicknameAr: student.guardianInfo?.nickname?.ar?.trim() || "",
+      guardianNicknameEn: student.guardianInfo?.nickname?.en?.trim() || "",
 
-      enrollmentNumber: student.enrollmentNumber || '',
+      enrollmentNumber: student.enrollmentNumber || "",
 
-      sessionTitle:  session?.title || '',
+      sessionTitle: session?.title || "",
       scheduledDate: session?.scheduledDate || null,
-      startTime:     session?.startTime || '',
-      endTime:       session?.endTime || '',
-      groupName:     session?.groupId?.name || '',
-      groupCode:     session?.groupId?.code || '',
-      meetingLink:   session?.meetingLink || '',
+      startTime: session?.startTime || "",
+      endTime: session?.endTime || "",
+      groupName: session?.groupId?.name || "",
+      groupCode: session?.groupId?.code || "",
+      meetingLink: session?.meetingLink || "",
     };
 
     return NextResponse.json({
@@ -192,35 +265,23 @@ export async function POST(req, { params }) {
       data: {
         guardian: templates?.guardian
           ? {
-              content:    templates.guardian.content,
+              content: templates.guardian.content,
               isFallback: templates.guardian.isFallback,
             }
           : null,
         metadata,
       },
     });
-
   } catch (error) {
-    console.error('❌ POST attendance preview error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("❌ POST attendance preview error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
   }
 }
 
 // ─── PATCH (save attendance + credits) ───────────────────
-// 🔒 ضمان "خصم مرة واحدة بس": الخصم/الاسترجاع بيتحدد بمقارنة oldStatus
-// (المسجل فعليًا في الـ DB قبل الطلب ده) مع newStatus. بما إن present/late/
-// absent/excused كلهم موجودين في DEDUCT_STATUSES، فالتبديل بينهم (حاضر ↔
-// غايب ↔ معذور) — حتى لو حصل كذا مرة عبر submits مختلفة — بيدي creditAction
-// = 'nothing' كل مرة، لأن "كان محسوب" و"لسه محسوب" في الحالتين. الخصم بيحصل
-// مرة واحدة بس لما الحالة تتسجل لأول مرة (من null). شوف مثال:
-//   1) submit "غايب" (oldStatus=null)      → deduct (خصم -2)
-//   2) submit "حاضر" (oldStatus="absent")  → nothing (مفيش تغيير في الساعات)
-//   3) submit "معذور" (oldStatus="present")→ nothing (برضو مفيش تغيير)
-// الساعات المخصومة فضلت 2 بس طول الوقت، مهما اتبدلت الحالة بين التلاتة دول.
-//
-// ✅ جديد: تنبيهات الرصيد المنخفض (4h / 2h) + تنبيه النفاذ الكامل
-// - تُجمع الـ students اللي "عبرت" حد معين بعد الخصم
-// - التنبيهات تُرسل مرة واحدة بس لكل عبور (يعني مش هتتبعت كل حصة)
 export async function PATCH(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -234,61 +295,79 @@ export async function PATCH(req, { params }) {
       const text = await req.text();
       if (text) body = JSON.parse(text);
     } catch {
-      return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON" },
+        { status: 400 },
+      );
     }
 
     const { attendanceRecords } = body;
 
     if (!Array.isArray(attendanceRecords) || attendanceRecords.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'attendanceRecords array is required' },
-        { status: 400 }
+        { success: false, error: "attendanceRecords array is required" },
+        { status: 400 },
       );
     }
 
     const session = await Session.findById(id).populate({
-      path: 'groupId',
-      select: 'name instructors students',
+      path: "groupId",
+      select: "name instructors students hold status",
     });
 
     if (!session) {
-      return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Session not found" },
+        { status: 404 },
+      );
     }
 
-    // 📌 oldStatusSnapshot بيتبنى من الـ DB الفعلي (مش من أي حاجة جايه من
-    // الفرونت إند) — ده اللي بيمنع أي تلاعب أو تضارب لو الفرونت إند بعت
-    // بيانات قديمة أو المستخدم فتح تابين اتنين.
+    // ✅ افحص هل الجروب على Hold
+    const availability = await checkGroupAvailability(session);
+    if (!availability.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: availability.error,
+          code: availability.code,
+        },
+        { status: 403 },
+      );
+    }
+
+    // 📌 oldStatusSnapshot من الـ DB الفعلي
     const oldStatusSnapshot = {};
-    session.attendance.forEach(a => {
+    session.attendance.forEach((a) => {
       oldStatusSnapshot[a.studentId?.toString()] = a.status;
     });
 
-    const studentIds = attendanceRecords.map(r => r.studentId);
-    const students   = await Student.find({ _id: { $in: studentIds } });
+    const studentIds = attendanceRecords.map((r) => r.studentId);
+    const students = await Student.find({ _id: { $in: studentIds } });
     const studentMap = {};
-    students.forEach(s => { studentMap[s._id.toString()] = s; });
+    students.forEach((s) => {
+      studentMap[s._id.toString()] = s;
+    });
 
-    const results    = [];
+    const results = [];
     const notifyList = [];
 
     for (const record of attendanceRecords) {
       const { studentId, status: newStatus } = record;
       const oldStatus = oldStatusSnapshot[studentId] || null;
 
-      // ✅ لو الحالة متغيرتش، منعملش أي حاجة خالص — لا تسجيل ولا خصم/استرجاع.
       if (oldStatus === newStatus) {
         results.push({
           studentId,
           oldStatus,
           newStatus,
-          action: 'no_change',
-          creditAction: 'nothing',
+          action: "no_change",
+          creditAction: "nothing",
         });
         continue;
       }
 
       const existing = session.attendance.find(
-        a => a.studentId?.toString() === studentId
+        (a) => a.studentId?.toString() === studentId,
       );
       if (existing) {
         existing.status = newStatus;
@@ -296,64 +375,57 @@ export async function PATCH(req, { params }) {
         session.attendance.push({ studentId, status: newStatus });
       }
 
-      // 🔒 هنا بالظبط بيتحدد هل نخصم ساعتين، نرجعهم، ولا مفيش أي تغيير.
-      // present/absent/excused (الحالات التلاتة المتاحة في التأكيد النهائي)
-      // كلهم في DEDUCT_STATUSES، فالتبديل بينهم دايمًا بيدي 'nothing'.
-      const wasDeducting = oldStatus !== null && DEDUCT_STATUSES.includes(oldStatus);
-      const willDeduct   = DEDUCT_STATUSES.includes(newStatus);
+      const wasDeducting =
+        oldStatus !== null && DEDUCT_STATUSES.includes(oldStatus);
+      const willDeduct = DEDUCT_STATUSES.includes(newStatus);
 
-      let creditAction = 'nothing';
-      if (!wasDeducting && willDeduct)  creditAction = 'deduct';   // أول تسجيل بس (null → حالة)
-      if (wasDeducting  && !willDeduct) creditAction = 'refund';   // مش وارد يحصل من واجهة التأكيد النهائي حاليًا
+      let creditAction = "nothing";
+      if (!wasDeducting && willDeduct) creditAction = "deduct";
+      if (wasDeducting && !willDeduct) creditAction = "refund";
 
       const student = studentMap[studentId];
-      if (student && creditAction !== 'nothing') {
-        if (creditAction === 'deduct') {
+      if (student && creditAction !== "nothing") {
+        if (creditAction === "deduct") {
           await student.deductCreditHours({
-            hours:            CREDIT_DEDUCTION,
-            sessionId:        id,
-            sessionTitle:     session.title || '',
-            groupId:          session.groupId?._id,
-            groupName:        session.groupId?.name || '',
+            hours: CREDIT_DEDUCTION,
+            sessionId: id,
+            sessionTitle: session.title || "",
+            groupId: session.groupId?._id,
+            groupName: session.groupId?.name || "",
             attendanceStatus: newStatus,
-            notes:            `Attendance: ${oldStatus || 'none'} → ${newStatus}`,
+            notes: `Attendance: ${oldStatus || "none"} → ${newStatus}`,
           });
         } else {
           await student.addCreditHours({
-            hours:        CREDIT_DEDUCTION,
-            sessionId:    id,
-            sessionTitle: session.title || '',
-            groupId:      session.groupId?._id,
-            groupName:    session.groupId?.name || '',
-            reason:       `Attendance changed: ${oldStatus} → ${newStatus}`,
+            hours: CREDIT_DEDUCTION,
+            sessionId: id,
+            sessionTitle: session.title || "",
+            groupId: session.groupId?._id,
+            groupName: session.groupId?.name || "",
+            reason: `Attendance changed: ${oldStatus} → ${newStatus}`,
           });
         }
       }
 
-      results.push({ studentId, oldStatus, newStatus, action: 'updated', creditAction });
+      results.push({
+        studentId,
+        oldStatus,
+        newStatus,
+        action: "updated",
+        creditAction,
+      });
 
-      if (['absent', 'late', 'excused'].includes(newStatus)) {
+      if (["absent", "late", "excused"].includes(newStatus)) {
         notifyList.push({ studentId, status: newStatus });
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // ✅ جمع الطلاب اللي محتاجين تنبيه رصيد (4h / 2h) + طلاب الرصيد صفر
-    //
-    // المنطق: بنلف على نتايج الحضور، وبنحدد للطالب اللي اتعمله 'deduct' فعلاً
-    // (أول مرة يتسجل حضوره في السيشن دي)، هل الرصيد "عبر" حد معين:
-    //   - 🟡 4h: كان > 4 قبل الخصم، بقى ≤ 4 بعده (وفي نطاق 3-4)
-    //   - 🔴 2h: كان > 2 قبل الخصم، بقى ≤ 2 بعده (وفي نطاق 1-2)
-    //   - ⛔ 0h:  بقى صفر أو أقل
-    //
-    // ملاحظة مهمة: بنستخدم `wasDeductedNow` عشان نمنع إرسال تنبيهات مكررة
-    // لو الطالب اتعمله تحديث حالته من غير خصم (already deducted before).
-    // ═══════════════════════════════════════════════════════════════════
-    const lowBalanceStudents  = [];
+    // ✅ تجميع طلاب تنبيهات الرصيد
+    const lowBalanceStudents = [];
     const zeroBalanceStudents = [];
 
     for (const record of results) {
-      if (record.action !== 'updated') continue;
+      if (record.action !== "updated") continue;
 
       const student = studentMap[record.studentId];
       if (!student?.creditSystem?.currentPackage) continue;
@@ -361,12 +433,11 @@ export async function PATCH(req, { params }) {
       const remainingHours =
         student.creditSystem.currentPackage.remainingHours || 0;
 
-      const wasDeductedNow = record.creditAction === 'deduct';
+      const wasDeductedNow = record.creditAction === "deduct";
       const previousBalance = wasDeductedNow
         ? remainingHours + CREDIT_DEDUCTION
         : remainingHours;
 
-      // 🟡 عبور حد الـ 4 ساعات
       if (
         wasDeductedNow &&
         previousBalance > 4 &&
@@ -377,11 +448,10 @@ export async function PATCH(req, { params }) {
           studentId: record.studentId,
           student,
           remainingHours,
-          alertType: '4h',
+          alertType: "4h",
         });
       }
 
-      // 🔴 عبور حد الـ 2 ساعة
       if (
         wasDeductedNow &&
         previousBalance > 2 &&
@@ -392,11 +462,10 @@ export async function PATCH(req, { params }) {
           studentId: record.studentId,
           student,
           remainingHours,
-          alertType: '2h',
+          alertType: "2h",
         });
       }
 
-      // ⛔ نفاذ كامل للرصيد
       if (remainingHours <= 0) {
         zeroBalanceStudents.push({
           studentId: record.studentId,
@@ -406,12 +475,11 @@ export async function PATCH(req, { params }) {
       }
     }
 
-    // ✅ إرسال تنبيهات الرصيد المنخفض
     if (lowBalanceStudents.length > 0) {
       try {
         await sendLowBalanceAlerts(lowBalanceStudents);
       } catch (err) {
-        console.error('⚠️ Low balance alerts error:', err.message);
+        console.error("⚠️ Low balance alerts error:", err.message);
       }
     }
 
@@ -419,7 +487,7 @@ export async function PATCH(req, { params }) {
       try {
         await disableZeroBalanceNotifications(zeroBalanceStudents);
       } catch (err) {
-        console.error('⚠️ Zero balance notifications error:', err.message);
+        console.error("⚠️ Zero balance notifications error:", err.message);
       }
     }
 
@@ -430,6 +498,44 @@ export async function PATCH(req, { params }) {
     }
 
     await session.save();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ HOLD — استهلاك أو فكّ تلقائي
+    // ═══════════════════════════════════════════════════════════════════
+    try {
+      const groupId = session.groupId?._id || session.groupId;
+      if (groupId) {
+        const groupDoc = await Group.findById(groupId);
+
+        if (groupDoc?.hold?.isHeld) {
+          // 🎯 sessions: استهلك سيشن
+          if (groupDoc.hold.holdType === "sessions") {
+            const consumeResult = await groupDoc.consumeHoldSession();
+            if (consumeResult.autoReleased) {
+              console.log(
+                `✅ Hold auto-released for group ${groupDoc.code} (sessions consumed)`,
+              );
+            }
+          }
+
+          // 🎯 until_session: افحص لو السيشن دي هي المستهدفة
+          if (groupDoc.hold.holdType === "until_session") {
+            const releaseResult =
+              await groupDoc.checkAndReleaseUntilSessionHold(session._id);
+            if (releaseResult?.released) {
+              console.log(
+                `✅ Hold auto-released for group ${groupDoc.code} (target session consumed)`,
+              );
+            }
+          }
+        }
+      }
+    } catch (holdErr) {
+      console.warn(
+        "⚠️ Could not process hold consumption/release:",
+        holdErr.message,
+      );
+    }
 
     if (notifyList.length) {
       await sendAbsenceNotifications(id, notifyList);
@@ -445,9 +551,11 @@ export async function PATCH(req, { params }) {
         },
       },
     });
-
   } catch (error) {
-    console.error('❌ PATCH attendance error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("❌ PATCH attendance error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
   }
 }

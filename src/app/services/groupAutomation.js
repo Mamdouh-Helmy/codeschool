@@ -7,6 +7,42 @@ import User from "../models/User";
 import MessageTemplate from "../models/MessageTemplate";
 import { wapilotService } from "./wapilot-service";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HOLD GUARD — حماية من إرسال أي رسالة لجروب على Hold
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * 🔒 هل الجروب مسموح له يبعت رسائل دلوقتي؟
+ * بترجع { ok: true } لو الجروب:
+ *   - موجود
+ *   - مش isDeleted
+ *   - status === "active"
+ *   - مش على Hold
+ */
+async function canGroupSendMessages(groupId) {
+  if (!groupId) return { ok: false, reason: "no_group_id" };
+
+  try {
+    const group = await Group.findById(groupId)
+      .select("name code status hold isDeleted")
+      .lean();
+
+    if (!group) return { ok: false, reason: "group_not_found" };
+    if (group.isDeleted) return { ok: false, reason: "group_deleted" };
+    if (group.status !== "active") {
+      return { ok: false, reason: `group_status_${group.status}`, group };
+    }
+    if (group.hold?.isHeld) {
+      return { ok: false, reason: "group_on_hold", group };
+    }
+
+    return { ok: true, group };
+  } catch (err) {
+    console.error("❌ canGroupSendMessages error:", err.message);
+    return { ok: false, reason: "check_failed" };
+  }
+}
+
 // ── Fetch TemplateVariable map from DB ────────────────────────────────────
 async function fetchDbVars(genderContext = {}) {
   try {
@@ -26,10 +62,6 @@ async function fetchDbVars(genderContext = {}) {
 
 // ============================================================
 // ✅ NEW: استخراج الاسم المختصر للحصة من الـ title
-// title بيكون مثلاً:
-//   "Introduction to Computer Basics - Session 1: Getting Started with Computers & Getting Started with Computers"
-// المطلوب: الجزء اللي بعد ":" بس
-//   "Getting Started with Computers"
 // ============================================================
 function extractSessionShortName(title) {
   if (!title) return "";
@@ -96,6 +128,7 @@ async function filterEligibleStudents(students) {
 
 /**
  * ✅ EVENT 1: Group Activated
+ * ملحوظة: مش محتاجة Hold Guard لأنها بتتنادى وقت التفعيل نفسه.
  */
 export async function onGroupActivated(groupId, userId, selectedLinkIds = []) {
   try {
@@ -254,17 +287,17 @@ export async function onGroupActivated(groupId, userId, selectedLinkIds = []) {
               endTime.setHours(eh, em, 0, 0);
 
               await link.reserveForSession(
-  lastSession._id,
-  groupId,
-  startTime,
-  endTime,
-  userId,
-  {
-    daysOfWeek: group.schedule.daysOfWeek,
-    timeFrom: group.schedule.timeFrom,
-    timeTo: group.schedule.timeTo,
-  },
-);
+                lastSession._id,
+                groupId,
+                startTime,
+                endTime,
+                userId,
+                {
+                  daysOfWeek: group.schedule.daysOfWeek,
+                  timeFrom: group.schedule.timeFrom,
+                  timeTo: group.schedule.timeTo,
+                },
+              );
 
               console.log(
                 `✅ Reserved "${link.name}" — ${sessionsUsingLink.length} sessions` +
@@ -544,6 +577,20 @@ export async function sendAbsenceNotifications(
 
     const group = session.groupId;
 
+    // ✅ HOLD GUARD — لو الجروب على Hold، منبعتش إشعارات غياب/تأخير/عذر
+    const holdCheck = await canGroupSendMessages(group?._id || group);
+    if (!holdCheck.ok) {
+      console.log(
+        `⏭️ [HOLD GUARD] sendAbsenceNotifications skipped — ${holdCheck.reason}`,
+      );
+      return {
+        success: true,
+        sentCount: 0,
+        skippedCount: 0,
+        reason: holdCheck.reason,
+      };
+    }
+
     const studentsNeedingNotifications = attendanceData.filter((record) =>
       ["absent", "late", "excused"].includes(record.status),
     );
@@ -706,7 +753,6 @@ We're waiting for you 💻🚀
 Nour ✨
 Follow-up Team`,
     },
-    // للتوافق مع الكود القديم
     reminder_1h_student: {
       ar: `{salutation_ar} 👋
 فاضل ربع ساعة بالظبط ونبدأ session {sessionName} ✨
@@ -767,7 +813,6 @@ To start the session focused, please make sure the laptop is charged, internet i
 Nour ✨
 Follow-up Team`,
     },
-    // للتوافق مع الكود القديم
     reminder_1h_guardian: {
       ar: `{guardianSalutation} 👋
 بفكّر حضرتك إن حصة {childTitle} {studentName} في {sessionName} هتبدأ بعد ربع ساعة بالظبط ✨
@@ -1061,7 +1106,7 @@ We look forward to seeing {studentName}'s progress! 🚀
 Code School Team 💻`,
     },
 
-        // ══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════
     // ✅ BILLING — تنبيهات الرصيد المنخفض
     // ══════════════════════════════════════════════════════════
     credit_low_balance_4h_student: {
@@ -1353,14 +1398,13 @@ async function prepareStudentVariables(
   }
   if (extra.newTime) variables.newTime = extra.newTime;
 
-  // ✅ status مع gender-aware
   if (extra.attendanceStatus) {
     const statusTextMap = {
       ar: {
-        absent:  isMale ? "غائب"  : "غائبة",
-        late:    isMale ? "متأخر" : "متأخرة",
+        absent: isMale ? "غائب" : "غائبة",
+        late: isMale ? "متأخر" : "متأخرة",
         excused: isMale ? "معذور" : "معذورة",
-        present: isMale ? "حاضر"  : "حاضرة",
+        present: isMale ? "حاضر" : "حاضرة",
       },
       en: {
         absent: "Absent",
@@ -1461,8 +1505,8 @@ async function prepareInstructorVariables(instructor, group, session = null) {
       date: sessionDate,
       time: `${session.startTime || ""} - ${session.endTime || ""}`,
       meetingLink: session.meetingLink || "",
-      username: session.meetingCredentials?.username || "", // ✅ للمدرب بس
-      password: session.meetingCredentials?.password || "", // ✅ للمدرب بس
+      username: session.meetingCredentials?.username || "",
+      password: session.meetingCredentials?.password || "",
     });
   }
 
@@ -1482,6 +1526,23 @@ export async function sendInstructorSessionReminder(
       .populate("groupId")
       .lean();
     if (!session) throw new Error("Session not found");
+
+    // ✅ HOLD GUARD — لو الجروب على Hold، منبعتش تذكيرات للمدرسين
+    const holdCheck = await canGroupSendMessages(
+      session.groupId?._id || session.groupId,
+    );
+    if (!holdCheck.ok) {
+      console.log(
+        `⏭️ [HOLD GUARD] sendInstructorSessionReminder skipped — ${holdCheck.reason}`,
+      );
+      return {
+        success: false,
+        reason: holdCheck.reason,
+        successCount: 0,
+        failCount: 0,
+        results: [],
+      };
+    }
 
     const group = await Group.findById(session.groupId._id || session.groupId)
       .populate("instructors.userId", "name email gender language profile")
@@ -1545,7 +1606,6 @@ export async function sendInstructorSessionReminder(
               ? dbTemplate.contentAr || dbTemplate.content || ""
               : dbTemplate.contentEn || dbTemplate.contentAr || "";
         } else {
-          // fallback
           if (is24h) {
             messageContent =
               language === "ar"
@@ -1608,6 +1668,8 @@ export async function sendInstructorSessionReminder(
 
 /**
  * ✅ إرسال إشعارات الرصيد المنخفض
+ * ملحوظة: مش محتاجة Hold Guard لأنها بتتنادى من attendance route
+ * اللي أصلاً بيتحقق من الـ Hold قبل ما يشتغل.
  */
 export async function sendLowBalanceAlerts(students) {
   try {
@@ -1667,23 +1729,17 @@ export async function sendLowBalanceAlerts(students) {
           continue;
         }
 
-        // ✅ تحديد القالب المناسب حسب الرصيد:
-        //   - 2 ساعة أو أقل → تنبيه عاجل
-        //   - 4 ساعات أو أقل → تنبيه تحذيري
-        //   - أكبر من 4 ساعات → نتخطى (مش المفروض يتم استدعاؤها أصلاً)
         const isCritical = remainingHours <= 2;
         const templateKey = isCritical ? "2h" : "4h";
 
         const studentTemplateType = `credit_low_balance_${templateKey}_student`;
         const guardianTemplateType = `credit_low_balance_${templateKey}_guardian`;
 
-        // ── تجهيز المتغيرات ──
         const packageName =
           student.creditSystem?.currentPackage?.packageName ||
           student.creditSystem?.currentPackage?.packageType ||
           (language === "ar" ? "الباقة" : "Package");
 
-        // guardianSalutation
         const relationship = student.guardianInfo?.relationship || "father";
         const isFather = relationship !== "mother";
         const guardianSalutation_ar = isFather
@@ -1699,8 +1755,12 @@ export async function sendLowBalanceAlerts(students) {
         const isMale = gender !== "female";
         const childTitle =
           language === "ar"
-            ? isMale ? "ابنك" : "ابنتك"
-            : isMale ? "your son" : "your daughter";
+            ? isMale
+              ? "ابنك"
+              : "ابنتك"
+            : isMale
+              ? "your son"
+              : "your daughter";
 
         const salutationBase_ar = isMale ? "عزيزي الطالب" : "عزيزتي الطالبة";
         const salutation_en = `Dear ${studentFirstName}`;
@@ -1716,7 +1776,6 @@ export async function sendLowBalanceAlerts(students) {
           packageName,
         };
 
-        // ── إرسال رسالة الطالب ──
         if (studentPhone) {
           try {
             const studentTpl = await getMessageTemplate(
@@ -1749,7 +1808,6 @@ export async function sendLowBalanceAlerts(students) {
           }
         }
 
-        // ── إرسال رسالة ولي الأمر ──
         if (guardianPhone) {
           try {
             const guardianTpl = await getMessageTemplate(
@@ -2136,6 +2194,20 @@ export async function sendInstructorWelcomeMessages(
 
     if (!group) throw new Error("Group not found");
 
+    // ✅ HOLD GUARD
+    if (group.hold?.isHeld) {
+      console.log(
+        `⏭️ [HOLD GUARD] sendInstructorWelcomeMessages skipped — group_on_hold`,
+      );
+      return {
+        success: false,
+        message: "Group is on hold",
+        reason: "group_on_hold",
+        instructorsCount: group.instructors?.length || 0,
+        notificationsSent: 0,
+      };
+    }
+
     if (!group.instructors || group.instructors.length === 0) {
       return {
         success: true,
@@ -2380,7 +2452,7 @@ export async function onStudentAddedToGroup(
   groupId,
   customMessages = { student: null, guardian: null, moduleOverview: null },
   sendWhatsApp = true,
-  moduleData = {}, // ✅ جديد
+  moduleData = {},
 ) {
   try {
     console.log(`\n🎯 EVENT: Student Added to Group ==========`);
@@ -2393,6 +2465,14 @@ export async function onStudentAddedToGroup(
     ]);
 
     if (!student || !group) throw new Error("Student or Group not found");
+
+    // ✅ HOLD GUARD — مينفعش نضيف طالب لجروب على Hold
+    if (group.hold?.isHeld) {
+      console.log(
+        `⏭️ [HOLD GUARD] onStudentAddedToGroup skipped — group_on_hold`,
+      );
+      throw new Error("لا يمكن إضافة طالب لجروب على Hold حاليًا");
+    }
 
     await Student.findByIdAndUpdate(
       studentId,
@@ -2412,7 +2492,6 @@ export async function onStudentAddedToGroup(
       group.automation?.whatsappEnabled &&
       group.automation?.welcomeMessage
     ) {
-      // ✅ مرّر moduleData لـ prepareStudentVariables
       const { variables, language } = await prepareStudentVariables(
         student,
         group,
@@ -2847,6 +2926,21 @@ export async function onSessionStatusChanged(
 
     const group = session.groupId;
 
+    // ✅ HOLD GUARD — لو الجروب على Hold، منبعتش إشعارات إلغاء/تأجيل
+    const holdCheck = await canGroupSendMessages(group?._id || group);
+    if (!holdCheck.ok) {
+      console.log(
+        `⏭️ [HOLD GUARD] onSessionStatusChanged skipped — ${holdCheck.reason}`,
+      );
+      return {
+        success: false,
+        reason: holdCheck.reason,
+        totalStudents: 0,
+        successCount: 0,
+        failCount: 0,
+      };
+    }
+
     const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
@@ -2964,7 +3058,6 @@ export async function onSessionStatusChanged(
 
 /**
  * ✅ Send manual session reminder
- * ✅ يدعم: 24hours | 15min (و 1hour للتوافق مع الكود القديم)
  */
 export async function sendManualSessionReminder(
   sessionId,
@@ -2984,6 +3077,23 @@ export async function sendManualSessionReminder(
 
     const group = session.groupId;
 
+    // ✅ HOLD GUARD — لو الجروب على Hold، منبعتش تذكيرات
+    const holdCheck = await canGroupSendMessages(group?._id || group);
+    if (!holdCheck.ok) {
+      console.log(
+        `⏭️ [HOLD GUARD] sendManualSessionReminder skipped — ${holdCheck.reason}`,
+      );
+      return {
+        success: false,
+        reason: holdCheck.reason,
+        totalStudents: 0,
+        successCount: 0,
+        failCount: 0,
+        reminderType,
+        notificationResults: [],
+      };
+    }
+
     const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
@@ -2997,8 +3107,6 @@ export async function sendManualSessionReminder(
     let failCount = 0;
     const notificationResults = [];
 
-    // ✅ تحديد نوع القالب
-    // 15min و 1hour بيستخدموا نفس القالب (reminder_15min)
     const is24h = reminderType === "24hours";
     const guardianTemplateType = is24h
       ? "reminder_24h_guardian"
@@ -3019,7 +3127,6 @@ export async function sendManualSessionReminder(
 
         console.log(`📤 ${student.personalInfo?.fullName} | ${language}`);
 
-        // ── رسالة الطالب ──────────────────────────────────────────────────
         let finalStudentMessage = "";
 
         const perStudentTemplate = metadata?.studentMessages?.[studentIdStr];
@@ -3050,7 +3157,6 @@ export async function sendManualSessionReminder(
           finalStudentMessage = replaceVariables(template.content, variables);
         }
 
-        // ── رسالة ولي الأمر ───────────────────────────────────────────────
         let finalGuardianMessage = "";
 
         const perGuardianTemplate = metadata?.guardianMessages?.[studentIdStr];
@@ -3116,9 +3222,6 @@ export async function sendManualSessionReminder(
       }
     }
 
-    // ============================================================
-    // ✅ تعليم الـ DB بعد إرسال الـ cron التلقائي
-    // ============================================================
     if (metadata?.automatedCron && successCount > 0) {
       try {
         let updateField = {};
@@ -3134,12 +3237,10 @@ export async function sendManualSessionReminder(
             "automationEvents.reminderStats.total24hFailed": failCount,
           };
         } else {
-          // 15min أو 1hour
           updateField = {
             "automationEvents.reminder15minSent": true,
             "automationEvents.reminder15minSentAt": new Date(),
             "automationEvents.reminder15minStudentsNotified": successCount,
-            // للتوافق مع الكود القديم
             "automationEvents.reminder1hSent": true,
             "automationEvents.reminder1hSentAt": new Date(),
             "automationEvents.reminder1hStudentsNotified": successCount,
@@ -3194,6 +3295,16 @@ export async function onGroupCompleted(
       .lean();
     if (!group) return { success: false, error: "Group not found" };
 
+    // ✅ HOLD GUARD — مينفعش نعلن إتمام دورة لجروب على Hold
+    if (group.hold?.isHeld) {
+      console.log(`⏭️ [HOLD GUARD] onGroupCompleted skipped — group_on_hold`);
+      return {
+        success: false,
+        error: "Group is on hold",
+        reason: "group_on_hold",
+      };
+    }
+
     const students = await Student.find({
       "academicInfo.groupIds": new mongoose.Types.ObjectId(groupId),
       isDeleted: false,
@@ -3206,7 +3317,6 @@ export async function onGroupCompleted(
     if (students.length === 0)
       return { success: false, error: "No students in group" };
 
-    // ✅ عدد الحصص الكلي
     const totalSessions =
       group.totalSessionsCount ||
       (await Session.countDocuments({
@@ -3215,7 +3325,6 @@ export async function onGroupCompleted(
         status: "completed",
       }));
 
-    // ✅ تاريخ الإتمام = آخر سيشن مكتملة
     const lastSession = await Session.findOne({
       groupId,
       isDeleted: false,
@@ -3255,7 +3364,6 @@ export async function onGroupCompleted(
           },
         );
 
-        // ✅ المتغيرات المحسّنة
         const enhancedVars = {
           ...variables,
           courseName,
@@ -3266,7 +3374,6 @@ export async function onGroupCompleted(
           feedbackLink: feedbackLink || "",
         };
 
-        // ✅ لينكات الشهادات
         const certificates = await getStudentCertificates(
           student,
           group,
@@ -3294,7 +3401,6 @@ export async function onGroupCompleted(
           }
         }
 
-        // ── رسالة الطالب ──
         let finalStudentMessage = "";
         const studentIdStr = student._id.toString();
         const perStudentMsgs = customMessages[studentIdStr];
@@ -3315,7 +3421,6 @@ export async function onGroupCompleted(
           );
         }
 
-        // ── رسالة ولي الأمر ──
         let finalGuardianMessage = "";
         if (perStudentMsgs?.guardian?.trim()) {
           finalGuardianMessage = perStudentMsgs.guardian;
@@ -3333,7 +3438,6 @@ export async function onGroupCompleted(
           );
         }
 
-        // ✅ إضافة لينك الشهادة
         if (certificateLine) {
           if (!finalStudentMessage.includes("🏆")) {
             finalStudentMessage += certificateLine;
@@ -3343,7 +3447,6 @@ export async function onGroupCompleted(
           }
         }
 
-        // ✅ إضافة لينك الاستبيان
         if (feedbackLink) {
           const feedbackSuffix =
             language === "ar"
@@ -3710,7 +3813,6 @@ export function prepareReminderMessages(
 
   if (language === "en") {
     if (!is15min) {
-      // 24h
       guardianMessage.content = `📅 Session Reminder – Code School
 
 Dear ${guardianName},
@@ -3738,7 +3840,6 @@ ${session.meetingLink ? `🔗 Meeting Link: ${session.meetingLink}` : ""}
 
 Code School Team 💻`;
     } else {
-      // 15min
       guardianMessage.content = `⏰ Session Starting in 15 Minutes – Code School
 
 Dear ${guardianName},
@@ -3766,7 +3867,6 @@ Code School Team 💻`;
     }
   } else {
     if (!is15min) {
-      // 24h
       guardianMessage.content = `📅 تذكير الجلسة – Code School
 
 عزيزي/عزيزتي ${guardianName}،
@@ -3792,7 +3892,6 @@ Code School Team 💻`;
 
 فريق Code School 💻`;
     } else {
-      // 15min
       guardianMessage.content = `⏰ الحصة هتبدأ بعد ربع ساعة – Code School
 
 عزيزي/عزيزتي ${guardianName}،
@@ -3965,9 +4064,8 @@ async function getFirstSessionMeetingLink(groupId) {
   }
 }
 
-
 /**
- * ✅ يحدد أي موديولات اتكملت فعلاً (كل السيشنات بتاعتها status = completed)
+ * ✅ يحدد أي موديولات اتكملت فعلاً
  */
 async function getCompletedModuleIndexes(groupId) {
   const sessions = await Session.find({ groupId, isDeleted: false }).lean();
@@ -4003,7 +4101,8 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
 
   const guardianPhone =
     student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
-  if (!guardianPhone) return { success: false, skipped: true, reason: "no_guardian_phone" };
+  if (!guardianPhone)
+    return { success: false, skipped: true, reason: "no_guardian_phone" };
 
   const template = await getMessageTemplate("module_overview", language, "guardian");
 
@@ -4014,7 +4113,8 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
     language,
   );
   const childTitle = await wapilotService.getStudentChildTitle(gender, language);
-  const supervisorName = (await wapilotService.getDbVariable("supervisorName", language)) || "";
+  const supervisorName =
+    (await wapilotService.getDbVariable("supervisorName", language)) || "";
 
   const studentDisplayName =
     (language === "ar" ? studentNickname?.ar : studentNickname?.en) ||
@@ -4037,7 +4137,7 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
     content = content.replace(new RegExp(`\\{${key}\\}`, "g"), value ?? "");
   });
 
-    return await wapilotService.sendAndLogEvalMessage({
+  return await wapilotService.sendAndLogEvalMessage({
     studentId: student._id,
     phoneNumber: guardianPhone,
     messageContent: content,
@@ -4054,16 +4154,8 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
   });
 }
 
-
-// ============================================================
-// ✅ Atomic Claim — يضمن إن process واحد بس ياخد حق الإرسال
-//    (يمنع تكرار الرسائل حتى لو الكرون اشتغل بالتوازي)
-// ============================================================
-
 /**
- * يحاول يحجز "slot" للرسالة في الـ DB بشكل atomic.
- * @returns true  → احنا اللي هنبعت
- *          false → حد تاني حجزها قبلاً (تخطاها)
+ * يحاول يحجز "slot" للرسالة في الـ DB بشكل atomic
  */
 async function claimModuleOverviewSlot(
   studentId,
@@ -4076,7 +4168,6 @@ async function claimModuleOverviewSlot(
     const updated = await Student.findOneAndUpdate(
       {
         _id: studentId,
-        // ✅ الشرط الحاسم: لازم ميكونش فيه entry بنفس (groupId + moduleIndex)
         moduleOverviewsSent: {
           $not: {
             $elemMatch: {
@@ -4094,7 +4185,7 @@ async function claimModuleOverviewSlot(
             moduleIndex: moduleIdx,
             moduleTitle,
             sentAt: new Date(),
-            status: "sending", // مؤقت لحد ما الإرسال ينجح
+            status: "sending",
           },
         },
       },
@@ -4111,9 +4202,6 @@ async function claimModuleOverviewSlot(
   }
 }
 
-/**
- * بعد نجاح الإرسال → نحوّل الحالة من "sending" لـ "sent"
- */
 async function markModuleOverviewSent(studentId, groupId, moduleIdx) {
   try {
     await Student.updateOne(
@@ -4139,9 +4227,6 @@ async function markModuleOverviewSent(studentId, groupId, moduleIdx) {
   }
 }
 
-/**
- * لو الإرسال فشل → نلغي الحجز عشان يحاول تاني في الـ cron اللي بعده
- */
 async function releaseModuleOverviewClaim(studentId, groupId, moduleIdx) {
   try {
     await Student.updateOne(
@@ -4178,6 +4263,7 @@ export async function checkAndSendModuleOverviewNotifications() {
     status: "active",
     isDeleted: false,
     sessionsGenerated: true,
+    "hold.isHeld": { $ne: true }, // ✅ HOLD GUARD
   })
     .populate({ path: "courseId", select: "title curriculum" })
     .populate("students");
@@ -4202,7 +4288,6 @@ export async function checkAndSendModuleOverviewNotifications() {
       for (const student of studentsInGroup) {
         if (!student) continue;
 
-        // كاتش-أب تلقائي من موديول 1 لحد أعلى موديول اتكمل + 1
         for (
           let moduleIdx = 1;
           moduleIdx <= highestCompleted + 1;
@@ -4215,7 +4300,6 @@ export async function checkAndSendModuleOverviewNotifications() {
 
           const moduleData = curriculum[moduleIdx];
 
-          // ✅ الحجز الـ atomic — هو ده اللي بيمنع التكرار
           const claimed = await claimModuleOverviewSlot(
             student._id,
             group._id,
@@ -4225,7 +4309,6 @@ export async function checkAndSendModuleOverviewNotifications() {
           );
 
           if (!claimed) {
-            // حد تاني (كرون تاني / نفس الكرون بالتوازي) سبقنا → تخطى
             results.push({
               studentId: student._id,
               groupId: group._id,
@@ -4236,7 +4319,6 @@ export async function checkAndSendModuleOverviewNotifications() {
             continue;
           }
 
-          // ✅ دلوقتي احنا الوحيدين اللي هنبعت
           let sendResult;
           try {
             sendResult = await sendModuleOverviewMessage(
@@ -4256,7 +4338,6 @@ export async function checkAndSendModuleOverviewNotifications() {
           if (sendResult?.success) {
             await markModuleOverviewSent(student._id, group._id, moduleIdx);
           } else {
-            // فشل الإرسال → نلغي الحجز عشان يحاول تاني بعدين
             await releaseModuleOverviewClaim(student._id, group._id, moduleIdx);
           }
 
@@ -4285,12 +4366,9 @@ export async function checkAndSendModuleOverviewNotifications() {
   };
 }
 
-// ============================================================
-// ✅ Helper: يحدد لو الجروب خلص فعليًا
-//    - عنده سيشنات
-//    - كل السيشنات status إما completed أو cancelled
-//    - مفيش أي سيشن لسه scheduled أو postponed
-// ============================================================
+/**
+ * ✅ Helper: يحدد لو الجروب خلص فعليًا
+ */
 async function isGroupFullyCompleted(groupId) {
   const sessions = await Session.find({
     groupId,
@@ -4306,9 +4384,9 @@ async function isGroupFullyCompleted(groupId) {
   );
 }
 
-// ============================================================
-// ✅ Helper: يبني قائمة لينكات الشهادات المتاحة للطالب
-// ============================================================
+/**
+ * ✅ Helper: يبني قائمة لينكات الشهادات المتاحة للطالب
+ */
 async function getStudentCertificates(student, group, course) {
   try {
     const issued = student.issuedCertificates || [];
@@ -4363,16 +4441,17 @@ async function getStudentCertificates(student, group, course) {
   }
 }
 
-// ============================================================
-// ✅ EVENT (Cron): يفحص كل الجروبات، ولو خلصت يبعت
-//    رسالة إتمام الدورة لكل طالب وولي أمر (مرة واحدة بس)
-// ============================================================
+/**
+ * ✅ EVENT (Cron): يفحص كل الجروبات، ولو خلصت يبعت
+ *    رسالة إتمام الدورة لكل طالب وولي أمر (مرة واحدة بس)
+ */
 export async function checkAndSendGroupCompletionNotifications() {
   console.log(`\n🎓 Checking for completed groups...`);
 
   const groups = await Group.find({
     isDeleted: false,
     status: { $in: ["active", "completed"] },
+    "hold.isHeld": { $ne: true }, // ✅ HOLD GUARD
     "metadata.completionNotification.sent": { $ne: true },
   })
     .populate({
@@ -4453,9 +4532,9 @@ export async function checkAndSendGroupCompletionNotifications() {
   };
 }
 
-// ============================================================
-// ✅ Helper: بناء لينك الـ Maps من الـ Group
-// ============================================================
+/**
+ * ✅ Helper: بناء لينك الـ Maps من الـ Group
+ */
 function buildMapsLink(group, session) {
   const loc = group?.locationDetails || {};
 
@@ -4473,9 +4552,9 @@ function buildMapsLink(group, session) {
   return "";
 }
 
-// ============================================================
-// ✅ يجهز المتغيرات الخاصة بالـ Offline (location/maps)
-// ============================================================
+/**
+ * ✅ يجهز المتغيرات الخاصة بالـ Offline (location/maps)
+ */
 async function prepareOfflineLocationVariables(group, session, language = "ar") {
   const loc = group?.locationDetails || {};
 
@@ -4494,9 +4573,9 @@ async function prepareOfflineLocationVariables(group, session, language = "ar") 
   return { placeName, address, mapsLink };
 }
 
-// ============================================================
-// ✅ OFFLINE: تذكير قبل 24 ساعة (Maps / Location Reminder)
-// ============================================================
+/**
+ * ✅ OFFLINE: تذكير قبل 24 ساعة (Maps / Location Reminder)
+ */
 export async function sendOfflineLocationReminder(
   sessionId,
   metadata = {},
@@ -4515,7 +4594,14 @@ export async function sendOfflineLocationReminder(
       .lean();
     if (!group) throw new Error("Group not found");
 
-    // ✅ حماية: لو الجروب Online مش هتبعت
+    // ✅ HOLD GUARD
+    if (group.hold?.isHeld) {
+      console.log(
+        `⏭️ [HOLD GUARD] sendOfflineLocationReminder skipped — group_on_hold`,
+      );
+      return { success: false, reason: "group_on_hold" };
+    }
+
     const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
     if (deliveryMode !== "offline") {
       return {
@@ -4550,7 +4636,6 @@ export async function sendOfflineLocationReminder(
           session,
         );
 
-        // ✅ حقن متغيرات المكان
         const locVars = await prepareOfflineLocationVariables(
           group,
           session,
@@ -4558,7 +4643,6 @@ export async function sendOfflineLocationReminder(
         );
         Object.assign(variables, locVars);
 
-        // ── رسالة الطالب ──
         const studentTemplateType = "reminder_24h_offline_student";
         const studentTpl = await getMessageTemplate(
           studentTemplateType,
@@ -4570,7 +4654,6 @@ export async function sendOfflineLocationReminder(
           variables,
         );
 
-        // ── رسالة ولي الأمر ──
         const guardianTemplateType = "reminder_24h_offline_guardian";
         const guardianTpl = await getMessageTemplate(
           guardianTemplateType,
@@ -4623,9 +4706,9 @@ export async function sendOfflineLocationReminder(
   }
 }
 
-// ============================================================
-// ✅ OFFLINE: Drop-off Alert قبل 30 دقيقة
-// ============================================================
+/**
+ * ✅ OFFLINE: Drop-off Alert قبل 30 دقيقة
+ */
 export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
   try {
     console.log(`\n🚗 OFFLINE 30min Drop-off Alert ==========`);
@@ -4638,6 +4721,14 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
       .populate("instructors.userId", "name email gender language profile")
       .lean();
     if (!group) throw new Error("Group not found");
+
+    // ✅ HOLD GUARD
+    if (group.hold?.isHeld) {
+      console.log(
+        `⏭️ [HOLD GUARD] sendOfflineDropoffAlert skipped — group_on_hold`,
+      );
+      return { success: false, reason: "group_on_hold" };
+    }
 
     const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
     if (deliveryMode !== "offline") {
@@ -4656,7 +4747,10 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
     for (const student of students) {
       try {
         const eligible = await canSendMessage(student);
-        if (!eligible) { failCount++; continue; }
+        if (!eligible) {
+          failCount++;
+          continue;
+        }
 
         const { variables, language } = await prepareStudentVariables(
           student,
@@ -4676,14 +4770,20 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
           language,
           "student",
         );
-        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
+        const finalStudentMessage = replaceVariables(
+          studentTpl.content,
+          variables,
+        );
 
         const guardianTpl = await getMessageTemplate(
           "reminder_30min_offline_guardian",
           language,
           "guardian",
         );
-        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+        const finalGuardianMessage = replaceVariables(
+          guardianTpl.content,
+          variables,
+        );
 
         const result = await sendToStudentWithLogging({
           studentId: student._id,
@@ -4701,24 +4801,34 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
           },
         });
 
-        if (result.success) { sentCount++; results.push({ studentId: student._id, status: "sent" }); }
-        else { failCount++; }
+        if (result.success) {
+          sentCount++;
+          results.push({ studentId: student._id, status: "sent" });
+        } else {
+          failCount++;
+        }
       } catch (err) {
         console.error(`❌ Error for student ${student._id}:`, err.message);
         failCount++;
       }
     }
 
-    return { success: sentCount > 0, totalStudents: students.length, successCount: sentCount, failCount, results };
+    return {
+      success: sentCount > 0,
+      totalStudents: students.length,
+      successCount: sentCount,
+      failCount,
+      results,
+    };
   } catch (error) {
     console.error("❌ Error in sendOfflineDropoffAlert:", error);
     return { success: false, error: error.message };
   }
 }
 
-// ============================================================
-// ✅ OFFLINE: Pre-Attendance Ping
-// ============================================================
+/**
+ * ✅ OFFLINE: Pre-Attendance Ping
+ */
 export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
   try {
     console.log(`\n✅ OFFLINE Pre-Attendance Ping ==========`);
@@ -4731,6 +4841,14 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
       .populate("instructors.userId", "name email gender language profile")
       .lean();
     if (!group) throw new Error("Group not found");
+
+    // ✅ HOLD GUARD
+    if (group.hold?.isHeld) {
+      console.log(
+        `⏭️ [HOLD GUARD] sendOfflinePreAttendancePing skipped — group_on_hold`,
+      );
+      return { success: false, reason: "group_on_hold" };
+    }
 
     const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
     if (deliveryMode !== "offline") {
@@ -4749,7 +4867,10 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
     for (const student of students) {
       try {
         const eligible = await canSendMessage(student);
-        if (!eligible) { failCount++; continue; }
+        if (!eligible) {
+          failCount++;
+          continue;
+        }
 
         const { variables, language } = await prepareStudentVariables(
           student,
@@ -4762,14 +4883,20 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
           language,
           "student",
         );
-        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
+        const finalStudentMessage = replaceVariables(
+          studentTpl.content,
+          variables,
+        );
 
         const guardianTpl = await getMessageTemplate(
           "pre_attendance_ping_guardian",
           language,
           "guardian",
         );
-        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+        const finalGuardianMessage = replaceVariables(
+          guardianTpl.content,
+          variables,
+        );
 
         const result = await sendToStudentWithLogging({
           studentId: student._id,
@@ -4785,27 +4912,37 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
           },
         });
 
-        if (result.success) { sentCount++; results.push({ studentId: student._id, status: "sent" }); }
-        else { failCount++; }
+        if (result.success) {
+          sentCount++;
+          results.push({ studentId: student._id, status: "sent" });
+        } else {
+          failCount++;
+        }
       } catch (err) {
         console.error(`❌ Error for student ${student._id}:`, err.message);
         failCount++;
       }
     }
 
-    return { success: sentCount > 0, totalStudents: students.length, successCount: sentCount, failCount, results };
+    return {
+      success: sentCount > 0,
+      totalStudents: students.length,
+      successCount: sentCount,
+      failCount,
+      results,
+    };
   } catch (error) {
     console.error("❌ Error in sendOfflinePreAttendancePing:", error);
     return { success: false, error: error.message };
   }
 }
 
-// ============================================================
-// ✅ OFFLINE: إرسال تذكير للمدرس (24h / 30min / ping)
-// ============================================================
+/**
+ * ✅ OFFLINE: إرسال تذكير للمدرس (24h / 30min / ping)
+ */
 export async function sendInstructorOfflineReminder(
   sessionId,
-  reminderType, // "24hours_offline" | "30min_offline" | "pre_attendance_ping"
+  reminderType,
   metadata = {},
 ) {
   try {
@@ -4821,6 +4958,14 @@ export async function sendInstructorOfflineReminder(
       .lean();
     if (!group) throw new Error("Group not found");
 
+    // ✅ HOLD GUARD
+    if (group.hold?.isHeld) {
+      console.log(
+        `⏭️ [HOLD GUARD] sendInstructorOfflineReminder skipped — group_on_hold`,
+      );
+      return { success: false, reason: "group_on_hold" };
+    }
+
     const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
     if (deliveryMode !== "offline") {
       return { success: false, reason: "not_offline" };
@@ -4830,14 +4975,13 @@ export async function sendInstructorOfflineReminder(
       return { success: false, reason: "no_instructors" };
     }
 
-    // ✅ اسمح للـ DB template يحدد النوع، وإلا fallback
     const WhatsAppTemplateInstructor = (
       await import("../models/WhatsAppTemplateInstructor")
     ).default;
 
     const dbTemplateTypeMap = {
       "24hours_offline": "reminder_24h_offline",
-      "30min_offline":   "reminder_30min_offline",
+      "30min_offline": "reminder_30min_offline",
       "pre_attendance_ping": "pre_attendance_ping",
     };
 
@@ -4853,12 +4997,19 @@ export async function sendInstructorOfflineReminder(
 
     for (const instructorEntry of group.instructors) {
       const instructor = instructorEntry.userId;
-      if (!instructor?._id) { failCount++; continue; }
+      if (!instructor?._id) {
+        failCount++;
+        continue;
+      }
 
       const instructorPhone = instructor.profile?.phone?.trim();
       if (!instructorPhone) {
         failCount++;
-        results.push({ instructorId: instructor._id, status: "skipped", reason: "no_phone" });
+        results.push({
+          instructorId: instructor._id,
+          status: "skipped",
+          reason: "no_phone",
+        });
         continue;
       }
 
@@ -4869,7 +5020,11 @@ export async function sendInstructorOfflineReminder(
           session,
         );
 
-        const locVars = await prepareOfflineLocationVariables(group, session, language);
+        const locVars = await prepareOfflineLocationVariables(
+          group,
+          session,
+          language,
+        );
         Object.assign(variables, locVars);
 
         let messageContent = "";
@@ -4880,7 +5035,6 @@ export async function sendInstructorOfflineReminder(
               ? dbTemplate.contentAr || dbTemplate.content || ""
               : dbTemplate.contentEn || dbTemplate.contentAr || "";
         } else {
-          // Fallback hardcoded
           if (reminderType === "24hours_offline") {
             messageContent =
               language === "ar"
@@ -4892,7 +5046,6 @@ export async function sendInstructorOfflineReminder(
                 ? `{instructorSalutation} 👋\n\n⏰ فاضل 30 دقيقة على بداية حصة *{sessionName}*\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\n👥 المجموعة: {groupName}\n\nفريق Code School 💻`
                 : `{instructorSalutation} 👋\n\n⏰ 30 minutes until *{sessionName}* starts\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\n👥 Group: {groupName}\n\nCode School 💻`;
           } else {
-            // pre_attendance_ping
             messageContent =
               language === "ar"
                 ? `{instructorSalutation} 👋\n\nالحصة *{sessionName}* هتبدأ دلوقتي، ياريت نتأكد إن الطلاب موجودين وجاهزين ونسجل الحضور ✨\n\nفريق Code School 💻`
@@ -4901,20 +5054,33 @@ export async function sendInstructorOfflineReminder(
         }
 
         const finalMessage = replaceVariables(messageContent, variables);
-        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
+        const preparedPhone =
+          wapilotService.preparePhoneNumber(instructorPhone);
         if (!preparedPhone) throw new Error("Invalid phone number");
 
-        const sendResult = await wapilotService.sendTextMessage(preparedPhone, finalMessage);
+        const sendResult = await wapilotService.sendTextMessage(
+          preparedPhone,
+          finalMessage,
+        );
 
         if (sendResult?.success) {
           successCount++;
-          results.push({ instructorId: instructor._id, instructorName: instructor.name, status: "sent" });
+          results.push({
+            instructorId: instructor._id,
+            instructorName: instructor.name,
+            status: "sent",
+          });
         } else {
           throw new Error(sendResult?.error || "Send failed");
         }
       } catch (err) {
         failCount++;
-        results.push({ instructorId: instructor._id, instructorName: instructor.name, status: "failed", reason: err.message });
+        results.push({
+          instructorId: instructor._id,
+          instructorName: instructor.name,
+          status: "failed",
+          reason: err.message,
+        });
         console.error(`❌ Failed for ${instructor.name}:`, err.message);
       }
     }

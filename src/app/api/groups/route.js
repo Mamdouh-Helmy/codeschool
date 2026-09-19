@@ -5,7 +5,7 @@ import Group from "../../models/Group";
 import Student from "../../models/Student";
 import Session from "../../models/Session";
 import Course from "../../models/Course";
-import Tag from "../../models/Tag"; // ✅ لازم يتسجل قبل أي .populate("tags")
+import Tag from "../../models/Tag";
 import { requireAdmin } from "@/utils/authMiddleware";
 import {
   calculateTotalSessions,
@@ -13,7 +13,7 @@ import {
 } from "@/utils/sessionGenerator";
 import { getSessionsLinkHealthForGroups } from "@/utils/checkMeetingLinks";
 
-// ─── Helper: Check instructor schedule conflicts (unchanged) ──────────────
+// ─── Helper: Check instructor schedule conflicts ──────────────────────────
 async function checkInstructorConflicts(
   instructors,
   schedule,
@@ -96,8 +96,6 @@ export async function GET(req) {
     const studentsMin = searchParams.get("studentsMin");
     const studentsMax = searchParams.get("studentsMax");
     const sessionsGenerated = searchParams.get("sessionsGenerated");
-
-    // ✅ فلتر جديد: الوسوم
     const tagsParam = searchParams.get("tags");
 
     const query = { isDeleted: false };
@@ -163,7 +161,7 @@ export async function GET(req) {
       .populate("instructors.userId", "name email")
       .populate("students", "personalInfo.fullName enrollmentNumber")
       .populate("createdBy", "name email")
-      .populate("tags") // ✅
+      .populate("tags")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -171,9 +169,7 @@ export async function GET(req) {
 
     console.log("✅ Groups fetched:", groups.length, "of", total);
 
-    // ✅ فحص صحة اللينكات (مفيش لينك / اللينك اتمسح) لكل جروبات الصفحة دي
-    // دفعة واحدة (query واحد على Session وواحد على MeetingLink) — عشان
-    // منعملش N+1 query لكل جروب لوحده
+    // ✅ فحص صحة اللينكات لكل جروبات الصفحة دي دفعة واحدة
     const groupIds = groups.map((g) => g._id);
     const linkHealthMap = await getSessionsLinkHealthForGroups(groupIds);
 
@@ -208,7 +204,7 @@ export async function GET(req) {
         schedule: group.schedule,
         deliveryMode: group.deliveryMode || "online",
         location: group.location || "",
-        locationDetails: group.locationDetails || null, // ✅
+        locationDetails: group.locationDetails || null,
         automation: group.automation,
         moduleSelection: group.moduleSelection,
         sessionsGenerated: group.sessionsGenerated,
@@ -216,23 +212,41 @@ export async function GET(req) {
         createdBy: group.createdBy,
         createdAt: group.createdAt,
         updatedAt: group.updatedAt,
-        tags: group.tags || [], // ✅
+        tags: group.tags || [],
         linkHealth: {
           hasIssue: health.hasIssue,
           missingCount: health.missingCount,
           orphanedCount: health.orphanedCount,
-        }, // ✅ فيه جلسة بدون لينك أو لينك اتمسح من الداتابيز؟
+        },
+
+        // ✅ Hold — إضافة holdUntilSessionId
+        isOnHold: !!group.hold?.isHeld,
+        hold: group.hold
+          ? {
+              holdType: group.hold.holdType,
+              holdDays: group.hold.holdDays,
+              holdSessionsCount: group.hold.holdSessionsCount,
+              holdSessionsConsumed: group.hold.holdSessionsConsumed,
+              holdUntilSessionId: group.hold.holdUntilSessionId || null,
+              holdStartDate: group.hold.holdStartDate,
+              holdEndDate: group.hold.holdEndDate,
+              holdReason: group.hold.holdReason,
+            }
+          : null,
       };
     });
 
-    const statsQuery = { ...query };
-    delete statsQuery.$or;
     const stats = {
       total,
       active: await Group.countDocuments({ ...query, status: "active" }),
       draft: await Group.countDocuments({ ...query, status: "draft" }),
       completed: await Group.countDocuments({ ...query, status: "completed" }),
       cancelled: await Group.countDocuments({ ...query, status: "cancelled" }),
+      onHold: await Group.countDocuments({
+        ...query,
+        status: "active",
+        "hold.isHeld": true,
+      }),
     };
 
     return NextResponse.json({
@@ -284,9 +298,9 @@ export async function POST(req) {
       automation,
       moduleSelection,
       tags,
-      deliveryMode, // ✅ "online" | "offline"
-      location, // ✅ نص مركّب (fallback / نص جاهز للعرض)
-      locationDetails, // ✅ { lat, lng, placeName, country, address, extraDetails }
+      deliveryMode,
+      location,
+      locationDetails,
     } = body;
 
     if (!name || !courseId || !maxStudents || !schedule) {
@@ -366,12 +380,10 @@ export async function POST(req) {
       );
     }
 
-    // ✅ نوع الجروب — بيتحكم في بدل مواصلات المدرس (offline بس بياخد بدل)
     const normalizedDeliveryMode = ["online", "offline"].includes(deliveryMode)
       ? deliveryMode
       : "online";
 
-    // ✅ لازم يبقى فيه اسم مكان أو إحداثيات محفوظة من الماب في حالة الـ offline
     const hasLocationInfo =
       location?.trim() ||
       locationDetails?.placeName?.trim() ||
@@ -478,7 +490,8 @@ export async function POST(req) {
         timezone: schedule.timezone || "Africa/Cairo",
       },
       deliveryMode: normalizedDeliveryMode,
-      location: normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
+      location:
+        normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
       locationDetails:
         normalizedDeliveryMode === "offline"
           ? {
@@ -517,7 +530,7 @@ export async function POST(req) {
       totalSessionsCount: totalSessions,
       createdBy: adminUser.id,
       updatedAt: new Date(),
-      tags: tags || [], // ✅
+      tags: tags || [],
     };
 
     const group = await Group.create(groupData);
@@ -526,7 +539,7 @@ export async function POST(req) {
       .populate("courseId", "title level")
       .populate("instructors.userId", "name email")
       .populate("createdBy", "name email")
-      .populate("tags") // ✅
+      .populate("tags")
       .lean();
 
     const responseData = {
@@ -611,8 +624,8 @@ export async function PUT(req, { params }) {
       moduleSelection,
       tags,
       deliveryMode,
-      location, // ✅
-      locationDetails, // ✅
+      location,
+      locationDetails,
     } = body;
 
     const normalizedInstructors = (instructors || []).map((i) => ({
@@ -720,7 +733,6 @@ export async function PUT(req, { params }) {
       ? deliveryMode
       : group.deliveryMode || "online";
 
-    // ✅ لازم يبقى فيه اسم مكان أو إحداثيات محفوظة من الماب في حالة الـ offline
     const hasLocationInfo =
       location?.trim() ||
       locationDetails?.placeName?.trim() ||
@@ -749,7 +761,8 @@ export async function PUT(req, { params }) {
           timezone: schedule.timezone || "Africa/Cairo",
         },
         deliveryMode: normalizedDeliveryMode,
-        location: normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
+        location:
+          normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
         locationDetails:
           normalizedDeliveryMode === "offline"
             ? {
@@ -775,7 +788,7 @@ export async function PUT(req, { params }) {
         },
         totalSessionsCount,
         updatedAt: new Date(),
-        tags: tags || [], // ✅
+        tags: tags || [],
       },
     };
 
@@ -788,7 +801,6 @@ export async function PUT(req, { params }) {
       .populate("tags")
       .lean();
 
-    // 🔄 تحديث deliveryMode للـ Sessions غير المكتملة
     await Session.updateMany(
       {
         groupId: id,

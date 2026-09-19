@@ -8,7 +8,7 @@ import {
   Calendar, Clock, CheckCircle, Lock, Play, Video,
   AlertCircle, ChevronRight, X, BookOpen, Layers,
   Target, ExternalLink, BadgeCheck, Search, Users,
-  Timer, FileText, Info,
+  Timer, FileText, Info, PauseCircle,
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -47,89 +47,103 @@ const fmtDateShort = (d, locale = 'ar') => {
 
 const fmtDateFull = (d, locale = 'ar') => {
   if (!d) return "";
-  return new Date(d).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', { 
-    weekday: "long", year: "numeric", month: "long", day: "numeric" 
+  return new Date(d).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', {
+    weekday: "long", year: "numeric", month: "long", day: "numeric"
   });
 };
 
 const fmtDateKey = (d) => new Date(d).toISOString().split("T")[0];
 
 const STATUS = (locale = 'ar') => ({
-  completed: { 
-    label: locale === 'ar' ? "مكتملة" : "Completed", 
-    dot: "bg-secondary", 
-    badge: "bg-secondary/10 dark:bg-secondary/20 text-secondary dark:text-secondary border border-secondary/20", 
-    icon: CheckCircle 
+  completed: {
+    label: locale === 'ar' ? "مكتملة" : "Completed",
+    dot: "bg-secondary",
+    badge: "bg-secondary/10 dark:bg-secondary/20 text-secondary dark:text-secondary border border-secondary/20",
+    icon: CheckCircle
   },
-  scheduled: { 
-    label: locale === 'ar' ? "مجدولة" : "Scheduled", 
-    dot: "bg-primary", 
-    badge: "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border border-primary/20", 
-    icon: Clock 
+  scheduled: {
+    label: locale === 'ar' ? "مجدولة" : "Scheduled",
+    dot: "bg-primary",
+    badge: "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border border-primary/20",
+    icon: Clock
   },
-  cancelled: { 
-    label: locale === 'ar' ? "ملغاة" : "Cancelled", 
-    dot: "bg-red-400", 
-    badge: "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/40", 
-    icon: X 
+  cancelled: {
+    label: locale === 'ar' ? "ملغاة" : "Cancelled",
+    dot: "bg-red-400",
+    badge: "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/40",
+    icon: X
   },
-  postponed: { 
-    label: locale === 'ar' ? "مؤجلة" : "Postponed", 
-    dot: "bg-accent", 
-    badge: "bg-accent/10 dark:bg-accent/20 text-accent dark:text-accent border border-accent/20", 
-    icon: Clock 
+  postponed: {
+    label: locale === 'ar' ? "مؤجلة" : "Postponed",
+    dot: "bg-accent",
+    badge: "bg-accent/10 dark:bg-accent/20 text-accent dark:text-accent border border-accent/20",
+    icon: Clock
   },
 });
 
 const ATT = (locale = 'ar') => ({
-  present: { 
-    label: locale === 'ar' ? "حاضر" : "Present", 
-    color: "text-secondary", 
-    bg: "bg-secondary/10", 
-    icon: CheckCircle 
+  present: {
+    label: locale === 'ar' ? "حاضر" : "Present",
+    color: "text-secondary",
+    bg: "bg-secondary/10",
+    icon: CheckCircle
   },
-  late: { 
-    label: locale === 'ar' ? "متأخر" : "Late", 
-    color: "text-accent", 
-    bg: "bg-accent/10", 
-    icon: Clock 
+  late: {
+    label: locale === 'ar' ? "متأخر" : "Late",
+    color: "text-accent",
+    bg: "bg-accent/10",
+    icon: Clock
   },
-  excused: { 
-    label: locale === 'ar' ? "معذور" : "Excused", 
-    color: "text-secondary", 
-    bg: "bg-secondary/10", 
-    icon: BadgeCheck 
+  excused: {
+    label: locale === 'ar' ? "معذور" : "Excused",
+    color: "text-secondary",
+    bg: "bg-secondary/10",
+    icon: BadgeCheck
   },
-  absent: { 
-    label: locale === 'ar' ? "غائب" : "Absent", 
-    color: "text-red-600 dark:text-red-400", 
-    bg: "bg-red-50 dark:bg-red-900/20", 
-    icon: X 
+  absent: {
+    label: locale === 'ar' ? "غائب" : "Absent",
+    color: "text-red-600 dark:text-red-400",
+    bg: "bg-red-50 dark:bg-red-900/20",
+    icon: X
   },
 });
 
 const PLAT = (locale = 'ar') => ({
-  zoom: { 
-    label: locale === 'ar' ? "Zoom" : "Zoom", 
-    icon: "🔷", 
-    grad: "from-primary to-[#f67d00]" 
-  },
-  google_meet: { 
-    label: locale === 'ar' ? "Meet" : "Meet", 
-    icon: "🔴", 
-    grad: "from-secondary to-[#ff6437]" 
-  },
-  microsoft_teams: { 
-    label: locale === 'ar' ? "Teams" : "Teams", 
-    icon: "🔵", 
-    grad: "from-primary to-secondary" 
-  },
-  other: { 
-    label: locale === 'ar' ? "رابط" : "Link", 
-    icon: "🔗", 
-    grad: C.primaryGrad 
-  },
+  zoom: { label: "Zoom", icon: "🔷", grad: "from-primary to-[#f67d00]" },
+  google_meet: { label: "Meet", icon: "🔴", grad: "from-secondary to-[#ff6437]" },
+  microsoft_teams: { label: "Teams", icon: "🔵", grad: "from-primary to-secondary" },
+  other: { label: "Link", icon: "🔗", grad: C.primaryGrad },
 });
+
+// ─── Hold Banner (new component) ─────────────────────────────────────────────
+function HoldBanner({ locale, reason }) {
+  const t = (ar, en) => (locale === 'ar' ? ar : en);
+  return (
+    <div className="mb-5 rounded-2xl p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+          <PauseCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-black text-sm text-amber-900 dark:text-amber-300">
+            {t("الجروب متوقف مؤقتًا (Hold)", "Group is temporarily on hold")}
+          </p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
+            {t(
+              "الجلسات معلّقة حاليًا ولا يمكن الدخول إليها. هيرجع الجروب شغال تلقائيًا قريب.",
+              "Sessions are paused and can't be joined right now. The group will resume automatically soon."
+            )}
+          </p>
+          {reason && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 italic">
+              {t("السبب", "Reason")}: {reason}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Session Detail Modal ─────────────────────────────────────────────────────
 function SessionModal({ session, onClose, locale }) {
@@ -139,6 +153,7 @@ function SessionModal({ session, onClose, locale }) {
   const AttIcon = att?.icon;
   const plat = PLAT(locale)[session.meetingPlatform] || PLAT(locale).other;
   const isCompleted = session.status === "completed";
+  const groupIsOnHold = !!session.groupIsOnHold;
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -151,7 +166,7 @@ function SessionModal({ session, onClose, locale }) {
 
       <div className="relative w-full sm:max-w-xl max-h-[92vh] overflow-y-auto bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col">
 
-        {/* Header with brand gradient */}
+        {/* Header */}
         <div className={`relative bg-gradient-to-br ${C.primaryGrad2} p-6 rounded-t-3xl sm:rounded-t-3xl overflow-hidden flex-shrink-0`}>
           <div className="absolute inset-0 opacity-10"
             style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
@@ -164,6 +179,13 @@ function SessionModal({ session, onClose, locale }) {
                   <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                   {cfg.label}
                 </span>
+                {/* ✅ Hold Badge — جديد */}
+                {groupIsOnHold && !isCompleted && (
+                  <span className="bg-amber-500/30 text-white text-xs font-bold px-2.5 py-1 rounded-full border border-amber-400/40 flex items-center gap-1">
+                    <PauseCircle className="w-3 h-3" />
+                    {locale === 'ar' ? 'متوقف' : 'On Hold'}
+                  </span>
+                )}
                 {att && isCompleted && (
                   <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${att.bg} ${att.color} flex items-center gap-1`}>
                     <AttIcon className="w-3 h-3" />{att.label}
@@ -198,8 +220,25 @@ function SessionModal({ session, onClose, locale }) {
         {/* Body */}
         <div className="p-5 space-y-4">
 
-          {/* Join button */}
-          {session.showJoinButton && (
+          {/* ✅ Hold Notice — جديد */}
+          {groupIsOnHold && !isCompleted && (
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+              <PauseCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800 dark:text-amber-300">
+                <p className="font-black">
+                  {locale === 'ar' ? 'الجروب متوقف مؤقتًا' : 'Group is on hold'}
+                </p>
+                <p className="text-xs mt-1 leading-relaxed">
+                  {locale === 'ar'
+                    ? 'هذه الجلسة غير متاحة حاليًا. هيفتح الجروب تلقائيًا لما يرجع نشط.'
+                    : 'This session is not available right now. Access will resume once the group is reactivated.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Join button — مش بيظهر لو على Hold */}
+          {session.showJoinButton && !groupIsOnHold && (
             <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
               className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-white font-black text-sm bg-gradient-to-r ${plat.grad} shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all`}>
               <Video className="w-5 h-5" />{t("allSessions.modal.joinMeeting")}<ExternalLink className="w-4 h-4" />
@@ -233,10 +272,9 @@ function SessionModal({ session, onClose, locale }) {
                   <div key={i} className="flex items-center gap-3 px-4 py-3">
                     <div
                       className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0
-      ${isCompleted
+                        ${isCompleted
                           ? "bg-secondary/10 text-secondary"
-                          : "bg-primary/10 text-primary"
-                        }`}
+                          : "bg-primary/10 text-primary"}`}
                     >
                       {i + 1}
                     </div>
@@ -306,6 +344,9 @@ function SessionRow({ session, onOpen, locale }) {
   const isCompleted = session.status === "completed";
   const isToday = session.isToday && session.status === "scheduled";
 
+  // ✅ هل الجروب على Hold؟
+  const groupIsOnHold = !!session.groupIsOnHold;
+
   const handleClick = () => {
     if (isLocked) return;
     onOpen(session);
@@ -319,34 +360,47 @@ function SessionRow({ session, onOpen, locale }) {
         ${isLocked
           ? "opacity-50 cursor-not-allowed"
           : "cursor-pointer hover:-translate-y-0.5 hover:shadow-md"}
-        ${isToday
-          ? "border-primary/40 shadow-md shadow-primary/10 ring-1 ring-primary/20"
-          : isCompleted
-            ? "border-secondary/30 dark:border-secondary/30 hover:shadow-secondary/5"
-            : "border-gray-100 dark:border-[#30363d] hover:border-gray-200 dark:hover:border-[#3d444d]"}`}
+        ${groupIsOnHold && !isCompleted
+          ? "border-amber-300/60 dark:border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/5"
+          : isToday
+            ? "border-primary/40 shadow-md shadow-primary/10 ring-1 ring-primary/20"
+            : isCompleted
+              ? "border-secondary/30 dark:border-secondary/30 hover:shadow-secondary/5"
+              : "border-gray-100 dark:border-[#30363d] hover:border-gray-200 dark:hover:border-[#3d444d]"}`}
     >
       {/* Bubble */}
       <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 shadow-sm
-        ${isLocked
-          ? "bg-gray-100 dark:bg-[#21262d] text-gray-400 dark:text-[#6e7681]"
-          : isCompleted
-            ? "bg-gradient-to-br from-secondary to-secondary/80 text-white"
-            : isToday
-              ? `bg-gradient-to-br ${C.primaryGrad} text-white`
-              : "bg-gradient-to-br from-primary to-[#f67d00] text-white"}`}>
-        {isLocked
-          ? <Lock className="w-4 h-4" />
-          : isCompleted
-            ? <CheckCircle className="w-4 h-4" />
-            : session.status === "cancelled"
-              ? <X className="w-4 h-4" />
-              : <span className="text-xs">{(session.moduleIndex ?? 0) * 3 + (session.sessionNumber ?? 1)}</span>}
+        ${groupIsOnHold && !isCompleted
+          ? "bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400"
+          : isLocked
+            ? "bg-gray-100 dark:bg-[#21262d] text-gray-400 dark:text-[#6e7681]"
+            : isCompleted
+              ? "bg-gradient-to-br from-secondary to-secondary/80 text-white"
+              : isToday
+                ? `bg-gradient-to-br ${C.primaryGrad} text-white`
+                : "bg-gradient-to-br from-primary to-[#f67d00] text-white"}`}>
+        {groupIsOnHold && !isCompleted
+          ? <PauseCircle className="w-4 h-4" />
+          : isLocked
+            ? <Lock className="w-4 h-4" />
+            : isCompleted
+              ? <CheckCircle className="w-4 h-4" />
+              : session.status === "cancelled"
+                ? <X className="w-4 h-4" />
+                : <span className="text-xs">{(session.moduleIndex ?? 0) * 3 + (session.sessionNumber ?? 1)}</span>}
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-          {isToday && (
+          {/* ✅ Hold badge — جديد */}
+          {groupIsOnHold && !isCompleted && (
+            <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <PauseCircle className="w-3 h-3" />
+              {locale === 'ar' ? 'متوقف' : 'On Hold'}
+            </span>
+          )}
+          {isToday && !groupIsOnHold && (
             <span className={`text-[10px] font-black ${C.primaryText} flex items-center gap-1`}>
               <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />{t("allSessions.today")}
             </span>
@@ -373,7 +427,8 @@ function SessionRow({ session, onOpen, locale }) {
             <AttIcon className="w-3 h-3" />{att.label}
           </span>
         )}
-        {session.showJoinButton && (
+        {/* Join button — مش بيظهر لو على Hold */}
+        {session.showJoinButton && !groupIsOnHold && (
           <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r ${plat.grad} text-white shadow-md hover:shadow-lg hover:scale-105 transition-all`}>
@@ -403,7 +458,7 @@ function DateHeader({ dateKey, count, locale }) {
   const { t } = useI18n();
   const d = new Date(dateKey);
   const isToday = fmtDateKey(new Date()) === dateKey;
-  
+
   return (
     <div className="flex items-center gap-3 mb-3">
       <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 shadow-sm
@@ -455,7 +510,7 @@ export default function AllSessionsPage() {
       .then(([sessRes, dashRes]) => {
         if (sessRes.success) setData(sessRes.data);
         else setError(sessRes.message || t("allSessions.error"));
-        
+
         if (dashRes.success) {
           setUser(dashRes.data?.user);
           setNotifications(dashRes.data?.notifications || []);
@@ -502,9 +557,17 @@ export default function AllSessionsPage() {
   });
   const sortedDates = Object.keys(byDate).sort((a, b) => new Date(a) - new Date(b));
 
-  const joinNow = (data?.sessions || []).filter((s) => s.showJoinButton);
+  // ✅ Join Now — بنستثني اللي على Hold
+  const joinNow = (data?.sessions || []).filter(
+    (s) => s.showJoinButton && !s.groupIsOnHold
+  );
 
   const sessions = data?.sessions || [];
+
+  // ✅ هل عند الطالب أي جروب على Hold؟
+  const anyGroupOnHold = sessions.some((s) => s.groupIsOnHold && s.status !== "completed");
+  const onHoldReason = sessions.find((s) => s.groupIsOnHold && s.status !== "completed")?.group?.name;
+
   const FILTERS = [
     { id: "all", label: t("allSessions.filters.all"), count: data?.stats?.total ?? 0 },
     { id: "upcoming", label: t("allSessions.filters.upcoming"), count: sessions.filter(s => s.canAccess && s.status === "scheduled").length },
@@ -522,22 +585,22 @@ export default function AllSessionsPage() {
           onClick={() => setSidebarOpen(false)} />
       )}
       <div className={`fixed lg:static inset-y-0 ${locale === 'ar' ? 'right-0' : 'left-0'} z-50 transform transition-all duration-500
-        ${sidebarOpen 
-          ? (locale === 'ar' ? 'translate-x-0' : 'translate-x-0') 
+        ${sidebarOpen
+          ? (locale === 'ar' ? 'translate-x-0' : 'translate-x-0')
           : (locale === 'ar' ? 'translate-x-full lg:translate-x-0' : '-translate-x-full lg:translate-x-0')
         } flex-shrink-0`}>
         <StudentSidebar user={currentUser} onLogout={handleLogout} />
       </div>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        <StudentHeader 
-          user={currentUser} 
+        <StudentHeader
+          user={currentUser}
           notifications={notifications}
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
-          sidebarOpen={sidebarOpen} 
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+          sidebarOpen={sidebarOpen}
         />
 
-        {/* Sticky toolbar with brand colors */}
+        {/* Sticky toolbar */}
         <div className="sticky top-0 z-20 bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md border-b border-gray-200 dark:border-[#30363d]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between py-4 gap-3">
@@ -555,17 +618,15 @@ export default function AllSessionsPage() {
                 </div>
               </div>
 
-              {/* Search */}
               <div className="relative hidden sm:block">
                 <Search className={`absolute ${locale === 'ar' ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
-                <input 
-                  value={search} 
-                  onChange={(e) => setSearch(e.target.value)} 
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                   placeholder={t("allSessions.search")}
                   className={`w-48 bg-gray-100 dark:bg-[#21262d] border border-gray-200 dark:border-[#30363d] rounded-xl ${locale === 'ar' ? 'pr-9 pl-4' : 'pl-9 pr-4'} py-2 text-sm text-gray-900 dark:text-[#e6edf3] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/60`} />
               </div>
 
-              {/* View toggle */}
               <div className="flex bg-gray-100 dark:bg-[#21262d] rounded-xl p-1 gap-0.5">
                 <button onClick={() => setGroupByDate(true)}
                   className={`p-1.5 rounded-lg transition-all ${groupByDate ? `bg-white dark:bg-[#161b22] shadow ${C.primaryText}` : "text-gray-400"}`}
@@ -580,7 +641,6 @@ export default function AllSessionsPage() {
               </div>
             </div>
 
-            {/* Filters with brand colors */}
             <div className="flex gap-1.5 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
               {FILTERS.map(({ id, label, count }) => (
                 <button key={id} onClick={() => setFilter(id)}
@@ -602,7 +662,15 @@ export default function AllSessionsPage() {
         {/* Content */}
         <div className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
 
-          {/* Join Now Banner with brand gradient */}
+          {/* ✅ Hold Banner — جديد */}
+          {!loading && anyGroupOnHold && filter === "all" && (
+            <HoldBanner
+              locale={locale}
+              reason={onHoldReason}
+            />
+          )}
+
+          {/* Join Now Banner */}
           {joinNow.length > 0 && filter === "all" && (
             <div className={`mb-5 bg-gradient-to-r ${C.primaryGrad2} rounded-2xl p-4 text-white relative overflow-hidden`}>
               <div className="absolute -top-6 -left-6 w-24 h-24 bg-white/10 rounded-full blur-xl" />
@@ -674,7 +742,6 @@ export default function AllSessionsPage() {
         </div>
       </main>
 
-      {/* Session Detail Modal */}
       {modal && <SessionModal session={modal} onClose={() => setModal(null)} locale={locale} />}
     </div>
   );

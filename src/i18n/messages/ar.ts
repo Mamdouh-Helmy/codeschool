@@ -4735,6 +4735,85 @@ const ar = {
   "groups.form.searchFailed": "فشل البحث عن المكان",
   "groups.form.searching": "جاري البحث...",
   "groups.links.orphaned": "الروابط اليتيمة",
+  "groups.form.reschedule.conflictTitle": "عنوان تعارض إعادة الجدولة",
+  "groups.hold.modalTitle": "تعليق المجموعة",
+  "groups.stats.onHold": "قيد التعليق",
+
+  // ── GroupsAdmin ───────────────────────────────────────────────────────
+  "groups.actions.hold": "تعليق المجموعة",
+  "groups.actions.release": "فك التعليق",
+  "groups.actions.fixLinks": "إصلاح روابط الاجتماعات",
+  "groups.links.missing": "جلسات بدون رابط",
+  "groups.hold.confirmRelease":
+    "هل أنت متأكد من رغبتك في فك التعليق عن المجموعة \"{name}\"؟",
+  "groups.hold.releasing": "جاري فك التعليق...",
+  "groups.hold.releaseSuccess": "تم فك التعليق بنجاح",
+  "groups.hold.releaseFailed": "فشل فك التعليق",
+ 
+  // شارات الحالة في الجدول
+  "groups.hold.indefinite": "تعليق مفتوح",
+  "groups.hold.sessions": "تعليق بالجلسات",
+  "groups.hold.untilSession": "تعليق حتى جلسة محددة",
+  "groups.hold.duration": "تعليق",
+  "groups.hold.days": "أيام",
+ 
+  // ── GroupHoldModal ────────────────────────────────────────────────────
+  "groups.hold.pausedTitle": "سيتم إيقاف المجموعة مؤقتًا",
+  "groups.hold.effect.noMessages": "بدون رسائل",
+  "groups.hold.effect.noCredit": "بدون خصم ساعات",
+  "groups.hold.effect.noAttendance": "بدون تسجيل حضور",
+ 
+  "groups.hold.type.label": "نوع التعليق",
+  "groups.hold.type.duration.title": "لفترة محددة",
+  "groups.hold.type.duration.desc": "حدد عدد الأيام",
+  "groups.hold.type.sessions.title": "لعدد من الجلسات",
+  "groups.hold.type.sessions.desc": "ينتهي بعد عقد عدد من الجلسات",
+  "groups.hold.type.untilSession.title": "حتى جلسة محددة",
+  "groups.hold.type.untilSession.desc": "اختر الجلسة التي ينتهي عندها",
+  "groups.hold.type.indefinite.title": "مفتوح",
+  "groups.hold.type.indefinite.desc": "حتى تفكه يدويًا",
+ 
+  "groups.hold.daysCount": "عدد الأيام",
+  "groups.hold.sessionsCount": "عدد الجلسات",
+  "groups.hold.unit.days": "يوم",
+  "groups.hold.unit.sessions": "جلسة",
+ 
+  "groups.hold.targetSession": "الجلسة المستهدفة",
+  "groups.hold.module": "الوحدة",
+  "groups.hold.session": "الجلسة",
+  "groups.hold.noSessions": "لا توجد جلسات مجدولة لهذه المجموعة حاليًا",
+  "groups.hold.loadFailed":
+    "تعذر تحميل الجلسات. أغلق النافذة وحاول مرة أخرى.",
+  "groups.hold.shiftNote":
+    "الجلسات من تاريخ هذه الجلسة فصاعدًا ستُرحَّل أسبوعًا إلى الأمام.",
+ 
+  "groups.hold.reason": "السبب",
+  "groups.hold.reasonOptional": "اختياري",
+  "groups.hold.reasonPlaceholder": "مثال: عطلة رسمية، ظروف خاصة...",
+ 
+  "groups.hold.shift.title": "ترحيل الجلسات المجدولة",
+  "groups.hold.shift.desc": "ستُرحَّل الجلسات القادمة إلى الأمام تلقائيًا",
+ 
+  // ملخص قبل التفعيل
+  "groups.hold.summary.duration":
+    "سيتم فك التعليق تلقائيًا بعد {days} يوم",
+  "groups.hold.summary.sessions":
+    "سيتم فك التعليق بعد تسجيل الحضور في {count} جلسة",
+  "groups.hold.summary.untilSession":
+    "سيتم فك التعليق عند تسجيل الحضور في «{title}»",
+  "groups.hold.summary.pickSession": "اختر الجلسة التي سينتهي عندها التعليق",
+  "groups.hold.summary.indefinite": "سيستمر التعليق حتى تفكه يدويًا",
+ 
+  // أزرار ورسائل
+  "groups.hold.activate": "تفعيل التعليق",
+  "groups.hold.activating": "جاري التفعيل...",
+  "groups.hold.success": "تم تعليق المجموعة بنجاح",
+  "groups.hold.failed": "فشل تعليق المجموعة",
+  "groups.hold.connectionError": "خطأ في الاتصال",
+  "groups.hold.invalidDays": "عدد الأيام غير صحيح",
+  "groups.hold.invalidSessions": "عدد الجلسات غير صحيح",
+  "groups.hold.selectSession": "يجب اختيار الجلسة المستهدفة",
+  "group.holdGroup": "تعليق المجموعة",
 };
 
 export default ar;

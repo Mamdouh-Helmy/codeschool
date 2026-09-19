@@ -20,8 +20,9 @@ import {
   CalendarClock, Hourglass, SkipForward, ArrowRightCircle,
   Send, BadgeCheck, BadgeAlert, MessageSquareWarning,
   Repeat,
-  MapPin, // ✅ جديد
-  Navigation, // ✅ جديد
+  MapPin,
+  Navigation,
+  PauseCircle, // ✅ جديد
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -105,6 +106,36 @@ function AnimatedCounter({ value, duration = 1200 }) {
     return () => cancelAnimationFrame(frame);
   }, [value, duration]);
   return <span>{count}</span>;
+}
+
+// ─── ✅ Hold Banner (new) ────────────────────────────────────────────────────
+function HoldBanner({ isAr, groupsCount }) {
+  const t = (ar, en) => (isAr ? ar : en);
+  return (
+    <div className="mb-5 rounded-2xl p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+          <PauseCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-black text-sm text-amber-900 dark:text-amber-300">
+            {t("فيه جروبات متوقفة مؤقتًا (Hold)", "Some groups are temporarily on hold")}
+          </p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
+            {groupsCount > 1
+              ? t(
+                  `${groupsCount} جروبات من جروباتك موقوفة حاليًا. الجلسات بتاعتها مش هتقدر تشغّلها لحد ما الـ Hold يتفك.`,
+                  `${groupsCount} of your groups are on hold. You can't run their sessions until the hold is released.`
+                )
+              : t(
+                  "أحد جروباتك موقوف حاليًا. الجلسات بتاعته مش هتقدر تشغّلها لحد ما الـ Hold يتفك.",
+                  "One of your groups is on hold. You can't run its sessions until the hold is released."
+                )}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── 🔓 Request Access Modal ───────────────────────────────────────────────────
@@ -763,6 +794,9 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const lessons = deduplicateLessons(session.lessons || []);
 
+  // ✅ هل الجروب على Hold؟
+  const groupIsOnHold = !!session.groupIsOnHold;
+
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
@@ -775,6 +809,9 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
     excused: session.attendance.filter(a => a.status === "excused").length,
     total: session.attendance.length,
   } : null;
+
+  // ✅ هل نعرض زرار الحضور؟ (لازم الجروب مش على Hold)
+  const showAttendanceActions = canManageAttendance && !groupIsOnHold;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
@@ -794,7 +831,14 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
                   <span className={`w-2 h-2 rounded-full ${cfg.dot} animate-pulse`} />
                   {isAr ? cfg.labelAr : cfg.labelEn}
                 </span>
-                {isActuallyToday && !isPartial && (
+                {/* ✅ Hold Badge */}
+                {groupIsOnHold && !isCompleted && (
+                  <span className="bg-amber-500/30 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-amber-400/40 flex items-center gap-1">
+                    <PauseCircle className="w-3 h-3" />
+                    {t("متوقف", "On Hold")}
+                  </span>
+                )}
+                {isActuallyToday && !isPartial && !groupIsOnHold && (
                   <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40">
                     ✨ {t("اليوم", "Today")}
                   </span>
@@ -837,7 +881,27 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
 
         <div className="p-5 space-y-4 bg-gray-50/50 dark:bg-[#0d1117]">
 
-          {isPartial && (
+          {/* ✅ Hold Notice — جديد */}
+          {groupIsOnHold && !isCompleted && (
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0 border border-amber-200 dark:border-amber-500/30">
+                <PauseCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-amber-800 dark:text-amber-300">
+                  {t("الجروب متوقف مؤقتًا", "Group is on hold")}
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">
+                  {t(
+                    "هذه الجلسة غير متاحة حاليًا. الحضور والرابط سيكونان متاحين بعد فكّ الـ Hold.",
+                    "This session is not available right now. Attendance and link will be available once the hold is released."
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {isPartial && !groupIsOnHold && (
             <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#004d59]/5 dark:bg-[#004d59]/10 border border-[#004d59]/20 dark:border-[#004d59]/30">
               <div className="w-9 h-9 rounded-xl bg-[#004d59]/10 dark:bg-[#004d59]/20 flex items-center justify-center flex-shrink-0 border border-[#004d59]/20">
                 <Lock className="w-4 h-4 text-[#004d59] dark:text-teal-400" />
@@ -872,7 +936,7 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             </div>
           )}
 
-          {isPartial && !isCompleted && !hasPendingReopenRequest && onRequestAccess && (
+          {isPartial && !isCompleted && !hasPendingReopenRequest && !groupIsOnHold && onRequestAccess && (
             <button
               onClick={() => onRequestAccess(session)}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-[#004d59] dark:text-teal-400 border border-[#004d59]/30 dark:border-[#004d59]/30 hover:bg-[#004d59]/5 dark:hover:bg-[#004d59]/10 transition-all"
@@ -884,17 +948,18 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
 
           <SessionDescriptionCard session={session} isAr={isAr} />
 
-          {/* ✅ Online → Meeting Credentials | Offline → Location Card */}
-          {!isPartial && isOpenToday && !session.isOffline && session.meetingLink && (
+          {/* ✅ Online → Meeting Credentials | Offline → Location Card
+              — مش بيظهروا لو الجروب على Hold */}
+          {!isPartial && isOpenToday && !session.isOffline && session.meetingLink && !groupIsOnHold && (
             <MeetingCredentials session={session} isAr={isAr} />
           )}
 
-          {!isPartial && isOpenToday && session.isOffline && session.locationInfo && (
+          {!isPartial && isOpenToday && session.isOffline && session.locationInfo && !groupIsOnHold && (
             <LocationCard session={session} isAr={isAr} />
           )}
 
-          {/* زرار الحضور */}
-          {canManageAttendance && (
+          {/* ✅ زرار الحضور — مش بيظهر لو الجروب على Hold */}
+          {showAttendanceActions && (
             session.isOffline ? (
               <Link href={`/instructor/attendance?session=${session._id}`}
                 className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-[#004d59] to-[#ff6700] text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
@@ -916,7 +981,8 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             )
           )}
 
-          {isCompleted && !hasEarlyAccess && !hasPendingReopenRequest && onRequestAccess && (
+          {/* ✅ زرار إعادة فتح الجلسة — بس لما الجروب مش على Hold */}
+          {isCompleted && !hasEarlyAccess && !hasPendingReopenRequest && !groupIsOnHold && onRequestAccess && (
             <button
               onClick={() => onRequestAccess(session)}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-[#004d59] dark:text-teal-400 border border-[#004d59]/30 dark:border-[#004d59]/30 hover:bg-[#004d59]/5 dark:hover:bg-[#004d59]/10 transition-all"
@@ -1056,23 +1122,37 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   const t = (ar, en) => isAr ? ar : en;
   const sessionNum = (session.moduleIndex ?? 0) * 3 + (session.sessionNumber ?? 1);
 
+  // ✅ هل الجروب على Hold؟
+  const groupIsOnHold = !!session.groupIsOnHold;
+
+  // ✅ إخفاء أزرار Join/Attendance لو الجروب على Hold
+  const showJoin = session.showJoinButton && !groupIsOnHold;
+  const showAttendance = session.showAttendanceButton && !groupIsOnHold;
+
   const canOpenFull = session.canViewDetails;
   const canOpenPartial = session.canViewPartialDetails;
   const isClickable =
     canOpenFull ||
     canOpenPartial ||
     session.status === "completed" ||
-    isToday;
+    (isToday && !groupIsOnHold);
   const hasPendingReq = session.pendingReschedule?.status === "pending";
 
   const iconColors = {
     completed: "from-emerald-400 to-teal-500",
-    scheduled: isToday ? "from-[#ff6700] to-[#feaf00]" : "from-[#004d59] to-[#004d59]/70",
+    scheduled: isToday
+      ? "from-[#ff6700] to-[#feaf00]"
+      : "from-[#004d59] to-[#004d59]/70",
     cancelled: "from-red-400 to-red-500",
     postponed: "from-[#feaf00] to-[#f67d00]",
   };
 
   const handleClick = () => {
+    if (groupIsOnHold && !isCompleted) {
+      // مش بنفتح أي حاجة لو الجروب على Hold — نعرض المودال بمعاينة فقط
+      onOpen(session);
+      return;
+    }
     if (isClickable) {
       onOpen(session);
     } else {
@@ -1085,30 +1165,47 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
       onClick={handleClick}
       className={`group flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-2xl border bg-white dark:bg-[#161b22]
         transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg
-        ${isClickable ? "cursor-pointer" : "cursor-pointer opacity-75 hover:opacity-100"}
-        ${isToday
-          ? "border-[#ff6700]/40 shadow-md shadow-[#ff6700]/10 ring-1 ring-[#ff6700]/20"
-          : isCompleted
-            ? "border-emerald-200/60 dark:border-emerald-800/30 hover:shadow-emerald-500/5"
-            : "border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/30 dark:hover:border-[#004d59]/40"}`}
+        ${isClickable || groupIsOnHold ? "cursor-pointer" : "cursor-pointer opacity-75 hover:opacity-100"}
+        ${groupIsOnHold && !isCompleted
+          ? "border-amber-300/60 dark:border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/5"
+          : isToday
+            ? "border-[#ff6700]/40 shadow-md shadow-[#ff6700]/10 ring-1 ring-[#ff6700]/20"
+            : isCompleted
+              ? "border-emerald-200/60 dark:border-emerald-800/30 hover:shadow-emerald-500/5"
+              : "border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/30 dark:hover:border-[#004d59]/40"}`}
     >
-      <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 shadow-md bg-gradient-to-br ${iconColors[session.status] || iconColors.scheduled} text-white`}>
-        {isCompleted
-          ? <CheckCircle className="w-5 h-5" />
-          : session.status === "cancelled"
-            ? <X className="w-5 h-5" />
-            : <span className="text-sm font-black">{sessionNum}</span>}
+      <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 shadow-md bg-gradient-to-br
+        ${groupIsOnHold && !isCompleted
+          ? "from-amber-400 to-amber-500"
+          : iconColors[session.status] || iconColors.scheduled
+        } text-white`}>
+        {groupIsOnHold && !isCompleted ? (
+          <PauseCircle className="w-5 h-5" />
+        ) : isCompleted ? (
+          <CheckCircle className="w-5 h-5" />
+        ) : session.status === "cancelled" ? (
+          <X className="w-5 h-5" />
+        ) : (
+          <span className="text-sm font-black">{sessionNum}</span>
+        )}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-          {isToday && (
+          {/* ✅ Hold Badge */}
+          {groupIsOnHold && !isCompleted && (
+            <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <PauseCircle className="w-2.5 h-2.5" />
+              {t("متوقف", "On Hold")}
+            </span>
+          )}
+          {isToday && !groupIsOnHold && (
             <span className="text-[10px] font-black text-[#ff6700] flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#ff6700] animate-pulse" />
               {t("اليوم", "Today")}
             </span>
           )}
-          {!isToday && canOpenPartial && (
+          {!isToday && canOpenPartial && !groupIsOnHold && (
             <span className="text-[10px] font-black text-[#004d59] dark:text-teal-400 flex items-center gap-1">
               <Lock className="w-2.5 h-2.5" />
               {t("معاينة", "Preview")}
@@ -1140,7 +1237,6 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
         </div>
       </div>
 
-      {/* Right side */}
       <div className="flex items-center gap-2 flex-shrink-0">
         {isCompleted && attRate !== null && (
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-50 dark:bg-[#21262d] border border-gray-100 dark:border-[#30363d]">
@@ -1151,8 +1247,8 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
           </div>
         )}
 
-        {/* ✅ زرار حضور سريع للسيشنات Offline اللي معادها النهاردة */}
-        {session.showAttendanceButton && (
+        {/* ✅ Attendance button — يظهر بس لو مش على Hold */}
+        {showAttendance && (
           <Link href={`/instructor/attendance?session=${session._id}`}
             onClick={e => e.stopPropagation()}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
@@ -1161,8 +1257,8 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
           </Link>
         )}
 
-        {/* Online → Start button */}
-        {session.showJoinButton && !session.isOffline && (
+        {/* ✅ Join button — يظهر بس لو مش على Hold */}
+        {showJoin && !session.isOffline && (
           <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
@@ -1359,8 +1455,21 @@ export default function InstructorSessionsPage() {
     { id: "cancelled", labelAr: "ملغاة/مؤجلة", labelEn: "Cancelled", count: sessions.filter(s => s.status === "cancelled" || s.status === "postponed").length },
   ];
 
-  const todayJoinable = sessions.filter(s => s.showJoinButton || s.showAttendanceButton);
+  // ✅ اليوم — بنستثني اللي جروباتهم على Hold
+  const todayJoinable = sessions.filter(
+    s => (s.showJoinButton || s.showAttendanceButton) && !s.groupIsOnHold
+  );
   const currentUser = user || { name: isAr ? "مدرس" : "Instructor", email: "", role: "instructor" };
+
+  // ✅ هل فيه جروبات على Hold؟ (بنستثني المكتملة)
+  const heldGroupsSet = new Set(
+    sessions
+      .filter((s) => s.groupIsOnHold && s.status !== "completed")
+      .map((s) => s.group?._id)
+      .filter(Boolean)
+  );
+  const heldGroupsCount = heldGroupsSet.size;
+  const anyGroupOnHold = heldGroupsCount > 0;
 
   const handleRequestSubmitted = useCallback(() => {
     fetchData(true);
@@ -1486,6 +1595,11 @@ export default function InstructorSessionsPage() {
             </div>
           )}
 
+          {/* ✅ Hold Banner — جديد */}
+          {!loading && anyGroupOnHold && filter === "all" && (
+            <HoldBanner isAr={isAr} groupsCount={heldGroupsCount} />
+          )}
+
           {/* Today's Session Banner */}
           {todayJoinable.length > 0 && filter === "all" && (
             <div className="mb-5 rounded-2xl p-4 text-white relative overflow-hidden shadow-lg"
@@ -1510,7 +1624,6 @@ export default function InstructorSessionsPage() {
                   )}
                 </div>
 
-                {/* Online → Start | Offline → Attendance */}
                 {!todayJoinable[0].isOffline && todayJoinable[0].meetingLink && (
                   <a href={todayJoinable[0].meetingLink} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"

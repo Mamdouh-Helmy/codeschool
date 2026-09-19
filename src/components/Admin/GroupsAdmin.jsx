@@ -10,15 +10,17 @@ import {
     UserPlus, PlayCircle, Hash, Target, Info, Filter, X,
     SlidersHorizontal, ChevronDown, CalendarDays, GraduationCap,
     UserCheck, Layers, Tag, Sparkles, FolderOpen,
-    Link2Off, // ✅ أيقونة تحذير اللينكات
+    Link2Off,
+    PauseCircle,
 } from "lucide-react";
 import Modal from "./Modal";
 import GroupForm from "./GroupForm";
 import AddStudentsToGroup from "./AddStudentsToGroup";
 import InstructorNotificationModal from "./InstructorNotificationModal";
 import MeetingLinksCheckModal from "./MeetingLinksCheckModal";
-import FixGroupLinksModal from "./FixGroupLinksModal"; // ✅ جديد
+import FixGroupLinksModal from "./FixGroupLinksModal";
 import GroupDetailsPage from "./GroupDetailsPage";
+import GroupHoldModal from "./GroupHoldModal";
 import { useI18n } from "@/i18n/I18nProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -39,15 +41,21 @@ const INITIAL_FILTERS = {
     studentsCountMin: "",
     studentsCountMax: "",
     sessionsGenerated: "",
-    tags: "", // ✅ إضافة فلتر tags (سيكون عبارة عن CSV من الـ IDs)
+    tags: "",
     page: 1,
     limit: 10,
 };
 
 const INITIAL_PAGINATION = { page: 1, limit: 10, total: 0, totalPages: 1 };
-const INITIAL_STATS = { total: 0, active: 0, draft: 0, completed: 0, cancelled: 0 };
+const INITIAL_STATS = {
+    total: 0,
+    active: 0,
+    draft: 0,
+    completed: 0,
+    cancelled: 0,
+    onHold: 0,
+};
 
-// Refined badge palette — soft tinted surface + matching ring instead of flat borders
 const STATUS_COLORS = {
     active: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20",
     draft: "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:ring-slate-600/40",
@@ -82,7 +90,7 @@ const buildQueryParams = (filters) => {
         createdAtTo: "createdAtTo",
         studentsCountMin: "studentsMin",
         studentsCountMax: "studentsMax",
-        tags: "tags", // ✅ إضافة
+        tags: "tags",
     };
 
     Object.entries(simpleKeys).forEach(([filterKey, paramKey]) => {
@@ -125,11 +133,11 @@ export default function GroupsAdmin() {
     const [stats, setStats] = useState(INITIAL_STATS);
 
     // ── Tags State ──────────────────────────────────────────────────────────────
-    const [tagsList, setTagsList] = useState([]);                 // ✅ قائمة الوسوم
-    const [tagsModalOpen, setTagsModalOpen] = useState(false);    // ✅ مودال إدارة الوسوم
-    const [editingTag, setEditingTag] = useState(null);           // ✅ الوسم الجاري تعديله
-    const [newTagName, setNewTagName] = useState("");             // ✅ اسم وسم جديد
-    const [newTagColor, setNewTagColor] = useState("#3B82F6");    // ✅ لون وسم جديد
+    const [tagsList, setTagsList] = useState([]);
+    const [tagsModalOpen, setTagsModalOpen] = useState(false);
+    const [editingTag, setEditingTag] = useState(null);
+    const [newTagName, setNewTagName] = useState("");
+    const [newTagColor, setNewTagColor] = useState("#3B82F6");
 
     const [modalOpen, setModalOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState(null);
@@ -137,10 +145,14 @@ export default function GroupsAdmin() {
     const [addStudentsModalOpen, setAddStudentsModalOpen] = useState(false);
     const [selectedGroupForStudents, setSelectedGroupForStudents] = useState(null);
     const [meetingLinksModal, setMeetingLinksModal] = useState({ open: false, groupId: null });
-    const [fixLinksModal, setFixLinksModal] = useState({ open: false, groupId: null }); // ✅ جديد
+    const [fixLinksModal, setFixLinksModal] = useState({ open: false, groupId: null });
     const [instructorNotificationModal, setInstructorNotificationModal] = useState({
         open: false, groupData: null, instructors: [],
     });
+
+    // ✅ Hold state
+    const [holdModal, setHoldModal] = useState({ open: false, groupId: null });
+
     const [pendingActivation, setPendingActivation] = useState({
         forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "",
     });
@@ -179,6 +191,12 @@ export default function GroupsAdmin() {
             icon: <CheckCircle className="w-5 h-5 md:w-6 md:h-6" />,
         },
         {
+            label: t("groups.stats.onHold") || "On Hold", value: stats.onHold || 0,
+            accent: "from-amber-500/15 via-amber-500/5 to-transparent", ring: "ring-amber-500/15",
+            iconWrap: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+            icon: <PauseCircle className="w-5 h-5 md:w-6 md:h-6" />,
+        },
+        {
             label: t("groups.stats.draft") || "Draft", value: stats.draft,
             accent: "from-slate-400/15 via-slate-400/5 to-transparent", ring: "ring-slate-400/15",
             iconWrap: "bg-slate-400/10 text-slate-500 dark:text-slate-400",
@@ -210,12 +228,11 @@ export default function GroupsAdmin() {
         if (filters.createdAtFrom || filters.createdAtTo) count++;
         if (filters.studentsCountMin || filters.studentsCountMax) count++;
         if (filters.sessionsGenerated) count++;
-        if (filters.tags) count++; // ✅
+        if (filters.tags) count++;
         return count;
     }, [filters]);
 
     // ── Data Fetching ──────────────────────────────────────────────────────────
-    // جلب البيانات الأساسية (الكورسات، المدرسين)
     useEffect(() => {
         const fetchFilterData = async () => {
             try {
@@ -236,7 +253,6 @@ export default function GroupsAdmin() {
         fetchFilterData();
     }, []);
 
-    // جلب الوسوم
     const loadTags = useCallback(async () => {
         try {
             const res = await fetch("/api/tags");
@@ -251,7 +267,6 @@ export default function GroupsAdmin() {
         loadTags();
     }, [loadTags]);
 
-    // جلب المجموعات
     const loadGroups = useCallback(async () => {
         setLoading(true);
         try {
@@ -264,7 +279,7 @@ export default function GroupsAdmin() {
             if (json.success) {
                 setGroups(json.data || []);
                 if (json.pagination) setPagination(json.pagination);
-                if (json.stats) setStats(json.stats);
+                if (json.stats) setStats({ ...INITIAL_STATS, ...json.stats });
             } else {
                 toast.error(json.error || t("groups.load.failed"), { position: "top-center" });
             }
@@ -280,7 +295,6 @@ export default function GroupsAdmin() {
         loadGroups();
     }, [loadGroups]);
 
-    // cleanup debounce on unmount
     useEffect(() => () => clearTimeout(searchTimeoutRef.current), []);
 
     // ── Filter Handlers ────────────────────────────────────────────────────────
@@ -320,7 +334,6 @@ export default function GroupsAdmin() {
         }));
     }, []);
 
-    // ✅ دالة لتبديل فلتر الوسم
     const toggleTagFilter = useCallback((tagId) => {
         setFilters((prev) => {
             const current = prev.tags ? prev.tags.split(",") : [];
@@ -449,9 +462,55 @@ export default function GroupsAdmin() {
         setAddStudentsModalOpen(true);
     }, []);
 
-    // ✅ فتح مودال إصلاح لينكات الاجتماعات (جلسة بدون لينك أو لينك اتمسح)
     const onFixLinks = useCallback((groupId) => {
         setFixLinksModal({ open: true, groupId });
+    }, []);
+
+    // ✅ فتح مودال Hold
+    const onHold = useCallback((groupId) => {
+        setHoldModal({ open: true, groupId });
+    }, []);
+
+    // ✅ فكّ الـ Hold مباشرة
+    const onRelease = useCallback(async (groupId, groupName) => {
+        const confirmed = window.confirm(
+            t("groups.hold.confirmRelease")?.replace("{name}", groupName)
+            || `متأكد إنك عايز تفك الـ Hold عن "${groupName}"؟`
+        );
+        if (!confirmed) return;
+
+        const loadingToast = toast.loading(
+            t("groups.hold.releasing") || "جاري فك الـ Hold...",
+            { position: "top-center" }
+        );
+        try {
+            const res = await fetch(`/api/groups/${groupId}/hold`, {
+                method: "DELETE",
+            });
+            const json = await res.json();
+            if (json.success) {
+                await loadGroups();
+                toast.success(
+                    t("groups.hold.releaseSuccess") || "تم فكّ الـ Hold بنجاح",
+                    { id: loadingToast, position: "top-center" }
+                );
+            } else {
+                toast.error(
+                    json.error || t("groups.hold.releaseFailed") || "فشل فك الـ Hold",
+                    { id: loadingToast, position: "top-center" }
+                );
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error(
+                t("groups.hold.releaseFailed") || "فشل الاتصال",
+                { id: loadingToast, position: "top-center" }
+            );
+        }
+    }, [loadGroups, t]);
+
+    const closeHoldModal = useCallback(() => {
+        setHoldModal({ open: false, groupId: null });
     }, []);
 
     // ── Tag Management Functions ──────────────────────────────────────────────
@@ -500,15 +559,13 @@ export default function GroupsAdmin() {
         }
     };
 
-    // داخل GroupsAdmin.jsx
-
     const handleDeleteTag = async (id) => {
         if (!confirm("Are you sure you want to permanently delete this tag? It will be removed from all groups.")) return;
         try {
             const res = await fetch(`/api/tags/${id}`, { method: "DELETE" });
             if (res.ok) {
                 toast.success("Tag permanently deleted");
-                await loadTags(); // ✅ تحديث القائمة فوراً
+                await loadTags();
             } else {
                 const json = await res.json();
                 toast.error(json.error || "Failed to delete tag");
@@ -580,7 +637,6 @@ export default function GroupsAdmin() {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        {/* ✅ زر إدارة الوسوم */}
                         <button
                             onClick={() => setTagsModalOpen(true)}
                             className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700/60 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all flex items-center gap-2 border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
@@ -599,8 +655,8 @@ export default function GroupsAdmin() {
                 </div>
             </div>
 
-            {/* ── Stats ── */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+            {/* ── Stats (6 cards) ── */}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 md:gap-4">
                 {statsConfig.map((stat) => (
                     <div
                         key={stat.label}
@@ -626,7 +682,6 @@ export default function GroupsAdmin() {
                 {/* Row 1: Search + Course + Instructor + Advanced Toggle */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
 
-                    {/* Search */}
                     <div className="relative group">
                         <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors`} />
                         <input
@@ -638,7 +693,6 @@ export default function GroupsAdmin() {
                         />
                     </div>
 
-                    {/* Course */}
                     <div className="relative">
                         <GraduationCap className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
                         <select
@@ -656,7 +710,6 @@ export default function GroupsAdmin() {
                         <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
                     </div>
 
-                    {/* Instructor */}
                     <div className="relative">
                         <UserCheck className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
                         <select
@@ -674,7 +727,6 @@ export default function GroupsAdmin() {
                         <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
                     </div>
 
-                    {/* Advanced Toggle */}
                     <button
                         onClick={() => setShowAdvancedFilters((v) => !v)}
                         className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${showAdvancedFilters
@@ -697,10 +749,8 @@ export default function GroupsAdmin() {
                 {showAdvancedFilters && (
                     <div className="space-y-5 pt-4 border-t border-PowderBlueBorder dark:border-dark_border animate-in fade-in slide-in-from-top-1 duration-200">
 
-                        {/* Status + Capacity + Sessions */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-                            {/* Status chips */}
                             <div>
                                 <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
                                     {t("groups.filters.status") || "Status"}
@@ -722,7 +772,6 @@ export default function GroupsAdmin() {
                                 </div>
                             </div>
 
-                            {/* Capacity */}
                             <div>
                                 <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
                                     {t("groups.filters.capacity") || "Capacity"}
@@ -747,7 +796,6 @@ export default function GroupsAdmin() {
                                 </div>
                             </div>
 
-                            {/* Sessions Generated */}
                             <div>
                                 <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
                                     {t("groups.filters.sessions") || "Sessions"}
@@ -773,7 +821,6 @@ export default function GroupsAdmin() {
                             </div>
                         </div>
 
-                        {/* Days of Week */}
                         <div>
                             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
                                 <CalendarDays className="w-3.5 h-3.5" />
@@ -795,7 +842,6 @@ export default function GroupsAdmin() {
                             </div>
                         </div>
 
-                        {/* ✅ Tags Filter */}
                         <div>
                             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
                                 <Tag className="w-3.5 h-3.5" />
@@ -830,7 +876,6 @@ export default function GroupsAdmin() {
                             </div>
                         </div>
 
-                        {/* Date Ranges */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <DateRangeFilter
                                 label={t("groups.filters.startDate") || "Start Date Range"}
@@ -850,7 +895,6 @@ export default function GroupsAdmin() {
                             />
                         </div>
 
-                        {/* Students Count + Actions */}
                         <div className="flex flex-wrap items-center gap-3">
                             <div className="flex items-center gap-2 bg-gray-50 dark:bg-dark_input rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-gray-700">
                                 <Users className="w-4 h-4 text-gray-400" />
@@ -938,6 +982,8 @@ export default function GroupsAdmin() {
                                     onEdit={onEdit}
                                     onDelete={onDelete}
                                     onFixLinks={onFixLinks}
+                                    onHold={onHold}
+                                    onRelease={onRelease}
                                 />
                             ))}
                         </tbody>
@@ -974,8 +1020,8 @@ export default function GroupsAdmin() {
             </div>
 
             <Modal open={modalOpen} onClose={closeGroupModal} size="2xl" noPadding>
-  <GroupForm initial={editingGroup} onClose={closeGroupModal} onSaved={onSaved} />
-</Modal>
+                <GroupForm initial={editingGroup} onClose={closeGroupModal} onSaved={onSaved} />
+            </Modal>
 
             <Modal open={viewDetailsModal.open} title="" onClose={closeViewDetailsModal} size="full">
                 <GroupDetailsPage groupId={viewDetailsModal.groupId} onClose={closeViewDetailsModal} />
@@ -996,7 +1042,6 @@ export default function GroupsAdmin() {
                 onConfirm={onMeetingLinksCheckConfirmed}
             />
 
-            {/* ✅ مودال إصلاح لينكات الاجتماعات (جلسة بدون لينك / لينك اتمسح من الداتابيز) */}
             <FixGroupLinksModal
                 isOpen={fixLinksModal.open}
                 groupId={fixLinksModal.groupId}
@@ -1012,6 +1057,26 @@ export default function GroupsAdmin() {
                 onSendNotifications={handleActivateAndNotify}
             />
 
+            {/* ✅ Hold Modal */}
+            {holdModal.open && (
+                <Modal
+                    open={holdModal.open}
+                    title={t("groups.hold.modalTitle") || "تعليق الجروب (Hold)"}
+                    onClose={closeHoldModal}
+                    size="md"
+                >
+                    <GroupHoldModal
+                        groupId={holdModal.groupId}
+                        groupName={
+                            groups.find((g) => g.id === holdModal.groupId)?.name || ""
+                        }
+                        isAr={isRTL}
+                        onClose={closeHoldModal}
+                        onSaved={loadGroups}
+                    />
+                </Modal>
+            )}
+
             {/* ✅ مودال إدارة الوسوم */}
             <Modal
                 open={tagsModalOpen}
@@ -1020,7 +1085,6 @@ export default function GroupsAdmin() {
                 size="md"
             >
                 <div className="space-y-5 p-1">
-                    {/* إضافة وسم جديد */}
                     <div className="bg-gray-50 dark:bg-dark_input/60 rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-gray-700">
                         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5" />
@@ -1054,7 +1118,6 @@ export default function GroupsAdmin() {
                         </div>
                     </div>
 
-                    {/* قائمة الوسوم */}
                     <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
                         {tagsList.map((tag) => (
                             <div key={tag._id} className="flex items-center justify-between p-2.5 rounded-xl ring-1 ring-inset ring-gray-100 dark:ring-gray-700 hover:ring-gray-200 dark:hover:bg-gray-800/60 transition">
@@ -1153,12 +1216,35 @@ function DateRangeFilter({ label, icon, fromValue, toValue, onFromChange, onToCh
     );
 }
 
-// ✅ تم تعديل GroupRow لعرض الوسوم + تحذير لينكات الاجتماعات المفقودة/المعطوبة
-function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate, onAddStudents, onViewSessions, onEdit, onDelete, onFixLinks }) {
+// ✅ GroupRow مع حالة until_session
+function GroupRow({
+    group, dayLabels, statusLabels, t,
+    onViewDetails, onActivate, onAddStudents, onViewSessions,
+    onEdit, onDelete, onFixLinks,
+    onHold, onRelease,
+}) {
     const hasLinkIssue = !!group.linkHealth?.hasIssue;
+    const isOnHold = !!group.isOnHold;
     const linkIssueLabel = group.linkHealth?.orphanedCount > 0
         ? (t("groups.links.orphaned") || "لينك محذوف من الداتابيز")
         : (t("groups.links.missing") || "جلسات بدون لينك");
+
+    // ✅ نص الـ Hold حسب النوع (بما فيها until_session)
+    const holdLabel = (() => {
+        if (!isOnHold) return "";
+        if (group.hold?.holdType === "indefinite") {
+            return t("groups.hold.indefinite") || "Hold — مفتوح";
+        }
+        if (group.hold?.holdType === "sessions") {
+            const consumed = group.hold.holdSessionsConsumed || 0;
+            const total = group.hold.holdSessionsCount || 0;
+            return `${t("groups.hold.sessions") || "Hold"}: ${consumed}/${total}`;
+        }
+        if (group.hold?.holdType === "until_session") {
+            return t("groups.hold.untilSession") || "Hold لحد سيشن محددة";
+        }
+        return `${t("groups.hold.duration") || "Hold"}: ${group.hold?.holdDays || 0} ${t("groups.hold.days") || "أيام"}`;
+    })();
 
     return (
         <tr className="group hover:bg-gray-50/80 dark:hover:bg-dark_input/60 transition-colors">
@@ -1170,8 +1256,6 @@ function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate
                     <Hash className="w-3 h-3" />{group.code}
                 </p>
 
-                {/* ✅ تحذير جميل لو فيه مشكلة في لينكات الجروب: مفيش لينك خالص، أو
-                    اللينك كان موجود واتحذف من الداتابيز */}
                 {hasLinkIssue && (
                     <button
                         type="button"
@@ -1189,7 +1273,6 @@ function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate
                     </button>
                 )}
 
-                {/* ✅ عرض الوسوم */}
                 {group.tags && group.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                         {group.tags.map((tag) => (
@@ -1219,12 +1302,31 @@ function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate
                 <p className="text-xs text-SlateBlueText dark:text-darktext">{group.course?.level || ""}</p>
             </td>
 
-            {/* Status */}
+            {/* Status + Hold Badge */}
             <td className="py-3.5 px-4">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[group.status] || STATUS_COLORS.draft}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[group.status] || STATUS_DOT.draft}`} />
-                    {statusLabels[group.status] || group.status}
-                </span>
+                <div className="space-y-1.5">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[group.status] || STATUS_COLORS.draft}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[group.status] || STATUS_DOT.draft}`} />
+                        {statusLabels[group.status] || group.status}
+                    </span>
+
+                    {isOnHold && (
+                        <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20 w-fit">
+                                <PauseCircle className="w-3 h-3" />
+                                {holdLabel}
+                            </span>
+                            {group.hold?.holdReason && (
+                                <span
+                                    className="text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[180px]"
+                                    title={group.hold.holdReason}
+                                >
+                                    {group.hold.holdReason}
+                                </span>
+                            )}
+                        </div>
+                    )}
+                </div>
             </td>
 
             {/* Students */}
@@ -1260,30 +1362,55 @@ function GroupRow({ group, dayLabels, statusLabels, t, onViewDetails, onActivate
                     <ActionButton onClick={() => onViewDetails(group.id)} hoverColor="blue" title={t("groups.actions.viewDetails") || "View Details"}>
                         <Info className="w-4 h-4 text-blue-600" />
                     </ActionButton>
+
+                    {group.status === "active" && !isOnHold && (
+                        <ActionButton
+                            onClick={() => onHold(group.id)}
+                            hoverColor="amber"
+                            title={t("groups.actions.hold") || "تعليق الجروب"}
+                        >
+                            <PauseCircle className="w-4 h-4 text-amber-600" />
+                        </ActionButton>
+                    )}
+
+                    {isOnHold && (
+                        <ActionButton
+                            onClick={() => onRelease(group.id, group.name)}
+                            hoverColor="green"
+                            title={t("groups.actions.release") || "فكّ التعليق"}
+                        >
+                            <PlayCircle className="w-4 h-4 text-emerald-600" />
+                        </ActionButton>
+                    )}
+
                     {group.status === "draft" && (
                         <ActionButton onClick={() => onActivate(group.id)} hoverColor="green" title={t("groups.actions.activate") || "Activate"}>
                             <PlayCircle className="w-4 h-4 text-emerald-600" />
                         </ActionButton>
                     )}
-                    {group.status === "active" && !group.isFull && (
+
+                    {group.status === "active" && !group.isFull && !isOnHold && (
                         <ActionButton onClick={() => onAddStudents(group.id)} hoverColor="blue" title={t("groups.actions.addStudents") || "Add Students"}>
                             <UserPlus className="w-4 h-4 text-blue-600" />
                         </ActionButton>
                     )}
-                    {/* ✅ زرار سريع لإصلاح اللينكات لو فيه مشكلة (متاح لأي جروب مش draft محتاج لينكات) */}
+
                     {hasLinkIssue && (
                         <ActionButton onClick={() => onFixLinks(group.id)} hoverColor="red" title={t("groups.actions.fixLinks") || "إصلاح لينكات الاجتماعات"}>
                             <Link2Off className="w-4 h-4 text-amber-600" />
                         </ActionButton>
                     )}
+
                     {group.sessionsGenerated && (
                         <ActionButton onClick={() => onViewSessions(group.id)} hoverColor="purple" title={t("groups.actions.viewSessions") || "View Sessions"}>
                             <Calendar className="w-4 h-4 text-purple-600" />
                         </ActionButton>
                     )}
+
                     <ActionButton onClick={() => onEdit(group)} hoverColor="gray" title={t("groups.actions.edit") || "Edit"}>
                         <Edit className="w-4 h-4 text-primary" />
                     </ActionButton>
+
                     <ActionButton onClick={() => onDelete(group.id, group.name)} hoverColor="red" title={t("groups.actions.delete") || "Delete"}>
                         <Trash2 className="w-4 h-4 text-red-600" />
                     </ActionButton>
@@ -1300,6 +1427,7 @@ function ActionButton({ onClick, hoverColor, title, children }) {
         purple: "hover:bg-purple-50 dark:hover:bg-purple-900/30",
         red: "hover:bg-red-50 dark:hover:bg-red-900/30",
         gray: "hover:bg-gray-100 dark:hover:bg-gray-700",
+        amber: "hover:bg-amber-50 dark:hover:bg-amber-900/30",
     };
     return (
         <button onClick={onClick} title={title} className={`p-1.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${hoverClasses[hoverColor]}`}>

@@ -9,6 +9,7 @@ import StudentEvaluation from '../../../../../models/StudentEvaluation';
 import MessageTemplate from '../../../../../models/MessageTemplate';
 import TemplateVariable from '../../../../../models/TemplateVariable';
 
+
 const EVALUATION_TEMPLATE_MAP = {
   pass:   'evaluation_pass',
   review: 'evaluation_review',
@@ -409,6 +410,23 @@ async function buildBlogMessage(student, session, blogInfo) {
   return { rendered, lang };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HELPER: حماية من الـ Hold
+// ═══════════════════════════════════════════════════════════════════════════
+function checkGroupHoldResponse(session) {
+  if (session?.groupId?.hold?.isHeld) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'الجروب على Hold حاليًا — التقييم مش متاح',
+        code: 'GROUP_ON_HOLD',
+      },
+      { status: 403 },
+    );
+  }
+  return null;
+}
+
 // ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(req, { params }) {
   try {
@@ -420,10 +438,15 @@ export async function GET(req, { params }) {
     const { id } = await params;
 
     const session = await Session.findById(id)
-      .populate({ path: 'groupId', select: 'name code students instructors' })
+      .populate({ path: 'groupId', select: 'name code students instructors hold status' }) // ✅ ضيفنا hold و status
       .lean();
 
     if (!session) return NextResponse.json({ success: false, message: 'الجلسة غير موجودة' }, { status: 404 });
+
+    // ✅ حماية من الـ Hold
+    const holdResponse = checkGroupHoldResponse(session);
+    if (holdResponse) return holdResponse;
+
     if (!session.attendanceTaken) {
       return NextResponse.json({ success: false, message: 'سجّل الحضور أولاً قبل التقييم' }, { status: 400 });
     }
@@ -507,6 +530,7 @@ export async function GET(req, { params }) {
           sessionNumber: session.sessionNumber,
           moduleIndex:   session.moduleIndex,
           recordingLink: session.recordingLink || '',
+          deliveryMode:  session.deliveryMode || null, // ✅ ضيفناها للفرونت
           group: { _id: session.groupId?._id, name: session.groupId?.name, code: session.groupId?.code },
         },
         students: studentsForEval,
@@ -552,9 +576,15 @@ export async function POST(req, { params }) {
 
     const [student, session] = await Promise.all([
       Student.findById(studentId).select('personalInfo guardianInfo communicationPreferences enrollmentNumber').lean(),
-      Session.findById(id).lean(),
+      Session.findById(id)
+        .populate({ path: 'groupId', select: 'hold status name' }) // ✅ ضيفنا hold و status
+        .lean(),
     ]);
     if (!student) return NextResponse.json({ success: false, error: 'Student not found' }, { status: 404 });
+
+    // ✅ حماية من الـ Hold
+    const holdResponse = checkGroupHoldResponse(session);
+    if (holdResponse) return holdResponse;
 
     const { moduleTitle, moduleDescription } = session?.groupId
       ? await getModuleData(session.groupId, session.moduleIndex ?? 0)
@@ -622,9 +652,21 @@ export async function PATCH(req, { params }) {
     }
 
     const session = await Session.findById(id)
-      .populate({ path: 'groupId', select: 'name instructors deliveryMode' })
+      .populate({ path: 'groupId', select: 'name instructors deliveryMode hold status' }) // ✅ ضيفنا hold و status
       .select('+recordingLink');
     if (!session) return NextResponse.json({ success: false, message: 'الجلسة غير موجودة' }, { status: 404 });
+
+    // ✅ حماية من الـ Hold
+    if (session.groupId?.hold?.isHeld) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'الجروب على Hold حاليًا — مينفعش تقيّم',
+          code: 'GROUP_ON_HOLD',
+        },
+        { status: 403 },
+      );
+    }
 
     if (user.role === 'instructor') {
       const isInstructor = session.groupId?.instructors?.some(
