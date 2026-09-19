@@ -1063,7 +1063,7 @@ export default function GroupsAdmin() {
                     open={holdModal.open}
                     title={t("groups.hold.modalTitle") || "تعليق الجروب (Hold)"}
                     onClose={closeHoldModal}
-                    size="md"
+                    size="xl"
                 >
                     <GroupHoldModal
                         groupId={holdModal.groupId}

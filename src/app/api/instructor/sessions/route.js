@@ -7,10 +7,10 @@ import {
   sendAbsenceNotifications,
   sendLowBalanceAlerts,
   disableZeroBalanceNotifications,
-} from "../../../../../services/groupAutomation";
-import Session from "../../../../../models/Session";
-import Student from "../../../../../models/Student";
-import Group from "../../../../../models/Group";
+} from "../../../services/groupAutomation";
+import Session from "../../../models/Session";
+import Student from "../../../models/Student";
+import Group from "../../../models/Group";
 
 // ─── Constants ───────────────────────────────────────────
 const DEDUCT_STATUSES = ["present", "late", "absent", "excused"];
