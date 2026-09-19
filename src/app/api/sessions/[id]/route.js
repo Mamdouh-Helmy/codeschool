@@ -33,7 +33,7 @@ export async function GET(req) {
 
     const total    = await Session.countDocuments(query);
     const sessions = await Session.find(query)
-      .populate("groupId",  "name code deliveryMode hold status") // ✅ ضيفنا hold + status
+      .populate("groupId",  "name code deliveryMode hold status")
       .populate("courseId", "title level")
       .populate("attendance.studentId", "personalInfo.fullName enrollmentNumber")
       .sort({ scheduledDate: 1, startTime: 1 })
@@ -66,7 +66,6 @@ export async function GET(req) {
         recordingLink:   session.recordingLink,
         attendanceTaken: session.attendanceTaken,
 
-        // ✅ بيانات المرتب — الوقت الفعلي ونوع السيشن وحالة المعالجة
         deliveryMode:    session.deliveryMode || session.groupId?.deliveryMode || "online",
         actualStartTime: session.actualStartTime || "",
         actualEndTime:   session.actualEndTime || "",
@@ -80,7 +79,6 @@ export async function GET(req) {
           excused: attendance.filter((a) => a.status === "excused").length,
         },
 
-        // ✅ group object — ضيفنا isOnHold + hold + status
         group: session.groupId
           ? {
               id: session.groupId._id,
@@ -178,7 +176,6 @@ export async function POST(req) {
       );
     }
 
-    // ✅ نوع السيشن snapshot من الجروب وقت الإنشاء
     const group = await Group.findById(groupId).select("deliveryMode").lean();
 
     const session = await Session.create({
@@ -273,18 +270,24 @@ export async function PUT(req, { params }) {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // ✅ HOLD GUARD — منع تحويل السيشن لـ "completed" لو الجروب على Hold
+    // ✅ HOLD GUARD — منع أي تعديل على السيشن لو الجروب على Hold
+    //
+    //    مينفعش: تأجيل، إلغاء، تحديد كمكتملة، تعديل رابط، تعديل ملاحظات،
+    //    أو أي تغيير تاني على السيشن دي.
+    //
+    //    السبب: الجروب معلّق، ومفيش أي سبب منطقي لتعديل سيشناته لحد ما
+    //    الـ Hold يتفك.
     // ═══════════════════════════════════════════════════════════════════
     const groupIsOnHold = !!existingSession.groupId?.hold?.isHeld;
 
-    if (updateData.status === "completed" && groupIsOnHold) {
+    if (groupIsOnHold) {
       console.log(
-        `⏭️ [HOLD GUARD] Blocked marking session ${id} as completed — group is on hold`
+        `⏭️ [HOLD GUARD] Blocked any update on session ${id} — group is on hold (${existingSession.groupId.hold.holdType})`
       );
       return NextResponse.json(
         {
           success: false,
-          error: "الجروب على Hold حاليًا — مينفعش تحدّد الجلسة كمكتملة",
+          error: "الجروب على Hold حاليًا — مينفعش تعدّل أي حاجة في الجلسة لحد ما الـ Hold يتفك",
           code: "GROUP_ON_HOLD",
         },
         { status: 403 }
@@ -297,7 +300,7 @@ export async function PUT(req, { params }) {
     const isNewlyCancelled    = newStatus === "cancelled" && oldStatus !== "cancelled";
     const isPostponedWithDate = newStatus === "postponed" && !!updateData.newDate;
 
-    // ── Build base update payload (بدون status/scheduledDate لسه) ──────────
+    // ── Build base update payload ───────────────────────────────────────────
     const basePayload = {
       meetingLink:      updateData.meetingLink      || "",
       recordingLink:    updateData.recordingLink    || "",
@@ -306,11 +309,9 @@ export async function PUT(req, { params }) {
       "metadata.updatedAt": new Date(),
     };
 
-    // ✅ الوقت الفعلي للسيشن — أساس حساب مرتب المدرس بالدقيقة.
     if (updateData.actualStartTime) basePayload.actualStartTime = updateData.actualStartTime;
     if (updateData.actualEndTime)   basePayload.actualEndTime   = updateData.actualEndTime;
 
-    // ✅ حفظ metadata في الـ DB للـ audit trail
     if (updateData.metadata && Object.keys(updateData.metadata).length > 0) {
       basePayload["metadata.lastNotificationMessages"] = updateData.metadata;
     }
@@ -374,7 +375,6 @@ export async function PUT(req, { params }) {
     let payrollResult = null;
 
     if (newStatus === "completed" && oldStatus !== "completed") {
-      // ✅ الـ payroll الأول — هو اللي بيحدد المدة الفعلية للسيشن
       try {
         const { processSessionPayroll } = await import("@/lib/payroll");
         payrollResult = await processSessionPayroll({
@@ -389,7 +389,6 @@ export async function PUT(req, { params }) {
         payrollResult = { success: false, error: payrollError.message };
       }
 
-      // ✅ عداد ساعات التدريس بنفس المدة الفعلية
       try {
         const group = await Group.findById(existingSession.groupId._id || existingSession.groupId);
         if (group?.instructors?.length) {
@@ -402,7 +401,6 @@ export async function PUT(req, { params }) {
       }
     }
 
-    // ✅ لو سيشن كانت completed ورجعت ملغية/مؤجلة → نلغي سطور المرتب
     if (
       oldStatus === "completed" &&
       newStatus &&
@@ -421,7 +419,6 @@ export async function PUT(req, { params }) {
       }
     }
 
-    // ── Trigger notifications for cancelled / postponed ───────────────────
     if (
       newStatus &&
       oldStatus !== newStatus &&
@@ -507,7 +504,6 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ success: false, error: "Session not found" }, { status: 404 });
     }
 
-    // ✅ إلغاء أي سطور مرتب مرتبطة بالسيشن دي
     try {
       const { cancelSessionPayroll } = await import("@/lib/payroll");
       await cancelSessionPayroll(id, {

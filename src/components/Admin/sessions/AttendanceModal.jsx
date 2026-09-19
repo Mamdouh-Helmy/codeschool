@@ -11,11 +11,12 @@ import {
   Clock,
   AlertTriangle,
   Ban,
+  PauseCircle,
+  Lock,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// resolveVar — gender-aware value from a DB variable object
-// same logic as AddStudentsToGroup
+// resolveVar
 // ─────────────────────────────────────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
   const v = dbVars[key];
@@ -47,8 +48,7 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// buildVariables — DB-first, hardcoded fallback
-// dbVars: map of { [key]: TemplateVariable }  (pass {} when not yet loaded)
+// buildVariables
 // ─────────────────────────────────────────────────────────────────────────────
 function buildVariables(student, status, session, dbVars = {}) {
   if (!student) return {};
@@ -60,7 +60,6 @@ function buildVariables(student, status, session, dbVars = {}) {
   const isFather     = relationship !== "mother";
   const genderCtx    = { studentGender: gender, guardianType: relationship };
 
-  // ── Names ────────────────────────────────────────────────────────────────
   const studentFirstName =
     lang === "ar"
       ? student.personalInfo?.nickname?.ar?.trim()  ||
@@ -75,7 +74,6 @@ function buildVariables(student, status, session, dbVars = {}) {
       : student.guardianInfo?.nickname?.en?.trim()  ||
         student.guardianInfo?.name?.split(" ")[0]   || "Guardian";
 
-  // ── DB vars → fallback ───────────────────────────────────────────────────
   const salutationBase_ar =
     resolveVar(dbVars, "salutation_ar", "ar", genderCtx) ||
     (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
@@ -116,7 +114,6 @@ function buildVariables(student, status, session, dbVars = {}) {
     resolveVar(dbVars, "relationship_ar", "ar", genderCtx) ||
     (isFather ? "الأب" : "الأم");
 
-  // ── Composed salutations ─────────────────────────────────────────────────
   const guardianSalutation_ar = `${guardianSalBase_ar} ${guardianFirstName}`;
   const guardianSalutation_en = `${guardianSalBase_en} ${guardianFirstName}`;
   const guardianSalutation    = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
@@ -126,7 +123,6 @@ function buildVariables(student, status, session, dbVars = {}) {
 
   const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
 
-  // ── Attendance status text (with Arabic feminine form) ───────────────────
   const statusMap = {
     ar: { absent: "غائب",   late: "متأخر",   excused: "معتذر",   present: "حاضر"    },
     en: { absent: "absent", late: "late",     excused: "excused", present: "present" },
@@ -139,7 +135,6 @@ function buildVariables(student, status, session, dbVars = {}) {
       ? (statusMapFemaleAr[status] || status)
       : (statusMap[lang]?.[status] || status);
 
-  // ── Session data ─────────────────────────────────────────────────────────
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
         lang === "ar" ? "ar-EG" : "en-US",
@@ -148,7 +143,6 @@ function buildVariables(student, status, session, dbVars = {}) {
     : "";
 
   return {
-    // Guardian
     guardianSalutation,
     guardianSalutation_ar,
     guardianSalutation_en,
@@ -156,8 +150,7 @@ function buildVariables(student, status, session, dbVars = {}) {
     guardianFullName: student.guardianInfo?.name || "",
     relationship_ar,
 
-    // Student
-    salutation:      guardianSalutation, // common alias in templates
+    salutation:      guardianSalutation,
     studentSalutation,
     studentName:     studentFirstName,
     studentName_ar:  studentFirstName,
@@ -168,39 +161,33 @@ function buildVariables(student, status, session, dbVars = {}) {
     name_en:         studentFirstName,
     fullName:        student.personalInfo?.fullName || "",
 
-    // Gender
     childTitle,
     you_ar,
     welcome_ar,
     studentGender_ar,
     studentGender_en,
 
-    // Status
     status:           statusText,
     attendanceStatus: statusText,
 
-    // Session
     sessionName:  session?.title || "",
     date:         sessionDate,
     sessionDate,
     time:         `${session?.startTime || ""} - ${session?.endTime || ""}`,
     meetingLink:  session?.meetingLink || "",
 
-    // Group
     groupName: session?.groupId?.name || "",
     groupCode: session?.groupId?.code || "",
 
-    // Student extra
     enrollmentNumber: student.enrollmentNumber || "",
 
-    // Language
     selectedLanguage_ar: lang === "ar" ? "العربية" : "الإنجليزية",
     selectedLanguage_en: lang === "ar" ? "Arabic"  : "English",
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// renderTemplate — replace every {variable} with its resolved value
+// renderTemplate
 // ─────────────────────────────────────────────────────────────────────────────
 function renderTemplate(template, variables) {
   if (!template) return "";
@@ -211,6 +198,61 @@ function renderTemplate(template, variables) {
     }
   });
   return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HoldBanner — داخل المودال
+// ═══════════════════════════════════════════════════════════════════════════
+function HoldLockBanner({ isRTL, holdInfo }) {
+  const t = (ar, en) => (isRTL ? ar : en);
+
+  const holdLabel = (() => {
+    if (!holdInfo) return "";
+    if (holdInfo.holdType === "indefinite") {
+      return t("مفتوح لحد ما يتفك يدويًا", "Indefinite");
+    }
+    if (holdInfo.holdType === "sessions") {
+      return t(
+        `لعدد ${holdInfo.holdSessionsCount} سيشنات (اتستهلك ${holdInfo.holdSessionsConsumed || 0})`,
+        `For ${holdInfo.holdSessionsCount} sessions (${holdInfo.holdSessionsConsumed || 0} consumed)`
+      );
+    }
+    if (holdInfo.holdType === "until_session") {
+      return t("لحد سيشن محددة", "Until a specific session");
+    }
+    return t(`لمدة ${holdInfo.holdDays || 0} يوم`, `For ${holdInfo.holdDays || 0} days`);
+  })();
+
+  return (
+    <div className="rounded-xl p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+          <PauseCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-black text-sm text-amber-900 dark:text-amber-300">
+              {t("السيشن دي مقفولة بسبب الـ Hold", "This session is locked due to hold")}
+            </p>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold">
+              {holdLabel}
+            </span>
+          </div>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
+            {t(
+              "مينفعش تسجل حضور للسيشن دي لحد ما الـ Hold يتفك. لو محتاج تفتحها، ارجع لصفحة المجموعات وفك الـ Hold.",
+              "You can't record attendance for this session until the hold is released. To unlock, go back to the groups page and release the hold."
+            )}
+          </p>
+          {holdInfo?.holdReason && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 italic">
+              {t("السبب", "Reason")}: {holdInfo.holdReason}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,10 +268,9 @@ export default function AttendanceModal({
   isRTL,
   t,
 }) {
-  // ── State ──────────────────────────────────────────────────────────────────
   const [attendance,        setAttendance]        = useState([]);
-  const [rawTemplates,      setRawTemplates]      = useState({});    // raw {xxx} strings from DB
-  const [customMessages,    setCustomMessages]    = useState({});    // what the textarea shows
+  const [rawTemplates,      setRawTemplates]      = useState({});
+  const [customMessages,    setCustomMessages]    = useState({});
   const [saving,            setSaving]            = useState(false);
   const [showMessageEditor, setShowMessageEditor] = useState({});
   const [showHints,         setShowHints]         = useState({});
@@ -240,7 +281,6 @@ export default function AttendanceModal({
   const [savingTemplate,    setSavingTemplate]    = useState({});
   const [templatesFetched,  setTemplatesFetched]  = useState(false);
 
-  // ── DB template variables (gender-aware) ──────────────────────────────────
   const [dbVars, setDbVars] = useState({});
 
   const textareaRefs    = useRef({});
@@ -248,12 +288,15 @@ export default function AttendanceModal({
   const initialLoadDone = useRef(false);
   const fetchQueue      = useRef(new Set());
 
-  // ✅ الطلاب اللي أصلاً ليهم سجل حضور في السيشن دي من قبل ما المودال يتفتح.
-  // دول بالفعل اتخصمت منهم الساعتين، فأي تعديل على حالتهم بعد كده متلمسش
-  // الرصيد تاني — بغض النظر عن الرصيد الحالي.
   const initialRecordedStudentIds = useRef(new Set());
 
-  // ── Fetch DB template variables on mount ──────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ✅ HOLD GUARD — من الـ attendanceData
+  // ═══════════════════════════════════════════════════════════════════════════
+  const sessionLocked = !!attendanceData?.sessionLocked;
+  const holdInfo = attendanceData?.group?.hold || null;
+
+  // ── Fetch DB template variables ──────────────────────────────────────────
   useEffect(() => {
     fetch("/api/whatsapp/template-variables")
       .then((r) => r.json())
@@ -310,10 +353,6 @@ export default function AttendanceModal({
     return { hasBalance: remainingHours > 0, remainingHours, isZeroBalance };
   }, []);
 
-  // ✅ هل اختيار أي حالة للطالب ده دلوقتي ممنوع؟
-  // ممنوع بس لو: (1) السيشن دي أول مرة تتسجل له فيها حضور، و(2) رصيده صفر/مجمد.
-  // لو أصلاً متسجل له حضور قبل كده، يفضل يقدر يعدل الحالة براحته لأن الساعتين
-  // خلاص اتخصمت وده مش هيغيّر في الرصيد.
   const isStudentLocked = useCallback(
     (student) => {
       const studentId = student?._id?.toString();
@@ -324,7 +363,6 @@ export default function AttendanceModal({
     [checkStudentBalance]
   );
 
-  // ── Build rendered message (raw template + real student variables) ─────────
   const buildRenderedMessage = useCallback(
     (studentId, rawTemplate) => {
       const student = groupStudents.find(
@@ -339,7 +377,6 @@ export default function AttendanceModal({
     [groupStudents, getStudentStatus, session, dbVars]
   );
 
-  // ── Fetch template from API ───────────────────────────────────────────────
   const fetchTemplateForStudent = useCallback(
     async (studentId, status) => {
       if (!studentId || !status) return null;
@@ -403,7 +440,6 @@ export default function AttendanceModal({
     [session.id, getStudentStatus, isRTL]
   );
 
-  // ── Save template to DB ───────────────────────────────────────────────────
   const saveTemplateToDatabase = useCallback(
     async (studentId, rawContent) => {
       if (!studentId || !rawContent?.trim()) return;
@@ -499,15 +535,22 @@ export default function AttendanceModal({
     [groupStudents, getStudentStatus, isRTL]
   );
 
-  // ── Update attendance status ──────────────────────────────────────────────
   const updateAttendanceStatus = useCallback(
     (studentId, status) => {
+      // ✅ HOLD GUARD — منع التعديل لو السيشن مقفولة
+      if (sessionLocked) {
+        toast.error(
+          isRTL
+            ? "السيشن دي مقفولة بسبب الـ Hold — مينفعش تسجل حضور"
+            : "This session is locked due to hold — can't record attendance"
+        );
+        return;
+      }
+
       const student = groupStudents.find(
         (s) => s._id?.toString() === studentId?.toString()
       );
 
-      // ✅ منع منتشرة على كل الحالات: لو أول مرة يتسجل له حضور في السيشن دي
-      // ورصيده صفر، امنعه أيًا كانت الحالة اللي هيختارها.
       if (isStudentLocked(student)) {
         const { remainingHours } = checkStudentBalance(student);
         toast.error(
@@ -544,7 +587,7 @@ export default function AttendanceModal({
         setManuallyEdited((prev)    => { const n = { ...prev }; delete n[studentId]; return n; });
       }
     },
-    [fetchTemplateForStudent, manuallyEdited, groupStudents, isStudentLocked, checkStudentBalance, isRTL]
+    [fetchTemplateForStudent, manuallyEdited, groupStudents, isStudentLocked, checkStudentBalance, isRTL, sessionLocked]
   );
 
   const updateStudentNotes = useCallback((studentId, notes) => {
@@ -563,7 +606,6 @@ export default function AttendanceModal({
     });
   }, []);
 
-  // ── Available variables for the hints dropdown ────────────────────────────
   const availableVariables = useMemo(
     () => [
       { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (كاملة)"    : "Guardian Salutation",  icon: "👤" },
@@ -582,7 +624,6 @@ export default function AttendanceModal({
     [isRTL]
   );
 
-  // ── Textarea handlers ─────────────────────────────────────────────────────
   const handleTextareaInput = useCallback((e, studentId) => {
     const value     = e.target.value;
     const cursorPos = e.target.selectionStart;
@@ -659,18 +700,8 @@ export default function AttendanceModal({
   );
 
   // ── Effects ────────────────────────────────────────────────────────────────
-
-  // Initialise attendance from DB or student list, and freeze which students
-  // already had a record for this session BEFORE this modal session started
   useEffect(() => {
     if (initialLoadDone.current) return;
-
-    // ✅ منع الـ race condition: لو لسه بنستنى بيانات الحضور من السيرفر
-    // (loading === true)، ماتعملش أي تهيئة دلوقتي. من غيرها ممكن الـ
-    // effect يشتغل بـ attendanceData لسه فاضي (لأنه وصل بعد groupStudents)
-    // فيحط كل حاجة "غايب" افتراضيًا ويقفل initialLoadDone قبل ما البيانات
-    // الحقيقية توصل أصلاً — وده اللي بيخلي الحالة الحقيقية (حاضر) تتفقد
-    // بمجرد ما تقفل وتفتح المودال تاني.
     if (loading) return;
 
     if (attendanceData?.attendance?.length > 0) {
@@ -688,7 +719,6 @@ export default function AttendanceModal({
     initialLoadDone.current = true;
   }, [attendanceData, groupStudents, loading]);
 
-  // Fetch templates for already-absent/late/excused students
   useEffect(() => {
     if (!groupStudents.length || !attendance.length || templatesFetched) return;
 
@@ -710,7 +740,6 @@ export default function AttendanceModal({
     fetchAll();
   }, [groupStudents, attendance]);
 
-  // Close hints on outside click
   useEffect(() => {
     const handler = (e) => {
       Object.keys(hintsRefs.current).forEach((id) => {
@@ -725,9 +754,18 @@ export default function AttendanceModal({
 
   // ── Save all attendance ───────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
+    // ✅ HOLD GUARD
+    if (sessionLocked) {
+      toast.error(
+        isRTL
+          ? "السيشن دي مقفولة بسبب الـ Hold — مينفعش تحفظ الحضور"
+          : "This session is locked due to hold — can't save attendance"
+      );
+      return;
+    }
+
     setSaving(true);
     try {
-      // Render all messages (replace {variables} with real values) before sending
       const renderedMessages = {};
       Object.keys(customMessages).forEach((studentId) => {
         renderedMessages[studentId] = buildRenderedMessage(
@@ -745,7 +783,7 @@ export default function AttendanceModal({
             status:    a.status,
             notes:     a.notes || "",
           })),
-          customMessages: renderedMessages, // ← fully rendered, no {vars}
+          customMessages: renderedMessages,
         }),
       });
 
@@ -755,7 +793,16 @@ export default function AttendanceModal({
         onClose();
         onRefresh();
       } else {
-        toast.error(json.error || (isRTL ? "فشل الحفظ" : "Save failed"));
+        // ✅ لو الباك اند رفض بسبب الـ Hold
+        if (json.code === "SESSION_ON_HOLD") {
+          toast.error(
+            isRTL
+              ? "السيشن دي مقفولة بسبب الـ Hold — مينفعش تحفظ"
+              : "Session is locked due to hold — can't save"
+          );
+        } else {
+          toast.error(json.error || (isRTL ? "فشل الحفظ" : "Save failed"));
+        }
       }
     } catch (err) {
       console.error("Error saving attendance:", err);
@@ -771,6 +818,7 @@ export default function AttendanceModal({
     onClose,
     onRefresh,
     buildRenderedMessage,
+    sessionLocked,
   ]);
 
   // ── Loading state ─────────────────────────────────────────────────────────
@@ -805,8 +853,14 @@ export default function AttendanceModal({
         {/* ── Header ── */}
         <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white">
+            <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
               {isRTL ? "تسجيل الحضور" : "Attendance"} — {session?.title}
+              {sessionLocked && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                  <Lock className="w-3 h-3" />
+                  {isRTL ? "مقفولة" : "Locked"}
+                </span>
+              )}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               {new Date(session?.scheduledDate).toLocaleDateString(
@@ -823,6 +877,13 @@ export default function AttendanceModal({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* ✅ Hold Lock Banner */}
+        {sessionLocked && (
+          <div className="px-6 pt-4">
+            <HoldLockBanner isRTL={isRTL} holdInfo={holdInfo} />
+          </div>
+        )}
 
         {/* ── Stats ── */}
         <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border bg-gray-50 dark:bg-dark_input">
@@ -858,36 +919,49 @@ export default function AttendanceModal({
               const { remainingHours } = checkStudentBalance(student);
               const isLocked = isStudentLocked(student);
 
-              // Live variables (DB-powered) for preview and context card
               const currentVars = buildVariables(student, status, session, dbVars);
-
-              // Preview: raw template + render with real values
               const rawMsg     = customMessages[studentId] || "";
               const previewMsg = renderTemplate(rawMsg, currentVars);
+
+              // ✅ هل نعرض أي حاجة للطالب ده؟
+              // لو السيشن مقفولة بسبب الـ Hold → نعرض العداد باهت فقط
+              const effectiveLocked = isLocked || sessionLocked;
 
               return (
                 <div
                   key={studentId}
                   className={`border rounded-lg overflow-hidden ${
-                    isLocked
-                      ? "border-gray-300 dark:border-gray-700 opacity-75"
-                      : "border-PowderBlueBorder dark:border-dark_border"
+                    sessionLocked
+                      ? "border-amber-300 dark:border-amber-600/40 opacity-60"
+                      : effectiveLocked
+                        ? "border-gray-300 dark:border-gray-700 opacity-75"
+                        : "border-PowderBlueBorder dark:border-dark_border"
                   }`}
                 >
                   {/* ── Student row + select ── */}
                   <div
                     className={`flex items-center justify-between p-4 ${
-                      isLocked
-                        ? "bg-gray-100 dark:bg-gray-800"
-                        : "bg-white dark:bg-darkmode"
+                      sessionLocked
+                        ? "bg-amber-50/40 dark:bg-amber-500/5"
+                        : effectiveLocked
+                          ? "bg-gray-100 dark:bg-gray-800"
+                          : "bg-white dark:bg-darkmode"
                     }`}
                   >
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-MidnightNavyText dark:text-white">
                           {student.personalInfo?.fullName}
                         </p>
-                        {isLocked && (
+                        {/* ✅ Session locked badge */}
+                        {sessionLocked && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-full text-xs">
+                            <Lock className="w-3 h-3" />
+                            {isRTL ? "مقفولة" : "Locked"}
+                          </span>
+                        )}
+                        {/* ✅ Zero balance badge */}
+                        {!sessionLocked && isLocked && (
                           <span className="flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs">
                             <Ban className="w-3 h-3" />
                             {isRTL ? "محظور" : "Blocked"}
@@ -933,7 +1007,7 @@ export default function AttendanceModal({
                         )}
                       </div>
 
-                      {!isLocked && remainingHours <= 2 && remainingHours > 0 && (
+                      {!effectiveLocked && remainingHours <= 2 && remainingHours > 0 && (
                         <p className="flex items-center gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
                           <AlertTriangle className="w-3 h-3" />
                           {isRTL
@@ -946,9 +1020,9 @@ export default function AttendanceModal({
                     <select
                       value={status}
                       onChange={(e) => updateAttendanceStatus(studentId, e.target.value)}
-                      disabled={isLocked}
+                      disabled={effectiveLocked}
                       className={`px-3 py-2 text-sm border rounded-lg dark:bg-dark_input dark:text-white ${
-                        isLocked
+                        effectiveLocked
                           ? "border-gray-300 dark:border-gray-700 opacity-50 cursor-not-allowed"
                           : "border-PowderBlueBorder dark:border-dark_border"
                       }`}
@@ -960,14 +1034,37 @@ export default function AttendanceModal({
                     </select>
                   </div>
 
+                  {/* ── Session Locked → message ── */}
+                  {sessionLocked && (
+                    <div className="bg-amber-50/40 dark:bg-amber-500/5 border-t border-amber-200 dark:border-amber-600/30 p-4 text-center">
+                      <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center justify-center gap-2">
+                        <Lock className="w-4 h-4" />
+                        {isRTL
+                          ? "السيشن مقفولة بسبب الـ Hold — تسجيل الحضور معطّل"
+                          : "Session locked due to hold — attendance disabled"}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ── Zero balance locked → message ── */}
+                  {!sessionLocked && isLocked && needsMessage && (
+                    <div className="bg-gray-100 dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 p-4 text-center">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
+                        <Ban className="w-4 h-4" />
+                        {isRTL
+                          ? "تم تعطيل الإشعارات بسبب نفاد الرصيد"
+                          : "Notifications disabled — zero balance"}
+                      </p>
+                    </div>
+                  )}
+
                   {/* ── Message editor (absent/late/excused, not locked) ── */}
-                  {!isLocked && needsMessage && (
+                  {!effectiveLocked && needsMessage && (
                     <div className="bg-purple-50 dark:bg-purple-900/20 border-t border-purple-200 dark:border-purple-800 p-4">
                       <div className="flex items-start gap-3">
                         <MessageCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
                         <div className="flex-1 space-y-3">
 
-                          {/* Title + reset button */}
                           <div className="flex items-center justify-between">
                             <h4 className="font-semibold text-purple-900 dark:text-purple-100 text-sm">
                               📨 {isRTL ? "رسالة لولي الأمر" : "Message for Guardian"}
@@ -985,7 +1082,6 @@ export default function AttendanceModal({
                             </button>
                           </div>
 
-                          {/* Context card (read-only) */}
                           <div className="p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700 text-xs space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="text-purple-500 font-medium">
@@ -1025,7 +1121,6 @@ export default function AttendanceModal({
                             )}
                           </div>
 
-                          {/* Textarea — raw template */}
                           <div className="space-y-1 relative">
                             <label className="text-xs text-gray-600 dark:text-gray-400">
                               {isRTL
@@ -1053,7 +1148,6 @@ export default function AttendanceModal({
                               dir={studentLang === "ar" ? "rtl" : "ltr"}
                             />
 
-                            {/* Hints dropdown */}
                             {showHints[studentId] && (
                               <div
                                 ref={(el) => (hintsRefs.current[studentId] = el)}
@@ -1094,7 +1188,6 @@ export default function AttendanceModal({
                             )}
                           </div>
 
-                          {/* Notes */}
                           <div>
                             <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
                               {isRTL ? "ملاحظات (اختياري)" : "Notes (optional)"}
@@ -1108,7 +1201,6 @@ export default function AttendanceModal({
                             />
                           </div>
 
-                          {/* Live preview (rendered) */}
                           {previewMsg && (
                             <div className="bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 overflow-hidden">
                               <div className="bg-purple-50 dark:bg-purple-900/30 px-3 py-2 border-b flex items-center justify-between">
@@ -1133,7 +1225,6 @@ export default function AttendanceModal({
                             </div>
                           )}
 
-                          {/* Save as default template */}
                           <div className="flex justify-end pt-2 border-t border-purple-200 dark:border-purple-800">
                             <button
                               onClick={() => saveTemplateToDatabase(studentId, rawMsg)}
@@ -1155,18 +1246,6 @@ export default function AttendanceModal({
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-
-                  {/* ── Locked + needs message ── */}
-                  {isLocked && needsMessage && (
-                    <div className="bg-gray-100 dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 p-4 text-center">
-                      <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
-                        <Ban className="w-4 h-4" />
-                        {isRTL
-                          ? "تم تعطيل الإشعارات بسبب نفاد الرصيد"
-                          : "Notifications disabled — zero balance"}
-                      </p>
                     </div>
                   )}
                 </div>
@@ -1194,13 +1273,23 @@ export default function AttendanceModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
+            disabled={saving || sessionLocked}
+            className={`px-4 py-2 text-sm rounded-lg flex items-center gap-2 ${
+              sessionLocked
+                ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                : "bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
+            }`}
+            title={sessionLocked ? (isRTL ? "السيشن مقفولة بسبب الـ Hold" : "Session locked due to hold") : ""}
           >
             {saving ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                 {isRTL ? "جاري الحفظ..." : "Saving..."}
+              </>
+            ) : sessionLocked ? (
+              <>
+                <Lock className="w-4 h-4" />
+                {isRTL ? "مقفولة" : "Locked"}
               </>
             ) : (
               <>

@@ -4,19 +4,18 @@
 //   → يتخصم ساعتين مرة واحدة بس.
 // - أي تعديل بعد كده على نفس الطالب في نفس السيشن (يقلبها لأي حالة تانية)
 //   → مفيش أي خصم أو إرجاع تاني. الساعتين ثابتة زي ما هي.
-// - يعني الخصم مربوط بـ"هل الطالب متسجل له حضور في السيشن دي قبل كده ولا لأ"
-//   مش مربوط بالحالة نفسها.
 //
-// ✅ جديد: تنبيهات الرصيد المنخفض (4h / 2h) + تنبيه النفاذ الكامل
-// - 🟡 تنبيه 4 ساعات: يُرسل مرة واحدة لما الرصيد يعبر من >4 لـ ≤4
-// - 🔴 تنبيه 2 ساعة: يُرسل مرة واحدة لما الرصيد يعبر من >2 لـ ≤2
-// - ⛔ نفاذ كامل: يُرسل لما الرصيد يوصل ≤0
+// ✅ HOLD GUARD: 
+// - منع تسجيل الحضور على أي سيشن مقفولة بسبب الـ Hold
+// - indefinite / duration → كل السيشنات مقفولة
+// - sessions → أول N سيشنات (بترتيب moduleIndex → sessionNumber) مقفولة
+// - until_session → من أول الجروب لحد السيشن المستهدفة (شاملة) مقفولة
 
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Session from '../../../../models/Session';
 import Student from '../../../../models/Student';
-import Group from '../../../../models/Group'; // مطلوب لتسجيل الـ schema عشان الـ populate يشتغل
+import Group from '../../../../models/Group';
 import { requireAdmin } from '@/utils/authMiddleware';
 import {
   onAttendanceSubmitted,
@@ -25,13 +24,74 @@ import {
 } from '../../../../services/groupAutomation';
 import mongoose from 'mongoose';
 
-// ✅ مهم جدًا: يمنع Next.js من عمل cache للراوت ده (GET أو POST).
-// من غيره، ممكن ترجع بيانات قديمة بعد الحفظ لحد ما الـ cache ينتهي لوحده.
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const HOURS_PER_SESSION = 2;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HOLD GUARD — منطق مركزي واحد
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * بيرتّب السيشنات بنفس ترتيب الباك اند:
+ *   moduleIndex ASC → sessionNumber ASC → scheduledDate ASC
+ */
+function sortSessionsForHold(sessions) {
+  return [...sessions].sort((a, b) => {
+    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
+    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
+  });
+}
+
+/**
+ * 🔒 هل السيشن دي مقفولة بسبب الـ Hold؟
+ */
+function isSessionLockedByHold(sessionId, group, allSessions) {
+  if (!group?.hold?.isHeld) return false;
+  const hold = group.hold;
+  if (!hold) return false;
+
+  const sessionIdStr = String(sessionId);
+
+  // سيشنات تاريخية — مش بتتأثر بالـ Hold
+  const mySession = allSessions.find((s) => String(s._id) === sessionIdStr);
+  if (mySession?.status === "completed") return false;
+
+  // indefinite / duration → كل الجلسات مقفولة
+  if (hold.holdType === "indefinite" || hold.holdType === "duration") {
+    return true;
+  }
+
+  // باقي الأنواع بتعتمد على ترتيب السيشنات
+  const sorted = sortSessionsForHold(allSessions);
+  const myIndex = sorted.findIndex((s) => String(s._id) === sessionIdStr);
+  if (myIndex === -1) return false;
+
+  // sessions: N سيشنات الأولى
+  if (hold.holdType === "sessions") {
+    const consumed = hold.holdSessionsConsumed || 0;
+    // لو لسه مفيش أي سيشن اتاستهلكت → كل السيشنات مقفولة
+    if (consumed === 0) return true;
+    return myIndex < consumed;
+  }
+
+  // until_session: من أول الترتيب لحد السيشن المستهدفة (شاملة)
+  if (hold.holdType === "until_session") {
+    const targetId = hold.holdUntilSessionId;
+    if (!targetId) return true;
+    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
+    if (targetIndex === -1) return true;
+    return myIndex <= targetIndex;
+  }
+
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POST — حفظ الحضور
+// ═══════════════════════════════════════════════════════════════════════════
 export async function POST(req, { params }) {
   try {
     const { id } = await params;
@@ -51,12 +111,45 @@ export async function POST(req, { params }) {
       );
     }
 
-    const session = await Session.findOne({ _id: id, isDeleted: false }).populate('groupId');
+    // ✅ populate hold + status
+    const session = await Session.findOne({ _id: id, isDeleted: false }).populate({
+      path: 'groupId',
+      select: 'name code hold status',
+    });
     if (!session) {
       return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
     }
 
     const group = session.groupId;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ HOLD GUARD — منع تسجيل الحضور على سيشن مقفولة
+    // ═══════════════════════════════════════════════════════════════════
+    if (group?.hold?.isHeld) {
+      // جيب كل سيشنات الجروب للترتيب
+      const allSessions = await Session.find({
+        groupId: group._id,
+        isDeleted: false,
+      })
+        .select('_id moduleIndex sessionNumber scheduledDate status')
+        .lean();
+
+      const locked = isSessionLockedByHold(id, group, allSessions);
+
+      if (locked) {
+        console.log(
+          `⏭️ [HOLD GUARD] Blocked attendance POST for locked session ${id} — ${group.hold.holdType}`
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'السيشن دي مقفولة بسبب الـ Hold — مينفعش تسجل حضور',
+            code: 'SESSION_ON_HOLD',
+          },
+          { status: 403 }
+        );
+      }
+    }
 
     // ── مين اللي أصلاً متسجل له حضور في السيشن دي قبل الحفظة الحالية ─────────
     const alreadyRecordedStudentIds = new Set(
@@ -71,11 +164,10 @@ export async function POST(req, { params }) {
       const studentId = record.studentId?.toString();
       const newStatus = record.status;
 
-      // ✅ لو الطالب ده أصلاً متسجل له حضور في السيشن دي من قبل، يبقى اتخصم
-      // منه فعلاً ساعتين مهما كانت الحالة القديمة أو الجديدة → متلمسش الرصيد
+      // ✅ لو الطالب ده أصلاً متسجل له حضور في السيشن دي من قبل → متلمسش الرصيد
       if (alreadyRecordedStudentIds.has(studentId)) continue;
 
-      // ✅ أول مرة يتسجل له حضور في السيشن دي → اخصم ساعتين، مهما كانت الحالة
+      // ✅ أول مرة يتسجل له حضور في السيشن دي → اخصم ساعتين
       const student = await Student.findById(studentId);
       if (!student?.creditSystem?.currentPackage) continue;
 
@@ -101,18 +193,9 @@ export async function POST(req, { params }) {
         reason: `First record for this session: ${newStatus}`
       });
 
-      // ═══════════════════════════════════════════════════════════════
-      // ✅ Threshold detection — نحدد إذا الرصيد "عبر" حد معين دلوقتي
-      //    الرصيد قبل الخصم = remainingHours + HOURS_PER_SESSION
-      // ═══════════════════════════════════════════════════════════════
       const previousBalance = remainingHours + HOURS_PER_SESSION;
 
-      // 🟡 عبور حد الـ 4 ساعات: كان > 4، بقى في نطاق (2, 4]
-      if (
-        previousBalance > 4 &&
-        remainingHours <= 4 &&
-        remainingHours > 2
-      ) {
+      if (previousBalance > 4 && remainingHours <= 4 && remainingHours > 2) {
         lowBalanceStudents.push({
           studentId,
           student,
@@ -121,12 +204,7 @@ export async function POST(req, { params }) {
         });
       }
 
-      // 🔴 عبور حد الـ 2 ساعة: كان > 2، بقى في نطاق (0, 2]
-      if (
-        previousBalance > 2 &&
-        remainingHours <= 2 &&
-        remainingHours > 0
-      ) {
+      if (previousBalance > 2 && remainingHours <= 2 && remainingHours > 0) {
         lowBalanceStudents.push({
           studentId,
           student,
@@ -135,7 +213,6 @@ export async function POST(req, { params }) {
         });
       }
 
-      // ⛔ نفاذ كامل للرصيد
       if (remainingHours <= 0) {
         zeroBalanceStudents.push({ studentId, student, remainingHours: 0 });
       }
@@ -158,8 +235,7 @@ export async function POST(req, { params }) {
       }
     }
 
-    // ── حفظ الحضور الجديد على الجلسة (الحالة نفسها بتتحدث دايمًا حتى لو
-    //    الرصيد متلمسش) ────────────────────────────────────────────────────
+    // ── حفظ الحضور الجديد على الجلسة ────────────────────────────────────────
     const attendanceRecords = attendance.map((record) => ({
       studentId: record.studentId,
       status: record.status,
@@ -229,6 +305,9 @@ export async function POST(req, { params }) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// GET — جلب بيانات الحضور + Hold info
+// ═══════════════════════════════════════════════════════════════════════════
 export async function GET(req, { params }) {
   try {
     const authCheck = await requireAdmin(req);
@@ -238,9 +317,9 @@ export async function GET(req, { params }) {
 
     const { id } = await params;
 
-    // ── جلسة واحدة بس، بكل الـ populate اللي محتاجينه ─────────────────────────
+    // ✅ جيب session + hold + status في الجروب
     const session = await Session.findOne({ _id: id, isDeleted: false })
-      .populate('groupId', 'name code')
+      .populate('groupId', 'name code hold status')
       .populate('attendance.studentId', '_id')
       .lean();
 
@@ -248,8 +327,40 @@ export async function GET(req, { params }) {
       return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
     }
 
+    const group = session.groupId;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ HOLD GUARD — نحدد هل السيشن دي مقفولة؟
+    // ═══════════════════════════════════════════════════════════════════
+    let sessionLocked = false;
+    let holdInfo = null;
+
+    if (group?.hold?.isHeld) {
+      const allSessions = await Session.find({
+        groupId: group._id,
+        isDeleted: false,
+      })
+        .select('_id moduleIndex sessionNumber scheduledDate status')
+        .lean();
+
+      sessionLocked = isSessionLockedByHold(id, group, allSessions);
+
+      holdInfo = {
+        isHeld: true,
+        holdType: group.hold.holdType || null,
+        holdDays: group.hold.holdDays || 0,
+        holdSessionsCount: group.hold.holdSessionsCount || 0,
+        holdSessionsConsumed: group.hold.holdSessionsConsumed || 0,
+        holdUntilSessionId: group.hold.holdUntilSessionId || null,
+        holdStartDate: group.hold.holdStartDate || null,
+        holdEndDate: group.hold.holdEndDate || null,
+        holdReason: group.hold.holdReason || "",
+      };
+    }
+
+    // جيب طلاب الجروب
     const groupStudents = await Student.find({
-      'academicInfo.groupIds': session.groupId._id,
+      'academicInfo.groupIds': group._id,
       isDeleted: false
     })
       .select('personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem')
@@ -318,7 +429,16 @@ export async function GET(req, { params }) {
         attendance,
         students,
         stats,
-        group: session.groupId
+        group: {
+          _id: group._id,
+          name: group.name,
+          code: group.code,
+          status: group.status || null,
+          isOnHold: !!group.hold?.isHeld,
+          hold: holdInfo,
+        },
+        // ✅ الحقلين دول بس هما اللي المودال محتاجهم
+        sessionLocked,
       }
     });
   } catch (error) {

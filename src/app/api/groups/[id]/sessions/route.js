@@ -31,8 +31,13 @@ export async function GET(req, { params }) {
     const past = searchParams.get('past') === 'true';
 
     // ✅ جلب المجموعة مع بيانات الكورس
+    // ✅ ضيفنا hold + status + deliveryMode + instructors عشان الفرونت يستخدمهم
     const group = await Group.findOne({ _id: id, isDeleted: false })
       .populate('courseId', 'title level')
+      .select(
+        'name code courseId courseSnapshot schedule automation ' +
+        'hold status deliveryMode instructors'
+      )
       .lean();
 
     if (!group) {
@@ -99,6 +104,9 @@ export async function GET(req, { params }) {
       level: group.courseId?.level || '',
     };
 
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ الـ group object — ضيفنا hold + status + isOnHold
+    // ═══════════════════════════════════════════════════════════════
     return NextResponse.json({
       success: true,
       data: formattedSessions,
@@ -108,10 +116,29 @@ export async function GET(req, { params }) {
         _id: group._id,
         code: group.code,
         name: group.name,
+        status: group.status || "draft",
+        deliveryMode: group.deliveryMode || "online",
         courseSnapshot,
         courseId: group.courseId || null,
         schedule: group.schedule || {},
         automation: group.automation || {},
+        instructors: group.instructors || [],
+
+        // ✅ جديد: بيانات الـ Hold (هو ده اللي الفرونت بيقرأه)
+        isOnHold: !!group.hold?.isHeld,
+        hold: group.hold
+          ? {
+              isHeld: !!group.hold.isHeld,
+              holdType: group.hold.holdType || null,
+              holdDays: group.hold.holdDays || 0,
+              holdSessionsCount: group.hold.holdSessionsCount || 0,
+              holdSessionsConsumed: group.hold.holdSessionsConsumed || 0,
+              holdUntilSessionId: group.hold.holdUntilSessionId || null,
+              holdStartDate: group.hold.holdStartDate || null,
+              holdEndDate: group.hold.holdEndDate || null,
+              holdReason: group.hold.holdReason || "",
+            }
+          : null,
       }
     });
 

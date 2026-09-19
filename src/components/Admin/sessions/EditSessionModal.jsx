@@ -21,7 +21,7 @@ import {
   CalendarCheck,
   ArrowLeftRight,
   ShieldCheck,
-  PauseCircle, // ✅ جديد
+  PauseCircle,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// buildVariables — DB-first, hardcoded fallback (مع دعم dbVars)
+// buildVariables
 // ─────────────────────────────────────────────────────────────────────────────
 function buildVariables(student, session, formData, dbVars = {}) {
   if (!student) return {};
@@ -153,7 +153,7 @@ function buildVariables(student, session, formData, dbVars = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// renderTemplate — replace {variable} placeholders
+// renderTemplate
 // ─────────────────────────────────────────────────────────────────────────────
 function renderTemplate(template, variables) {
   if (!template) return "";
@@ -277,7 +277,6 @@ const STATUS_OPTIONS = [
   },
 ];
 
-// ✅ StatusPicker مع دعم disabledValues
 function StatusPicker({ value, onChange, isRTL, disabledValues = [] }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -458,14 +457,14 @@ export default function EditSessionModal({
   const isPostponed     = formData.status === "postponed";
   const isCancelling    = formData.status === "cancelled" && session?.status !== "cancelled";
 
-  // ✅ هل الجروب على Hold؟
+  // ✅ هل الجروب على Hold؟ → كل التعديلات مقفولة
   const groupIsOnHold = !!session?.group?.isOnHold;
 
   // ── Cascade preview ──────────────────────────────────────────────────────
   const cascadePreview = useMemo(() => {
-    if (!isCancelling) return { shifting: [], skipped: [] };
+    if (!isCancelling || groupIsOnHold) return { shifting: [], skipped: [] };
     return getShiftedChainPreview(allSessions, session, 7);
-  }, [isCancelling, allSessions, session]);
+  }, [isCancelling, groupIsOnHold, allSessions, session]);
 
   // ── Fetch DB template variables on mount ──────────────────────────────────
   useEffect(() => {
@@ -502,6 +501,9 @@ export default function EditSessionModal({
 
   // ── Fetch templates from backend ──────────────────────────────────────────
   useEffect(() => {
+    // ✅ مش محتاجين نحمّل قوالب لو الجروب على Hold لأن الـ status مقفول
+    if (groupIsOnHold) return;
+
     const fetchTemplates = async () => {
       if (!showReasonField || !selectedStudentForPreview) return;
       if (manuallyEdited.student && manuallyEdited.guardian) return;
@@ -549,7 +551,7 @@ export default function EditSessionModal({
     };
 
     fetchTemplates();
-  }, [formData.status, selectedStudentForPreview?._id, formData.newDate, formData.newTime]);
+  }, [formData.status, selectedStudentForPreview?._id, formData.newDate, formData.newTime, groupIsOnHold]);
 
   // ── Live preview ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -571,6 +573,12 @@ export default function EditSessionModal({
   // ── Save template to DB ───────────────────────────────────────────────────
   const saveTemplateToDatabase = useCallback(
     async (type, content) => {
+      if (groupIsOnHold) {
+        toast.error(
+          isRTL ? "الجروب على Hold — مينفعش تحفظ قوالب" : "Group is on hold — can't save templates"
+        );
+        return;
+      }
       if (!selectedStudentForPreview || !content?.trim()) return;
       setSavingTemplate((prev) => ({ ...prev, [type]: true }));
 
@@ -673,7 +681,7 @@ export default function EditSessionModal({
         setSavingTemplate((prev) => ({ ...prev, [type]: false }));
       }
     },
-    [formData.status, selectedStudentForPreview, isRTL]
+    [formData.status, selectedStudentForPreview, isRTL, groupIsOnHold]
   );
 
   // ── Salutation preview card ───────────────────────────────────────────────
@@ -794,6 +802,8 @@ export default function EditSessionModal({
       if (!student) return;
       setSelectedStudentForPreview(student);
 
+      if (groupIsOnHold) return; // مش محتاجين نجيب قوالب
+
       if (!manuallyEdited.student || !manuallyEdited.guardian) {
         setLoadingTemplates(true);
         try {
@@ -826,11 +836,12 @@ export default function EditSessionModal({
         }
       }
     },
-    [groupStudents, manuallyEdited, formData.status, session.id]
+    [groupStudents, manuallyEdited, formData.status, session.id, groupIsOnHold]
   );
 
   // ── Reset to defaults ─────────────────────────────────────────────────────
   const resetToDefault = useCallback(async () => {
+    if (groupIsOnHold) return;
     if (!selectedStudentForPreview) return;
     setLoadingTemplates(true);
     try {
@@ -873,6 +884,7 @@ export default function EditSessionModal({
     formData.meetingLink,
     session.id,
     isRTL,
+    groupIsOnHold,
   ]);
 
   // ── Hints dropdown renderer ───────────────────────────────────────────────
@@ -919,12 +931,12 @@ export default function EditSessionModal({
 
   // ── Save session ──────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    // ✅ HOLD GUARD — إضافي على اللي في الـ backend
-    if (groupIsOnHold && formData.status === "completed") {
+    // ✅ HOLD GUARD — أي تعديل مرفوض لو الجروب على Hold
+    if (groupIsOnHold) {
       toast.error(
         isRTL
-          ? "الجروب على Hold — مينفعش تحدّد الجلسة كمكتملة"
-          : "Group is on hold — can't mark session as completed"
+          ? "الجروب على Hold — مينفعش تعدّل أي حاجة في الجلسة"
+          : "Group is on hold — can't make any changes to the session"
       );
       return;
     }
@@ -981,7 +993,16 @@ export default function EditSessionModal({
         onClose();
         onRefresh();
       } else {
-        toast.error(json.error || (isRTL ? "فشل التحديث" : "Update failed"));
+        // ✅ لو الباك اند رفض بسبب الـ Hold
+        if (json.code === "GROUP_ON_HOLD") {
+          toast.error(
+            isRTL
+              ? "الجروب على Hold — مينفعش تعدّل أي حاجة"
+              : "Group is on hold — can't make any changes"
+          );
+        } else {
+          toast.error(json.error || (isRTL ? "فشل التحديث" : "Update failed"));
+        }
       }
     } catch (error) {
       console.error("Error saving session:", error);
@@ -1014,10 +1035,16 @@ export default function EditSessionModal({
         {/* ── Header ── */}
         <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white">
+            <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
               {isRTL
                 ? `تعديل الجلسة - ${session?.title}`
                 : `Edit Session - ${session?.title}`}
+              {groupIsOnHold && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                  <PauseCircle className="w-3 h-3" />
+                  {isRTL ? "مقفولة" : "Locked"}
+                </span>
+              )}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               {session?.scheduledDate
@@ -1040,7 +1067,7 @@ export default function EditSessionModal({
         {/* ── Body ── */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
-          {/* ✅ Hold Notice — للأدمن */}
+          {/* ✅ Hold Notice — التعديل كله معطّل */}
           {groupIsOnHold && (
             <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
               <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
@@ -1048,12 +1075,12 @@ export default function EditSessionModal({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black text-amber-800 dark:text-amber-300">
-                  {isRTL ? "الجروب على Hold" : "Group is on hold"}
+                  {isRTL ? "الجروب على Hold — التعديل معطّل" : "Group is on hold — editing is disabled"}
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">
                   {isRTL
-                    ? 'مينفعش تحدّد الجلسة كـ "مكتملة" لأن الجروب واقف. باقي التعديلات (رابط، ملاحظات، تأجيل) مسموحة.'
-                    : 'You can\'t mark this session as "completed" while the group is on hold. Other edits (link, notes, postpone) are still allowed.'}
+                    ? "مينفعش تعدّل أي حاجة في الجلسة دي (الحالة، الرابط، التسجيل، الملاحظات) لحد ما الـ Hold يتفك. ارجع لصفحة المجموعات وفك الـ Hold الأول."
+                    : "You can't make any changes to this session (status, links, recording, notes) until the hold is released. Go back to the groups page and release the hold first."}
                 </p>
               </div>
             </div>
@@ -1067,16 +1094,21 @@ export default function EditSessionModal({
             <StatusPicker
               value={formData.status}
               isRTL={isRTL}
-              disabledValues={groupIsOnHold ? ["completed"] : []}
+              disabledValues={
+                groupIsOnHold
+                  ? ["scheduled", "completed", "postponed", "cancelled"]
+                  : []
+              }
               onChange={(val) => {
+                if (groupIsOnHold) return;
                 setFormData((prev) => ({ ...prev, status: val }));
                 setManuallyEdited({ student: false, guardian: false });
               }}
             />
           </div>
 
-          {/* ✅ Cascade impact */}
-          {isCancelling && (
+          {/* Cascade impact */}
+          {isCancelling && !groupIsOnHold && (
             <CascadeImpactStrip
               shifting={cascadePreview.shifting}
               skipped={cascadePreview.skipped}
@@ -1095,7 +1127,10 @@ export default function EditSessionModal({
               value={formData.meetingLink}
               onChange={(e) => setFormData((prev) => ({ ...prev, meetingLink: e.target.value }))}
               placeholder={isRTL ? "أدخل رابط الاجتماع" : "Enter meeting link"}
-              className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+              disabled={groupIsOnHold}
+              className={`w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white ${
+                groupIsOnHold ? "opacity-50 cursor-not-allowed" : ""
+              }`}
             />
           </div>
 
@@ -1110,7 +1145,10 @@ export default function EditSessionModal({
               value={formData.recordingLink}
               onChange={(e) => setFormData((prev) => ({ ...prev, recordingLink: e.target.value }))}
               placeholder={isRTL ? "أدخل رابط التسجيل" : "Enter recording link"}
-              className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+              disabled={groupIsOnHold}
+              className={`w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white ${
+                groupIsOnHold ? "opacity-50 cursor-not-allowed" : ""
+              }`}
             />
           </div>
 
@@ -1128,6 +1166,7 @@ export default function EditSessionModal({
                     onChange={(e) => setFormData((prev) => ({ ...prev, newDate: e.target.value }))}
                     className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
                     min={new Date().toISOString().split("T")[0]}
+                    disabled={groupIsOnHold}
                   />
                 </div>
                 <div>
@@ -1139,6 +1178,7 @@ export default function EditSessionModal({
                     value={formData.newTime}
                     onChange={(e) => setFormData((prev) => ({ ...prev, newTime: e.target.value }))}
                     className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
+                    disabled={groupIsOnHold}
                   />
                 </div>
               </div>
@@ -1154,7 +1194,7 @@ export default function EditSessionModal({
           )}
 
           {/* ── Messages (cancelled / postponed only) ── */}
-          {showReasonField && (
+          {showReasonField && !groupIsOnHold && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-5">
 
               {/* Header */}
@@ -1387,7 +1427,10 @@ export default function EditSessionModal({
               onChange={(e) => setFormData((prev) => ({ ...prev, instructorNotes: e.target.value }))}
               placeholder={isRTL ? "أضف ملاحظات للمدرب..." : "Add instructor notes..."}
               rows={3}
-              className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white resize-none"
+              disabled={groupIsOnHold}
+              className={`w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white resize-none ${
+                groupIsOnHold ? "opacity-50 cursor-not-allowed" : ""
+              }`}
               dir={isRTL ? "rtl" : "ltr"}
             />
           </div>
@@ -1399,22 +1442,37 @@ export default function EditSessionModal({
             onClick={onClose}
             className="px-4 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-gray-50 dark:hover:bg-dark_input"
           >
-            {isRTL ? "إلغاء" : "Cancel"}
+            {isRTL ? "إغلاق" : "Close"}
           </button>
           <button
             onClick={handleSave}
             disabled={
               saving ||
               loadingTemplates ||
+              groupIsOnHold ||
               (showReasonField &&
                 (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim()))
             }
-            className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            title={
+              groupIsOnHold
+                ? (isRTL ? "الجروب على Hold — التعديل معطّل" : "Group is on hold — editing disabled")
+                : ""
+            }
+            className={`px-4 py-2 text-sm rounded-lg flex items-center gap-2 ${
+              groupIsOnHold
+                ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                : "bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            }`}
           >
             {saving ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                 {isRTL ? "جاري الحفظ..." : "Saving..."}
+              </>
+            ) : groupIsOnHold ? (
+              <>
+                <PauseCircle className="w-4 h-4" />
+                {isRTL ? "مقفولة (Hold)" : "Locked (Hold)"}
               </>
             ) : (
               <>

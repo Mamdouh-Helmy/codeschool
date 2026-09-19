@@ -1,6 +1,6 @@
 // /src/app/admin/sessions/page.jsx
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import toast from "react-hot-toast";
 import {
   Calendar,
@@ -29,7 +29,8 @@ import {
   Send,
   User,
   Trophy,
-  PauseCircle, // ✅ جديد
+  PauseCircle,
+  Lock,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -41,11 +42,94 @@ import StudentsListModal from "./sessions/StudentsListModal";
 import GroupCompletionModal from "./sessions/GroupCompletionModal";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ✅ Hold Utilities — منطق مركزي واحد لكل الصفحة
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * بيرتّب السيشنات بنفس ترتيب الباك اند (cascade):
+ *   moduleIndex ASC → sessionNumber ASC → scheduledDate ASC
+ */
+function sortSessionsForHold(sessions) {
+  return [...sessions].sort((a, b) => {
+    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
+    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
+  });
+}
+
+/**
+ * 🔒 يحدد هل السيشن دي مقفولة بسبب الـ Hold؟
+ *
+ * @param {Object} session — السيشن الحالية
+ * @param {Object} group   — الجروب (فيه .hold)
+ * @param {Array}  allSessions — كل سيشنات الجروب (للترتيب)
+ * @returns {boolean}
+ */
+function isSessionLockedByHold(session, group, allSessions) {
+  if (!group?.isOnHold) return false;
+  if (session.status === "completed") return false; // تاريخية
+
+  const hold = group.hold;
+  if (!hold) return false;
+
+  // indefinite / duration → كل الجلسات مقفولة
+  if (hold.holdType === "indefinite" || hold.holdType === "duration") {
+    return true;
+  }
+
+  // باقي الأنواع بتعتمد على ترتيب السيشنات
+  const sorted = sortSessionsForHold(allSessions);
+  const myIndex = sorted.findIndex((s) => s.id === session.id);
+  if (myIndex === -1) return false;
+
+  // sessions: N سيشنات الأولى (0..N-1)
+  if (hold.holdType === "sessions") {
+    const consumed = hold.holdSessionsConsumed || 0;
+    // ✅ لو لسه مفيش أي سيشن اتاستهلكت → كل السيشنات مقفولة لحد ما التقدم يحصل
+    return myIndex < Math.max(consumed, 0) || consumed === 0;
+  }
+
+  // until_session: من أول الترتيب لحد السيشن المستهدفة (شاملة)
+  if (hold.holdType === "until_session") {
+    const targetId = hold.holdUntilSessionId;
+    if (!targetId) return true;
+    const targetIndex = sorted.findIndex((s) => s.id === String(targetId) || s._id === String(targetId));
+    if (targetIndex === -1) return true;
+    return myIndex <= targetIndex;
+  }
+
+  return false;
+}
+
+/**
+ * 🔒 هل الـ Hold يقفل الجروب بالكامل؟ (indefinite أو duration)
+ * مفيد لعرض Banner بشكل مختلف، ولحساب إتمام المجموعة.
+ */
+function isFullGroupHold(group) {
+  if (!group?.isOnHold) return false;
+  const t = group.hold?.holdType;
+  return t === "indefinite" || t === "duration";
+}
+
+/**
+ * 🔒 هل كل السيشنات اللي مش مكتملة مقفولة بسبب الـ Hold؟
+ * (يستخدم لمنع "إتمام المجموعة" في كل الحالات.)
+ */
+function areAllActiveSessionsLocked(group, allSessions) {
+  if (!group?.isOnHold) return false;
+  const active = allSessions.filter((s) => s.status !== "completed");
+  if (active.length === 0) return false;
+  return active.every((s) => isSessionLockedByHold(s, group, allSessions));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ✅ HoldBanner — للأدمن
 // ═══════════════════════════════════════════════════════════════════════════
-function HoldBanner({ group, isRTL, t }) {
+function HoldBanner({ group, isRTL, t, lockedCount = 0, totalActive = 0 }) {
   const hold = group?.hold;
   if (!group?.isOnHold || !hold) return null;
+
+  const isFull = hold.holdType === "indefinite" || hold.holdType === "duration";
 
   const holdLabel = (() => {
     if (hold.holdType === "indefinite") {
@@ -86,11 +170,23 @@ function HoldBanner({ group, isRTL, t }) {
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold">
               {holdLabel}
             </span>
+            {/* ✅ لو مش full hold، نبين عدد السيشنات المقفولة */}
+            {!isFull && totalActive > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold">
+                {isRTL
+                  ? `${lockedCount} من ${totalActive} سيشن مقفولة`
+                  : `${lockedCount} of ${totalActive} sessions locked`}
+              </span>
+            )}
           </div>
           <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
-            {isRTL
-              ? "الجلسات معلّقة، مفيش رسائل بتتبعت، ومفيش ساعات بتتخصم. هتقدر تعدّل بيانات الجلسات، بس مش هتقدر تحدّدها كمكتملة لحد ما تفك الـ Hold."
-              : "Sessions are paused — no messages sent, no credits deducted. You can edit sessions, but can't mark them as completed until the hold is released."}
+            {isFull
+              ? (isRTL
+                  ? "كل جلسات الجروب معلّقة — مفيش رسائل بتتبعت، ومفيش ساعات بتتخصم. هتقدر تعدّل بيانات الجلسات، بس مش هتقدر تحدّدها كمكتملة أو تبعت تذكيرات."
+                  : "All sessions are paused — no messages sent, no credits deducted. You can edit sessions, but can't mark them as completed or send reminders.")
+              : (isRTL
+                  ? `عدد محدود من الجلسات مقفول حاليًا (${lockedCount}). الجلسات المقفولة مش هتقدر تبعت تذكيراتها ولا تحدّدها كمكتملة.`
+                  : `${lockedCount} session(s) are paused. Locked sessions can't have reminders sent or be marked as completed.`)}
           </p>
           {endDate && (
             <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5">
@@ -105,6 +201,18 @@ function HoldBanner({ group, isRTL, t }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ SessionRowHoldBadge — Badge صغير على السيشن المقفولة
+// ═══════════════════════════════════════════════════════════════════════════
+function SessionHoldBadge({ isRTL }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+      <Lock className="w-2.5 h-2.5" />
+      {isRTL ? "مقفولة" : "Locked"}
+    </span>
   );
 }
 
@@ -143,13 +251,11 @@ export default function SessionsAdmin() {
   // Data Loading Functions
   // ================================================================
 
-  // ✅ Helper: check if all sessions are done (completed or cancelled)
   const checkSessionsLocally = useCallback((sessionsList) => {
     if (!sessionsList || sessionsList.length === 0) return false;
     return sessionsList.every(s => s.status === 'completed' || s.status === 'cancelled');
   }, []);
 
-  // ✅ Helper: verify group completion eligibility via API
   const checkIfGroupComplete = useCallback(async (gId) => {
     try {
       const res = await fetch(`/api/groups/${gId}/complete`, { cache: 'no-store' });
@@ -190,23 +296,26 @@ export default function SessionsAdmin() {
         setSessions(loadedSessions);
 
         const groupData = json.group || {};
-        console.log('📦 Group data from API:', groupData);
-
         setGroup({
           ...groupData,
           _id: groupData._id || groupData.id || groupId,
         });
 
-        // ✅ Auto-detect group completion after loading sessions
-        // + منع عرض المودال لو الجروب على Hold
+        // ✅ Auto-detect group completion — مع Hold Guard
         const groupIsOnHold = !!groupData?.hold?.isHeld;
-        if (
+        const groupIsFullHold =
+          groupData?.hold?.holdType === "indefinite" ||
+          groupData?.hold?.holdType === "duration";
+
+        const canAutoComplete =
           loadedSessions.length > 0 &&
           !filters.status &&
           !filters.upcoming &&
           !filters.past &&
-          !groupIsOnHold // ✅ HOLD GUARD
-        ) {
+          !groupIsOnHold && // ✅ HOLD GUARD: مش بنفتح المودال لو الجروب على Hold
+          !groupIsFullHold;
+
+        if (canAutoComplete) {
           const allDone = checkSessionsLocally(loadedSessions);
           if (allDone) {
             const result = await checkIfGroupComplete(groupId);
@@ -271,6 +380,41 @@ export default function SessionsAdmin() {
     loadSessions();
     loadGroupStudents();
   }, [loadSessions, loadGroupStudents]);
+
+  // ================================================================
+  // ✅ HOLD STATE — ميمو مركزي واحد
+  // ================================================================
+
+  // هل الجروب على Hold؟
+  const groupIsOnHold = !!group?.hold?.isHeld;
+
+  // مجموعة الـ IDs المقفولة (Set للبحث السريع O(1))
+  const lockedSessionIds = useMemo(() => {
+    if (!groupIsOnHold || !sessions.length) return new Set();
+    const set = new Set();
+    sessions.forEach((s) => {
+      if (isSessionLockedByHold(s, group, sessions)) {
+        set.add(String(s.id));
+      }
+    });
+    return set;
+  }, [groupIsOnHold, group, sessions]);
+
+  // هل كل السيشنات النشطة مقفولة؟ (لمنع إتمام المجموعة)
+  const allActiveLocked = useMemo(
+    () => areAllActiveSessionsLocked(group, sessions),
+    [group, sessions]
+  );
+
+  // إحصائيات
+  const totalActiveSessions = sessions.filter((s) => s.status !== "completed").length;
+  const lockedSessionsCount = lockedSessionIds.size;
+
+  // Helper: هل السيشن دي مقفولة؟
+  const isLocked = useCallback(
+    (session) => lockedSessionIds.has(String(session.id)),
+    [lockedSessionIds]
+  );
 
   // ================================================================
   // Modal Open Functions
@@ -348,10 +492,19 @@ export default function SessionsAdmin() {
   }, [t]);
 
   const openReminderModal = useCallback((session, reminderType) => {
+    // ✅ HOLD GUARD
+    if (isLocked(session)) {
+      toast.error(
+        isRTL
+          ? "السيشن دي مقفولة بسبب الـ Hold — مينفعش تبعت تذكيرات"
+          : "This session is locked due to hold — can't send reminders"
+      );
+      return;
+    }
     setSelectedSession(session);
     setSelectedReminderType(reminderType);
     setReminderModalOpen(true);
-  }, []);
+  }, [isLocked, isRTL]);
 
   // ================================================================
   // Completion stats
@@ -361,8 +514,10 @@ export default function SessionsAdmin() {
   const totalDone = completedCount + cancelledCount;
   const allDone = sessions.length > 0 && totalDone === sessions.length;
 
-  // ✅ هل الجروب على Hold؟
-  const groupIsOnHold = !!group?.hold?.isHeld;
+  // ✅ هل نعرض زر إتمام المجموعة؟
+  //    - كل الجلسات خلصت (completed/cancelled)
+  //    - ومفيش أي سيشن نشطة مقفولة (Hold Guard)
+  const canCompleteGroup = allDone && !allActiveLocked && !groupIsOnHold;
 
   // ================================================================
   // Render
@@ -395,8 +550,14 @@ export default function SessionsAdmin() {
   return (
     <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
 
-      {/* ✅ Hold Banner — للأدمن */}
-      <HoldBanner group={group} isRTL={isRTL} t={t} />
+      {/* ✅ Hold Banner — فيه عدد السيشنات المقفولة */}
+      <HoldBanner
+        group={group}
+        isRTL={isRTL}
+        t={t}
+        lockedCount={lockedSessionsCount}
+        totalActive={totalActiveSessions}
+      />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-darkmode rounded-xl shadow-sm p-6 border border-PowderBlueBorder dark:border-dark_border">
@@ -410,8 +571,8 @@ export default function SessionsAdmin() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* ✅ زر إتمام المجموعة - يظهر فقط لو كل الجلسات خلصت والجروب مش على Hold */}
-            {allDone && !groupIsOnHold && (
+            {/* ✅ زر إتمام المجموعة — بس لو كل الجلسات خلصت ومفيش أي Hold نشط */}
+            {canCompleteGroup && (
               <button
                 onClick={() => setCompletionModalOpen(true)}
                 className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 flex items-center gap-2 text-sm font-semibold shadow-md"
@@ -437,8 +598,8 @@ export default function SessionsAdmin() {
           </div>
         </div>
 
-        {/* ✅ Progress bar لو كل الجلسات خلصت (والجروب مش على Hold) */}
-        {allDone && !groupIsOnHold && (
+        {/* ✅ Progress bar لو كل الجلسات خلصت ومفيش Hold */}
+        {allDone && canCompleteGroup && (
           <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg flex items-center gap-3">
             <Trophy className="w-5 h-5 text-amber-500 shrink-0" />
             <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
@@ -449,14 +610,14 @@ export default function SessionsAdmin() {
           </div>
         )}
 
-        {/* ✅ لو كل الجلسات خلصت بس الجروب على Hold */}
-        {allDone && groupIsOnHold && (
+        {/* ✅ لو كل الجلسات خلصت بس فيه Hold */}
+        {allDone && !canCompleteGroup && groupIsOnHold && (
           <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center gap-3">
             <PauseCircle className="w-5 h-5 text-gray-400 shrink-0" />
             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
               {isRTL
-                ? 'الجلسات كلها خلصت، بس الجروب على Hold — مش هينفع إتمام المجموعة لحد ما تفك الـ Hold.'
-                : 'All sessions finished, but the group is on hold — group completion is disabled until the hold is released.'}
+                ? `الجلسات كلها خلصت (${completedCount} مكتملة، ${cancelledCount} ملغاة)، بس الجروب على Hold — مش هينفع إتمام المجموعة لحد ما تفك الـ Hold.`
+                : `All sessions finished (${completedCount} completed, ${cancelledCount} cancelled), but the group is on hold — group completion is disabled until the hold is released.`}
             </p>
           </div>
         )}
@@ -516,91 +677,114 @@ export default function SessionsAdmin() {
               </tr>
             </thead>
             <tbody className="divide-y divide-PowderBlueBorder dark:divide-dark_border">
-              {sessions.map((session) => (
-                <tr key={session.id} className="hover:bg-gray-50 dark:hover:bg-dark_input">
-                  <td className="py-3 px-4">
-                    <div>
-                      <p className="font-medium text-sm">{session.title}</p>
-                      <p className="text-xs text-gray-500">
-                        {t("sessions.table.module")} {session.moduleIndex + 1} - {t("sessions.table.session")} {session.sessionNumber}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="text-sm">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(session.scheduledDate, isRTL)}
+              {sessions.map((session) => {
+                const sessionIsLocked = isLocked(session);
+
+                return (
+                  <tr
+                    key={session.id}
+                    className={`hover:bg-gray-50 dark:hover:bg-dark_input ${
+                      sessionIsLocked ? "bg-amber-50/40 dark:bg-amber-500/5" : ""
+                    }`}
+                  >
+                    <td className="py-3 px-4">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-sm">{session.title}</p>
+                          {/* ✅ Badge على السيشن المقفولة */}
+                          {sessionIsLocked && <SessionHoldBadge isRTL={isRTL} />}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {t("sessions.table.module")} {session.moduleIndex + 1} - {t("sessions.table.session")} {session.sessionNumber}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-1 text-gray-500">
-                        <Clock className="w-3 h-3" />
-                        {session.startTime} - {session.endTime}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="text-sm">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(session.scheduledDate, isRTL)}
+                        </div>
+                        <div className="flex items-center gap-1 text-gray-500">
+                          <Clock className="w-3 h-3" />
+                          {session.startTime} - {session.endTime}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(session.status)}`}>
-                      {getStatusText(session.status, t)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    {session.attendanceTaken ? (
-                      <div className="text-sm text-green-600 flex items-center gap-1">
-                        <CheckCircle className="w-4 h-4" />
-                        {t("sessions.attendance.taken")}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-gray-400 flex items-center gap-1">
-                        <XCircle className="w-4 h-4" />
-                        {t("sessions.attendance.notTaken")}
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
-                      {session.status === 'scheduled' && !groupIsOnHold && (
-                        <>
-                          <button
-                            onClick={() => openReminderModal(session, '24hours')}
-                            className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
-                            title={isRTL ? 'إرسال تذكير 24 ساعة' : 'Send 24h reminder'}
-                          >
-                            <Calendar className="w-4 h-4 text-blue-600" />
-                          </button>
-                          <button
-                            onClick={() => openReminderModal(session, '1hour')}
-                            className="p-1.5 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded transition-colors"
-                            title={isRTL ? 'إرسال تذكير ساعة' : 'Send 1h reminder'}
-                          >
-                            <Clock className="w-4 h-4 text-orange-600" />
-                          </button>
-                        </>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(session.status)}`}>
+                        {getStatusText(session.status, t)}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      {session.attendanceTaken ? (
+                        <div className="text-sm text-green-600 flex items-center gap-1">
+                          <CheckCircle className="w-4 h-4" />
+                          {t("sessions.attendance.taken")}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-400 flex items-center gap-1">
+                          <XCircle className="w-4 h-4" />
+                          {t("sessions.attendance.notTaken")}
+                        </div>
                       )}
-                      <button
-                        onClick={() => openDetailsModal(session)}
-                        className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                        title={t("sessions.buttons.viewDetails")}
-                      >
-                        <Eye className="w-4 h-4 text-blue-500" />
-                      </button>
-                      <button
-                        onClick={() => openEditModal(session)}
-                        className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                        title={t("sessions.buttons.edit")}
-                      >
-                        <Edit className="w-4 h-4 text-primary" />
-                      </button>
-                      <button
-                        onClick={() => openAttendanceModal(session)}
-                        className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                        title={t("sessions.buttons.manageAttendance")}
-                      >
-                        <ClipboardCheck className="w-4 h-4 text-green-500" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        {/* ✅ زراير التذكيرات — تظهر بس لو السيشن مش مقفولة */}
+                        {session.status === 'scheduled' && !sessionIsLocked && (
+                          <>
+                            <button
+                              onClick={() => openReminderModal(session, '24hours')}
+                              className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                              title={isRTL ? 'إرسال تذكير 24 ساعة' : 'Send 24h reminder'}
+                            >
+                              <Calendar className="w-4 h-4 text-blue-600" />
+                            </button>
+                            <button
+                              onClick={() => openReminderModal(session, '1hour')}
+                              className="p-1.5 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded transition-colors"
+                              title={isRTL ? 'إرسال تذكير ساعة' : 'Send 1h reminder'}
+                            >
+                              <Clock className="w-4 h-4 text-orange-600" />
+                            </button>
+                          </>
+                        )}
+                        {session.status === 'scheduled' && sessionIsLocked && (
+                          <span
+                            className="p-1.5 rounded opacity-40 cursor-not-allowed"
+                            title={isRTL ? 'التذكيرات مقفولة بسبب الـ Hold' : 'Reminders locked due to hold'}
+                          >
+                            <Lock className="w-4 h-4 text-amber-600" />
+                          </span>
+                        )}
+
+                        <button
+                          onClick={() => openDetailsModal(session)}
+                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                          title={t("sessions.buttons.viewDetails")}
+                        >
+                          <Eye className="w-4 h-4 text-blue-500" />
+                        </button>
+                        <button
+                          onClick={() => openEditModal(session)}
+                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                          title={t("sessions.buttons.edit")}
+                        >
+                          <Edit className="w-4 h-4 text-primary" />
+                        </button>
+                        <button
+                          onClick={() => openAttendanceModal(session)}
+                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                          title={t("sessions.buttons.manageAttendance")}
+                        >
+                          <ClipboardCheck className="w-4 h-4 text-green-500" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
