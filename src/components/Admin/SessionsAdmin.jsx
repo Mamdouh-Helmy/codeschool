@@ -29,6 +29,7 @@ import {
   Send,
   User,
   Trophy,
+  PauseCircle, // ✅ جديد
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -38,6 +39,74 @@ import AttendanceModal from "./sessions/AttendanceModal";
 import SessionDetailsModal from "./sessions/SessionDetailsModal";
 import StudentsListModal from "./sessions/StudentsListModal";
 import GroupCompletionModal from "./sessions/GroupCompletionModal";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HoldBanner — للأدمن
+// ═══════════════════════════════════════════════════════════════════════════
+function HoldBanner({ group, isRTL, t }) {
+  const hold = group?.hold;
+  if (!group?.isOnHold || !hold) return null;
+
+  const holdLabel = (() => {
+    if (hold.holdType === "indefinite") {
+      return isRTL ? "مفتوح لحد ما تفكّه يدويًا" : "Indefinite — release manually";
+    }
+    if (hold.holdType === "sessions") {
+      return isRTL
+        ? `لعدد ${hold.holdSessionsCount} سيشنات (اتستهلك ${hold.holdSessionsConsumed || 0})`
+        : `For ${hold.holdSessionsCount} sessions (${hold.holdSessionsConsumed || 0} consumed)`;
+    }
+    if (hold.holdType === "until_session") {
+      return isRTL ? "لحد سيشن محددة" : "Until a specific session";
+    }
+    return isRTL
+      ? `لمدة ${hold.holdDays || 0} يوم`
+      : `For ${hold.holdDays || 0} days`;
+  })();
+
+  const endDate = hold.holdEndDate
+    ? new Date(hold.holdEndDate).toLocaleDateString(isRTL ? "ar-EG" : "en-US", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      })
+    : null;
+
+  return (
+    <div className="rounded-xl p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+          <PauseCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-black text-sm text-amber-900 dark:text-amber-300">
+              {isRTL ? "الجروب على Hold حاليًا" : "Group is currently on hold"}
+            </p>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold">
+              {holdLabel}
+            </span>
+          </div>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
+            {isRTL
+              ? "الجلسات معلّقة، مفيش رسائل بتتبعت، ومفيش ساعات بتتخصم. هتقدر تعدّل بيانات الجلسات، بس مش هتقدر تحدّدها كمكتملة لحد ما تفك الـ Hold."
+              : "Sessions are paused — no messages sent, no credits deducted. You can edit sessions, but can't mark them as completed until the hold is released."}
+          </p>
+          {endDate && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5">
+              {isRTL ? `مجدول ينتهي: ${endDate}` : `Scheduled to end: ${endDate}`}
+            </p>
+          )}
+          {hold.holdReason && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 italic">
+              {isRTL ? "السبب" : "Reason"}: {hold.holdReason}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SessionsAdmin() {
   const { t, language } = useI18n();
@@ -120,18 +189,24 @@ export default function SessionsAdmin() {
         const loadedSessions = json.data || [];
         setSessions(loadedSessions);
 
-        // ✅ التأكد من أن الـ group object يحتوي على _id
         const groupData = json.group || {};
         console.log('📦 Group data from API:', groupData);
 
-        // تحويل group data للتأكد من وجود _id
         setGroup({
           ...groupData,
-          _id: groupData._id || groupData.id || groupId, // ✅ التأكد من وجود _id
+          _id: groupData._id || groupData.id || groupId,
         });
 
         // ✅ Auto-detect group completion after loading sessions
-        if (loadedSessions.length > 0 && !filters.status && !filters.upcoming && !filters.past) {
+        // + منع عرض المودال لو الجروب على Hold
+        const groupIsOnHold = !!groupData?.hold?.isHeld;
+        if (
+          loadedSessions.length > 0 &&
+          !filters.status &&
+          !filters.upcoming &&
+          !filters.past &&
+          !groupIsOnHold // ✅ HOLD GUARD
+        ) {
           const allDone = checkSessionsLocally(loadedSessions);
           if (allDone) {
             const result = await checkIfGroupComplete(groupId);
@@ -286,6 +361,9 @@ export default function SessionsAdmin() {
   const totalDone = completedCount + cancelledCount;
   const allDone = sessions.length > 0 && totalDone === sessions.length;
 
+  // ✅ هل الجروب على Hold؟
+  const groupIsOnHold = !!group?.hold?.isHeld;
+
   // ================================================================
   // Render
   // ================================================================
@@ -317,6 +395,9 @@ export default function SessionsAdmin() {
   return (
     <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
 
+      {/* ✅ Hold Banner — للأدمن */}
+      <HoldBanner group={group} isRTL={isRTL} t={t} />
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-darkmode rounded-xl shadow-sm p-6 border border-PowderBlueBorder dark:border-dark_border">
         <div className="flex items-center justify-between">
@@ -329,8 +410,8 @@ export default function SessionsAdmin() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* ✅ زر إتمام المجموعة - يظهر فقط لو كل الجلسات خلصت */}
-            {allDone && (
+            {/* ✅ زر إتمام المجموعة - يظهر فقط لو كل الجلسات خلصت والجروب مش على Hold */}
+            {allDone && !groupIsOnHold && (
               <button
                 onClick={() => setCompletionModalOpen(true)}
                 className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 flex items-center gap-2 text-sm font-semibold shadow-md"
@@ -356,14 +437,26 @@ export default function SessionsAdmin() {
           </div>
         </div>
 
-        {/* ✅ Progress bar لو كل الجلسات خلصت */}
-        {allDone && (
+        {/* ✅ Progress bar لو كل الجلسات خلصت (والجروب مش على Hold) */}
+        {allDone && !groupIsOnHold && (
           <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg flex items-center gap-3">
             <Trophy className="w-5 h-5 text-amber-500 shrink-0" />
             <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
               {isRTL
                 ? `🎉 تم إنهاء جميع الجلسات (${completedCount} مكتملة، ${cancelledCount} ملغاة)! يمكنك الآن إرسال رسائل إتمام المجموعة.`
                 : `🎉 All sessions finished (${completedCount} completed, ${cancelledCount} cancelled)! You can now send group completion messages.`}
+            </p>
+          </div>
+        )}
+
+        {/* ✅ لو كل الجلسات خلصت بس الجروب على Hold */}
+        {allDone && groupIsOnHold && (
+          <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-lg flex items-center gap-3">
+            <PauseCircle className="w-5 h-5 text-gray-400 shrink-0" />
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+              {isRTL
+                ? 'الجلسات كلها خلصت، بس الجروب على Hold — مش هينفع إتمام المجموعة لحد ما تفك الـ Hold.'
+                : 'All sessions finished, but the group is on hold — group completion is disabled until the hold is released.'}
             </p>
           </div>
         )}
@@ -465,7 +558,7 @@ export default function SessionsAdmin() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      {session.status === 'scheduled' && (
+                      {session.status === 'scheduled' && !groupIsOnHold && (
                         <>
                           <button
                             onClick={() => openReminderModal(session, '24hours')}
@@ -539,8 +632,6 @@ export default function SessionsAdmin() {
         />
       )}
 
-      {attendanceData && console.log('📦 Attendance data students:', attendanceData.students)}
-
       {editModalOpen && selectedSession && (
         <EditSessionModal
           session={selectedSession}
@@ -596,7 +687,7 @@ export default function SessionsAdmin() {
             courseSnapshot: group?.courseSnapshot || null,
             courseId: group?.courseId || null
           }}
-          groupId={groupId} // ✅ تمرير groupId مباشرة
+          groupId={groupId}
           groupStudents={groupStudents}
           onClose={() => setCompletionModalOpen(false)}
           onRefresh={loadSessions}

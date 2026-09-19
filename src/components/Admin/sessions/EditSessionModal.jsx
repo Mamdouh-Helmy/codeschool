@@ -21,6 +21,7 @@ import {
   CalendarCheck,
   ArrowLeftRight,
   ShieldCheck,
+  PauseCircle, // ✅ جديد
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,7 +69,6 @@ function buildVariables(student, session, formData, dbVars = {}) {
   const isFather     = relationship !== "mother";
   const genderCtx    = { studentGender: gender, guardianType: relationship };
 
-  // ── Names ────────────────────────────────────────────────────────────────
   const studentFirstName =
     lang === "ar"
       ? student.personalInfo?.nickname?.ar?.trim()  ||
@@ -83,7 +83,6 @@ function buildVariables(student, session, formData, dbVars = {}) {
       : student.guardianInfo?.nickname?.en?.trim()  ||
         student.guardianInfo?.name?.split(" ")[0]   || "Guardian";
 
-  // ── DB vars → fallback ───────────────────────────────────────────────────
   const salutationBase_ar =
     resolveVar(dbVars, "salutation_ar", "ar", genderCtx) ||
     (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
@@ -104,7 +103,6 @@ function buildVariables(student, session, formData, dbVars = {}) {
     resolveVar(dbVars, "childTitle", "en", genderCtx) ||
     (isMale ? "your son" : "your daughter");
 
-  // ── Composed salutations ─────────────────────────────────────────────────
   const guardianSalutation_ar = `${guardianSalBase_ar} ${guardianFirstName}`;
   const guardianSalutation_en = `${guardianSalBase_en} ${guardianFirstName}`;
   const guardianSalutation    = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
@@ -117,7 +115,6 @@ function buildVariables(student, session, formData, dbVars = {}) {
 
   const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
 
-  // ── Session date ─────────────────────────────────────────────────────────
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
         lang === "ar" ? "ar-EG" : "en-US",
@@ -125,7 +122,6 @@ function buildVariables(student, session, formData, dbVars = {}) {
       )
     : "";
 
-  // ── New date (for postponed) ─────────────────────────────────────────────
   const newDateFormatted = formData?.newDate
     ? new Date(formData.newDate).toLocaleDateString(
         lang === "ar" ? "ar-EG" : "en-US",
@@ -171,16 +167,7 @@ function renderTemplate(template, variables) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// getShiftedChainPreview — بيحسب محليًا (من غير API) مين هيترحل لو السيشن
-// دي اتلغت، بناءً على allSessions اللي الصفحة الأب محملاها أصلاً.
-// ✅ السيشن نفسها (trigger) بقت بتترحل هي كمان +shiftDays، وبتفضل معلّمة
-//    كـ isTrigger عشان الـ UI يوضحها لوحدها في الشريط.
-// 🔧 FIX: بناخد كل سيشنات الجروب (قبل الـ trigger وبعدها في التسلسل) مش بس
-// "اللي بعدها". قبل كده كان بيعمل slice(myIndex) فبيقطع أي سيشن قبل الـ
-// trigger من المعاينة بالكامل حتى لو كانت لسه "مجدولة" ومحتاجة تترحل هي
-// كمان. دلوقتي: أي سيشن في الجروب مش "مكتملة" (وملهاش إلغاء سابق لو مش هي
-// الـ trigger) بتترحل، بغض النظر عن موقعها قبل أو بعد الـ trigger.
-// ده لازم يفضل متطابق تمامًا مع منطق الباك اند في cascadeShiftOnCancel.
+// getShiftedChainPreview
 // ─────────────────────────────────────────────────────────────────────────────
 function getShiftedChainPreview(allSessions, currentSession, shiftDays = 7) {
   if (!currentSession || !allSessions?.length) return { shifting: [], skipped: [] };
@@ -199,7 +186,6 @@ function getShiftedChainPreview(allSessions, currentSession, shiftDays = 7) {
   const hasCurrent = sameGroup.some((s) => s.id === currentSession.id);
   if (!hasCurrent) return { shifting: [], skipped: [] };
 
-  // ✅ كل سيشنات الجروب (مش بس اللي بعد الـ trigger في الترتيب)
   const chain = sameGroup;
   const shifting = [];
   const skipped = [];
@@ -238,7 +224,7 @@ function formatShortDate(date, isRTL) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STATUS PICKER — كروت بصرية بدل الـ <select>
+// STATUS PICKER
 // ─────────────────────────────────────────────────────────────────────────────
 const STATUS_OPTIONS = [
   {
@@ -291,33 +277,64 @@ const STATUS_OPTIONS = [
   },
 ];
 
-function StatusPicker({ value, onChange, isRTL }) {
+// ✅ StatusPicker مع دعم disabledValues
+function StatusPicker({ value, onChange, isRTL, disabledValues = [] }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {STATUS_OPTIONS.map((opt) => {
         const Icon = opt.icon;
         const isActive = value === opt.value;
+        const isDisabled = disabledValues.includes(opt.value);
+
         return (
           <button
             key={opt.value}
             type="button"
-            onClick={() => onChange(opt.value)}
+            disabled={isDisabled}
+            onClick={() => !isDisabled && onChange(opt.value)}
+            title={
+              isDisabled
+                ? (isRTL ? "مقفول بسبب الـ Hold" : "Locked — group is on hold")
+                : ""
+            }
             className={`relative text-left rtl:text-right p-3 rounded-xl border-2 transition-all ${
-              isActive
-                ? `${opt.activeBg} border-transparent ring-2 ${opt.ring}`
-                : "bg-white dark:bg-dark_input border-PowderBlueBorder dark:border-dark_border hover:border-gray-300 dark:hover:border-gray-600"
+              isDisabled
+                ? "opacity-40 cursor-not-allowed bg-gray-50 dark:bg-gray-800/50 border-PowderBlueBorder dark:border-dark_border"
+                : isActive
+                  ? `${opt.activeBg} border-transparent ring-2 ${opt.ring}`
+                  : "bg-white dark:bg-dark_input border-PowderBlueBorder dark:border-dark_border hover:border-gray-300 dark:hover:border-gray-600"
             }`}
           >
             <div className="flex items-center gap-2 mb-1.5">
-              <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${isActive ? opt.iconBg : "bg-gray-100 dark:bg-gray-800"}`}>
-                <Icon className={`w-4 h-4 ${isActive ? opt.activeText : "text-gray-400"}`} />
+              <div
+                className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                  isActive && !isDisabled ? opt.iconBg : "bg-gray-100 dark:bg-gray-800"
+                }`}
+              >
+                <Icon
+                  className={`w-4 h-4 ${
+                    isActive && !isDisabled ? opt.activeText : "text-gray-400"
+                  }`}
+                />
               </div>
-              <span className={`text-sm font-semibold ${isActive ? opt.activeText : "text-MidnightNavyText dark:text-white"}`}>
+              <span
+                className={`text-sm font-semibold ${
+                  isActive && !isDisabled
+                    ? opt.activeText
+                    : "text-MidnightNavyText dark:text-white"
+                }`}
+              >
                 {isRTL ? opt.labelAr : opt.labelEn}
               </span>
             </div>
-            <p className={`text-[11px] leading-tight ${isActive ? opt.activeText : "text-gray-400"}`}>
-              {isRTL ? opt.hintAr : opt.hintEn}
+            <p
+              className={`text-[11px] leading-tight ${
+                isActive && !isDisabled ? opt.activeText : "text-gray-400"
+              }`}
+            >
+              {isDisabled
+                ? (isRTL ? "🔒 مقفول بسبب الـ Hold" : "🔒 Locked (Hold)")
+                : (isRTL ? opt.hintAr : opt.hintEn)}
             </p>
           </button>
         );
@@ -327,8 +344,7 @@ function StatusPicker({ value, onChange, isRTL }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CASCADE IMPACT STRIP — بيظهر بس لما الحالة = ملغاة، وبيوضح الأثر قبل الحفظ
-// ✅ أول كارت (لو موجود) بيبقى للـ trigger نفسها، معلّم بشارة "دي اللي هتلغيها"
+// CASCADE IMPACT STRIP
 // ─────────────────────────────────────────────────────────────────────────────
 function CascadeImpactStrip({ shifting, skipped, isRTL }) {
   if (shifting.length === 0 && skipped.length === 0) {
@@ -442,7 +458,10 @@ export default function EditSessionModal({
   const isPostponed     = formData.status === "postponed";
   const isCancelling    = formData.status === "cancelled" && session?.status !== "cancelled";
 
-  // ── Cascade preview (client-side, no extra API call) ───────────────────────
+  // ✅ هل الجروب على Hold؟
+  const groupIsOnHold = !!session?.group?.isOnHold;
+
+  // ── Cascade preview ──────────────────────────────────────────────────────
   const cascadePreview = useMemo(() => {
     if (!isCancelling) return { shifting: [], skipped: [] };
     return getShiftedChainPreview(allSessions, session, 7);
@@ -900,6 +919,16 @@ export default function EditSessionModal({
 
   // ── Save session ──────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
+    // ✅ HOLD GUARD — إضافي على اللي في الـ backend
+    if (groupIsOnHold && formData.status === "completed") {
+      toast.error(
+        isRTL
+          ? "الجروب على Hold — مينفعش تحدّد الجلسة كمكتملة"
+          : "Group is on hold — can't mark session as completed"
+      );
+      return;
+    }
+
     if (
       showReasonField &&
       (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim())
@@ -970,6 +999,7 @@ export default function EditSessionModal({
     isRTL,
     onClose,
     onRefresh,
+    groupIsOnHold,
   ]);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1010,6 +1040,25 @@ export default function EditSessionModal({
         {/* ── Body ── */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
+          {/* ✅ Hold Notice — للأدمن */}
+          {groupIsOnHold && (
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                <PauseCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-amber-800 dark:text-amber-300">
+                  {isRTL ? "الجروب على Hold" : "Group is on hold"}
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">
+                  {isRTL
+                    ? 'مينفعش تحدّد الجلسة كـ "مكتملة" لأن الجروب واقف. باقي التعديلات (رابط، ملاحظات، تأجيل) مسموحة.'
+                    : 'You can\'t mark this session as "completed" while the group is on hold. Other edits (link, notes, postpone) are still allowed.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Status — visual picker */}
           <div>
             <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
@@ -1018,6 +1067,7 @@ export default function EditSessionModal({
             <StatusPicker
               value={formData.status}
               isRTL={isRTL}
+              disabledValues={groupIsOnHold ? ["completed"] : []}
               onChange={(val) => {
                 setFormData((prev) => ({ ...prev, status: val }));
                 setManuallyEdited({ student: false, guardian: false });
@@ -1025,7 +1075,7 @@ export default function EditSessionModal({
             />
           </div>
 
-          {/* ✅ Cascade impact — بيظهر فورًا لما تختار "ملغاة" */}
+          {/* ✅ Cascade impact */}
           {isCancelling && (
             <CascadeImpactStrip
               shifting={cascadePreview.shifting}

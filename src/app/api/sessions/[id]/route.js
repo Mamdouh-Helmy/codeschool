@@ -33,7 +33,7 @@ export async function GET(req) {
 
     const total    = await Session.countDocuments(query);
     const sessions = await Session.find(query)
-      .populate("groupId",  "name code deliveryMode")
+      .populate("groupId",  "name code deliveryMode hold status") // ✅ ضيفنا hold + status
       .populate("courseId", "title level")
       .populate("attendance.studentId", "personalInfo.fullName enrollmentNumber")
       .sort({ scheduledDate: 1, startTime: 1 })
@@ -79,9 +79,29 @@ export async function GET(req) {
           late:    attendance.filter((a) => a.status === "late").length,
           excused: attendance.filter((a) => a.status === "excused").length,
         },
+
+        // ✅ group object — ضيفنا isOnHold + hold + status
         group: session.groupId
-          ? { id: session.groupId._id, name: session.groupId.name, code: session.groupId.code }
+          ? {
+              id: session.groupId._id,
+              name: session.groupId.name,
+              code: session.groupId.code,
+              isOnHold: !!session.groupId.hold?.isHeld,
+              status: session.groupId.status || null,
+              hold: session.groupId.hold
+                ? {
+                    holdType: session.groupId.hold.holdType,
+                    holdDays: session.groupId.hold.holdDays,
+                    holdSessionsCount: session.groupId.hold.holdSessionsCount,
+                    holdSessionsConsumed: session.groupId.hold.holdSessionsConsumed,
+                    holdUntilSessionId: session.groupId.hold.holdUntilSessionId || null,
+                    holdEndDate: session.groupId.hold.holdEndDate,
+                    holdReason: session.groupId.hold.holdReason,
+                  }
+                : null,
+            }
           : null,
+
         course: session.courseId
           ? { id: session.courseId._id, title: session.courseId.title, level: session.courseId.level }
           : null,
@@ -241,9 +261,34 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ success: false, error: "Invalid session ID format" }, { status: 400 });
     }
 
-    const existingSession = await Session.findOne({ _id: id, isDeleted: false }).populate("groupId");
+    // ✅ populate hold + status
+    const existingSession = await Session.findOne({ _id: id, isDeleted: false })
+      .populate({
+        path: "groupId",
+        select: "name code automation courseSnapshot instructors deliveryMode hold status",
+      });
+
     if (!existingSession) {
       return NextResponse.json({ success: false, error: "Session not found" }, { status: 404 });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ HOLD GUARD — منع تحويل السيشن لـ "completed" لو الجروب على Hold
+    // ═══════════════════════════════════════════════════════════════════
+    const groupIsOnHold = !!existingSession.groupId?.hold?.isHeld;
+
+    if (updateData.status === "completed" && groupIsOnHold) {
+      console.log(
+        `⏭️ [HOLD GUARD] Blocked marking session ${id} as completed — group is on hold`
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          error: "الجروب على Hold حاليًا — مينفعش تحدّد الجلسة كمكتملة",
+          code: "GROUP_ON_HOLD",
+        },
+        { status: 403 }
+      );
     }
 
     const oldStatus = existingSession.status;
@@ -262,11 +307,10 @@ export async function PUT(req, { params }) {
     };
 
     // ✅ الوقت الفعلي للسيشن — أساس حساب مرتب المدرس بالدقيقة.
-    // الأدمن ممكن يبعته وهو بيقفل السيشن، ولو مبعتش بنقع على الوقت المجدول.
     if (updateData.actualStartTime) basePayload.actualStartTime = updateData.actualStartTime;
     if (updateData.actualEndTime)   basePayload.actualEndTime   = updateData.actualEndTime;
 
-    // ✅ حفظ metadata في الـ DB (studentMessages, guardianMessages) للـ audit trail
+    // ✅ حفظ metadata في الـ DB للـ audit trail
     if (updateData.metadata && Object.keys(updateData.metadata).length > 0) {
       basePayload["metadata.lastNotificationMessages"] = updateData.metadata;
     }
@@ -292,7 +336,7 @@ export async function PUT(req, { params }) {
         new:           true,
         runValidators: true,
       })
-        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode")
+        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode hold status")
         .populate("courseId", "title");
 
     } else if (isPostponedWithDate) {
@@ -309,7 +353,7 @@ export async function PUT(req, { params }) {
         new:           true,
         runValidators: true,
       })
-        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode")
+        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode hold status")
         .populate("courseId", "title");
 
     } else {
@@ -319,14 +363,14 @@ export async function PUT(req, { params }) {
         new:           true,
         runValidators: true,
       })
-        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode")
+        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode hold status")
         .populate("courseId", "title");
     }
 
     console.log(`✅ Session updated: ${updatedSession.title} | ${oldStatus} → ${newStatus}`);
 
     // ── Instructor hours + Payroll on completion ───────────────────────────
-        let instructorHoursResult = null;
+    let instructorHoursResult = null;
     let payrollResult = null;
 
     if (newStatus === "completed" && oldStatus !== "completed") {
@@ -359,7 +403,6 @@ export async function PUT(req, { params }) {
     }
 
     // ✅ لو سيشن كانت completed ورجعت ملغية/مؤجلة → نلغي سطور المرتب
-    // (مش بنمسحها — cancelled عشان الـ audit trail يفضل)
     if (
       oldStatus === "completed" &&
       newStatus &&
