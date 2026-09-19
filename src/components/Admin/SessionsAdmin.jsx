@@ -59,15 +59,11 @@ function sortSessionsForHold(sessions) {
 
 /**
  * 🔒 يحدد هل السيشن دي مقفولة بسبب الـ Hold؟
- *
- * @param {Object} session — السيشن الحالية
- * @param {Object} group   — الجروب (فيه .hold)
- * @param {Array}  allSessions — كل سيشنات الجروب (للترتيب)
- * @returns {boolean}
+ * (fallback محلي — يُستخدم لو الـ API مبعتش sessionIsLocked)
  */
 function isSessionLockedByHold(session, group, allSessions) {
   if (!group?.isOnHold) return false;
-  if (session.status === "completed") return false; // تاريخية
+  if (session.status === "completed") return false;
 
   const hold = group.hold;
   if (!hold) return false;
@@ -79,21 +75,25 @@ function isSessionLockedByHold(session, group, allSessions) {
 
   // باقي الأنواع بتعتمد على ترتيب السيشنات
   const sorted = sortSessionsForHold(allSessions);
-  const myIndex = sorted.findIndex((s) => s.id === session.id);
+  const myIndex = sorted.findIndex(
+    (s) => String(s.id) === String(session.id)
+  );
   if (myIndex === -1) return false;
 
   // sessions: N سيشنات الأولى (0..N-1)
   if (hold.holdType === "sessions") {
     const consumed = hold.holdSessionsConsumed || 0;
-    // ✅ لو لسه مفيش أي سيشن اتاستهلكت → كل السيشنات مقفولة لحد ما التقدم يحصل
-    return myIndex < Math.max(consumed, 0) || consumed === 0;
+    if (consumed === 0) return true;
+    return myIndex < consumed;
   }
 
   // until_session: من أول الترتيب لحد السيشن المستهدفة (شاملة)
   if (hold.holdType === "until_session") {
     const targetId = hold.holdUntilSessionId;
     if (!targetId) return true;
-    const targetIndex = sorted.findIndex((s) => s.id === String(targetId) || s._id === String(targetId));
+    const targetIndex = sorted.findIndex(
+      (s) => String(s.id) === String(targetId) || String(s._id) === String(targetId)
+    );
     if (targetIndex === -1) return true;
     return myIndex <= targetIndex;
   }
@@ -102,18 +102,7 @@ function isSessionLockedByHold(session, group, allSessions) {
 }
 
 /**
- * 🔒 هل الـ Hold يقفل الجروب بالكامل؟ (indefinite أو duration)
- * مفيد لعرض Banner بشكل مختلف، ولحساب إتمام المجموعة.
- */
-function isFullGroupHold(group) {
-  if (!group?.isOnHold) return false;
-  const t = group.hold?.holdType;
-  return t === "indefinite" || t === "duration";
-}
-
-/**
- * 🔒 هل كل السيشنات اللي مش مكتملة مقفولة بسبب الـ Hold؟
- * (يستخدم لمنع "إتمام المجموعة" في كل الحالات.)
+ * 🔒 هل كل السيشنات اللي مش مكتملة مقفولة؟
  */
 function areAllActiveSessionsLocked(group, allSessions) {
   if (!group?.isOnHold) return false;
@@ -170,7 +159,6 @@ function HoldBanner({ group, isRTL, t, lockedCount = 0, totalActive = 0 }) {
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold">
               {holdLabel}
             </span>
-            {/* ✅ لو مش full hold، نبين عدد السيشنات المقفولة */}
             {!isFull && totalActive > 0 && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold">
                 {isRTL
@@ -205,7 +193,7 @@ function HoldBanner({ group, isRTL, t, lockedCount = 0, totalActive = 0 }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ SessionRowHoldBadge — Badge صغير على السيشن المقفولة
+// ✅ SessionHoldBadge — Badge صغير على السيشن المقفولة
 // ═══════════════════════════════════════════════════════════════════════════
 function SessionHoldBadge({ isRTL }) {
   return (
@@ -303,17 +291,13 @@ export default function SessionsAdmin() {
 
         // ✅ Auto-detect group completion — مع Hold Guard
         const groupIsOnHold = !!groupData?.hold?.isHeld;
-        const groupIsFullHold =
-          groupData?.hold?.holdType === "indefinite" ||
-          groupData?.hold?.holdType === "duration";
 
         const canAutoComplete =
           loadedSessions.length > 0 &&
           !filters.status &&
           !filters.upcoming &&
           !filters.past &&
-          !groupIsOnHold && // ✅ HOLD GUARD: مش بنفتح المودال لو الجروب على Hold
-          !groupIsFullHold;
+          !groupIsOnHold; // ✅ HOLD GUARD
 
         if (canAutoComplete) {
           const allDone = checkSessionsLocally(loadedSessions);
@@ -389,11 +373,18 @@ export default function SessionsAdmin() {
   const groupIsOnHold = !!group?.hold?.isHeld;
 
   // مجموعة الـ IDs المقفولة (Set للبحث السريع O(1))
+  // ✅ بنحسبها من الحساب المحلي (سواء الـ API بعت sessionIsLocked أو لأ)
   const lockedSessionIds = useMemo(() => {
     if (!groupIsOnHold || !sessions.length) return new Set();
     const set = new Set();
     sessions.forEach((s) => {
-      if (isSessionLockedByHold(s, group, sessions)) {
+      // ✅ لو الـ API بعت sessionIsLocked، استخدمها. وإلا احسب محليًا
+      const isLocked =
+        s.sessionIsLocked !== undefined
+          ? s.sessionIsLocked
+          : isSessionLockedByHold(s, group, sessions);
+
+      if (isLocked) {
         set.add(String(s.id));
       }
     });
@@ -421,6 +412,16 @@ export default function SessionsAdmin() {
   // ================================================================
 
   const openAttendanceModal = useCallback(async (session) => {
+    // ✅ HOLD GUARD — احتياطي (الزر مش هيبان أصلًا لو مقفولة)
+    if (isLocked(session)) {
+      toast.error(
+        isRTL
+          ? "السيشن دي مقفولة بسبب الـ Hold — مينفعش تسجل حضور"
+          : "This session is locked due to hold — can't take attendance"
+      );
+      return;
+    }
+
     setSelectedSession(session);
     setLoadingAttendance(true);
     setAttendanceModalOpen(true);
@@ -452,7 +453,7 @@ export default function SessionsAdmin() {
     } finally {
       setLoadingAttendance(false);
     }
-  }, [t]);
+  }, [t, isLocked, isRTL]);
 
   const openEditModal = useCallback((session) => {
     setSelectedSession(session);
@@ -516,8 +517,8 @@ export default function SessionsAdmin() {
 
   // ✅ هل نعرض زر إتمام المجموعة؟
   //    - كل الجلسات خلصت (completed/cancelled)
-  //    - ومفيش أي سيشن نشطة مقفولة (Hold Guard)
-  const canCompleteGroup = allDone && !allActiveLocked && !groupIsOnHold;
+  //    - ومفيش أي Hold نشط
+  const canCompleteGroup = allDone && !groupIsOnHold;
 
   // ================================================================
   // Render
@@ -678,7 +679,11 @@ export default function SessionsAdmin() {
             </thead>
             <tbody className="divide-y divide-PowderBlueBorder dark:divide-dark_border">
               {sessions.map((session) => {
-                const sessionIsLocked = isLocked(session);
+                // ✅ استخدام قيمة الـ API لو متوفرة، وإلا الحساب المحلي
+                const sessionIsLocked =
+                  session.sessionIsLocked !== undefined
+                    ? session.sessionIsLocked
+                    : isLocked(session);
 
                 return (
                   <tr
@@ -750,6 +755,8 @@ export default function SessionsAdmin() {
                             </button>
                           </>
                         )}
+
+                        {/* ✅ لو مقفولة — أيقونة قفل بدل التذكيرات */}
                         {session.status === 'scheduled' && sessionIsLocked && (
                           <span
                             className="p-1.5 rounded opacity-40 cursor-not-allowed"
@@ -759,6 +766,7 @@ export default function SessionsAdmin() {
                           </span>
                         )}
 
+                        {/* زر التفاصيل — يفضل شغال عادي */}
                         <button
                           onClick={() => openDetailsModal(session)}
                           className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
@@ -766,6 +774,8 @@ export default function SessionsAdmin() {
                         >
                           <Eye className="w-4 h-4 text-blue-500" />
                         </button>
+
+                        {/* زر التعديل — يفضل شغال (الـ Backend هيمنع لو مقفولة) */}
                         <button
                           onClick={() => openEditModal(session)}
                           className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
@@ -773,13 +783,24 @@ export default function SessionsAdmin() {
                         >
                           <Edit className="w-4 h-4 text-primary" />
                         </button>
-                        <button
-                          onClick={() => openAttendanceModal(session)}
-                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                          title={t("sessions.buttons.manageAttendance")}
-                        >
-                          <ClipboardCheck className="w-4 h-4 text-green-500" />
-                        </button>
+
+                        {/* ✅ زر الحضور — يتقفل لو السيشن مقفولة */}
+                        {!sessionIsLocked ? (
+                          <button
+                            onClick={() => openAttendanceModal(session)}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                            title={t("sessions.buttons.manageAttendance")}
+                          >
+                            <ClipboardCheck className="w-4 h-4 text-green-500" />
+                          </button>
+                        ) : (
+                          <span
+                            className="p-1.5 rounded opacity-40 cursor-not-allowed"
+                            title={isRTL ? 'الحضور مقفول بسبب الـ Hold' : 'Attendance locked due to hold'}
+                          >
+                            <ClipboardCheck className="w-4 h-4 text-amber-600" />
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>

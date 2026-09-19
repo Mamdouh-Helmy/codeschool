@@ -12,11 +12,59 @@ import Session from "../../../../../models/Session";
 import Student from "../../../../../models/Student";
 import Group from "../../../../../models/Group";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HOLD HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function sortSessionsForHold(sessions) {
+  return [...sessions].sort((a, b) => {
+    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
+    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
+  });
+}
+
+function isSessionLockedByHold(session, group, allGroupSessions) {
+  if (!group?.hold?.isHeld) return false;
+  if (session?.status === "completed") return false;
+
+  const hold = group.hold;
+
+  if (hold.holdType === "indefinite" || hold.holdType === "duration") {
+    return true;
+  }
+
+  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) {
+    return true;
+  }
+
+  const sorted = sortSessionsForHold(allGroupSessions);
+  const myId = String(session._id);
+  const myIndex = sorted.findIndex((s) => String(s._id) === myId);
+  if (myIndex === -1) return false;
+
+  if (hold.holdType === "sessions") {
+    const consumed = hold.holdSessionsConsumed || 0;
+    if (consumed === 0) return true;
+    return myIndex < consumed;
+  }
+
+  if (hold.holdType === "until_session") {
+    const targetId = hold.holdUntilSessionId;
+    if (!targetId) return true;
+    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
+    if (targetIndex === -1) return true;
+    return myIndex <= targetIndex;
+  }
+
+  return false;
+}
+
 // ─── Constants ───────────────────────────────────────────
 const DEDUCT_STATUSES = ["present", "late", "absent", "excused"];
 const CREDIT_DEDUCTION = 2;
 
-// ─── Helper: التحقق من صلاحية الجروب (مش على Hold) ─────────────────
+// ─── Helper: التحقق من صلاحية الجروب / السيشن (مش على Hold)
 async function checkGroupAvailability(session) {
   const groupId = session?.groupId?._id || session?.groupId;
   if (!groupId) return { ok: false, error: "Session has no group" };
@@ -27,25 +75,49 @@ async function checkGroupAvailability(session) {
 
   if (!group) return { ok: false, error: "Group not found" };
 
-  if (group.hold?.isHeld) {
+  if (!group.hold?.isHeld) {
+    // مفيش Hold — نتحقق من حالة الجروب بس
+    if (group.status !== "active" && group.status !== "completed") {
+      return {
+        ok: false,
+        code: "GROUP_NOT_ACTIVE",
+        error: `الجروب حالته "${group.status}" — مينفعش تسجل حضور`,
+        group,
+      };
+    }
+    return { ok: true, group };
+  }
+
+  // ✅ فيه Hold — نفحص لو السيشن دي بالتحديد مقفولة
+  const allGroupSessions = await Session.find({
+    groupId: group._id,
+    isDeleted: false,
+  })
+    .select("_id moduleIndex sessionNumber scheduledDate status")
+    .lean();
+
+  const sessionIsLocked = isSessionLockedByHold(
+    {
+      _id: session._id,
+      moduleIndex: session.moduleIndex,
+      sessionNumber: session.sessionNumber,
+      status: session.status,
+    },
+    group,
+    allGroupSessions
+  );
+
+  if (sessionIsLocked) {
     return {
       ok: false,
-      code: "GROUP_ON_HOLD",
-      error: "الجروب على Hold حاليًا — مينفعش تسجل حضور",
+      code: "SESSION_ON_HOLD",
+      error: "السيشن دي مقفولة بسبب الـ Hold — مينفعش تسجل حضور",
       group,
     };
   }
 
-  if (group.status !== "active" && group.status !== "completed") {
-    return {
-      ok: false,
-      code: "GROUP_NOT_ACTIVE",
-      error: `الجروب حالته "${group.status}" — مينفعش تسجل حضور`,
-      group,
-    };
-  }
-
-  return { ok: true, group };
+  // ✅ الجروب على Hold، بس السيشن دي مش مقفولة → نكمل عادي
+  return { ok: true, group, sessionIsLocked: false };
 }
 
 // ─── GET ─────────────────────────────────────────────────
@@ -73,6 +145,28 @@ export async function GET(req, { params }) {
 
     const group = session.groupId;
     const isOnHold = !!group?.hold?.isHeld;
+
+    // ✅ نحدد لو السيشن دي بالتحديد مقفولة
+    let sessionLocked = false;
+    if (isOnHold) {
+      const allGroupSessions = await Session.find({
+        groupId: group._id,
+        isDeleted: false,
+      })
+        .select("_id moduleIndex sessionNumber scheduledDate status")
+        .lean();
+
+      sessionLocked = isSessionLockedByHold(
+        {
+          _id: session._id,
+          moduleIndex: session.moduleIndex,
+          sessionNumber: session.sessionNumber,
+          status: session.status,
+        },
+        group,
+        allGroupSessions
+      );
+    }
 
     const studentIds = (group?.students || []).map((s) => s.studentId || s);
 
@@ -128,6 +222,7 @@ export async function GET(req, { params }) {
         session,
         students: studentsWithAttendance,
         groupIsOnHold: isOnHold,
+        sessionLocked, // ✅ جديد — هل السيشن دي بالتحديد مقفولة؟
         groupHold: group?.hold || null,
       },
     });
@@ -177,20 +272,40 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ افحص هل الجروب على Hold
+    // ✅ افحص هل السيشن دي بالتحديد مقفولة
     const sessionCheck = await Session.findById(id)
       .populate({ path: "groupId", select: "hold status name code" })
       .lean();
 
     if (sessionCheck?.groupId?.hold?.isHeld) {
-      return NextResponse.json(
+      const allGroupSessions = await Session.find({
+        groupId: sessionCheck.groupId._id,
+        isDeleted: false,
+      })
+        .select("_id moduleIndex sessionNumber scheduledDate status")
+        .lean();
+
+      const sessionIsLocked = isSessionLockedByHold(
         {
-          success: false,
-          error: "الجروب على Hold حاليًا",
-          code: "GROUP_ON_HOLD",
+          _id: sessionCheck._id,
+          moduleIndex: sessionCheck.moduleIndex,
+          sessionNumber: sessionCheck.sessionNumber,
+          status: sessionCheck.status,
         },
-        { status: 403 },
+        sessionCheck.groupId,
+        allGroupSessions
       );
+
+      if (sessionIsLocked) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "السيشن دي مقفولة بسبب الـ Hold",
+            code: "SESSION_ON_HOLD",
+          },
+          { status: 403 },
+        );
+      }
     }
 
     // 🆕 sendNow: إرسال فوري لرسالة الواتساب بس
@@ -322,7 +437,7 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    // ✅ افحص هل الجروب على Hold
+    // ✅ افحص هل السيشن دي مقفولة
     const availability = await checkGroupAvailability(session);
     if (!availability.ok) {
       return NextResponse.json(

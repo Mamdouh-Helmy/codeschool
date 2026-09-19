@@ -115,9 +115,20 @@ const PLAT = (locale = 'ar') => ({
   other: { label: "Link", icon: "🔗", grad: C.primaryGrad },
 });
 
-// ─── Hold Banner (new component) ─────────────────────────────────────────────
-function HoldBanner({ locale, reason }) {
+// ─── Hold Banner — بيعرض عدد السيشنات المقفولة ─────────────────────────────
+function HoldBanner({ locale, lockedCount, totalActive }) {
   const t = (ar, en) => (locale === 'ar' ? ar : en);
+
+  const message = lockedCount === totalActive
+    ? t(
+        "كل جلساتك المتاحة متوقفة مؤقتًا. هتقدر تدخل عليها تاني بعد فكّ الـ Hold.",
+        "All your active sessions are paused. You can access them once the hold is released."
+      )
+    : t(
+        `${lockedCount} جلسة من ${totalActive} متوقفة مؤقتًا. الجلسات التانية شغالة عادي.`,
+        `${lockedCount} of ${totalActive} sessions are paused. The rest are working normally.`
+      );
+
   return (
     <div className="mb-5 rounded-2xl p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
       <div className="flex items-start gap-3">
@@ -126,19 +137,11 @@ function HoldBanner({ locale, reason }) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-black text-sm text-amber-900 dark:text-amber-300">
-            {t("الجروب متوقف مؤقتًا (Hold)", "Group is temporarily on hold")}
+            {t("فيه جلسات متوقفة مؤقتًا (Hold)", "Some sessions are temporarily on hold")}
           </p>
           <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
-            {t(
-              "الجلسات معلّقة حاليًا ولا يمكن الدخول إليها. هيرجع الجروب شغال تلقائيًا قريب.",
-              "Sessions are paused and can't be joined right now. The group will resume automatically soon."
-            )}
+            {message}
           </p>
-          {reason && (
-            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 italic">
-              {t("السبب", "Reason")}: {reason}
-            </p>
-          )}
         </div>
       </div>
     </div>
@@ -153,7 +156,9 @@ function SessionModal({ session, onClose, locale }) {
   const AttIcon = att?.icon;
   const plat = PLAT(locale)[session.meetingPlatform] || PLAT(locale).other;
   const isCompleted = session.status === "completed";
-  const groupIsOnHold = !!session.groupIsOnHold;
+
+  // ✅ هل السيشن دي مقفولة؟
+  const sessionIsLocked = !!session.sessionIsLocked;
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -179,11 +184,11 @@ function SessionModal({ session, onClose, locale }) {
                   <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                   {cfg.label}
                 </span>
-                {/* ✅ Hold Badge — جديد */}
-                {groupIsOnHold && !isCompleted && (
+                {/* ✅ Locked Badge — بس لو السيشن دي مقفولة */}
+                {sessionIsLocked && !isCompleted && (
                   <span className="bg-amber-500/30 text-white text-xs font-bold px-2.5 py-1 rounded-full border border-amber-400/40 flex items-center gap-1">
-                    <PauseCircle className="w-3 h-3" />
-                    {locale === 'ar' ? 'متوقف' : 'On Hold'}
+                    <Lock className="w-3 h-3" />
+                    {locale === 'ar' ? 'مقفولة' : 'Locked'}
                   </span>
                 )}
                 {att && isCompleted && (
@@ -220,25 +225,25 @@ function SessionModal({ session, onClose, locale }) {
         {/* Body */}
         <div className="p-5 space-y-4">
 
-          {/* ✅ Hold Notice — جديد */}
-          {groupIsOnHold && !isCompleted && (
+          {/* ✅ Hold Notice — بس للسيشن دي لو مقفولة */}
+          {sessionIsLocked && !isCompleted && (
             <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
-              <PauseCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-amber-800 dark:text-amber-300">
                 <p className="font-black">
-                  {locale === 'ar' ? 'الجروب متوقف مؤقتًا' : 'Group is on hold'}
+                  {locale === 'ar' ? 'الجلسة مقفولة مؤقتًا' : 'Session is on hold'}
                 </p>
                 <p className="text-xs mt-1 leading-relaxed">
                   {locale === 'ar'
-                    ? 'هذه الجلسة غير متاحة حاليًا. هيفتح الجروب تلقائيًا لما يرجع نشط.'
-                    : 'This session is not available right now. Access will resume once the group is reactivated.'}
+                    ? 'هذه الجلسة غير متاحة حاليًا. هيتم فتحها تلقائيًا لما الـ Hold يتفك.'
+                    : 'This session is not available right now. It will unlock automatically once the hold is released.'}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Join button — مش بيظهر لو على Hold */}
-          {session.showJoinButton && !groupIsOnHold && (
+          {/* Join button — مش بيظهر لو السيشن دي مقفولة */}
+          {session.showJoinButton && !sessionIsLocked && (
             <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
               className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-white font-black text-sm bg-gradient-to-r ${plat.grad} shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all`}>
               <Video className="w-5 h-5" />{t("allSessions.modal.joinMeeting")}<ExternalLink className="w-4 h-4" />
@@ -339,15 +344,23 @@ function SessionRow({ session, onOpen, locale }) {
   const AttIcon = att?.icon;
   const plat = PLAT(locale)[session.meetingPlatform] || PLAT(locale).other;
 
+  // ✅ هل السيشن دي مقفولة بسبب الـ Hold؟
+  const sessionIsLocked = !!session.sessionIsLocked;
+
   // Locked = not accessible + scheduled (not completed)
-  const isLocked = !session.canAccess && session.status === "scheduled";
   const isCompleted = session.status === "completed";
   const isToday = session.isToday && session.status === "scheduled";
 
-  // ✅ هل الجروب على Hold؟
-  const groupIsOnHold = !!session.groupIsOnHold;
+  // ✅ isLocked العام = (مش متاح عادي) أو (مقفول بسبب الـ Hold)
+  const isLocked = (!session.canAccess && session.status === "scheduled") || (sessionIsLocked && !isCompleted);
 
   const handleClick = () => {
+    if (isLocked && !sessionIsLocked) return; // مش بنفتح لو مش متاح عادي
+    if (sessionIsLocked && !isCompleted) {
+      // بنفتح عشان نعرض رسالة الـ Hold
+      onOpen(session);
+      return;
+    }
     if (isLocked) return;
     onOpen(session);
   };
@@ -357,12 +370,12 @@ function SessionRow({ session, onOpen, locale }) {
       onClick={handleClick}
       className={`group flex items-center gap-3 p-4 rounded-2xl border bg-white dark:bg-[#161b22]
         transition-all duration-200
-        ${isLocked
+        ${isLocked && !sessionIsLocked
           ? "opacity-50 cursor-not-allowed"
           : "cursor-pointer hover:-translate-y-0.5 hover:shadow-md"}
-        ${groupIsOnHold && !isCompleted
+        ${sessionIsLocked && !isCompleted
           ? "border-amber-300/60 dark:border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/5"
-          : isToday
+          : isToday && !sessionIsLocked
             ? "border-primary/40 shadow-md shadow-primary/10 ring-1 ring-primary/20"
             : isCompleted
               ? "border-secondary/30 dark:border-secondary/30 hover:shadow-secondary/5"
@@ -370,7 +383,7 @@ function SessionRow({ session, onOpen, locale }) {
     >
       {/* Bubble */}
       <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 shadow-sm
-        ${groupIsOnHold && !isCompleted
+        ${sessionIsLocked && !isCompleted
           ? "bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400"
           : isLocked
             ? "bg-gray-100 dark:bg-[#21262d] text-gray-400 dark:text-[#6e7681]"
@@ -379,8 +392,8 @@ function SessionRow({ session, onOpen, locale }) {
               : isToday
                 ? `bg-gradient-to-br ${C.primaryGrad} text-white`
                 : "bg-gradient-to-br from-primary to-[#f67d00] text-white"}`}>
-        {groupIsOnHold && !isCompleted
-          ? <PauseCircle className="w-4 h-4" />
+        {sessionIsLocked && !isCompleted
+          ? <Lock className="w-4 h-4" />
           : isLocked
             ? <Lock className="w-4 h-4" />
             : isCompleted
@@ -393,14 +406,14 @@ function SessionRow({ session, onOpen, locale }) {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-          {/* ✅ Hold badge — جديد */}
-          {groupIsOnHold && !isCompleted && (
+          {/* ✅ Locked badge — بس على السيشنات المقفولة فعلاً */}
+          {sessionIsLocked && !isCompleted && (
             <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 flex items-center gap-1">
-              <PauseCircle className="w-3 h-3" />
-              {locale === 'ar' ? 'متوقف' : 'On Hold'}
+              <Lock className="w-3 h-3" />
+              {locale === 'ar' ? 'مقفولة' : 'Locked'}
             </span>
           )}
-          {isToday && !groupIsOnHold && (
+          {isToday && !sessionIsLocked && (
             <span className={`text-[10px] font-black ${C.primaryText} flex items-center gap-1`}>
               <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />{t("allSessions.today")}
             </span>
@@ -427,8 +440,8 @@ function SessionRow({ session, onOpen, locale }) {
             <AttIcon className="w-3 h-3" />{att.label}
           </span>
         )}
-        {/* Join button — مش بيظهر لو على Hold */}
-        {session.showJoinButton && !groupIsOnHold && (
+        {/* Join button — مش بيظهر لو السيشن دي مقفولة */}
+        {session.showJoinButton && !sessionIsLocked && (
           <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r ${plat.grad} text-white shadow-md hover:shadow-lg hover:scale-105 transition-all`}>
@@ -531,11 +544,12 @@ export default function AllSessionsPage() {
   const currentUser = user || { name: locale === 'ar' ? "طالب" : "Student", email: "", role: "student" };
 
   const filtered = (data?.sessions || []).filter((s) => {
+    const sessionIsLocked = !!s.sessionIsLocked;
     const mf =
       filter === "all" ? true :
         filter === "completed" ? s.status === "completed" :
-          filter === "upcoming" ? s.status === "scheduled" && s.canAccess :
-            filter === "locked" ? !s.canAccess && s.status === "scheduled" :
+          filter === "upcoming" ? s.status === "scheduled" && s.canAccess && !sessionIsLocked :
+            filter === "locked" ? (sessionIsLocked || (!s.canAccess && s.status === "scheduled")) :
               filter === "today" ? s.isToday : true;
     const ms = !search ||
       (s.title && s.title.toLowerCase().includes(search.toLowerCase())) ||
@@ -557,23 +571,34 @@ export default function AllSessionsPage() {
   });
   const sortedDates = Object.keys(byDate).sort((a, b) => new Date(a) - new Date(b));
 
-  // ✅ Join Now — بنستثني اللي على Hold
+  // ✅ Join Now — بنستثني اللي مقفولة
   const joinNow = (data?.sessions || []).filter(
-    (s) => s.showJoinButton && !s.groupIsOnHold
+    (s) => s.showJoinButton && !s.sessionIsLocked
   );
 
   const sessions = data?.sessions || [];
 
-  // ✅ هل عند الطالب أي جروب على Hold؟
-  const anyGroupOnHold = sessions.some((s) => s.groupIsOnHold && s.status !== "completed");
-  const onHoldReason = sessions.find((s) => s.groupIsOnHold && s.status !== "completed")?.group?.name;
+  // ✅ إحصائيات الـ Hold — بناءً على sessionIsLocked
+  const lockedSessionsCount = sessions.filter(
+    (s) => s.sessionIsLocked && s.status !== "completed"
+  ).length;
+  const totalActiveSessions = sessions.filter((s) => s.status !== "completed").length;
+  const anySessionLocked = lockedSessionsCount > 0;
 
   const FILTERS = [
     { id: "all", label: t("allSessions.filters.all"), count: data?.stats?.total ?? 0 },
-    { id: "upcoming", label: t("allSessions.filters.upcoming"), count: sessions.filter(s => s.canAccess && s.status === "scheduled").length },
+    {
+      id: "upcoming",
+      label: t("allSessions.filters.upcoming"),
+      count: sessions.filter(s => s.canAccess && s.status === "scheduled" && !s.sessionIsLocked).length
+    },
     { id: "completed", label: t("allSessions.filters.completed"), count: data?.stats?.completed ?? 0 },
     { id: "today", label: t("allSessions.filters.today"), count: sessions.filter(s => s.isToday).length },
-    { id: "locked", label: t("allSessions.filters.locked"), count: sessions.filter(s => !s.canAccess && s.status === "scheduled").length },
+    {
+      id: "locked",
+      label: t("allSessions.filters.locked"),
+      count: sessions.filter(s => (s.sessionIsLocked || (!s.canAccess && s.status === "scheduled")) && s.status !== "completed").length
+    },
   ];
 
   return (
@@ -662,11 +687,12 @@ export default function AllSessionsPage() {
         {/* Content */}
         <div className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
 
-          {/* ✅ Hold Banner — جديد */}
-          {!loading && anyGroupOnHold && filter === "all" && (
+          {/* ✅ Hold Banner — بيعرض عدد السيشنات المقفولة */}
+          {!loading && anySessionLocked && filter === "all" && (
             <HoldBanner
               locale={locale}
-              reason={onHoldReason}
+              lockedCount={lockedSessionsCount}
+              totalActive={totalActiveSessions}
             />
           )}
 

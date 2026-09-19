@@ -9,6 +9,53 @@ import StudentEvaluation from '../../../../../models/StudentEvaluation';
 import MessageTemplate from '../../../../../models/MessageTemplate';
 import TemplateVariable from '../../../../../models/TemplateVariable';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HOLD HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function sortSessionsForHold(sessions) {
+  return [...sessions].sort((a, b) => {
+    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
+    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
+  });
+}
+
+function isSessionLockedByHold(session, group, allGroupSessions) {
+  if (!group?.hold?.isHeld) return false;
+  if (session?.status === 'completed') return false;
+
+  const hold = group.hold;
+
+  if (hold.holdType === 'indefinite' || hold.holdType === 'duration') {
+    return true;
+  }
+
+  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) {
+    return true;
+  }
+
+  const sorted = sortSessionsForHold(allGroupSessions);
+  const myId = String(session._id);
+  const myIndex = sorted.findIndex((s) => String(s._id) === myId);
+  if (myIndex === -1) return false;
+
+  if (hold.holdType === 'sessions') {
+    const consumed = hold.holdSessionsConsumed || 0;
+    if (consumed === 0) return true;
+    return myIndex < consumed;
+  }
+
+  if (hold.holdType === 'until_session') {
+    const targetId = hold.holdUntilSessionId;
+    if (!targetId) return true;
+    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
+    if (targetIndex === -1) return true;
+    return myIndex <= targetIndex;
+  }
+
+  return false;
+}
 
 const EVALUATION_TEMPLATE_MAP = {
   pass:   'evaluation_pass',
@@ -16,10 +63,6 @@ const EVALUATION_TEMPLATE_MAP = {
   repeat: 'evaluation_repeat',
 };
 
-// 🆕 الطلاب اللي حالة حضورهم من ضمن الـ array دي مايدخلوش خطوة التقييم خالص:
-// مش بيظهروا في الـ GET، ومش بياخدوا أي تقييم/رسالة/لينك تسجيل/بلوج حتى لو
-// اتبعتوا في الـ PATCH لأي سبب (تأمين مزدوج — الفرونت أصلاً مش هيبعتهم
-// لأنهم مش هيظهروا، بس الـ backend بيتأكد بنفسه كمان).
 const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'late', 'excused'];
 
 // ─── Helper: resolve var from DB ─────────────────────────────────────────────
@@ -119,16 +162,10 @@ async function getModuleData(groupId, moduleIndex) {
   }
 }
 
-// ─── Helper: جيب بيانات البلوج الخاصة بالسيشن دي من الكورس ───────────────────
-// بيدور على السيشن المطابقة (بنفس sessionNumber) جوه curriculum[moduleIndex].sessions
-// ولو مفيش محتوى بلوج خالص (لا عربي ولا إنجليزي) بيرجع null — يعني مفيش
-// أي رسالة بلوج هتتبعت أصلاً.
+// ─── Helper: جيب بيانات البلوج ───────────────────────────────────────────────
 async function getSessionBlogInfo(session) {
   try {
-    console.log('🔍 [BlogInfo] session.courseId:', session?.courseId, '| moduleIndex:', session?.moduleIndex, '| sessionNumber:', session?.sessionNumber);
-
     if (!session?.courseId || session.moduleIndex === undefined || !session.sessionNumber) {
-      console.log('🔍 [BlogInfo] Missing courseId/moduleIndex/sessionNumber — returning null');
       return null;
     }
 
@@ -137,31 +174,18 @@ async function getSessionBlogInfo(session) {
       .select('curriculum')
       .lean();
 
-    if (!course) {
-      console.log('🔍 [BlogInfo] Course not found for id:', session.courseId);
-      return null;
-    }
+    if (!course) return null;
 
     const moduleData = course.curriculum?.[session.moduleIndex];
-    console.log('🔍 [BlogInfo] moduleData found:', !!moduleData, '| sessions count in module:', moduleData?.sessions?.length || 0);
-    if (moduleData?.sessions?.length) {
-      console.log('🔍 [BlogInfo] sessionNumbers available in module:', moduleData.sessions.map(s => s.sessionNumber));
-    }
-
     const sessionBlog = (moduleData?.sessions || []).find(
       (s) => Number(s.sessionNumber) === Number(session.sessionNumber)
     );
 
-    if (!sessionBlog) {
-      console.log('🔍 [BlogInfo] No matching sub-session found for sessionNumber:', session.sessionNumber);
-      return null;
-    }
+    if (!sessionBlog) return null;
 
     const hasAr = !!sessionBlog.blogBodyAr?.trim();
     const hasEn = !!sessionBlog.blogBodyEn?.trim();
-    console.log('🔍 [BlogInfo] Found sessionBlog — hasAr:', hasAr, '| hasEn:', hasEn);
 
-    // ✅ لو مفيش محتوى بلوج خالص (مش عربي ومش إنجليزي) — من غير رسالة
     if (!hasAr && !hasEn) return null;
 
     return { hasAr, hasEn };
@@ -172,8 +196,6 @@ async function getSessionBlogInfo(session) {
 }
 
 // ─── Build rendered evaluation message ───────────────────────────────────────
-// ⛔️ ملحوظة مهمة: الرسالة دي بقت مالهاش أي علاقة بلينك البلوج خالص —
-// اللينك بقى جوه رسالة مستقلة تمامًا (buildBlogMessage تحت).
 async function buildEvaluationMessage(student, decision, session, extra = {}) {
   const lang         = student.communicationPreferences?.preferredLanguage || 'ar';
   const gender       = (student.personalInfo?.gender || 'male').toLowerCase();
@@ -184,35 +206,27 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
 
   const dbVars = await loadDbVars();
 
-  // ── اسم الطالب حسب اللغة ────────────────────────────────────────────────
   const studentFirstName =
     lang === 'ar'
       ? student.personalInfo?.nickname?.ar?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب'
       : student.personalInfo?.nickname?.en?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'Student';
 
-  // ── اسم ولي الأمر حسب اللغة ─────────────────────────────────────────────
-  // لازم يتحدد الأول عشان يتستخدم في بناء guardianSalutation
   const guardianFirstName =
     lang === 'ar'
       ? student.guardianInfo?.nickname?.ar?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
       : student.guardianInfo?.nickname?.en?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
 
-  // ── guardianSalutation من DB أولاً ──────────────────────────────────────
-  // القيمة في DB بتكون: "عزيزي الأستاذ {guardianName}" أو "Dear Mr. {guardianName}"
-  // بعد ما نجيبها نعمل replace بـ guardianFirstName الصح حسب اللغة والجنس
   const guardianSalutationFromDB = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
   const guardianSalutation = guardianSalutationFromDB
     ? guardianSalutationFromDB.replace(/\{guardianName\}/g, guardianFirstName)
     : buildGuardianSalutation(guardianFirstName, isFather, lang);
 
-  // ── childTitle حسب اللغة والجنس ──────────────────────────────────────────
   const childTitle =
     resolveVar(dbVars, 'childTitle', lang, genderCtx) ||
     (lang === 'ar'
       ? (isMale ? 'ابنك' : 'ابنتك')
       : (isMale ? 'your son' : 'your daughter'));
 
-  // ── evaluationDecision حسب اللغة والقرار ────────────────────────────────
   const decisionFromDB = resolveVar(dbVars, 'evaluationDecision', lang, genderCtx);
   const decisionText = decisionFromDB || (
     lang === 'ar'
@@ -220,12 +234,10 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
       : (decision === 'pass' ? 'Excellent' : decision === 'review' ? 'Needs Review' : 'Needs Support')
   );
 
-  // ── supervisorName من DB vars ────────────────────────────────────────────
   const supervisorName =
     resolveVar(dbVars, 'supervisorName', lang, genderCtx) ||
     (lang === 'ar' ? 'المشرف الأكاديمي' : 'Learning Supervisor');
 
-  // ── تاريخ الجلسة حسب اللغة ──────────────────────────────────────────────
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
         lang === 'ar' ? 'ar-EG' : 'en-US',
@@ -242,7 +254,6 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
   const starsParticipation = buildStars(ratings.participation ?? 3);
   const instructorComment  = extra.comment?.trim() || (lang === 'ar' ? '—' : '—');
 
-  // ── رابط التسجيل حسب اللغة ──────────────────────────────────────────────
   const recordingLinkText = session?.recordingLink
     ? lang === 'ar'
       ? `🎥 رابط التسجيل: ${session.recordingLink}`
@@ -253,7 +264,6 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     ? await getCompletedSessionsCount(extra.groupId, student._id)
     : 0;
 
-  // ── moduleTitle و moduleDescription ─────────────────────────────────────
   const moduleTitle =
     extra.moduleTitle ||
     resolveVar(dbVars, 'moduleTitle', lang, genderCtx) ||
@@ -264,7 +274,6 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     resolveVar(dbVars, 'moduleDescription', lang, genderCtx) ||
     '';
 
-  // ── جيب القالب من DB ─────────────────────────────────────────────────────
   let template   = extra.rawContent;
   let isFallback = false;
 
@@ -274,9 +283,8 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     isFallback = result.isFallback;
   }
 
-  // ── بناء جدول المتغيرات ───────────────────────────────────────────────────
   const variables = {
-    guardianSalutation,   // ✅ جاية من DB + replace بالاسم الصح حسب اللغة
+    guardianSalutation,
     guardianName:        guardianFirstName,
     studentName:         studentFirstName,
     childTitle,
@@ -330,13 +338,11 @@ async function buildRecordingMessage(student, session, recordingLink) {
       ? student.personalInfo?.nickname?.ar?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب'
       : student.personalInfo?.nickname?.en?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'Student';
 
-  // ── اسم ولي الأمر حسب اللغة ─────────────────────────────────────────────
   const guardianFirstName =
     lang === 'ar'
       ? student.guardianInfo?.nickname?.ar?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
       : student.guardianInfo?.nickname?.en?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
 
-  // ── guardianSalutation من DB أولاً ──────────────────────────────────────
   const guardianSalutationFromDB = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
   const guardianSalutation = guardianSalutationFromDB
     ? guardianSalutationFromDB.replace(/\{guardianName\}/g, guardianFirstName)
@@ -352,7 +358,7 @@ async function buildRecordingMessage(student, session, recordingLink) {
   let rendered = result.content;
 
   const variables = {
-    guardianSalutation,   // ✅ نفس الـ pattern — من DB + replace بالاسم الصح
+    guardianSalutation,
     guardianName:  guardianFirstName,
     studentName:   studentFirstName,
     childTitle,
@@ -367,17 +373,11 @@ async function buildRecordingMessage(student, session, recordingLink) {
   return { rendered, lang, isFallback: result.isFallback };
 }
 
-// ─── 🆕 Build session blog (summary) message — رسالة مستقلة تمامًا ──────────
-// دي رسالة منفصلة بالكامل عن رسالة التقييم ورسالة التسجيل — بتحتوي بس على
-// تحية لولي الأمر + لينك ملخص الجلسة. بترجع null لو مفيش محتوى بلوج فعلاً
-// باللغة اللي هتتبعت بيها الرسالة (عربي/إنجليزي) عشان مفيش رسالة فاضية تتبعت.
+// ─── Build session blog (summary) message ────────────────────────────────────
 async function buildBlogMessage(student, session, blogInfo) {
   const lang = student.communicationPreferences?.preferredLanguage || 'ar';
 
-  console.log('🔍 [BlogMessage] lang:', lang, '| blogInfo:', blogInfo);
-
   if (!blogInfo || !((lang === 'ar' && blogInfo.hasAr) || (lang === 'en' && blogInfo.hasEn))) {
-    console.log('🔍 [BlogMessage] No matching blog content for this language — skipping');
     return null;
   }
 
@@ -405,26 +405,45 @@ async function buildBlogMessage(student, session, blogInfo) {
       ? `${guardianSalutation}،\n\n📝 تقدروا تقروا ملخص الجلسة كامل من هنا:\n${blogUrl}`
       : `${guardianSalutation},\n\n📝 You can read the full session summary here:\n${blogUrl}`;
 
-  console.log('✅ [BlogMessage] Built standalone blog message');
-
   return { rendered, lang };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ HELPER: حماية من الـ Hold
+// ✅ HELPER: حماية من الـ Hold (بتاخد بعين الاعتبار نوع الـ Hold)
 // ═══════════════════════════════════════════════════════════════════════════
-function checkGroupHoldResponse(session) {
-  if (session?.groupId?.hold?.isHeld) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'الجروب على Hold حاليًا — التقييم مش متاح',
-        code: 'GROUP_ON_HOLD',
-      },
-      { status: 403 },
-    );
-  }
-  return null;
+async function checkGroupHoldResponse(session) {
+  if (!session?.groupId?.hold?.isHeld) return null;
+
+  // جيب كل سيشنات الجروب
+  const groupId = session.groupId._id || session.groupId;
+  const allGroupSessions = await Session.find({
+    groupId,
+    isDeleted: false,
+  })
+    .select('_id moduleIndex sessionNumber scheduledDate status')
+    .lean();
+
+  const sessionIsLocked = isSessionLockedByHold(
+    {
+      _id: session._id,
+      moduleIndex: session.moduleIndex,
+      sessionNumber: session.sessionNumber,
+      status: session.status,
+    },
+    session.groupId,
+    allGroupSessions,
+  );
+
+  if (!sessionIsLocked) return null;
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: 'السيشن دي مقفولة بسبب الـ Hold — التقييم مش متاح',
+      code: 'SESSION_ON_HOLD',
+    },
+    { status: 403 },
+  );
 }
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
@@ -438,13 +457,13 @@ export async function GET(req, { params }) {
     const { id } = await params;
 
     const session = await Session.findById(id)
-      .populate({ path: 'groupId', select: 'name code students instructors hold status' }) // ✅ ضيفنا hold و status
+      .populate({ path: 'groupId', select: 'name code students instructors hold status' })
       .lean();
 
     if (!session) return NextResponse.json({ success: false, message: 'الجلسة غير موجودة' }, { status: 404 });
 
     // ✅ حماية من الـ Hold
-    const holdResponse = checkGroupHoldResponse(session);
+    const holdResponse = await checkGroupHoldResponse(session);
     if (holdResponse) return holdResponse;
 
     if (!session.attendanceTaken) {
@@ -469,12 +488,6 @@ export async function GET(req, { params }) {
       attendanceMap[a.studentId?.toString()] = a.status;
     });
 
-    // ✅ FIX: التقييمات لازم تتفلتر بالسيشن الحالية (sessionId: session._id)
-    // مش بس بالجروب والطالب — قبل كده كانت الكويري بتجيب "آخر تقييم اتعمل
-    // للطالب ده في الجروب كله" بغض النظر عن أي سيشن كان، فلو الطالب اتقيّم
-    // في سيشن سابقة وكُتب تعليق طويل، التعليق ده كان بيظهر تلقائيًا كـ
-    // "currentComment" في أي سيشن جديدة تانية لنفس الطالب — وده سبب ظهور
-    // التقرير القديم جوه الـ textarea بدل ما يكون فاضي.
     const existingEvals = await StudentEvaluation.find({
       groupId:   session.groupId?._id,
       sessionId: session._id,
@@ -496,9 +509,6 @@ export async function GET(req, { params }) {
       MessageTemplate.getOrFallback('session_recording', 'ar'),
     ]);
 
-    // 🆕 الطلاب اللي "غايب" أو "معذور" في الحضور مايدخلوش خطوة التقييم خالص —
-    // بيتفلتروا هنا قبل ما يترجعوا للفرونت، فمش هيظهروا في الصفحة أصلاً
-    // ومش هياخدوا أي تقييم أو رسالة أو لينك تسجيل أو بلوج.
     const studentsForEval = students
       .filter((s) => {
         const status = attendanceMap[s._id.toString()] || null;
@@ -530,7 +540,7 @@ export async function GET(req, { params }) {
           sessionNumber: session.sessionNumber,
           moduleIndex:   session.moduleIndex,
           recordingLink: session.recordingLink || '',
-          deliveryMode:  session.deliveryMode || null, // ✅ ضيفناها للفرونت
+          deliveryMode:  session.deliveryMode || null,
           group: { _id: session.groupId?._id, name: session.groupId?.name, code: session.groupId?.code },
         },
         students: studentsForEval,
@@ -566,7 +576,6 @@ export async function POST(req, { params }) {
     if (!studentId || !decision) return NextResponse.json({ success: false, error: 'studentId and decision required' }, { status: 400 });
     if (!['pass', 'review', 'repeat'].includes(decision)) return NextResponse.json({ success: false, error: 'Invalid decision' }, { status: 400 });
 
-    // 🆕 نفس القاعدة هنا: مايتعملش preview لرسالة تقييم لطالب غايب/معذور
     if (EXCLUDED_FROM_EVALUATION_STATUSES.includes(attendanceStatus)) {
       return NextResponse.json(
         { success: false, error: 'الطالب غايب أو معذور — لا يدخل خطوة التقييم' },
@@ -577,21 +586,19 @@ export async function POST(req, { params }) {
     const [student, session] = await Promise.all([
       Student.findById(studentId).select('personalInfo guardianInfo communicationPreferences enrollmentNumber').lean(),
       Session.findById(id)
-        .populate({ path: 'groupId', select: 'hold status name' }) // ✅ ضيفنا hold و status
+        .populate({ path: 'groupId', select: 'hold status name' })
         .lean(),
     ]);
     if (!student) return NextResponse.json({ success: false, error: 'Student not found' }, { status: 404 });
 
     // ✅ حماية من الـ Hold
-    const holdResponse = checkGroupHoldResponse(session);
+    const holdResponse = await checkGroupHoldResponse(session);
     if (holdResponse) return holdResponse;
 
     const { moduleTitle, moduleDescription } = session?.groupId
       ? await getModuleData(session.groupId, session.moduleIndex ?? 0)
       : { moduleTitle: '', moduleDescription: '' };
 
-    // ✅ نفس بيانات البلوج اللي هتتستخدم فعليًا في الرسالة الحقيقية — عشان
-    // المعاينة تبقى مطابقة تمامًا لما هيتبعت فعليًا بعد الحفظ
     const blogInfo = session ? await getSessionBlogInfo(session) : null;
 
     const { rendered, lang, isFallback, guardianPhone } = await buildEvaluationMessage(
@@ -607,14 +614,13 @@ export async function POST(req, { params }) {
       }
     );
 
-    // 🆕 معاينة رسالة ملخص الجلسة (البلوج) كرسالة مستقلة تمامًا في response منفصل
     const blogMessage = session ? await buildBlogMessage(student, session, blogInfo) : null;
 
     return NextResponse.json({
       success: true,
       data: {
         content:      rendered,
-        blogContent:  blogMessage?.rendered || null,   // 🆕 رسالة الملخص المستقلة
+        blogContent:  blogMessage?.rendered || null,
         lang,
         isFallback,
         guardianPhone,
@@ -642,9 +648,6 @@ export async function PATCH(req, { params }) {
     try { const t = await req.text(); if (t?.trim()) body = JSON.parse(t); }
     catch { return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    // 🆕 actualStartTime / actualEndTime: الوقت الفعلي اللي المدرس بدأ وخلص فيه
-    // ("19:00" / "20:30"). اختياريين — لو مجوش بنقع على الوقت المجدول تلقائيًا
-    // جوه lib/payroll.
     const { evaluations, actualStartTime, actualEndTime } = body;
 
     if (!Array.isArray(evaluations) || evaluations.length === 0) {
@@ -652,21 +655,13 @@ export async function PATCH(req, { params }) {
     }
 
     const session = await Session.findById(id)
-      .populate({ path: 'groupId', select: 'name instructors deliveryMode hold status' }) // ✅ ضيفنا hold و status
+      .populate({ path: 'groupId', select: 'name instructors deliveryMode hold status' })
       .select('+recordingLink');
     if (!session) return NextResponse.json({ success: false, message: 'الجلسة غير موجودة' }, { status: 404 });
 
     // ✅ حماية من الـ Hold
-    if (session.groupId?.hold?.isHeld) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'الجروب على Hold حاليًا — مينفعش تقيّم',
-          code: 'GROUP_ON_HOLD',
-        },
-        { status: 403 },
-      );
-    }
+    const holdResponse = await checkGroupHoldResponse(session);
+    if (holdResponse) return holdResponse;
 
     if (user.role === 'instructor') {
       const isInstructor = session.groupId?.instructors?.some(
@@ -675,7 +670,6 @@ export async function PATCH(req, { params }) {
       if (!isInstructor) return NextResponse.json({ success: false, message: 'مش مدرس هذا الجروب' }, { status: 403 });
     }
 
-    // ✅ احفظ الحالة القديمة قبل أي تعديل
     const wasAlreadyCompleted = session.status === 'completed';
 
     const { moduleTitle, moduleDescription } = session.groupId?._id
@@ -841,13 +835,11 @@ export async function PATCH(req, { params }) {
     if (!wasAlreadyCompleted) {
       session.status = 'completed';
 
-      // ✅ الوقت الفعلي — بيتحفظ على السيشن نفسها عشان يفضل مرجع دايم
       if (actualStartTime) session.actualStartTime = actualStartTime;
       if (actualEndTime)   session.actualEndTime   = actualEndTime;
 
       await session.save();
 
-            // ✅ الـ payroll الأول
       try {
         const { processSessionPayroll } = await import('@/lib/payroll');
         payrollResult = await processSessionPayroll({
@@ -862,7 +854,6 @@ export async function PATCH(req, { params }) {
         payrollResult = { success: false, error: payrollError.message };
       }
 
-      // ✅ ساعات التدريس بنفس المدة الفعلية
       try {
         const group = await Group.findById(session.groupId?._id || session.groupId);
         if (group) {

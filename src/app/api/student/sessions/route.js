@@ -6,6 +6,57 @@ import Student from "../../../models/Student";
 import Session from "../../../models/Session";
 import Group from "../../../models/Group";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HOLD HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function sortSessionsForHold(sessions) {
+  return [...sessions].sort((a, b) => {
+    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
+    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
+  });
+}
+
+function isSessionLockedByHold(session, group, allGroupSessions) {
+  if (!group?.hold?.isHeld) return false;
+  if (session?.status === "completed") return false;
+
+  const hold = group.hold;
+
+  if (hold.holdType === "indefinite" || hold.holdType === "duration") {
+    return true;
+  }
+
+  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) {
+    return true;
+  }
+
+  const sorted = sortSessionsForHold(allGroupSessions);
+  const myId = String(session._id);
+  const myIndex = sorted.findIndex((s) => String(s._id) === myId);
+  if (myIndex === -1) return false;
+
+  if (hold.holdType === "sessions") {
+    const consumed = hold.holdSessionsConsumed || 0;
+    if (consumed === 0) return true;
+    return myIndex < consumed;
+  }
+
+  if (hold.holdType === "until_session") {
+    const targetId = hold.holdUntilSessionId;
+    if (!targetId) return true;
+    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
+    if (targetIndex === -1) return true;
+    return myIndex <= targetIndex;
+  }
+
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GET
+// ═══════════════════════════════════════════════════════════════════════════
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -56,7 +107,7 @@ export async function GET(req) {
     groups.forEach((g) => {
       const gid = g._id.toString();
       groupCurriculumMap[gid] = g.courseId?.curriculum || [];
-      groupHoldMap[gid] = !!g.hold?.isHeld;
+      groupHoldMap[gid] = g.hold || null;
       groupStatusMap[gid] = g.status || "draft";
     });
 
@@ -80,7 +131,7 @@ export async function GET(req) {
       .limit(limit)
       .lean();
 
-    // ── ترتيب الجلسات لكل جروب لحساب canAccess ───────────────────────────────
+    // ── ترتيب الجلسات لكل جروب ──────────────────────────────────────────────
     const sessionsByGroup = {};
     groupIds.forEach((gid) => { sessionsByGroup[gid.toString()] = []; });
 
@@ -113,9 +164,24 @@ export async function GET(req) {
       const prevCompleted = isFirst || (prevSession && prevSession.status === "completed");
 
       // ✅ هل الجروب على Hold؟ (من الـ session.groupId أو من الـ map)
-      const sessionGroupHold = !!session.groupId?.hold?.isHeld;
-      const groupIsOnHold =
-        sessionGroupHold || !!groupHoldMap[gid];
+      const sessionGroupHold = session.groupId?.hold;
+      const groupIsOnHold = !!(sessionGroupHold?.isHeld || groupHoldMap[gid]?.isHeld);
+
+      // ✅ هل السيشن دي بالتحديد مقفولة؟
+      let sessionIsLocked = false;
+      if (groupIsOnHold) {
+        const holdInfo = sessionGroupHold?.isHeld ? sessionGroupHold : groupHoldMap[gid];
+        sessionIsLocked = isSessionLockedByHold(
+          {
+            _id: session._id,
+            moduleIndex: session.moduleIndex,
+            sessionNumber: session.sessionNumber,
+            status: session.status,
+          },
+          { hold: holdInfo },
+          groupOrder
+        );
+      }
 
       // ✅ هل الجروب فعّال أصلًا؟
       const sessionGroupStatus = session.groupId?.status || groupStatusMap[gid] || "draft";
@@ -126,10 +192,11 @@ export async function GET(req) {
         session.status === "completed" ||
         (prevCompleted && session.status !== "cancelled");
 
-      // ✅ OVERRIDE: لو الجروب على Hold أو مش active → مفيش وصول لأي سيشن
-      // (ما عدا السيشنات المكتملة — دي تاريخية ويشوفوها عادي)
+      // ✅ OVERRIDE: لو الجروب على Hold أو مش active
       if (session.status !== "completed") {
-        if (groupIsOnHold || !groupIsActive) {
+        if (!groupIsActive) {
+          canAccess = false;
+        } else if (sessionIsLocked) {
           canAccess = false;
         }
       }
@@ -152,7 +219,7 @@ export async function GET(req) {
       const sessionEndTime = new Date(sessionDate);
       sessionEndTime.setHours(endH, endM, 0, 0);
 
-      // ✅ showJoinButton: لازم الجروب مش على Hold ومش inactive
+      // ✅ showJoinButton: لازم الجروب مش مقفول
       let showJoinButton =
         prevCompleted &&
         session.status === "scheduled" &&
@@ -160,7 +227,7 @@ export async function GET(req) {
         sessionEndTime > now &&
         !!session.meetingLink;
 
-      if (groupIsOnHold || !groupIsActive) {
+      if (!groupIsActive || sessionIsLocked) {
         showJoinButton = false;
       }
 
@@ -178,13 +245,13 @@ export async function GET(req) {
 
       const lessons = rawLessons.map((l) => ({ title: l.title }));
 
-      // ✅ Recording: للسيشنات المكتملة بس (Hold مش بيأثر على التاريخي)
+      // ✅ Recording: للسيشنات المكتملة بس
       const recordingLink =
         session.status === "completed" ? session.recordingLink : null;
 
       // ✅ materials: بس للسيشنات اللي الطالب عنده وصول ليها
       const materials =
-        (session.status === "completed" || canAccess) && !groupIsOnHold
+        (session.status === "completed" || canAccess) && !sessionIsLocked
           ? session.materials || []
           : session.status === "completed"
             ? session.materials || []
@@ -216,6 +283,7 @@ export async function GET(req) {
         // ✅ Hold info — جديد
         groupIsOnHold,
         groupIsActive,
+        sessionIsLocked, // ✅ جديد — هل السيشن دي بالتحديد مقفولة؟
 
         group: {
           _id:  session.groupId?._id || session.groupId,
@@ -234,9 +302,9 @@ export async function GET(req) {
       isDeleted: false,
     }).select("status groupId").lean();
 
-    // ✅ إحصائيات الـ Hold — جديد
+    // ✅ إحصائيات الـ Hold
     const heldGroupIds = Object.keys(groupHoldMap).filter(
-      (gid) => groupHoldMap[gid]
+      (gid) => groupHoldMap[gid]?.isHeld
     );
     const heldSessions = statsAll.filter((s) =>
       heldGroupIds.includes(s.groupId?.toString())
@@ -248,9 +316,7 @@ export async function GET(req) {
       scheduled: statsAll.filter((s) => s.status === "scheduled").length,
       cancelled: statsAll.filter((s) => s.status === "cancelled").length,
       postponed: statsAll.filter((s) => s.status === "postponed").length,
-
-      // ✅ جديد: كم سيشن متأثر بالـ Hold
-      onHold: heldSessions.filter((s) => s.status !== "completed").length,
+      onHold:    heldSessions.filter((s) => s.status !== "completed").length,
     };
 
     return NextResponse.json({

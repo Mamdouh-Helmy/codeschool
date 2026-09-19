@@ -7,6 +7,54 @@ import { requireAdmin } from "@/utils/authMiddleware";
 import { onSessionStatusChanged } from "../../../services/groupAutomation";
 import mongoose from "mongoose";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HOLD HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function sortSessionsForHold(sessions) {
+  return [...sessions].sort((a, b) => {
+    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
+    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
+  });
+}
+
+function isSessionLockedByHold(session, group, allGroupSessions) {
+  if (!group?.hold?.isHeld) return false;
+  if (session?.status === "completed") return false;
+
+  const hold = group.hold;
+
+  if (hold.holdType === "indefinite" || hold.holdType === "duration") {
+    return true;
+  }
+
+  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) {
+    return true;
+  }
+
+  const sorted = sortSessionsForHold(allGroupSessions);
+  const myId = String(session._id);
+  const myIndex = sorted.findIndex((s) => String(s._id) === myId);
+  if (myIndex === -1) return false;
+
+  if (hold.holdType === "sessions") {
+    const consumed = hold.holdSessionsConsumed || 0;
+    if (consumed === 0) return true;
+    return myIndex < consumed;
+  }
+
+  if (hold.holdType === "until_session") {
+    const targetId = hold.holdUntilSessionId;
+    if (!targetId) return true;
+    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
+    if (targetIndex === -1) return true;
+    return myIndex <= targetIndex;
+  }
+
+  return false;
+}
+
 // ============================================================
 // GET
 // ============================================================
@@ -86,17 +134,7 @@ export async function GET(req) {
               code: session.groupId.code,
               isOnHold: !!session.groupId.hold?.isHeld,
               status: session.groupId.status || null,
-              hold: session.groupId.hold
-                ? {
-                    holdType: session.groupId.hold.holdType,
-                    holdDays: session.groupId.hold.holdDays,
-                    holdSessionsCount: session.groupId.hold.holdSessionsCount,
-                    holdSessionsConsumed: session.groupId.hold.holdSessionsConsumed,
-                    holdUntilSessionId: session.groupId.hold.holdUntilSessionId || null,
-                    holdEndDate: session.groupId.hold.holdEndDate,
-                    holdReason: session.groupId.hold.holdReason,
-                  }
-                : null,
+              hold: session.groupId.hold || null,
             }
           : null,
 
@@ -225,7 +263,6 @@ export async function POST(req) {
 // PUT
 // ============================================================
 
-// ✅ يحسب endTime جديد بيحافظ على نفس مدة السيشن الأصلية بعد تغيير startTime
 function shiftTimeByDuration(oldStart, oldEnd, newStart) {
   const toMinutes = (t) => {
     const [h, m] = t.split(":").map(Number);
@@ -258,7 +295,6 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ success: false, error: "Invalid session ID format" }, { status: 400 });
     }
 
-    // ✅ populate hold + status
     const existingSession = await Session.findOne({ _id: id, isDeleted: false })
       .populate({
         path: "groupId",
@@ -270,28 +306,39 @@ export async function PUT(req, { params }) {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // ✅ HOLD GUARD — منع أي تعديل على السيشن لو الجروب على Hold
-    //
-    //    مينفعش: تأجيل، إلغاء، تحديد كمكتملة، تعديل رابط، تعديل ملاحظات،
-    //    أو أي تغيير تاني على السيشن دي.
-    //
-    //    السبب: الجروب معلّق، ومفيش أي سبب منطقي لتعديل سيشناته لحد ما
-    //    الـ Hold يتفك.
+    // ✅ HOLD GUARD — منع التعديل لو السيشن دي بالتحديد مقفولة
     // ═══════════════════════════════════════════════════════════════════
     const groupIsOnHold = !!existingSession.groupId?.hold?.isHeld;
 
     if (groupIsOnHold) {
-      console.log(
-        `⏭️ [HOLD GUARD] Blocked any update on session ${id} — group is on hold (${existingSession.groupId.hold.holdType})`
-      );
-      return NextResponse.json(
+      const allGroupSessions = await Session.find({
+        groupId: existingSession.groupId._id || existingSession.groupId,
+        isDeleted: false,
+      })
+        .select("_id moduleIndex sessionNumber scheduledDate status")
+        .lean();
+
+      const sessionIsLocked = isSessionLockedByHold(
         {
-          success: false,
-          error: "الجروب على Hold حاليًا — مينفعش تعدّل أي حاجة في الجلسة لحد ما الـ Hold يتفك",
-          code: "GROUP_ON_HOLD",
+          _id: existingSession._id,
+          moduleIndex: existingSession.moduleIndex,
+          sessionNumber: existingSession.sessionNumber,
+          status: existingSession.status,
         },
-        { status: 403 }
+        existingSession.groupId,
+        allGroupSessions
       );
+
+      if (sessionIsLocked) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "السيشن دي مقفولة بسبب الـ Hold — مينفعش تعدّل أي حاجة فيها",
+            code: "SESSION_ON_HOLD",
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const oldStatus = existingSession.status;
@@ -300,7 +347,6 @@ export async function PUT(req, { params }) {
     const isNewlyCancelled    = newStatus === "cancelled" && oldStatus !== "cancelled";
     const isPostponedWithDate = newStatus === "postponed" && !!updateData.newDate;
 
-    // ── Build base update payload ───────────────────────────────────────────
     const basePayload = {
       meetingLink:      updateData.meetingLink      || "",
       recordingLink:    updateData.recordingLink    || "",
@@ -370,7 +416,6 @@ export async function PUT(req, { params }) {
 
     console.log(`✅ Session updated: ${updatedSession.title} | ${oldStatus} → ${newStatus}`);
 
-    // ── Instructor hours + Payroll on completion ───────────────────────────
     let instructorHoursResult = null;
     let payrollResult = null;
 
