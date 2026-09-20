@@ -1,5 +1,6 @@
 "use client";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 /**
@@ -7,19 +8,9 @@ import { X } from "lucide-react";
  * ──────────────────────────────────────────────────────────────────────────
  * One consistent container for every modal in the sessions area.
  *
- * Fixes the old problem where each modal built its own
- * `fixed inset-0 ... max-w-6xl w-full` wrapper by hand: sizes drifted,
- * the card sometimes read as "the whole screen" because there was no
- * breathing room around it on large screens, and there was no shared
- * scroll behavior (header/footer would scroll away with the content).
- *
- * This shell:
- *  - always leaves clear space around the card (p-4 sm:p-6 on the backdrop)
- *  - caps the card at `size` and at 88vh tall, and only the BODY scrolls —
- *    header and footer stay put
- *  - gives every modal the same entrance motion, radius, border and shadow
- *  - carries an `accent` color so each modal keeps its own identity
- *    (attendance = emerald, edit = indigo, hold/lock = amber, list = slate)
+ * Rendered through a React portal into document.body, so the overlay is
+ * always relative to the VIEWPORT — never to a parent that has
+ * transform / filter / overflow / backdrop-filter (which breaks `fixed`).
  */
 const ACCENTS = {
   emerald: "from-emerald-500 to-teal-500",
@@ -50,28 +41,37 @@ export default function ModalShell({
   children,
   closeOnBackdrop = true,
 }) {
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose?.();
     document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      document.body.style.overflow = prevOverflow;
     };
-  }, [onClose]);
+  }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       dir={isRTL ? "rtl" : "ltr"}
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose?.();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-[2px] p-4 sm:p-6 animate-[fadeIn_.15s_ease-out]"
+      style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100vw", height: "100dvh" }}
+      className="z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px] animate-[fadeIn_.15s_ease-out] sm:p-6"
     >
       <div
-        className={`relative flex w-full ${SIZES[size] || SIZES.xl} flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/20 dark:border-white/10 dark:bg-[#12141c] max-h-[88vh] animate-[popIn_.18s_ease-out]`}
+        className={`relative flex max-h-[88vh] w-full ${SIZES[size] || SIZES.xl} flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/20 animate-[popIn_.18s_ease-out] dark:border-white/10 dark:bg-[#12141c]`}
       >
         {/* accent hairline */}
         <div className={`h-1 w-full shrink-0 bg-gradient-to-r ${ACCENTS[accent] || ACCENTS.indigo}`} />
@@ -123,6 +123,7 @@ export default function ModalShell({
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 }

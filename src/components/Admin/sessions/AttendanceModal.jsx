@@ -16,6 +16,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import ModalShell from "./ModalShell";
+import AttendanceStatusPicker from "./AttendanceStatusPicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveVar
@@ -25,14 +26,14 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
   if (!v) return null;
 
   const { studentGender = "male", guardianType = "father" } = genderContext;
-  const isMale   = String(studentGender).toLowerCase() !== "female";
-  const isFather = String(guardianType).toLowerCase()  !== "mother";
+  const isMale = String(studentGender).toLowerCase() !== "female";
+  const isFather = String(guardianType).toLowerCase() !== "mother";
 
   if (v.hasGender) {
     if (v.genderType === "student") {
       return lang === "ar"
-        ? (isMale ? v.valueMaleAr   : v.valueFemaleAr) || v.valueAr || null
-        : (isMale ? v.valueMaleEn   : v.valueFemaleEn) || v.valueEn || null;
+        ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
+        : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
     }
     if (v.genderType === "guardian") {
       return lang === "ar"
@@ -55,26 +56,26 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 function buildVariables(student, status, session, dbVars = {}) {
   if (!student) return {};
 
-  const lang         = (student.communicationPreferences?.preferredLanguage || "ar").toLowerCase();
-  const gender       = (student.personalInfo?.gender       || "male").toLowerCase().trim();
+  const lang = (student.communicationPreferences?.preferredLanguage || "ar").toLowerCase();
+  const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
   const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
-  const isMale       = gender !== "female";
-  const isFather     = relationship !== "mother";
-  const genderCtx    = { studentGender: gender, guardianType: relationship };
+  const isMale = gender !== "female";
+  const isFather = relationship !== "mother";
+  const genderCtx = { studentGender: gender, guardianType: relationship };
 
   const studentFirstName =
     lang === "ar"
-      ? student.personalInfo?.nickname?.ar?.trim()  ||
-        student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
-      : student.personalInfo?.nickname?.en?.trim()  ||
-        student.personalInfo?.fullName?.split(" ")[0] || "Student";
+      ? student.personalInfo?.nickname?.ar?.trim() ||
+      student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
+      : student.personalInfo?.nickname?.en?.trim() ||
+      student.personalInfo?.fullName?.split(" ")[0] || "Student";
 
   const guardianFirstName =
     lang === "ar"
-      ? student.guardianInfo?.nickname?.ar?.trim()  ||
-        student.guardianInfo?.name?.split(" ")[0]   || "ولي الأمر"
-      : student.guardianInfo?.nickname?.en?.trim()  ||
-        student.guardianInfo?.name?.split(" ")[0]   || "Guardian";
+      ? student.guardianInfo?.nickname?.ar?.trim() ||
+      student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر"
+      : student.guardianInfo?.nickname?.en?.trim() ||
+      student.guardianInfo?.name?.split(" ")[0] || "Guardian";
 
   const salutationBase_ar =
     resolveVar(dbVars, "salutation_ar", "ar", genderCtx) ||
@@ -118,16 +119,16 @@ function buildVariables(student, status, session, dbVars = {}) {
 
   const guardianSalutation_ar = `${guardianSalBase_ar} ${guardianFirstName}`;
   const guardianSalutation_en = `${guardianSalBase_en} ${guardianFirstName}`;
-  const guardianSalutation    = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
+  const guardianSalutation = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
 
   const studentSalutation_ar = `${salutationBase_ar} ${studentFirstName}`;
-  const studentSalutation    = lang === "ar" ? studentSalutation_ar : `Dear ${studentFirstName}`;
+  const studentSalutation = lang === "ar" ? studentSalutation_ar : `Dear ${studentFirstName}`;
 
   const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
 
   const statusMap = {
-    ar: { absent: "غائب",   late: "متأخر",   excused: "معتذر",   present: "حاضر"    },
-    en: { absent: "absent", late: "late",     excused: "excused", present: "present" },
+    ar: { absent: "غائب", late: "متأخر", excused: "معتذر", present: "حاضر" },
+    en: { absent: "absent", late: "late", excused: "excused", present: "present" },
   };
   const statusMapFemaleAr = {
     absent: "غائبة", late: "متأخرة", excused: "معتذرة", present: "حاضرة",
@@ -139,29 +140,29 @@ function buildVariables(student, status, session, dbVars = {}) {
 
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
-        lang === "ar" ? "ar-EG" : "en-US",
-        { weekday: "long", year: "numeric", month: "long", day: "numeric" }
-      )
+      lang === "ar" ? "ar-EG" : "en-US",
+      { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+    )
     : "";
 
   return {
     guardianSalutation,
     guardianSalutation_ar,
     guardianSalutation_en,
-    guardianName:     guardianFirstName,
+    guardianName: guardianFirstName,
     guardianFullName: student.guardianInfo?.name || "",
     relationship_ar,
 
-    salutation:      guardianSalutation,
+    salutation: guardianSalutation,
     studentSalutation,
-    studentName:     studentFirstName,
-    studentName_ar:  studentFirstName,
-    studentName_en:  studentFirstName,
+    studentName: studentFirstName,
+    studentName_ar: studentFirstName,
+    studentName_en: studentFirstName,
     studentFullName: student.personalInfo?.fullName || "",
     fullStudentName: student.personalInfo?.fullName || "",
-    name_ar:         studentFirstName,
-    name_en:         studentFirstName,
-    fullName:        student.personalInfo?.fullName || "",
+    name_ar: studentFirstName,
+    name_en: studentFirstName,
+    fullName: student.personalInfo?.fullName || "",
 
     childTitle,
     you_ar,
@@ -169,14 +170,14 @@ function buildVariables(student, status, session, dbVars = {}) {
     studentGender_ar,
     studentGender_en,
 
-    status:           statusText,
+    status: statusText,
     attendanceStatus: statusText,
 
-    sessionName:  session?.title || "",
-    date:         sessionDate,
+    sessionName: session?.title || "",
+    date: sessionDate,
     sessionDate,
-    time:         `${session?.startTime || ""} - ${session?.endTime || ""}`,
-    meetingLink:  session?.meetingLink || "",
+    time: `${session?.startTime || ""} - ${session?.endTime || ""}`,
+    meetingLink: session?.meetingLink || "",
 
     groupName: session?.groupId?.name || "",
     groupCode: session?.groupId?.code || "",
@@ -184,7 +185,7 @@ function buildVariables(student, status, session, dbVars = {}) {
     enrollmentNumber: student.enrollmentNumber || "",
 
     selectedLanguage_ar: lang === "ar" ? "العربية" : "الإنجليزية",
-    selectedLanguage_en: lang === "ar" ? "Arabic"  : "English",
+    selectedLanguage_en: lang === "ar" ? "Arabic" : "English",
   };
 }
 
@@ -207,9 +208,9 @@ function renderTemplate(template, variables) {
 // ─────────────────────────────────────────────────────────────────────────────
 const STATUS_META = {
   present: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-500/10", ring: "ring-emerald-200 dark:ring-emerald-500/20" },
-  absent:  { dot: "bg-rose-500",    text: "text-rose-700 dark:text-rose-300",       bg: "bg-rose-50 dark:bg-rose-500/10",       ring: "ring-rose-200 dark:ring-rose-500/20" },
-  late:    { dot: "bg-amber-500",   text: "text-amber-700 dark:text-amber-300",     bg: "bg-amber-50 dark:bg-amber-500/10",     ring: "ring-amber-200 dark:ring-amber-500/20" },
-  excused: { dot: "bg-sky-500",     text: "text-sky-700 dark:text-sky-300",         bg: "bg-sky-50 dark:bg-sky-500/10",         ring: "ring-sky-200 dark:ring-sky-500/20" },
+  absent: { dot: "bg-rose-500", text: "text-rose-700 dark:text-rose-300", bg: "bg-rose-50 dark:bg-rose-500/10", ring: "ring-rose-200 dark:ring-rose-500/20" },
+  late: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-300", bg: "bg-amber-50 dark:bg-amber-500/10", ring: "ring-amber-200 dark:ring-amber-500/20" },
+  excused: { dot: "bg-sky-500", text: "text-sky-700 dark:text-sky-300", bg: "bg-sky-50 dark:bg-sky-500/10", ring: "ring-sky-200 dark:ring-sky-500/20" },
 };
 
 function StatCard({ label, value, meta }) {
@@ -275,25 +276,25 @@ export default function AttendanceModal({
   isRTL,
   t,
 }) {
-  const [attendance,        setAttendance]        = useState([]);
-  const [rawTemplates,      setRawTemplates]      = useState({});
-  const [customMessages,    setCustomMessages]    = useState({});
-  const [saving,            setSaving]            = useState(false);
+  const [attendance, setAttendance] = useState([]);
+  const [rawTemplates, setRawTemplates] = useState({});
+  const [customMessages, setCustomMessages] = useState({});
+  const [saving, setSaving] = useState(false);
   const [showMessageEditor, setShowMessageEditor] = useState({});
-  const [showHints,         setShowHints]         = useState({});
-  const [cursorPosition,    setCursorPosition]    = useState({});
+  const [showHints, setShowHints] = useState({});
+  const [cursorPosition, setCursorPosition] = useState({});
   const [selectedHintIndex, setSelectedHintIndex] = useState({});
-  const [loadingTemplates,  setLoadingTemplates]  = useState({});
-  const [manuallyEdited,    setManuallyEdited]    = useState({});
-  const [savingTemplate,    setSavingTemplate]    = useState({});
-  const [templatesFetched,  setTemplatesFetched]  = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState({});
+  const [manuallyEdited, setManuallyEdited] = useState({});
+  const [savingTemplate, setSavingTemplate] = useState({});
+  const [templatesFetched, setTemplatesFetched] = useState(false);
 
   const [dbVars, setDbVars] = useState({});
 
-  const textareaRefs    = useRef({});
-  const hintsRefs       = useRef({});
+  const textareaRefs = useRef({});
+  const hintsRefs = useRef({});
   const initialLoadDone = useRef(false);
-  const fetchQueue      = useRef(new Set());
+  const fetchQueue = useRef(new Set());
 
   const initialRecordedStudentIds = useRef(new Set());
 
@@ -372,7 +373,7 @@ export default function AttendanceModal({
       );
       if (!student) return rawTemplate || "";
 
-      const status    = getStudentStatus(studentId);
+      const status = getStudentStatus(studentId);
       const variables = buildVariables(student, status, session, dbVars);
       return renderTemplate(rawTemplate, variables);
     },
@@ -386,16 +387,16 @@ export default function AttendanceModal({
 
       setLoadingTemplates((prev) => ({ ...prev, [studentId]: true }));
       try {
-        const res  = await fetch(`/api/sessions/${session.id}/attendance-templates`, {
-          method:  "POST",
+        const res = await fetch(`/api/sessions/${session.id}/attendance-templates`, {
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ attendanceStatus: status, studentId }),
+          body: JSON.stringify({ attendanceStatus: status, studentId }),
         });
         const json = await res.json();
 
         if (json.success && json.data?.guardian?.content) {
           const raw = json.data.guardian.content;
-          setRawTemplates((prev)   => ({ ...prev, [studentId]: raw }));
+          setRawTemplates((prev) => ({ ...prev, [studentId]: raw }));
           setCustomMessages((prev) => ({ ...prev, [studentId]: raw }));
           setManuallyEdited((prev) => ({ ...prev, [studentId]: false }));
           return raw;
@@ -416,19 +417,19 @@ export default function AttendanceModal({
       if (!status) return;
 
       setLoadingTemplates((prev) => ({ ...prev, [studentId]: true }));
-      setManuallyEdited((prev)   => ({ ...prev, [studentId]: false }));
+      setManuallyEdited((prev) => ({ ...prev, [studentId]: false }));
 
       try {
-        const res  = await fetch(`/api/sessions/${session.id}/attendance-templates`, {
-          method:  "POST",
+        const res = await fetch(`/api/sessions/${session.id}/attendance-templates`, {
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ attendanceStatus: status, studentId }),
+          body: JSON.stringify({ attendanceStatus: status, studentId }),
         });
         const json = await res.json();
 
         if (json.success && json.data?.guardian?.content) {
           const raw = json.data.guardian.content;
-          setRawTemplates((prev)   => ({ ...prev, [studentId]: raw }));
+          setRawTemplates((prev) => ({ ...prev, [studentId]: raw }));
           setCustomMessages((prev) => ({ ...prev, [studentId]: raw }));
           toast.success(isRTL ? "تم استعادة القالب الافتراضي" : "Default template restored");
         }
@@ -453,30 +454,30 @@ export default function AttendanceModal({
 
       try {
         const typeMap = {
-          absent:  "absence_notification",
-          late:    "late_notification",
+          absent: "absence_notification",
+          late: "late_notification",
           excused: "excused_notification",
         };
         const nameMap = {
-          absent:  "Absence Notification",
-          late:    "Late Notification",
+          absent: "Absence Notification",
+          late: "Late Notification",
           excused: "Excused Absence Notification",
         };
 
-        const templateType  = typeMap[status];
+        const templateType = typeMap[status];
         const recipientType = "guardian";
-        const student       = groupStudents.find(
+        const student = groupStudents.find(
           (s) => s._id?.toString() === studentId?.toString()
         );
         const studentLang = student?.communicationPreferences?.preferredLanguage || "ar";
 
-        const searchRes  = await fetch(
+        const searchRes = await fetch(
           `/api/message-templates?type=${templateType}&default=true`
         );
         const searchJson = await searchRes.json();
 
         const updatePayload = {
-          name:      nameMap[status],
+          name: nameMap[status],
           isDefault: true,
           ...(studentLang === "ar"
             ? { contentAr: rawContent, contentEn: searchJson.data?.[0]?.contentEn || "" }
@@ -486,30 +487,30 @@ export default function AttendanceModal({
         let saveRes, saveJson;
 
         if (searchJson.success && searchJson.data?.length > 0) {
-          saveRes  = await fetch("/api/message-templates", {
-            method:  "PUT",
+          saveRes = await fetch("/api/message-templates", {
+            method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ _id: searchJson.data[0]._id, ...updatePayload }),
+            body: JSON.stringify({ _id: searchJson.data[0]._id, ...updatePayload }),
           });
           saveJson = await saveRes.json();
         } else {
-          saveRes  = await fetch("/api/message-templates", {
-            method:  "POST",
+          saveRes = await fetch("/api/message-templates", {
+            method: "POST",
             headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({
+            body: JSON.stringify({
               templateType,
               recipientType,
               ...updatePayload,
-              isActive:  true,
+              isActive: true,
               variables: [
                 { key: "guardianSalutation", label: "Guardian Salutation" },
-                { key: "studentName",        label: "Student Name"        },
-                { key: "childTitle",         label: "Son / Daughter"      },
-                { key: "status",             label: "Attendance Status"   },
-                { key: "sessionName",        label: "Session Name"        },
-                { key: "date",               label: "Date"                },
-                { key: "time",               label: "Time"                },
-                { key: "enrollmentNumber",   label: "Enrollment Number"   },
+                { key: "studentName", label: "Student Name" },
+                { key: "childTitle", label: "Son / Daughter" },
+                { key: "status", label: "Attendance Status" },
+                { key: "sessionName", label: "Session Name" },
+                { key: "date", label: "Date" },
+                { key: "time", label: "Time" },
+                { key: "enrollmentNumber", label: "Enrollment Number" },
               ],
             }),
           });
@@ -570,7 +571,7 @@ export default function AttendanceModal({
         );
         if (idx >= 0) {
           const next = [...prev];
-          next[idx]  = { ...next[idx], status };
+          next[idx] = { ...next[idx], status };
           return next;
         }
         return [...prev, { studentId, status, notes: "" }];
@@ -583,9 +584,9 @@ export default function AttendanceModal({
         }
       } else {
         setShowMessageEditor((prev) => ({ ...prev, [studentId]: false }));
-        setCustomMessages((prev)    => { const n = { ...prev }; delete n[studentId]; return n; });
-        setRawTemplates((prev)      => { const n = { ...prev }; delete n[studentId]; return n; });
-        setManuallyEdited((prev)    => { const n = { ...prev }; delete n[studentId]; return n; });
+        setCustomMessages((prev) => { const n = { ...prev }; delete n[studentId]; return n; });
+        setRawTemplates((prev) => { const n = { ...prev }; delete n[studentId]; return n; });
+        setManuallyEdited((prev) => { const n = { ...prev }; delete n[studentId]; return n; });
       }
     },
     [fetchTemplateForStudent, manuallyEdited, groupStudents, isStudentLocked, checkStudentBalance, isRTL, sessionLocked]
@@ -600,7 +601,7 @@ export default function AttendanceModal({
       );
       if (idx >= 0) {
         const next = [...prev];
-        next[idx]  = { ...next[idx], notes };
+        next[idx] = { ...next[idx], notes };
         return next;
       }
       return prev;
@@ -609,34 +610,34 @@ export default function AttendanceModal({
 
   const availableVariables = useMemo(
     () => [
-      { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (كاملة)"    : "Guardian Salutation",  icon: "👤" },
-      { key: "{guardianName}",       label: isRTL ? "اسم ولي الأمر"             : "Guardian Name",        icon: "👤" },
-      { key: "{studentName}",        label: isRTL ? "اسم الطالب"                : "Student Name",         icon: "👶" },
-      { key: "{childTitle}",         label: isRTL ? "ابنك / ابنتك"              : "Son / Daughter",       icon: "👪" },
-      { key: "{status}",             label: isRTL ? "حالة الحضور"               : "Attendance Status",    icon: "📊" },
-      { key: "{attendanceStatus}",   label: isRTL ? "حالة الحضور (بديل)"        : "Attendance (alt)",     icon: "📊" },
-      { key: "{sessionName}",        label: isRTL ? "اسم الجلسة"                : "Session Name",         icon: "📘" },
-      { key: "{date}",               label: isRTL ? "التاريخ"                   : "Date",                 icon: "📅" },
-      { key: "{time}",               label: isRTL ? "الوقت"                     : "Time",                 icon: "⏰" },
-      { key: "{enrollmentNumber}",   label: isRTL ? "الرقم التعريفي"             : "Enrollment No.",       icon: "🔢" },
-      { key: "{groupName}",          label: isRTL ? "اسم المجموعة"              : "Group Name",           icon: "👥" },
-      { key: "{meetingLink}",        label: isRTL ? "رابط الجلسة"               : "Meeting Link",         icon: "🔗" },
+      { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (كاملة)" : "Guardian Salutation", icon: "👤" },
+      { key: "{guardianName}", label: isRTL ? "اسم ولي الأمر" : "Guardian Name", icon: "👤" },
+      { key: "{studentName}", label: isRTL ? "اسم الطالب" : "Student Name", icon: "👶" },
+      { key: "{childTitle}", label: isRTL ? "ابنك / ابنتك" : "Son / Daughter", icon: "👪" },
+      { key: "{status}", label: isRTL ? "حالة الحضور" : "Attendance Status", icon: "📊" },
+      { key: "{attendanceStatus}", label: isRTL ? "حالة الحضور (بديل)" : "Attendance (alt)", icon: "📊" },
+      { key: "{sessionName}", label: isRTL ? "اسم الجلسة" : "Session Name", icon: "📘" },
+      { key: "{date}", label: isRTL ? "التاريخ" : "Date", icon: "📅" },
+      { key: "{time}", label: isRTL ? "الوقت" : "Time", icon: "⏰" },
+      { key: "{enrollmentNumber}", label: isRTL ? "الرقم التعريفي" : "Enrollment No.", icon: "🔢" },
+      { key: "{groupName}", label: isRTL ? "اسم المجموعة" : "Group Name", icon: "👥" },
+      { key: "{meetingLink}", label: isRTL ? "رابط الجلسة" : "Meeting Link", icon: "🔗" },
     ],
     [isRTL]
   );
 
   const handleTextareaInput = useCallback((e, studentId) => {
-    const value     = e.target.value;
+    const value = e.target.value;
     const cursorPos = e.target.selectionStart;
 
     setCustomMessages((prev) => ({ ...prev, [studentId]: value }));
-    setManuallyEdited((prev) => ({ ...prev, [studentId]: true  }));
+    setManuallyEdited((prev) => ({ ...prev, [studentId]: true }));
     setCursorPosition((prev) => ({ ...prev, [studentId]: cursorPos }));
 
     const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
     if (lastAt !== -1 && lastAt === cursorPos - 1) {
-      setShowHints((prev)         => ({ ...prev, [studentId]: true }));
-      setSelectedHintIndex((prev) => ({ ...prev, [studentId]: 0   }));
+      setShowHints((prev) => ({ ...prev, [studentId]: true }));
+      setSelectedHintIndex((prev) => ({ ...prev, [studentId]: 0 }));
     } else {
       setShowHints((prev) => ({ ...prev, [studentId]: false }));
     }
@@ -647,23 +648,23 @@ export default function AttendanceModal({
       const textarea = textareaRefs.current[studentId];
       if (!textarea) return;
 
-      const current   = customMessages[studentId] || "";
+      const current = customMessages[studentId] || "";
       const cursorPos = cursorPosition[studentId] || 0;
-      const before    = current.substring(0, cursorPos);
-      const lastAt    = before.lastIndexOf("@");
+      const before = current.substring(0, cursorPos);
+      const lastAt = before.lastIndexOf("@");
 
       let newValue, newCursor;
       if (lastAt !== -1) {
-        newValue  = current.substring(0, lastAt) + variable.key + current.substring(cursorPos);
+        newValue = current.substring(0, lastAt) + variable.key + current.substring(cursorPos);
         newCursor = lastAt + variable.key.length;
       } else {
-        newValue  = current.substring(0, cursorPos) + variable.key + current.substring(cursorPos);
+        newValue = current.substring(0, cursorPos) + variable.key + current.substring(cursorPos);
         newCursor = cursorPos + variable.key.length;
       }
 
       setCustomMessages((prev) => ({ ...prev, [studentId]: newValue }));
-      setManuallyEdited((prev) => ({ ...prev, [studentId]: true     }));
-      setShowHints((prev)      => ({ ...prev, [studentId]: false    }));
+      setManuallyEdited((prev) => ({ ...prev, [studentId]: true }));
+      setShowHints((prev) => ({ ...prev, [studentId]: false }));
 
       setTimeout(() => {
         textarea.focus();
@@ -772,14 +773,14 @@ export default function AttendanceModal({
         );
       });
 
-      const res  = await fetch(`/api/sessions/${session.id}/attendance`, {
-        method:  "POST",
+      const res = await fetch(`/api/sessions/${session.id}/attendance`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
+        body: JSON.stringify({
           attendance: attendance.map((a) => ({
             studentId: a.studentId?._id || a.studentId?.id || a.studentId,
-            status:    a.status,
-            notes:     a.notes || "",
+            status: a.status,
+            notes: a.notes || "",
           })),
           customMessages: renderedMessages,
         }),
@@ -819,10 +820,10 @@ export default function AttendanceModal({
   ]);
 
   const stats = {
-    total:   groupStudents.length,
+    total: groupStudents.length,
     present: attendance.filter((a) => a.status === "present").length,
-    absent:  attendance.filter((a) => a.status === "absent").length,
-    late:    attendance.filter((a) => a.status === "late").length,
+    absent: attendance.filter((a) => a.status === "absent").length,
+    late: attendance.filter((a) => a.status === "late").length,
     excused: attendance.filter((a) => a.status === "excused").length,
     blocked: groupStudents.filter((s) => isStudentLocked(s)).length,
   };
@@ -839,11 +840,10 @@ export default function AttendanceModal({
         onClick={handleSave}
         disabled={saving || sessionLocked}
         title={sessionLocked ? (isRTL ? "السيشن مقفولة بسبب الـ Hold" : "Session locked due to hold") : ""}
-        className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${
-          sessionLocked
+        className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${sessionLocked
             ? "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-white/5 dark:text-slate-500"
             : "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-        }`}
+          }`}
       >
         {saving ? (
           <>
@@ -910,12 +910,12 @@ export default function AttendanceModal({
       {/* Students */}
       <div className="space-y-3">
         {groupStudents.map((student) => {
-          const studentId    = student._id?.toString();
-          const status       = getStudentStatus(studentId);
-          const notes        = getStudentNotes(studentId);
+          const studentId = student._id?.toString();
+          const status = getStudentStatus(studentId);
+          const notes = getStudentNotes(studentId);
           const needsMessage = ["absent", "late", "excused"].includes(status);
-          const studentLang  = student.communicationPreferences?.preferredLanguage || "ar";
-          const gender       = (student.personalInfo?.gender       || "male").toLowerCase().trim();
+          const studentLang = student.communicationPreferences?.preferredLanguage || "ar";
+          const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
           const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
 
           const { remainingHours } = checkStudentBalance(student);
@@ -924,19 +924,18 @@ export default function AttendanceModal({
           const meta = STATUS_META[status];
 
           const currentVars = buildVariables(student, status, session, dbVars);
-          const rawMsg     = customMessages[studentId] || "";
+          const rawMsg = customMessages[studentId] || "";
           const previewMsg = renderTemplate(rawMsg, currentVars);
 
           return (
             <div
               key={studentId}
-              className={`overflow-hidden rounded-xl border transition-colors ${
-                sessionLocked
+              className={`overflow-hidden rounded-xl border transition-colors ${sessionLocked
                   ? "border-amber-200 dark:border-amber-500/20"
                   : effectiveLocked
                     ? "border-slate-200 dark:border-white/10"
                     : "border-slate-200 dark:border-white/10"
-              } ${effectiveLocked ? "opacity-70" : ""}`}
+                } ${effectiveLocked ? "opacity-70" : ""}`}
             >
               <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 dark:bg-transparent">
                 <div className="min-w-0 flex-1">
@@ -972,15 +971,14 @@ export default function AttendanceModal({
                     </span>
                     {student.creditSystem?.currentPackage && (
                       <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
-                          remainingHours <= 0
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${remainingHours <= 0
                             ? "bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400"
                             : remainingHours <= 2
                               ? "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
                               : remainingHours <= 5
                                 ? "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
                                 : "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-                        }`}
+                          }`}
                       >
                         <Clock className="h-3 w-3" /> {remainingHours}h
                       </span>
@@ -995,21 +993,12 @@ export default function AttendanceModal({
                   )}
                 </div>
 
-                <select
+                <AttendanceStatusPicker
                   value={status}
-                  onChange={(e) => updateAttendanceStatus(studentId, e.target.value)}
+                  onChange={(val) => updateAttendanceStatus(studentId, val)}
                   disabled={effectiveLocked}
-                  className={`rounded-lg border px-3 py-2 text-sm font-medium outline-none transition-colors dark:bg-[#171a24] dark:text-white ${
-                    effectiveLocked
-                      ? "cursor-not-allowed border-slate-200 opacity-50 dark:border-white/10"
-                      : `border-slate-200 focus:border-emerald-400 dark:border-white/10 ${meta ? meta.bg : ""}`
-                  }`}
-                >
-                  <option value="present">{isRTL ? "حاضر" : "Present"}</option>
-                  <option value="absent">{isRTL ? "غائب" : "Absent"}</option>
-                  <option value="late">{isRTL ? "متأخر" : "Late"}</option>
-                  <option value="excused">{isRTL ? "معتذر" : "Excused"}</option>
-                </select>
+                  isRTL={isRTL}
+                />
               </div>
 
               {sessionLocked && (
@@ -1099,9 +1088,8 @@ export default function AttendanceModal({
                                 key={v.key}
                                 type="button"
                                 onClick={() => insertVariable(studentId, v)}
-                                className={`flex w-full items-center gap-2 px-3 py-2 text-right hover:bg-violet-50 dark:hover:bg-violet-500/10 ${
-                                  i === (selectedHintIndex[studentId] || 0) ? "bg-violet-100 dark:bg-violet-500/20" : ""
-                                }`}
+                                className={`flex w-full items-center gap-2 px-3 py-2 text-right hover:bg-violet-50 dark:hover:bg-violet-500/10 ${i === (selectedHintIndex[studentId] || 0) ? "bg-violet-100 dark:bg-violet-500/20" : ""
+                                  }`}
                               >
                                 <span>{v.icon}</span>
                                 <div className="flex flex-1 items-center justify-between">
