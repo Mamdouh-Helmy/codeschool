@@ -1,9 +1,7 @@
-// /src/components/sessions/GroupCompletionModal.jsx
 "use client";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import toast from "react-hot-toast";
 import {
-  X,
   Save,
   RefreshCw,
   Trophy,
@@ -14,8 +12,10 @@ import {
   Link2,
   CheckCircle,
   Send,
-  Globe
+  Globe,
+  Info,
 } from "lucide-react";
+import ModalShell from "./ModalShell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveVar — gender-aware value from a DB TemplateVariable object
@@ -48,6 +48,44 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 
   return lang === "ar" ? v.valueAr || null : v.valueEn || null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tone maps (full class strings so Tailwind can see them)
+// ─────────────────────────────────────────────────────────────────────────────
+const TONES = {
+  student: {
+    panel: "border-sky-100 bg-sky-50/50 dark:border-sky-500/10 dark:bg-sky-500/5",
+    iconWrap: "bg-sky-100 dark:bg-sky-500/20",
+    icon: "text-sky-600 dark:text-sky-300",
+    title: "text-sky-900 dark:text-sky-200",
+    textarea: "border-sky-200 focus:border-sky-400 focus:ring-sky-100 dark:border-sky-500/20",
+    previewBox: "border-sky-200 dark:border-sky-500/10",
+    previewHead: "bg-sky-50 border-sky-100 dark:bg-sky-500/10 dark:border-sky-500/10",
+    previewHeadText: "text-sky-700 dark:text-sky-300",
+    hintBox: "border-sky-200 dark:border-sky-500/30",
+    hintHead: "border-sky-100 bg-sky-50 dark:border-sky-500/10 dark:bg-sky-500/10",
+    hintHeadText: "text-sky-700 dark:text-sky-300",
+    hintHover: "hover:bg-sky-50 dark:hover:bg-sky-500/10",
+    hintActive: "bg-sky-100 dark:bg-sky-500/20",
+    hintKey: "text-sky-600 dark:text-sky-400",
+  },
+  guardian: {
+    panel: "border-violet-100 bg-violet-50/50 dark:border-violet-500/10 dark:bg-violet-500/5",
+    iconWrap: "bg-violet-100 dark:bg-violet-500/20",
+    icon: "text-violet-600 dark:text-violet-300",
+    title: "text-violet-900 dark:text-violet-200",
+    textarea: "border-violet-200 focus:border-violet-400 focus:ring-violet-100 dark:border-violet-500/20",
+    previewBox: "border-violet-200 dark:border-violet-500/10",
+    previewHead: "bg-violet-50 border-violet-100 dark:bg-violet-500/10 dark:border-violet-500/10",
+    previewHeadText: "text-violet-700 dark:text-violet-300",
+    hintBox: "border-violet-200 dark:border-violet-500/30",
+    hintHead: "border-violet-100 bg-violet-50 dark:border-violet-500/10 dark:bg-violet-500/10",
+    hintHeadText: "text-violet-700 dark:text-violet-300",
+    hintHover: "hover:bg-violet-50 dark:hover:bg-violet-500/10",
+    hintActive: "bg-violet-100 dark:bg-violet-500/20",
+    hintKey: "text-violet-600 dark:text-violet-400",
+  },
+};
 
 export default function GroupCompletionModal({
   group,
@@ -119,9 +157,7 @@ export default function GroupCompletionModal({
     }
   }, [groupStudents]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // ✅ buildVariables — مع جميع المتغيرات المطلوبة
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── buildVariables ────────────────────────────────────────────────────────
   const buildVariables = useCallback(
     (student) => {
       if (!student) return {};
@@ -133,7 +169,6 @@ export default function GroupCompletionModal({
       const isFather     = relationship !== "mother";
       const genderCtx    = { studentGender: gender, guardianType: relationship };
 
-      // ── Names ──────────────────────────────────────────────────────────
       const studentFirstName =
         lang === "ar"
           ? student.personalInfo?.nickname?.ar?.trim() || student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
@@ -144,7 +179,6 @@ export default function GroupCompletionModal({
           ? student.guardianInfo?.nickname?.ar?.trim() || student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر"
           : student.guardianInfo?.nickname?.en?.trim() || student.guardianInfo?.name?.split(" ")[0] || "Guardian";
 
-      // ── DB vars → fallback ──────────────────────────────────────────────
       const salutationBase_ar =
         resolveVar(dbVars, "salutation_ar", "ar", genderCtx) ||
         (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
@@ -169,7 +203,6 @@ export default function GroupCompletionModal({
         resolveVar(dbVars, "childTitle", "en", genderCtx) ||
         (isMale ? "your son" : "your daughter");
 
-      // ── Composed salutations ────────────────────────────────────────────
       const guardianSalutation_ar = `${guardianSalBase_ar} ${guardianFirstName}`;
       const guardianSalutation_en = `${guardianSalBase_en} ${guardianFirstName}`;
       const guardianSalutation    = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
@@ -181,36 +214,26 @@ export default function GroupCompletionModal({
       const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
 
       return {
-        // ── تحيات الطالب ──────────────────────────────────────────────────
-        studentSalutation,         // حسب لغة الطالب  → {studentSalutation}
-        studentSalutation_ar,      // دائماً عربي      → {studentSalutation_ar}
-        studentSalutation_en,      // دائماً إنجليزي   → {studentSalutation_en}
+        studentSalutation,
+        studentSalutation_ar,
+        studentSalutation_en,
 
-        // ── تحيات ولي الأمر ───────────────────────────────────────────────
-        guardianSalutation,        // حسب لغة الطالب  → {guardianSalutation}
-        guardianSalutation_ar,     // دائماً عربي      → {guardianSalutation_ar}
-        guardianSalutation_en,     // دائماً إنجليزي   → {guardianSalutation_en}
+        guardianSalutation,
+        guardianSalutation_ar,
+        guardianSalutation_en,
 
-        // ── ✅ FIX: المتغيرات التي كانت مفقودة ───────────────────────────
-        // {salutation_ar} في قوالب الطالب → تحية الطالب بالعربي
         salutation_ar: studentSalutation_ar,
-        // {salutation_en} في قوالب الطالب → تحية الطالب بالإنجليزي
         salutation_en: studentSalutation_en,
 
-        // ── alias مشترك (للتوافق مع القوالب القديمة) ─────────────────────
-        // {salutation} → تحية ولي الأمر حسب لغة الطالب
         salutation: guardianSalutation,
 
-        // ── أسماء ─────────────────────────────────────────────────────────
         studentName:      studentFirstName,
         studentFullName:  student.personalInfo?.fullName || "",
         guardianName:     guardianFirstName,
         guardianFullName: student.guardianInfo?.name || "",
 
-        // ── childTitle ────────────────────────────────────────────────────
         childTitle,
 
-        // ── بيانات المجموعة ───────────────────────────────────────────────
         groupName:        group?.name || "",
         groupCode:        group?.code || "",
         courseName:       group?.courseSnapshot?.title || "",
@@ -304,23 +327,18 @@ export default function GroupCompletionModal({
   // ── Available variables for hints ─────────────────────────────────────────
   const availableVariables = useMemo(
     () => [
-      // تحيات الطالب
       { key: "{studentSalutation}",     label: isRTL ? "تحية الطالب (حسب اللغة)"    : "Student Salutation",        icon: "👶" },
       { key: "{studentSalutation_ar}",  label: isRTL ? "تحية الطالب - عربي"          : "Student Salutation (AR)",    icon: "👶" },
       { key: "{studentSalutation_en}",  label: isRTL ? "تحية الطالب - إنجليزي"       : "Student Salutation (EN)",    icon: "👶" },
-      // ✅ المتغيرات المُصلحة
       { key: "{salutation_ar}",         label: isRTL ? "التحية - عربي"               : "Salutation (AR)",            icon: "👋" },
       { key: "{salutation_en}",         label: isRTL ? "التحية - إنجليزي"            : "Salutation (EN)",            icon: "👋" },
-      // تحيات ولي الأمر
       { key: "{guardianSalutation}",    label: isRTL ? "تحية ولي الأمر (حسب اللغة)" : "Guardian Salutation",        icon: "👤" },
       { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي"       : "Guardian Salutation (AR)",   icon: "👤" },
       { key: "{guardianSalutation_en}", label: isRTL ? "تحية ولي الأمر - إنجليزي"   : "Guardian Salutation (EN)",   icon: "👤" },
       { key: "{salutation}",            label: isRTL ? "التحية العامة (ولي الأمر)"   : "Salutation (guardian alias)", icon: "👋" },
-      // أسماء
       { key: "{studentName}",           label: isRTL ? "اسم الطالب"                  : "Student Name",               icon: "👶" },
       { key: "{guardianName}",          label: isRTL ? "اسم ولي الأمر"              : "Guardian Name",              icon: "👤" },
       { key: "{childTitle}",            label: isRTL ? "ابنك/ابنتك"                  : "Son/Daughter",               icon: "👪" },
-      // بيانات المجموعة
       { key: "{groupName}",             label: isRTL ? "اسم المجموعة"               : "Group Name",                 icon: "👥" },
       { key: "{groupCode}",             label: isRTL ? "كود المجموعة"               : "Group Code",                 icon: "🔢" },
       { key: "{courseName}",            label: isRTL ? "اسم الكورس"                 : "Course Name",                icon: "📘" },
@@ -332,12 +350,12 @@ export default function GroupCompletionModal({
 
   // ── Salutation preview ────────────────────────────────────────────────────
   const salutationPreview = useMemo(() => {
-    if (!selectedStudentForPreview) return { student: "", guardian: "", salutation_ar: "" };
+    if (!selectedStudentForPreview) return { student: "", guardian: "", childTitle: "" };
     const vars = buildVariables(selectedStudentForPreview);
     return {
-      student:      vars.studentSalutation,
-      guardian:     vars.guardianSalutation,
-      salutation_ar: vars.salutation_ar,
+      student:    vars.studentSalutation,
+      guardian:   vars.guardianSalutation,
+      childTitle: vars.childTitle,
     };
   }, [selectedStudentForPreview, buildVariables]);
 
@@ -669,17 +687,18 @@ export default function GroupCompletionModal({
     isRTL, onClose, onRefresh,
   ]);
 
-  // ── Hints Dropdown ────────────────────────────────────────────────────────
-  const HintsDropdown = ({ type, borderColor, bgColor, textColor }) =>
-    showHints[type] ? (
+  // ── Hints dropdown ────────────────────────────────────────────────────────
+  const renderHints = (type) => {
+    if (!showHints[type]) return null;
+    const c = TONES[type];
+    return (
       <div
         ref={(el) => (hintsRef.current[type] = el)}
-        className={`absolute z-50 w-full mt-1 bg-white dark:bg-darkmode border-2 ${borderColor} rounded-lg shadow-xl max-h-56 overflow-y-auto`}
+        className={`absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-white shadow-xl dark:bg-[#171a24] ${c.hintBox}`}
       >
-        <div className={`px-3 py-1.5 ${bgColor} border-b dark:border-opacity-20`}>
-          <p className={`text-xs font-semibold ${textColor} flex items-center gap-1`}>
-            <Zap className="w-3 h-3" />
-            {isRTL ? "المتغيرات المتاحة" : "Available Variables"}
+        <div className={`border-b px-3 py-1.5 ${c.hintHead}`}>
+          <p className={`flex items-center gap-1 text-xs font-semibold ${c.hintHeadText}`}>
+            <Zap className="h-3 w-3" /> {isRTL ? "المتغيرات المتاحة" : "Available Variables"}
           </p>
         </div>
         {availableVariables.map((v, i) => (
@@ -687,385 +706,283 @@ export default function GroupCompletionModal({
             key={v.key}
             type="button"
             onClick={() => insertVariable(type, v)}
-            className={`w-full px-3 py-2 text-right hover:${bgColor} dark:hover:bg-opacity-20 flex items-center gap-2 ${
-              i === selectedHintIndex[type] ? `${bgColor} dark:bg-opacity-40` : ""
+            className={`flex w-full items-center gap-2 px-3 py-2 text-right ${c.hintHover} ${
+              i === selectedHintIndex[type] ? c.hintActive : ""
             }`}
           >
             <span>{v.icon}</span>
-            <div className="flex-1 flex items-center justify-between">
-              <span className={`text-sm font-mono ${textColor}`}>{v.key}</span>
-              <span className="text-xs text-gray-500">{v.label}</span>
+            <div className="flex flex-1 items-center justify-between">
+              <span className={`font-mono text-sm ${c.hintKey}`}>{v.key}</span>
+              <span className="text-xs text-slate-500">{v.label}</span>
             </div>
           </button>
         ))}
-        <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border-t text-xs text-gray-400">
+        <div className="border-t bg-slate-50 px-3 py-1.5 text-[11px] text-slate-400 dark:bg-white/5">
           ↑↓ {isRTL ? "للتنقل" : "navigate"} · Enter {isRTL ? "للإدراج" : "insert"} · Esc {isRTL ? "إغلاق" : "close"}
         </div>
       </div>
-    ) : null;
+    );
+  };
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div
-        className="bg-white dark:bg-darkmode rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-        dir={isRTL ? "rtl" : "ltr"}
+  // ── Message editor panel ──────────────────────────────────────────────────
+  const renderMessageEditor = (type) => {
+    const isStudent = type === "student";
+    const c = TONES[type];
+    const Icon = isStudent ? User : Users;
+    const currentMessage = isStudent ? currentStudentMessage : currentGuardianMessage;
+    const previewMessage = isStudent ? previewStudentMessage : previewGuardianMessage;
+    const previewLang = selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar";
+    const dir = previewLang === "ar" ? "rtl" : "ltr";
+
+    return (
+      <div className={`space-y-3 rounded-xl border p-4 ${c.panel}`}>
+        <div className="flex items-center gap-2">
+          <div className={`flex h-7 w-7 items-center justify-center rounded-full ${c.iconWrap}`}>
+            <Icon className={`h-4 w-4 ${c.icon}`} />
+          </div>
+          <h4 className={`text-sm font-semibold ${c.title}`}>
+            {isStudent ? (isRTL ? "رسالة للطالب" : "Student Message") : (isRTL ? "رسالة لولي الأمر" : "Guardian Message")}
+          </h4>
+          {isStudent && loadingTemplates && (
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-sky-300 border-t-sky-600" />
+          )}
+        </div>
+
+        <div className="relative">
+          <textarea
+            ref={isStudent ? studentTextareaRef : guardianTextareaRef}
+            value={currentMessage}
+            onChange={handleInput(type)}
+            onKeyDown={handleKeyDown(type)}
+            onSelect={(e) => setCursorPosition((prev) => ({ ...prev, [type]: e.target.selectionStart }))}
+            placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ for variables..."}
+            className={`h-32 w-full resize-none rounded-lg border bg-white px-3 py-2.5 font-mono text-sm text-slate-800 outline-none focus:ring-2 dark:bg-white/5 dark:text-white ${c.textarea}`}
+            dir={dir}
+          />
+          {renderHints(type)}
+        </div>
+
+        {previewMessage && selectedStudentForPreview && (
+          <div className={`overflow-hidden rounded-lg border bg-white dark:bg-white/5 ${c.previewBox}`}>
+            <div className={`flex items-center justify-between border-b px-3 py-1.5 ${c.previewHead}`}>
+              <span className={`flex items-center gap-1.5 text-xs font-medium ${c.previewHeadText}`}>
+                <MessageCircle className="h-3.5 w-3.5" />
+                {isStudent ? (isRTL ? "معاينة للطالب" : "Student preview") : (isRTL ? "معاينة لولي الأمر" : "Guardian preview")}
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {previewLang === "ar" ? "🇸🇦" : "🇬🇧"}
+                {" · "}
+                {isStudent
+                  ? ((selectedStudentForPreview.personalInfo?.gender || "").toLowerCase() === "female" ? "👧" : "👦")
+                  : ((selectedStudentForPreview.guardianInfo?.relationship || "").toLowerCase() === "mother" ? "👩" : "👨")}
+              </span>
+            </div>
+            <div
+              className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm text-slate-700 dark:text-slate-200"
+              dir={dir}
+            >
+              {previewMessage}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const footer = (
+    <>
+      <p className="me-auto hidden items-center gap-1 text-xs text-slate-400 sm:flex">
+        <Globe className="h-3 w-3" />
+        {isRTL
+          ? "كل طالب هيستلم الرسالة بلغته المفضلة"
+          : "Each student receives the message in their preferred language"}
+      </p>
+      <button
+        onClick={onClose}
+        className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
       >
-        {/* ── Header ── */}
-        <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border flex items-center justify-between bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-              <Trophy className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white">
-                {isRTL ? `إتمام المجموعة - ${group?.name}` : `Complete Group - ${group?.name}`}
-              </h2>
-              <p className="text-sm text-gray-500 mt-0.5">
-                {isRTL ? `الكود: ${group?.code}` : `Code: ${group?.code}`}
-                {group?.courseSnapshot?.title && ` · ${group.courseSnapshot.title}`}
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-            <X className="w-5 h-5" />
-          </button>
+        {isRTL ? "إلغاء" : "Cancel"}
+      </button>
+      <button
+        onClick={handleSend}
+        disabled={
+          sending ||
+          loadingTemplates ||
+          !currentStudentMessage?.trim() ||
+          !currentGuardianMessage?.trim()
+        }
+        className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-amber-500/20 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+      >
+        {sending ? (
+          <>
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            {isRTL ? "جاري الإرسال..." : "Sending..."}
+          </>
+        ) : (
+          <>
+            <Send className="h-4 w-4" />
+            {isRTL ? `إرسال لـ ${groupStudents.length} طالب` : `Send to ${groupStudents.length} students`}
+          </>
+        )}
+      </button>
+    </>
+  );
+
+  return (
+    <ModalShell
+      open
+      onClose={onClose}
+      size="2xl"
+      accent="amber"
+      isRTL={isRTL}
+      title={isRTL ? `إتمام المجموعة — ${group?.name || ""}` : `Complete Group — ${group?.name || ""}`}
+      subtitle={`${isRTL ? "الكود" : "Code"}: ${group?.code || ""}${group?.courseSnapshot?.title ? ` · ${group.courseSnapshot.title}` : ""}`}
+      headerBadge={
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+          <Trophy className="h-3 w-3" />
+          {groupStudents.length}
+        </span>
+      }
+      footer={footer}
+    >
+      <div className="space-y-5">
+        {/* Feedback link */}
+        <div>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-white">
+            <Link2 className="h-3.5 w-3.5" />
+            {isRTL ? "رابط التقييم (اختياري)" : "Feedback Link (optional)"}
+          </label>
+          <input
+            type="url"
+            value={formData.feedbackLink}
+            onChange={(e) => setFormData((prev) => ({ ...prev, feedbackLink: e.target.value }))}
+            placeholder={isRTL ? "أدخل رابط استبيان التقييم..." : "Enter feedback form URL..."}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 dark:border-white/10 dark:bg-white/5 dark:text-white"
+          />
         </div>
 
-        {/* ── Body ── */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-
-          {/* Feedback Link */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-              <Link2 className="w-4 h-4" />
-              {isRTL ? "رابط التقييم (اختياري)" : "Feedback Link (optional)"}
-            </label>
-            <input
-              type="url"
-              value={formData.feedbackLink}
-              onChange={(e) => setFormData((prev) => ({ ...prev, feedbackLink: e.target.value }))}
-              placeholder={isRTL ? "أدخل رابط استبيان التقييم..." : "Enter feedback form URL..."}
-              className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
-            />
+        {/* Messages area */}
+        <div className="space-y-5 rounded-xl border border-amber-100 bg-amber-50/60 p-4 dark:border-amber-500/15 dark:bg-amber-500/5">
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-200">
+              <MessageCircle className="h-4 w-4" />
+              {isRTL ? "رسائل إتمام المجموعة" : "Group Completion Messages"}
+            </h3>
+            <button
+              onClick={resetToDefault}
+              disabled={loadingTemplates}
+              className="flex items-center gap-1 rounded-lg border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60 dark:border-amber-500/20 dark:bg-white/5 dark:text-amber-300"
+            >
+              <RefreshCw className={`h-3 w-3 ${loadingTemplates ? "animate-spin" : ""}`} />
+              {isRTL ? "استعادة القوالب" : "Reset Templates"}
+            </button>
           </div>
 
-          {/* Messages Area */}
-          <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-5">
+          {/* Student selector */}
+          {groupStudents.length > 0 && (
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">
+                {isRTL ? "اختر طالباً لمعاينة الرسالة:" : "Select student to preview:"}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {groupStudents.map((student) => {
+                  const isSelected = selectedStudentForPreview?._id?.toString() === student._id?.toString();
+                  const lang   = student.communicationPreferences?.preferredLanguage || "ar";
+                  const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
+                  const rel    = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
+                  const isEdited = editedStudentTemplates[student._id] || editedGuardianTemplates[student._id];
 
-            {/* Header with Reset */}
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-amber-900 dark:text-amber-100 flex items-center gap-2">
-                <MessageCircle className="w-4 h-4" />
-                {isRTL ? "رسائل إتمام المجموعة" : "Group Completion Messages"}
-              </h3>
-              <button
-                onClick={resetToDefault}
-                disabled={loadingTemplates}
-                className="px-3 py-1 text-xs bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 flex items-center gap-1 transition-colors"
-              >
-                <RefreshCw className={`w-3 h-3 ${loadingTemplates ? "animate-spin" : ""}`} />
-                {isRTL ? "استعادة القوالب" : "Reset Templates"}
-              </button>
-            </div>
-
-            {/* Student Selector */}
-            {groupStudents.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block">
-                  {isRTL ? "اختر طالباً لمعاينة الرسالة:" : "Select student to preview:"}
-                </label>
-                <select
-                  value={selectedStudentForPreview?._id || ""}
-                  onChange={(e) => handleStudentPreviewChange(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-amber-300 dark:border-amber-700 rounded-lg dark:bg-gray-800 dark:text-white"
-                  disabled={loadingTemplates}
-                >
-                  {groupStudents.map((student) => {
-                    const lang     = student.communicationPreferences?.preferredLanguage || "ar";
-                    const gender   = (student.personalInfo?.gender || "male").toLowerCase().trim();
-                    const rel      = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
-                    const isEdited = editedStudentTemplates[student._id] || editedGuardianTemplates[student._id];
-
-                    let optionText = student.personalInfo?.fullName || "";
-                    optionText += ` · ${lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}`;
-                    optionText += ` · ${gender === "female" ? "👧" : "👦"}`;
-                    optionText += ` · ${rel === "mother" ? "👩 أم" : rel === "father" ? "👨 أب" : "👤"}`;
-                    if (isEdited) optionText += " ✏️";
-
-                    return (
-                      <option key={student._id} value={student._id}>
-                        {optionText}
-                      </option>
-                    );
-                  })}
-                </select>
-
-                {/* Context card */}
-                {selectedStudentForPreview && (
-                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-amber-200 dark:border-amber-700 space-y-1.5 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-amber-600 dark:text-amber-400 font-medium w-28 shrink-0">
-                        👶 {isRTL ? "تحية الطالب:" : "Student:"}
-                      </span>
-                      <span className="text-gray-800 dark:text-gray-200 font-semibold">
-                        {salutationPreview.student}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-orange-600 dark:text-orange-400 font-medium w-28 shrink-0">
-                        👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}
-                      </span>
-                      <span className="text-gray-800 dark:text-gray-200 font-semibold">
-                        {salutationPreview.guardian}
-                      </span>
-                    </div>
-                    {/* ✅ عرض salutation_ar للتأكد */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-purple-600 dark:text-purple-400 font-medium w-28 shrink-0">
-                        👋 salutation_ar:
-                      </span>
-                      <span className="text-gray-800 dark:text-gray-200 font-semibold">
-                        {salutationPreview.salutation_ar}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <Globe className="w-3 h-3" />
-                      <span>
-                        {isRTL ? "لغة الطالب: " : "Student language: "}
-                        {selectedStudentForPreview.communicationPreferences?.preferredLanguage === "ar"
-                          ? "🇸🇦 العربية"
-                          : "🇬🇧 English"}
-                      </span>
-                    </div>
-                    {(manuallyEdited.student || manuallyEdited.guardian) && (
-                      <p className="text-orange-500 dark:text-orange-400 flex items-center gap-1 mt-1">
-                        ✏️ {isRTL ? "هذا الطالب لديه رسائل معدلة يدوياً" : "This student has manually edited messages"}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Student Message Editor ── */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                  <User className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                </div>
-                <h4 className="font-semibold text-amber-900 dark:text-amber-100 text-sm">
-                  {isRTL ? "رسالة للطالب" : "Message for Student"}
-                </h4>
-                {loadingTemplates && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-amber-500" />}
+                  return (
+                    <button
+                      key={student._id}
+                      onClick={() => handleStudentPreviewChange(student._id)}
+                      disabled={loadingTemplates}
+                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all disabled:opacity-60 ${
+                        isSelected
+                          ? "border-indigo-600 bg-indigo-600 text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 dark:border-white/10 dark:bg-transparent dark:text-slate-300"
+                      }`}
+                    >
+                      <span>{gender === "female" ? "👧" : "👦"}</span>
+                      <span>{student.personalInfo?.fullName?.split(" ")[0]}</span>
+                      <span className="opacity-70">{lang === "ar" ? "🇸🇦" : "🇬🇧"}</span>
+                      <span className="opacity-70">{rel === "mother" ? "👩" : rel === "father" ? "👨" : "👤"}</span>
+                      {isEdited && <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />}
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className="relative">
-                <textarea
-                  ref={studentTextareaRef}
-                  value={currentStudentMessage}
-                  onChange={handleInput("student")}
-                  onKeyDown={handleKeyDown("student")}
-                  onSelect={(e) => setCursorPosition((prev) => ({ ...prev, student: e.target.selectionStart }))}
-                  placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ to show variables..."}
-                  className="w-full px-3 py-2.5 border-2 border-amber-200 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-800 dark:text-white resize-none h-32 font-mono text-sm"
-                  dir={
-                    selectedStudentForPreview?.communicationPreferences?.preferredLanguage === "ar"
-                      ? "rtl"
-                      : "ltr"
-                  }
-                />
-                <span className="absolute bottom-2 left-2 text-xs text-gray-400">
-                  @ {isRTL ? "للمتغيرات" : "for variables"}
-                </span>
-                <HintsDropdown
-                  type="student"
-                  borderColor="border-amber-300 dark:border-amber-700"
-                  bgColor="bg-amber-50 dark:bg-amber-900/30"
-                  textColor="text-amber-600 dark:text-amber-400"
-                />
-              </div>
-
-              {/* Preview - Student */}
-              {previewStudentMessage && selectedStudentForPreview && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-amber-200 dark:border-amber-700 overflow-hidden">
-                  <div className="bg-amber-50 dark:bg-amber-900/30 px-3 py-2 border-b flex items-center justify-between">
-                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                      📋 {isRTL ? "معاينة للطالب" : "Student Preview"}
+              {selectedStudentForPreview && (
+                <div className="space-y-1.5 rounded-lg border border-amber-100 bg-white p-3 text-xs dark:border-amber-500/10 dark:bg-white/5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-28 shrink-0 font-medium text-sky-600 dark:text-sky-400">
+                      👶 {isRTL ? "تحية الطالب:" : "Student:"}
                     </span>
-                    <span className="text-xs text-amber-500 flex items-center gap-1">
-                      <Globe className="w-3 h-3" />
-                      {selectedStudentForPreview.communicationPreferences?.preferredLanguage === "ar"
-                        ? "🇸🇦 عربي"
-                        : "🇬🇧 English"}
-                      {" · "}
-                      {(selectedStudentForPreview.personalInfo?.gender || "").toLowerCase() === "female" ? "👧" : "👦"}
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.student}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-28 shrink-0 font-medium text-violet-600 dark:text-violet-400">
+                      👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}
                     </span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.guardian}</span>
                   </div>
-                  <div
-                    className="p-3 text-sm whitespace-pre-wrap break-words max-h-48 overflow-y-auto"
-                    dir={
-                      selectedStudentForPreview.communicationPreferences?.preferredLanguage === "ar"
-                        ? "rtl"
-                        : "ltr"
-                    }
-                  >
-                    {previewStudentMessage}
+                  <div className="flex items-center gap-2">
+                    <span className="w-28 shrink-0 font-medium text-emerald-600 dark:text-emerald-400">
+                      👶 {isRTL ? "ابنك/ابنتك:" : "Child title:"}
+                    </span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.childTitle}</span>
                   </div>
+                  {(manuallyEdited.student || manuallyEdited.guardian) && (
+                    <p className="pt-0.5 text-orange-500 dark:text-orange-400">
+                      ✏️ {isRTL ? "هذا الطالب لديه رسائل معدلة يدوياً" : "This student has manually edited messages"}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
+          )}
 
-            {/* ── Guardian Message Editor ── */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                  <Users className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                </div>
-                <h4 className="font-semibold text-orange-900 dark:text-orange-100 text-sm">
-                  {isRTL ? "رسالة لولي الأمر" : "Message for Guardian"}
-                </h4>
-              </div>
+          {renderMessageEditor("student")}
+          {renderMessageEditor("guardian")}
 
-              <div className="relative">
-                <textarea
-                  ref={guardianTextareaRef}
-                  value={currentGuardianMessage}
-                  onChange={handleInput("guardian")}
-                  onKeyDown={handleKeyDown("guardian")}
-                  onSelect={(e) => setCursorPosition((prev) => ({ ...prev, guardian: e.target.selectionStart }))}
-                  placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ to show variables..."}
-                  className="w-full px-3 py-2.5 border-2 border-orange-200 dark:border-orange-700 rounded-lg focus:ring-2 focus:ring-orange-500 dark:bg-gray-800 dark:text-white resize-none h-32 font-mono text-sm"
-                  dir={
-                    selectedStudentForPreview?.communicationPreferences?.preferredLanguage === "ar"
-                      ? "rtl"
-                      : "ltr"
-                  }
-                />
-                <span className="absolute bottom-2 left-2 text-xs text-gray-400">
-                  @ {isRTL ? "للمتغيرات" : "for variables"}
-                </span>
-                <HintsDropdown
-                  type="guardian"
-                  borderColor="border-orange-300 dark:border-orange-700"
-                  bgColor="bg-orange-50 dark:bg-orange-900/30"
-                  textColor="text-orange-600 dark:text-orange-400"
-                />
-              </div>
-
-              {/* Preview - Guardian */}
-              {previewGuardianMessage && selectedStudentForPreview && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-orange-200 dark:border-orange-700 overflow-hidden">
-                  <div className="bg-orange-50 dark:bg-orange-900/30 px-3 py-2 border-b flex items-center justify-between">
-                    <span className="text-xs font-medium text-orange-700 dark:text-orange-300">
-                      📋 {isRTL ? "معاينة لولي الأمر" : "Guardian Preview"}
-                    </span>
-                    <span className="text-xs text-orange-500 flex items-center gap-1">
-                      <Globe className="w-3 h-3" />
-                      {selectedStudentForPreview.communicationPreferences?.preferredLanguage === "ar"
-                        ? "🇸🇦 عربي"
-                        : "🇬🇧 English"}
-                      {" · "}
-                      {(() => {
-                        const rel = (selectedStudentForPreview.guardianInfo?.relationship || "").toLowerCase();
-                        return rel === "mother" ? "👩 أم" : rel === "father" ? "👨 أب" : "👤";
-                      })()}
-                    </span>
-                  </div>
-                  <div
-                    className="p-3 text-sm whitespace-pre-wrap break-words max-h-48 overflow-y-auto"
-                    dir={
-                      selectedStudentForPreview.communicationPreferences?.preferredLanguage === "ar"
-                        ? "rtl"
-                        : "ltr"
-                    }
-                  >
-                    {previewGuardianMessage}
-                  </div>
-                </div>
+          {/* Save template buttons */}
+          <div className="flex justify-end gap-2 border-t border-amber-100 pt-3 dark:border-amber-500/10">
+            <button
+              onClick={() => saveTemplateToDatabase("student", currentStudentMessage)}
+              disabled={!currentStudentMessage || savingTemplate.student || loadingTemplates}
+              className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {savingTemplate.student ? (
+                <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
+              ) : (
+                <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب الطالب" : "Save Student Template"}</>
               )}
-            </div>
-
-            {/* Save Template Buttons */}
-            <div className="flex justify-end gap-2 pt-2 border-t border-amber-200 dark:border-amber-800">
-              <button
-                onClick={() => saveTemplateToDatabase("student", currentStudentMessage)}
-                disabled={!currentStudentMessage || savingTemplate.student || loadingTemplates}
-                className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-              >
-                <Save className="w-3 h-3" />
-                {savingTemplate.student ? (
-                  <><RefreshCw className="w-3 h-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
-                ) : (
-                  isRTL ? "حفظ قالب الطالب" : "Save Student Template"
-                )}
-              </button>
-              <button
-                onClick={() => saveTemplateToDatabase("guardian", currentGuardianMessage)}
-                disabled={!currentGuardianMessage || savingTemplate.guardian || loadingTemplates}
-                className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-              >
-                <Save className="w-3 h-3" />
-                {savingTemplate.guardian ? (
-                  <><RefreshCw className="w-3 h-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
-                ) : (
-                  isRTL ? "حفظ قالب ولي الأمر" : "Save Guardian Template"
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Info Box */}
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2 text-xs text-blue-700 dark:text-blue-300">
-            <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <p>
-              {isRTL
-                ? `سيتم إرسال رسالتين مخصصتين لكل طالب (رسالة للطالب ورسالة لولي الأمر) بناءً على بيانات كل طالب (اللغة، الجنس، علاقة ولي الأمر). إجمالي الطلاب: ${groupStudents.length}`
-                : `Two personalized messages will be sent per student (student message + guardian message) based on each student's data (language, gender, guardian relationship). Total students: ${groupStudents.length}`}
-            </p>
+            </button>
+            <button
+              onClick={() => saveTemplateToDatabase("guardian", currentGuardianMessage)}
+              disabled={!currentGuardianMessage || savingTemplate.guardian || loadingTemplates}
+              className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {savingTemplate.guardian ? (
+                <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
+              ) : (
+                <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب ولي الأمر" : "Save Guardian Template"}</>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* ── Footer ── */}
-        <div className="p-6 border-t border-PowderBlueBorder dark:border-dark_border flex items-center justify-end gap-3">
-          <div className="flex-1">
-            <p className="text-xs text-gray-500">
-              <Globe className="w-3 h-3 inline mr-1" />
-              {isRTL
-                ? "سيتم إرسال القالب المناسب لكل طالب حسب لغته"
-                : "Each student will receive the message in their preferred language"}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-gray-50 dark:hover:bg-dark_input"
-          >
-            {isRTL ? "إلغاء" : "Cancel"}
-          </button>
-          <button
-            onClick={handleSend}
-            disabled={
-              sending ||
-              loadingTemplates ||
-              !currentStudentMessage?.trim() ||
-              !currentGuardianMessage?.trim()
-            }
-            className="px-5 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-semibold shadow-sm"
-          >
-            {sending ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                {isRTL ? "جاري الإرسال..." : "Sending..."}
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4" />
-                {isRTL ? `إرسال لـ ${groupStudents.length} طالب` : `Send to ${groupStudents.length} students`}
-              </>
-            )}
-          </button>
+        {/* Info strip */}
+        <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-white/10 dark:bg-white/[0.02] dark:text-slate-400">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>
+            {isRTL
+              ? `هيتبعت رسالتين مخصصتين لكل طالب (رسالة للطالب ورسالة لولي الأمر) حسب بيانات كل طالب: اللغة والجنس وعلاقة ولي الأمر. إجمالي الطلاب: ${groupStudents.length}`
+              : `Two personalized messages are sent per student (student + guardian) based on each student's language, gender and guardian relationship. Total students: ${groupStudents.length}`}
+          </p>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

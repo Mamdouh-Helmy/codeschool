@@ -189,6 +189,44 @@ const SessionSchema = new mongoose.Schema(
       trim: true,
     },
 
+        // ═══════════════════════════════════════════════════════════════
+    // ✅ MAKE-UP SESSION (Hصة تعويضية) — Ad-hoc session
+    // ═══════════════════════════════════════════════════════════════
+    // لما الأدمن يعمل حصة تعويضية لطالب، السيشن دي بتتحط في جروب
+    // جديد (طالب واحد بس) وعليها isComplimentary: true.
+    //
+    // isComplimentary = true معناه:
+    //   ❌ مفيش خصم من رصيد الطالب (زي أي سيشن عادية)
+    //   ✅ المدرس بيتحاسب عادي في الـpayroll
+    //
+    // makeupInfo بيحفظ رابط السيشن الأصلية اللي بيتعوّض عنها،
+    // عشان نمنع التكرار ونعرف نتبع القصة كاملة.
+    isComplimentary: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    makeupInfo: {
+      originalSessionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Session",
+        default: null,
+      },
+      originalGroupId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Group",
+        default: null,
+      },
+      originalSessionTitle: { type: String, default: "" },
+      originalSessionDate: { type: Date, default: null },
+      createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      createdAt: { type: Date, default: null },
+    },
+
     // ✅ Snapshot من نوع الجروب وقت إنشاء السيشن (لو null بيتقرا من الجروب وقت الحساب)
     deliveryMode: {
       type: String,

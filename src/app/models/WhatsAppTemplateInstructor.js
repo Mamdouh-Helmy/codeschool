@@ -1,20 +1,27 @@
 // src/models/WhatsAppTemplateInstructor.js
 import mongoose from "mongoose";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SCHEMA
+// ═══════════════════════════════════════════════════════════════════════════
 const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
   {
     templateType: {
       type: String,
       enum: [
-        // ── الأصلي ────────────────────────────────────────────
+        // ── Group Activation ──────────────────────────────────
         "group_activation",
+        "group_activation_offline",
+        // ── الأصلي ────────────────────────────────────────────
         "reminder_24h",
         "reminder_15min",
-
-        // ── OFFLINE — جديد ────────────────────────────────────
+        // ── OFFLINE ────────────────────────────────────────────
         "reminder_24h_offline",
         "reminder_30min_offline",
         "pre_attendance_ping",
+        // ── 🎁 الحصة التعويضية ────────────────────────────────
+        "makeup_session_instructor",
+        "makeup_session_instructor_offline",
       ],
       required: true,
       default: "group_activation",
@@ -27,15 +34,16 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
     },
     contentAr: {
       type: String,
-      required: true,
+      default: "",
     },
     contentEn: {
       type: String,
-      required: true,
+      default: "",
     },
-    // ✅ content بياخد snapshot من contentAr تلقائيًا (للتوافق مع الكود القديم)
+    // ✅ snapshot من contentAr للتوافق مع الكود القديم
     content: {
       type: String,
+      default: "",
     },
     description: {
       type: String,
@@ -51,10 +59,10 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
     },
     variables: [
       {
+        _id: false,
         key: String,
         label: String,
         description: String,
-        _id: false,
       },
     ],
     usageStats: {
@@ -68,13 +76,31 @@ const WhatsAppTemplateInstructorSchema = new mongoose.Schema(
       updatedAt: { type: Date, default: Date.now },
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    // ✅ تحويل تلقائي لـ plain object عند الـ JSON.stringify
+    toJSON: {
+      virtuals: true,
+      transform: (_doc, ret) => {
+        delete ret.__v;
+        return ret;
+      },
+    },
+    toObject: {
+      virtuals: true,
+      transform: (_doc, ret) => {
+        delete ret.__v;
+        return ret;
+      },
+    },
+  },
 );
 
-// ─── Indexes ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// INDEXES
+// ═══════════════════════════════════════════════════════════════════════════
 WhatsAppTemplateInstructorSchema.index({ templateType: 1, isActive: 1 });
 WhatsAppTemplateInstructorSchema.index({ isDefault: 1 });
-// ✅ ضمان وجود template default واحد بس لكل templateType
 WhatsAppTemplateInstructorSchema.index(
   { templateType: 1, isDefault: 1 },
   {
@@ -84,23 +110,28 @@ WhatsAppTemplateInstructorSchema.index(
   },
 );
 
-// ─── Hooks ─────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// HOOKS
+// ═══════════════════════════════════════════════════════════════════════════
 WhatsAppTemplateInstructorSchema.pre("save", async function () {
+  if (!this.metadata) this.metadata = {};
   this.metadata.updatedAt = new Date();
-  this.content = this.contentAr;
 
-  // ✅ لو الاتنين فاضيين نرمي error واضح
+  // ✅ لازم يكون فيه محتوى بالعربي أو الإنجليزي على الأقل
   if (!this.contentAr && !this.contentEn) {
     throw new Error(
       "at least one of contentAr or contentEn must be provided",
     );
   }
 
-  // ✅ لو واحد منهم فاضي، نعمل fallback للتاني عشان الكود ميقعش
+  // ✅ fallback بين اللغتين
   if (!this.contentAr && this.contentEn) this.contentAr = this.contentEn;
   if (!this.contentEn && this.contentAr) this.contentEn = this.contentAr;
 
-  // ✅ ضمان إن فيه default واحد بس لكل type
+  // ✅ content snapshot من contentAr
+  this.content = this.contentAr;
+
+  // ✅ default واحد بس لكل نوع
   if (this.isDefault) {
     await this.constructor.updateMany(
       {
@@ -113,14 +144,17 @@ WhatsAppTemplateInstructorSchema.pre("save", async function () {
   }
 });
 
-// ─── Methods ───────────────────────────────────────────────────────────────────
-WhatsAppTemplateInstructorSchema.methods.incrementUsage = async function () {
-  this.usageStats.totalSent += 1;
-  this.usageStats.lastUsedAt = new Date();
-  await this.save();
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// INSTANCE METHODS
+// ═══════════════════════════════════════════════════════════════════════════
+WhatsAppTemplateInstructorSchema.methods.incrementUsage =
+  async function () {
+    if (!this.usageStats) this.usageStats = { totalSent: 0 };
+    this.usageStats.totalSent = (this.usageStats.totalSent || 0) + 1;
+    this.usageStats.lastUsedAt = new Date();
+    await this.save();
+  };
 
-// ✅ helper: يجيب محتوى اللغة المطلوبة مع fallback
 WhatsAppTemplateInstructorSchema.methods.getContent = function (
   language = "ar",
 ) {
@@ -130,7 +164,6 @@ WhatsAppTemplateInstructorSchema.methods.getContent = function (
   return this.contentEn || this.contentAr || this.content || "";
 };
 
-// ✅ helper: يستبدل المتغيرات في المحتوى
 WhatsAppTemplateInstructorSchema.methods.render = function (
   variables = {},
   language = "ar",
@@ -149,8 +182,13 @@ WhatsAppTemplateInstructorSchema.methods.render = function (
   return content;
 };
 
-// ─── Statics ───────────────────────────────────────────────────────────────────
-// ✅ يجيب template default للـ type المطلوب
+// ═══════════════════════════════════════════════════════════════════════════
+// STATIC METHODS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * ✅ يجيب القالب الافتراضي لنوع معين — plain object جاهز للـ serialize
+ */
 WhatsAppTemplateInstructorSchema.statics.getDefaultFor = async function (
   templateType,
 ) {
@@ -158,10 +196,22 @@ WhatsAppTemplateInstructorSchema.statics.getDefaultFor = async function (
     templateType,
     isActive: true,
     isDefault: true,
-  }).lean();
+  })
+    .select("-__v")
+    .lean();
 };
 
-// ✅ يضمن وجود default لكل type — يشتغل مع seed من لوحة التحكم
+/**
+ * ✅ يجيب كل القوالب النشطة — plain objects
+ */
+WhatsAppTemplateInstructorSchema.statics.getActiveTemplates =
+  async function () {
+    return this.find({ isActive: true }).select("-__v").lean();
+  };
+
+/**
+ * ✅ يعمل seed للقوالب الافتراضية لو مش موجودة
+ */
 WhatsAppTemplateInstructorSchema.statics.ensureDefaults = async function () {
   const defaults = getInstructorFallbackTemplates();
 
@@ -188,15 +238,17 @@ WhatsAppTemplateInstructorSchema.statics.ensureDefaults = async function () {
   return results;
 };
 
-// ─── Fallback templates (hardcoded) ───────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// FALLBACK TEMPLATES (hardcoded)
+// ═══════════════════════════════════════════════════════════════════════════
 export function getInstructorFallbackTemplates() {
   return {
-    // ══════════════════════════════════════════════════════════
-    // group_activation (الأصلي)
-    // ══════════════════════════════════════════════════════════
+    // ═════════════════════════════════════════════════════════════════════
+    // 🎯 GROUP ACTIVATION — ONLINE
+    // ═════════════════════════════════════════════════════════════════════
     group_activation: {
-      name: "قالب تفعيل المجموعة للمدرب",
-      description: "بيتبعت للمدرب أول ما المجموعة تتفعّل",
+      name: "إشعار تفعيل مجموعة للمدرب (Online)",
+      description: "بيتبعت للمدرب أول ما الجروب الأونلاين يتفعّل",
       variables: [
         { key: "instructorSalutation", label: "تحية المدرب" },
         { key: "courseName", label: "اسم الكورس" },
@@ -205,52 +257,101 @@ export function getInstructorFallbackTemplates() {
         { key: "timeFrom", label: "وقت البداية" },
         { key: "timeTo", label: "وقت النهاية" },
         { key: "studentCount", label: "عدد الطلاب" },
+        { key: "meetingLink", label: "لينك الحصة" },
       ],
-      ar: `{instructorSalutation}،
+      ar: `{instructorSalutation} 👋
 
-يسرنا إعلامك بأن مجموعة جديدة قد تم تعيينها وتفعيلها بنجاح تحت إشرافك بالتفاصيل التالية:
+حبيت أبلغك إنه تم إسناد جروب *{groupName}* الخاص بكورس *{courseName}* لحضرتك ✨
+دي كل تفاصيل البداية عشان تكون جاهز:
 
-📘 البرنامج: {courseName}
-👥 المجموعة: {groupName}
-📅 تاريخ الحصة الأولى: {startDate}
-⏰ الموعد: {timeFrom} – {timeTo}
-👦👧 عدد الطلاب: {studentCount}
+📘 الـ Course: {courseName}
+👥 الـ Group: {groupName}
+📅 تاريخ البداية: {startDate}
+⏰ المعاد: من {timeFrom} إلى {timeTo}
+🔗 لينك الحصة:
+{meetingLink}
 
-📌 يرجى التأكد من التالي:
-- مراجعة المنهج وخطة الجلسة قبل الحصة الأولى
-- فتح رابط الاجتماع قبل ١٠-١٥ دقيقة على الأقل
-- التأكد من جاهزية جميع الأدوات والمواد المطلوبة
-- تسجيل الحضور وتقييم الجلسة بعد كل حصة
+متحمسين جداً لبداية قوية معاك، وبالتوفيق يا هندسة 🌟
 
-نقدر التزامك واحترافيتك ونتمنى لك رحلة تعليمية ناجحة ومؤثرة مع طلابك 🚀
+نور ✨
+فريق الأوبيريشن - Code School`,
+      en: `{instructorSalutation} 👋
 
-مع أطيب التحيات،
-إدارة Code School 💻`,
-      en: `{instructorSalutation},
+We're pleased to assign you group *{groupName}* for *{courseName}* ✨
+Here are all the starting details to get you ready:
 
-We are pleased to inform you that a new group has been assigned and activated under your supervision with the following details:
-
-📘 Program: {courseName}
+📘 Course: {courseName}
 👥 Group: {groupName}
-📅 First Session Date: {startDate}
-⏰ Schedule: {timeFrom} – {timeTo}
-👦👧 Students: {studentCount}
+📅 Start Date: {startDate}
+⏰ Time: From {timeFrom} to {timeTo}
+🔗 Meeting Link:
+{meetingLink}
 
-📌 Please make sure to:
-- Review the curriculum and session plan before the first session
-- Open the meeting link at least 10-15 minutes early
-- Ensure all required tools and materials are ready
-- Take attendance and evaluate the session after each class
+Excited for a strong start with you, best of luck! 🌟
 
-We appreciate your commitment and professionalism, and wish you a successful educational journey with your students 🚀
-
-Best regards,
-Code School Management 💻`,
+Nour ✨
+Operations Team - Code School`,
     },
 
-    // ══════════════════════════════════════════════════════════
-    // reminder_24h (أونلاين)
-    // ══════════════════════════════════════════════════════════
+    // ═════════════════════════════════════════════════════════════════════
+    // 🎯 GROUP ACTIVATION — OFFLINE
+    // ═════════════════════════════════════════════════════════════════════
+    group_activation_offline: {
+      name: "إشعار تفعيل مجموعة للمدرب (Offline)",
+      description: "بيتبعت للمدرب أول ما الجروب الأوفلاين يتفعّل",
+      variables: [
+        { key: "instructorSalutation", label: "تحية المدرب" },
+        { key: "courseName", label: "اسم الكورس" },
+        { key: "groupName", label: "اسم المجموعة" },
+        { key: "startDate", label: "تاريخ البداية" },
+        { key: "timeFrom", label: "وقت البداية" },
+        { key: "timeTo", label: "وقت النهاية" },
+        { key: "studentCount", label: "عدد الطلاب" },
+        { key: "placeName", label: "اسم المكان" },
+        { key: "address", label: "العنوان التفصيلي" },
+        { key: "mapsLink", label: "رابط الخريطة" },
+      ],
+      ar: `{instructorSalutation} 👋
+
+حبيت أبلغك إنه تم إسناد جروب *{groupName}* الخاص بكورس *{courseName}* لحضرتك ✨
+دي كل تفاصيل البداية عشان تكون جاهز:
+
+📘 الـ Course: {courseName}
+👥 الـ Group: {groupName}
+📅 تاريخ البداية: {startDate}
+⏰ المعاد: من {timeFrom} إلى {timeTo}
+
+📍 المكان: {placeName}
+📌 العنوان: {address}
+🗺️ اللوكيشن: {mapsLink}
+
+متحمسين جداً لبداية قوية معاك، وبالتوفيق يا هندسة 🌟
+
+نور ✨
+فريق الأوبيريشن - Code School`,
+      en: `{instructorSalutation} 👋
+
+We're pleased to assign you group *{groupName}* for *{courseName}* ✨
+Here are all the starting details to get you ready:
+
+📘 Course: {courseName}
+👥 Group: {groupName}
+📅 Start Date: {startDate}
+⏰ Time: From {timeFrom} to {timeTo}
+
+📍 Location: {placeName}
+📌 Address: {address}
+🗺️ Maps: {mapsLink}
+
+Excited for a strong start with you, best of luck! 🌟
+
+Nour ✨
+Operations Team - Code School`,
+    },
+
+    // ═════════════════════════════════════════════════════════════════════
+    // ⏰ REMINDER 24H (Online)
+    // ═════════════════════════════════════════════════════════════════════
     reminder_24h: {
       name: "تذكير 24 ساعة للمدرب (Online)",
       description: "تذكير للمدرب قبل الحصة الأونلاين بـ 24 ساعة",
@@ -306,9 +407,9 @@ Can't wait to see you tomorrow 💻🚀
 Code School Team`,
     },
 
-    // ══════════════════════════════════════════════════════════
-    // reminder_15min (أونلاين)
-    // ══════════════════════════════════════════════════════════
+    // ═════════════════════════════════════════════════════════════════════
+    // ⏳ REMINDER 15MIN (Online)
+    // ═════════════════════════════════════════════════════════════════════
     reminder_15min: {
       name: "تذكير 15 دقيقة للمدرب (Online)",
       description: "تذكير للمدرب قبل الحصة الأونلاين بـ 15 دقيقة",
@@ -358,13 +459,12 @@ Can't wait to see you now 💻🚀
 Code School Team`,
     },
 
-    // ══════════════════════════════════════════════════════════
-    // reminder_24h_offline (أوفلاين — Maps Reminder)
-    // ══════════════════════════════════════════════════════════
+    // ═════════════════════════════════════════════════════════════════════
+    // 📍 REMINDER 24H OFFLINE (Maps)
+    // ═════════════════════════════════════════════════════════════════════
     reminder_24h_offline: {
       name: "تذكير 24 ساعة للمدرب (Offline — Maps)",
-      description:
-        "تذكير للمدرب قبل الحصة الأوفلاين بـ 24 ساعة مع اللوكيشن",
+      description: "تذكير للمدرب قبل الحصة الأوفلاين بـ 24 ساعة مع اللوكيشن",
       variables: [
         { key: "instructorSalutation", label: "تحية المدرب" },
         { key: "sessionName", label: "اسم الحصة" },
@@ -408,9 +508,9 @@ Reminder: You have an *offline* session *{sessionName}* tomorrow ✨
 Code School Team 💻`,
     },
 
-    // ══════════════════════════════════════════════════════════
-    // reminder_30min_offline (Drop-off Alert)
-    // ══════════════════════════════════════════════════════════
+    // ═════════════════════════════════════════════════════════════════════
+    // 🚗 REMINDER 30MIN OFFLINE (Drop-off)
+    // ═════════════════════════════════════════════════════════════════════
     reminder_30min_offline: {
       name: "تنبيه 30 دقيقة للمدرب (Offline — Drop-off)",
       description:
@@ -445,13 +545,12 @@ Code School Team 💻`,
 Code School Team 💻`,
     },
 
-    // ══════════════════════════════════════════════════════════
-    // pre_attendance_ping
-    // ══════════════════════════════════════════════════════════
+    // ═════════════════════════════════════════════════════════════════════
+    // ✅ PRE-ATTENDANCE PING
+    // ═════════════════════════════════════════════════════════════════════
     pre_attendance_ping: {
       name: "Pre-Attendance Ping للمدرب",
-      description:
-        "رسالة قبل بداية الحصة مباشرة — للمدرب لتأكيد الاستعداد",
+      description: "رسالة قبل بداية الحصة مباشرة — للمدرب لتأكيد الاستعداد",
       variables: [
         { key: "instructorSalutation", label: "تحية المدرب" },
         { key: "sessionName", label: "اسم الحصة" },
@@ -467,10 +566,145 @@ Code School Team 💻`,
 
 Code School Team 💻`,
     },
+
+    // ═════════════════════════════════════════════════════════════════════
+    // 🎁 MAKE-UP SESSION (الحصة التعويضية — للمدرب) — Online
+    // ═════════════════════════════════════════════════════════════════════
+    makeup_session_instructor: {
+      name: "حصة تعويضية - المدرب",
+      description: "بيتبعت للمدرب لما الأدمن يعمل حصة تعويضية جديدة",
+      variables: [
+        { key: "instructorSalutation", label: "تحية المدرب" },
+        { key: "instructorName", label: "اسم المدرب" },
+        { key: "studentName", label: "اسم الطالب" },
+        { key: "courseName", label: "اسم الكورس" },
+        { key: "groupName", label: "اسم المجموعة" },
+        { key: "groupCode", label: "كود المجموعة" },
+        { key: "originalDate", label: "تاريخ الحصة الأصلية" },
+        { key: "originalTime", label: "وقت الحصة الأصلية" },
+        { key: "originalSessionTitle", label: "عنوان الحصة الأصلية" },
+        { key: "newDate", label: "تاريخ الحصة التعويضية" },
+        { key: "newTime", label: "وقت الحصة التعويضية" },
+        {
+          key: "sessionLocationBlock",
+          label: "معلومات المكان / اللينك (تلقائي)",
+        },
+      ],
+      ar: `{instructorSalutation} 👋
+
+تم تحديد حصة تعويضية جديدة ليك:
+
+📘 الكورس: {courseName}
+👥 المجموعة: {groupName} ({groupCode})
+👤 الطالب: {studentName}
+
+📅 التاريخ: {newDate}
+⏰ الوقت: {newTime}
+{sessionLocationBlock}
+
+🔄 الحصة الأصلية:
+📅 {originalDate}
+⏰ {originalTime}
+📚 {originalSessionTitle}
+
+ملاحظة: الحصة دي تعويضية (مجانية على الطالب)، لكن المدرس بيتحاسب عليها عادي.
+
+فريق Code School 💻`,
+      en: `{instructorSalutation} 👋
+
+A new make-up session has been scheduled for you:
+
+📘 Course: {courseName}
+👥 Group: {groupName} ({groupCode})
+👤 Student: {studentName}
+
+📅 Date: {newDate}
+⏰ Time: {newTime}
+{sessionLocationBlock}
+
+🔄 Original Session:
+📅 {originalDate}
+⏰ {originalTime}
+📚 {originalSessionTitle}
+
+Note: This is a make-up session (free for the student), but the instructor is still paid for it.
+
+Code School Team 💻`,
+    },
+
+    // ═════════════════════════════════════════════════════════════════════
+    // 🎁 MAKE-UP SESSION (Offline — للمدرب)
+    // ═════════════════════════════════════════════════════════════════════
+    makeup_session_instructor_offline: {
+      name: "حصة تعويضية - المدرب (Offline)",
+      description: "بيتبعت للمدرب لما الأدمن يعمل حصة تعويضية أوفلاين",
+      variables: [
+        { key: "instructorSalutation", label: "تحية المدرب" },
+        { key: "instructorName", label: "اسم المدرب" },
+        { key: "studentName", label: "اسم الطالب" },
+        { key: "courseName", label: "اسم الكورس" },
+        { key: "groupName", label: "اسم المجموعة" },
+        { key: "groupCode", label: "كود المجموعة" },
+        { key: "originalDate", label: "تاريخ الحصة الأصلية" },
+        { key: "originalTime", label: "وقت الحصة الأصلية" },
+        { key: "originalSessionTitle", label: "عنوان الحصة الأصلية" },
+        { key: "newDate", label: "تاريخ الحصة التعويضية" },
+        { key: "newTime", label: "وقت الحصة التعويضية" },
+        { key: "placeName", label: "اسم المكان" },
+        { key: "address", label: "العنوان التفصيلي" },
+        { key: "mapsLink", label: "رابط الخريطة" },
+      ],
+      ar: `{instructorSalutation} 👋
+
+تم تحديد حصة تعويضية جديدة ليك (Offline):
+
+📘 الكورس: {courseName}
+👥 المجموعة: {groupName} ({groupCode})
+👤 الطالب: {studentName}
+
+📅 التاريخ: {newDate}
+⏰ الوقت: {newTime}
+📍 المكان: {placeName}
+📌 العنوان: {address}
+🗺️ اللوكيشن: {mapsLink}
+
+🔄 الحصة الأصلية:
+📅 {originalDate}
+⏰ {originalTime}
+📚 {originalSessionTitle}
+
+ملاحظة: الحصة دي تعويضية (مجانية على الطالب)، لكن المدرس بيتحاسب عليها عادي.
+
+فريق Code School 💻`,
+      en: `{instructorSalutation} 👋
+
+A new make-up session has been scheduled for you (Offline):
+
+📘 Course: {courseName}
+👥 Group: {groupName} ({groupCode})
+👤 Student: {studentName}
+
+📅 Date: {newDate}
+⏰ Time: {newTime}
+📍 Location: {placeName}
+📌 Address: {address}
+🗺️ Maps: {mapsLink}
+
+🔄 Original Session:
+📅 {originalDate}
+⏰ {originalTime}
+📚 {originalSessionTitle}
+
+Note: This is a make-up session (free for the student), but the instructor is still paid for it.
+
+Code School Team 💻`,
+    },
   };
 }
 
-// ─── Model ─────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// MODEL EXPORT — آمن للـ hot reload
+// ═══════════════════════════════════════════════════════════════════════════
 const WhatsAppTemplateInstructor =
   mongoose.models.WhatsAppTemplateInstructor ||
   mongoose.model(

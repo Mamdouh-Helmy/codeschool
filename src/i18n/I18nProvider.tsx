@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useMemo } from "react";
+import React, { createContext, useContext, useMemo, useCallback } from "react";
 import { useLocale } from "@/app/context/LocaleContext";
 import en from "./messages/en";
 import ar from "./messages/ar";
@@ -15,21 +15,61 @@ type I18nContextValue = {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
+// ✅ escape كل الـ special characters في regex
+// (زي `{`, `}`, `(`, `)`, `.`, `*`, `+`, `?`, `[`, `]`, `\`, `^`, `$`, `|`)
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// ✅ نبني الـ regex من template literal بأمان
+function buildVarRegex(key: string): RegExp | null {
+  // لو الـ key فاضي أو مش string → نرجع null (نتخطاه)
+  if (!key || typeof key !== "string" || key.trim() === "") {
+    return null;
+  }
+
+  try {
+    // بنلف الـ key بـ { } كـ literal (مش كـ regex quantifier)
+    const pattern = `\\{${escapeRegex(key)}\\}`;
+    return new RegExp(pattern, "g");
+  } catch (err) {
+    console.warn(`⚠️ Could not build regex for var key "${key}":`, err);
+    return null;
+  }
+}
+
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const { locale } = useLocale();
   const messages = bundles[locale] || bundles.en;
 
-  const t = (key: string, vars?: Record<string, string | number>) => {
-    let str = messages[key] ?? key;
-    if (vars) {
-      for (const k of Object.keys(vars)) {
-        str = str.replace(new RegExp(`{${k}}`, "g"), String(vars[k]));
+  const t = useCallback(
+    (key: string, vars?: Record<string, string | number>) => {
+      // ✅ لو الـ key مش موجود أو مش string → نرجع فاضي بدل ما نكسر
+      if (!key || typeof key !== "string") {
+        return "";
       }
-    }
-    return str;
-  };
 
-  const value = useMemo(() => ({ t }), [messages, locale]);
+      let str = messages[key] ?? key;
+
+      if (vars && typeof vars === "object") {
+        for (const k of Object.keys(vars)) {
+          const regex = buildVarRegex(k);
+          if (!regex) continue; // تخطى المفاتيح الفاضية أو اللي فيها مشاكل
+
+          const value = vars[k];
+          str = str.replace(
+            regex,
+            value !== undefined && value !== null ? String(value) : "",
+          );
+        }
+      }
+
+      return str;
+    },
+    [messages],
+  );
+
+  const value = useMemo(() => ({ t }), [t]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

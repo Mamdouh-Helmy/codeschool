@@ -97,6 +97,8 @@ export async function GET(req) {
     const studentsMax = searchParams.get("studentsMax");
     const sessionsGenerated = searchParams.get("sessionsGenerated");
     const tagsParam = searchParams.get("tags");
+    // ✅ فلتر جديد: عشان نعرض/نخفي الجروبات التعويضية
+    const makeupFilter = searchParams.get("isMakeupGroup"); // "true" | "false" | null
 
     const query = { isDeleted: false };
 
@@ -149,6 +151,13 @@ export async function GET(req) {
         query.tags = { $in: tagIds };
       }
     }
+    // ✅ فلتر الجروبات التعويضية
+    if (makeupFilter === "true") {
+      query.isMakeupGroup = true;
+    } else if (makeupFilter === "false") {
+      // نشمل الجروبات العادية + أي وثيقة قديمة مفيهاش الحقل
+      query.isMakeupGroup = { $ne: true };
+    }
 
     console.log("🔍 Query:", JSON.stringify(query, null, 2));
 
@@ -185,6 +194,20 @@ export async function GET(req) {
         name: group.name,
         code: group.code,
         status: group.status,
+
+        // ✅ MAKE-UP GROUP FLAGS — عشان الفرونت يعرض بادج "حصة تعويضية"
+        isMakeupGroup: !!group.isMakeupGroup,
+        makeupInfo: group.makeupInfo
+          ? {
+              studentId: group.makeupInfo.studentId || null,
+              originalSessionId: group.makeupInfo.originalSessionId || null,
+              originalGroupId: group.makeupInfo.originalGroupId || null,
+              originalSessionTitle: group.makeupInfo.originalSessionTitle || "",
+              originalSessionDate: group.makeupInfo.originalSessionDate || null,
+              createdAt: group.makeupInfo.createdAt || null,
+            }
+          : null,
+
         course: {
           id: group.courseId?._id,
           title: group.courseId?.title,
@@ -219,7 +242,7 @@ export async function GET(req) {
           orphanedCount: health.orphanedCount,
         },
 
-        // ✅ Hold — إضافة holdUntilSessionId
+        // ✅ Hold
         isOnHold: !!group.hold?.isHeld,
         hold: group.hold
           ? {
@@ -246,6 +269,11 @@ export async function GET(req) {
         ...query,
         status: "active",
         "hold.isHeld": true,
+      }),
+      // ✅ إحصائية جديدة: عدد الجروبات التعويضية ضمن نفس الفلتر
+      makeup: await Group.countDocuments({
+        ...query,
+        isMakeupGroup: true,
       }),
     };
 
@@ -531,6 +559,8 @@ export async function POST(req) {
       createdBy: adminUser.id,
       updatedAt: new Date(),
       tags: tags || [],
+      // ✅ الجروبات اللي بتتعمل من الفورم العادي مش تعويضية
+      isMakeupGroup: false,
     };
 
     const group = await Group.create(groupData);
@@ -544,6 +574,7 @@ export async function POST(req) {
 
     const responseData = {
       ...populatedGroup,
+      isMakeupGroup: false,
       instructors: (populatedGroup.instructors || []).map((i) => ({
         _id: i.userId?._id || i.userId,
         name: i.userId?.name || "",
@@ -816,6 +847,8 @@ export async function PUT(req, { params }) {
 
     const responseData = {
       ...updatedGroup,
+      isMakeupGroup: !!updatedGroup.isMakeupGroup,
+      makeupInfo: updatedGroup.makeupInfo || null,
       instructors: (updatedGroup.instructors || []).map((i) => ({
         _id: i.userId?._id || i.userId,
         name: i.userId?.name || "",

@@ -11,7 +11,10 @@ import {
   sendInstructorWelcomeMessages,
 } from "../../../../services/groupAutomation";
 import mongoose from "mongoose";
-import { findScheduleConflict, pruneOrphanedReservations } from "@/utils/checkMeetingLinks";
+import {
+  findScheduleConflict,
+  pruneOrphanedReservations,
+} from "@/utils/checkMeetingLinks";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: build simulated session list for preview (no DB writes)
@@ -20,17 +23,28 @@ function previewSessions(group) {
   const course = group.courseId;
   if (!course?.curriculum?.length) return [];
 
-  const moduleSelection = group.moduleSelection || { mode: "all", selectedModules: [] };
+  const moduleSelection = group.moduleSelection || {
+    mode: "all",
+    selectedModules: [],
+  };
   const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
 
   const dayMap = {
-    Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-    Thursday: 4, Friday: 5, Saturday: 6,
+    Sunday: 0,
+    Monday: 1,
+    Tuesday: 2,
+    Wednesday: 3,
+    Thursday: 4,
+    Friday: 5,
+    Saturday: 6,
   };
 
   let modulesToUse = [];
   if (moduleSelection.mode === "all") {
-    modulesToUse = course.curriculum.map((m, i) => ({ module: m, origIdx: i }));
+    modulesToUse = course.curriculum.map((m, i) => ({
+      module: m,
+      origIdx: i,
+    }));
   } else {
     modulesToUse = moduleSelection.selectedModules
       .map((i) => ({ module: course.curriculum[i], origIdx: i }))
@@ -91,6 +105,27 @@ function previewSessions(group) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helper: build maps link for offline
+// ─────────────────────────────────────────────────────────────────────────────
+function buildMapsLink(group) {
+  const loc = group?.locationDetails || {};
+  if (loc.lat != null && loc.lng != null) {
+    return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+  }
+  if (loc.address) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      loc.address,
+    )}`;
+  }
+  if (loc.placeName || group?.location) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      loc.placeName || group.location,
+    )}`;
+  }
+  return "";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET: Preview link distribution BEFORE activation
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(req, { params }) {
@@ -103,7 +138,10 @@ export async function GET(req, { params }) {
     await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: "Invalid group ID" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid group ID" },
+        { status: 400 },
+      );
     }
 
     const group = await Group.findOne({ _id: id, isDeleted: false }).populate(
@@ -112,9 +150,47 @@ export async function GET(req, { params }) {
     );
 
     if (!group) {
-      return NextResponse.json({ success: false, error: "Group not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Group not found" },
+        { status: 404 },
+      );
     }
 
+    // ✅ NEW: Offline Groups مش محتاجة أي لينكات خالص — المدرس بيروح المكان
+    if (group.deliveryMode === "offline") {
+      const sessions = previewSessions(group);
+      const totalSessions = sessions.length;
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          isOffline: true,
+          isMakeupGroup: !!group.isMakeupGroup,
+          totalSessions,
+          totalLinks: 0,
+          availableLinksCount: 0,
+          reservedLinksCount: 0,
+          hasNoLinks: false,
+          hasAvailableLinks: false,
+          sessionsWithLinks: 0,
+          sessionsWithout: 0,
+          sessions,
+          availableLinks: [],
+          reservedLinks: [],
+          preselectedLinks: [],
+          preselectedLinkIds: [],
+          locationInfo: {
+            placeName: group.locationDetails?.placeName || "",
+            address: group.locationDetails?.address || "",
+            lat: group.locationDetails?.lat ?? null,
+            lng: group.locationDetails?.lng ?? null,
+            mapsLink: buildMapsLink(group),
+          },
+        },
+      });
+    }
+
+    // ── Online Flow ──────────────────────────────────────────────────────
     let allLinks = await MeetingLink.find({
       isDeleted: false,
       status: { $in: ["available", "reserved", "in_use"] },
@@ -122,7 +198,6 @@ export async function GET(req, { params }) {
       .sort({ "stats.totalUses": 1 })
       .lean();
 
-    // ✅ تنضيف الحجوزات اليتيمة (لجروبات اتحذفت) قبل أي فحص تعارض
     allLinks = await pruneOrphanedReservations(allLinks);
 
     const { daysOfWeek, timeFrom, timeTo } = group.schedule;
@@ -132,9 +207,6 @@ export async function GET(req, { params }) {
     const reservedLinks = [];
 
     for (const link of allLinks) {
-      // ✅ الفحص بيقارن مع كل الحجوزات النشطة (array) على اللينك، ومستثنى
-      // منه أي حجز لنفس الجروب ده (excludeGroupId = group._id) — عشان لو
-      // الجروب أصلاً بيستخدم اللينك ده مش هيتحسب "متعارض مع نفسه"
       const conflict = findScheduleConflict(link, newSchedule, group._id);
 
       if (conflict) {
@@ -152,32 +224,79 @@ export async function GET(req, { params }) {
       }
     }
 
-    // ✅ بناء بريفيو السيشنات (نفس اللوجيك القديم)
     const sessions = previewSessions(group);
     const totalSessions = sessions.length;
 
-    const sessionsWithLinks = availableLinks.length > 0 ? totalSessions : 0;
-    const sessionsWithout = availableLinks.length > 0 ? 0 : totalSessions;
+    // ✅ NEW: اجمع اللينكات المختارة مسبقًا من فورم الحصة التعويضية
+    // (لو الجروب تعويضي والأدمن اختار لينكات وقت الإنشاء)
+    const preselectedLinkIds = (group.metadata?.selectedLinkIds || []).map(
+      (lid) => lid.toString(),
+    );
+
+    let preselectedLinks = [];
+    let finalAvailableLinks = availableLinks;
+
+    if (preselectedLinkIds.length > 0) {
+      const preselDocs = await MeetingLink.find({
+        _id: { $in: preselectedLinkIds },
+        isDeleted: false,
+      }).lean();
+
+      preselectedLinks = preselDocs.map((l) => ({
+        _id: l._id,
+        id: l._id,
+        name: l.name,
+        platform: l.platform,
+        link: l.link,
+      }));
+
+      // ✅ شيل اللينكات دي من قايمة available عشان ما تتكررش في العرض
+      const preselSet = new Set(preselectedLinkIds);
+      finalAvailableLinks = availableLinks.filter(
+        (l) => !preselSet.has(l._id.toString()),
+      );
+
+      console.log(
+        `🔗 [Activate Preview] Found ${preselectedLinks.length} preselected link(s) from metadata`,
+      );
+    }
+
+    const sessionsWithLinks =
+      finalAvailableLinks.length > 0 || preselectedLinks.length > 0
+        ? totalSessions
+        : 0;
+    const sessionsWithout =
+      finalAvailableLinks.length > 0 || preselectedLinks.length > 0
+        ? 0
+        : totalSessions;
 
     return NextResponse.json({
       success: true,
       data: {
+        isOffline: false,
+        isMakeupGroup: !!group.isMakeupGroup,
         totalSessions,
         totalLinks: allLinks.length,
-        availableLinksCount: availableLinks.length,
+        availableLinksCount: finalAvailableLinks.length,
         reservedLinksCount: reservedLinks.length,
         hasNoLinks: allLinks.length === 0,
-        hasAvailableLinks: availableLinks.length > 0,
+        hasAvailableLinks: finalAvailableLinks.length > 0,
         sessionsWithLinks,
         sessionsWithout,
         sessions,
-        availableLinks,
+        availableLinks: finalAvailableLinks,
         reservedLinks,
+        // ✅ اللينكات المختارة مسبقًا من فورم الحصة التعويضية
+        preselectedLinks,
+        preselectedLinkIds,
       },
     });
   } catch (error) {
     console.error("❌ GET activate error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -195,16 +314,19 @@ export async function POST(req, { params }) {
     const body = await req.json();
     const {
       instructorMessages = {},
-      forceActivate    = false,
-      releaseReserved  = false,
-      // ✅ استقبل الـ IDs المختارة من الفرونت
-      selectedLinkIds  = [],
+      forceActivate = false,
+      releaseReserved = false,
+      // ✅ استقبل الـ IDs المختارة من الفرونت (لو الفرونت بعتها)
+      selectedLinkIds = [],
     } = body;
 
     await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: "Invalid group ID format" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid group ID format" },
+        { status: 400 },
+      );
     }
 
     const group = await Group.findOne({ _id: id, isDeleted: false })
@@ -212,62 +334,128 @@ export async function POST(req, { params }) {
       .populate("instructors.userId", "name email gender profile");
 
     if (!group) {
-      return NextResponse.json({ success: false, error: "Group not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Group not found" },
+        { status: 404 },
+      );
     }
 
-    // ── Release reserved links if requested ──────────────────────────────
-    if (releaseReserved) {
-  const group = await Group.findById(id).select("schedule");
-  const allLinks = await MeetingLink.find({ isDeleted: false, status: "reserved" });
-  let released = 0;
-  for (const link of allLinks) {
-    const conflict = findScheduleConflict(link, group.schedule, id);
-    if (conflict?.conflictingGroupId) {
-      try {
-        await link.releaseReservation(conflict.conflictingGroupId);
-        released++;
-      } catch (e) {
-        console.warn(`⚠️ Could not release link ${link.name}:`, e.message);
+    // ✅ فلاج الـ Offline — بيتحسب مرة واحدة وبيتحكم في كل الفلو بعد كده
+    const isOffline = group.deliveryMode === "offline";
+
+    console.log(`\n🎯 Activating group ${group.code}`);
+    console.log(
+      `   Delivery Mode: ${group.deliveryMode} (isOffline: ${isOffline})`,
+    );
+
+    // ── Release reserved links if requested (Online Only) ────────────────
+    if (!isOffline && releaseReserved) {
+      const freshGroup = await Group.findById(id).select("schedule");
+      const allLinks = await MeetingLink.find({
+        isDeleted: false,
+        status: "reserved",
+      });
+      let released = 0;
+
+      for (const link of allLinks) {
+        const conflict = findScheduleConflict(link, freshGroup.schedule, id);
+        if (conflict?.conflictingGroupId) {
+          try {
+            await link.releaseReservation(conflict.conflictingGroupId);
+            released++;
+          } catch (e) {
+            console.warn(`⚠️ Could not release link ${link.name}:`, e.message);
+          }
+        }
       }
+      console.log(`✅ Released ${released} conflicting reservation(s)`);
     }
-  }
-  console.log(`✅ Released ${released} conflicting reservation(s)`);
-}
 
     // ── Validations ──────────────────────────────────────────────────────
     let isReactivation = false;
 
-    if (group.status === "active")     isReactivation = true;
+    if (group.status === "active") isReactivation = true;
     if (group.status === "completed") {
-      return NextResponse.json({ success: false, error: "Cannot activate a completed group" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Cannot activate a completed group" },
+        { status: 400 },
+      );
     }
     if (!group.courseId?.curriculum?.length) {
-      return NextResponse.json({ success: false, error: "Cannot activate group: Course has no curriculum" }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Cannot activate group: Course has no curriculum",
+        },
+        { status: 400 },
+      );
     }
-    if (!group.schedule?.startDate || !group.schedule?.daysOfWeek?.length || group.schedule.daysOfWeek.length > 3) {
-      return NextResponse.json({
-        success: false,
-        error: `Group must have a valid schedule with 1 to 3 days selected (currently has ${group.schedule?.daysOfWeek?.length || 0} days)`,
-      }, { status: 400 });
+    if (
+      !group.schedule?.startDate ||
+      !group.schedule?.daysOfWeek?.length ||
+      group.schedule.daysOfWeek.length > 3
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Group must have a valid schedule with 1 to 3 days selected (currently has ${
+            group.schedule?.daysOfWeek?.length || 0
+          } days)`,
+        },
+        { status: 400 },
+      );
     }
 
-    const moduleSelection = group.moduleSelection || { mode: "all", selectedModules: [] };
-    if (moduleSelection.mode === "specific" && moduleSelection.selectedModules.length === 0) {
-      return NextResponse.json({ success: false, error: "No modules selected for session generation" }, { status: 400 });
+    // ✅ Offline لازم يكون فيه مكان محدد قبل التفعيل
+    if (isOffline) {
+      const loc = group.locationDetails || {};
+      const hasLocation =
+        loc?.placeName?.trim() ||
+        loc?.address?.trim() ||
+        (loc?.lat != null && loc?.lng != null) ||
+        group.location?.trim();
+
+      if (!hasLocation) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "جروب الأوفلاين لازم يكون فيه مكان محدد (placeName/address/coordinates) قبل التفعيل",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    const moduleSelection = group.moduleSelection || {
+      mode: "all",
+      selectedModules: [],
+    };
+    if (
+      moduleSelection.mode === "specific" &&
+      moduleSelection.selectedModules.length === 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "No modules selected for session generation",
+        },
+        { status: 400 },
+      );
     }
 
     // ── Update group status ──────────────────────────────────────────────
     const updateData = {
       $set: {
         "metadata.lastModifiedBy": adminUser.id,
-        "metadata.updatedAt":      new Date(),
+        "metadata.updatedAt": new Date(),
       },
     };
     if (!isReactivation) {
-      updateData.$set.status                   = "active";
-      updateData.$set["metadata.activatedAt"]  = new Date();
+      updateData.$set.status = "active";
+      updateData.$set["metadata.activatedAt"] = new Date();
     } else {
-      updateData.$set["metadata.reactivatedAt"]  = new Date();
+      updateData.$set["metadata.reactivatedAt"] = new Date();
       updateData.$set["metadata.lastRegeneration"] = new Date();
     }
 
@@ -278,12 +466,41 @@ export async function POST(req, { params }) {
       .populate("instructors.userId", "name email gender profile");
 
     // ── Sync indexes ─────────────────────────────────────────────────────
-    try { await Session.syncIndexes(); } catch (e) { console.warn("⚠️ syncIndexes:", e.message); }
+    try {
+      await Session.syncIndexes();
+    } catch (e) {
+      console.warn("⚠️ syncIndexes:", e.message);
+    }
 
     // ── Automation ───────────────────────────────────────────────────────
     try {
-      // ✅ مرّر selectedLinkIds لـ onGroupActivated
-      const automationResult = await onGroupActivated(id, adminUser.id, selectedLinkIds);
+      // ✅ NEW: لو الفرونت مبعتش selectedLinkIds (زي حالة الـ Make-up Group
+      // اللي بيتفعّل من صفحة الجروبات بدون ما المودال يبعتهم)، نقراها من
+      // الـ metadata اللي اتخزنت وقت إنشاء الجروب التعويضي.
+      const selectedLinkIdsFromMetadata =
+        updatedGroup.metadata?.selectedLinkIds || [];
+
+      const finalSelectedLinkIds =
+        selectedLinkIds.length > 0
+          ? selectedLinkIds // من الفرونت (اختيار يدوي في المودال)
+          : selectedLinkIdsFromMetadata; // من الـ Make-up form
+
+      console.log(
+        `   🔗 Selected links source: ${
+          selectedLinkIds.length > 0
+            ? "frontend"
+            : selectedLinkIdsFromMetadata.length > 0
+              ? "metadata (make-up form)"
+              : "none"
+        } (${finalSelectedLinkIds.length} link(s))`,
+      );
+
+      // ✅ للـ Offline بنمرر [] عشان الـ sessionGenerator ماتحاولش تحجز أي لينك
+      const automationResult = await onGroupActivated(
+        id,
+        adminUser.id,
+        isOffline ? [] : finalSelectedLinkIds,
+      );
 
       let instructorNotificationResult = {
         success: true,
@@ -294,76 +511,111 @@ export async function POST(req, { params }) {
 
       if (updatedGroup.instructors?.length > 0) {
         try {
-          instructorNotificationResult = await sendInstructorWelcomeMessages(id, instructorMessages);
+          instructorNotificationResult = await sendInstructorWelcomeMessages(
+            id,
+            instructorMessages,
+          );
         } catch (e) {
           instructorNotificationResult = { success: false, error: e.message };
         }
       }
 
-      const normalizedInstructors = (updatedGroup.instructors || []).map((entry) => ({
-        _id:       entry.userId?._id || entry.userId,
-        id:        entry.userId?._id || entry.userId,
-        name:      entry.userId?.name  || "",
-        email:     entry.userId?.email || "",
-        gender:    entry.userId?.gender || "",
-        profile:   entry.userId?.profile || {},
-        countTime: entry.countTime || 0,
-      }));
+      const normalizedInstructors = (updatedGroup.instructors || []).map(
+        (entry) => ({
+          _id: entry.userId?._id || entry.userId,
+          id: entry.userId?._id || entry.userId,
+          name: entry.userId?.name || "",
+          email: entry.userId?.email || "",
+          gender: entry.userId?.gender || "",
+          profile: entry.userId?.profile || {},
+          countTime: entry.countTime || 0,
+        }),
+      );
 
       return NextResponse.json({
         success: true,
-        message: isReactivation ? "Group reactivated successfully" : "Group activated successfully",
+        message: isReactivation
+          ? isOffline
+            ? "Group reactivated successfully (Offline)"
+            : "Group reactivated successfully"
+          : isOffline
+            ? "Group activated successfully (Offline)"
+            : "Group activated successfully",
         data: {
-          id:            updatedGroup._id,
-          code:          updatedGroup.code,
-          name:          updatedGroup.name,
-          status:        updatedGroup.status,
-          activatedAt:   updatedGroup.metadata?.activatedAt   ?? null,
+          id: updatedGroup._id,
+          code: updatedGroup.code,
+          name: updatedGroup.name,
+          status: updatedGroup.status,
+          deliveryMode: updatedGroup.deliveryMode,
+          isOffline,
+          isMakeupGroup: !!updatedGroup.isMakeupGroup,
+          activatedAt: updatedGroup.metadata?.activatedAt ?? null,
           reactivatedAt: updatedGroup.metadata?.reactivatedAt ?? null,
-          course:        updatedGroup.courseId,
-          instructors:   normalizedInstructors,
+          course: updatedGroup.courseId,
+          instructors: normalizedInstructors,
           sessionsGenerated: true,
-          totalSessions:     automationResult.sessionsGenerated,
+          totalSessions: automationResult.sessionsGenerated,
           isReactivation,
           scheduleInfo: {
-            daysPerWeek:  updatedGroup.schedule.daysOfWeek.length,
+            daysPerWeek: updatedGroup.schedule.daysOfWeek.length,
             selectedDays: updatedGroup.schedule.daysOfWeek,
-            startDate:    updatedGroup.schedule.startDate,
+            startDate: updatedGroup.schedule.startDate,
           },
-          moduleSelection: updatedGroup.moduleSelection || { mode: "all", selectedModules: [] },
+          moduleSelection: updatedGroup.moduleSelection || {
+            mode: "all",
+            selectedModules: [],
+          },
+          usedLinkIds: isOffline ? [] : finalSelectedLinkIds,
+          linkSource:
+            selectedLinkIds.length > 0
+              ? "frontend"
+              : selectedLinkIdsFromMetadata.length > 0
+                ? "metadata"
+                : "none",
         },
         automation: {
           sessions: {
-            triggered:    true,
-            status:       "completed",
-            generated:    automationResult.sessionsGenerated,
-            details:      automationResult,
+            triggered: true,
+            status: "completed",
+            generated: automationResult.sessionsGenerated,
+            details: automationResult,
             regeneration: automationResult.regeneration || false,
           },
           instructorNotifications: {
-            triggered:           updatedGroup.instructors?.length > 0,
-            status:              instructorNotificationResult?.success ? "sent" : "failed",
-            customMessagesUsed:  Object.keys(instructorMessages).length,
-            notificationsSent:   instructorNotificationResult?.notificationsSent   || 0,
-            notificationsFailed: instructorNotificationResult?.notificationsFailed || 0,
-            successRate:         instructorNotificationResult?.successRate          || 0,
-            results:             instructorNotificationResult,
+            triggered: updatedGroup.instructors?.length > 0,
+            status: instructorNotificationResult?.success ? "sent" : "failed",
+            customMessagesUsed: Object.keys(instructorMessages).length,
+            notificationsSent:
+              instructorNotificationResult?.notificationsSent || 0,
+            notificationsFailed:
+              instructorNotificationResult?.notificationsFailed || 0,
+            successRate: instructorNotificationResult?.successRate || 0,
+            results: instructorNotificationResult,
           },
         },
       });
     } catch (automationError) {
       console.error("❌ Automation failed:", automationError);
       if (!isReactivation) {
-        await Group.findByIdAndUpdate(id, { $set: { status: "draft", "metadata.updatedAt": new Date() } });
+        await Group.findByIdAndUpdate(id, {
+          $set: { status: "draft", "metadata.updatedAt": new Date() },
+        });
       }
-      return NextResponse.json({
-        success: false,
-        error:      `Automation failed: ${automationError.message}`,
-        suggestion: "Group status reverted to draft. Please check the schedule and try again.",
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Automation failed: ${automationError.message}`,
+          suggestion:
+            "Group status reverted to draft. Please check the schedule and try again.",
+        },
+        { status: 500 },
+      );
     }
   } catch (error) {
     console.error("❌ Error activating group:", error);
-    return NextResponse.json({ success: false, error: error.message || "Failed to activate group" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to activate group" },
+      { status: 500 },
+    );
   }
 }

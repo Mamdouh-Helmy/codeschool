@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import toast from "react-hot-toast";
 import {
-  X,
   Save,
   RefreshCw,
   Link2,
@@ -13,7 +12,6 @@ import {
   Users,
   Zap,
   Info,
-  Calendar,
   Clock,
   CheckCircle2,
   XCircle,
@@ -23,14 +21,14 @@ import {
   ShieldCheck,
   PauseCircle,
 } from "lucide-react";
+import ModalShell from "./ModalShell";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// resolveVar — نفس منطق ReminderModal تماماً
+// resolveVar / buildVariables / renderTemplate — unchanged business logic
 // ─────────────────────────────────────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
   const v = dbVars[key];
   if (!v) return null;
-
   const { studentGender = "male", guardianType = "father" } = genderContext;
   const isMale   = String(studentGender).toLowerCase() !== "female";
   const isFather = String(guardianType).toLowerCase()  !== "mother";
@@ -52,16 +50,11 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
         : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
     }
   }
-
   return lang === "ar" ? v.valueAr || null : v.valueEn || null;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildVariables
-// ─────────────────────────────────────────────────────────────────────────────
 function buildVariables(student, session, formData, dbVars = {}) {
   if (!student) return {};
-
   const lang         = (student.communicationPreferences?.preferredLanguage || "ar").toLowerCase();
   const gender       = (student.personalInfo?.gender       || "male").toLowerCase().trim();
   const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
@@ -71,37 +64,22 @@ function buildVariables(student, session, formData, dbVars = {}) {
 
   const studentFirstName =
     lang === "ar"
-      ? student.personalInfo?.nickname?.ar?.trim()  ||
-        student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
-      : student.personalInfo?.nickname?.en?.trim()  ||
-        student.personalInfo?.fullName?.split(" ")[0] || "Student";
+      ? student.personalInfo?.nickname?.ar?.trim()  || student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
+      : student.personalInfo?.nickname?.en?.trim()  || student.personalInfo?.fullName?.split(" ")[0] || "Student";
 
   const guardianFirstName =
     lang === "ar"
-      ? student.guardianInfo?.nickname?.ar?.trim()  ||
-        student.guardianInfo?.name?.split(" ")[0]   || "ولي الأمر"
-      : student.guardianInfo?.nickname?.en?.trim()  ||
-        student.guardianInfo?.name?.split(" ")[0]   || "Guardian";
+      ? student.guardianInfo?.nickname?.ar?.trim()  || student.guardianInfo?.name?.split(" ")[0]   || "ولي الأمر"
+      : student.guardianInfo?.nickname?.en?.trim()  || student.guardianInfo?.name?.split(" ")[0]   || "Guardian";
 
   const salutationBase_ar =
-    resolveVar(dbVars, "salutation_ar", "ar", genderCtx) ||
-    (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
-
+    resolveVar(dbVars, "salutation_ar", "ar", genderCtx) || (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
   const guardianSalBase_ar =
-    resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) ||
-    (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
-
+    resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) || (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
   const guardianSalBase_en =
-    resolveVar(dbVars, "guardianSalutation_en", "en", genderCtx) ||
-    (isFather ? "Dear Mr." : "Dear Mrs.");
-
-  const childTitleAr =
-    resolveVar(dbVars, "childTitle", "ar", genderCtx) ||
-    (isMale ? "ابنك" : "ابنتك");
-
-  const childTitleEn =
-    resolveVar(dbVars, "childTitle", "en", genderCtx) ||
-    (isMale ? "your son" : "your daughter");
+    resolveVar(dbVars, "guardianSalutation_en", "en", genderCtx) || (isFather ? "Dear Mr." : "Dear Mrs.");
+  const childTitleAr = resolveVar(dbVars, "childTitle", "ar", genderCtx) || (isMale ? "ابنك" : "ابنتك");
+  const childTitleEn = resolveVar(dbVars, "childTitle", "en", genderCtx) || (isMale ? "your son" : "your daughter");
 
   const guardianSalutation_ar = `${guardianSalBase_ar} ${guardianFirstName}`;
   const guardianSalutation_en = `${guardianSalBase_en} ${guardianFirstName}`;
@@ -112,49 +90,36 @@ function buildVariables(student, session, formData, dbVars = {}) {
 
   const salutation_ar = studentSalutation_ar;
   const salutation_en = `Dear ${studentFirstName}`;
-
   const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
 
   const sessionDate = session?.scheduledDate
-    ? new Date(session.scheduledDate).toLocaleDateString(
-        lang === "ar" ? "ar-EG" : "en-US",
-        { weekday: "long", year: "numeric", month: "long", day: "numeric" }
-      )
+    ? new Date(session.scheduledDate).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
     : "";
 
   const newDateFormatted = formData?.newDate
-    ? new Date(formData.newDate).toLocaleDateString(
-        lang === "ar" ? "ar-EG" : "en-US",
-        { weekday: "long", year: "numeric", month: "long", day: "numeric" }
-      )
+    ? new Date(formData.newDate).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
     : (lang === "ar" ? "التاريخ الجديد" : "New Date");
 
   return {
-    studentSalutation,
-    guardianSalutation,
-    salutation: guardianSalutation,
-    salutation_ar,
-    salutation_en,
-    studentName:      studentFirstName,
-    studentFullName:  student.personalInfo?.fullName || "",
-    guardianName:     guardianFirstName,
+    studentSalutation, guardianSalutation, salutation: guardianSalutation,
+    salutation_ar, salutation_en,
+    studentName: studentFirstName,
+    studentFullName: student.personalInfo?.fullName || "",
+    guardianName: guardianFirstName,
     guardianFullName: student.guardianInfo?.name || "",
     childTitle,
-    sessionName:      session?.title       || "",
-    date:             sessionDate,
-    time:             `${session?.startTime || ""} - ${session?.endTime || ""}`,
-    meetingLink:      formData?.meetingLink || session?.meetingLink || "",
-    newDate:          newDateFormatted,
-    newTime:          formData?.newTime    || "",
-    groupCode:        session?.groupId?.code || "",
-    groupName:        session?.groupId?.name || "",
+    sessionName: session?.title || "",
+    date: sessionDate,
+    time: `${session?.startTime || ""} - ${session?.endTime || ""}`,
+    meetingLink: formData?.meetingLink || session?.meetingLink || "",
+    newDate: newDateFormatted,
+    newTime: formData?.newTime || "",
+    groupCode: session?.groupId?.code || "",
+    groupName: session?.groupId?.name || "",
     enrollmentNumber: student.enrollmentNumber || "",
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// renderTemplate
-// ─────────────────────────────────────────────────────────────────────────────
 function renderTemplate(template, variables) {
   if (!template) return "";
   let result = template;
@@ -166,18 +131,13 @@ function renderTemplate(template, variables) {
   return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// getShiftedChainPreview
-// ─────────────────────────────────────────────────────────────────────────────
 function getShiftedChainPreview(allSessions, currentSession, shiftDays = 7) {
   if (!currentSession || !allSessions?.length) return { shifting: [], skipped: [] };
 
   const sameGroup = allSessions
     .filter((s) => {
       const sGroupId = typeof s.group === "object" ? s.group?.id : s.groupId;
-      const curGroupId = typeof currentSession.group === "object"
-        ? currentSession.group?.id
-        : currentSession.groupId;
+      const curGroupId = typeof currentSession.group === "object" ? currentSession.group?.id : currentSession.groupId;
       return (sGroupId || s.groupId) === (curGroupId || currentSession.groupId) || s.group?.id === currentSession.group?.id;
     })
     .slice()
@@ -192,15 +152,8 @@ function getShiftedChainPreview(allSessions, currentSession, shiftDays = 7) {
 
   chain.forEach((s) => {
     const isTrigger = s.id === currentSession.id;
-
-    if (s.status === "completed") {
-      skipped.push(s);
-      return;
-    }
-    if (!isTrigger && s.status === "cancelled") {
-      skipped.push(s);
-      return;
-    }
+    if (s.status === "completed") { skipped.push(s); return; }
+    if (!isTrigger && s.status === "cancelled") { skipped.push(s); return; }
 
     const oldDate = new Date(s.scheduledDate);
     const newDate = new Date(oldDate);
@@ -213,77 +166,37 @@ function getShiftedChainPreview(allSessions, currentSession, shiftDays = 7) {
 
 function formatShortDate(date, isRTL) {
   try {
-    return date.toLocaleDateString(isRTL ? "ar-EG" : "en-US", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    });
+    return date.toLocaleDateString(isRTL ? "ar-EG" : "en-US", { weekday: "short", day: "numeric", month: "short" });
   } catch {
     return "—";
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STATUS PICKER
+// STATUS PICKER — redesigned as a segmented row instead of 4 equal SaaS cards
 // ─────────────────────────────────────────────────────────────────────────────
 const STATUS_OPTIONS = [
-  {
-    value: "scheduled",
-    labelAr: "مجدولة",
-    labelEn: "Scheduled",
-    hintAr: "هتفضل زي ما هي",
-    hintEn: "Stays as is",
-    icon: CalendarCheck,
-    ring: "ring-blue-500",
-    activeBg: "bg-blue-50 dark:bg-blue-900/20",
-    activeText: "text-blue-700 dark:text-blue-300",
-    iconBg: "bg-blue-100 dark:bg-blue-900/40",
-  },
-  {
-    value: "completed",
-    labelAr: "مكتملة",
-    labelEn: "Completed",
-    hintAr: "+٢ ساعة للمدرب",
-    hintEn: "+2h to instructor",
-    icon: CheckCircle2,
-    ring: "ring-green-500",
-    activeBg: "bg-green-50 dark:bg-green-900/20",
-    activeText: "text-green-700 dark:text-green-300",
-    iconBg: "bg-green-100 dark:bg-green-900/40",
-  },
-  {
-    value: "postponed",
-    labelAr: "مؤجلة",
-    labelEn: "Postponed",
-    hintAr: "تاريخ جديد + إشعار",
-    hintEn: "New date + notice",
-    icon: CalendarClock,
-    ring: "ring-amber-500",
-    activeBg: "bg-amber-50 dark:bg-amber-900/20",
-    activeText: "text-amber-700 dark:text-amber-300",
-    iconBg: "bg-amber-100 dark:bg-amber-900/40",
-  },
-  {
-    value: "cancelled",
-    labelAr: "ملغاة",
-    labelEn: "Cancelled",
-    hintAr: "الباقي يترحل أسبوع",
-    hintEn: "Rest shifts a week",
-    icon: XCircle,
-    ring: "ring-red-500",
-    activeBg: "bg-red-50 dark:bg-red-900/20",
-    activeText: "text-red-700 dark:text-red-300",
-    iconBg: "bg-red-100 dark:bg-red-900/40",
-  },
+  { value: "scheduled", labelAr: "مجدولة", labelEn: "Scheduled", hintAr: "هتفضل زي ما هي", hintEn: "Stays as is", icon: CalendarCheck, accent: "sky" },
+  { value: "completed", labelAr: "مكتملة", labelEn: "Completed", hintAr: "+٢ ساعة للمدرب", hintEn: "+2h to instructor", icon: CheckCircle2, accent: "emerald" },
+  { value: "postponed", labelAr: "مؤجلة", labelEn: "Postponed", hintAr: "تاريخ جديد + إشعار", hintEn: "New date + notice", icon: CalendarClock, accent: "amber" },
+  { value: "cancelled", labelAr: "ملغاة", labelEn: "Cancelled", hintAr: "الباقي يترحل أسبوع", hintEn: "Rest shifts a week", icon: XCircle, accent: "rose" },
 ];
+
+const ACCENT_CLASSES = {
+  sky:     { active: "border-sky-400 bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300", icon: "bg-sky-100 text-sky-600 dark:bg-sky-500/20 dark:text-sky-300" },
+  emerald: { active: "border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300", icon: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300" },
+  amber:   { active: "border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300", icon: "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300" },
+  rose:    { active: "border-rose-400 bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300", icon: "bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300" },
+};
 
 function StatusPicker({ value, onChange, isRTL, disabledValues = [] }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {STATUS_OPTIONS.map((opt) => {
         const Icon = opt.icon;
         const isActive = value === opt.value;
         const isDisabled = disabledValues.includes(opt.value);
+        const c = ACCENT_CLASSES[opt.accent];
 
         return (
           <button
@@ -291,49 +204,25 @@ function StatusPicker({ value, onChange, isRTL, disabledValues = [] }) {
             type="button"
             disabled={isDisabled}
             onClick={() => !isDisabled && onChange(opt.value)}
-            title={
+            title={isDisabled ? (isRTL ? "مقفول بسبب الـ Hold" : "Locked — group is on hold") : ""}
+            className={`rounded-xl border p-3 text-left transition-all rtl:text-right ${
               isDisabled
-                ? (isRTL ? "مقفول بسبب الـ Hold" : "Locked — group is on hold")
-                : ""
-            }
-            className={`relative text-left rtl:text-right p-3 rounded-xl border-2 transition-all ${
-              isDisabled
-                ? "opacity-40 cursor-not-allowed bg-gray-50 dark:bg-gray-800/50 border-PowderBlueBorder dark:border-dark_border"
+                ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-40 dark:border-white/10 dark:bg-white/[0.02]"
                 : isActive
-                  ? `${opt.activeBg} border-transparent ring-2 ${opt.ring}`
-                  : "bg-white dark:bg-dark_input border-PowderBlueBorder dark:border-dark_border hover:border-gray-300 dark:hover:border-gray-600"
+                  ? `${c.active} shadow-sm`
+                  : "border-slate-200 bg-white hover:border-slate-300 dark:border-white/10 dark:bg-transparent dark:hover:border-white/20"
             }`}
           >
-            <div className="flex items-center gap-2 mb-1.5">
-              <div
-                className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                  isActive && !isDisabled ? opt.iconBg : "bg-gray-100 dark:bg-gray-800"
-                }`}
-              >
-                <Icon
-                  className={`w-4 h-4 ${
-                    isActive && !isDisabled ? opt.activeText : "text-gray-400"
-                  }`}
-                />
+            <div className="mb-1.5 flex items-center gap-2">
+              <div className={`flex h-6 w-6 items-center justify-center rounded-md ${isActive && !isDisabled ? c.icon : "bg-slate-100 text-slate-400 dark:bg-white/5"}`}>
+                <Icon className="h-3.5 w-3.5" />
               </div>
-              <span
-                className={`text-sm font-semibold ${
-                  isActive && !isDisabled
-                    ? opt.activeText
-                    : "text-MidnightNavyText dark:text-white"
-                }`}
-              >
+              <span className="text-sm font-semibold text-slate-800 dark:text-white">
                 {isRTL ? opt.labelAr : opt.labelEn}
               </span>
             </div>
-            <p
-              className={`text-[11px] leading-tight ${
-                isActive && !isDisabled ? opt.activeText : "text-gray-400"
-              }`}
-            >
-              {isDisabled
-                ? (isRTL ? "🔒 مقفول بسبب الـ Hold" : "🔒 Locked (Hold)")
-                : (isRTL ? opt.hintAr : opt.hintEn)}
+            <p className="text-[11px] text-slate-400">
+              {isDisabled ? (isRTL ? "مقفول (Hold)" : "Locked (Hold)") : (isRTL ? opt.hintAr : opt.hintEn)}
             </p>
           </button>
         );
@@ -348,8 +237,8 @@ function StatusPicker({ value, onChange, isRTL, disabledValues = [] }) {
 function CascadeImpactStrip({ shifting, skipped, isRTL }) {
   if (shifting.length === 0 && skipped.length === 0) {
     return (
-      <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-PowderBlueBorder dark:border-dark_border text-xs text-gray-500">
-        <Info className="w-3.5 h-3.5 shrink-0" />
+      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 dark:border-white/10 dark:bg-white/[0.02]">
+        <Info className="h-3.5 w-3.5 shrink-0" />
         {isRTL ? "مفيش سيشنات هتتأثر" : "No sessions will be affected"}
       </div>
     );
@@ -358,53 +247,42 @@ function CascadeImpactStrip({ shifting, skipped, isRTL }) {
   const followingCount = shifting.filter((s) => !s.isTrigger).length;
 
   return (
-    <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50/60 dark:bg-red-900/10 overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 bg-red-100/70 dark:bg-red-900/25 border-b border-red-200 dark:border-red-800/50">
-        <ArrowLeftRight className="w-3.5 h-3.5 text-red-600 dark:text-red-400 shrink-0" />
-        <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+    <div className="overflow-hidden rounded-xl border border-rose-200 bg-rose-50/60 dark:border-rose-500/20 dark:bg-rose-500/5">
+      <div className="flex items-center gap-2 border-b border-rose-200 bg-rose-100/70 px-3 py-2 dark:border-rose-500/20 dark:bg-rose-500/10">
+        <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
+        <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">
           {isRTL
             ? `الجلسة هتترحل + ${followingCount} جلسة تانية هتترحل أسبوعًا لقدام`
-            : `This session + ${followingCount} other session(s) will shift forward a week`}
+            : `This session + ${followingCount} other session(s) shift forward a week`}
         </p>
       </div>
-
-      <div className="p-2.5 flex gap-2 overflow-x-auto">
+      <div className="flex gap-2 overflow-x-auto p-2.5">
         {shifting.map((s) => (
           <div
             key={s.id}
-            className={`shrink-0 min-w-[150px] bg-white dark:bg-dark_input rounded-lg border p-2 ${
-              s.isTrigger ? "border-red-400 dark:border-red-600 ring-1 ring-red-300 dark:ring-red-700" : "border-red-200 dark:border-red-800/40"
+            className={`min-w-[150px] shrink-0 rounded-lg border bg-white p-2 dark:bg-[#171a24] ${
+              s.isTrigger ? "border-rose-400 ring-1 ring-rose-300 dark:border-rose-500 dark:ring-rose-700" : "border-rose-200 dark:border-rose-500/20"
             }`}
           >
             {s.isTrigger && (
-              <span className="inline-block mb-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-600 text-white">
+              <span className="mb-1 inline-block rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                 {isRTL ? "دي اللي بتلغيها" : "You're cancelling this"}
               </span>
             )}
-            <p className="text-xs font-medium text-MidnightNavyText dark:text-white truncate mb-1">
-              {s.title}
-            </p>
-            <div className="flex items-center gap-1 text-[11px] text-gray-500">
-              <span className="line-through opacity-60">{formatShortDate(s.oldDate, isRTL)}</span>
-              <span className="text-red-500">←</span>
-              <span className="font-semibold text-red-600 dark:text-red-400">
-                {formatShortDate(s.newDate, isRTL)}
-              </span>
+            <p className="mb-1 truncate text-xs font-medium text-slate-800 dark:text-white">{s.title}</p>
+            <div className="flex items-center gap-1 text-[11px] text-slate-500">
+              <span className="opacity-60 line-through">{formatShortDate(s.oldDate, isRTL)}</span>
+              <span className="text-rose-500">←</span>
+              <span className="font-semibold text-rose-600 dark:text-rose-400">{formatShortDate(s.newDate, isRTL)}</span>
             </div>
           </div>
         ))}
-
         {skipped.map((s) => (
-          <div
-            key={s.id}
-            className="shrink-0 min-w-[150px] bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-700 p-2 opacity-70"
-          >
-            <p className="text-xs font-medium text-gray-500 truncate mb-1">{s.title}</p>
-            <div className="flex items-center gap-1 text-[11px] text-gray-400">
-              <ShieldCheck className="w-3 h-3 shrink-0" />
-              {s.status === "completed"
-                ? (isRTL ? "مكتملة — مش هتتأثر" : "Completed — untouched")
-                : (isRTL ? "ملغاة بالفعل — مش هتتأثر" : "Already cancelled — untouched")}
+          <div key={s.id} className="min-w-[150px] shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-2 opacity-70 dark:border-white/10 dark:bg-white/[0.02]">
+            <p className="mb-1 truncate text-xs font-medium text-slate-500">{s.title}</p>
+            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+              <ShieldCheck className="h-3 w-3 shrink-0" />
+              {s.status === "completed" ? (isRTL ? "مكتملة — مش هتتأثر" : "Completed — untouched") : (isRTL ? "ملغاة بالفعل" : "Already cancelled")}
             </div>
           </div>
         ))}
@@ -416,15 +294,7 @@ function CascadeImpactStrip({ shifting, skipped, isRTL }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
-export default function EditSessionModal({
-  session,
-  groupStudents,
-  allSessions = [],
-  onClose,
-  onRefresh,
-  isRTL,
-  t,
-}) {
+export default function EditSessionModal({ session, groupStudents, allSessions = [], onClose, onRefresh, isRTL, t }) {
   const [formData, setFormData] = useState({
     meetingLink:     session?.meetingLink     || "",
     recordingLink:   session?.recordingLink   || "",
@@ -457,16 +327,13 @@ export default function EditSessionModal({
   const isPostponed     = formData.status === "postponed";
   const isCancelling    = formData.status === "cancelled" && session?.status !== "cancelled";
 
-  // ✅ هل الجروب على Hold؟ → كل التعديلات مقفولة
   const groupIsOnHold = !!session?.group?.isOnHold;
 
-  // ── Cascade preview ──────────────────────────────────────────────────────
   const cascadePreview = useMemo(() => {
     if (!isCancelling || groupIsOnHold) return { shifting: [], skipped: [] };
     return getShiftedChainPreview(allSessions, session, 7);
   }, [isCancelling, groupIsOnHold, allSessions, session]);
 
-  // ── Fetch DB template variables on mount ──────────────────────────────────
   useEffect(() => {
     fetch("/api/whatsapp/template-variables")
       .then((r) => r.json())
@@ -480,28 +347,22 @@ export default function EditSessionModal({
       .catch((err) => console.error("❌ Failed to load template variables:", err));
   }, []);
 
-  // ── Close hints on outside click ──────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
-      if (hintsRef.current.student  && !hintsRef.current.student.contains(e.target))
-        setShowHints((prev) => ({ ...prev, student: false }));
-      if (hintsRef.current.guardian && !hintsRef.current.guardian.contains(e.target))
-        setShowHints((prev) => ({ ...prev, guardian: false }));
+      if (hintsRef.current.student  && !hintsRef.current.student.contains(e.target)) setShowHints((prev) => ({ ...prev, student: false }));
+      if (hintsRef.current.guardian && !hintsRef.current.guardian.contains(e.target)) setShowHints((prev) => ({ ...prev, guardian: false }));
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── Select first student by default ──────────────────────────────────────
   useEffect(() => {
     if (groupStudents.length > 0 && !selectedStudentForPreview) {
       setSelectedStudentForPreview(groupStudents[0]);
     }
   }, [groupStudents]);
 
-  // ── Fetch templates from backend ──────────────────────────────────────────
   useEffect(() => {
-    // ✅ مش محتاجين نحمّل قوالب لو الجروب على Hold لأن الـ status مقفول
     if (groupIsOnHold) return;
 
     const fetchTemplates = async () => {
@@ -510,8 +371,7 @@ export default function EditSessionModal({
 
       setLoadingTemplates(true);
       try {
-        const eventType =
-          formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
+        const eventType = formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
 
         const res = await fetch(`/api/sessions/${session.id}/templates`, {
           method:  "POST",
@@ -519,27 +379,17 @@ export default function EditSessionModal({
           body:    JSON.stringify({
             eventType,
             studentId: selectedStudentForPreview._id,
-            extraData: {
-              newDate:     formData.newDate,
-              newTime:     formData.newTime,
-              meetingLink: formData.meetingLink,
-            },
+            extraData: { newDate: formData.newDate, newTime: formData.newTime, meetingLink: formData.meetingLink },
           }),
         });
 
         const json = await res.json();
         if (json.success) {
           if (!manuallyEdited.student && json.data.student) {
-            setFormData((prev) => ({
-              ...prev,
-              studentMessage: json.data.student.rawContent || json.data.student.content || "",
-            }));
+            setFormData((prev) => ({ ...prev, studentMessage: json.data.student.rawContent || json.data.student.content || "" }));
           }
           if (!manuallyEdited.guardian && json.data.guardian) {
-            setFormData((prev) => ({
-              ...prev,
-              guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "",
-            }));
+            setFormData((prev) => ({ ...prev, guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "" }));
           }
         }
       } catch (error) {
@@ -553,30 +403,17 @@ export default function EditSessionModal({
     fetchTemplates();
   }, [formData.status, selectedStudentForPreview?._id, formData.newDate, formData.newTime, groupIsOnHold]);
 
-  // ── Live preview ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedStudentForPreview) return;
     const vars = buildVariables(selectedStudentForPreview, session, formData, dbVars);
     setPreviewStudentMessage(renderTemplate(formData.studentMessage,  vars));
     setPreviewGuardianMessage(renderTemplate(formData.guardianMessage, vars));
-  }, [
-    formData.studentMessage,
-    formData.guardianMessage,
-    formData.meetingLink,
-    formData.newDate,
-    formData.newTime,
-    selectedStudentForPreview,
-    session,
-    dbVars,
-  ]);
+  }, [formData.studentMessage, formData.guardianMessage, formData.meetingLink, formData.newDate, formData.newTime, selectedStudentForPreview, session, dbVars]);
 
-  // ── Save template to DB ───────────────────────────────────────────────────
   const saveTemplateToDatabase = useCallback(
     async (type, content) => {
       if (groupIsOnHold) {
-        toast.error(
-          isRTL ? "الجروب على Hold — مينفعش تحفظ قوالب" : "Group is on hold — can't save templates"
-        );
+        toast.error(isRTL ? "الجروب على Hold — مينفعش تحفظ قوالب" : "Group is on hold — can't save templates");
         return;
       }
       if (!selectedStudentForPreview || !content?.trim()) return;
@@ -585,54 +422,34 @@ export default function EditSessionModal({
       try {
         let templateType = "";
         if (formData.status === "cancelled") {
-          templateType =
-            type === "student" ? "session_cancelled_student" : "session_cancelled_guardian";
+          templateType = type === "student" ? "session_cancelled_student" : "session_cancelled_guardian";
         } else if (formData.status === "postponed") {
-          templateType =
-            type === "student" ? "session_postponed_student" : "session_postponed_guardian";
+          templateType = type === "student" ? "session_postponed_student" : "session_postponed_guardian";
         } else return;
 
         const recipientType = type === "student" ? "student" : "guardian";
-        const studentLang =
-          selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
+        const studentLang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
+        const templateName = formData.status === "cancelled"
+          ? (type === "student" ? "Session Cancelled - Student" : "Session Cancelled - Guardian")
+          : (type === "student" ? "Session Postponed - Student" : "Session Postponed - Guardian");
 
-        const templateName =
-          formData.status === "cancelled"
-            ? type === "student" ? "Session Cancelled - Student" : "Session Cancelled - Guardian"
-            : type === "student" ? "Session Postponed - Student" : "Session Postponed - Guardian";
-
-        const searchRes  = await fetch(
-          `/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`
-        );
+        const searchRes  = await fetch(`/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`);
         const searchJson = await searchRes.json();
 
         if (searchJson.success && searchJson.data.length > 0) {
           const existing    = searchJson.data[0];
           const updateData  = {
-            id:        existing._id,
-            name:      templateName,
-            isDefault: true,
-            updatedAt: new Date(),
-            ...(studentLang === "ar"
-              ? { contentAr: content, contentEn: existing.contentEn || "" }
-              : { contentEn: content, contentAr: existing.contentAr || "" }),
+            id: existing._id, name: templateName, isDefault: true, updatedAt: new Date(),
+            ...(studentLang === "ar" ? { contentAr: content, contentEn: existing.contentEn || "" } : { contentEn: content, contentAr: existing.contentAr || "" }),
           };
-
-          const res  = await fetch("/api/message-templates", {
-            method:  "PUT",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify(updateData),
-          });
+          const res  = await fetch("/api/message-templates", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updateData) });
           const json = await res.json();
           if (!json.success) throw new Error(json.error || "Update failed");
         } else {
           const newTemplate = {
-            templateType,
-            recipientType,
-            name:        templateName,
+            templateType, recipientType, name: templateName,
             description: `${formData.status} notification for ${recipientType}`,
-            isDefault:   true,
-            isActive:    true,
+            isDefault: true, isActive: true,
             variables: [
               { key: "guardianSalutation", label: "Guardian Salutation" },
               { key: "studentSalutation",  label: "Student Salutation"  },
@@ -644,39 +461,19 @@ export default function EditSessionModal({
               { key: "time",               label: "Time"                },
               { key: "meetingLink",        label: "Meeting Link"        },
               { key: "enrollmentNumber",   label: "Enrollment Number"   },
-              ...(formData.status === "postponed"
-                ? [
-                    { key: "newDate", label: "New Date" },
-                    { key: "newTime", label: "New Time" },
-                  ]
-                : []),
+              ...(formData.status === "postponed" ? [{ key: "newDate", label: "New Date" }, { key: "newTime", label: "New Time" }] : []),
             ],
-            ...(studentLang === "ar"
-              ? { contentAr: content, contentEn: "" }
-              : { contentEn: content, contentAr: "" }),
+            ...(studentLang === "ar" ? { contentAr: content, contentEn: "" } : { contentEn: content, contentAr: "" }),
           };
-
-          const res  = await fetch("/api/message-templates", {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify(newTemplate),
-          });
+          const res  = await fetch("/api/message-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newTemplate) });
           const json = await res.json();
           if (!json.success) throw new Error(json.error || "Creation failed");
         }
 
-        toast.success(
-          isRTL
-            ? `✅ تم حفظ القالب (${studentLang === "ar" ? "عربي" : "إنجليزي"})`
-            : `✅ Template (${studentLang === "ar" ? "Arabic" : "English"}) saved`
-        );
+        toast.success(isRTL ? `✅ تم حفظ القالب (${studentLang === "ar" ? "عربي" : "إنجليزي"})` : `✅ Template (${studentLang === "ar" ? "Arabic" : "English"}) saved`);
       } catch (error) {
         console.error("Error saving template:", error);
-        toast.error(
-          isRTL
-            ? "فشل حفظ القالب: " + error.message
-            : "Failed to save template: " + error.message
-        );
+        toast.error(isRTL ? "فشل حفظ القالب: " + error.message : "Failed to save template: " + error.message);
       } finally {
         setSavingTemplate((prev) => ({ ...prev, [type]: false }));
       }
@@ -684,13 +481,11 @@ export default function EditSessionModal({
     [formData.status, selectedStudentForPreview, isRTL, groupIsOnHold]
   );
 
-  // ── Salutation preview card ───────────────────────────────────────────────
   const salutationPreview = useMemo(() => {
     if (!selectedStudentForPreview) return null;
     return buildVariables(selectedStudentForPreview, session, formData, dbVars);
   }, [selectedStudentForPreview, session, formData, dbVars]);
 
-  // ── Available variables for hints ─────────────────────────────────────────
   const availableVariables = useMemo(() => {
     const vars = [
       { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر" : "Guardian Salutation", icon: "👤" },
@@ -705,22 +500,17 @@ export default function EditSessionModal({
       { key: "{enrollmentNumber}",   label: isRTL ? "الرقم التعريفي" : "Enrollment No.",       icon: "🔢" },
     ];
     if (isPostponed) {
-      vars.push(
-        { key: "{newDate}", label: isRTL ? "التاريخ الجديد" : "New Date", icon: "📅" },
-        { key: "{newTime}", label: isRTL ? "الوقت الجديد"   : "New Time", icon: "⏰" }
-      );
+      vars.push({ key: "{newDate}", label: isRTL ? "التاريخ الجديد" : "New Date", icon: "📅" }, { key: "{newTime}", label: isRTL ? "الوقت الجديد" : "New Time", icon: "⏰" });
     }
     return vars;
   }, [isRTL, isPostponed]);
 
-  // ── Generic insert variable ───────────────────────────────────────────────
   const insertVariable = useCallback(
     (type, variable) => {
       const isStudent  = type === "student";
       const textarea   = isStudent ? studentTextareaRef.current : guardianTextareaRef.current;
       const currentVal = isStudent ? formData.studentMessage : formData.guardianMessage;
       const cursorPos  = isStudent ? cursorPosition.student  : cursorPosition.guardian;
-
       if (!textarea) return;
 
       const before = currentVal.substring(0, cursorPos);
@@ -740,51 +530,38 @@ export default function EditSessionModal({
       setManuallyEdited((prev) => ({ ...prev, [type]: true }));
       setShowHints((prev) => ({ ...prev, [type]: false }));
 
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(newCursor, newCursor);
-      }, 0);
+      setTimeout(() => { textarea.focus(); textarea.setSelectionRange(newCursor, newCursor); }, 0);
     },
     [formData.studentMessage, formData.guardianMessage, cursorPosition]
   );
 
-  // ── Textarea handlers ─────────────────────────────────────────────────────
-  const handleInput = useCallback(
-    (e, type) => {
-      const value     = e.target.value;
-      const cursorPos = e.target.selectionStart;
-      const field     = type === "student" ? "studentMessage" : "guardianMessage";
+  const handleInput = useCallback((e, type) => {
+    const value     = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    const field     = type === "student" ? "studentMessage" : "guardianMessage";
 
-      setFormData((prev) => ({ ...prev, [field]: value }));
-      setManuallyEdited((prev) => ({ ...prev, [type]: true }));
-      setCursorPosition((prev) => ({ ...prev, [type]: cursorPos }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setManuallyEdited((prev) => ({ ...prev, [type]: true }));
+    setCursorPosition((prev) => ({ ...prev, [type]: cursorPos }));
 
-      const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
-      if (lastAt !== -1 && lastAt === cursorPos - 1) {
-        setShowHints((prev)         => ({ ...prev, [type]: true }));
-        setSelectedHintIndex((prev) => ({ ...prev, [type]: 0   }));
-      } else {
-        setShowHints((prev) => ({ ...prev, [type]: false }));
-      }
-    },
-    []
-  );
+    const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
+    if (lastAt !== -1 && lastAt === cursorPos - 1) {
+      setShowHints((prev) => ({ ...prev, [type]: true }));
+      setSelectedHintIndex((prev) => ({ ...prev, [type]: 0 }));
+    } else {
+      setShowHints((prev) => ({ ...prev, [type]: false }));
+    }
+  }, []);
 
   const handleKeyDown = useCallback(
     (e, type) => {
       if (!showHints[type]) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedHintIndex((prev) => ({
-          ...prev,
-          [type]: (prev[type] + 1) % availableVariables.length,
-        }));
+        setSelectedHintIndex((prev) => ({ ...prev, [type]: (prev[type] + 1) % availableVariables.length }));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedHintIndex((prev) => ({
-          ...prev,
-          [type]: (prev[type] - 1 + availableVariables.length) % availableVariables.length,
-        }));
+        setSelectedHintIndex((prev) => ({ ...prev, [type]: (prev[type] - 1 + availableVariables.length) % availableVariables.length }));
       } else if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
         insertVariable(type, availableVariables[selectedHintIndex[type]]);
@@ -795,39 +572,22 @@ export default function EditSessionModal({
     [showHints, selectedHintIndex, availableVariables, insertVariable]
   );
 
-  // ── Change preview student ────────────────────────────────────────────────
   const handleStudentPreviewChange = useCallback(
     async (studentId) => {
       const student = groupStudents.find((s) => s._id === studentId);
       if (!student) return;
       setSelectedStudentForPreview(student);
-
-      if (groupIsOnHold) return; // مش محتاجين نجيب قوالب
+      if (groupIsOnHold) return;
 
       if (!manuallyEdited.student || !manuallyEdited.guardian) {
         setLoadingTemplates(true);
         try {
-          const eventType =
-            formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
-          const res  = await fetch(`/api/sessions/${session.id}/templates`, {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ eventType, studentId: student._id }),
-          });
+          const eventType = formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
+          const res  = await fetch(`/api/sessions/${session.id}/templates`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eventType, studentId: student._id }) });
           const json = await res.json();
           if (json.success) {
-            if (!manuallyEdited.student && json.data.student) {
-              setFormData((prev) => ({
-                ...prev,
-                studentMessage: json.data.student.rawContent || json.data.student.content || "",
-              }));
-            }
-            if (!manuallyEdited.guardian && json.data.guardian) {
-              setFormData((prev) => ({
-                ...prev,
-                guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "",
-              }));
-            }
+            if (!manuallyEdited.student && json.data.student) setFormData((prev) => ({ ...prev, studentMessage: json.data.student.rawContent || json.data.student.content || "" }));
+            if (!manuallyEdited.guardian && json.data.guardian) setFormData((prev) => ({ ...prev, guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "" }));
           }
         } catch (error) {
           console.error("Error fetching templates:", error);
@@ -839,34 +599,19 @@ export default function EditSessionModal({
     [groupStudents, manuallyEdited, formData.status, session.id, groupIsOnHold]
   );
 
-  // ── Reset to defaults ─────────────────────────────────────────────────────
   const resetToDefault = useCallback(async () => {
     if (groupIsOnHold) return;
     if (!selectedStudentForPreview) return;
     setLoadingTemplates(true);
     try {
-      const eventType =
-        formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
+      const eventType = formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
       const res  = await fetch(`/api/sessions/${session.id}/templates`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          eventType,
-          studentId: selectedStudentForPreview._id,
-          extraData: {
-            newDate:     formData.newDate,
-            newTime:     formData.newTime,
-            meetingLink: formData.meetingLink,
-          },
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventType, studentId: selectedStudentForPreview._id, extraData: { newDate: formData.newDate, newTime: formData.newTime, meetingLink: formData.meetingLink } }),
       });
       const json = await res.json();
       if (json.success) {
-        setFormData((prev) => ({
-          ...prev,
-          studentMessage:  json.data.student?.rawContent  || json.data.student?.content  || "",
-          guardianMessage: json.data.guardian?.rawContent || json.data.guardian?.content || "",
-        }));
+        setFormData((prev) => ({ ...prev, studentMessage: json.data.student?.rawContent || json.data.student?.content || "", guardianMessage: json.data.guardian?.rawContent || json.data.guardian?.content || "" }));
         setManuallyEdited({ student: false, guardian: false });
         toast.success(isRTL ? "تم استعادة القوالب الافتراضية" : "Default templates restored");
       }
@@ -876,31 +621,15 @@ export default function EditSessionModal({
     } finally {
       setLoadingTemplates(false);
     }
-  }, [
-    selectedStudentForPreview,
-    formData.status,
-    formData.newDate,
-    formData.newTime,
-    formData.meetingLink,
-    session.id,
-    isRTL,
-    groupIsOnHold,
-  ]);
+  }, [selectedStudentForPreview, formData.status, formData.newDate, formData.newTime, formData.meetingLink, session.id, isRTL, groupIsOnHold]);
 
-  // ── Hints dropdown renderer ───────────────────────────────────────────────
   const renderHints = (type) => {
     if (!showHints[type]) return null;
-    const isStudent = type === "student";
-    const color     = isStudent ? "blue" : "purple";
     return (
-      <div
-        ref={(el) => (hintsRef.current[type] = el)}
-        className={`absolute z-50 w-full mt-1 bg-white dark:bg-darkmode border-2 border-${color}-300 dark:border-${color}-700 rounded-lg shadow-xl max-h-56 overflow-y-auto`}
-      >
-        <div className={`px-3 py-1.5 bg-${color}-50 dark:bg-${color}-900/30 border-b dark:border-${color}-800`}>
-          <p className={`text-xs font-semibold text-${color}-700 dark:text-${color}-300 flex items-center gap-1`}>
-            <Zap className="w-3 h-3" />
-            {isRTL ? "المتغيرات المتاحة" : "Available Variables"}
+      <div ref={(el) => (hintsRef.current[type] = el)} className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-indigo-200 bg-white shadow-xl dark:border-indigo-500/30 dark:bg-[#171a24]">
+        <div className="border-b border-indigo-100 bg-indigo-50 px-3 py-1.5 dark:border-indigo-500/10 dark:bg-indigo-500/10">
+          <p className="flex items-center gap-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+            <Zap className="h-3 w-3" /> {isRTL ? "المتغيرات المتاحة" : "Available Variables"}
           </p>
         </div>
         {availableVariables.map((v, i) => (
@@ -908,43 +637,28 @@ export default function EditSessionModal({
             key={v.key}
             type="button"
             onClick={() => insertVariable(type, v)}
-            className={`w-full px-3 py-2 text-right hover:bg-${color}-50 dark:hover:bg-${color}-900/20 flex items-center gap-2 ${
-              i === selectedHintIndex[type] ? `bg-${color}-100 dark:bg-${color}-900/40` : ""
-            }`}
+            className={`flex w-full items-center gap-2 px-3 py-2 text-right hover:bg-indigo-50 dark:hover:bg-indigo-500/10 ${i === selectedHintIndex[type] ? "bg-indigo-100 dark:bg-indigo-500/20" : ""}`}
           >
             <span>{v.icon}</span>
-            <div className="flex-1 flex items-center justify-between">
-              <span className={`text-sm font-mono text-${color}-600 dark:text-${color}-400`}>
-                {v.key}
-              </span>
-              <span className="text-xs text-gray-500">{v.label}</span>
+            <div className="flex flex-1 items-center justify-between">
+              <span className="font-mono text-sm text-indigo-600 dark:text-indigo-400">{v.key}</span>
+              <span className="text-xs text-slate-500">{v.label}</span>
             </div>
           </button>
         ))}
-        <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border-t text-xs text-gray-400">
-          ↑↓ {isRTL ? "للتنقل" : "navigate"} · Enter{" "}
-          {isRTL ? "للإدراج" : "insert"} · Esc {isRTL ? "إغلاق" : "close"}
+        <div className="border-t bg-slate-50 px-3 py-1.5 text-[11px] text-slate-400 dark:bg-white/5">
+          ↑↓ {isRTL ? "للتنقل" : "navigate"} · Enter {isRTL ? "للإدراج" : "insert"} · Esc {isRTL ? "إغلاق" : "close"}
         </div>
       </div>
     );
   };
 
-  // ── Save session ──────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    // ✅ HOLD GUARD — أي تعديل مرفوض لو الجروب على Hold
     if (groupIsOnHold) {
-      toast.error(
-        isRTL
-          ? "الجروب على Hold — مينفعش تعدّل أي حاجة في الجلسة"
-          : "Group is on hold — can't make any changes to the session"
-      );
+      toast.error(isRTL ? "الجروب على Hold — مينفعش تعدّل أي حاجة في الجلسة" : "Group is on hold — can't make any changes");
       return;
     }
-
-    if (
-      showReasonField &&
-      (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim())
-    ) {
+    if (showReasonField && (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim())) {
       toast.error(isRTL ? "الرجاء كتابة الرسالتين" : "Please write both messages");
       return;
     }
@@ -964,42 +678,30 @@ export default function EditSessionModal({
       }
 
       const res = await fetch(`/api/sessions/${session.id}`, {
-        method:  "PUT",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          meetingLink:     formData.meetingLink,
-          recordingLink:   formData.recordingLink,
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meetingLink: formData.meetingLink,
+          recordingLink: formData.recordingLink,
           instructorNotes: formData.instructorNotes,
-          status:          formData.status,
-          newDate:         isPostponed ? formData.newDate : null,
-          newTime:         isPostponed ? formData.newTime : null,
-          metadata: showReasonField
-            ? { studentMessages, guardianMessages }
-            : {},
+          status: formData.status,
+          newDate: isPostponed ? formData.newDate : null,
+          newTime: isPostponed ? formData.newTime : null,
+          metadata: showReasonField ? { studentMessages, guardianMessages } : {},
         }),
       });
 
       const json = await res.json();
       if (json.success) {
         if (json.cascade?.shiftedCount > 0) {
-          toast.success(
-            isRTL
-              ? `تم الإلغاء، وترحيل ${json.cascade.shiftedCount} جلسة تانية أسبوعًا لقدام`
-              : `Cancelled — ${json.cascade.shiftedCount} other session(s) shifted forward a week`
-          );
+          toast.success(isRTL ? `تم الإلغاء، وترحيل ${json.cascade.shiftedCount} جلسة تانية أسبوعًا لقدام` : `Cancelled — ${json.cascade.shiftedCount} other session(s) shifted forward a week`);
         } else {
           toast.success(isRTL ? "تم تحديث الجلسة بنجاح" : "Session updated successfully");
         }
         onClose();
         onRefresh();
       } else {
-        // ✅ لو الباك اند رفض بسبب الـ Hold
         if (json.code === "GROUP_ON_HOLD") {
-          toast.error(
-            isRTL
-              ? "الجروب على Hold — مينفعش تعدّل أي حاجة"
-              : "Group is on hold — can't make any changes"
-          );
+          toast.error(isRTL ? "الجروب على Hold — مينفعش تعدّل أي حاجة" : "Group is on hold — can't make any changes");
         } else {
           toast.error(json.error || (isRTL ? "فشل التحديث" : "Update failed"));
         }
@@ -1010,117 +712,91 @@ export default function EditSessionModal({
     } finally {
       setSaving(false);
     }
-  }, [
-    formData,
-    showReasonField,
-    isPostponed,
-    session,
-    groupStudents,
-    dbVars,
-    isRTL,
-    onClose,
-    onRefresh,
-    groupIsOnHold,
-  ]);
+  }, [formData, showReasonField, isPostponed, session, groupStudents, dbVars, isRTL, onClose, onRefresh, groupIsOnHold]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────────────────────
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div
-        className="bg-white dark:bg-darkmode rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-        dir={isRTL ? "rtl" : "ltr"}
+  const footer = (
+    <>
+      <button onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">
+        {isRTL ? "إغلاق" : "Close"}
+      </button>
+      <button
+        onClick={handleSave}
+        disabled={saving || loadingTemplates || groupIsOnHold || (showReasonField && (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim()))}
+        title={groupIsOnHold ? (isRTL ? "الجروب على Hold — التعديل معطّل" : "Group is on hold — editing disabled") : ""}
+        className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${
+          groupIsOnHold ? "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-white/5 dark:text-slate-500" : "bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+        }`}
       >
-        {/* ── Header ── */}
-        <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
-              {isRTL
-                ? `تعديل الجلسة - ${session?.title}`
-                : `Edit Session - ${session?.title}`}
-              {groupIsOnHold && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                  <PauseCircle className="w-3 h-3" />
-                  {isRTL ? "مقفولة" : "Locked"}
-                </span>
-              )}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {session?.scheduledDate
-                ? new Date(session.scheduledDate).toLocaleDateString(
-                    isRTL ? "ar-EG" : "en-US",
-                    { weekday: "short", year: "numeric", month: "short", day: "numeric" }
-                  )
-                : ""}{" "}
-              - {session?.startTime} {isRTL ? "إلى" : "to"} {session?.endTime}
-            </p>
+        {saving ? (
+          <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
+        ) : groupIsOnHold ? (
+          <><PauseCircle className="h-4 w-4" /> {isRTL ? "مقفولة (Hold)" : "Locked (Hold)"}</>
+        ) : (
+          <><Save className="h-4 w-4" /> {isRTL ? "حفظ التغييرات" : "Save Changes"}</>
+        )}
+      </button>
+    </>
+  );
+
+  return (
+    <ModalShell
+      open
+      onClose={onClose}
+      size="2xl"
+      accent="indigo"
+      isRTL={isRTL}
+      title={isRTL ? `تعديل الجلسة — ${session?.title}` : `Edit Session — ${session?.title}`}
+      subtitle={`${session?.scheduledDate ? new Date(session.scheduledDate).toLocaleDateString(isRTL ? "ar-EG" : "en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" }) : ""} · ${session?.startTime}–${session?.endTime}`}
+      headerBadge={
+        groupIsOnHold && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+            <PauseCircle className="h-3 w-3" /> {isRTL ? "مقفولة" : "Locked"}
+          </span>
+        )
+      }
+      footer={footer}
+    >
+      <div className="space-y-5">
+        {groupIsOnHold && (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-500/20">
+              <PauseCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                {isRTL ? "الجروب على Hold — التعديل معطّل" : "Group is on hold — editing is disabled"}
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+                {isRTL
+                  ? "مينفعش تعدّل أي حاجة في الجلسة دي لحد ما الـ Hold يتفك. ارجع لصفحة المجموعات وفك الـ Hold الأول."
+                  : "You can't make changes here until the hold is released — release it from the groups page first."}
+              </p>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        )}
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-white">{isRTL ? "الحالة" : "Status"}</label>
+          <StatusPicker
+            value={formData.status}
+            isRTL={isRTL}
+            disabledValues={groupIsOnHold ? ["scheduled", "completed", "postponed", "cancelled"] : []}
+            onChange={(val) => {
+              if (groupIsOnHold) return;
+              setFormData((prev) => ({ ...prev, status: val }));
+              setManuallyEdited({ student: false, guardian: false });
+            }}
+          />
         </div>
 
-        {/* ── Body ── */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {isCancelling && !groupIsOnHold && (
+          <CascadeImpactStrip shifting={cascadePreview.shifting} skipped={cascadePreview.skipped} isRTL={isRTL} />
+        )}
 
-          {/* ✅ Hold Notice — التعديل كله معطّل */}
-          {groupIsOnHold && (
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
-              <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                <PauseCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-black text-amber-800 dark:text-amber-300">
-                  {isRTL ? "الجروب على Hold — التعديل معطّل" : "Group is on hold — editing is disabled"}
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">
-                  {isRTL
-                    ? "مينفعش تعدّل أي حاجة في الجلسة دي (الحالة، الرابط، التسجيل، الملاحظات) لحد ما الـ Hold يتفك. ارجع لصفحة المجموعات وفك الـ Hold الأول."
-                    : "You can't make any changes to this session (status, links, recording, notes) until the hold is released. Go back to the groups page and release the hold first."}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Status — visual picker */}
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-              {isRTL ? "الحالة" : "Status"}
-            </label>
-            <StatusPicker
-              value={formData.status}
-              isRTL={isRTL}
-              disabledValues={
-                groupIsOnHold
-                  ? ["scheduled", "completed", "postponed", "cancelled"]
-                  : []
-              }
-              onChange={(val) => {
-                if (groupIsOnHold) return;
-                setFormData((prev) => ({ ...prev, status: val }));
-                setManuallyEdited({ student: false, guardian: false });
-              }}
-            />
-          </div>
-
-          {/* Cascade impact */}
-          {isCancelling && !groupIsOnHold && (
-            <CascadeImpactStrip
-              shifting={cascadePreview.shifting}
-              skipped={cascadePreview.skipped}
-              isRTL={isRTL}
-            />
-          )}
-
-          {/* Meeting Link */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-              <Link2 className="w-4 h-4" />
-              {isRTL ? "رابط الاجتماع" : "Meeting Link"}
+            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-white">
+              <Link2 className="h-3.5 w-3.5" /> {isRTL ? "رابط الاجتماع" : "Meeting Link"}
             </label>
             <input
               type="url"
@@ -1128,17 +804,12 @@ export default function EditSessionModal({
               onChange={(e) => setFormData((prev) => ({ ...prev, meetingLink: e.target.value }))}
               placeholder={isRTL ? "أدخل رابط الاجتماع" : "Enter meeting link"}
               disabled={groupIsOnHold}
-              className={`w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white ${
-                groupIsOnHold ? "opacity-50 cursor-not-allowed" : ""
-              }`}
+              className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 dark:border-white/10 dark:bg-white/5 dark:text-white ${groupIsOnHold ? "cursor-not-allowed opacity-50" : ""}`}
             />
           </div>
-
-          {/* Recording Link */}
           <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-              <VideoIcon className="w-4 h-4" />
-              {isRTL ? "رابط التسجيل" : "Recording Link"}
+            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-white">
+              <VideoIcon className="h-3.5 w-3.5" /> {isRTL ? "رابط التسجيل" : "Recording Link"}
             </label>
             <input
               type="url"
@@ -1146,343 +817,198 @@ export default function EditSessionModal({
               onChange={(e) => setFormData((prev) => ({ ...prev, recordingLink: e.target.value }))}
               placeholder={isRTL ? "أدخل رابط التسجيل" : "Enter recording link"}
               disabled={groupIsOnHold}
-              className={`w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white ${
-                groupIsOnHold ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-            />
-          </div>
-
-          {/* New Date/Time — Postponed only */}
-          {isPostponed && (
-            <div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                    {isRTL ? "التاريخ الجديد" : "New Date"}
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.newDate}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, newDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
-                    min={new Date().toISOString().split("T")[0]}
-                    disabled={groupIsOnHold}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-                    {isRTL ? "الوقت الجديد" : "New Time"}
-                  </label>
-                  <input
-                    type="time"
-                    value={formData.newTime}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, newTime: e.target.value }))}
-                    className="w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white"
-                    disabled={groupIsOnHold}
-                  />
-                </div>
-              </div>
-              {formData.newDate && (
-                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                  <Info className="w-3.5 h-3.5 shrink-0" />
-                  {isRTL
-                    ? "هيتحفظ في قاعدة البيانات فورًا بمجرد الحفظ — مدة الجلسة (من-إلى) هتفضل زي ما هي"
-                    : "Will be saved to the database immediately — session duration stays the same"}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* ── Messages (cancelled / postponed only) ── */}
-          {showReasonField && !groupIsOnHold && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-5">
-
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-blue-900 dark:text-blue-100 flex items-center gap-2">
-                  <MessageCircle className="w-4 h-4" />
-                  {isRTL ? "رسائل الإشعار" : "Notification Messages"}
-                </h3>
-                <button
-                  onClick={resetToDefault}
-                  disabled={loadingTemplates}
-                  className="px-3 py-1 text-xs bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-1"
-                >
-                  <RefreshCw className={`w-3 h-3 ${loadingTemplates ? "animate-spin" : ""}`} />
-                  {isRTL ? "استعادة القوالب" : "Reset Templates"}
-                </button>
-              </div>
-
-              {/* Student selector */}
-              {groupStudents.length > 0 && (
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block">
-                    {isRTL ? "اختر طالباً لمعاينة الرسالة:" : "Select student to preview:"}
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {groupStudents.map((student) => {
-                      const isSelected =
-                        selectedStudentForPreview?._id?.toString() === student._id?.toString();
-                      const lang   = student.communicationPreferences?.preferredLanguage || "ar";
-                      const gender = (student.personalInfo?.gender || "male").toLowerCase();
-                      const rel    = (student.guardianInfo?.relationship || "father").toLowerCase();
-                      return (
-                        <button
-                          key={student._id}
-                          onClick={() => handleStudentPreviewChange(student._id)}
-                          disabled={loadingTemplates}
-                          className={`px-3 py-1.5 text-xs rounded-full border transition-all flex items-center gap-1.5 ${
-                            isSelected
-                              ? "bg-primary text-white border-primary"
-                              : "border-gray-300 dark:border-gray-600 hover:border-primary/50 text-gray-700 dark:text-gray-300"
-                          }`}
-                        >
-                          <span>{gender === "female" ? "👧" : "👦"}</span>
-                          <span>{student.personalInfo?.fullName?.split(" ")[0]}</span>
-                          <span className="opacity-70">{lang === "ar" ? "🇸🇦" : "🇬🇧"}</span>
-                          <span className="opacity-70">{rel === "mother" ? "👩" : "👨"}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Salutation preview card */}
-                  {salutationPreview && (
-                    <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-700 space-y-1.5 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="text-blue-600 dark:text-blue-400 font-medium w-28 shrink-0">
-                          👶 {isRTL ? "تحية الطالب:" : "Student:"}
-                        </span>
-                        <span className="text-gray-800 dark:text-gray-200 font-semibold">
-                          {salutationPreview.studentSalutation}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-purple-600 dark:text-purple-400 font-medium w-28 shrink-0">
-                          👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}
-                        </span>
-                        <span className="text-gray-800 dark:text-gray-200 font-semibold">
-                          {salutationPreview.guardianSalutation}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-600 dark:text-green-400 font-medium w-28 shrink-0">
-                          👶 {isRTL ? "ابنك/ابنتك:" : "Child title:"}
-                        </span>
-                        <span className="text-gray-800 dark:text-gray-200 font-semibold">
-                          {salutationPreview.childTitle}
-                        </span>
-                      </div>
-                      {(manuallyEdited.student || manuallyEdited.guardian) && (
-                        <p className="text-orange-500 dark:text-orange-400 flex items-center gap-1 mt-1">
-                          ✏️ {isRTL ? "الرسائل معدلة يدوياً" : "Messages manually edited"}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Student Message ── */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                    <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 text-sm">
-                    {isRTL ? "رسالة للطالب 👶" : "Student Message 👶"}
-                  </h4>
-                  {loadingTemplates && (
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />
-                  )}
-                </div>
-
-                <div className="relative">
-                  <textarea
-                    ref={studentTextareaRef}
-                    value={formData.studentMessage}
-                    onChange={(e) => handleInput(e, "student")}
-                    onKeyDown={(e) => handleKeyDown(e, "student")}
-                    onSelect={(e) =>
-                      setCursorPosition((prev) => ({ ...prev, student: e.target.selectionStart }))
-                    }
-                    placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ for variables..."}
-                    className="w-full px-3 py-2.5 border-2 border-blue-200 dark:border-blue-700 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none h-36 font-mono text-sm"
-                    dir={
-                      (selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar"
-                        ? "rtl" : "ltr"
-                    }
-                  />
-                  {renderHints("student")}
-                </div>
-
-                {previewStudentMessage && (
-                  <div className="bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-700 overflow-hidden">
-                    <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 border-b flex items-center gap-2">
-                      <MessageCircle className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                        {isRTL ? "معاينة رسالة الطالب" : "Student Preview"}
-                      </span>
-                    </div>
-                    <div
-                      className="p-3 text-sm whitespace-pre-wrap break-words max-h-48 overflow-y-auto"
-                      dir={
-                        (selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar"
-                          ? "rtl" : "ltr"
-                      }
-                    >
-                      {previewStudentMessage}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Guardian Message ── */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                    <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <h4 className="font-semibold text-purple-900 dark:text-purple-100 text-sm">
-                    {isRTL ? "رسالة لولي الأمر 👤" : "Guardian Message 👤"}
-                  </h4>
-                </div>
-
-                <div className="relative">
-                  <textarea
-                    ref={guardianTextareaRef}
-                    value={formData.guardianMessage}
-                    onChange={(e) => handleInput(e, "guardian")}
-                    onKeyDown={(e) => handleKeyDown(e, "guardian")}
-                    onSelect={(e) =>
-                      setCursorPosition((prev) => ({ ...prev, guardian: e.target.selectionStart }))
-                    }
-                    placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ for variables..."}
-                    className="w-full px-3 py-2.5 border-2 border-purple-200 dark:border-purple-700 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white resize-none h-36 font-mono text-sm"
-                    dir={
-                      (selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar"
-                        ? "rtl" : "ltr"
-                    }
-                  />
-                  {renderHints("guardian")}
-                </div>
-
-                {previewGuardianMessage && (
-                  <div className="bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 overflow-hidden">
-                    <div className="bg-purple-50 dark:bg-purple-900/30 px-3 py-1.5 border-b flex items-center gap-2">
-                      <MessageCircle className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                      <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
-                        {isRTL ? "معاينة رسالة ولي الأمر" : "Guardian Preview"}
-                      </span>
-                    </div>
-                    <div
-                      className="p-3 text-sm whitespace-pre-wrap break-words max-h-48 overflow-y-auto"
-                      dir={
-                        (selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar"
-                          ? "rtl" : "ltr"
-                      }
-                    >
-                      {previewGuardianMessage}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Save template buttons */}
-              <div className="flex justify-end gap-2 pt-2 border-t border-blue-200 dark:border-blue-800">
-                <button
-                  onClick={() => saveTemplateToDatabase("student", formData.studentMessage)}
-                  disabled={!formData.studentMessage || savingTemplate.student || loadingTemplates}
-                  className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-                >
-                  {savingTemplate.student ? (
-                    <><RefreshCw className="w-3 h-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
-                  ) : (
-                    <><Save className="w-3 h-3" /> {isRTL ? "حفظ قالب الطالب" : "Save Student Template"}</>
-                  )}
-                </button>
-                <button
-                  onClick={() => saveTemplateToDatabase("guardian", formData.guardianMessage)}
-                  disabled={!formData.guardianMessage || savingTemplate.guardian || loadingTemplates}
-                  className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-                >
-                  {savingTemplate.guardian ? (
-                    <><RefreshCw className="w-3 h-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
-                  ) : (
-                    <><Save className="w-3 h-3" /> {isRTL ? "حفظ قالب ولي الأمر" : "Save Guardian Template"}</>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Instructor Notes */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-MidnightNavyText dark:text-white mb-2">
-              <FileText className="w-4 h-4" />
-              {isRTL ? "ملاحظات المدرب" : "Instructor Notes"}
-            </label>
-            <textarea
-              value={formData.instructorNotes}
-              onChange={(e) => setFormData((prev) => ({ ...prev, instructorNotes: e.target.value }))}
-              placeholder={isRTL ? "أضف ملاحظات للمدرب..." : "Add instructor notes..."}
-              rows={3}
-              disabled={groupIsOnHold}
-              className={`w-full px-3 py-2 border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white resize-none ${
-                groupIsOnHold ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-              dir={isRTL ? "rtl" : "ltr"}
+              className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 dark:border-white/10 dark:bg-white/5 dark:text-white ${groupIsOnHold ? "cursor-not-allowed opacity-50" : ""}`}
             />
           </div>
         </div>
 
-        {/* ── Footer ── */}
-        <div className="p-6 border-t border-PowderBlueBorder dark:border-dark_border flex items-center justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-gray-50 dark:hover:bg-dark_input"
-          >
-            {isRTL ? "إغلاق" : "Close"}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={
-              saving ||
-              loadingTemplates ||
-              groupIsOnHold ||
-              (showReasonField &&
-                (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim()))
-            }
-            title={
-              groupIsOnHold
-                ? (isRTL ? "الجروب على Hold — التعديل معطّل" : "Group is on hold — editing disabled")
-                : ""
-            }
-            className={`px-4 py-2 text-sm rounded-lg flex items-center gap-2 ${
-              groupIsOnHold
-                ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-                : "bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-            }`}
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                {isRTL ? "جاري الحفظ..." : "Saving..."}
-              </>
-            ) : groupIsOnHold ? (
-              <>
-                <PauseCircle className="w-4 h-4" />
-                {isRTL ? "مقفولة (Hold)" : "Locked (Hold)"}
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                {isRTL ? "حفظ التغييرات" : "Save Changes"}
-              </>
+        {isPostponed && (
+          <div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-white">{isRTL ? "التاريخ الجديد" : "New Date"}</label>
+                <input
+                  type="date"
+                  value={formData.newDate}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, newDate: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                  min={new Date().toISOString().split("T")[0]}
+                  disabled={groupIsOnHold}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-white">{isRTL ? "الوقت الجديد" : "New Time"}</label>
+                <input
+                  type="time"
+                  value={formData.newTime}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, newTime: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                  disabled={groupIsOnHold}
+                />
+              </div>
+            </div>
+            {formData.newDate && (
+              <p className="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                <Info className="h-3.5 w-3.5 shrink-0" />
+                {isRTL ? "هيتحفظ فورًا بمجرد الحفظ — مدة الجلسة هتفضل زي ما هي" : "Saved immediately — session duration stays the same"}
+              </p>
             )}
-          </button>
+          </div>
+        )}
+
+        {showReasonField && !groupIsOnHold && (
+          <div className="space-y-5 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-500/15 dark:bg-indigo-500/5">
+            <div className="flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-indigo-900 dark:text-indigo-200">
+                <MessageCircle className="h-4 w-4" /> {isRTL ? "رسائل الإشعار" : "Notification Messages"}
+              </h3>
+              <button onClick={resetToDefault} disabled={loadingTemplates} className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-white px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50 dark:border-indigo-500/20 dark:bg-white/5 dark:text-indigo-300">
+                <RefreshCw className={`h-3 w-3 ${loadingTemplates ? "animate-spin" : ""}`} /> {isRTL ? "استعادة القوالب" : "Reset Templates"}
+              </button>
+            </div>
+
+            {groupStudents.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">{isRTL ? "اختر طالباً لمعاينة الرسالة:" : "Select student to preview:"}</label>
+                <div className="flex flex-wrap gap-2">
+                  {groupStudents.map((student) => {
+                    const isSelected = selectedStudentForPreview?._id?.toString() === student._id?.toString();
+                    const lang   = student.communicationPreferences?.preferredLanguage || "ar";
+                    const gender = (student.personalInfo?.gender || "male").toLowerCase();
+                    const rel    = (student.guardianInfo?.relationship || "father").toLowerCase();
+                    return (
+                      <button
+                        key={student._id}
+                        onClick={() => handleStudentPreviewChange(student._id)}
+                        disabled={loadingTemplates}
+                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${
+                          isSelected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-200 text-slate-700 hover:border-indigo-300 dark:border-white/10 dark:text-slate-300"
+                        }`}
+                      >
+                        <span>{gender === "female" ? "👧" : "👦"}</span>
+                        <span>{student.personalInfo?.fullName?.split(" ")[0]}</span>
+                        <span className="opacity-70">{lang === "ar" ? "🇸🇦" : "🇬🇧"}</span>
+                        <span className="opacity-70">{rel === "mother" ? "👩" : "👨"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {salutationPreview && (
+                  <div className="space-y-1.5 rounded-lg border border-indigo-100 bg-white p-3 text-xs dark:border-indigo-500/10 dark:bg-white/5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-28 shrink-0 font-medium text-indigo-600 dark:text-indigo-400">👶 {isRTL ? "تحية الطالب:" : "Student:"}</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.studentSalutation}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-28 shrink-0 font-medium text-violet-600 dark:text-violet-400">👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.guardianSalutation}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-28 shrink-0 font-medium text-emerald-600 dark:text-emerald-400">👶 {isRTL ? "ابنك/ابنتك:" : "Child title:"}</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.childTitle}</span>
+                    </div>
+                    {(manuallyEdited.student || manuallyEdited.guardian) && (
+                      <p className="pt-1 text-orange-500 dark:text-orange-400">✏️ {isRTL ? "الرسائل معدلة يدوياً" : "Messages manually edited"}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-500/20">
+                  <User className="h-4 w-4 text-sky-600 dark:text-sky-300" />
+                </div>
+                <h4 className="text-sm font-semibold text-sky-900 dark:text-sky-200">{isRTL ? "رسالة للطالب" : "Student Message"}</h4>
+                {loadingTemplates && <div className="h-3 w-3 animate-spin rounded-full border-2 border-sky-300 border-t-sky-600" />}
+              </div>
+              <div className="relative">
+                <textarea
+                  ref={studentTextareaRef}
+                  value={formData.studentMessage}
+                  onChange={(e) => handleInput(e, "student")}
+                  onKeyDown={(e) => handleKeyDown(e, "student")}
+                  onSelect={(e) => setCursorPosition((prev) => ({ ...prev, student: e.target.selectionStart }))}
+                  placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ for variables..."}
+                  className="h-36 w-full resize-none rounded-lg border border-sky-200 bg-white px-3 py-2.5 font-mono text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-sky-500/20 dark:bg-white/5 dark:text-white"
+                  dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}
+                />
+                {renderHints("student")}
+              </div>
+              {previewStudentMessage && (
+                <div className="overflow-hidden rounded-lg border border-sky-200 bg-white dark:border-sky-500/10 dark:bg-white/5">
+                  <div className="flex items-center gap-2 border-b bg-sky-50 px-3 py-1.5 dark:border-sky-500/10 dark:bg-sky-500/10">
+                    <MessageCircle className="h-3.5 w-3.5 text-sky-600 dark:text-sky-300" />
+                    <span className="text-xs font-medium text-sky-700 dark:text-sky-300">{isRTL ? "معاينة رسالة الطالب" : "Student Preview"}</span>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm" dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}>
+                    {previewStudentMessage}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-500/20">
+                  <Users className="h-4 w-4 text-violet-600 dark:text-violet-300" />
+                </div>
+                <h4 className="text-sm font-semibold text-violet-900 dark:text-violet-200">{isRTL ? "رسالة لولي الأمر" : "Guardian Message"}</h4>
+              </div>
+              <div className="relative">
+                <textarea
+                  ref={guardianTextareaRef}
+                  value={formData.guardianMessage}
+                  onChange={(e) => handleInput(e, "guardian")}
+                  onKeyDown={(e) => handleKeyDown(e, "guardian")}
+                  onSelect={(e) => setCursorPosition((prev) => ({ ...prev, guardian: e.target.selectionStart }))}
+                  placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ for variables..."}
+                  className="h-36 w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-2.5 font-mono text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-violet-500/20 dark:bg-white/5 dark:text-white"
+                  dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}
+                />
+                {renderHints("guardian")}
+              </div>
+              {previewGuardianMessage && (
+                <div className="overflow-hidden rounded-lg border border-violet-200 bg-white dark:border-violet-500/10 dark:bg-white/5">
+                  <div className="flex items-center gap-2 border-b bg-violet-50 px-3 py-1.5 dark:border-violet-500/10 dark:bg-violet-500/10">
+                    <MessageCircle className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
+                    <span className="text-xs font-medium text-violet-700 dark:text-violet-300">{isRTL ? "معاينة رسالة ولي الأمر" : "Guardian Preview"}</span>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm" dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}>
+                    {previewGuardianMessage}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-indigo-100 pt-3 dark:border-indigo-500/10">
+              <button onClick={() => saveTemplateToDatabase("student", formData.studentMessage)} disabled={!formData.studentMessage || savingTemplate.student || loadingTemplates} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                {savingTemplate.student ? <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</> : <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب الطالب" : "Save Student Template"}</>}
+              </button>
+              <button onClick={() => saveTemplateToDatabase("guardian", formData.guardianMessage)} disabled={!formData.guardianMessage || savingTemplate.guardian || loadingTemplates} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                {savingTemplate.guardian ? <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</> : <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب ولي الأمر" : "Save Guardian Template"}</>}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-white">
+            <FileText className="h-3.5 w-3.5" /> {isRTL ? "ملاحظات المدرب" : "Instructor Notes"}
+          </label>
+          <textarea
+            value={formData.instructorNotes}
+            onChange={(e) => setFormData((prev) => ({ ...prev, instructorNotes: e.target.value }))}
+            placeholder={isRTL ? "أضف ملاحظات للمدرب..." : "Add instructor notes..."}
+            rows={3}
+            disabled={groupIsOnHold}
+            className={`w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 dark:border-white/10 dark:bg-white/5 dark:text-white ${groupIsOnHold ? "cursor-not-allowed opacity-50" : ""}`}
+            dir={isRTL ? "rtl" : "ltr"}
+          />
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

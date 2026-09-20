@@ -8,6 +8,21 @@ import Course from "../../../../models/Course";
 import { onStudentAddedToGroup } from "../../../../services/groupAutomation";
 import { requireAdmin } from "@/utils/authMiddleware";
 
+// ✅ Helper: build maps link from group (offline)
+function buildMapsLink(group) {
+  const loc = group?.locationDetails || {};
+  if (loc.lat != null && loc.lng != null) {
+    return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+  }
+  if (loc.address) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.address)}`;
+  }
+  if (loc.placeName || group?.location) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.placeName || group.location)}`;
+  }
+  return "";
+}
+
 export async function POST(req, { params }) {
   try {
     const authCheck = await requireAdmin(req);
@@ -89,15 +104,12 @@ export async function POST(req, { params }) {
     }
 
     // ✅ استخرج module data من الكورس
-    // أولاً: من courseId المـ populated (أدق مصدر)
-    // ثانياً: من courseSnapshot كـ fallback
     let moduleTitle = "";
     let moduleDescription = "";
 
     const course = group.courseId;
 
     if (course?.curriculum?.length > 0) {
-      // ✅ جيب أول module من الكورس الحقيقي
       const firstModule = course.curriculum[0];
       moduleTitle = firstModule?.title || "";
       moduleDescription = firstModule?.description || "";
@@ -105,14 +117,12 @@ export async function POST(req, { params }) {
       console.log(`   Title: ${moduleTitle}`);
       console.log(`   Description: ${moduleDescription?.substring(0, 80)}`);
     } else if (group.courseSnapshot?.curriculum?.length > 0) {
-      // ✅ Fallback: من courseSnapshot
       const firstModule = group.courseSnapshot.curriculum[0];
       moduleTitle = firstModule?.title || "";
       moduleDescription = firstModule?.description || "";
       console.log(`✅ Module data from courseSnapshot.curriculum[0] (fallback):`);
       console.log(`   Title: ${moduleTitle}`);
     } else {
-      // ✅ Last fallback: لو الـ populate فشل لأي سبب، جيب الكورس مباشرة
       const courseId = group.courseId?._id || group.courseId;
       if (courseId) {
         try {
@@ -132,11 +142,24 @@ export async function POST(req, { params }) {
       }
     }
 
+    // ✅ NEW: detect offline + build location data
+    const isOffline = group.deliveryMode === "offline";
+    const loc = group.locationDetails || {};
+    const placeName = loc.placeName || group.location || "";
+    const address = loc.address || loc.extraDetails || "";
+    const mapsLink = isOffline ? buildMapsLink(group) : "";
+
     console.log(`\n✅ VALIDATION PASSED ==========`);
     console.log(`Group: ${group.name} (${group.code})`);
     console.log(`Student: ${student.personalInfo?.fullName}`);
+    console.log(`Delivery Mode: ${group.deliveryMode} (isOffline: ${isOffline})`);
     console.log(`moduleTitle: "${moduleTitle}"`);
     console.log(`moduleDescription: "${moduleDescription?.substring(0, 80)}"`);
+    if (isOffline) {
+      console.log(`📍 placeName: "${placeName}"`);
+      console.log(`📌 address: "${address}"`);
+      console.log(`🗺️ mapsLink: "${mapsLink}"`);
+    }
 
     // ✅ أضف الطالب للـ group
     await Group.findByIdAndUpdate(
@@ -163,10 +186,15 @@ export async function POST(req, { params }) {
           moduleOverview: moduleOverviewMessage,
         },
         sendWhatsApp,
-        // ✅ مرّر moduleTitle و moduleDescription للـ automation
+        // ✅ مرّر module + location data للـ automation
         {
           moduleTitle,
           moduleDescription,
+          // ✅ Offline data
+          isOffline,
+          placeName,
+          address,
+          mapsLink,
         },
       );
 
@@ -196,6 +224,8 @@ export async function POST(req, { params }) {
           code: group.code,
           currentStudentsCount: currentCount + 1,
           maxStudents: group.maxStudents,
+          deliveryMode: group.deliveryMode,
+          isOffline,
         },
         student: {
           id: student._id,
@@ -208,11 +238,18 @@ export async function POST(req, { params }) {
           gender: student.personalInfo?.gender,
           guardianRelationship: student.guardianInfo?.relationship,
         },
-        // ✅ أرجع module data في الـ response عشان الـ frontend يستخدمها لو احتاج
         moduleData: {
           title: moduleTitle,
           description: moduleDescription,
         },
+        // ✅ NEW: location data في الـ response
+        ...(isOffline && {
+          locationData: {
+            placeName,
+            address,
+            mapsLink,
+          },
+        }),
       },
       automation: automationResult,
     });

@@ -8,7 +8,7 @@ import {
   Calendar, Clock, CheckCircle, Lock, Play, Video,
   AlertCircle, ChevronRight, X, BookOpen, Layers,
   Target, ExternalLink, BadgeCheck, Search, Users,
-  Timer, FileText, Info, PauseCircle,
+  Timer, FileText, Info, PauseCircle, Gift,
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -191,6 +191,13 @@ function SessionModal({ session, onClose, locale }) {
                     {locale === 'ar' ? 'مقفولة' : 'Locked'}
                   </span>
                 )}
+                {/* ✅ حصة تعويضية (بدون خصم رصيد) */}
+                {session.isComplimentary && (
+                  <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
+                    <Gift className="w-3 h-3" />
+                    {locale === 'ar' ? 'حصة تعويضية' : 'Make-up'}
+                  </span>
+                )}
                 {att && isCompleted && (
                   <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${att.bg} ${att.color} flex items-center gap-1`}>
                     <AttIcon className="w-3 h-3" />{att.label}
@@ -250,7 +257,7 @@ function SessionModal({ session, onClose, locale }) {
             </a>
           )}
 
-          {/* Recording */}
+          {/* Recording — الباك بيرجّع null للـ offline */}
           {isCompleted && session.recordingLink && (
             <a href={session.recordingLink} target="_blank" rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl font-bold text-sm text-secondary bg-secondary/10 border border-secondary/20 hover:bg-secondary/20 transition-all">
@@ -351,6 +358,14 @@ function SessionRow({ session, onOpen, locale }) {
   const isCompleted = session.status === "completed";
   const isToday = session.isToday && session.status === "scheduled";
 
+  // ✅ الجروب نفسه مش active (draft / متوقف...) — الباك بيقفل السيشن وبيرجّع groupIsActive
+  // بنعرض السبب بدل ما الصف يبان مقفول من غير تفسير. الـ Hold ليه الأولوية في العرض.
+  const groupInactive =
+    session.groupIsActive === false &&
+    !isCompleted &&
+    session.status === "scheduled" &&
+    !sessionIsLocked;
+
   // ✅ isLocked العام = (مش متاح عادي) أو (مقفول بسبب الـ Hold)
   const isLocked = (!session.canAccess && session.status === "scheduled") || (sessionIsLocked && !isCompleted);
 
@@ -368,6 +383,7 @@ function SessionRow({ session, onOpen, locale }) {
   return (
     <div
       onClick={handleClick}
+      title={groupInactive ? (locale === 'ar' ? 'الجروب غير نشط حاليًا' : 'This group is not active right now') : undefined}
       className={`group flex items-center gap-3 p-4 rounded-2xl border bg-white dark:bg-[#161b22]
         transition-all duration-200
         ${isLocked && !sessionIsLocked
@@ -413,9 +429,23 @@ function SessionRow({ session, onOpen, locale }) {
               {locale === 'ar' ? 'مقفولة' : 'Locked'}
             </span>
           )}
+          {/* ✅ الجروب مش active */}
+          {groupInactive && (
+            <span className="text-[10px] font-black text-gray-500 dark:text-[#8b949e] flex items-center gap-1">
+              <PauseCircle className="w-3 h-3" />
+              {locale === 'ar' ? 'الجروب غير نشط' : 'Group inactive'}
+            </span>
+          )}
           {isToday && !sessionIsLocked && (
             <span className={`text-[10px] font-black ${C.primaryText} flex items-center gap-1`}>
               <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />{t("allSessions.today")}
+            </span>
+          )}
+          {/* ✅ حصة تعويضية (بدون خصم رصيد) */}
+          {session.isComplimentary && (
+            <span className="text-[10px] font-black text-secondary flex items-center gap-1">
+              <Gift className="w-3 h-3" />
+              {locale === 'ar' ? 'تعويضية' : 'Make-up'}
             </span>
           )}
           <h3 className={`font-bold text-sm truncate transition-colors
@@ -517,7 +547,9 @@ export default function AllSessionsPage() {
     setLoading(true);
     setError("");
     Promise.all([
-      fetch("/api/student/sessions", { credentials: "include" }).then((r) => r.json()),
+      // ✅ الباك بيرتب تصاعدي وبيقطع عند limit (الافتراضي 100)، فالجلسات الأحدث كانت ممكن تختفي
+      // عند الطالب اللي عنده جلسات كتير، والـ stats.total بيحسب الكل. بنطلب حد أعلى.
+      fetch("/api/student/sessions?limit=300", { credentials: "include" }).then((r) => r.json()),
       fetch("/api/student/dashboard", { credentials: "include" }).then((r) => r.json()),
     ])
       .then(([sessRes, dashRes]) => {

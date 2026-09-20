@@ -1,34 +1,17 @@
+// src/app/(dashboard)/layout.tsx
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import DashboardLayout from "@/components/Dashboard/DashboardLayout";
-import { cookies } from "next/headers";
+import { getCurrentUser } from "@/lib/auth";
 
-export default async function AdminLayout({
+export default async function DashboardRootLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  let user = null;
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
+  const user = await getCurrentUser();
 
-    if (token) {
-      const base = process.env.NEXTAUTH_URL || "http://localhost:3000";
-      const res = await fetch(`${base}/api/users/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-      if (res.ok && json?.success) {
-        user = json.user;
-      }
-    }
-  } catch (err) {
-    console.error("Error fetching user for admin layout:", err);
-  }
+  if (!user) redirect("/login");
 
   return <DashboardLayout user={user}>{children}</DashboardLayout>;
 }

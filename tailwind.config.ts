@@ -11,7 +11,8 @@ const config: Config = {
   ],
   safelist: [
     {
-      pattern: /(bg|from|to|text)-(blue|green|gray)-(50|100|200|300|400|500|600|700|800|900)/,
+      pattern:
+        /(bg|from|to|text)-(blue|green|gray)-(50|100|200|300|400|500|600|700|800|900)/,
     },
     {
       pattern: /bg-gradient-to-r/,
@@ -101,101 +102,103 @@ const config: Config = {
       },
       colors: {
         // ── Brand Palette ──────────────────────────────────
-        primary:    "#ff6700",   
-        secondary:  "#004d59",  
+        primary: "#ff6700",
+        secondary: "#004d59",
 
         // ✅ جديد: accent — ده اللون اللي كومبوننتات البورتفوليو
         // (Nav, Social, Home, Button, Tabs...) بتستخدمه أصلاً
         // في كل مكان (text-accent, border-accent, bg-accent).
         // من غيره الكلاسات دي كانت بترندر من غير لون خالص.
-        accent:        "#ff6700",
+        accent: "#ff6700",
         "accent-hover": "#f67d00",
 
         // ── Brand Aliases ──────────────────────────────────
-        SereneSky:          "#004d59",
-        ElectricAqua:       "#ff6437",
-        RegalBlue:          "#004d59",
-        LightYellow:        "#feaf00",
-        IcyBreeze:          "#fff8f0",
-        PaleCyan:           "#ffe8d6",
-        Aquamarine:         "#ff6437",
-        MidnightNavyText:   "#004d59",
-        SlateBlueText:      "#004d59",
-        PaleSkyBlu:         "#fff3e0",
-        MistyTealText:      "#004d59",
-        OliveDrab:          "#f67d00",
-        CadetBlue:          "#004d59",
-        Dandelion:          "#feaf00",
-        SkyBlueMist:        "#ffd9b3",
-        LightSkyBlue:       "#ffcba4",
-        Salem:              "#004d59",
-        YellowRating:       "#feaf00",
-        PaleCerulean:       "#ff6437",
-        PeriwinkleBorder:   "#ffd9b3",
-        LightBlueBorder:    "#ff6700",
+        SereneSky: "#004d59",
+        ElectricAqua: "#ff6437",
+        RegalBlue: "#004d59",
+        LightYellow: "#feaf00",
+        IcyBreeze: "#fff8f0",
+        PaleCyan: "#ffe8d6",
+        Aquamarine: "#ff6437",
+        MidnightNavyText: "#004d59",
+        SlateBlueText: "#004d59",
+        PaleSkyBlu: "#fff3e0",
+        MistyTealText: "#004d59",
+        OliveDrab: "#f67d00",
+        CadetBlue: "#004d59",
+        Dandelion: "#feaf00",
+        SkyBlueMist: "#ffd9b3",
+        LightSkyBlue: "#ffcba4",
+        Salem: "#004d59",
+        YellowRating: "#feaf00",
+        PaleCerulean: "#ff6437",
+        PeriwinkleBorder: "#ffd9b3",
+        LightBlueBorder: "#ff6700",
         OceanDepthsDarkBorder: "#004d59",
-        PowderBlueBorder:   "#fff3e0",
-        darkLineColor:      "#004d59",
+        PowderBlueBorder: "#fff3e0",
+        darkLineColor: "#004d59",
+        "brand-primary": "#ff6700",
+        "brand-secondary": "#004d59",
+        "brand-soft": "#fff8f0",
+        "brand-amber": "#feaf00",
+        "brand-coral": "#ff6437",
+        "brand-deep": "#002a33",
 
         // ── Dark Mode Surfaces (brand-aligned) ─────────────
         //    مأخوذة من InstructorDashboard
-        darkmode:   "#0a0f17",   // الخلفية الرئيسية  — كان: #011120
-        darklight:  "#161b22",   // Cards / Sidebar   — كان: #0d1a2c
-        dark_border: "#30363d",  // Borders            — كان: #224767
-        dark_input:  "#21262d",  // Inputs / Skeletons — كان: #1B2430
+        darkmode: "#0a0f17", // الخلفية الرئيسية  — كان: #011120
+        darklight: "#161b22", // Cards / Sidebar   — كان: #0d1a2c
+        dark_border: "#30363d", // Borders            — كان: #224767
+        dark_input: "#21262d", // Inputs / Skeletons — كان: #1B2430
 
         // ── إضافة: مستويات إضافية للـ dark mode ──────────
-        darkdeep:   "#0a0f17",   // أعمق خلفية (= darkmode)
-        darkmid:    "#161b22",   // Cards (= darklight)
-        darkcard:   "#161b22",   // alias واضح للـ cards
-        darkhover:  "#21262d",   // hover state
-        darktext:   "#7F8487",   // نص ثانوي — لم يتغير
-        darkmuted:  "#8b949e",   // نص خافت
-        darksubtle: "#6e7681",   // نص أخفت
+        darkdeep: "#0a0f17", // أعمق خلفية (= darkmode)
+        darkmid: "#161b22", // Cards (= darklight)
+        darkcard: "#161b22", // alias واضح للـ cards
+        darkhover: "#21262d", // hover state
+        darktext: "#7F8487", // نص ثانوي — لم يتغير
+        darkmuted: "#8b949e", // نص خافت
+        darksubtle: "#6e7681", // نص أخفت
 
         // ── Brand accent shades ────────────────────────────
-        "orange-brand":  "#ff6700",
-        "orange-deep":   "#f67d00",
-        "orange-coral":  "#ff6437",
-        "teal-brand":    "#004d59",
-        "teal-dark":     "#002a33",
-        "teal-deeper":   "#001a1f",
-        "amber-brand":   "#feaf00",
+        "orange-brand": "#ff6700",
+        "orange-deep": "#f67d00",
+        "orange-coral": "#ff6437",
+        "teal-brand": "#004d59",
+        "teal-dark": "#002a33",
+        "teal-deeper": "#001a1f",
+        "amber-brand": "#feaf00",
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
         // ── Brand Gradients ──
-        "brand-primary":
-          "linear-gradient(135deg, #004d59 0%, #ff6700 100%)",
-        "brand-warm":
-          "linear-gradient(135deg, #ff6700 0%, #feaf00 100%)",
-        "brand-cool":
-          "linear-gradient(135deg, #004d59 0%, #ff6437 100%)",
+        "brand-primary": "linear-gradient(135deg, #004d59 0%, #ff6700 100%)",
+        "brand-warm": "linear-gradient(135deg, #ff6700 0%, #feaf00 100%)",
+        "brand-cool": "linear-gradient(135deg, #004d59 0%, #ff6437 100%)",
         "brand-full":
           "linear-gradient(135deg, #004d59 0%, #ff6700 50%, #feaf00 100%)",
-        "brand-dark":
-          "linear-gradient(135deg, #0a0f17 0%, #001a1f 100%)",
+        "brand-dark": "linear-gradient(135deg, #0a0f17 0%, #001a1f 100%)",
       },
       fontSize: {
-        58: ["3.625rem",  { lineHeight: "5.375rem"  }],
-        53: ["3.3125rem", { lineHeight: "3.875rem"  }],
-        40: ["2.5rem",    { lineHeight: "3.4375rem" }],
-        48: ["3rem",      { lineHeight: "3.39rem"   }],
-        36: ["2.25rem",   { lineHeight: "2.625rem"  }],
-        34: ["2.125rem",  { lineHeight: "2.7669rem" }],
-        32: ["2rem",      { lineHeight: "2.5rem"    }],
-        28: ["1.75rem",   { lineHeight: "2.25rem"   }],
-        26: ["1.625rem",  { lineHeight: "2.1156rem" }],
-        24: ["1.5rem",    { lineHeight: "2rem"      }],
-        22: ["1.375rem",  { lineHeight: "2rem"      }],
-        20: ["1.25rem",   { lineHeight: "2.125rem"  }],
-        19: ["1.1875rem", { lineHeight: "1.625rem"  }],
+        58: ["3.625rem", { lineHeight: "5.375rem" }],
+        53: ["3.3125rem", { lineHeight: "3.875rem" }],
+        40: ["2.5rem", { lineHeight: "3.4375rem" }],
+        48: ["3rem", { lineHeight: "3.39rem" }],
+        36: ["2.25rem", { lineHeight: "2.625rem" }],
+        34: ["2.125rem", { lineHeight: "2.7669rem" }],
+        32: ["2rem", { lineHeight: "2.5rem" }],
+        28: ["1.75rem", { lineHeight: "2.25rem" }],
+        26: ["1.625rem", { lineHeight: "2.1156rem" }],
+        24: ["1.5rem", { lineHeight: "2rem" }],
+        22: ["1.375rem", { lineHeight: "2rem" }],
+        20: ["1.25rem", { lineHeight: "2.125rem" }],
+        19: ["1.1875rem", { lineHeight: "1.625rem" }],
         17: ["1.0625rem", { lineHeight: "1.4875rem" }],
-        16: ["1rem",      { lineHeight: "1.6875rem" }],
+        16: ["1rem", { lineHeight: "1.6875rem" }],
         15: ["0.9375rem", { lineHeight: "1.4375rem" }],
-        14: ["0.875rem",  { lineHeight: "1.225rem"  }],
+        14: ["0.875rem", { lineHeight: "1.225rem" }],
       },
     },
   },

@@ -1,478 +1,147 @@
+// components/Dashboard/DashboardLayout.tsx
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import type { ReactNode } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { usePathname } from "next/navigation";
 import { Toaster } from "react-hot-toast";
-import PrimarySidebar, { type DashboardNavItem, type CategoryItem } from "./PrimarySidebar";
+
+import PrimarySidebar from "./PrimarySidebar";
 import SecondarySidebar from "./SecondarySidebar";
 import TopBar from "./TopBar";
-import { useI18n } from "@/i18n/I18nProvider";
+import {
+  useAdminNavigation,
+  type CategoryItem,
+  type DashboardNavItem,
+} from "./navigation";
+
 import { useLocale } from "@/app/context/LocaleContext";
+import { UserProvider } from "@/app/context/UserContext";
 
-const createBadge = (value: string) => (
-  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-    {value}
-  </span>
-);
+type Props = {
+  children: ReactNode;
+  user?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+    image?: string | null;
+  } | null;
+};
 
-const DashboardLayout = ({ children, user }: { children: ReactNode; user?: any }) => {
-  const { t } = useI18n();
+const DashboardLayout = ({ children, user }: Props) => {
   const { locale } = useLocale();
   const pathname = usePathname();
-  const [isPrimarySidebarOpen, setPrimarySidebarOpen] = useState(false);
-  const [isSecondarySidebarOpen, setSecondarySidebarOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showSecondaryOnDesktop, setShowSecondaryOnDesktop] = useState(false);
-
   const isRTL = locale === "ar";
 
-  // Detect mobile screen
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
+  const { home, categories } = useAdminNavigation();
 
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const [mobileOpen, setMobileOpen] = useState(false); // mobile drawer
+  const [panelOpen, setPanelOpen] = useState(true); // desktop secondary panel
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
-  // Auto-close sidebars on mobile when navigating
-  useEffect(() => {
-    if (isMobile) {
-      setPrimarySidebarOpen(false);
-      setSecondarySidebarOpen(false);
-    }
-  }, [pathname, isMobile]);
-
-  // ❌ نشيل أي جلب بيانات من هنا - كل صفحة تجيب بياناتها بنفسها
-
-  const NAVIGATION_CATEGORIES: CategoryItem[] = useMemo(() => [
-    {
-      id: "content",
-      label: t('dashboard.content') || "Content Management",
-      icon: "ion:document-text-outline",
-      items: [
-        { label: t('dashboard.overview') || "Overview", href: "/admin", icon: "ion:speedometer-outline" },
-        {
-          label: t('dashboard.webinars') || "Webinars",
-          href: "/admin/webinars",
-          icon: "ion:videocam-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.projects') || "Projects",
-          href: "/admin/projects",
-          icon: "ion:briefcase-outline",
-        },
-        {
-          label: t('dashboard.Schedules') || "Schedules",
-          href: "/admin/schedules",
-          icon: "ion:time-outline",
-        },
-        {
-          label: t('dashboard.blogs') || "Blogs",
-          href: "/admin/blogs",
-          icon: "ion:newspaper-outline",
-        },
-        {
-          label: t('dashboard.events') || "Events",
-          href: "/admin/events",
-          icon: "ion:calendar-outline",
-        },
-        {
-          label: t('dashboard.testimonials') || "Testimonials",
-          href: "/admin/Testimonials",
-          icon: "ion:chatbubbles-outline",
-        },
-        {
-          label: t('dashboard.sectionImages') || "Section Images",
-          href: "/admin/sectionImages",
-          icon: "ion:images-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.sectionImagesHero') || "Hero Images",
-          href: "/admin/sectionImagesHero",
-          icon: "ion:images-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.sectionGuestPopup') || "Guest Popup",
-          href: "/admin/sectionGuestPopup",
-          icon: "ion:sparkles-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-      ]
-    },
-    {
-      id: "learning",
-      label: t('dashboard.learning') || "Learning Management",
-      icon: "ion:school-outline",
-      items: [
-        {
-          label: t('nav.curriculum') || "Curriculum",
-          href: "/admin/curriculum",
-          icon: "ion:school-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('nav.meetingLink') || "Meeting Link",
-          href: "/admin/meetingLinkAdmin",
-          icon: "ion:school-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.rescheduleRequests') || "طلبات الترحيل",
-          href: "/admin/reschedule-requests",
-          icon: "ion:calendar-outline",
-        },
-        {
-          label: t('dashboard.courses') || "Courses",
-          href: "/admin/courses",
-          icon: "ion:book-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.groups') || "Groups",
-          href: "/admin/groups",
-          icon: "ion:people-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.whatsappTemplates') || "WhatsApp Templates",
-          href: "/admin/whatsapp-templates",
-          icon: "ion:chatbubble-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.portfolioBroadcast') || "إعلان البورتفوليو",
-          href: "/admin/portfolio-broadcast",
-          icon: "ion:megaphone-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.portfolioInactivity') || "تذكير البورتفوليو",
-          href: "/admin/portfolio-inactivity",
-          icon: "ion:time-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.certificates') || "الشهادات",
-          href: "/admin/certificates",
-          icon: "ion:ribbon-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('nav.schedules') || "Schedules",
-          href: "/admin/schedules",
-          icon: "ion:time-outline",
-        },
-      ]
-    },
-    {
-      id: "users",
-      label: t('dashboard.users') || "User Management",
-      icon: "ion:people-outline",
-      items: [
-        {
-          label: t('dashboard.allUsers') || "كل المستخدمين",
-          href: "/admin/users",
-          icon: "ion:people-circle-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.students') || "Students",
-          href: "/admin/allStudents",
-          icon: "ion:school-outline",
-        },
-        {
-          label: t('dashboard.instructors') || "Instructors",
-          href: "/admin/InstructorsPage",
-          icon: "ion:person-circle-outline",
-        },
-        {
-          label: t('dashboard.Marketing') || "Marketing",
-          href: "/admin/MarketingPage",
-          icon: "ion:megaphone-outline",
-        },
-        {
-          label: t('dashboard.Admin') || "Admin",
-          href: "/admin/AdminPage",
-          icon: "ion:shield-checkmark-outline",
-        },
-        {
-          label: t('dashboard.guests') || "الزوار",
-          href: "/admin/guests",
-          icon: "ion:person-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('dashboard.overviewPage') || "نظرة عامة",
-          href: "/admin/overview",
-          icon: "ion:bar-chart-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-      ]
-    },
-    {
-      id: "subscriptions",
-      label: t('dashboard.subscriptions') || "Subscriptions",
-      icon: "ion:card-outline",
-      items: [
-        {
-          label: t('nav.pricing') || "Pricing",
-          href: "/admin/pricing",
-          icon: "ion:cash-outline",
-        },
-        {
-          label: t('nav.subscriptions') || "Subscriptions",
-          href: "/admin/subscriptions",
-          icon: "ion:card-outline",
-        },
-        {
-          label: "باقات الساعات",
-          href: "/admin/package-plans",
-          icon: "ion:pricetags-outline",
-        },
-        {
-          label: "أسعار المدرسين",
-          href: "/admin/instructor-rates",
-          icon: "ion:cash-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: "كشف المرتبات",
-          href: "/admin/payroll",
-          icon: "ion:wallet-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: "تنبيهات الفوترة",
-          href: "/admin/billing-alerts",
-          icon: "ion:alert-circle-outline",
-        },
-      ]
-    },
-    {
-      id: "communication",
-      label: t('dashboard.communication') || "Communication",
-      icon: "ion:chatbubble-outline",
-      items: [
-        {
-          label: t('dashboard.contacts') || "Contacts",
-          href: "/admin/ContactsPage",
-          icon: "ion:chatbubble-ellipses-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('nav.newsletter') || "Newsletter",
-          href: "/admin/newsletter",
-          icon: "ion:mail-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-        {
-          label: t('nav.blogSubscribers') || "Blog Subscribers",
-          href: "/admin/blog-subscribers",
-          icon: "ion:newspaper-outline",
-          badge: createBadge(t('common.new') || "New"),
-        },
-      ]
-    },
-    {
-      id: "system",
-      label: t('dashboard.system') || "System",
-      icon: "ion:settings-outline",
-      items: [
-        {
-          label: t('nav.homepage') || "Home",
-          href: "/",
-          icon: "ion:home-outline",
-        },
-        {
-          label: t('nav.referralSources') || "مصادر التسجيل",
-          href: "/admin/referral-sources",
-          icon: "ion:git-branch-outline",
-        },
-        {
-          label: t('nav.settings') || "Settings",
-          href: "/admin/settings",
-          icon: "ion:settings-outline",
-        },
-      ]
-    }
-  ], [t]);
-
-  // Flatten all items for active path detection
-  const ALL_ITEMS: DashboardNavItem[] = useMemo(() => {
-    return NAVIGATION_CATEGORIES.flatMap(category => category.items);
-  }, [NAVIGATION_CATEGORIES]);
-
+  // ─── Active route → category ───────────────────────────
   const activePath = useMemo(() => {
     if (!pathname) return null;
-
-    let bestMatch = ALL_ITEMS[0];
-
-    for (const item of ALL_ITEMS) {
-      if (pathname === item.href) {
-        return item.href;
-      }
-
-      if (
-        pathname.startsWith(item.href + "/") &&
-        item.href.length > bestMatch.href.length
-      ) {
-        bestMatch = item;
-      }
+    let best: string | null = null;
+    for (const { href } of categories.flatMap((c: CategoryItem) => c.items)) {
+      if (href === "/") continue;
+      const match = pathname === href || pathname.startsWith(href + "/");
+      if (match && (!best || href.length > best.length)) best = href;
     }
+    return best;
+  }, [pathname, categories]);
 
-    return bestMatch.href;
-  }, [pathname, ALL_ITEMS]);
+  const currentCategory = useMemo(
+    () =>
+      categories.find((c: CategoryItem) =>
+        c.items.some((i: DashboardNavItem) => i.href === activePath)
+      )?.id ?? null,
+    [activePath, categories]
+  );
 
-  // Find active category based on active path
-  const currentCategory = useMemo(() => {
-    if (!activePath) return null;
-
-    for (const category of NAVIGATION_CATEGORIES) {
-      if (category.items.some((item: DashboardNavItem) => item.href === activePath)) {
-        return category.id;
-      }
-    }
-
-    return null;
-  }, [activePath, NAVIGATION_CATEGORIES]);
-
-  // Set initial active category based on current path
   useEffect(() => {
-    if (currentCategory && !isMobile) {
-      setActiveCategory(currentCategory);
-    }
-  }, [currentCategory, isMobile]);
+    setMobileOpen(false);
+    setActiveCategory(currentCategory);
+  }, [pathname, currentCategory]);
 
-  const handleCategoryClick = (categoryId: string) => {
-    if (isMobile) {
-      setActiveCategory(categoryId);
-      setSecondarySidebarOpen(true);
-      setPrimarySidebarOpen(false);
-    } else {
-      if (activeCategory === categoryId) {
-        setSecondarySidebarOpen(!isSecondarySidebarOpen);
-        setShowSecondaryOnDesktop(!isSecondarySidebarOpen);
+  const selectedCategory = useMemo(
+    () => categories.find((c: CategoryItem) => c.id === activeCategory) ?? null,
+    [activeCategory, categories]
+  );
+
+  const handleCategoryClick = useCallback(
+    (id: string) => {
+      if (id === activeCategory) {
+        setPanelOpen((open) => !open);
       } else {
-        setActiveCategory(categoryId);
-        setSecondarySidebarOpen(true);
-        setShowSecondaryOnDesktop(true);
+        setActiveCategory(id);
+        setPanelOpen(true);
       }
-    }
-  };
+    },
+    [activeCategory]
+  );
 
-  const handleBackToCategories = () => {
-    setSecondarySidebarOpen(false);
-    setShowSecondaryOnDesktop(false);
-    setActiveCategory(null);
-  };
-
-  const selectedCategory = useMemo(() => {
-    return NAVIGATION_CATEGORIES.find(cat => cat.id === activeCategory);
-  }, [activeCategory, NAVIGATION_CATEGORIES]);
-
-  // Handle window resize effect
-  useEffect(() => {
-    if (!isMobile) {
-      setPrimarySidebarOpen(false);
-    }
-  }, [isMobile]);
+  const panelVisible = panelOpen && !!selectedCategory;
 
   return (
-    <div className={`min-h-screen bg-slate-100 text-slate-900 dark:bg-darkmode dark:text-white ${isRTL ? 'rtl' : 'ltr'}`}>
-      <Toaster
-        position="top-center"
-        containerStyle={{ zIndex: 99999 }}
-        toastOptions={{
-          className:
-            "bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-14 shadow-round-box border-none outline-none p-3 max-w-404",
-          style: { maxWidth: "25rem", zIndex: 99999 },
-          success: {
+    <UserProvider user={user ?? null}>
+      <div
+        className={`min-h-screen bg-slate-50 text-slate-900 dark:bg-darkmode dark:text-white ${isRTL ? "rtl" : "ltr"}`}
+        dir={isRTL ? "rtl" : "ltr"}
+      >
+        <Toaster
+          position="top-center"
+          containerStyle={{ zIndex: 99999 }}
+          toastOptions={{
             className:
-              "bg-primary text-white rounded-14 shadow-sm p-3 max-w-404",
-          },
-          error: {
-            className:
-              "bg-red-600 text-white rounded-14 shadow-sm p-3 max-w-404",
-          },
-          duration: 4000,
-        }}
-      />
-      <div className="flex min-h-screen w-full">
-        {/* Primary Sidebar - Always visible on desktop */}
-        <PrimarySidebar
-          categories={NAVIGATION_CATEGORIES}
-          activeCategory={activeCategory}
-          isOpen={isPrimarySidebarOpen}
-          onClose={() => setPrimarySidebarOpen(false)}
-          onCategoryClick={handleCategoryClick}
-          isMobile={isMobile}
-          isRTL={isRTL}
+              "bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white rounded-xl shadow-lg border border-slate-200 dark:border-dark_border p-3",
+            success: { className: "bg-[#ff6700] text-white rounded-xl shadow-lg p-3" },
+            error: { className: "bg-red-600 text-white rounded-xl shadow-lg p-3" },
+            duration: 4000,
+          }}
         />
 
-        {/* Secondary Sidebar - Shows Items of Selected Category (only on desktop when user clicks) */}
-        {selectedCategory && !isMobile && showSecondaryOnDesktop && (
+        <PrimarySidebar
+          home={home}
+          categories={categories}
+          activeCategory={activeCategory}
+          activePath={activePath}
+          isHomeActive={pathname === "/admin"}
+          mobileOpen={mobileOpen}
+          onMobileClose={() => setMobileOpen(false)}
+          onCategoryClick={handleCategoryClick}
+        />
+
+        {selectedCategory && (
           <SecondarySidebar
             category={selectedCategory}
             activePath={activePath}
-            isOpen={isSecondarySidebarOpen}
-            onClose={handleBackToCategories}
-            currentCategory={currentCategory}
-            isMobile={isMobile}
-            isRTL={isRTL}
-            onBackToCategories={handleBackToCategories}
+            isOpen={panelOpen}
+            onClose={() => setPanelOpen(false)}
           />
         )}
 
-        {/* For mobile, show secondary sidebar as overlay */}
-        {selectedCategory && isMobile && (
-          <SecondarySidebar
-            category={selectedCategory}
-            activePath={activePath}
-            isOpen={isSecondarySidebarOpen}
-            onClose={handleBackToCategories}
-            currentCategory={currentCategory}
-            isMobile={isMobile}
-            isRTL={isRTL}
-            onBackToCategories={handleBackToCategories}
-          />
-        )}
+        {/* rail = 5.5rem, panel = 15rem → 20.5rem */}
+        <div
+          className={`flex min-h-screen min-w-0 flex-col transition-[padding] duration-300 ${
+            panelVisible ? "lg:ps-[20.5rem]" : "lg:ps-[5.5rem]"
+          }`}
+        >
+          <Suspense fallback={<div className="h-16 border-b border-slate-200 bg-white dark:border-dark_border dark:bg-darklight" />}>
+            <TopBar onMenuClick={() => setMobileOpen(true)} user={user ?? undefined} isRTL={isRTL} />
+          </Suspense>
 
-        {/* Main Content Area - Fixed TopBar with scrollable content */}
-        <div className="flex min-h-screen flex-1 flex-col overflow-hidden">
-          {/* TopBar - Always fixed at top */}
-          <TopBar
-            onMenuClick={() => setPrimarySidebarOpen(true)}
-            user={user}
-            showSecondaryToggle={activeCategory !== null && !isMobile}
-            onSecondaryToggle={() => {
-              setSecondarySidebarOpen(!isSecondarySidebarOpen);
-              setShowSecondaryOnDesktop(!isSecondarySidebarOpen);
-            }}
-            isRTL={isRTL}
-            onBackToCategories={handleBackToCategories}
-            showBackButton={isSecondarySidebarOpen && !isMobile}
-          />
-
-          {/* Scrollable Main Content */}
-          <div className={`flex-1 overflow-auto transition-all duration-300 ${!isMobile && isSecondarySidebarOpen && activeCategory
-            ? isRTL ? 'mr-[12rem]' : 'ml-[12rem]'
-            : !isMobile ? (isRTL ? 'mr-20' : 'ml-20') : ''
-            }`}>
-            <main className="px-4 py-6 sm:px-6 lg:px-8">
-              {children}
-            </main>
-          </div>
+          <main className="flex-1 p-4 sm:p-5 lg:p-6">{children}</main>
         </div>
       </div>
-    </div>
+    </UserProvider>
   );
 };
 

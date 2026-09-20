@@ -4700,6 +4700,141 @@ const en = {
   "groups.hold.invalidSessions": "Invalid sessions count",
   "groups.hold.selectSession": "You must select a target session",
   "group.holdGroup": "Hold Group",
+  "groups.makeup.button": "Make-up Session",
+  "groups.makeup.badge": "Make-up",
+  "groups.stats.makeup": "Make-up Classes",
+  "groups.makeup.created": "Make-up session created successfully",
+
+  "profile.signIn": "Sign in",
+  "profile.settings": "Settings",
+  "profile.myProfile": "My Profile",
+  "profile.language": "Language",
+
+  // Welcome
+  "dashboard.welcomeBack": "Welcome back",
+
+  "dashboard.liveData": "Live Data",
+  "dashboard.realTimeData": "Real-time data from your database",
+  "dashboard.updatedJustNow": "Updated just now",
+
+  "dashboard.totalGroups": "Total Groups",
+  "dashboard.activeGroups": "Active Groups",
+  "dashboard.totalInstructors": "Instructors",
+  "dashboard.pendingInvoices": "Pending Invoices",
+  "dashboard.overdueInvoices": "Overdue Invoices",
+  "dashboard.escrowAmount": "Escrow Amount",
+
+  // Flow Charts
+  "dashboard.studentLifecycle": "Student Lifecycle",
+  "dashboard.studentLifecycleDesc": "Radial distribution across funnel stages",
+  "dashboard.billingPipeline": "Billing Pipeline",
+  "dashboard.billingPipelineDesc": "Invoice flow from creation to payment",
+  "dashboard.creditHealth": "Credit Health",
+  "dashboard.creditHealthDesc": "Students distribution by remaining hours",
+  "dashboard.revenueFlow": "Revenue Flow",
+  "dashboard.revenueFlowDesc": "Collected vs Escrow — last 6 months",
+  "dashboard.liveActivity": "Live Activity",
+  "dashboard.liveActivityDesc": "Most recent events in your academy",
+  "dashboard.weeklyEngagement": "Weekly Engagement",
+  "dashboard.weeklyEngagementDesc": "Avg group capacity utilization",
+  "dashboard.contentHub": "Content Hub",
+  "dashboard.contentHubDesc": "Blog, projects & quick actions",
+  "dashboard.recentEnrollments": "Recent Enrollments",
+  "dashboard.recentEnrollmentsDesc": "Latest students joining your academy",
+
+  // Flow Stages
+  "dashboard.stages.enrolled": "Enrolled",
+  "dashboard.stages.assigned_to_group": "In Group",
+  "dashboard.stages.has_active_package": "Active Package",
+  "dashboard.stages.attended_session": "Attended",
+  "dashboard.stages.pending": "Pending",
+  "dashboard.stages.escrow": "In Escrow",
+  "dashboard.stages.suspended": "Suspended",
+  "dashboard.stages.paid": "Paid",
+  "dashboard.stages.zero": "Zero",
+  "dashboard.stages.critical": "Critical",
+  "dashboard.stages.low": "Low",
+  "dashboard.stages.good": "Good",
+
+  // Revenue Chart
+  "dashboard.collected": "Collected",
+  "dashboard.inEscrow": "In Escrow",
+  "dashboard.outstanding": "outstanding",
+  "dashboard.totalInvoices": "Total invoices",
+  "dashboard.totalTracked": "Total tracked",
+
+  // Engagement
+  "dashboard.average": "AVG",
+  "dashboard.peakDay": "Peak Day",
+  "dashboard.excellent": "Excellent",
+  "dashboard.goodPerformance": "Good",
+  "dashboard.needsWork": "Needs work",
+
+  // Content Hub
+  "dashboard.publishedPosts": "Published Posts",
+  "dashboard.activeProjects": "Active Projects",
+  "dashboard.drafts": "drafts",
+  "dashboard.writeNewBlog": "Write New Blog Post",
+  "dashboard.contentCreation": "Content creation",
+  "dashboard.viewStudentProjects": "View Student Projects",
+  "dashboard.portfolioReview": "Portfolio review",
+
+  "dashboard.noEnrollments": "No enrollments yet",
+  "dashboard.notAssigned": "Not assigned",
+
+  // Status
+  "dashboard.statusActive": "Active",
+  "dashboard.statusPending": "Pending",
+  "dashboard.statusTrial": "Trial",
+
+  // Activity Feed
+  "dashboard.noRecentActivity": "No recent activity",
+  "dashboard.newStudentRegistration": "New Student Registration",
+  "dashboard.joinedPlatform": "joined the platform",
+  "dashboard.newSubscription": "New Subscription",
+  "dashboard.subscribedTo": "subscribed to",
+  "dashboard.newProjectSubmitted": "New Project Submitted",
+  "dashboard.created": "created",
+  "dashboard.paymentReceived": "Payment received",
+  "dashboard.evaluation": "Evaluation",
+  "dashboard.newGroup": "New group",
+  "dashboard.zeroBalanceAlert": "students with zero balance",
+  "dashboard.zeroBalanceDesc": "Credit exhausted — notifications disabled",
+  "dashboard.now": "now",
+
+  // ═══════════════════════════════════════════════════════
+  // ERRORS
+  // ═══════════════════════════════════════════════════════
+  "errors.failedToFetch": "Failed to fetch data",
+  "errors.noRealData": "No real data available yet",
+  "errors.networkError": "Network error",
+  "errors.unknownError": "Unknown error",
+  "errors.tryAgain": "Try again",
+  "calendar.done": "Done",
+  "calendar.clear": "Clear",
+  "calendar.selectRange": "Select Range",
+
+  "dashboard.catCms": "Website & CMS",
+  "dashboard.catAcademic": "Academic Operations",
+  "dashboard.catOps": "Operations & Comms",
+  "dashboard.catUsers": "Users Management",
+  "dashboard.catFinance": "Finance & Billing",
+  "dashboard.catMarketing": "Marketing & Growth",
+  "dashboard.catSystem": "System Settings",
+  "dashboard.adHocSessions": "Ad-hoc Sessions",
+  "dashboard.portfolios": "Student Portfolios",
+  "dashboard.whatsappRouting": "WhatsApp Routing Health",
+  "dashboard.suspensionAlerts": "Pending Suspension Alerts",
+  "dashboard.communicationLogs": "Communication Logs",
+  "dashboard.invoices": "Invoices & Due Dates",
+  "dashboard.packagePlans": "Hour Packages",
+  "dashboard.escrow": "Escrow Funds Monitor",
+  "dashboard.financialReports": "Financial Reports",
+  "dashboard.instructorRates": "Instructor Rates",
+  "dashboard.payroll": "Teacher Payroll Ledgers",
+  "dashboard.campaigns": "Marketing Campaigns",
+  "dashboard.leads": "Leads",
+  "dashboard.integrations": "API Integrations",
 };
 
 export default en;

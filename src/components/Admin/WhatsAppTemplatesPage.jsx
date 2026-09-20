@@ -7,7 +7,7 @@ import {
   UserPlus, UserCog, Search, Star, RotateCcw, Video,
   Settings, ChevronDown, ChevronUp, Check, X,
   BookOpen, Menu, Info, MapPin, Car,
-  Coins, AlertTriangle, // ✅ جديد
+  Coins, AlertTriangle, Gift,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -22,9 +22,12 @@ const TEMPLATE_TYPES = [
   { id: "guardian_notification", label: "إشعار ولي الأمر", icon: Users, color: "secondary", emoji: "👨‍👩‍👧", category: "basic", type: "guardian_only", api: "whatsapp" },
   { id: "language_confirmation", label: "تأكيد اللغة", icon: Globe, color: "emerald", emoji: "🌍", category: "basic", type: "student_only", api: "whatsapp" },
   { id: "guardian_language_notification", label: "إشعار اللغة لولي الأمر", icon: Bell, color: "accent", emoji: "📢", category: "basic", type: "guardian_only", api: "whatsapp" },
-  { id: "group_student_welcome_student", label: "ترحيب الطالب بالمجموعة", icon: UserPlus, color: "indigo", emoji: "➕", category: "group", type: "student_with_group", api: "group", isNew: true },
-  { id: "group_student_welcome_guardian", label: "إشعار ولي الأمر بالمجموعة", icon: Users, color: "indigo", emoji: "👨‍👩‍👧", category: "group", type: "guardian_with_group", api: "group", isNew: true },
-  { id: "instructor_group_activation", label: "إشعار تفعيل مجموعة للمدرب", icon: UserCog, color: "amber", emoji: "👨‍🏫", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
+  { id: "group_student_welcome_student", label: "ترحيب الطالب بالمجموعة (Online)", icon: UserPlus, color: "indigo", emoji: "➕", category: "group", type: "student_with_group", api: "group", isNew: true },
+  { id: "group_student_welcome_guardian", label: "إشعار ولي الأمر بالمجموعة (Online)", icon: Users, color: "indigo", emoji: "👨‍👩‍👧", category: "group", type: "guardian_with_group", api: "group", isNew: true },
+  { id: "group_student_welcome_student_offline", label: "ترحيب الطالب بالمجموعة (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "group", type: "student_with_group", api: "group", isNew: true },
+  { id: "group_student_welcome_guardian_offline", label: "إشعار ولي الأمر بالمجموعة (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "group", type: "guardian_with_group", api: "group", isNew: true },
+  { id: "instructor_group_activation", label: "إشعار تفعيل مجموعة للمدرب (Online)", icon: UserCog, color: "amber", emoji: "👨‍🏫", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
+  { id: "instructor_group_activation_offline", label: "إشعار تفعيل مجموعة للمدرب (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
   { id: "reminder_24h_student", label: "تذكير الطالب 24 ساعة", icon: Clock, color: "sky", emoji: "⏰", category: "reminder", type: "student_with_session", api: "message" },
   { id: "reminder_24h_guardian", label: "تذكير ولي الأمر 24 ساعة", icon: Clock, color: "sky", emoji: "⏰", category: "reminder", type: "guardian_with_session", api: "message" },
   { id: "reminder_15min_student", label: "تذكير الطالب قبل 15 دقيقة", icon: Clock, color: "accent", emoji: "⏳", category: "reminder", type: "student_with_session", api: "message" },
@@ -44,28 +47,8 @@ const TEMPLATE_TYPES = [
   { id: "session_recording", label: "رابط التسجيل", icon: Video, color: "sky", emoji: "🎥", category: "evaluation", type: "guardian_with_session", api: "message" },
   { id: "learning_supervisor_intro", label: "تقديم المشرف الأكاديمي", icon: User, color: "primary", emoji: "👨‍🏫", category: "basic", type: "guardian_only", api: "message", isNew: true },
   { id: "module_overview", label: "نظرة عامة على الموديول", icon: BookOpen, color: "secondary", emoji: "📚", category: "basic", type: "guardian_only", api: "message", isNew: true },
-  {
-    id: "instructor_reminder_24h",
-    label: "تذكير المدرب 24 ساعة (Online)",
-    icon: Clock,
-    color: "sky",
-    emoji: "⏰",
-    category: "instructor",
-    type: "instructor_only",
-    api: "instructor",
-    isNew: true
-  },
-  {
-    id: "instructor_reminder_15min",
-    label: "تذكير المدرب 15 دقيقة (Online)",
-    icon: Clock,
-    color: "accent",
-    emoji: "⏳",
-    category: "instructor",
-    type: "instructor_only",
-    api: "instructor",
-    isNew: true
-  },
+  { id: "instructor_reminder_24h", label: "تذكير المدرب 24 ساعة (Online)", icon: Clock, color: "sky", emoji: "⏰", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
+  { id: "instructor_reminder_15min", label: "تذكير المدرب 15 دقيقة (Online)", icon: Clock, color: "accent", emoji: "⏳", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
 
   // ═══════════════════════════════════════════════════════════════
   // ✅ OFFLINE FLOW — Student & Guardian
@@ -89,30 +72,21 @@ const TEMPLATE_TYPES = [
   { id: "portfolio_update_broadcast", label: "إعلان تحديث النظام", icon: Zap, color: "secondary", emoji: "📢", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
   { id: "portfolio_contact_form_notification", label: "إشعار رسالة Contact Form", icon: MessageCircle, color: "sky", emoji: "📩", category: "portfolio", type: "portfolio_owner_only", api: "message", isNew: true },
 
-  {
-    id: "credit_low_balance_4h_student",
-    label: "تنبيه رصيد منخفض (4 ساعات) - الطالب",
-    icon: Coins, color: "amber", emoji: "🟡",
-    category: "billing", type: "student_only", api: "message", isNew: true,
-  },
-  {
-    id: "credit_low_balance_4h_guardian",
-    label: "تنبيه رصيد منخفض (4 ساعات) - ولي الأمر",
-    icon: Coins, color: "amber", emoji: "🟡",
-    category: "billing", type: "guardian_only", api: "message", isNew: true,
-  },
-  {
-    id: "credit_low_balance_2h_student",
-    label: "تنبيه رصيد عاجل (2 ساعة) - الطالب",
-    icon: AlertTriangle, color: "rose", emoji: "🔴",
-    category: "billing", type: "student_only", api: "message", isNew: true,
-  },
-  {
-    id: "credit_low_balance_2h_guardian",
-    label: "تنبيه رصيد عاجل (2 ساعة) - ولي الأمر",
-    icon: AlertTriangle, color: "rose", emoji: "🔴",
-    category: "billing", type: "guardian_only", api: "message", isNew: true,
-  },
+  // ── Billing ──
+  { id: "credit_low_balance_4h_student", label: "تنبيه رصيد منخفض (4 ساعات) - الطالب", icon: Coins, color: "amber", emoji: "🟡", category: "billing", type: "student_only", api: "message", isNew: true },
+  { id: "credit_low_balance_4h_guardian", label: "تنبيه رصيد منخفض (4 ساعات) - ولي الأمر", icon: Coins, color: "amber", emoji: "🟡", category: "billing", type: "guardian_only", api: "message", isNew: true },
+  { id: "credit_low_balance_2h_student", label: "تنبيه رصيد عاجل (2 ساعة) - الطالب", icon: AlertTriangle, color: "rose", emoji: "🔴", category: "billing", type: "student_only", api: "message", isNew: true },
+  { id: "credit_low_balance_2h_guardian", label: "تنبيه رصيد عاجل (2 ساعة) - ولي الأمر", icon: AlertTriangle, color: "rose", emoji: "🔴", category: "billing", type: "guardian_only", api: "message", isNew: true },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎁 MAKE-UP SESSION (الحصة التعويضية) — Online + Offline
+  // ═══════════════════════════════════════════════════════════════
+  { id: "makeup_session_student", label: "حصة تعويضية - الطالب", icon: Gift, color: "primary", emoji: "🎁", category: "makeup", type: "student_only", api: "message", isNew: true },
+  { id: "makeup_session_guardian", label: "حصة تعويضية - ولي الأمر", icon: Gift, color: "primary", emoji: "🎁", category: "makeup", type: "guardian_only", api: "message", isNew: true },
+  { id: "makeup_session_instructor", label: "حصة تعويضية - المدرب", icon: Gift, color: "primary", emoji: "🎁", category: "makeup", type: "instructor_only", api: "instructor", isNew: true },
+  { id: "makeup_session_student_offline", label: "حصة تعويضية - الطالب (Offline)", icon: Gift, color: "amber", emoji: "🎁", category: "makeup", type: "student_only", api: "message", isNew: true },
+  { id: "makeup_session_guardian_offline", label: "حصة تعويضية - ولي الأمر (Offline)", icon: Gift, color: "amber", emoji: "🎁", category: "makeup", type: "guardian_only", api: "message", isNew: true },
+  { id: "makeup_session_instructor_offline", label: "حصة تعويضية - المدرب (Offline)", icon: Gift, color: "amber", emoji: "🎁", category: "makeup", type: "instructor_only", api: "instructor", isNew: true },
 ];
 
 const CATEGORIES = {
@@ -125,7 +99,8 @@ const CATEGORIES = {
   attendance: { label: "الحضور", emoji: "📋" },
   completion: { label: "الإكمال", emoji: "🎉" },
   evaluation: { label: "التقييم", emoji: "⭐" },
-  billing: { label: "الرصيد والباقات", emoji: "💳" }, // ✅ جديد
+  billing: { label: "الرصيد والباقات", emoji: "💳" },
+  makeup: { label: "الحصص التعويضية", emoji: "🎁" },
   portfolio: { label: "البورتفوليو", emoji: "💼" },
 };
 
@@ -141,8 +116,9 @@ const VAR_GROUPS = {
   evaluation: { label: "التقييم", emoji: "⭐" },
   common: { label: "عامة", emoji: "📌" },
   portfolio: { label: "البورتفوليو", emoji: "💼" },
-  offline: { label: "Offline (الموقع)", emoji: "📍" }, // ✅ جديد
+  offline: { label: "Offline (الموقع)", emoji: "📍" },
   billing: { label: "الرصيد والباقة", emoji: "💳" },
+  makeup: { label: "الحصة التعويضية", emoji: "🎁" },
 };
 
 const TEMPLATE_VARS = {
@@ -152,150 +128,79 @@ const TEMPLATE_VARS = {
   guardian_language_notification: ["guardianSalutation_ar", "guardianSalutation_en", "studentGender_ar", "studentGender_en", "studentName_ar", "studentName_en", "selectedLanguage_ar", "selectedLanguage_en"],
   group_student_welcome_student: ["salutation_ar", "salutation_en", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructor", "firstMeetingLink", "studentName"],
   group_student_welcome_guardian: ["guardianSalutation_ar", "guardianSalutation_en", "childTitle", "studentName", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructor", "firstMeetingLink"],
-  instructor_group_activation: ["salutation", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructorName", "studentCount"],
-
-  reminder_24h_student: [
-    "salutation_ar", "salutation_en", "sessionName", "sessionDescription",
-    "date", "time", "meetingLink", "guardianSalutation", "studentName",
-    "guardianName", "childTitle", "enrollmentNumber"
-  ],
-
-  reminder_24h_guardian: [
-    "guardianSalutation", "salutation_ar", "salutation_en", "studentName",
-    "guardianName", "childTitle", "sessionDescription", "groupName",
-    "groupCode", "courseName", "enrollmentNumber", "feedbackLink"
-  ],
-
-  reminder_15min_student: [
-    "salutation_ar", "salutation_en", "sessionName", "sessionDescription",
-    "time", "meetingLink", "guardianSalutation", "studentName",
-    "childTitle", "enrollmentNumber"
-  ],
-
-  reminder_15min_guardian: [
-    "guardianSalutation", "salutation_ar", "salutation_en", "studentName",
-    "guardianName", "childTitle", "sessionName", "sessionDescription",
-    "date", "time", "meetingLink", "enrollmentNumber"
-  ],
-
+  group_student_welcome_student_offline: ["salutation_ar", "salutation_en", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructor", "placeName", "address", "mapsLink", "studentName"],
+  group_student_welcome_guardian_offline: ["guardianSalutation_ar", "guardianSalutation_en", "childTitle", "studentName", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructor", "placeName", "address", "mapsLink"],
+  instructor_group_activation: ["salutation", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructorName", "studentCount", "meetingLink"],
+  instructor_group_activation_offline: ["salutation", "courseName", "groupName", "startDate", "timeTo", "timeFrom", "instructorName", "studentCount", "placeName", "address", "mapsLink"],
+  reminder_24h_student: ["salutation_ar", "salutation_en", "sessionName", "sessionDescription", "date", "time", "meetingLink", "guardianSalutation", "studentName", "guardianName", "childTitle", "enrollmentNumber"],
+  reminder_24h_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionDescription", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink"],
+  reminder_15min_student: ["salutation_ar", "salutation_en", "sessionName", "sessionDescription", "time", "meetingLink", "guardianSalutation", "studentName", "childTitle", "enrollmentNumber"],
+  reminder_15min_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "sessionDescription", "date", "time", "meetingLink", "enrollmentNumber"],
   session_cancelled_student: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
   session_cancelled_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber"],
   session_postponed_student: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
   session_postponed_guardian: ["guardianSalutation", "salutation_ar", "salutation_en", "studentName", "guardianName", "childTitle", "sessionName", "date", "time", "meetingLink", "enrollmentNumber", "newDate", "newTime"],
-
   absence_notification: ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
   late_notification: ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
   excused_notification: ["guardianSalutation", "guardianName", "studentName", "childTitle", "status", "sessionName", "date", "time", "enrollmentNumber", "salutation_ar", "salutation_en"],
-
-group_completion_student: [
-  "salutation_ar", "salutation_en", "guardianSalutation",
-  "studentName", "guardianName", "childTitle",
-  "groupName", "groupCode", "courseName", "enrollmentNumber",
-  "feedbackLink",
-  "totalSessions",     // ✅ جديد
-  "completionDate",    // ✅ جديد
-],
-group_completion_guardian: [
-  "salutation_ar", "salutation_en", "guardianSalutation",
-  "studentName", "guardianName", "childTitle",
-  "groupName", "groupCode", "courseName", "enrollmentNumber",
-  "feedbackLink",
-  "totalSessions",     // ✅ جديد
-  "completionDate",    // ✅ جديد
-],
-
-  evaluation_pass: [
-    "guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus",
-    "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation",
-    "instructorComment", "completedSessions", "recordingLink",
-    "supervisorName", "moduleTitle", "moduleDescription",
-  ],
-  evaluation_review: [
-    "guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus",
-    "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation",
-    "instructorComment", "completedSessions", "recordingLink",
-    "supervisorName", "moduleTitle", "moduleDescription",
-  ],
-  evaluation_repeat: [
-    "guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus",
-    "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation",
-    "instructorComment", "completedSessions", "recordingLink",
-    "supervisorName", "moduleTitle", "moduleDescription",
-  ],
-
+  group_completion_student: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink", "totalSessions", "completionDate"],
+  group_completion_guardian: ["salutation_ar", "salutation_en", "guardianSalutation", "studentName", "guardianName", "childTitle", "groupName", "groupCode", "courseName", "enrollmentNumber", "feedbackLink", "totalSessions", "completionDate"],
+  evaluation_pass: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink", "supervisorName", "moduleTitle", "moduleDescription"],
+  evaluation_review: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink", "supervisorName", "moduleTitle", "moduleDescription"],
+  evaluation_repeat: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink", "supervisorName", "moduleTitle", "moduleDescription"],
   session_recording: ["guardianSalutation", "guardianName", "childTitle", "studentName", "sessionName", "recordingLink"],
-  instructor_reminder_24h: [
-    "instructorSalutation", "sessionName", "sessionDescription",
-    "date", "time", "meetingLink", "username", "password",
-    "groupName", "studentCount"
-  ],
-  instructor_reminder_15min: [
-    "instructorSalutation", "sessionName", "sessionDescription",
-    "time", "meetingLink", "username", "password", "groupName"
-  ],
-
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ OFFLINE VARS
-  // ═══════════════════════════════════════════════════════════════
-  reminder_24h_offline_student: [
-    "salutation_ar", "salutation_en", "sessionName",
-    "date", "time", "placeName", "address", "mapsLink",
-  ],
-  reminder_24h_offline_guardian: [
-    "guardianSalutation", "childTitle", "studentName", "sessionName",
-    "date", "time", "placeName", "address", "mapsLink",
-  ],
-  reminder_30min_offline_student: [
-    "salutation_ar", "salutation_en", "sessionName",
-    "time", "placeName", "mapsLink",
-  ],
-  reminder_30min_offline_guardian: [
-    "guardianSalutation", "childTitle", "studentName", "sessionName",
-    "time", "placeName", "mapsLink",
-  ],
-  pre_attendance_ping_student: [
-    "salutation_ar", "salutation_en", "sessionName",
-  ],
-  pre_attendance_ping_guardian: [
-    "guardianSalutation", "childTitle", "studentName", "sessionName",
-  ],
-  instructor_reminder_24h_offline: [
-    "instructorSalutation", "sessionName", "date", "time",
-    "placeName", "address", "mapsLink", "groupName", "studentCount",
-  ],
-  instructor_reminder_30min_offline: [
-    "instructorSalutation", "sessionName", "time",
-    "placeName", "mapsLink", "groupName",
-  ],
-  instructor_pre_attendance_ping: [
-    "instructorSalutation", "sessionName",
-  ],
-
+  instructor_reminder_24h: ["instructorSalutation", "sessionName", "sessionDescription", "date", "time", "meetingLink", "username", "password", "groupName", "studentCount"],
+  instructor_reminder_15min: ["instructorSalutation", "sessionName", "sessionDescription", "time", "meetingLink", "username", "password", "groupName"],
+  reminder_24h_offline_student: ["salutation_ar", "salutation_en", "sessionName", "date", "time", "placeName", "address", "mapsLink"],
+  reminder_24h_offline_guardian: ["guardianSalutation", "childTitle", "studentName", "sessionName", "date", "time", "placeName", "address", "mapsLink"],
+  reminder_30min_offline_student: ["salutation_ar", "salutation_en", "sessionName", "time", "placeName", "mapsLink"],
+  reminder_30min_offline_guardian: ["guardianSalutation", "childTitle", "studentName", "sessionName", "time", "placeName", "mapsLink"],
+  pre_attendance_ping_student: ["salutation_ar", "salutation_en", "sessionName"],
+  pre_attendance_ping_guardian: ["guardianSalutation", "childTitle", "studentName", "sessionName"],
+  instructor_reminder_24h_offline: ["instructorSalutation", "sessionName", "date", "time", "placeName", "address", "mapsLink", "groupName", "studentCount"],
+  instructor_reminder_30min_offline: ["instructorSalutation", "sessionName", "time", "placeName", "mapsLink", "groupName"],
+  instructor_pre_attendance_ping: ["instructorSalutation", "sessionName"],
   learning_supervisor_intro: ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
   module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "moduleDescription", "supervisorName"],
   portfolio_inactivity_reminder: ["ownerWelcome", "ownerName", "portfolioLink"],
   portfolio_update_broadcast: ["ownerName", "updateLink"],
   portfolio_contact_form_notification: ["ownerSalutation", "ownerName", "dashboardLink"],
-  credit_low_balance_4h_student: [
-    "salutation_ar", "salutation_en", "remainingHours", "packageName",
-  ],
-  credit_low_balance_4h_guardian: [
-    "guardianSalutation", "childTitle", "studentName",
-    "remainingHours", "packageName",
-  ],
-  credit_low_balance_2h_student: [
-    "salutation_ar", "salutation_en", "remainingHours", "packageName",
-  ],
-  credit_low_balance_2h_guardian: [
-    "guardianSalutation", "childTitle", "studentName",
-    "remainingHours", "packageName",
-  ],
+  credit_low_balance_4h_student: ["salutation_ar", "salutation_en", "remainingHours", "packageName"],
+  credit_low_balance_4h_guardian: ["guardianSalutation", "childTitle", "studentName", "remainingHours", "packageName"],
+  credit_low_balance_2h_student: ["salutation_ar", "salutation_en", "remainingHours", "packageName"],
+  credit_low_balance_2h_guardian: ["guardianSalutation", "childTitle", "studentName", "remainingHours", "packageName"],
+
+  // 🎁 Make-up (Online)
+  makeup_session_student: ["studentSalutation", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "newSessionTitle", "meetingLink", "instructorName"],
+  makeup_session_guardian: ["guardianSalutation", "guardianName", "childTitle", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "newDate", "newTime", "meetingLink", "instructorName"],
+  makeup_session_instructor: ["instructorSalutation", "instructorName", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "meetingLink"],
+
+  // 🎁 Make-up (Offline)
+  makeup_session_student_offline: ["studentSalutation", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "newSessionTitle", "placeName", "address", "mapsLink", "instructorName"],
+  makeup_session_guardian_offline: ["guardianSalutation", "guardianName", "childTitle", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "newDate", "newTime", "placeName", "address", "mapsLink", "instructorName"],
+  makeup_session_instructor_offline: ["instructorSalutation", "instructorName", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "placeName", "address", "mapsLink"],
 };
 
 const FRONTEND_FALLBACKS = {
   language_confirmation: {
     ar: `✅ تم تأكيد اللغة المفضلة\n\n{salutation_ar}،\n\nتم تعيين *اللغة العربية* كلغة التواصل الرسمية معك.\n\n📌 ماذا يحدث الآن؟\n- جميع الرسائل القادمة ستكون بالعربية\n- المحتوى التعليمي والدعم سيكون متاحاً بالعربية\n\nنحن متحمسون لوجودك معنا! 🚀\n\nمع أطيب التحيات،\nفريق Code School 💻\n\n🌍 شكراً لاختيارك Code School`,
     en: `✅ Language Preference Confirmed\n\n{salutation_en},\n\nYour preferred language has been set to *English*.\n\n📌 What happens next?\n- All future messages will be sent in English\n- Course materials and support will be available in English\n\nWe're excited to have you on board! 🚀\n\nBest regards,\nThe Code School Team 💻\n\n🌍 Thank you for choosing Code School`,
+  },
+  group_student_welcome_student: {
+    ar: `{salutation_ar}،\n\nيسرنا إعلامك بأنه تم تسجيلك بنجاح في Code School! 🎉\n\n📘 البرنامج: {courseName}\n👥 المجموعة: {groupName}\n📅 تاريخ البدء: {startDate}\n⏰ الموعد: {timeFrom} – {timeTo}\n👨‍🏫 المدرب: {instructor}\n🔗 رابط الجلسة الأولى: {firstMeetingLink}\n\nمتحمسون لبدء رحلتك التعليمية معنا! 🚀\n\nمع أطيب التحيات،\nفريق Code School 💻`,
+    en: `{salutation_en},\n\nWe are pleased to confirm your enrollment at Code School! 🎉\n\n📘 Program: {courseName}\n👥 Group: {groupName}\n📅 Start Date: {startDate}\n⏰ Schedule: {timeFrom} – {timeTo}\n👨‍🏫 Instructor: {instructor}\n🔗 First Session Link: {firstMeetingLink}\n\nExcited to start your learning journey with us! 🚀\n\nBest regards,\nCode School Team 💻`,
+  },
+  group_student_welcome_guardian: {
+    ar: `{guardianSalutation_ar}،\n\nيسرنا إعلامكم بأنه تم تسجيل {childTitle} {studentName} بنجاح في Code School! 🎉\n\n📘 البرنامج: {courseName}\n👥 المجموعة: {groupName}\n📅 تاريخ البدء: {startDate}\n⏰ الموعد: {timeFrom} – {timeTo}\n👨‍🏫 المدرب: {instructor}\n🔗 رابط الجلسة الأولى: {firstMeetingLink}\n\nنتطلع لرؤية تقدم {studentName} معنا! 🚀\n\nمع أطيب التحيات،\nفريق Code School 💻`,
+    en: `{guardianSalutation_en},\n\nWe are pleased to inform you that {childTitle} {studentName} has been successfully enrolled at Code School! 🎉\n\n📘 Program: {courseName}\n👥 Group: {groupName}\n📅 Start Date: {startDate}\n⏰ Schedule: {timeFrom} – {timeTo}\n👨‍🏫 Instructor: {instructor}\n🔗 First Session Link: {firstMeetingLink}\n\nWe look forward to seeing {studentName}'s progress! 🚀\n\nBest regards,\nCode School Team 💻`,
+  },
+  group_student_welcome_student_offline: {
+    ar: `{salutation_ar}،\n\nيسرنا إعلامك بأنه تم تسجيلك بنجاح في Code School! 🎉\n\n📘 البرنامج: {courseName}\n👥 المجموعة: {groupName}\n📅 تاريخ البدء: {startDate}\n⏰ الموعد: {timeFrom} – {timeTo}\n👨‍🏫 المدرب: {instructor}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n\nمتحمسون لبدء رحلتك التعليمية معنا! 🚀\n\nمع أطيب التحيات،\nفريق Code School 💻`,
+    en: `{salutation_en},\n\nWe are pleased to confirm your enrollment at Code School! 🎉\n\n📘 Program: {courseName}\n👥 Group: {groupName}\n📅 Start Date: {startDate}\n⏰ Schedule: {timeFrom} – {timeTo}\n👨‍🏫 Instructor: {instructor}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n\nExcited to start your learning journey with us! 🚀\n\nBest regards,\nCode School Team 💻`,
+  },
+  group_student_welcome_guardian_offline: {
+    ar: `{guardianSalutation_ar}،\n\nيسرنا إعلامكم بأنه تم تسجيل {childTitle} {studentName} بنجاح في Code School! 🎉\n\n📘 البرنامج: {courseName}\n👥 المجموعة: {groupName}\n📅 تاريخ البدء: {startDate}\n⏰ الموعد: {timeFrom} – {timeTo}\n👨‍🏫 المدرب: {instructor}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n\nنتطلع لرؤية تقدم {studentName} معنا! 🚀\n\nمع أطيب التحيات،\nفريق Code School 💻`,
+    en: `{guardianSalutation_en},\n\nWe are pleased to inform you that {childTitle} {studentName} has been successfully enrolled at Code School! 🎉\n\n📘 Program: {courseName}\n👥 Group: {groupName}\n📅 Start Date: {startDate}\n⏰ Schedule: {timeFrom} – {timeTo}\n👨‍🏫 Instructor: {instructor}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n\nWe look forward to seeing {studentName}'s progress! 🚀\n\nBest regards,\nCode School Team 💻`,
   },
   guardian_language_notification: {
     ar: `{guardianSalutation_ar}،\n\nيسعدنا إبلاغكم بأن {studentGender_ar} **{studentName_ar}** قام/ت باختيار *اللغة العربية* كلغة مفضلة للتواصل بنجاح.\n\n📌 ماذا يعني هذا؟\n- جميع الرسائل القادمة لـ{studentGender_ar} ستكون باللغة العربية\n\nشكراً لثقتكم المستمرة في Code School.\n\nمع أطيب التحيات،\nفريق Code School 💻`,
@@ -341,10 +246,6 @@ const FRONTEND_FALLBACKS = {
     ar: `{instructorSalutation} 👋\nحبيت أفكرك إن ميعادنا هيبدأ خلال *15 دقيقة* إن شاء الله ✨\n\n📘 الـ Session: {sessionName}\n📝 وصف السيشن: {sessionDescription}\n⏰ الوقت: {time}\n🔗 لينك الحصة:\n{meetingLink}\n\n🔐 بيانات الدخول:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 المجموعة: {groupName}\n\nمتحمسين نشوفك دلوقتي 💻🚀\nفريق Code School`,
     en: `{instructorSalutation} 👋\nJust a reminder that our session starts in *15 minutes*, God willing ✨\n\n📘 Session: {sessionName}\n📝 Session Overview: {sessionDescription}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n🔐 Login Details:\n👤 Username: {username}\n🔑 Password: {password}\n\n👥 Group: {groupName}\n\nCan't wait to see you now 💻🚀\nCode School Team`,
   },
-
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ OFFLINE — Student & Guardian
-  // ═══════════════════════════════════════════════════════════════
   reminder_24h_offline_student: {
     ar: `{salutation_ar} 👋\n\nتذكير: حصتك *{sessionName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n\n🗺️ اللوكيشن على الخريطة:\n{mapsLink}\n\nمنتظرينك في الميعاد 💻\nCode School`,
     en: `{salutation_en} 👋\n\nReminder: Your session *{sessionName}* is tomorrow, God willing ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n\n🗺️ Location on Maps:\n{mapsLink}\n\nSee you there 💻\nCode School`,
@@ -369,10 +270,6 @@ const FRONTEND_FALLBACKS = {
     ar: `{guardianSalutation} 👋\n\nبنستعد نبدأ حصة {childTitle} *{studentName}* دلوقتي، ياريت نتأكد إنه موجود وجاهز ✨\nCode School 💻`,
     en: `{guardianSalutation} 👋\n\nWe're about to start {childTitle} *{studentName}*'s session now, please make sure they're ready ✨\nCode School 💻`,
   },
-
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ OFFLINE — Instructor
-  // ═══════════════════════════════════════════════════════════════
   instructor_reminder_24h_offline: {
     ar: `{instructorSalutation} 👋\n\nتذكير: عندك حصة *{sessionName}* بكرة إن شاء الله (Offline) ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ {mapsLink}\n\n👥 المجموعة: {groupName}\n🔢 عدد الطلاب: {studentCount}\n\nفريق Code School 💻`,
     en: `{instructorSalutation} 👋\n\nReminder: You have an *offline* session *{sessionName}* tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ {mapsLink}\n\n👥 Group: {groupName}\n🔢 Students: {studentCount}\n\nCode School Team 💻`,
@@ -385,7 +282,6 @@ const FRONTEND_FALLBACKS = {
     ar: `{instructorSalutation} 👋\n\nالحصة *{sessionName}* هتبدأ دلوقتي، ياريت نتأكد إن الطلاب موجودين وجاهزين ونسجل الحضور ✨\n\nفريق Code School 💻`,
     en: `{instructorSalutation} 👋\n\n*{sessionName}* is about to start, please make sure students are present and take attendance ✨\n\nCode School Team 💻`,
   },
-
   portfolio_inactivity_reminder: {
     ar: `أهلاً بيك يا {ownerName}،\n\nعارفين إن الـ Personal Portfolio بتاعك مش مجرد صفحة على النت، ده واجهة الـ Business بتاعك والمكان اللي بيعكس مجهودك وشغلك.\n\nعشان كده، صممنا البورتفوليو بتاعك ليكون صديق لمحركات البحث ومُحسن للـ SEO والـ GEO.. وده معناه Visibility أعلى وعملاء أكتر يقدروا يوصلولك بسهولة.\n\nادخل دلوقتي وضيف أي Updates جديدة في الـ Projects بتاعتك عشان تفضل دايماً في الصدارة والـ Ranking بتاعك يعلى!\n\nلينك البورتفوليو بتاعك:\n{portfolioLink}`,
     en: `Hi {ownerName},\n\nYour Personal Portfolio isn't just a page online — it's the face of your business and the place that reflects your effort and work.\n\nThat's why we designed your portfolio to be search-engine friendly and optimized for SEO & GEO.. which means higher visibility and more clients finding you easily.\n\nLog in now and add any new Updates to your Projects to stay ahead and keep your Ranking climbing!\n\nYour portfolio link:\n{portfolioLink}`,
@@ -398,7 +294,6 @@ const FRONTEND_FALLBACKS = {
     ar: `عزيزي {ownerName}،\n\nيعلمك نظام الإشعارات الآلي بتلقي رسالة جديدة عبر الـ Contact Form الخاص بالـ Personal Portfolio الخاص بك.\n\nلضمان الخصوصية وسرية البيانات، يتم توجيه جميع الرسائل وتشفيرها آلياً إلى حسابك دون أي تدخل بشري.\n\nلعرض محتوى الرسالة والرد عليها، برجاء تسجيل الدخول إلى الـ Dashboard:\n🔗 {dashboardLink}`,
     en: `Dear {ownerName},\n\nOur automated notification system informs you that a new message has been received via the Contact Form on your Personal Portfolio.\n\nTo ensure privacy and data confidentiality, all messages are automatically routed and encrypted to your account without any human intervention.\n\nTo view the message and reply, please log in to your Dashboard:\n🔗 {dashboardLink}`,
   },
-
   credit_low_balance_4h_student: {
     ar: `{salutation_ar} 👋\n\n⚠️ تنبيه: رصيد الساعات المتبقية في باقتك قارب على الانتهاء.\n\n🔋 الساعات المتبقية: *{remainingHours}* ساعة\n📦 الباقة: {packageName}\n\nلتجنب توقف الجلسات، بننصحك بتجديد الباقة قبل ما الرصيد ينفذ.\n\nفريق Code School 💻`,
     en: `{salutation_en} 👋\n\n⚠️ Heads-up: Your remaining credit hours are running low.\n\n🔋 Remaining hours: *{remainingHours}*\n📦 Package: {packageName}\n\nTo avoid any session interruption, we recommend renewing your package before the balance runs out.\n\nCode School Team 💻`,
@@ -416,23 +311,85 @@ const FRONTEND_FALLBACKS = {
     en: `{guardianSalutation} 🚨\n\n🚨 Urgent: {childTitle} *{studentName}*'s credit hours are almost exhausted.\n\n🔋 Remaining hours: *{remainingHours}* only\n📦 Package: {packageName}\n\nPlease contact the administration immediately to renew the package, so {childTitle}'s sessions don't stop.\n\nCode School Team 💻`,
   },
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🎁 MAKE-UP SESSION (Online)
+  // ═══════════════════════════════════════════════════════════════
+  makeup_session_student: {
+    ar: `{studentSalutation} 👋\n\nعندنا خبر حلو ليك! 🎁\n\nتم تحديد حصة تعويضية ليك عشان نعوّضك عن الحصة اللي فاتتك:\n\n📘 الكورس: {courseName}\n👥 المجموعة الجديدة: {groupName} ({groupCode})\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\n✨ الحصة التعويضية الجديدة:\n📅 {newDate}\n⏰ {newTime}\n📚 {newSessionTitle}\n🔗 رابط الحصة: {meetingLink}\n👨‍🏫 المدرس: {instructorName}\n\n🎉 الحصة دي مجانية تمامًا — مش هتتخصم من رصيدك.\n\nمستنيينك! 💻\nفريق Code School`,
+    en: `{studentSalutation} 👋\n\nWe've got great news! 🎁\n\nA make-up session has been scheduled for you:\n\n📘 Course: {courseName}\n👥 New Group: {groupName} ({groupCode})\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\n✨ New Make-up Session:\n📅 {newDate}\n⏰ {newTime}\n📚 {newSessionTitle}\n🔗 Meeting Link: {meetingLink}\n👨‍🏫 Instructor: {instructorName}\n\n🎉 This session is completely free — it won't be deducted from your balance.\n\nSee you there! 💻\nCode School Team`,
+  },
+  makeup_session_guardian: {
+    ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم إنه تم تحديد حصة تعويضية لـ{childTitle} **{studentName}**:\n\n📘 الكورس: {courseName}\n👥 المجموعة الجديدة: {groupName} ({groupCode})\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n\n✨ الحصة التعويضية الجديدة:\n📅 {newDate}\n⏰ {newTime}\n🔗 رابط الحصة: {meetingLink}\n👨‍🏫 المدرس: {instructorName}\n\n🎉 الحصة دي مجانية — مش هتتخصم من رصيد {childTitle}.\n\nفريق Code School 💻`,
+    en: `{guardianSalutation} 👋\n\nWe are pleased to inform you that a make-up session has been scheduled for {childTitle} **{studentName}**:\n\n📘 Course: {courseName}\n👥 New Group: {groupName} ({groupCode})\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n\n✨ New Make-up Session:\n📅 {newDate}\n⏰ {newTime}\n🔗 Meeting Link: {meetingLink}\n👨‍🏫 Instructor: {instructorName}\n\n🎉 This session is free — it won't be deducted from {childTitle}'s balance.\n\nCode School Team 💻`,
+  },
+  makeup_session_instructor: {
+    ar: `{instructorSalutation} 👋\n\nتم تحديد حصة تعويضية جديدة ليك:\n\n📘 الكورس: {courseName}\n👥 المجموعة: {groupName} ({groupCode})\n👤 الطالب: {studentName}\n\n📅 التاريخ: {newDate}\n⏰ الوقت: {newTime}\n🔗 رابط الحصة: {meetingLink}\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nملاحظة: الحصة دي تعويضية (مجانية على الطالب)، لكن المدرس بيتحاسب عليها عادي.\n\nفريق Code School 💻`,
+    en: `{instructorSalutation} 👋\n\nA new make-up session has been scheduled for you:\n\n📘 Course: {courseName}\n👥 Group: {groupName} ({groupCode})\n👤 Student: {studentName}\n\n📅 Date: {newDate}\n⏰ Time: {newTime}\n🔗 Meeting Link: {meetingLink}\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nNote: This is a make-up session (free for the student), but the instructor is still paid for it.\n\nCode School Team 💻`,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎁 MAKE-UP SESSION (Offline)
+  // ═══════════════════════════════════════════════════════════════
+  makeup_session_student_offline: {
+    ar: `{studentSalutation} 👋\n\nعندنا خبر حلو ليك! 🎁\n\nتم تحديد حصة تعويضية ليك عشان نعوّضك عن الحصة اللي فاتتك:\n\n📘 الكورس: {courseName}\n👥 المجموعة الجديدة: {groupName} ({groupCode})\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\n✨ الحصة التعويضية الجديدة:\n📅 {newDate}\n⏰ {newTime}\n📚 {newSessionTitle}\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n👨‍🏫 المدرس: {instructorName}\n\n🎉 الحصة دي مجانية تمامًا — مش هتتخصم من رصيدك.\n\nمستنيينك! 💻\nفريق Code School`,
+    en: `{studentSalutation} 👋\n\nWe've got great news! 🎁\n\nA make-up session has been scheduled for you:\n\n📘 Course: {courseName}\n👥 New Group: {groupName} ({groupCode})\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\n✨ New Make-up Session:\n📅 {newDate}\n⏰ {newTime}\n📚 {newSessionTitle}\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n👨‍🏫 Instructor: {instructorName}\n\n🎉 This session is completely free — it won't be deducted from your balance.\n\nSee you there! 💻\nCode School Team`,
+  },
+  makeup_session_guardian_offline: {
+    ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم إنه تم تحديد حصة تعويضية لـ{childTitle} **{studentName}**:\n\n📘 الكورس: {courseName}\n👥 المجموعة الجديدة: {groupName} ({groupCode})\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n\n✨ الحصة التعويضية الجديدة:\n📅 {newDate}\n⏰ {newTime}\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n👨‍🏫 المدرس: {instructorName}\n\n🎉 الحصة دي مجانية — مش هتتخصم من رصيد {childTitle}.\n\nفريق Code School 💻`,
+    en: `{guardianSalutation} 👋\n\nWe are pleased to inform you that a make-up session has been scheduled for {childTitle} **{studentName}**:\n\n📘 Course: {courseName}\n👥 New Group: {groupName} ({groupCode})\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n\n✨ New Make-up Session:\n📅 {newDate}\n⏰ {newTime}\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n👨‍🏫 Instructor: {instructorName}\n\n🎉 This session is free — it won't be deducted from {childTitle}'s balance.\n\nCode School Team 💻`,
+  },
+  makeup_session_instructor_offline: {
+    ar: `{instructorSalutation} 👋\n\nتم تحديد حصة تعويضية جديدة ليك (Offline):\n\n📘 الكورس: {courseName}\n👥 المجموعة: {groupName} ({groupCode})\n👤 الطالب: {studentName}\n\n📅 التاريخ: {newDate}\n⏰ الوقت: {newTime}\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nملاحظة: الحصة دي تعويضية (مجانية على الطالب)، لكن المدرس بيتحاسب عليها عادي.\n\nفريق Code School 💻`,
+    en: `{instructorSalutation} 👋\n\nA new make-up session has been scheduled for you (Offline):\n\n📘 Course: {courseName}\n👥 Group: {groupName} ({groupCode})\n👤 Student: {studentName}\n\n📅 Date: {newDate}\n⏰ Time: {newTime}\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nNote: This is a make-up session (free for the student), but the instructor is still paid for it.\n\nCode School Team 💻`,
+  },
+
+  instructor_group_activation: {
+    ar: `{salutation} 👋\n\nحبيت أبلغك إنه تم إسناد جروب *{groupName}* الخاص بكورس *{courseName}* لحضرتك ✨\nدي كل تفاصيل البداية عشان تكون جاهز:\n\n📘 الـ Course: {courseName}\n👥 الـ Group: {groupName}\n📅 تاريخ البداية: {startDate}\n⏰ المعاد: من {timeFrom} إلى {timeTo}\n🔗 لينك الحصة:\n{meetingLink}\n\nمتحمسين جداً لبداية قوية معاك، وبالتوفيق يا هندسة 🌟\n\nنور ✨\nفريق الأوبيريشن - Code School`,
+    en: `{salutation} 👋\n\nWe're pleased to assign you group *{groupName}* for *{courseName}* ✨\nHere are all the starting details to get you ready:\n\n📘 Course: {courseName}\n👥 Group: {groupName}\n📅 Start Date: {startDate}\n⏰ Time: From {timeFrom} to {timeTo}\n🔗 Meeting Link:\n{meetingLink}\n\nExcited for a strong start with you, best of luck! 🌟\n\nNour ✨\nOperations Team - Code School`,
+  },
+  instructor_group_activation_offline: {
+    ar: `{salutation} 👋\n\nحبيت أبلغك إنه تم إسناد جروب *{groupName}* الخاص بكورس *{courseName}* لحضرتك ✨\nدي كل تفاصيل البداية عشان تكون جاهز:\n\n📘 الـ Course: {courseName}\n👥 الـ Group: {groupName}\n📅 تاريخ البداية: {startDate}\n⏰ المعاد: من {timeFrom} إلى {timeTo}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n\nمتحمسين جداً لبداية قوية معاك، وبالتوفيق يا هندسة 🌟\n\nنور ✨\nفريق الأوبيريشن - Code School`,
+    en: `{salutation} 👋\n\nWe're pleased to assign you group *{groupName}* for *{courseName}* ✨\nHere are all the starting details to get you ready:\n\n📘 Course: {courseName}\n👥 Group: {groupName}\n📅 Start Date: {startDate}\n⏰ Time: From {timeFrom} to {timeTo}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n\nExcited for a strong start with you, best of luck! 🌟\n\nNour ✨\nOperations Team - Code School`,
+  },
 };
 
-// ── Color map with brand colors ──
-const C_MAP = {
-  primary: { bg: "bg-[#ff6700]", text: "text-[#ff6700]", light: "bg-[#ff6700]/10", border: "border-[#ff6700]/20", ring: "ring-[#ff6700]/30", activePill: "bg-[#ff6700] text-white" },
-  secondary: { bg: "bg-[#004d59]", text: "text-[#004d59]", light: "bg-[#004d59]/10", border: "border-[#004d59]/20", ring: "ring-[#004d59]/30", activePill: "bg-[#004d59] text-white" },
-  accent: { bg: "bg-[#feaf00]", text: "text-[#feaf00]", light: "bg-[#feaf00]/10", border: "border-[#feaf00]/20", ring: "ring-[#feaf00]/30", activePill: "bg-[#feaf00] text-white" },
-  violet: { bg: "bg-[#ff6700]", text: "text-[#ff6700]", light: "bg-[#ff6700]/10", border: "border-[#ff6700]/20", ring: "ring-[#ff6700]/30", activePill: "bg-[#ff6700] text-white" },
-  blue: { bg: "bg-[#004d59]", text: "text-[#004d59]", light: "bg-[#004d59]/10", border: "border-[#004d59]/20", ring: "ring-[#004d59]/30", activePill: "bg-[#004d59] text-white" },
-  emerald: { bg: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400", light: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800", ring: "ring-emerald-500/30", activePill: "bg-emerald-500 text-white" },
-  orange: { bg: "bg-[#ff6700]", text: "text-[#ff6700]", light: "bg-[#ff6700]/10", border: "border-[#ff6700]/20", ring: "ring-[#ff6700]/30", activePill: "bg-[#ff6700] text-white" },
-  amber: { bg: "bg-[#feaf00]", text: "text-[#feaf00]", light: "bg-[#feaf00]/10", border: "border-[#feaf00]/20", ring: "ring-[#feaf00]/30", activePill: "bg-[#feaf00] text-white" },
-  indigo: { bg: "bg-[#004d59]", text: "text-[#004d59]", light: "bg-[#004d59]/10", border: "border-[#004d59]/20", ring: "ring-[#004d59]/30", activePill: "bg-[#004d59] text-white" },
-  sky: { bg: "bg-sky-500", text: "text-sky-600 dark:text-sky-400", light: "bg-sky-50 dark:bg-sky-900/20", border: "border-sky-200 dark:border-sky-800", ring: "ring-sky-500/30", activePill: "bg-sky-500 text-white" },
-  rose: { bg: "bg-rose-500", text: "text-rose-600 dark:text-rose-400", light: "bg-rose-50 dark:bg-rose-900/20", border: "border-rose-200 dark:border-rose-800", ring: "ring-rose-500/30", activePill: "bg-rose-500 text-white" },
-  slate: { bg: "bg-slate-500", text: "text-slate-600 dark:text-slate-400", light: "bg-slate-50 dark:bg-slate-900/20", border: "border-slate-200 dark:border-slate-800", ring: "ring-slate-500/30", activePill: "bg-slate-500 text-white" },
+// ─────────────────────────────────────────────────────────────
+// DESIGN TOKENS
+// ─────────────────────────────────────────────────────────────
+const ORANGE_TEXT = "text-[#c24d00] dark:text-[#ff8a3d]";
+const TEAL_TEXT = "text-[#004d59] dark:text-teal-300";
+const AMBER_TEXT = "text-[#8f5b00] dark:text-[#feaf00]";
+
+const TONE = {
+  primary: { bg: "bg-[#ff6700]", onBg: "text-white", text: ORANGE_TEXT, light: "bg-[#ff6700]/10", border: "border-[#ff6700]/25" },
+  secondary: { bg: "bg-[#004d59] dark:bg-[#0b7285]", onBg: "text-white", text: TEAL_TEXT, light: "bg-[#004d59]/10 dark:bg-teal-400/10", border: "border-[#004d59]/20 dark:border-teal-400/25" },
+  accent: { bg: "bg-[#feaf00]", onBg: "text-slate-900", text: AMBER_TEXT, light: "bg-[#feaf00]/15", border: "border-[#feaf00]/40" },
+  emerald: { bg: "bg-emerald-600", onBg: "text-white", text: "text-emerald-700 dark:text-emerald-400", light: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800" },
+  sky: { bg: "bg-sky-600", onBg: "text-white", text: "text-sky-700 dark:text-sky-400", light: "bg-sky-50 dark:bg-sky-900/20", border: "border-sky-200 dark:border-sky-800" },
+  rose: { bg: "bg-rose-600", onBg: "text-white", text: "text-rose-700 dark:text-rose-400", light: "bg-rose-50 dark:bg-rose-900/20", border: "border-rose-200 dark:border-rose-800" },
+  slate: { bg: "bg-slate-600", onBg: "text-white", text: "text-slate-600 dark:text-slate-400", light: "bg-slate-50 dark:bg-slate-900/20", border: "border-slate-200 dark:border-slate-800" },
 };
+
+const C_MAP = {
+  primary: TONE.primary,
+  secondary: TONE.secondary,
+  accent: TONE.accent,
+  violet: TONE.primary,
+  blue: TONE.secondary,
+  emerald: TONE.emerald,
+  orange: TONE.primary,
+  amber: TONE.accent,
+  indigo: TONE.secondary,
+  sky: TONE.sky,
+  rose: TONE.rose,
+  slate: TONE.slate,
+};
+
+const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6700]/40";
+const PANEL = "rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#161b27]";
+const INPUT = "w-full text-sm bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:text-slate-100 placeholder-slate-400 transition-colors";
+
+const WA_PATTERN = "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23000' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")";
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
@@ -454,113 +411,265 @@ function buildVals(variable) {
 
 function getRecipientType(tabId) {
   if (tabId.startsWith("portfolio_")) return "portfolio_owner";
+  if (tabId.startsWith("makeup_session_instructor")) return "instructor";
   if (tabId.includes("student")) return "student";
   return "guardian";
 }
 
-// ✅ NEW: نحدد هل القالب instructor (بيتحفظ في WhatsAppTemplateInstructor)
 function isInstructorTemplate(tabId) {
   return (
     tabId === "instructor_group_activation" ||
+    tabId === "instructor_group_activation_offline" ||
     tabId === "instructor_reminder_24h" ||
     tabId === "instructor_reminder_15min" ||
     tabId === "instructor_reminder_24h_offline" ||
     tabId === "instructor_reminder_30min_offline" ||
-    tabId === "instructor_pre_attendance_ping"
+    tabId === "instructor_pre_attendance_ping" ||
+    tabId === "makeup_session_instructor" ||
+    tabId === "makeup_session_instructor_offline"
   );
 }
 
-// ✅ NEW: mapping بين UI id و DB templateType للمدرب
 const INSTRUCTOR_TYPE_MAP = {
   instructor_group_activation: "group_activation",
+  instructor_group_activation_offline: "group_activation_offline",
   instructor_reminder_24h: "reminder_24h",
   instructor_reminder_15min: "reminder_15min",
   instructor_reminder_24h_offline: "reminder_24h_offline",
   instructor_reminder_30min_offline: "reminder_30min_offline",
   instructor_pre_attendance_ping: "pre_attendance_ping",
+  makeup_session_instructor: "makeup_session_instructor",
+  makeup_session_instructor_offline: "makeup_session_instructor_offline",
 };
 
-// ✅ NEW: mapping معاكس (DB → UI) للاستخدام في fetchTemplates
 const INSTRUCTOR_DB_TO_UI = {
   group_activation: "instructor_group_activation",
+  group_activation_offline: "instructor_group_activation_offline",
   reminder_24h: "instructor_reminder_24h",
   reminder_15min: "instructor_reminder_15min",
   reminder_24h_offline: "instructor_reminder_24h_offline",
   reminder_30min_offline: "instructor_reminder_30min_offline",
   pre_attendance_ping: "instructor_pre_attendance_ping",
+  makeup_session_instructor: "makeup_session_instructor",
+  makeup_session_instructor_offline: "makeup_session_instructor_offline",
 };
 
 // ─────────────────────────────────────────────────────────────
-// GENDER CONTEXT SELECTOR
+// WHATSAPP PREVIEW RENDERING
 // ─────────────────────────────────────────────────────────────
-function GenderContextSelector({ genderContext, setGenderContext }) {
-  const { studentGender, guardianType, instructorGender, ownerGender } = genderContext;
+const VAR_OPEN = "\uE000";
+const VAR_CLOSE = "\uE001";
+const VAR_SPLIT = /\uE000([\s\S]*?)\uE001/;
 
-  const btnBase = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border";
-  const active = "bg-[#ff6700] text-white border-[#ff6700] shadow-sm";
-  const inactive = "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-[#ff6700]/30";
+function renderWhatsApp(text) {
+  let k = 0;
+  const nextKey = () => `wa-${k++}`;
 
+  const withVarMarks = (str) =>
+    str.split(VAR_SPLIT).map((part, i) =>
+      i % 2 === 1 ? (
+        <span
+          key={nextKey()}
+          className="rounded bg-[#ff6700]/15 px-0.5 text-[#a13f00] dark:bg-[#ff6700]/25 dark:text-[#ffb27a]"
+        >
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+
+  const out = [];
+  const re = /\*\*([^*\n]+)\*\*|\*([^*\n]+)\*/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(...withVarMarks(text.slice(last, m.index)));
+    out.push(
+      <strong key={nextKey()} className="font-bold">
+        {withVarMarks(m[1] ?? m[2])}
+      </strong>
+    );
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(...withVarMarks(text.slice(last)));
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────
+// SMALL SHARED UI
+// ─────────────────────────────────────────────────────────────
+function Segmented({ options, value, onChange, size = "md", className = "" }) {
+  const pad = size === "sm" ? "px-2.5 py-1 text-[11px]" : "px-3 py-1.5 text-xs";
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-l from-[#ff6700]/10 to-[#004d59]/10 border border-[#ff6700]/20 rounded-2xl mb-4 flex-wrap">
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <Sparkles className="w-3.5 h-3.5 text-[#ff6700]" />
-        <span className="text-[11px] font-bold text-[#ff6700]">معاينة حسب:</span>
-      </div>
+    <div role="group" className={`inline-flex items-center gap-0.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 ${className}`}>
+      {options.map(({ id, label, icon: Icon, badge }) => {
+        const on = value === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(id)}
+            className={`flex items-center gap-1.5 rounded-[10px] font-bold whitespace-nowrap transition-colors ${pad} ${FOCUS} ${on
+              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+          >
+            {Icon && <Icon className="w-3.5 h-3.5" />}
+            <span>{label}</span>
+            {badge !== undefined && (
+              <span className={`rounded-full px-1.5 text-[10px] leading-4 ${on ? "bg-[#ff6700]/10 " + ORANGE_TEXT : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400"}`}>
+                {badge}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <span className="text-[10px] text-slate-400 ml-1">👤 الطالب:</span>
-        <button onClick={() => setGenderContext(p => ({ ...p, studentGender: "male" }))} className={`${btnBase} ${studentGender === "male" ? active : inactive}`}>♂ ذكر</button>
-        <button onClick={() => setGenderContext(p => ({ ...p, studentGender: "female" }))} className={`${btnBase} ${studentGender === "female" ? active : inactive}`}>♀ أنثى</button>
-      </div>
+function Chip({ tone = TONE.slate, small = false, children, className = "" }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border font-bold ${small ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px]"} ${tone.light} ${tone.text} ${tone.border} ${className}`}>
+      {children}
+    </span>
+  );
+}
 
-      <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
-
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <span className="text-[10px] text-slate-400 ml-1">👨‍👩‍👧 ولي الأمر:</span>
-        <button onClick={() => setGenderContext(p => ({ ...p, guardianType: "father" }))} className={`${btnBase} ${guardianType === "father" ? active : inactive}`}>👨 أب</button>
-        <button onClick={() => setGenderContext(p => ({ ...p, guardianType: "mother" }))} className={`${btnBase} ${guardianType === "mother" ? active : inactive}`}>👩 أم</button>
-      </div>
-
-      <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
-
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <span className="text-[10px] text-slate-400 ml-1">👨‍🏫 المدرب:</span>
-        <button onClick={() => setGenderContext(p => ({ ...p, instructorGender: "male" }))} className={`${btnBase} ${instructorGender === "male" ? active : inactive}`}>♂ ذكر</button>
-        <button onClick={() => setGenderContext(p => ({ ...p, instructorGender: "female" }))} className={`${btnBase} ${instructorGender === "female" ? active : inactive}`}>♀ أنثى</button>
-      </div>
-
-      <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
-
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <span className="text-[10px] text-slate-400 ml-1">💼 صاحب البورتفوليو:</span>
-        <button onClick={() => setGenderContext(p => ({ ...p, ownerGender: "male" }))} className={`${btnBase} ${ownerGender === "male" ? active : inactive}`}>♂ ذكر</button>
-        <button onClick={() => setGenderContext(p => ({ ...p, ownerGender: "female" }))} className={`${btnBase} ${ownerGender === "female" ? active : inactive}`}>♀ أنثى</button>
+function Notice({ tone = TONE.accent, icon: Icon, title, children }) {
+  return (
+    <div className={`mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3 ${tone.light} ${tone.border}`}>
+      <Icon className={`mt-0.5 h-4 w-4 flex-shrink-0 ${tone.text}`} />
+      <div className="min-w-0">
+        <p className={`text-xs font-bold ${tone.text}`}>{title}</p>
+        {children && <p className="mt-0.5 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{children}</p>}
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// FIELD COMPONENT
-// ─────────────────────────────────────────────────────────────
+const ROLE_ROWS = [
+  { key: "studentGender", role: "student", label: "الطالب", emoji: "👤", options: [{ id: "male", label: "♂ ذكر" }, { id: "female", label: "♀ أنثى" }] },
+  { key: "guardianType", role: "guardian", label: "ولي الأمر", emoji: "👨‍👩‍👧", options: [{ id: "father", label: "👨 أب" }, { id: "mother", label: "👩 أم" }] },
+  { key: "instructorGender", role: "instructor", label: "المدرب", emoji: "👨‍🏫", options: [{ id: "male", label: "♂ ذكر" }, { id: "female", label: "♀ أنثى" }] },
+  { key: "ownerGender", role: "owner", label: "صاحب البورتفوليو", emoji: "💼", options: [{ id: "male", label: "♂ ذكر" }, { id: "female", label: "♀ أنثى" }] },
+];
+
+function PreviewContext({ genderContext, setGenderContext, relevantRoles }) {
+  const [showAll, setShowAll] = useState(false);
+  const rows = ROLE_ROWS.filter(r => showAll || relevantRoles.has(r.role));
+  const hiddenCount = ROLE_ROWS.length - rows.length;
+
+  return (
+    <div className={`${PANEL} p-3`}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <Sparkles className={`h-3.5 w-3.5 ${ORANGE_TEXT}`} />
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-200">المعاينة حسب</span>
+        </div>
+        {(hiddenCount > 0 || showAll) && (
+          <button
+            type="button"
+            onClick={() => setShowAll(p => !p)}
+            className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ${ORANGE_TEXT} hover:bg-[#ff6700]/10 ${FOCUS}`}
+          >
+            {showAll ? "إخفاء الباقي" : `أدوار أخرى (${hiddenCount})`}
+          </button>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-slate-400">هذا القالب مبيعتمدش على الجنس.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map(r => (
+            <div key={r.key} className="flex items-center justify-between gap-2">
+              <span className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <span>{r.emoji}</span>
+                <span className="truncate">{r.label}</span>
+              </span>
+              <Segmented
+                size="sm"
+                options={r.options}
+                value={genderContext[r.key]}
+                onChange={(v) => setGenderContext(p => ({ ...p, [r.key]: v }))}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PhonePreview({ nodes, dir }) {
+  const tail = dir === "rtl" ? "rounded-tr-sm" : dir === "ltr" ? "rounded-tl-sm" : "";
+  return (
+    <div className="mx-auto w-full max-w-[360px]">
+      <div className="overflow-hidden rounded-[28px] border-[5px] border-slate-800 bg-slate-800 shadow-xl dark:border-slate-600 dark:bg-slate-600">
+        <div className="flex items-center gap-2.5 bg-[#075e54] px-3.5 py-2.5 text-white dark:bg-[#202c33]">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#ff6700] to-[#004d59] text-[11px] font-bold">
+            CS
+          </div>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-[13px] font-bold">Code School</p>
+            <p className="text-[11px] text-white/70">حساب تجاري</p>
+          </div>
+        </div>
+
+        <div className="relative min-h-[300px] bg-[#efeae2] dark:bg-[#0b141a]">
+          <div className="pointer-events-none absolute inset-0 opacity-[0.05]" style={{ backgroundImage: WA_PATTERN }} />
+          <div className="relative max-h-[min(56vh,520px)] overflow-y-auto no-scrollbar p-3">
+            {nodes.length > 0 ? (
+              <div dir={dir} className="flex flex-col items-start">
+                <div className={`max-w-[92%] rounded-xl ${tail} bg-white px-3 pb-1.5 pt-2 shadow-[0_1px_1px_rgba(11,20,26,0.15)] dark:bg-[#202c33]`}>
+                  <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[#111b21] dark:text-[#e9edef]">
+                    {nodes}
+                  </div>
+                  <div className="mt-1 flex justify-end">
+                    <span dir="ltr" className="text-[10px] text-slate-400">12:34</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-2 py-16">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/50 dark:bg-white/10">
+                  <MessageCircle className="h-4 w-4 text-slate-400" />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">اكتب الرسالة لترى المعاينة</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-2.5 flex items-start gap-1.5 px-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+        <Info className="mt-0.5 h-3 w-3 flex-shrink-0" />
+        <span>
+          القيم <mark className="rounded bg-[#ff6700]/15 px-0.5 text-[#a13f00] dark:bg-[#ff6700]/25 dark:text-[#ffb27a]">المظللة</mark> تجريبية، وبتتبدل بالقيم الحقيقية وقت الإرسال.
+        </span>
+      </p>
+    </div>
+  );
+}
+
 function Field({ label, field, dir, vals, onChange }) {
   return (
     <div>
-      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">{label}</label>
+      <label className="mb-1 block text-[11px] font-bold text-slate-500 dark:text-slate-400">{label}</label>
       <textarea
         value={vals[field]}
         onChange={(e) => onChange(field, e.target.value)}
         dir={dir}
         rows={vals[field]?.length > 60 ? 2 : 1}
-        className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:text-slate-100 resize-none transition-all"
+        className={`${INPUT} resize-none px-3 py-1.5`}
       />
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// VARIABLE ROW
-// ─────────────────────────────────────────────────────────────
 function VariableRow({ variable, onSave, saving }) {
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -588,118 +697,97 @@ function VariableRow({ variable, onSave, saving }) {
 
   const genderBadge = variable.hasGender
     ? genderType === "guardian"
-      ? <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20 font-bold">أب/أم</span>
+      ? <Chip small tone={TONE.secondary}>أب/أم</Chip>
       : genderType === "instructor"
-        ? <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20 font-bold">ذ/أ مدرب</span>
-        : <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20 font-bold">ذكر/أنثى</span>
+        ? <Chip small tone={TONE.accent}>ذ/أ مدرب</Chip>
+        : <Chip small tone={TONE.primary}>ذكر/أنثى</Chip>
     : null;
 
-  const rowBg = editing
-    ? "border-[#ff6700]/30 dark:border-[#ff6700]/50 shadow-sm"
-    : "border-slate-200 dark:border-slate-700";
-
-  const headerBg = editing
-    ? "bg-[#ff6700]/5 dark:bg-[#ff6700]/10"
-    : "bg-white dark:bg-[#161b27] hover:bg-slate-50 dark:hover:bg-slate-800/50";
+  const valueLine = "flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400";
+  const valueText = "font-medium text-slate-700 dark:text-slate-200 truncate max-w-[120px] sm:max-w-[160px]";
 
   return (
-    <div className={`border rounded-xl overflow-hidden transition-all ${rowBg}`}>
-      <div
-        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer select-none ${headerBg}`}
+    <div className={`overflow-hidden rounded-xl border transition-colors ${editing ? "border-[#ff6700]/40 dark:border-[#ff6700]/50" : "border-slate-200 dark:border-slate-700"}`}>
+      <button
+        type="button"
+        aria-expanded={editing}
+        className={`flex w-full items-center gap-3 px-3 py-2.5 text-right ${FOCUS} ${editing ? "bg-[#ff6700]/5 dark:bg-[#ff6700]/10" : "bg-white hover:bg-slate-50 dark:bg-[#161b27] dark:hover:bg-slate-800/50"}`}
         onClick={() => !isSaving && setEditing(p => !p)}
       >
-        <span className="text-lg flex-shrink-0">{variable.icon}</span>
+        <span className="flex-shrink-0 text-lg">{variable.icon}</span>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <code className="text-[10px] font-mono font-bold text-[#ff6700] bg-[#ff6700]/10 px-1.5 py-0.5 rounded">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <code dir="ltr" className={`rounded bg-[#ff6700]/10 px-1.5 py-0.5 font-mono text-[11px] font-bold ${ORANGE_TEXT}`}>
               {`{${variable.key}}`}
             </code>
-            <span className="text-xs text-slate-600 dark:text-slate-300 font-medium truncate">{variable.labelAr}</span>
+            <span className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">{variable.labelAr}</span>
             {genderBadge}
           </div>
 
           {!editing && (
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
               {variable.hasGender && genderType !== "guardian" ? (
                 <>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-0.5">
-                    <span>♂🇸🇦</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-[100px]">{vals.valueMaleAr}</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-0.5">
-                    <span>♀🇸🇦</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-[100px]">{vals.valueFemaleAr}</span>
-                  </span>
+                  <span className={valueLine}><span>♂</span><span className={valueText}>{vals.valueMaleAr}</span></span>
+                  <span className={valueLine}><span>♀</span><span className={valueText}>{vals.valueFemaleAr}</span></span>
                 </>
               ) : variable.hasGender && genderType === "guardian" ? (
                 <>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-0.5">
-                    <span>👨🇸🇦</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-[100px]">{vals.valueFatherAr}</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-0.5">
-                    <span>👩🇸🇦</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-[100px]">{vals.valueMotherAr}</span>
-                  </span>
+                  <span className={valueLine}><span>👨</span><span className={valueText}>{vals.valueFatherAr}</span></span>
+                  <span className={valueLine}><span>👩</span><span className={valueText}>{vals.valueMotherAr}</span></span>
                 </>
               ) : (
                 <>
-                  <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                    <span className="text-[9px]">🇸🇦</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-[140px]">{vals.valueAr}</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                    <span className="text-[9px]">🇬🇧</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-[140px]">{vals.valueEn}</span>
-                  </span>
+                  <span className={valueLine}><span>🇸🇦</span><span className={valueText}>{vals.valueAr}</span></span>
+                  <span className={valueLine}><span>🇬🇧</span><span className={valueText}>{vals.valueEn}</span></span>
                 </>
               )}
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {dirty && !editing && <span className="w-2 h-2 rounded-full bg-[#feaf00]" />}
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          {dirty && !editing && <span className="h-2 w-2 rounded-full bg-[#feaf00]" />}
           {isSaving
-            ? <Loader2 className="w-3.5 h-3.5 text-[#ff6700] animate-spin" />
+            ? <Loader2 className={`h-4 w-4 animate-spin ${ORANGE_TEXT}`} />
             : editing
-              ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
-              : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              ? <ChevronUp className="h-4 w-4 text-slate-400" />
+              : <ChevronDown className="h-4 w-4 text-slate-400" />
           }
         </div>
-      </div>
+      </button>
 
       {editing && (
-        <div className="px-3 pb-3 pt-2 bg-white dark:bg-[#161b27] border-t border-slate-100 dark:border-slate-800 space-y-3">
+        <div className="space-y-3 border-t border-slate-100 bg-white px-3 pb-3 pt-3 dark:border-slate-800 dark:bg-[#161b27]">
           {variable.hasGender ? (
             <>
               {genderType === "guardian" ? (
                 <>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Field label="👨 أب — عربي" field="valueFatherAr" dir="rtl" vals={vals} onChange={handleChange} />
                     <Field label="👨 أب — إنجليزي" field="valueFatherEn" dir="ltr" vals={vals} onChange={handleChange} />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Field label="👩 أم — عربي" field="valueMotherAr" dir="rtl" vals={vals} onChange={handleChange} />
                     <Field label="👩 أم — إنجليزي" field="valueMotherEn" dir="ltr" vals={vals} onChange={handleChange} />
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Field label="♂ ذكر — عربي" field="valueMaleAr" dir="rtl" vals={vals} onChange={handleChange} />
                     <Field label="♂ ذكر — إنجليزي" field="valueMaleEn" dir="ltr" vals={vals} onChange={handleChange} />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Field label="♀ أنثى — عربي" field="valueFemaleAr" dir="rtl" vals={vals} onChange={handleChange} />
                     <Field label="♀ أنثى — إنجليزي" field="valueFemaleEn" dir="ltr" vals={vals} onChange={handleChange} />
                   </div>
                 </>
               )}
-              <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
-                <p className="text-[9px] text-slate-400 mb-1.5">القيمة الافتراضية (fallback)</p>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="border-t border-slate-100 pt-2 dark:border-slate-800">
+                <p className="mb-1.5 text-[11px] text-slate-400">القيمة الافتراضية (fallback)</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Field label="🇸🇦 افتراضي عربي" field="valueAr" dir="rtl" vals={vals} onChange={handleChange} />
                   <Field label="🇬🇧 افتراضي إنجليزي" field="valueEn" dir="ltr" vals={vals} onChange={handleChange} />
                 </div>
@@ -714,20 +802,22 @@ function VariableRow({ variable, onSave, saving }) {
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
+              type="button"
               onClick={handleCancel}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 ${FOCUS}`}
             >
-              <X className="w-3 h-3" /> إلغاء
+              <X className="h-3 w-3" /> إلغاء
             </button>
             <button
+              type="button"
               onClick={handleSave}
               disabled={isSaving || !dirty}
-              className={`flex items-center gap-1 px-4 py-1.5 rounded-lg text-xs font-bold transition-all
+              className={`flex items-center gap-1 rounded-lg px-4 py-1.5 text-xs font-bold transition-all ${FOCUS}
                 ${isSaving || !dirty
-                  ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
-                  : "bg-[#ff6700] hover:bg-[#f67d00] text-white shadow-sm active:scale-95"}`}
+                  ? "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800"
+                  : "bg-[#ff6700] text-white hover:bg-[#f06000] active:scale-95"}`}
             >
-              {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+              {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
               {isSaving ? "جاري الحفظ..." : "حفظ"}
             </button>
           </div>
@@ -737,9 +827,6 @@ function VariableRow({ variable, onSave, saving }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// VARIABLES TAB
-// ─────────────────────────────────────────────────────────────
 function VariablesTab({ dbVars, setDbVars, loadingVars }) {
   const [savingKey, setSavingKey] = useState(null);
   const [searchVars, setSearchVars] = useState("");
@@ -782,52 +869,52 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
   }, {});
 
   if (loadingVars) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-3">
-      <Loader2 className="w-8 h-8 text-[#ff6700] animate-spin" />
-      <p className="text-sm text-slate-400">جاري تحميل المتغيرات...</p>
+    <div className="flex flex-col items-center justify-center gap-3 py-20">
+      <Loader2 className={`h-8 w-8 animate-spin ${ORANGE_TEXT}`} />
+      <p className="text-sm text-slate-500 dark:text-slate-400">جاري تحميل المتغيرات...</p>
     </div>
   );
 
+  const pill = (on) =>
+    `flex flex-shrink-0 items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-colors ${FOCUS} ${on
+      ? "bg-[#ff6700] text-white"
+      : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"}`;
+
   return (
-    <div className="p-3 sm:p-4 lg:p-5">
-      <div className="flex items-start gap-3 px-4 py-3 rounded-2xl border border-[#ff6700]/20 bg-[#ff6700]/5 mb-4">
-        <Settings className="w-4 h-4 text-[#ff6700] flex-shrink-0 mt-0.5" />
+    <div className="mx-auto w-full max-w-5xl p-3 sm:p-4 lg:p-6">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#ff6700]/10">
+          <Settings className={`h-5 w-5 ${ORANGE_TEXT}`} />
+        </div>
         <div>
-          <p className="text-xs font-bold text-[#ff6700]">⚙️ إدارة قيم المتغيرات</p>
-          <p className="text-[11px] text-[#004d59] mt-0.5">
-            المتغيرات التي تدعم <strong>الجنس</strong> لها حقول منفصلة: <strong>ذكر/أنثى</strong> للطالب والمدرب، و<strong>أب/أم</strong> لولي الأمر.
+          <h1 className="text-base font-bold text-slate-900 dark:text-white">إدارة قيم المتغيرات</h1>
+          <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+            المتغيرات اللي بتدعم <strong>الجنس</strong> ليها حقول منفصلة: <strong>ذكر/أنثى</strong> للطالب والمدرب، و<strong>أب/أم</strong> لولي الأمر.
           </p>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+      <div className="sticky top-14 z-20 -mx-3 mb-4 space-y-2 border-b border-slate-200 bg-slate-50/90 px-3 py-3 backdrop-blur dark:border-slate-800 dark:bg-[#0f1117]/90 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+        <div className="relative">
+          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={searchVars}
             onChange={e => setSearchVars(e.target.value)}
             placeholder="بحث في المتغيرات..."
-            className="w-full pr-9 pl-3 py-2 text-xs bg-white dark:bg-[#161b27] border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:text-slate-200 placeholder-slate-400"
+            className={`${INPUT} bg-white py-2 pl-3 pr-10 dark:bg-[#161b27]`}
           />
         </div>
-        <div className="flex gap-1 flex-wrap">
-          <button
-            onClick={() => setActiveGroup("all")}
-            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${activeGroup === "all" ? "bg-[#ff6700] text-white shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"}`}
-          >
-            الكل ({dbVars.length})
+        <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+          <button type="button" onClick={() => setActiveGroup("all")} className={pill(activeGroup === "all")}>
+            الكل <span className="opacity-70">({dbVars.length})</span>
           </button>
           {Object.entries(VAR_GROUPS).map(([key, grp]) => {
             const count = dbVars.filter(v => v.group === key).length;
             if (!count) return null;
             return (
-              <button
-                key={key}
-                onClick={() => setActiveGroup(key)}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${activeGroup === key ? "bg-[#ff6700] text-white shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"}`}
-              >
+              <button key={key} type="button" onClick={() => setActiveGroup(key)} className={pill(activeGroup === key)}>
                 <span>{grp.emoji}</span>
-                <span className="hidden sm:inline">{grp.label}</span>
+                <span>{grp.label}</span>
                 <span className="opacity-70">({count})</span>
               </button>
             );
@@ -835,36 +922,34 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-6">
         {Object.entries(grouped).map(([groupKey, vars]) => {
           const grp = VAR_GROUPS[groupKey] || { label: groupKey, emoji: "📌" };
           const genderVarCount = vars.filter(v => v.hasGender).length;
           return (
-            <div key={groupKey}>
-              <div className="flex items-center gap-2 mb-2">
+            <section key={groupKey}>
+              <div className="mb-2 flex items-center gap-2">
                 <span className="text-sm">{grp.emoji}</span>
-                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{grp.label}</span>
-                <span className="text-[10px] text-slate-400">({vars.length})</span>
+                <h2 className="text-sm font-bold text-slate-700 dark:text-slate-200">{grp.label}</h2>
+                <span className="text-xs text-slate-400">({vars.length})</span>
                 {genderVarCount > 0 && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20 font-bold">
-                    ⚧ {genderVarCount} يدعم الجنس
-                  </span>
+                  <Chip small tone={TONE.primary}>⚧ {genderVarCount} يدعم الجنس</Chip>
                 )}
-                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700 mr-1" />
+                <div className="mr-1 h-px flex-1 bg-slate-200 dark:bg-slate-700" />
               </div>
               <div className="space-y-1.5">
                 {vars.map(v => (
                   <VariableRow key={v.key} variable={v} onSave={handleSaveVar} saving={savingKey} />
                 ))}
               </div>
-            </div>
+            </section>
           );
         })}
 
         {filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 gap-2">
-            <Search className="w-8 h-8 text-slate-300" />
-            <p className="text-sm text-slate-400">لا توجد متغيرات تطابق البحث</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-16">
+            <Search className="h-8 w-8 text-slate-300" />
+            <p className="text-sm text-slate-500 dark:text-slate-400">مفيش متغيرات تطابق البحث</p>
           </div>
         )}
       </div>
@@ -872,9 +957,6 @@ function VariablesTab({ dbVars, setDbVars, loadingVars }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// TEMPLATE SIDEBAR
-// ─────────────────────────────────────────────────────────────
 function TemplateSidebar({ byCategory, activeTab, onSelectTab, searchQ, setSearchQ, templates, isOpenMobile, onCloseMobile }) {
   const [openCats, setOpenCats] = useState(() => {
     const cat = TEMPLATE_TYPES.find(t => t.id === activeTab)?.category;
@@ -886,60 +968,83 @@ function TemplateSidebar({ byCategory, activeTab, onSelectTab, searchQ, setSearc
     if (cat) setOpenCats(p => new Set(p).add(cat));
   }, [activeTab]);
 
+  useEffect(() => {
+    if (!isOpenMobile) return;
+    const onKey = (e) => { if (e.key === "Escape") onCloseMobile(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpenMobile, onCloseMobile]);
+
+  const statusOf = (id) => {
+    const tpl = templates[id];
+    if (tpl?.isFrontendFallback) return "fallback";
+    return tpl?.contentAr || tpl?.content ? "saved" : "empty";
+  };
+
+  const DOT = {
+    saved: { cls: "bg-[#004d59] dark:bg-teal-400", title: "محفوظ" },
+    fallback: { cls: "bg-[#feaf00]", title: "افتراضي — لسه مش محفوظ" },
+    empty: { cls: "bg-slate-300 dark:bg-slate-600", title: "فارغ" },
+  };
+
   const panel = (
-    <div className="flex flex-col h-full bg-white dark:bg-[#161b27]">
-      <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-shrink-0">
+    <div className="flex h-full flex-col bg-white dark:bg-[#161b27]">
+      <div className="flex flex-shrink-0 items-center gap-2 border-b border-slate-100 p-3 dark:border-slate-800">
         <div className="relative flex-1">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
             placeholder="بحث عن قالب..."
-            className="w-full pr-9 pl-3 py-2 text-xs bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:text-slate-200 placeholder-slate-400"
+            className={`${INPUT} py-2 pl-3 pr-9 text-xs`}
           />
         </div>
-        <button onClick={onCloseMobile} className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 flex-shrink-0">
-          <X className="w-4 h-4" />
+        <button type="button" aria-label="إغلاق" onClick={onCloseMobile} className={`flex-shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden ${FOCUS}`}>
+          <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar">
+      <div className="no-scrollbar flex-1 overflow-y-auto">
         {Object.entries(CATEGORIES).map(([key, cat]) => {
           const items = byCategory[key] || [];
           if (!items.length) return null;
-          const isOpen = openCats.has(key);
+          const isOpen = openCats.has(key) || !!searchQ;
           const hasActive = items.some(t => t.id === activeTab);
           return (
-            <div key={key} className="border-b border-slate-50 dark:border-slate-800/60">
+            <div key={key} className="border-b border-slate-100 dark:border-slate-800/60">
               <button
+                type="button"
+                aria-expanded={isOpen}
                 onClick={() => setOpenCats(p => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; })}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-bold transition-colors ${hasActive ? "text-[#ff6700]" : "text-slate-600 dark:text-slate-300"} hover:bg-slate-50 dark:hover:bg-slate-800/40`}
+                className={`flex w-full items-center justify-between px-3 py-2.5 text-xs font-bold transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40 ${FOCUS} ${hasActive ? ORANGE_TEXT : "text-slate-700 dark:text-slate-200"}`}
               >
                 <span className="flex items-center gap-2">
                   <span>{cat.emoji}</span>{cat.label}
-                  <span className="text-slate-400 font-normal">({items.length})</span>
+                  <span className="font-normal text-slate-400">({items.length})</span>
                 </span>
-                {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </button>
               {isOpen && (
                 <div className="pb-1">
                   {items.map(t => {
                     const tc = C_MAP[t.color] || C_MAP.primary;
                     const isActive = activeTab === t.id;
-                    const hasData = !!(templates[t.id]?.contentAr || templates[t.id]?.content);
+                    const dot = DOT[statusOf(t.id)];
                     return (
                       <button
+                        type="button"
                         key={t.id}
                         onClick={() => onSelectTab(t.id)}
-                        className={`w-full flex items-center gap-2 pr-8 pl-3 py-2 text-xs transition-colors ${isActive
-                            ? `${tc.light} ${tc.text} font-bold border-r-2 border-current`
-                            : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                        aria-current={isActive ? "true" : undefined}
+                        className={`flex w-full items-center gap-2 border-r-2 py-2 pl-3 pr-7 text-xs transition-colors ${FOCUS} ${isActive
+                          ? `${tc.light} ${tc.text} border-current font-bold`
+                          : "border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/40"
                           }`}
                       >
-                        <t.icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? tc.text : "text-slate-400"}`} />
-                        <span className="truncate flex-1 text-right">{t.emoji} {t.label}</span>
-                        {t.isNew && <span className="bg-[#ff6700] text-white text-[8px] font-bold px-1 py-0.5 rounded-full flex-shrink-0">NEW</span>}
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hasData ? "bg-[#004d59]" : "bg-slate-300 dark:bg-slate-600"}`} />
+                        <t.icon className={`h-4 w-4 flex-shrink-0 ${isActive ? tc.text : "text-slate-400"}`} />
+                        <span className="flex-1 truncate text-right">{t.emoji} {t.label}</span>
+                        {t.isNew && <span className="flex-shrink-0 rounded-full bg-[#ff6700] px-1.5 py-px text-[9px] font-bold text-white">NEW</span>}
+                        <span title={dot.title} className={`h-2 w-2 flex-shrink-0 rounded-full ${dot.cls}`} />
                       </button>
                     );
                   })}
@@ -950,41 +1055,45 @@ function TemplateSidebar({ byCategory, activeTab, onSelectTab, searchQ, setSearc
         })}
 
         {Object.values(byCategory).every(arr => !arr?.length) && (
-          <div className="flex flex-col items-center justify-center py-14 gap-2 px-4">
-            <Search className="w-7 h-7 text-slate-300" />
-            <p className="text-xs text-slate-400 text-center">لا توجد قوالب تطابق البحث</p>
+          <div className="flex flex-col items-center justify-center gap-2 px-4 py-14">
+            <Search className="h-7 w-7 text-slate-300" />
+            <p className="text-center text-xs text-slate-500 dark:text-slate-400">مفيش قوالب تطابق البحث</p>
           </div>
         )}
+      </div>
+
+      <div className="flex flex-shrink-0 items-center justify-center gap-3 border-t border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+        {Object.values(DOT).map(d => (
+          <span key={d.title} className="flex items-center gap-1">
+            <span className={`h-2 w-2 rounded-full ${d.cls}`} />
+            {d.title.split(" —")[0]}
+          </span>
+        ))}
       </div>
     </div>
   );
 
   return (
     <>
-      {/* Desktop docked sidebar */}
-      <div className="hidden lg:block lg:w-72 flex-shrink-0 border-l border-slate-200 dark:border-slate-800 lg:sticky lg:top-14 lg:h-[calc(100vh-56px)]">
+      <aside className="hidden flex-shrink-0 border-l border-slate-200 dark:border-slate-800 lg:sticky lg:top-14 lg:block lg:h-[calc(100vh-56px)] lg:w-72">
         {panel}
-      </div>
+      </aside>
 
-      {/* Mobile drawer */}
       {isOpenMobile && (
-        <div className="lg:hidden fixed inset-0 z-50">
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCloseMobile} />
           <div className="absolute inset-y-0 right-0 w-[85%] max-w-xs shadow-2xl animate-[slideIn_0.22s_ease-out]">
             {panel}
           </div>
-          <style jsx>{`
-            @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-          `}</style>
         </div>
       )}
     </>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
-// ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 export default function WhatsAppTemplatesPage() {
   useI18n();
 
@@ -1000,6 +1109,7 @@ export default function WhatsAppTemplatesPage() {
   const [cursorPos, setCursorPos] = useState(0);
   const [searchQ, setSearchQ] = useState("");
   const [mainTab, setMainTab] = useState("templates");
+  const [mobilePane, setMobilePane] = useState("edit");
   const [dbVars, setDbVars] = useState([]);
   const [loadingVars, setLoadingVars] = useState(false);
   const [genderContext, setGenderContext] = useState({
@@ -1051,32 +1161,69 @@ export default function WhatsAppTemplatesPage() {
     };
   }, [showHints]);
 
-  const fetchTemplates = async () => {
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ HELPER: Safe fetch JSON — بيتعامل مع أي رد مش JSON
+  // ═══════════════════════════════════════════════════════════════════════
+  const safeFetchJson = useCallback(async (url, options = {}) => {
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      if (!text) return { success: false, error: "Empty response" };
+      try {
+        return JSON.parse(text);
+      } catch {
+        console.error(`❌ Invalid JSON from ${url}:`, text.slice(0, 200));
+        return { success: false, error: "Invalid JSON response" };
+      }
+    } catch (err) {
+      console.error(`❌ Fetch error for ${url}:`, err.message);
+      return { success: false, error: err.message };
+    }
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FETCH TEMPLATES
+  // ═══════════════════════════════════════════════════════════════════════
+  const fetchTemplates = useCallback(async () => {
     setLoading(true);
     try {
-      const [sRes, iRes, gRes, mRes] = await Promise.all([
-        fetch("/api/whatsapp/templates"),
-        fetch("/api/whatsapp/instructor-templates"),
-        fetch("/api/whatsapp/group-templates"),
-        fetch("/api/whatsapp/message-templates"),
+      const [sd, id, gd, md] = await Promise.all([
+        safeFetchJson("/api/whatsapp/templates"),
+        safeFetchJson("/api/whatsapp/instructor-templates"),
+        safeFetchJson("/api/whatsapp/group-templates"),
+        safeFetchJson("/api/whatsapp/message-templates"),
       ]);
 
       const map = {};
 
-      const sd = await sRes.json();
-      if (sd.success && sd.data) {
+      // 1. Language Confirmation Templates
+      if (sd.success && Array.isArray(sd.data)) {
         sd.data.forEach(t => {
           if (t.templateType === "student_language_confirmation") {
-            if (!map["language_confirmation"]) map["language_confirmation"] = { ...t, content: t.contentAr || t.content || "", contentAr: t.contentAr || t.content || "", contentEn: t.contentEn || t.content || "" };
+            if (!map["language_confirmation"]) {
+              map["language_confirmation"] = {
+                ...t,
+                content: t.contentAr || t.content || "",
+                contentAr: t.contentAr || t.content || "",
+                contentEn: t.contentEn || t.content || "",
+              };
+            }
           } else if (t.templateType === "guardian_language_confirmation") {
-            if (!map["guardian_language_notification"]) map["guardian_language_notification"] = { ...t, content: t.contentAr || t.content || "", contentAr: t.contentAr || t.content || "", contentEn: t.contentEn || t.content || "" };
+            if (!map["guardian_language_notification"]) {
+              map["guardian_language_notification"] = {
+                ...t,
+                content: t.contentAr || t.content || "",
+                contentAr: t.contentAr || t.content || "",
+                contentEn: t.contentEn || t.content || "",
+              };
+            }
           } else {
             if (!map[t.templateType]) map[t.templateType] = t;
           }
         });
       }
 
-      const id = await iRes.json();
+      // 2. Instructor Templates
       if (id.success && id.data) {
         const list = Array.isArray(id.data) ? id.data : [id.data];
         list.forEach(d => {
@@ -1092,53 +1239,121 @@ export default function WhatsAppTemplatesPage() {
         });
       }
 
-      const gd = await gRes.json();
+      // 3. Group Welcome Templates
       if (gd.success && gd.data) {
-        const d = gd.data;
-        if (!map["group_student_welcome_student"]) map["group_student_welcome_student"] = { ...d, templateType: "group_student_welcome_student", content: d.studentContentAr || d.content || "", contentAr: d.studentContentAr || "", contentEn: d.studentContentEn || "" };
-        if (!map["group_student_welcome_guardian"]) map["group_student_welcome_guardian"] = { ...d, templateType: "group_student_welcome_guardian", content: d.guardianContentAr || d.content || "", contentAr: d.guardianContentAr || "", contentEn: d.guardianContentEn || "" };
+        const list = Array.isArray(gd.data) ? gd.data : [gd.data];
+        const online = list.find(t => t.templateType === "group_welcome");
+        if (online && !map["group_student_welcome_student"]) {
+          map["group_student_welcome_student"] = {
+            ...online,
+            templateType: "group_student_welcome_student",
+            content: online.studentMaleContentAr || online.studentContentAr || online.content || "",
+            contentAr: online.studentMaleContentAr || online.studentContentAr || "",
+            contentEn: online.studentMaleContentEn || online.studentContentEn || "",
+          };
+        }
+        if (online && !map["group_student_welcome_guardian"]) {
+          map["group_student_welcome_guardian"] = {
+            ...online,
+            templateType: "group_student_welcome_guardian",
+            content: online.guardianFatherContentAr || online.guardianContentAr || "",
+            contentAr: online.guardianFatherContentAr || online.guardianContentAr || "",
+            contentEn: online.guardianFatherContentEn || online.guardianContentEn || "",
+          };
+        }
+        const offline = list.find(t => t.templateType === "group_welcome_offline");
+        if (offline && !map["group_student_welcome_student_offline"]) {
+          map["group_student_welcome_student_offline"] = {
+            ...offline,
+            templateType: "group_student_welcome_student_offline",
+            content: offline.studentMaleContentAr || offline.studentContentAr || offline.content || "",
+            contentAr: offline.studentMaleContentAr || offline.studentContentAr || "",
+            contentEn: offline.studentMaleContentEn || offline.studentContentEn || "",
+          };
+        }
+        if (offline && !map["group_student_welcome_guardian_offline"]) {
+          map["group_student_welcome_guardian_offline"] = {
+            ...offline,
+            templateType: "group_student_welcome_guardian_offline",
+            content: offline.guardianFatherContentAr || offline.guardianContentAr || "",
+            contentAr: offline.guardianFatherContentAr || offline.guardianContentAr || "",
+            contentEn: offline.guardianFatherContentEn || offline.guardianContentEn || "",
+          };
+        }
       }
 
-      const md = await mRes.json();
-      if (md.success && md.data) {
+      // 4. Message Templates
+      if (md.success && Array.isArray(md.data)) {
         md.data.forEach(t => {
-          if (!map[t.templateType]) map[t.templateType] = { ...t, content: t.contentAr || "", contentAr: t.contentAr || "", contentEn: t.contentEn || "", isMessageTemplate: true, _messageTemplateId: t._id };
+          if (!map[t.templateType]) {
+            map[t.templateType] = {
+              ...t,
+              content: t.contentAr || "",
+              contentAr: t.contentAr || "",
+              contentEn: t.contentEn || "",
+              isMessageTemplate: true,
+              _messageTemplateId: t._id,
+            };
+          }
         });
       }
 
+      // 5. Frontend Fallbacks
       Object.entries(FRONTEND_FALLBACKS).forEach(([typeId, fb]) => {
-        if (!map[typeId]) map[typeId] = {
-          templateType: typeId, content: fb.ar, contentAr: fb.ar, contentEn: fb.en,
-          isMessageTemplate: !["language_confirmation", "guardian_language_notification"].includes(typeId),
-          isFrontendFallback: true,
-          _messageTemplateId: null,
-        };
+        const existing = map[typeId];
+        const hasContent = existing && (existing.contentAr || existing.content || existing.contentEn);
+
+        if (!existing || !hasContent) {
+          map[typeId] = {
+            ...(existing || {}),
+            templateType: typeId,
+            content: fb.ar,
+            contentAr: fb.ar,
+            contentEn: fb.en,
+            isMessageTemplate: existing?.isMessageTemplate ?? !["language_confirmation", "guardian_language_notification"].includes(typeId),
+            isFrontendFallback: true,
+            _messageTemplateId: existing?._messageTemplateId || null,
+            _id: existing?._id || null,
+          };
+        }
       });
 
       setTemplates(map);
-    } catch {
+    } catch (err) {
+      console.error("❌ fetchTemplates error:", err);
       toast.error("فشل تحميل القوالب");
     } finally {
       setLoading(false);
     }
-  };
+  }, [safeFetchJson]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // FETCH VARIABLES
+  // ═══════════════════════════════════════════════════════════════════════
   const fetchVariables = useCallback(async () => {
     setLoadingVars(true);
     try {
-      const res = await fetch("/api/whatsapp/template-variables");
-      const data = await res.json();
-      if (data.success) setDbVars(data.data);
-      else toast.error("فشل تحميل المتغيرات");
+      const data = await safeFetchJson("/api/whatsapp/template-variables");
+      if (data.success && Array.isArray(data.data)) {
+        setDbVars(data.data);
+      } else {
+        toast.error("فشل تحميل المتغيرات");
+      }
     } catch {
       toast.error("خطأ في تحميل المتغيرات");
     } finally {
       setLoadingVars(false);
     }
-  }, []);
+  }, [safeFetchJson]);
 
-  useEffect(() => { fetchTemplates(); fetchVariables(); }, []);
+  useEffect(() => {
+    fetchTemplates();
+    fetchVariables();
+  }, [fetchTemplates, fetchVariables]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // RESOLVE VARIABLES
+  // ═══════════════════════════════════════════════════════════════════════
   const resolveVarValue = useCallback((v, lang) => {
     if (!v.hasGender) return lang === "ar" ? v.valueAr : v.valueEn;
 
@@ -1197,6 +1412,8 @@ export default function WhatsAppTemplatesPage() {
       ? (curTemplate?.contentAr || curTemplate?.content || "")
       : (curTemplate?.contentEn || curTemplate?.content || "");
 
+  const textDir = isSingleContent ? "auto" : testLanguage === "ar" ? "rtl" : "ltr";
+
   const updateContent = (val) => {
     const cur = templates[activeTab];
     if (!cur) return;
@@ -1216,7 +1433,7 @@ export default function WhatsAppTemplatesPage() {
     }
   };
 
-  const getPreview = () => {
+  const buildPreview = (mark) => {
     const tmpl = templates[activeTab];
     if (!tmpl) return "";
     let text = isSingleContent
@@ -1224,10 +1441,13 @@ export default function WhatsAppTemplatesPage() {
       : testLanguage === "ar" ? (tmpl.contentAr || tmpl.content || "") : (tmpl.contentEn || tmpl.content || "");
     const examples = getVarExamples(testLanguage);
     Object.entries(examples).forEach(([key, val]) => {
-      text = text.replace(new RegExp(key.replace(/[{}]/g, "\\$&"), "g"), val);
+      const safe = val ?? "";
+      text = text.replace(new RegExp(key.replace(/[{}]/g, "\\$&"), "g"), () => (mark ? `${VAR_OPEN}${safe}${VAR_CLOSE}` : safe));
     });
     return text;
   };
+
+  const getPreview = () => buildPreview(false);
 
   const handleSelectTab = useCallback((tabId) => {
     if (tabId === activeTab) { setSidebarOpen(false); return; }
@@ -1238,6 +1458,7 @@ export default function WhatsAppTemplatesPage() {
     setActiveTab(tabId);
     setDirty(false);
     setSidebarOpen(false);
+    setMobilePane("edit");
   }, [activeTab, dirty]);
 
   const handleMainTabChange = useCallback((id) => {
@@ -1248,110 +1469,239 @@ export default function WhatsAppTemplatesPage() {
     setMainTab(id);
   }, [mainTab, dirty]);
 
-  const saveTemplate = async () => {
-    const cur = templates[activeTab];
-    if (!cur) return;
-    setSaving(true);
-    try {
-      let endpoint, payload;
+  // ═══════════════════════════════════════════════════════════════════════
+  // SAVE TEMPLATE
+  // ═══════════════════════════════════════════════════════════════════════
+ // ═══════════════════════════════════════════════════════════════════════
+// SAVE TEMPLATE
+// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+// SAVE TEMPLATE
+// ═══════════════════════════════════════════════════════════════════════
+const saveTemplate = async () => {
+  const cur = templates[activeTab];
+  if (!cur) return;
+  setSaving(true);
+  try {
+    let endpoint, payload;
 
-      // ✅ Instructor templates (كل الـ 6 أنواع)
-      if (isInstructorTemplate(activeTab)) {
-        endpoint = "/api/whatsapp/instructor-templates";
+    // ═══════════════════════════════════════════════════════════════
+    // 1. Instructor Templates
+    // ═══════════════════════════════════════════════════════════════
+    if (isInstructorTemplate(activeTab)) {
+      endpoint = "/api/whatsapp/instructor-templates";
+      const dbType = INSTRUCTOR_TYPE_MAP[activeTab];
 
-        const dbType = INSTRUCTOR_TYPE_MAP[activeTab];
-
-        if (cur.isFrontendFallback || !cur._id) {
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              templateType: dbType,
-              name: activeType?.label || activeTab,
-              contentAr: cur.contentAr || cur.content,
-              contentEn: cur.contentEn || "",
-              isDefault: true,
-              isActive: true,
-            }),
-          });
-          const data = await res.json();
-          if (data.success) { await fetchTemplates(); setDirty(false); toast.success("✅ تم حفظ القالب"); }
-          else toast.error(data.message || data.error || "فشل الحفظ");
-          return;
+      if (cur.isFrontendFallback || !cur._id) {
+        const data = await safeFetchJson(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            templateType: dbType,
+            name: activeType?.label || activeTab,
+            contentAr: cur.contentAr || cur.content,
+            contentEn: cur.contentEn || "",
+            isDefault: true,
+            isActive: true,
+          }),
+        });
+        if (data.success) {
+          await fetchTemplates();
+          setDirty(false);
+          toast.success("✅ تم حفظ القالب");
+        } else {
+          toast.error(data.message || data.error || "فشل الحفظ");
         }
-
-        payload = {
-          id: cur._id,
-          templateType: dbType,
-          contentAr: cur.contentAr || cur.content,
-          contentEn: cur.contentEn || "",
-          setAsDefault: true,
-        };
-
-      } else if (activeTab.startsWith("group_student_welcome")) {
-        endpoint = "/api/whatsapp/group-templates";
-        const base = templates["group_student_welcome_student"];
-        payload = { id: base?._id || cur._id, setAsDefault: true };
-        if (activeTab === "group_student_welcome_student") { payload.studentContentAr = cur.contentAr || cur.content; payload.studentContentEn = cur.contentEn; }
-        else { payload.guardianContentAr = cur.contentAr || cur.content; payload.guardianContentEn = cur.contentEn; }
-
-      } else if (isLangConfirmation) {
-        endpoint = "/api/whatsapp/templates";
-        const dbType = activeTab === "language_confirmation" ? "student_language_confirmation" : "guardian_language_confirmation";
-        if (cur.isFrontendFallback || !cur._id) {
-          const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateType: dbType, name: activeTab === "language_confirmation" ? "تأكيد اللغة للطالب" : "تأكيد اللغة لولي الأمر", content: cur.contentAr || cur.content, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn || "", description: "", isDefault: true, isActive: true, setAsDefault: true }) });
-          const data = await res.json();
-          if (data.success) { await fetchTemplates(); setDirty(false); toast.success("✅ تم حفظ القالب"); }
-          else toast.error(data.message || data.error || "فشل الحفظ");
-          return;
-        }
-        payload = { id: cur._id, content: cur.contentAr || cur.content, contentAr: cur.contentAr || cur.content, contentEn: cur.contentEn || "", setAsDefault: true };
-
-      } else if (cur.isMessageTemplate) {
-        endpoint = "/api/whatsapp/message-templates";
-        if (cur.isFrontendFallback || !cur._messageTemplateId) {
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              templateType: activeTab,
-              contentAr: cur.contentAr || cur.content,
-              contentEn: cur.contentEn || "",
-              recipientType: getRecipientType(activeTab),
-              name: activeTab,
-              isDefault: true,
-              isActive: true,
-            }),
-          });
-          const data = await res.json();
-          if (data.success) { await fetchTemplates(); setDirty(false); toast.success("✅ تم حفظ القالب"); }
-          else toast.error(data.message || data.error || "فشل الحفظ");
-          return;
-        }
-        payload = {
-          _id: cur._messageTemplateId || cur._id,
-          templateType: activeTab,
-          contentAr: cur.contentAr || cur.content,
-          contentEn: cur.contentEn,
-          recipientType: getRecipientType(activeTab),
-        };
-      } else {
-        endpoint = "/api/whatsapp/templates";
-        payload = { id: cur._id, content: cur.content, setAsDefault: true };
+        return;
       }
 
-      const res = await fetch(endpoint, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (data.success) { await fetchTemplates(); setDirty(false); toast.success("✅ تم حفظ القالب"); }
-      else toast.error(data.message || data.error || "فشل الحفظ");
-    } catch {
-      toast.error("خطأ في الحفظ");
-    } finally {
-      setSaving(false);
+      payload = {
+        id: cur._id,
+        templateType: dbType,
+        contentAr: cur.contentAr || cur.content,
+        contentEn: cur.contentEn || "",
+        setAsDefault: true,
+      };
     }
-  };
+    // ═══════════════════════════════════════════════════════════════
+    // 2. Group Welcome Templates
+    // ═══════════════════════════════════════════════════════════════
+    else if (activeTab.startsWith("group_student_welcome")) {
+      endpoint = "/api/whatsapp/group-templates";
+      const isOfflineTab = activeTab.endsWith("_offline");
+      const baseKey = isOfflineTab
+        ? "group_student_welcome_student_offline"
+        : "group_student_welcome_student";
+      const base = templates[baseKey] || cur;
+
+      // ✅ FIX: تحديد دقيق لنوع التبويب الحالي
+      // ⚠️ مش بنستخدم "_student" لأن كل الـ IDs فيها "_student"
+      //    (حتى تبويب ولي الأمر! لأن الـ ID "group_student_welcome_guardian")
+      //    الحل: نفحص "_guardian" — ده اللي بيفرّق فعلاً.
+      const isGuardianTab = activeTab.includes("_guardian");
+
+      const contentAr = cur.contentAr || cur.content || "";
+      const contentEn = cur.contentEn || "";
+
+      // ═══════════════════════════════════════════════════════════════
+      // ✅ FIX: نبعت بس الحقول الخاصة بالتبويب الحالي
+      //    الـ PUT route بيتجاهل أي حقل undefined، فبكده حقول الطرف
+      //    التاني هتفضل زي ما هي في الداتابيز بدون overwrite فاضي.
+      // ═══════════════════════════════════════════════════════════════
+      payload = {
+        id: base?._id || cur._id,
+        setAsDefault: true,
+      };
+
+      if (isGuardianTab) {
+        // ✅ حفظ حقول ولي الأمر فقط (الأب + الأم)
+        payload.guardianFatherContentAr = contentAr;
+        payload.guardianFatherContentEn = contentEn;
+        payload.guardianMotherContentAr = contentAr;
+        payload.guardianMotherContentEn = contentEn;
+        console.log("🔒 [Group Template] Saving GUARDIAN slots:", {
+          templateId: base?._id || cur._id,
+          contentArPreview: contentAr.slice(0, 60),
+        });
+      } else {
+        // ✅ حفظ حقول الطالب فقط (الذكر + الأنثى)
+        payload.studentMaleContentAr = contentAr;
+        payload.studentMaleContentEn = contentEn;
+        payload.studentFemaleContentAr = contentAr;
+        payload.studentFemaleContentEn = contentEn;
+        console.log("🔒 [Group Template] Saving STUDENT slots:", {
+          templateId: base?._id || cur._id,
+          contentArPreview: contentAr.slice(0, 60),
+        });
+      }
+    }
+    // ═══════════════════════════════════════════════════════════════
+    // 3. Language Confirmation
+    // ═══════════════════════════════════════════════════════════════
+    else if (isLangConfirmation) {
+      endpoint = "/api/whatsapp/templates";
+      const dbType = activeTab === "language_confirmation"
+        ? "student_language_confirmation"
+        : "guardian_language_confirmation";
+
+      if (cur.isFrontendFallback || !cur._id) {
+        const data = await safeFetchJson(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            templateType: dbType,
+            name: activeTab === "language_confirmation"
+              ? "تأكيد اللغة للطالب"
+              : "تأكيد اللغة لولي الأمر",
+            content: cur.contentAr || cur.content,
+            contentAr: cur.contentAr || cur.content,
+            contentEn: cur.contentEn || "",
+            description: "",
+            isDefault: true,
+            isActive: true,
+            setAsDefault: true,
+          }),
+        });
+        if (data.success) {
+          await fetchTemplates();
+          setDirty(false);
+          toast.success("✅ تم حفظ القالب");
+        } else {
+          toast.error(data.message || data.error || "فشل الحفظ");
+        }
+        return;
+      }
+
+      payload = {
+        id: cur._id,
+        content: cur.contentAr || cur.content,
+        contentAr: cur.contentAr || cur.content,
+        contentEn: cur.contentEn || "",
+        setAsDefault: true,
+      };
+    }
+    // ═══════════════════════════════════════════════════════════════
+    // 4. Message Templates
+    // ═══════════════════════════════════════════════════════════════
+    else if (cur.isMessageTemplate) {
+      endpoint = "/api/whatsapp/message-templates";
+
+      if (cur.isFrontendFallback || !cur._messageTemplateId) {
+        const data = await safeFetchJson(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            templateType: activeTab,
+            contentAr: cur.contentAr || cur.content,
+            contentEn: cur.contentEn || "",
+            recipientType: getRecipientType(activeTab),
+            name: activeTab,
+            isDefault: true,
+            isActive: true,
+          }),
+        });
+        if (data.success) {
+          await fetchTemplates();
+          setDirty(false);
+          toast.success("✅ تم حفظ القالب");
+        } else {
+          toast.error(data.message || data.error || "فشل الحفظ");
+        }
+        return;
+      }
+
+      payload = {
+        _id: cur._messageTemplateId || cur._id,
+        templateType: activeTab,
+        contentAr: cur.contentAr || cur.content,
+        contentEn: cur.contentEn,
+        recipientType: getRecipientType(activeTab),
+      };
+    }
+    // ═══════════════════════════════════════════════════════════════
+    // 5. Fallback
+    // ═══════════════════════════════════════════════════════════════
+    else {
+      endpoint = "/api/whatsapp/templates";
+      payload = { id: cur._id, content: cur.content, setAsDefault: true };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // إرسال الطلب
+    // ═══════════════════════════════════════════════════════════════
+    const data = await safeFetchJson(endpoint, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (data.success) {
+      await fetchTemplates();
+      setDirty(false);
+      toast.success("✅ تم حفظ القالب");
+    } else {
+      toast.error(data.message || data.error || "فشل الحفظ");
+    }
+  } catch (err) {
+    console.error("❌ saveTemplate error:", err);
+    toast.error("خطأ في الحفظ");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const allVars = getVariablesForTemplate(activeTab, testLanguage);
+
+  const relevantRoles = new Set();
+  allVars.forEach(v => {
+    if (!v.hasGender) return;
+    relevantRoles.add(
+      v.genderType === "guardian" ? "guardian"
+        : v.genderType === "instructor" ? "instructor"
+          : v.genderType === "portfolio_owner" ? "owner"
+            : "student"
+    );
+  });
 
   const insertVariable = (variable) => {
     const before = textVal.substring(0, cursorPos);
@@ -1399,12 +1749,21 @@ export default function WhatsAppTemplatesPage() {
     textareaRef.current?.focus();
   };
 
+  const insertAtCaret = (v) => {
+    const pos = textareaRef.current ? textareaRef.current.selectionStart : textVal.length;
+    setCursorPos(pos);
+    insertVariable(v);
+  };
+
   const sendTest = async () => {
     if (!testPhone) { toast.error("أدخل رقم الهاتف"); return; }
     setTesting(true);
     try {
-      const res = await fetch("/api/whatsapp/test-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phoneNumber: testPhone, messageContent: getPreview(), messageType: activeTab, language: testLanguage }) });
-      const data = await res.json();
+      const data = await safeFetchJson("/api/whatsapp/test-send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumber: testPhone, messageContent: getPreview(), messageType: activeTab, language: testLanguage }),
+      });
       if (data.success) toast.success(`✅ تم الإرسال إلى ${testPhone}`);
       else toast.error(data.message || "فشل الإرسال");
     } catch {
@@ -1417,112 +1776,75 @@ export default function WhatsAppTemplatesPage() {
   const filtered = TEMPLATE_TYPES.filter(t => !searchQ || t.label.includes(searchQ));
   const byCategory = filtered.reduce((acc, t) => { if (!acc[t.category]) acc[t.category] = []; acc[t.category].push(t); return acc; }, {});
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
+  if (loading && Object.keys(templates).length === 0) return (
+    <div className="flex min-h-[500px] flex-col items-center justify-center gap-4">
       <div className="relative">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#ff6700] to-[#004d59] flex items-center justify-center shadow-xl">
-          <MessageCircle className="w-7 h-7 text-white" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ff6700] to-[#004d59] shadow-xl">
+          <MessageCircle className="h-7 w-7 text-white" />
         </div>
-        <div className="absolute -inset-1 rounded-3xl border-2 border-[#ff6700]/30 animate-ping" />
+        <div className="absolute -inset-1 animate-ping rounded-3xl border-2 border-[#ff6700]/30" />
       </div>
-      <p className="text-sm text-slate-500 dark:text-slate-400 animate-pulse">جاري تحميل القوالب...</p>
+      <p className="animate-pulse text-sm text-slate-500 dark:text-slate-400">جاري تحميل القوالب...</p>
     </div>
   );
 
+  const previewNodes = renderWhatsApp(buildPreview(true));
+
+  const langOptions = [
+    { id: "ar", label: "🇸🇦 عربي" },
+    { id: "en", label: "🇬🇧 English" },
+  ];
+
   return (
-    <div className="flex flex-col bg-slate-50 dark:bg-[#0f1117] min-h-screen" dir="rtl">
-
+    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-[#0f1117]" dir="rtl">
       {/* ── Header ── */}
-      <header className="sticky top-0 z-40 bg-white dark:bg-[#161b27] border-b border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center gap-3 px-4 h-14">
-
-          <div className="flex items-center gap-2.5 flex-shrink-0">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#004d59] flex items-center justify-center shadow-lg">
-              <MessageCircle className="w-4 h-4 text-white" />
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-[#161b27]/95">
+        <div className="flex h-14 items-center gap-3 px-3 sm:px-4">
+          <div className="flex flex-shrink-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff6700] to-[#004d59]">
+              <MessageCircle className="h-4 w-4 text-white" />
             </div>
             <div className="hidden sm:block">
-              <p className="text-sm font-bold text-slate-900 dark:text-white leading-none">قوالب الرسائل</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">WhatsApp Templates</p>
+              <p className="text-sm font-bold leading-none text-slate-900 dark:text-white">قوالب الرسائل</p>
+              <p className="mt-1 text-[11px] leading-none text-slate-500 dark:text-slate-400">WhatsApp Templates</p>
             </div>
           </div>
 
-          <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+          <div className="mx-1 hidden h-6 w-px flex-shrink-0 bg-slate-200 dark:bg-slate-700 sm:block" />
 
-          <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 flex-shrink-0">
-            {[
+          <Segmented
+            className="flex-shrink-0"
+            value={mainTab}
+            onChange={handleMainTabChange}
+            options={[
               { id: "templates", icon: MessageCircle, label: "القوالب" },
               { id: "variables", icon: Settings, label: "المتغيرات", badge: dbVars.length },
-            ].map(({ id, icon: Icon, label, badge }) => (
-              <button
-                key={id}
-                onClick={() => handleMainTabChange(id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mainTab === id ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400"}`}
-              >
-                <Icon className="w-3 h-3" />
-                <span>{label}</span>
-                {badge !== undefined && (
-                  <span className={`text-[9px] px-1 py-0.5 rounded-full font-bold ${mainTab === id ? "bg-[#ff6700]/10 text-[#ff6700]" : "bg-slate-200 dark:bg-slate-700 text-slate-400"}`}>
-                    {badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+            ]}
+          />
 
           {mainTab === "templates" && (
-            <>
-              <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0 hidden lg:block" />
-
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="lg:hidden flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex-1 min-w-0"
-              >
-                {activeType && <activeType.icon className="w-3.5 h-3.5 flex-shrink-0" />}
-                <span className="truncate flex-1 text-right">{activeType?.emoji} {activeType?.label}</span>
-                {dirty && <span className="w-2 h-2 rounded-full bg-[#feaf00] flex-shrink-0" />}
-                <Menu className="w-3.5 h-3.5 flex-shrink-0" />
-              </button>
-
-              {!isSingleContent && (
-                <div className="hidden lg:flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 flex-shrink-0">
-                  {["ar", "en"].map(lang => (
-                    <button
-                      key={lang}
-                      onClick={() => setTestLanguage(lang)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${testLanguage === lang ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400"}`}
-                    >
-                      {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 EN"}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200 lg:hidden ${FOCUS}`}
+            >
+              {activeType && <activeType.icon className="h-3.5 w-3.5 flex-shrink-0" />}
+              <span className="flex-1 truncate text-right">{activeType?.emoji} {activeType?.label}</span>
+              {dirty && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-[#feaf00]" />}
+              <Menu className="h-3.5 w-3.5 flex-shrink-0" />
+            </button>
           )}
 
           <button
+            type="button"
+            aria-label="تحديث"
+            title="تحديث القوالب والمتغيرات"
             onClick={() => { fetchTemplates(); fetchVariables(); }}
-            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 flex-shrink-0 mr-auto lg:mr-0"
+            className={`mr-auto flex-shrink-0 rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 ${FOCUS}`}
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`h-4 w-4 ${loading || loadingVars ? "animate-spin" : ""}`} />
           </button>
         </div>
-
-        {mainTab === "templates" && !isSingleContent && (
-          <div className="lg:hidden border-t border-slate-100 dark:border-slate-800/80 px-4 py-1.5 flex items-center gap-2">
-            <span className="text-[10px] text-slate-400 flex-shrink-0">اللغة:</span>
-            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-              {["ar", "en"].map(lang => (
-                <button
-                  key={lang}
-                  onClick={() => setTestLanguage(lang)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${testLanguage === lang ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400"}`}
-                >
-                  {lang === "ar" ? "🇸🇦 عربي" : "🇬🇧 EN"}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </header>
 
       {/* ── Body ── */}
@@ -1540,87 +1862,92 @@ export default function WhatsAppTemplatesPage() {
           />
         )}
 
-        <div className="flex-1 min-w-0">
+        <main className="min-w-0 flex-1">
           {mainTab === "variables" && (
             <VariablesTab dbVars={dbVars} setDbVars={setDbVars} loadingVars={loadingVars} />
           )}
 
           {mainTab === "templates" && (
-            <div className="flex-1 p-3 sm:p-4 lg:p-5 pb-24 lg:pb-5">
-
+            <div className="mx-auto w-full max-w-[1400px] p-3 pb-28 sm:p-4 lg:p-6 xl:pb-6">
               {activeType && (
-                <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border mb-3 ${C.light} ${C.border}`}>
-                  <div className={`w-10 h-10 rounded-xl ${C.bg} flex items-center justify-center shadow-md flex-shrink-0`}>
-                    <activeType.icon className="w-5 h-5 text-white" />
+                <div className="mb-4 flex items-start gap-3">
+                  <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl ${C.bg}`}>
+                    <activeType.icon className={`h-5 w-5 ${C.onBg}`} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-bold text-slate-900 dark:text-white">{activeType.emoji} {activeType.label}</span>
-                      {activeType.isNew && <span className="bg-[#ff6700] text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEW</span>}
-                      {isSingleContent && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700">🌐 رسالة ثنائية اللغة</span>}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="text-base font-bold text-slate-900 dark:text-white sm:text-lg">{activeType.emoji} {activeType.label}</h1>
+                      {activeType.isNew && <span className="rounded-full bg-[#ff6700] px-1.5 py-0.5 text-[10px] font-bold text-white">NEW</span>}
                       {dirty && (
-                        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 font-bold">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> تعديلات غير محفوظة
+                        <span className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 dark:border-amber-800/40 dark:bg-amber-900/30 dark:text-amber-400">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" /> تعديلات غير محفوظة
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      {activeType.type.includes("student") && <span className={`text-[10px] px-2 py-0.5 rounded-full ${C.light} ${C.text} border ${C.border}`}>👤 للطالب</span>}
-                      {activeType.type.includes("guardian") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">👨‍👩‍👧 لولي الأمر</span>}
-                      {activeType.type.includes("instructor") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20">👨‍🏫 للمدرب</span>}
-                      {activeType.type.includes("group") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">👥 بيانات المجموعة</span>}
-                      {activeType.type.includes("session") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20">📅 بيانات الحصة</span>}
-                      {activeType.category === "offline" && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20">📍 Offline</span>}
-                      <span className="text-[10px] text-slate-400">{allVars.length} متغير</span>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {activeType.type.includes("student") && <Chip tone={C}>👤 للطالب</Chip>}
+                      {activeType.type.includes("guardian") && <Chip tone={TONE.secondary}>👨‍👩‍👧 لولي الأمر</Chip>}
+                      {activeType.type.includes("instructor") && <Chip tone={TONE.accent}>👨‍🏫 للمدرب</Chip>}
+                      {activeType.category === "portfolio" && <Chip tone={TONE.accent}>💼 لصاحب البورتفوليو</Chip>}
+                      {activeType.type.includes("group") && <Chip tone={TONE.primary}>👥 بيانات المجموعة</Chip>}
+                      {activeType.type.includes("session") && <Chip tone={TONE.secondary}>📅 بيانات الحصة</Chip>}
+                      {activeType.category === "offline" && <Chip tone={TONE.accent}>📍 Offline</Chip>}
+                      {activeType.category === "makeup" && <Chip tone={TONE.primary}>🎁 تعويضية</Chip>}
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">{allVars.length} متغير</span>
                     </div>
                   </div>
                 </div>
               )}
 
               {templates[activeTab]?.isFrontendFallback && (
-                <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20 mb-3">
-                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400">⚡ هذا القالب لسه معندهوش نسخة محفوظة في قاعدة البيانات</p>
-                    <p className="text-[11px] text-amber-600/80 dark:text-amber-500/80 mt-0.5">
-                      المعروض دلوقتي قيمة افتراضية جاهزة (Default) فقط. اضغط <strong>"حفظ التغييرات"</strong> تحت عشان تفعّل القالب فعليًا في النظام.
-                    </p>
-                  </div>
-                </div>
+                <Notice tone={TONE.accent} icon={AlertCircle} title="القالب ده لسه معندوش نسخة محفوظة في قاعدة البيانات">
+                  المعروض دلوقتي قيمة افتراضية جاهزة فقط. اضغط <strong>"حفظ التغييرات"</strong> عشان تفعّل القالب فعليًا في النظام.
+                </Notice>
               )}
-
-              <GenderContextSelector genderContext={genderContext} setGenderContext={setGenderContext} />
 
               {isLangConfirmation && (
-                <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl border border-secondary/20 bg-secondary/10 mb-4">
-                  <Globe className="w-4 h-4 text-secondary flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-secondary">🌍 قالب باللغة المختارة فقط</p>
-                    <p className="text-[11px] text-secondary/80 mt-0.5">هذا القالب بيتبعت <strong>باللغة اللي اختارها الطالب فعلاً</strong>.</p>
-                  </div>
-                </div>
+                <Notice tone={TONE.secondary} icon={Globe} title="قالب باللغة المختارة فقط">
+                  القالب ده بيتبعت <strong>باللغة اللي اختارها الطالب فعلاً</strong>.
+                </Notice>
               )}
 
-              <div className="grid xl:grid-cols-3 lg:grid-cols-2 gap-4">
+              <div className="mb-3 xl:hidden">
+                <Segmented
+                  className="w-full [&>button]:flex-1 [&>button]:justify-center"
+                  value={mobilePane}
+                  onChange={setMobilePane}
+                  options={[
+                    { id: "edit", icon: Edit, label: "التحرير" },
+                    { id: "preview", icon: Eye, label: "المعاينة" },
+                  ]}
+                />
+              </div>
 
-                <div className="xl:col-span-2 space-y-4">
-
-                  <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <div className={`flex items-center justify-between gap-2 px-4 py-2.5 border-b ${C.light} ${C.border} flex-wrap`}>
-                      <div className="flex items-center gap-2">
-                        <Edit className={`w-3.5 h-3.5 ${C.text}`} />
-                        <span className={`text-xs font-bold ${C.text}`}>
-                          تحرير القالب{!isSingleContent && (testLanguage === "ar" ? " 🇸🇦 عربي" : " 🇬🇧 English")}
+              <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                {/* ── التحرير ── */}
+                <div className={`${mobilePane === "edit" ? "block" : "hidden"} min-w-0 space-y-4 xl:block`}>
+                  <div className={PANEL}>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">
+                          <Edit className={`h-3.5 w-3.5 ${C.text}`} />
+                          تحرير القالب
                         </span>
+                        {isSingleContent ? (
+                          <Chip tone={TONE.slate}>🌐 رسالة ثنائية اللغة</Chip>
+                        ) : (
+                          <Segmented size="sm" options={langOptions} value={testLanguage} onChange={setTestLanguage} />
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] tabular-nums text-slate-500 dark:text-slate-400">{textVal.length} حرف</span>
                         <button
+                          type="button"
                           onClick={openVariablePicker}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all hover:scale-105 active:scale-95 ${C.bg} text-white shadow-sm`}
+                          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-transform active:scale-95 ${C.bg} ${C.onBg} ${FOCUS}`}
                         >
-                          <Zap className="w-3 h-3" /> إدراج متغير
+                          <Zap className="h-3.5 w-3.5" /> إدراج متغير
                         </button>
-                        <span className="text-[10px] text-slate-400">{textVal.length} حرف</span>
                       </div>
                     </div>
 
@@ -1631,244 +1958,187 @@ export default function WhatsAppTemplatesPage() {
                         onChange={handleInput}
                         onKeyDown={handleKeyDown}
                         onClick={e => setCursorPos(e.target.selectionStart)}
-                        dir="ltr"
+                        dir={textDir}
                         placeholder={testLanguage === "ar" ? "اكتب الرسالة... اكتب @ أو اضغط \"إدراج متغير\"" : "Write your message... type @ or use \"Insert variable\""}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#ff6700]/20 focus:border-[#ff6700] dark:focus:border-[#ff6700] dark:text-slate-100 resize-none h-52 sm:h-64 lg:h-80 text-sm font-mono leading-loose transition-all placeholder-slate-400"
+                        className={`${INPUT} h-56 resize-y px-4 py-3 text-[15px] leading-8 sm:h-72 xl:h-[26rem]`}
                       />
 
                       {showHints && allVars.length > 0 && (
                         <div
                           ref={hintsRef}
-                          className="fixed z-[9999] bg-white dark:bg-[#1a2236] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden"
+                          role="listbox"
+                          className="fixed z-[9999] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#1a2236]"
                           style={{ top: hintsPos.top, left: hintsPos.left, right: hintsPos.right, maxWidth: "calc(100vw - 16px)" }}
                         >
-                          <div className={`flex items-center gap-2 px-3 py-2 ${C.light} border-b ${C.border}`}>
-                            <Zap className={`w-3 h-3 ${C.text}`} />
-                            <span className={`text-[10px] font-bold ${C.text}`}>اختر متغيراً — سيُدرج مثاله في النص</span>
+                          <div className={`flex items-center gap-2 border-b px-3 py-2 ${C.light} ${C.border}`}>
+                            <Zap className={`h-3.5 w-3.5 ${C.text}`} />
+                            <span className={`text-xs font-bold ${C.text}`}>اختر متغيراً — هيتحط مكانه في النص</span>
                           </div>
-                          <div className="max-h-60 overflow-y-auto no-scrollbar">
+                          <div className="no-scrollbar max-h-60 overflow-y-auto">
                             {allVars.map((v, idx) => (
                               <button
+                                type="button"
+                                role="option"
+                                aria-selected={idx === selectedHint}
                                 key={v.key}
                                 onClick={() => insertVariable(v)}
-                                className={`w-full px-3 py-2.5 flex items-center gap-3 text-right transition-colors ${idx === selectedHint ? C.light : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}
+                                className={`flex w-full items-center gap-3 px-3 py-2.5 text-right transition-colors ${idx === selectedHint ? C.light : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}
                               >
-                                <span className="text-base flex-shrink-0">{v.icon}</span>
-                                <div className="flex-1 min-w-0">
+                                <span className="flex-shrink-0 text-base">{v.icon}</span>
+                                <div className="min-w-0 flex-1">
                                   <div className="flex items-center justify-between gap-2">
-                                    <span className={`text-[10px] font-mono ${C.text} font-bold`}>{v.key}</span>
-                                    <span className="text-[10px] text-slate-400 dark:text-slate-500">{v.label}</span>
+                                    <span dir="ltr" className={`font-mono text-[11px] font-bold ${C.text}`}>{v.key}</span>
+                                    <span className="truncate text-[11px] text-slate-500 dark:text-slate-400">{v.label}</span>
                                   </div>
-                                  <div className="mt-0.5 flex items-center gap-1">
-                                    <span className="text-[9px] text-slate-400">يُدرج:</span>
-                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${C.light} ${C.text} font-mono`}>{v.example}</span>
-                                    {v.hasGender && <span className="text-[9px] px-1 py-0.5 rounded bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20">⚧</span>}
+                                  <div className="mt-0.5 flex items-center gap-1.5">
+                                    <span className="text-[10px] text-slate-400">مثال:</span>
+                                    <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{v.example}</span>
+                                    {v.hasGender && <span className="text-[10px] text-slate-400">⚧</span>}
                                   </div>
                                 </div>
                               </button>
                             ))}
                           </div>
-                          <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400 text-center">
+                          <div className="border-t border-slate-100 bg-slate-50 px-3 py-1.5 text-center text-[11px] text-slate-500 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400">
                             ↑ ↓ للتنقل &bull; Enter للإدراج &bull; Esc للإغلاق
                           </div>
                         </div>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20">
-                      <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" /> اضغط "إدراج متغير" أو اكتب @ لإدراج القيمة من الداتابيز
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+                      <p className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                        <Sparkles className="h-3 w-3 flex-shrink-0" /> اكتب @ أو اضغط "إدراج متغير" — القيم بتيجي من الداتابيز، و*نص* بيطلع عريض في واتساب
                       </p>
                       <button
+                        type="button"
                         onClick={saveTemplate}
                         disabled={saving}
-                        className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md ${saving ? "bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed" : `${C.bg} text-white hover:opacity-90`}`}
+                        className={`flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-bold transition-all active:scale-95 ${FOCUS} ${saving ? "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-700" : `${C.bg} ${C.onBg} hover:opacity-90`}`}
                       >
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                         {saving ? "جاري الحفظ..." : "حفظ التغييرات"}
                       </button>
                     </div>
                   </div>
 
                   {allVars.length > 0 && (
-                    <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Zap className={`w-3.5 h-3.5 ${C.text}`} />
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">إدراج سريع — انقر للإدراج في موضع الكرسر</span>
+                    <div className={`${PANEL} p-4`}>
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+                          <Zap className={`h-3.5 w-3.5 ${C.text}`} />
+                          متغيرات القالب — اضغط للإدراج مكان المؤشر
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleMainTabChange("variables")}
+                          className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold hover:bg-[#ff6700]/10 ${ORANGE_TEXT} ${FOCUS}`}
+                        >
+                          <Settings className="h-3 w-3" /> تعديل القيم
+                        </button>
                       </div>
-                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto no-scrollbar sm:max-h-none">
+                      <div className="no-scrollbar flex max-h-32 flex-wrap gap-1.5 overflow-y-auto sm:max-h-none">
                         {allVars.map(v => (
                           <button
+                            type="button"
                             key={v.key}
-                            onClick={() => { const pos = textareaRef.current ? textareaRef.current.selectionStart : textVal.length; setCursorPos(pos); insertVariable(v); }}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-medium border transition-all hover:scale-105 active:scale-95 ${C.light} ${C.text} ${C.border} hover:shadow-sm`}
+                            title={`${v.key} ← ${v.example}`}
+                            onClick={() => insertAtCaret(v)}
+                            className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs transition-colors hover:border-[#ff6700]/40 hover:bg-[#ff6700]/5 active:scale-95 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-[#ff6700]/10 ${FOCUS}`}
                           >
                             <span>{v.icon}</span>
-                            <span className="font-mono">{v.example}</span>
-                            {v.hasGender && <span className="text-[8px] opacity-60">⚧</span>}
-                            <span className="text-[9px] text-slate-400 dark:text-slate-500 border-r border-current/20 pr-1 mr-0.5 opacity-60">{v.label}</span>
+                            <span className="font-semibold text-slate-700 dark:text-slate-200">{v.label}</span>
+                            <span className="max-w-[120px] truncate font-normal text-slate-400 dark:text-slate-500">{v.example}</span>
+                            {v.hasGender && <span className="text-[10px] text-slate-400">⚧</span>}
                           </button>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 rounded-lg bg-[#004d59] flex items-center justify-center">
-                        <Send className="w-3 h-3 text-white" />
+                  <div className={`${PANEL} p-4`}>
+                    <div className="mb-3 flex items-center gap-2">
+                      <div className={`flex h-6 w-6 items-center justify-center rounded-lg ${TONE.secondary.bg}`}>
+                        <Send className="h-3 w-3 text-white" />
                       </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">اختبار الإرسال</span>
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-200">إرسال تجريبي</span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">— بيبعت المعاينة الحالية بالقيم التجريبية</span>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <input
                         type="tel"
                         value={testPhone}
                         onChange={e => setTestPhone(e.target.value)}
                         placeholder="+201234567890"
                         dir="ltr"
-                        className="flex-1 px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#004d59]/20 focus:border-[#004d59] dark:text-slate-100 placeholder-slate-400"
+                        className={`${INPUT} flex-1 px-3 py-2`}
                       />
                       <button
+                        type="button"
                         onClick={sendTest}
                         disabled={testing}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#004d59] to-[#ff6437] hover:from-[#003540] hover:to-[#ff6437] text-white rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md disabled:opacity-50 whitespace-nowrap"
+                        className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-50 ${TONE.secondary.bg} hover:opacity-90 ${FOCUS}`}
                       >
-                        {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                        {testing ? "جاري..." : "إرسال تجريبي"}
+                        {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        {testing ? "جاري الإرسال..." : "إرسال"}
                       </button>
                     </div>
                   </div>
+
+                  <details className={`${PANEL} group px-4 py-3`}>
+                    <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+                      <Info className={`h-3.5 w-3.5 ${C.text}`} /> نصائح للتحرير
+                      <ChevronDown className="mr-auto h-3.5 w-3.5 text-slate-400 transition-transform group-open:rotate-180" />
+                    </summary>
+                    <ul className="mt-2.5 space-y-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                      <li>• اضغط "إدراج متغير" أو اكتب @ لعرض المتغيرات — القيم من الداتابيز.</li>
+                      <li>• المتغيرات اللي عليها ⚧ بتتغير حسب الجنس المختار في المعاينة.</li>
+                      <li>• "تعديل القيم" بيفتحلك تبويب المتغيرات لتعديل قيم الجنس.</li>
+                      {isSingleContent && <li>• 🌐 القالب ده رسالة واحدة فيها عربي وإنجليزي مع بعض.</li>}
+                      {activeType?.category === "offline" && <li>• 📍 قوالب Offline فيها متغيرات الموقع (placeName، address، mapsLink).</li>}
+                      {activeType?.category === "makeup" && <li>• 🎁 قوالب الحصة التعويضية بتتبعت لما الأدمن يفعّل جروب تعويضي.</li>}
+                    </ul>
+                  </details>
                 </div>
 
-                <div className="space-y-4">
-
-                  <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                    <div className={`flex items-center gap-2 px-4 py-2.5 border-b ${C.light} ${C.border}`}>
-                      <Eye className={`w-3.5 h-3.5 ${C.text}`} />
-                      <span className={`text-xs font-bold ${C.text}`}>معاينة مباشرة</span>
-                      <div className="mr-auto flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-[10px] text-slate-400">مباشر</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800/40">
-                      <Info className="w-3 h-3 text-blue-500 flex-shrink-0" />
-                      <p className="text-[10px] text-blue-600 dark:text-blue-400">هذه معاينة بقيم تجريبية — القيم الحقيقية تُستبدل وقت الإرسال الفعلي</p>
-                    </div>
-
-                    <div className="p-3">
-                      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-                        <span className="text-[9px] text-slate-400">المعاينة لـ:</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#ff6700]/10 text-[#ff6700] border border-[#ff6700]/20 font-bold">
-                          {genderContext.studentGender === "male" ? "♂ طالب" : "♀ طالبة"}
-                        </span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#004d59]/10 text-[#004d59] border border-[#004d59]/20 font-bold">
-                          {genderContext.guardianType === "father" ? "👨 أب" : "👩 أم"}
-                        </span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#feaf00]/10 text-[#feaf00] border border-[#feaf00]/20 font-bold">
-                          {genderContext.instructorGender === "male" ? "♂ مدرب" : "♀ مدربة"}
-                        </span>
-                      </div>
-                      <div className="bg-[#e5ddd5] dark:bg-[#0d1117] rounded-xl p-3 min-h-44 relative overflow-hidden">
-                        <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23000' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")" }} />
-                        <div className="relative">
-                          {getPreview() ? (
-                            <div className="bg-white dark:bg-[#1e2535] rounded-xl rounded-tl-sm p-3 shadow-sm max-w-[94%] ml-auto">
-                              <pre className="text-[11px] text-slate-800 dark:text-slate-100 whitespace-pre-wrap font-sans leading-relaxed max-h-72 overflow-y-auto no-scrollbar">{getPreview()}</pre>
-                              <div className="flex justify-end mt-1.5 gap-1 items-center">
-                                <span className="text-[9px] text-slate-400">12:34</span>
-                                <CheckCircle className="w-3 h-3 text-sky-400" />
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center py-12 gap-2">
-                              <div className="w-9 h-9 rounded-full bg-white/40 dark:bg-white/10 flex items-center justify-center">
-                                <MessageCircle className="w-4 h-4 text-slate-400" />
-                              </div>
-                              <p className="text-xs text-slate-400">اكتب الرسالة لترى المعاينة</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                {/* ── المعاينة ── */}
+                <div className={`${mobilePane === "preview" ? "block" : "hidden"} no-scrollbar min-w-0 space-y-3 xl:sticky xl:top-[72px] xl:block xl:max-h-[calc(100vh-88px)] xl:overflow-y-auto`}>
+                  <div className="flex items-center gap-2 px-1">
+                    <Eye className={`h-3.5 w-3.5 ${C.text}`} />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">معاينة مباشرة</span>
+                    <span className="mr-auto flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> بتتحدث وأنت بتكتب
+                    </span>
                   </div>
 
-                  {allVars.length > 0 && (
-                    <div className="bg-white dark:bg-[#161b27] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                      <div className={`flex items-center justify-between gap-2 px-4 py-2.5 border-b ${C.light} ${C.border}`}>
-                        <div className="flex items-center gap-2">
-                          <Zap className={`w-3.5 h-3.5 ${C.text}`} />
-                          <span className={`text-xs font-bold ${C.text}`}>متغيرات هذا القالب</span>
-                        </div>
-                        <button onClick={() => handleMainTabChange("variables")} className="text-[10px] text-[#ff6700] hover:text-[#f67d00] dark:hover:text-[#ff6700] font-bold flex items-center gap-1 transition-colors">
-                          <Settings className="w-3 h-3" /> تعديل القيم
-                        </button>
-                      </div>
-                      <div className="p-3 max-h-72 overflow-y-auto no-scrollbar space-y-0.5">
-                        {allVars.map(v => (
-                          <button
-                            key={v.key}
-                            onClick={() => { const pos = textareaRef.current ? textareaRef.current.selectionStart : textVal.length; setCursorPos(pos); insertVariable(v); }}
-                            className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-right"
-                          >
-                            <span className="text-sm flex-shrink-0">{v.icon}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-1">
-                                <span className={`text-[10px] font-mono font-bold ${C.text}`}>{v.key}</span>
-                                <div className="flex items-center gap-1">
-                                  {v.hasGender && <span className="text-[8px] text-[#ff6700]">⚧</span>}
-                                  <span className="text-[9px] text-slate-400 truncate">{v.label}</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <span className="text-[9px] text-slate-400">مثال:</span>
-                                <span className={`text-[10px] font-semibold ${C.text} truncate`}>{v.example}</span>
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <PreviewContext
+                    genderContext={genderContext}
+                    setGenderContext={setGenderContext}
+                    relevantRoles={relevantRoles}
+                  />
 
-                  <div className="bg-gradient-to-br from-[#ff6700]/10 to-[#004d59]/10 border border-[#ff6700]/20 rounded-2xl p-3">
-                    <div className="flex items-start gap-2">
-                      <Sparkles className="w-3.5 h-3.5 text-[#ff6700] flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-[10px] font-bold text-[#ff6700] mb-1">💡 نصائح</p>
-                        <ul className="text-[10px] text-[#004d59] space-y-0.5">
-                          <li>• اضغط "إدراج متغير" أو اكتب @ لعرض المتغيرات — القيم من الداتابيز</li>
-                          <li>• المتغيرات برمز ⚧ تتغير حسب الجنس المختار أعلاه</li>
-                          <li>• غيّر الطالب (ذكر/أنثى)، ولي الأمر (أب/أم)، المدرب لرؤية المعاينة الصحيحة</li>
-                          <li>• انقر "تعديل القيم" لتعديل قيم الجنس من الداتابيز</li>
-                          {isSingleContent && <li>• 🌐 هذا القالب رسالة واحدة تحتوي عربي وإنجليزي معاً</li>}
-                          {activeType?.category === "offline" && <li>• 📍 قوالب Offline تحتوي على متغيرات الموقع (placeName، address، mapsLink)</li>}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
+                  <PhonePreview nodes={previewNodes} dir={textDir} />
                 </div>
               </div>
             </div>
           )}
-        </div>
+        </main>
       </div>
 
       {mainTab === "templates" && dirty && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 p-3">
-          <div className="bg-white/95 dark:bg-[#161b27]/95 backdrop-blur-md rounded-2xl border border-amber-200 dark:border-amber-800/40 shadow-xl p-3 flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 flex-1 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+        <div className="fixed inset-x-0 bottom-0 z-40 p-3 xl:hidden">
+          <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-white/95 p-3 shadow-xl backdrop-blur-md dark:border-amber-800/40 dark:bg-[#161b27]/95">
+            <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+              <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-amber-500" />
               <span className="truncate">لديك تعديلات غير محفوظة</span>
             </span>
             <button
+              type="button"
               onClick={saveTemplate}
               disabled={saving}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white flex-shrink-0 ${saving ? "bg-slate-300" : C.bg}`}
+              className={`flex flex-shrink-0 items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold ${saving ? "bg-slate-300 text-white" : `${C.bg} ${C.onBg}`} ${FOCUS}`}
             >
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
               {saving ? "جاري الحفظ..." : "حفظ الآن"}
             </button>
           </div>
@@ -1878,6 +2148,11 @@ export default function WhatsAppTemplatesPage() {
       <style jsx global>{`
         .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        details > summary::-webkit-details-marker { display: none; }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-pulse, .animate-ping { animation: none !important; }
+        }
       `}</style>
     </div>
   );

@@ -96,7 +96,8 @@ export async function POST(req, context) {
 
     student.metadata.lastModifiedBy = authCheck.user.id;
     student.metadata.updatedAt = new Date();
-    await student.save();
+    // ✅ validateModifiedOnly: يتجاهل أي رسائل واتساب قديمة بايظة في المصفوفة
+    await student.save({ validateModifiedOnly: true });
 
     const fresh = await Student.findById(id)
       .populate("authUserId", "name email role")

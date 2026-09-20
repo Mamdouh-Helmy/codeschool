@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import toast from "react-hot-toast";
 import {
-  X,
   Save,
   MessageCircle,
   Users,
@@ -13,7 +12,10 @@ import {
   Ban,
   PauseCircle,
   Lock,
+  Check,
+  CalendarClock,
 } from "lucide-react";
+import ModalShell from "./ModalShell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveVar
@@ -200,56 +202,61 @@ function renderTemplate(template, variables) {
   return result;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ HoldBanner — داخل المودال
-// ═══════════════════════════════════════════════════════════════════════════
-function HoldLockBanner({ isRTL, holdInfo }) {
-  const t = (ar, en) => (isRTL ? ar : en);
+// ─────────────────────────────────────────────────────────────────────────────
+// Small design primitives
+// ─────────────────────────────────────────────────────────────────────────────
+const STATUS_META = {
+  present: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-500/10", ring: "ring-emerald-200 dark:ring-emerald-500/20" },
+  absent:  { dot: "bg-rose-500",    text: "text-rose-700 dark:text-rose-300",       bg: "bg-rose-50 dark:bg-rose-500/10",       ring: "ring-rose-200 dark:ring-rose-500/20" },
+  late:    { dot: "bg-amber-500",   text: "text-amber-700 dark:text-amber-300",     bg: "bg-amber-50 dark:bg-amber-500/10",     ring: "ring-amber-200 dark:ring-amber-500/20" },
+  excused: { dot: "bg-sky-500",     text: "text-sky-700 dark:text-sky-300",         bg: "bg-sky-50 dark:bg-sky-500/10",         ring: "ring-sky-200 dark:ring-sky-500/20" },
+};
 
+function StatCard({ label, value, meta }) {
+  return (
+    <div className={`rounded-xl border px-3 py-2.5 text-center ${meta ? `${meta.bg} ${meta.ring} ring-1 border-transparent` : "border-slate-200 dark:border-white/10"}`}>
+      <p className={`text-xl font-bold tabular-nums ${meta ? meta.text : "text-slate-800 dark:text-white"}`}>{value}</p>
+      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{label}</p>
+    </div>
+  );
+}
+
+function HoldLockNotice({ isRTL, holdInfo }) {
+  const t = (ar, en) => (isRTL ? ar : en);
   const holdLabel = (() => {
     if (!holdInfo) return "";
-    if (holdInfo.holdType === "indefinite") {
-      return t("مفتوح لحد ما يتفك يدويًا", "Indefinite");
-    }
-    if (holdInfo.holdType === "sessions") {
-      return t(
-        `لعدد ${holdInfo.holdSessionsCount} سيشنات (اتستهلك ${holdInfo.holdSessionsConsumed || 0})`,
-        `For ${holdInfo.holdSessionsCount} sessions (${holdInfo.holdSessionsConsumed || 0} consumed)`
-      );
-    }
-    if (holdInfo.holdType === "until_session") {
-      return t("لحد سيشن محددة", "Until a specific session");
-    }
-    return t(`لمدة ${holdInfo.holdDays || 0} يوم`, `For ${holdInfo.holdDays || 0} days`);
+    if (holdInfo.holdType === "indefinite") return t("مفتوح لحد ما يتفك يدويًا", "Indefinite");
+    if (holdInfo.holdType === "sessions")
+      return t(`لعدد ${holdInfo.holdSessionsCount} سيشنات (اتستهلك ${holdInfo.holdSessionsConsumed || 0})`, `${holdInfo.holdSessionsCount} sessions (${holdInfo.holdSessionsConsumed || 0} used)`);
+    if (holdInfo.holdType === "until_session") return t("لحد سيشن محددة", "Until a specific session");
+    return t(`لمدة ${holdInfo.holdDays || 0} يوم`, `${holdInfo.holdDays || 0} days`);
   })();
 
   return (
-    <div className="rounded-xl p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-          <PauseCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-black text-sm text-amber-900 dark:text-amber-300">
-              {t("السيشن دي مقفولة بسبب الـ Hold", "This session is locked due to hold")}
-            </p>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold">
-              {holdLabel}
-            </span>
-          </div>
-          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
-            {t(
-              "مينفعش تسجل حضور للسيشن دي لحد ما الـ Hold يتفك. لو محتاج تفتحها، ارجع لصفحة المجموعات وفك الـ Hold.",
-              "You can't record attendance for this session until the hold is released. To unlock, go back to the groups page and release the hold."
-            )}
+    <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-500/20">
+        <PauseCircle className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-bold text-amber-900 dark:text-amber-300">
+            {t("السيشن دي مقفولة بسبب الـ Hold", "This session is locked (on hold)")}
           </p>
-          {holdInfo?.holdReason && (
-            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 italic">
-              {t("السبب", "Reason")}: {holdInfo.holdReason}
-            </p>
-          )}
+          <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-500/20 dark:text-amber-200">
+            {holdLabel}
+          </span>
         </div>
+        <p className="mt-1 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+          {t(
+            "مينفعش تسجل حضور للسيشن دي لحد ما الـ Hold يتفك. ارجع لصفحة المجموعات وفك الـ Hold لو محتاج تفتحها.",
+            "You can't take attendance here until the hold is released — release it from the groups page first."
+          )}
+        </p>
+        {holdInfo?.holdReason && (
+          <p className="mt-1 text-[11px] italic text-amber-600 dark:text-amber-400">
+            {t("السبب", "Reason")}: {holdInfo.holdReason}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -290,13 +297,9 @@ export default function AttendanceModal({
 
   const initialRecordedStudentIds = useRef(new Set());
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ✅ HOLD GUARD — من الـ attendanceData
-  // ═══════════════════════════════════════════════════════════════════════════
   const sessionLocked = !!attendanceData?.sessionLocked;
   const holdInfo = attendanceData?.group?.hold || null;
 
-  // ── Fetch DB template variables ──────────────────────────────────────────
   useEffect(() => {
     fetch("/api/whatsapp/template-variables")
       .then((r) => r.json())
@@ -310,7 +313,6 @@ export default function AttendanceModal({
       .catch((err) => console.error("❌ Failed to load template variables:", err));
   }, []);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
   const getStudentStatus = useCallback(
     (studentId) => {
       const record = attendance.find(
@@ -537,7 +539,6 @@ export default function AttendanceModal({
 
   const updateAttendanceStatus = useCallback(
     (studentId, status) => {
-      // ✅ HOLD GUARD — منع التعديل لو السيشن مقفولة
       if (sessionLocked) {
         toast.error(
           isRTL
@@ -699,7 +700,6 @@ export default function AttendanceModal({
     [showHints, selectedHintIndex, availableVariables, insertVariable]
   );
 
-  // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (initialLoadDone.current) return;
     if (loading) return;
@@ -752,9 +752,7 @@ export default function AttendanceModal({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── Save all attendance ───────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    // ✅ HOLD GUARD
     if (sessionLocked) {
       toast.error(
         isRTL
@@ -793,7 +791,6 @@ export default function AttendanceModal({
         onClose();
         onRefresh();
       } else {
-        // ✅ لو الباك اند رفض بسبب الـ Hold
         if (json.code === "SESSION_ON_HOLD") {
           toast.error(
             isRTL
@@ -821,18 +818,6 @@ export default function AttendanceModal({
     sessionLocked,
   ]);
 
-  // ── Loading state ─────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-darkmode rounded-lg p-6">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
-        </div>
-      </div>
-    );
-  }
-
-  // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = {
     total:   groupStudents.length,
     present: attendance.filter((a) => a.status === "present").length,
@@ -842,464 +827,370 @@ export default function AttendanceModal({
     blocked: groupStudents.filter((s) => isStudentLocked(s)).length,
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-  return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto"
-      dir={isRTL ? "rtl" : "ltr"}
-    >
-      <div className="bg-white dark:bg-darkmode rounded-xl shadow-lg max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col">
-
-        {/* ── Header ── */}
-        <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-MidnightNavyText dark:text-white flex items-center gap-2">
-              {isRTL ? "تسجيل الحضور" : "Attendance"} — {session?.title}
-              {sessionLocked && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                  <Lock className="w-3 h-3" />
-                  {isRTL ? "مقفولة" : "Locked"}
-                </span>
-              )}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {new Date(session?.scheduledDate).toLocaleDateString(
-                isRTL ? "ar-EG" : "en-US",
-                { weekday: "short", year: "numeric", month: "short", day: "numeric" }
-              )}{" "}
-              · {session?.startTime} {isRTL ? "إلى" : "to"} {session?.endTime}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* ✅ Hold Lock Banner */}
-        {sessionLocked && (
-          <div className="px-6 pt-4">
-            <HoldLockBanner isRTL={isRTL} holdInfo={holdInfo} />
-          </div>
+  const footer = (
+    <>
+      <button
+        onClick={onClose}
+        className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+      >
+        {isRTL ? "إلغاء" : "Cancel"}
+      </button>
+      <button
+        onClick={handleSave}
+        disabled={saving || sessionLocked}
+        title={sessionLocked ? (isRTL ? "السيشن مقفولة بسبب الـ Hold" : "Session locked due to hold") : ""}
+        className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${
+          sessionLocked
+            ? "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-white/5 dark:text-slate-500"
+            : "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+        }`}
+      >
+        {saving ? (
+          <>
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            {isRTL ? "جاري الحفظ..." : "Saving..."}
+          </>
+        ) : sessionLocked ? (
+          <>
+            <Lock className="h-4 w-4" />
+            {isRTL ? "مقفولة" : "Locked"}
+          </>
+        ) : (
+          <>
+            <Save className="h-4 w-4" />
+            {isRTL ? "حفظ الحضور" : "Save Attendance"}
+          </>
         )}
+      </button>
+    </>
+  );
 
-        {/* ── Stats ── */}
-        <div className="p-6 border-b border-PowderBlueBorder dark:border-dark_border bg-gray-50 dark:bg-dark_input">
-          <div className="grid grid-cols-6 gap-4">
-            {[
-              { label: isRTL ? "الإجمالي" : "Total",   value: stats.total,   color: "text-gray-800 dark:text-white" },
-              { label: isRTL ? "حاضر"    : "Present",  value: stats.present, color: "text-green-600"  },
-              { label: isRTL ? "غائب"    : "Absent",   value: stats.absent,  color: "text-red-600"    },
-              { label: isRTL ? "متأخر"   : "Late",     value: stats.late,    color: "text-yellow-600" },
-              { label: isRTL ? "معتذر"   : "Excused",  value: stats.excused, color: "text-blue-600"   },
-              { label: isRTL ? "محظور"   : "Blocked",  value: stats.blocked, color: "text-gray-500"   },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="text-center">
-                <p className={`text-2xl font-bold ${color}`}>{value}</p>
-                <p className="text-xs text-gray-500">{label}</p>
-              </div>
-            ))}
-          </div>
+  if (loading) {
+    return (
+      <ModalShell open onClose={onClose} size="md" accent="emerald" isRTL={isRTL} title={isRTL ? "تسجيل الحضور" : "Attendance"}>
+        <div className="flex flex-col items-center justify-center gap-3 py-10">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-200 border-t-emerald-600" />
+          <p className="text-sm text-slate-500">{isRTL ? "جاري التحميل..." : "Loading..."}</p>
         </div>
+      </ModalShell>
+    );
+  }
 
-        {/* ── Students List ── */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-4">
-            {groupStudents.map((student) => {
-              const studentId    = student._id?.toString();
-              const status       = getStudentStatus(studentId);
-              const notes        = getStudentNotes(studentId);
-              const needsMessage = ["absent", "late", "excused"].includes(status);
-              const studentLang  = student.communicationPreferences?.preferredLanguage || "ar";
-              const gender       = (student.personalInfo?.gender       || "male").toLowerCase().trim();
-              const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
+  return (
+    <ModalShell
+      open
+      onClose={onClose}
+      size="3xl"
+      accent="emerald"
+      isRTL={isRTL}
+      title={`${isRTL ? "تسجيل الحضور" : "Attendance"} — ${session?.title}`}
+      subtitle={`${new Date(session?.scheduledDate).toLocaleDateString(isRTL ? "ar-EG" : "en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" })} · ${session?.startTime}–${session?.endTime}`}
+      headerBadge={
+        sessionLocked && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+            <Lock className="h-3 w-3" />
+            {isRTL ? "مقفولة" : "Locked"}
+          </span>
+        )
+      }
+      footer={footer}
+    >
+      {sessionLocked && <HoldLockNotice isRTL={isRTL} holdInfo={holdInfo} />}
 
-              const { remainingHours } = checkStudentBalance(student);
-              const isLocked = isStudentLocked(student);
+      {/* Stats strip */}
+      <div className="mb-6 grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <StatCard label={isRTL ? "الإجمالي" : "Total"} value={stats.total} />
+        <StatCard label={isRTL ? "حاضر" : "Present"} value={stats.present} meta={STATUS_META.present} />
+        <StatCard label={isRTL ? "غائب" : "Absent"} value={stats.absent} meta={STATUS_META.absent} />
+        <StatCard label={isRTL ? "متأخر" : "Late"} value={stats.late} meta={STATUS_META.late} />
+        <StatCard label={isRTL ? "معتذر" : "Excused"} value={stats.excused} meta={STATUS_META.excused} />
+        <StatCard label={isRTL ? "محظور" : "Blocked"} value={stats.blocked} />
+      </div>
 
-              const currentVars = buildVariables(student, status, session, dbVars);
-              const rawMsg     = customMessages[studentId] || "";
-              const previewMsg = renderTemplate(rawMsg, currentVars);
+      {/* Students */}
+      <div className="space-y-3">
+        {groupStudents.map((student) => {
+          const studentId    = student._id?.toString();
+          const status       = getStudentStatus(studentId);
+          const notes        = getStudentNotes(studentId);
+          const needsMessage = ["absent", "late", "excused"].includes(status);
+          const studentLang  = student.communicationPreferences?.preferredLanguage || "ar";
+          const gender       = (student.personalInfo?.gender       || "male").toLowerCase().trim();
+          const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
 
-              // ✅ هل نعرض أي حاجة للطالب ده؟
-              // لو السيشن مقفولة بسبب الـ Hold → نعرض العداد باهت فقط
-              const effectiveLocked = isLocked || sessionLocked;
+          const { remainingHours } = checkStudentBalance(student);
+          const isLocked = isStudentLocked(student);
+          const effectiveLocked = isLocked || sessionLocked;
+          const meta = STATUS_META[status];
 
-              return (
-                <div
-                  key={studentId}
-                  className={`border rounded-lg overflow-hidden ${
-                    sessionLocked
-                      ? "border-amber-300 dark:border-amber-600/40 opacity-60"
-                      : effectiveLocked
-                        ? "border-gray-300 dark:border-gray-700 opacity-75"
-                        : "border-PowderBlueBorder dark:border-dark_border"
-                  }`}
-                >
-                  {/* ── Student row + select ── */}
-                  <div
-                    className={`flex items-center justify-between p-4 ${
-                      sessionLocked
-                        ? "bg-amber-50/40 dark:bg-amber-500/5"
-                        : effectiveLocked
-                          ? "bg-gray-100 dark:bg-gray-800"
-                          : "bg-white dark:bg-darkmode"
-                    }`}
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium text-MidnightNavyText dark:text-white">
-                          {student.personalInfo?.fullName}
-                        </p>
-                        {/* ✅ Session locked badge */}
-                        {sessionLocked && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-full text-xs">
-                            <Lock className="w-3 h-3" />
-                            {isRTL ? "مقفولة" : "Locked"}
-                          </span>
-                        )}
-                        {/* ✅ Zero balance badge */}
-                        {!sessionLocked && isLocked && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs">
-                            <Ban className="w-3 h-3" />
-                            {isRTL ? "محظور" : "Blocked"}
-                          </span>
-                        )}
-                      </div>
+          const currentVars = buildVariables(student, status, session, dbVars);
+          const rawMsg     = customMessages[studentId] || "";
+          const previewMsg = renderTemplate(rawMsg, currentVars);
 
-                      <p className="text-xs text-gray-500">
-                        {isRTL ? "رقم" : "ID"}: {student.enrollmentNumber}
-                      </p>
-
-                      <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {studentLang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}
-                        </span>
-                        <span className="text-purple-600 dark:text-purple-400">
-                          {gender === "female"
-                            ? isRTL ? "👧 أنثى" : "👧 Female"
-                            : isRTL ? "👦 ذكر"  : "👦 Male"}
-                        </span>
-                        <span className="text-green-600 dark:text-green-400">
-                          {relationship === "mother"
-                            ? isRTL ? "👩 أم"   : "👩 Mother"
-                            : relationship === "father"
-                              ? isRTL ? "👨 أب"  : "👨 Father"
-                              : isRTL ? "👤 ولي" : "👤 Guardian"}
-                        </span>
-                        {student.creditSystem?.currentPackage && (
-                          <span
-                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${
-                              remainingHours <= 0
-                                ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                                : remainingHours <= 2
-                                  ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-                                  : remainingHours <= 5
-                                    ? "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400"
-                                    : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
-                            }`}
-                          >
-                            <Clock className="w-3 h-3" />
-                            <span>{remainingHours}h</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {!effectiveLocked && remainingHours <= 2 && remainingHours > 0 && (
-                        <p className="flex items-center gap-1 mt-1 text-xs text-red-600 dark:text-red-400">
-                          <AlertTriangle className="w-3 h-3" />
-                          {isRTL
-                            ? `تحذير: الرصيد على وشك النفاذ (${remainingHours}h)`
-                            : `Warning: Low balance (${remainingHours}h)`}
-                        </p>
-                      )}
-                    </div>
-
-                    <select
-                      value={status}
-                      onChange={(e) => updateAttendanceStatus(studentId, e.target.value)}
-                      disabled={effectiveLocked}
-                      className={`px-3 py-2 text-sm border rounded-lg dark:bg-dark_input dark:text-white ${
-                        effectiveLocked
-                          ? "border-gray-300 dark:border-gray-700 opacity-50 cursor-not-allowed"
-                          : "border-PowderBlueBorder dark:border-dark_border"
-                      }`}
-                    >
-                      <option value="present">{isRTL ? "حاضر"  : "Present"}</option>
-                      <option value="absent">{isRTL ? "غائب"  : "Absent" }</option>
-                      <option value="late">{isRTL ? "متأخر" : "Late"   }</option>
-                      <option value="excused">{isRTL ? "معتذر" : "Excused"}</option>
-                    </select>
+          return (
+            <div
+              key={studentId}
+              className={`overflow-hidden rounded-xl border transition-colors ${
+                sessionLocked
+                  ? "border-amber-200 dark:border-amber-500/20"
+                  : effectiveLocked
+                    ? "border-slate-200 dark:border-white/10"
+                    : "border-slate-200 dark:border-white/10"
+              } ${effectiveLocked ? "opacity-70" : ""}`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 dark:bg-transparent">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${meta?.dot || "bg-slate-300"}`} />
+                    <p className="font-semibold text-slate-800 dark:text-white">
+                      {student.personalInfo?.fullName}
+                    </p>
+                    {sessionLocked && (
+                      <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                        <Lock className="h-3 w-3" /> {isRTL ? "مقفولة" : "Locked"}
+                      </span>
+                    )}
+                    {!sessionLocked && isLocked && (
+                      <span className="flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-600 dark:bg-rose-500/15 dark:text-rose-400">
+                        <Ban className="h-3 w-3" /> {isRTL ? "محظور" : "Blocked"}
+                      </span>
+                    )}
                   </div>
 
-                  {/* ── Session Locked → message ── */}
-                  {sessionLocked && (
-                    <div className="bg-amber-50/40 dark:bg-amber-500/5 border-t border-amber-200 dark:border-amber-600/30 p-4 text-center">
-                      <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center justify-center gap-2">
-                        <Lock className="w-4 h-4" />
-                        {isRTL
-                          ? "السيشن مقفولة بسبب الـ Hold — تسجيل الحضور معطّل"
-                          : "Session locked due to hold — attendance disabled"}
-                      </p>
-                    </div>
-                  )}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    <span className="inline-flex items-center gap-1">
+                      <Hash className="h-3 w-3" /> {student.enrollmentNumber}
+                    </span>
+                    <span>{studentLang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}</span>
+                    <span>{gender === "female" ? (isRTL ? "👧 أنثى" : "👧 Female") : (isRTL ? "👦 ذكر" : "👦 Male")}</span>
+                    <span>
+                      {relationship === "mother"
+                        ? (isRTL ? "👩 أم" : "👩 Mother")
+                        : relationship === "father"
+                          ? (isRTL ? "👨 أب" : "👨 Father")
+                          : (isRTL ? "👤 ولي" : "👤 Guardian")}
+                    </span>
+                    {student.creditSystem?.currentPackage && (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
+                          remainingHours <= 0
+                            ? "bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400"
+                            : remainingHours <= 2
+                              ? "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
+                              : remainingHours <= 5
+                                ? "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
+                                : "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                        }`}
+                      >
+                        <Clock className="h-3 w-3" /> {remainingHours}h
+                      </span>
+                    )}
+                  </div>
 
-                  {/* ── Zero balance locked → message ── */}
-                  {!sessionLocked && isLocked && needsMessage && (
-                    <div className="bg-gray-100 dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 p-4 text-center">
-                      <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
-                        <Ban className="w-4 h-4" />
-                        {isRTL
-                          ? "تم تعطيل الإشعارات بسبب نفاد الرصيد"
-                          : "Notifications disabled — zero balance"}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* ── Message editor (absent/late/excused, not locked) ── */}
-                  {!effectiveLocked && needsMessage && (
-                    <div className="bg-purple-50 dark:bg-purple-900/20 border-t border-purple-200 dark:border-purple-800 p-4">
-                      <div className="flex items-start gap-3">
-                        <MessageCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 space-y-3">
-
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold text-purple-900 dark:text-purple-100 text-sm">
-                              📨 {isRTL ? "رسالة لولي الأمر" : "Message for Guardian"}
-                              {" "}({student.guardianInfo?.name || (isRTL ? "ولي الأمر" : "Guardian")})
-                            </h4>
-                            <button
-                              onClick={() => resetToDefaultTemplate(studentId)}
-                              disabled={loadingTemplates[studentId]}
-                              className="px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-purple-300 dark:border-purple-700 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-1"
-                            >
-                              <RefreshCw
-                                className={`w-3 h-3 ${loadingTemplates[studentId] ? "animate-spin" : ""}`}
-                              />
-                              {isRTL ? "استعادة" : "Reset"}
-                            </button>
-                          </div>
-
-                          <div className="p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700 text-xs space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-purple-500 font-medium">
-                                {isRTL ? "تحية ولي الأمر:" : "Guardian greeting:"}
-                              </span>
-                              <span className="text-gray-800 dark:text-gray-200 font-semibold">
-                                {currentVars.guardianSalutation}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-purple-500 font-medium">
-                                {isRTL ? "الإشارة للطالب:" : "Student ref:"}
-                              </span>
-                              <span className="text-gray-800 dark:text-gray-200">
-                                {currentVars.childTitle}{" "}
-                                <strong>{currentVars.studentName}</strong>
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-purple-500 font-medium">
-                                {isRTL ? "الحالة:" : "Status:"}
-                              </span>
-                              <span className="text-gray-800 dark:text-gray-200">
-                                {currentVars.status}
-                              </span>
-                            </div>
-                            {loadingTemplates[studentId] && (
-                              <div className="flex items-center gap-2 text-purple-600">
-                                <RefreshCw className="w-3 h-3 animate-spin" />
-                                {isRTL ? "جاري تحميل القالب..." : "Loading template..."}
-                              </div>
-                            )}
-                            {manuallyEdited[studentId] && (
-                              <p className="text-orange-500 dark:text-orange-400">
-                                ✏️ {isRTL ? "معدّلة يدوياً" : "Manually edited"}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="space-y-1 relative">
-                            <label className="text-xs text-gray-600 dark:text-gray-400">
-                              {isRTL
-                                ? "نص القالب (اكتب @ لإدراج متغير)"
-                                : "Template text (type @ to insert variable)"}
-                            </label>
-
-                            <textarea
-                              ref={(el) => (textareaRefs.current[studentId] = el)}
-                              value={rawMsg}
-                              onChange={(e) => handleTextareaInput(e, studentId)}
-                              onKeyDown={(e) => handleKeyDown(e, studentId)}
-                              onSelect={(e) =>
-                                setCursorPosition((prev) => ({
-                                  ...prev,
-                                  [studentId]: e.target.selectionStart,
-                                }))
-                              }
-                              placeholder={
-                                isRTL
-                                  ? "مثال: {guardianSalutation}، {childTitle} {studentName} غاب اليوم."
-                                  : "e.g. {guardianSalutation}, {childTitle} {studentName} was absent today."
-                              }
-                              className="w-full px-3 py-2.5 border-2 border-purple-200 dark:border-purple-700 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white resize-none h-28 font-mono text-sm"
-                              dir={studentLang === "ar" ? "rtl" : "ltr"}
-                            />
-
-                            {showHints[studentId] && (
-                              <div
-                                ref={(el) => (hintsRefs.current[studentId] = el)}
-                                className="absolute z-50 w-full mt-1 bg-white dark:bg-darkmode border-2 border-purple-300 dark:border-purple-700 rounded-lg shadow-xl max-h-56 overflow-y-auto"
-                              >
-                                <div className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 border-b dark:border-purple-800">
-                                  <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1">
-                                    <Zap className="w-3 h-3" />
-                                    {isRTL ? "المتغيرات المتاحة" : "Available Variables"}
-                                  </p>
-                                </div>
-                                {availableVariables.map((v, i) => (
-                                  <button
-                                    key={v.key}
-                                    type="button"
-                                    onClick={() => insertVariable(studentId, v)}
-                                    className={`w-full px-3 py-2 text-right hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-2 ${
-                                      i === (selectedHintIndex[studentId] || 0)
-                                        ? "bg-purple-100 dark:bg-purple-900/40"
-                                        : ""
-                                    }`}
-                                  >
-                                    <span>{v.icon}</span>
-                                    <div className="flex-1 flex items-center justify-between">
-                                      <span className="text-sm font-mono text-purple-600 dark:text-purple-400">
-                                        {v.key}
-                                      </span>
-                                      <span className="text-xs text-gray-500">{v.label}</span>
-                                    </div>
-                                  </button>
-                                ))}
-                                <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border-t text-xs text-gray-400">
-                                  ↑↓ {isRTL ? "للتنقل" : "navigate"} · Enter{" "}
-                                  {isRTL ? "للإدراج" : "insert"} · Esc{" "}
-                                  {isRTL ? "إغلاق" : "close"}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
-                              {isRTL ? "ملاحظات (اختياري)" : "Notes (optional)"}
-                            </label>
-                            <input
-                              type="text"
-                              value={notes}
-                              onChange={(e) => updateStudentNotes(studentId, e.target.value)}
-                              placeholder={isRTL ? "أضف ملاحظة..." : "Add a note..."}
-                              className="w-full px-3 py-2 text-sm border border-purple-200 dark:border-purple-700 rounded-lg dark:bg-gray-800 dark:text-white"
-                            />
-                          </div>
-
-                          {previewMsg && (
-                            <div className="bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 overflow-hidden">
-                              <div className="bg-purple-50 dark:bg-purple-900/30 px-3 py-2 border-b flex items-center justify-between">
-                                <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
-                                  📋{" "}
-                                  {isRTL
-                                    ? "معاينة الرسالة الفعلية (بعد استبدال المتغيرات)"
-                                    : "Live Preview (variables resolved)"}
-                                </span>
-                                <span className="text-xs text-purple-400">
-                                  {studentLang === "ar" ? "🇸🇦" : "🇬🇧"} ·
-                                  {gender === "female" ? " 👧" : " 👦"} ·
-                                  {relationship === "mother" ? " 👩 أم" : " 👨 أب"}
-                                </span>
-                              </div>
-                              <div
-                                className="p-3 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap bg-gray-50 dark:bg-gray-700 max-h-48 overflow-y-auto"
-                                dir={studentLang === "ar" ? "rtl" : "ltr"}
-                              >
-                                {previewMsg}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="flex justify-end pt-2 border-t border-purple-200 dark:border-purple-800">
-                            <button
-                              onClick={() => saveTemplateToDatabase(studentId, rawMsg)}
-                              disabled={!rawMsg || savingTemplate[studentId] || loadingTemplates[studentId]}
-                              className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-                            >
-                              {savingTemplate[studentId] ? (
-                                <>
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                  {isRTL ? "جاري الحفظ..." : "Saving..."}
-                                </>
-                              ) : (
-                                <>
-                                  <Save className="w-3 h-3" />
-                                  {isRTL ? "حفظ كقالب افتراضي" : "Save as Default Template"}
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                  {!effectiveLocked && remainingHours <= 2 && remainingHours > 0 && (
+                    <p className="mt-1.5 flex items-center gap-1 text-[11px] text-rose-600 dark:text-rose-400">
+                      <AlertTriangle className="h-3 w-3" />
+                      {isRTL ? `تحذير: الرصيد على وشك النفاذ (${remainingHours}h)` : `Low balance warning (${remainingHours}h)`}
+                    </p>
                   )}
                 </div>
-              );
-            })}
-          </div>
 
-          {groupStudents.length === 0 && (
-            <div className="text-center py-8">
-              <Users className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-500 font-medium">
-                {isRTL ? "لا يوجد طلاب في هذه المجموعة" : "No students in this group"}
-              </p>
+                <select
+                  value={status}
+                  onChange={(e) => updateAttendanceStatus(studentId, e.target.value)}
+                  disabled={effectiveLocked}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium outline-none transition-colors dark:bg-[#171a24] dark:text-white ${
+                    effectiveLocked
+                      ? "cursor-not-allowed border-slate-200 opacity-50 dark:border-white/10"
+                      : `border-slate-200 focus:border-emerald-400 dark:border-white/10 ${meta ? meta.bg : ""}`
+                  }`}
+                >
+                  <option value="present">{isRTL ? "حاضر" : "Present"}</option>
+                  <option value="absent">{isRTL ? "غائب" : "Absent"}</option>
+                  <option value="late">{isRTL ? "متأخر" : "Late"}</option>
+                  <option value="excused">{isRTL ? "معتذر" : "Excused"}</option>
+                </select>
+              </div>
+
+              {sessionLocked && (
+                <div className="border-t border-amber-100 bg-amber-50/50 p-3 text-center dark:border-amber-500/10 dark:bg-amber-500/5">
+                  <p className="flex items-center justify-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                    <Lock className="h-3.5 w-3.5" />
+                    {isRTL ? "تسجيل الحضور معطّل بسبب الـ Hold" : "Attendance disabled — session on hold"}
+                  </p>
+                </div>
+              )}
+
+              {!sessionLocked && isLocked && needsMessage && (
+                <div className="border-t border-slate-100 bg-slate-50 p-3 text-center dark:border-white/10 dark:bg-white/[0.02]">
+                  <p className="flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <Ban className="h-3.5 w-3.5" />
+                    {isRTL ? "تم تعطيل الإشعارات بسبب نفاد الرصيد" : "Notifications disabled — zero balance"}
+                  </p>
+                </div>
+              )}
+
+              {!effectiveLocked && needsMessage && (
+                <div className="space-y-4 border-t border-violet-100 bg-violet-50/50 p-4 dark:border-violet-500/10 dark:bg-violet-500/5">
+                  <div className="flex items-start gap-3">
+                    <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-violet-900 dark:text-violet-200">
+                          {isRTL ? "رسالة لولي الأمر" : "Message for guardian"}{" "}
+                          <span className="font-normal text-violet-600 dark:text-violet-400">
+                            ({student.guardianInfo?.name || (isRTL ? "ولي الأمر" : "Guardian")})
+                          </span>
+                        </h4>
+                        <button
+                          onClick={() => resetToDefaultTemplate(studentId)}
+                          disabled={loadingTemplates[studentId]}
+                          className="flex items-center gap-1 rounded-md border border-violet-200 bg-white px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50 dark:border-violet-500/20 dark:bg-white/5 dark:text-violet-300"
+                        >
+                          <RefreshCw className={`h-3 w-3 ${loadingTemplates[studentId] ? "animate-spin" : ""}`} />
+                          {isRTL ? "استعادة" : "Reset"}
+                        </button>
+                      </div>
+
+                      <div className="space-y-1 rounded-lg border border-violet-100 bg-white p-2.5 text-xs dark:border-violet-500/10 dark:bg-white/5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-24 shrink-0 text-violet-500">{isRTL ? "تحية:" : "Greeting:"}</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-200">{currentVars.guardianSalutation}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-24 shrink-0 text-violet-500">{isRTL ? "الطالب:" : "Student:"}</span>
+                          <span className="text-slate-700 dark:text-slate-200">{currentVars.childTitle} <strong>{currentVars.studentName}</strong></span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-24 shrink-0 text-violet-500">{isRTL ? "الحالة:" : "Status:"}</span>
+                          <span className="text-slate-700 dark:text-slate-200">{currentVars.status}</span>
+                        </div>
+                        {manuallyEdited[studentId] && (
+                          <p className="pt-0.5 text-orange-500 dark:text-orange-400">✏️ {isRTL ? "معدّلة يدوياً" : "Manually edited"}</p>
+                        )}
+                      </div>
+
+                      <div className="relative space-y-1">
+                        <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                          {isRTL ? "نص القالب (اكتب @ لإدراج متغير)" : "Template text (type @ for a variable)"}
+                        </label>
+                        <textarea
+                          ref={(el) => (textareaRefs.current[studentId] = el)}
+                          value={rawMsg}
+                          onChange={(e) => handleTextareaInput(e, studentId)}
+                          onKeyDown={(e) => handleKeyDown(e, studentId)}
+                          onSelect={(e) => setCursorPosition((prev) => ({ ...prev, [studentId]: e.target.selectionStart }))}
+                          placeholder={isRTL ? "مثال: {guardianSalutation}، {childTitle} {studentName} غاب اليوم." : "e.g. {guardianSalutation}, {childTitle} {studentName} was absent today."}
+                          className="h-28 w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-2.5 font-mono text-sm text-slate-800 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-violet-500/20 dark:bg-white/5 dark:text-white"
+                          dir={studentLang === "ar" ? "rtl" : "ltr"}
+                        />
+                        {showHints[studentId] && (
+                          <div
+                            ref={(el) => (hintsRefs.current[studentId] = el)}
+                            className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-violet-200 bg-white shadow-xl dark:border-violet-500/30 dark:bg-[#171a24]"
+                          >
+                            <div className="border-b border-violet-100 bg-violet-50 px-3 py-1.5 dark:border-violet-500/10 dark:bg-violet-500/10">
+                              <p className="flex items-center gap-1 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                                <Zap className="h-3 w-3" /> {isRTL ? "المتغيرات المتاحة" : "Available Variables"}
+                              </p>
+                            </div>
+                            {availableVariables.map((v, i) => (
+                              <button
+                                key={v.key}
+                                type="button"
+                                onClick={() => insertVariable(studentId, v)}
+                                className={`flex w-full items-center gap-2 px-3 py-2 text-right hover:bg-violet-50 dark:hover:bg-violet-500/10 ${
+                                  i === (selectedHintIndex[studentId] || 0) ? "bg-violet-100 dark:bg-violet-500/20" : ""
+                                }`}
+                              >
+                                <span>{v.icon}</span>
+                                <div className="flex flex-1 items-center justify-between">
+                                  <span className="font-mono text-sm text-violet-600 dark:text-violet-400">{v.key}</span>
+                                  <span className="text-xs text-slate-500">{v.label}</span>
+                                </div>
+                              </button>
+                            ))}
+                            <div className="border-t bg-slate-50 px-3 py-1.5 text-[11px] text-slate-400 dark:bg-white/5">
+                              ↑↓ {isRTL ? "للتنقل" : "navigate"} · Enter {isRTL ? "للإدراج" : "insert"} · Esc {isRTL ? "إغلاق" : "close"}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                          {isRTL ? "ملاحظات (اختياري)" : "Notes (optional)"}
+                        </label>
+                        <input
+                          type="text"
+                          value={notes}
+                          onChange={(e) => updateStudentNotes(studentId, e.target.value)}
+                          placeholder={isRTL ? "أضف ملاحظة..." : "Add a note..."}
+                          className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-400 dark:border-violet-500/20 dark:bg-white/5 dark:text-white"
+                        />
+                      </div>
+
+                      {previewMsg && (
+                        <div className="overflow-hidden rounded-lg border border-violet-100 bg-white dark:border-violet-500/10 dark:bg-white/5">
+                          <div className="flex items-center justify-between border-b border-violet-100 bg-violet-50 px-3 py-1.5 dark:border-violet-500/10 dark:bg-violet-500/10">
+                            <span className="text-[11px] font-medium text-violet-700 dark:text-violet-300">
+                              📋 {isRTL ? "معاينة الرسالة الفعلية" : "Live preview"}
+                            </span>
+                            <span className="text-[11px] text-violet-400">
+                              {studentLang === "ar" ? "🇸🇦" : "🇬🇧"} · {gender === "female" ? "👧" : "👦"} · {relationship === "mother" ? "👩" : "👨"}
+                            </span>
+                          </div>
+                          <div
+                            className="max-h-48 overflow-y-auto whitespace-pre-wrap bg-slate-50/60 p-3 text-sm text-slate-700 dark:bg-transparent dark:text-slate-200"
+                            dir={studentLang === "ar" ? "rtl" : "ltr"}
+                          >
+                            {previewMsg}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end border-t border-violet-100 pt-2 dark:border-violet-500/10">
+                        <button
+                          onClick={() => saveTemplateToDatabase(studentId, rawMsg)}
+                          disabled={!rawMsg || savingTemplate[studentId] || loadingTemplates[studentId]}
+                          className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {savingTemplate[studentId] ? (
+                            <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
+                          ) : (
+                            <><Save className="h-3 w-3" /> {isRTL ? "حفظ كقالب افتراضي" : "Save as default"}</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          );
+        })}
 
-        {/* ── Footer ── */}
-        <div className="p-6 border-t border-PowderBlueBorder dark:border-dark_border flex items-center justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-lg hover:bg-gray-50 dark:hover:bg-dark_input"
-          >
-            {isRTL ? "إلغاء" : "Cancel"}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || sessionLocked}
-            className={`px-4 py-2 text-sm rounded-lg flex items-center gap-2 ${
-              sessionLocked
-                ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-                : "bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
-            }`}
-            title={sessionLocked ? (isRTL ? "السيشن مقفولة بسبب الـ Hold" : "Session locked due to hold") : ""}
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                {isRTL ? "جاري الحفظ..." : "Saving..."}
-              </>
-            ) : sessionLocked ? (
-              <>
-                <Lock className="w-4 h-4" />
-                {isRTL ? "مقفولة" : "Locked"}
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                {isRTL ? "حفظ الحضور" : "Save Attendance"}
-              </>
-            )}
-          </button>
-        </div>
+        {groupStudents.length === 0 && (
+          <div className="py-10 text-center">
+            <Users className="mx-auto mb-2 h-10 w-10 text-slate-300" />
+            <p className="font-medium text-slate-500">
+              {isRTL ? "لا يوجد طلاب في هذه المجموعة" : "No students in this group"}
+            </p>
+          </div>
+        )}
       </div>
-    </div>
+    </ModalShell>
+  );
+}
+
+// small local icon (kept inline to avoid an extra import path assumption)
+function Hash(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...props}>
+      <line x1="4" y1="9" x2="20" y2="9" />
+      <line x1="4" y1="15" x2="20" y2="15" />
+      <line x1="10" y1="3" x2="8" y2="21" />
+      <line x1="16" y1="3" x2="14" y2="21" />
+    </svg>
   );
 }

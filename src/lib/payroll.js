@@ -130,6 +130,8 @@ export async function processSessionPayroll({
     actualStartTime || session.actualStartTime || session.startTime || "";
   const endTime = actualEndTime || session.actualEndTime || session.endTime || "";
 
+  // ✅ usedActual بيبقى true بس لو في وقت فعلي *حقيقي* اتسجل (مبعوت دلوقتي
+  // أو محفوظ من قبل على السيشن) — مش لو رجعنا لـ fallback الجدول
   const usedActual = !!(
     (actualStartTime && actualEndTime) ||
     (session.actualStartTime && session.actualEndTime)
@@ -192,40 +194,60 @@ export async function processSessionPayroll({
 
     const sessionAmount = calculateSessionAmount(durationMinutes, rate.hourlyRate);
 
-    const entry = await PayrollEntry.create({
-      instructorId,
-      sessionId: session._id,
-      groupId: session.groupId,
-      courseId: session.courseId,
-      sessionTitle: session.title || "",
-      groupName: group.name || "",
-      sessionDate,
-      deliveryMode,
-      actualStartTime: startTime,
-      actualEndTime: endTime,
-      durationMinutes,
-      durationSource: usedActual ? "actual" : "scheduled",
-      hourlyRateSnapshot: rate.hourlyRate,
-      rateHistoryId: rate.historyId,
-      sessionAmount,
-      transportationAllowance,
-      transportationApplied,
-      transportationSkipReason,
-      totalAmount: round2(sessionAmount + transportationAllowance),
-      currency: rate.currency,
-      status: "pending",
-      metadata: { createdBy: actedBy, source },
-    });
+    // ✅ FIX: الـ findOne فوق مش atomic — لو نفس السيشن اتعالجت مرتين في نفس
+    // اللحظة (مثلاً complete من الأدمن + evaluation من المدرس)، ممكن الـ
+    // create يرمي duplicate key error (unique index instructorId+sessionId).
+    // بنمسك الحالة دي لوحدها لكل مدرس عشان error واحد مايوقفش باقي المدرسين
+    // في نفس اللوب.
+    try {
+      const entry = await PayrollEntry.create({
+        instructorId,
+        sessionId: session._id,
+        groupId: session.groupId,
+        courseId: session.courseId,
+        sessionTitle: session.title || "",
+        groupName: group.name || "",
+        sessionDate,
+        deliveryMode,
+        actualStartTime: startTime,
+        actualEndTime: endTime,
+        durationMinutes,
+        durationSource: usedActual ? "actual" : "scheduled",
+        hourlyRateSnapshot: rate.hourlyRate,
+        rateHistoryId: rate.historyId,
+        sessionAmount,
+        transportationAllowance,
+        transportationApplied,
+        transportationSkipReason,
+        totalAmount: round2(sessionAmount + transportationAllowance),
+        currency: rate.currency,
+        status: "pending",
+        metadata: { createdBy: actedBy, source },
+      });
 
-    entries.push(entry);
+      entries.push(entry);
+    } catch (err) {
+      if (err?.code === 11000) {
+        skipped.push({ instructorId, reason: "entry_exists" });
+      } else {
+        throw err;
+      }
+    }
   }
 
   // ✅ مبنقفلش السيشن على processed غير لما كل المدرسين ياخدوا سطورهم —
   // كده لو مدرس مالوش سعر، الأدمن يظبطه ويشغّل إعادة الحساب عادي.
   const allDone = skipped.every((s) => s.reason === "entry_exists");
 
-  session.actualStartTime = startTime;
-  session.actualEndTime = endTime;
+  // ✅ FIX: نحدّث actualStartTime/actualEndTime على السيشن بس لو فعلاً في
+  // وقت فعلي حقيقي اتسجل (usedActual). لو استخدمنا الجدول كـ fallback بس،
+  // نسيب الحقلين زي ما هما (فاضيين) عشان مايبانش إن فيه check-in فعلي حصل
+  // مع إنه مجرد قيمة افتراضية من الجدول.
+  if (usedActual) {
+    session.actualStartTime = startTime;
+    session.actualEndTime = endTime;
+  }
+
   session.payroll = {
     processed: allDone,
     processedAt: new Date(),

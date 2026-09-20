@@ -4745,24 +4745,24 @@ const ar = {
   "groups.actions.fixLinks": "إصلاح روابط الاجتماعات",
   "groups.links.missing": "جلسات بدون رابط",
   "groups.hold.confirmRelease":
-    "هل أنت متأكد من رغبتك في فك التعليق عن المجموعة \"{name}\"؟",
+    'هل أنت متأكد من رغبتك في فك التعليق عن المجموعة "{name}"؟',
   "groups.hold.releasing": "جاري فك التعليق...",
   "groups.hold.releaseSuccess": "تم فك التعليق بنجاح",
   "groups.hold.releaseFailed": "فشل فك التعليق",
- 
+
   // شارات الحالة في الجدول
   "groups.hold.indefinite": "تعليق مفتوح",
   "groups.hold.sessions": "تعليق بالجلسات",
   "groups.hold.untilSession": "تعليق حتى جلسة محددة",
   "groups.hold.duration": "تعليق",
   "groups.hold.days": "أيام",
- 
+
   // ── GroupHoldModal ────────────────────────────────────────────────────
   "groups.hold.pausedTitle": "سيتم إيقاف المجموعة مؤقتًا",
   "groups.hold.effect.noMessages": "بدون رسائل",
   "groups.hold.effect.noCredit": "بدون خصم ساعات",
   "groups.hold.effect.noAttendance": "بدون تسجيل حضور",
- 
+
   "groups.hold.type.label": "نوع التعليق",
   "groups.hold.type.duration.title": "لفترة محددة",
   "groups.hold.type.duration.desc": "حدد عدد الأيام",
@@ -4772,38 +4772,36 @@ const ar = {
   "groups.hold.type.untilSession.desc": "اختر الجلسة التي ينتهي عندها",
   "groups.hold.type.indefinite.title": "مفتوح",
   "groups.hold.type.indefinite.desc": "حتى تفكه يدويًا",
- 
+
   "groups.hold.daysCount": "عدد الأيام",
   "groups.hold.sessionsCount": "عدد الجلسات",
   "groups.hold.unit.days": "يوم",
   "groups.hold.unit.sessions": "جلسة",
- 
+
   "groups.hold.targetSession": "الجلسة المستهدفة",
   "groups.hold.module": "الوحدة",
   "groups.hold.session": "الجلسة",
   "groups.hold.noSessions": "لا توجد جلسات مجدولة لهذه المجموعة حاليًا",
-  "groups.hold.loadFailed":
-    "تعذر تحميل الجلسات. أغلق النافذة وحاول مرة أخرى.",
+  "groups.hold.loadFailed": "تعذر تحميل الجلسات. أغلق النافذة وحاول مرة أخرى.",
   "groups.hold.shiftNote":
     "الجلسات من تاريخ هذه الجلسة فصاعدًا ستُرحَّل أسبوعًا إلى الأمام.",
- 
+
   "groups.hold.reason": "السبب",
   "groups.hold.reasonOptional": "اختياري",
   "groups.hold.reasonPlaceholder": "مثال: عطلة رسمية، ظروف خاصة...",
- 
+
   "groups.hold.shift.title": "ترحيل الجلسات المجدولة",
   "groups.hold.shift.desc": "ستُرحَّل الجلسات القادمة إلى الأمام تلقائيًا",
- 
+
   // ملخص قبل التفعيل
-  "groups.hold.summary.duration":
-    "سيتم فك التعليق تلقائيًا بعد {days} يوم",
+  "groups.hold.summary.duration": "سيتم فك التعليق تلقائيًا بعد {days} يوم",
   "groups.hold.summary.sessions":
     "سيتم فك التعليق بعد تسجيل الحضور في {count} جلسة",
   "groups.hold.summary.untilSession":
     "سيتم فك التعليق عند تسجيل الحضور في «{title}»",
   "groups.hold.summary.pickSession": "اختر الجلسة التي سينتهي عندها التعليق",
   "groups.hold.summary.indefinite": "سيستمر التعليق حتى تفكه يدويًا",
- 
+
   // أزرار ورسائل
   "groups.hold.activate": "تفعيل التعليق",
   "groups.hold.activating": "جاري التفعيل...",
@@ -4814,6 +4812,143 @@ const ar = {
   "groups.hold.invalidSessions": "عدد الجلسات غير صحيح",
   "groups.hold.selectSession": "يجب اختيار الجلسة المستهدفة",
   "group.holdGroup": "تعليق المجموعة",
+  "groups.makeup.button": "حصة تعويضية",
+  "groups.makeup.badge": "تعويضية",
+  "groups.stats.makeup": "حصص التعويض",
+  "groups.makeup.created": "تم إنشاء حصة التعويض بنجاح",
+
+  "profile.signIn": "تسجيل الدخول",
+  "profile.settings": "الإعدادات",
+  "profile.myProfile": "ملفي الشخصي",
+  "profile.language": "اللغة",
+
+  // Welcome
+  "dashboard.welcomeBack": "أهلاً بعودتك",
+
+  "dashboard.liveData": "بيانات مباشرة",
+  "dashboard.realTimeData": "بيانات حقيقية من قاعدة البيانات",
+  "dashboard.updatedJustNow": "تم التحديث الآن",
+
+  "dashboard.totalGroups": "إجمالي الجروبات",
+  "dashboard.activeGroups": "الجروبات النشطة",
+  "dashboard.totalInstructors": "المدرسين",
+  "dashboard.pendingInvoices": "فواتير معلقة",
+  "dashboard.overdueInvoices": "فواتير متأخرة",
+  "dashboard.escrowAmount": "مبلغ الإسكرو",
+
+  // Flow Charts
+  "dashboard.studentLifecycle": "دورة حياة الطالب",
+  "dashboard.studentLifecycleDesc": "توزيع دائري لمراحل التسجيل والتفعيل",
+  "dashboard.billingPipeline": "خط سير الفواتير",
+  "dashboard.billingPipelineDesc": "مراحل الفواتير من الإنشاء للدفع",
+  "dashboard.creditHealth": "صحة الرصيد",
+  "dashboard.creditHealthDesc": "توزيع الطلاب حسب ساعات الرصيد المتبقية",
+  "dashboard.revenueFlow": "تدفق الإيرادات",
+  "dashboard.revenueFlowDesc": "المحصل مقابل الإسكرو — آخر 6 شهور",
+  "dashboard.liveActivity": "الأنشطة المباشرة",
+  "dashboard.liveActivityDesc": "أحدث الأحداث في الأكاديمية",
+  "dashboard.weeklyEngagement": "تفاعل الأسبوع",
+  "dashboard.weeklyEngagementDesc": "متوسط إشغال الجروبات",
+  "dashboard.contentHub": "مركز المحتوى",
+  "dashboard.contentHubDesc": "المقالات، المشاريع، والإجراءات السريعة",
+  "dashboard.recentEnrollments": "أحدث التسجيلات",
+  "dashboard.recentEnrollmentsDesc": "آخر الطلاب المنضمين للأكاديمية",
+
+  // Flow Stages
+  "dashboard.stages.enrolled": "مسجل",
+  "dashboard.stages.assigned_to_group": "في مجموعة",
+  "dashboard.stages.has_active_package": "باقة نشطة",
+  "dashboard.stages.attended_session": "حضر سيشن",
+  "dashboard.stages.pending": "قيد الانتظار",
+  "dashboard.stages.escrow": "في الإسكرو",
+  "dashboard.stages.suspended": "موقوف",
+  "dashboard.stages.paid": "مدفوع",
+  "dashboard.stages.zero": "صفر",
+  "dashboard.stages.critical": "حرج",
+  "dashboard.stages.low": "منخفض",
+  "dashboard.stages.good": "جيد",
+
+  // Revenue Chart
+  "dashboard.collected": "محصّل",
+  "dashboard.inEscrow": "في الإسكرو",
+  "dashboard.outstanding": "معلق",
+  "dashboard.totalInvoices": "إجمالي الفواتير",
+  "dashboard.totalTracked": "إجمالي الطلاب",
+
+  // Engagement
+  "dashboard.average": "متوسط",
+  "dashboard.peakDay": "أعلى يوم",
+
+  "dashboard.excellent": "ممتاز",
+  "dashboard.goodPerformance": "أداء جيد",
+  "dashboard.needsWork": "بحاجة لتحسين",
+
+  // Content Hub
+  "dashboard.publishedPosts": "المقالات المنشورة",
+  "dashboard.activeProjects": "المشاريع النشطة",
+  "dashboard.drafts": "مسودات",
+
+  "dashboard.writeNewBlog": "كتابة مقال جديد",
+  "dashboard.contentCreation": "إنشاء محتوى",
+  "dashboard.viewStudentProjects": "عرض مشاريع الطلاب",
+  "dashboard.portfolioReview": "مراجعة المحفظة",
+
+  "dashboard.noEnrollments": "لا يوجد تسجيلات بعد",
+  "dashboard.notAssigned": "غير محدد",
+
+  // Status
+  "dashboard.statusActive": "نشط",
+  "dashboard.statusPending": "قيد الانتظار",
+  "dashboard.statusTrial": "تجريبي",
+
+  // Activity Feed
+  "dashboard.noRecentActivity": "لا يوجد نشاط حديث",
+  "dashboard.newStudentRegistration": "تسجيل طالب جديد",
+  "dashboard.joinedPlatform": "انضم إلى المنصة",
+  "dashboard.newSubscription": "اشتراك جديد",
+  "dashboard.subscribedTo": "اشترك في",
+  "dashboard.newProjectSubmitted": "تم تقديم مشروع جديد",
+  "dashboard.created": "أنشأ",
+  "dashboard.paymentReceived": "دفعة مستلمة",
+  "dashboard.evaluation": "تقييم",
+  "dashboard.newGroup": "جروب جديد",
+  "dashboard.zeroBalanceAlert": "طلاب برصيد صفر",
+  "dashboard.zeroBalanceDesc": "الرصيد استنفد — تم تعطيل الإشعارات",
+  "dashboard.now": "الآن",
+
+  // ═══════════════════════════════════════════════════════
+  // ERRORS
+  // ═══════════════════════════════════════════════════════
+  "errors.failedToFetch": "فشل في جلب البيانات",
+  "errors.noRealData": "لا توجد بيانات حقيقية متاحة بعد",
+  "errors.networkError": "خطأ في الشبكة",
+  "errors.unknownError": "خطأ غير معروف",
+  "errors.tryAgain": "حاول مرة أخرى",
+  "calendar.done": "تم",
+  "calendar.clear": "مسح",
+  "calendar.selectRange": "تحديد نطاق",
+
+   "dashboard.catCms": "الموقع والمحتوى",
+    "dashboard.catAcademic": "العمليات الأكاديمية",
+    "dashboard.catOps": "العمليات والتواصل",
+    "dashboard.catUsers": "إدارة المستخدمين",
+    "dashboard.catFinance": "المالية والفواتير",
+    "dashboard.catMarketing": "التسويق والنمو",
+    "dashboard.catSystem": "إعدادات النظام",
+    "dashboard.adHocSessions": "الجلسات الاستثنائية",
+    "dashboard.portfolios": "بورتفوليو الطلاب",
+    "dashboard.whatsappRouting": "حالة توجيه واتساب",
+    "dashboard.suspensionAlerts": "تنبيهات الإيقاف المعلّقة",
+    "dashboard.communicationLogs": "سجل التواصل",
+    "dashboard.invoices": "الفواتير وتواريخ الاستحقاق",
+    "dashboard.packagePlans": "باقات الساعات",
+    "dashboard.escrow": "متابعة أموال الضمان",
+    "dashboard.financialReports": "التقارير المالية",
+    "dashboard.instructorRates": "أسعار المدرسين",
+    "dashboard.payroll": "كشف مرتبات المدرسين",
+    "dashboard.campaigns": "الحملات التسويقية",
+    "dashboard.leads": "العملاء المحتملون",
+    "dashboard.integrations": "تكاملات الـ API"
 };
 
 export default ar;

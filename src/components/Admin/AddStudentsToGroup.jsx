@@ -5,7 +5,7 @@ import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
 import toast from "react-hot-toast";
 
-// ─── Icons (inline SVG to avoid import issues) ────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────
 const Icon = {
   Users: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -68,6 +68,12 @@ const Icon = {
       <circle cx="12" cy="10" r="2" />
     </svg>
   ),
+  MapPin: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  ),
   Alert: () => (
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" />
@@ -81,7 +87,7 @@ const Icon = {
   ),
 };
 
-// ─── Avatar initials ────────────────────────────────────────────────────────
+// ─── Avatar ──────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
   { bg: "#EDE9FF", text: "#5B4FCF" },
   { bg: "#E0F5EE", text: "#0D6B50" },
@@ -91,26 +97,66 @@ const AVATAR_COLORS = [
 ];
 
 function getInitials(name = "") {
-  const parts = name.trim().split(" ").filter(Boolean);
+  const parts = String(name || "").trim().split(" ").filter(Boolean);
   if (parts.length >= 2) return parts[0][0] + parts[1][0];
   return parts[0]?.[0] || "؟";
 }
 
 function getAvatarColor(name = "") {
   let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const s = String(name || "");
+  for (let i = 0; i < s.length; i++) hash = s.charCodeAt(i) + ((hash << 5) - hash);
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+const safe = (v) => (v === undefined || v === null ? "" : String(v));
+
+// ✅ Helper: build maps link for offline
+function buildMapsLink(group) {
+  const loc = group?.locationDetails || {};
+  if (loc.lat != null && loc.lng != null) {
+    return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+  }
+  if (loc.address) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.address)}`;
+  }
+  if (loc.placeName || group?.location) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.placeName || group.location)}`;
+  }
+  return "";
+}
+
+// ✅ Helper: كشف إذا كان النص بتاع ولي الأمر وليس الطالب
+const GUARDIAN_MARKERS = [
+  "{guardianSalutation",
+  "{guardianSalutation_ar}",
+  "{guardianSalutation_en}",
+  "{childTitle}",
+  "{guardianName}",
+];
+const STUDENT_MARKERS = [
+  "{salutation_ar}",
+  "{salutation_en}",
+  "{studentSalutation}",
+  "{studentName}",
+];
+
+function looksLikeGuardianContent(text) {
+  if (!text) return false;
+  const hasGuardian = GUARDIAN_MARKERS.some((m) => text.includes(m));
+  const hasStudent = STUDENT_MARKERS.some((m) => text.includes(m));
+  return hasGuardian && !hasStudent;
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────
 export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded }) {
   const { locale } = useLocale();
   const { t } = useI18n();
 
   const [students, setStudents] = useState([]);
   const [group, setGroup] = useState(null);
+  const [isOffline, setIsOffline] = useState(false);
 
-  // NEW: module data from course
   const [courseModule, setCourseModule] = useState({
     title: "",
     description: "",
@@ -161,17 +207,17 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
   const isRTL = locale === "ar";
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────
+  // ─── Helpers ─────────────────────────────────────────────────────────
   const getGenderFlags = useCallback((student) => {
     if (!student) return { isMale: true, isFather: true };
-    const gender = String(student.personalInfo?.gender || "Male").toLowerCase();
-    const relationship = String(student.guardianInfo?.relationship || "father").toLowerCase();
+    const gender = String(student?.personalInfo?.gender || "Male").toLowerCase();
+    const relationship = String(student?.guardianInfo?.relationship || "father").toLowerCase();
     return { isMale: gender !== "female", isFather: relationship !== "mother" };
   }, []);
 
   const buildInstructorsNames = (instructors, language = "ar") => {
-    if (!instructors?.length) return "";
-    const names = instructors.map(i => i.userId?.name || i.name).filter(Boolean);
+    if (!Array.isArray(instructors) || !instructors.length) return "";
+    const names = instructors.map(i => i?.userId?.name || i?.name).filter(Boolean);
     if (!names.length) return "";
     if (names.length === 1) return names[0];
     if (language === "ar") {
@@ -187,7 +233,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       const data = await res.json();
       if (data.success && data.data) {
         const map = {};
-        data.data.forEach(v => { map[v.key] = v; });
+        data.data.forEach(v => { if (v?.key) map[v.key] = v; });
         setDbVars(map);
       }
     } catch (err) {
@@ -200,112 +246,221 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const resolveVar = useCallback((key, lang = "ar", genderContext = {}) => {
     const v = dbVars[key];
     if (!v) return null;
-    const { studentGender = "Male", guardianType = "father", instructorGender = "male" } = genderContext;
-    const isMale = String(studentGender).toLowerCase() !== "female";
-    const isFather = String(guardianType).toLowerCase() !== "mother";
-    const isMaleInstructor = String(instructorGender).toLowerCase() !== "female";
-    if (v.hasGender) {
-      if (v.genderType === "student") return lang === "ar" ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
-      if (v.genderType === "guardian") return lang === "ar" ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || null : (isFather ? v.valueFatherEn : v.valueMotherEn) || v.valueEn || null;
-      if (v.genderType === "instructor") return lang === "ar" ? (isMaleInstructor ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null : (isMaleInstructor ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
+    try {
+      const { studentGender = "Male", guardianType = "father", instructorGender = "male" } = genderContext || {};
+      const isMale = String(studentGender).toLowerCase() !== "female";
+      const isFather = String(guardianType).toLowerCase() !== "mother";
+      const isMaleInstructor = String(instructorGender).toLowerCase() !== "female";
+      if (v.hasGender) {
+        if (v.genderType === "student") {
+          return lang === "ar"
+            ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
+            : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
+        }
+        if (v.genderType === "guardian") {
+          return lang === "ar"
+            ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || null
+            : (isFather ? v.valueFatherEn : v.valueMotherEn) || v.valueEn || null;
+        }
+        if (v.genderType === "instructor") {
+          return lang === "ar"
+            ? (isMaleInstructor ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
+            : (isMaleInstructor ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
+        }
+      }
+      return lang === "ar" ? (v.valueAr || null) : (v.valueEn || null);
+    } catch (err) {
+      console.warn("⚠️ resolveVar error:", key, err);
+      return null;
     }
-    return lang === "ar" ? v.valueAr || null : v.valueEn || null;
   }, [dbVars]);
 
+  // ✅ getStudentContext
   const getStudentContext = useCallback(() => {
     if (!selectedStudent) return null;
-    const lang = selectedStudent.communicationPreferences?.preferredLanguage || "ar";
-    const studentGender = selectedStudent.personalInfo?.gender || "Male";
-    const guardianType = selectedStudent.guardianInfo?.relationship || "father";
-    const genderCtx = { studentGender, guardianType, instructorGender: supervisorGender };
-    const { isMale, isFather } = getGenderFlags(selectedStudent);
-    const studentFullName = selectedStudent.personalInfo?.fullName || "";
-    const guardianFullName = selectedStudent.guardianInfo?.name || "";
-    const studentNickAr = selectedStudent.personalInfo?.nickname?.ar || studentFullName.split(" ")[0] || "الطالب";
-    const studentNickEn = selectedStudent.personalInfo?.nickname?.en || studentFullName.split(" ")[0] || "Student";
-    const guardianNickAr = selectedStudent.guardianInfo?.nickname?.ar || guardianFullName.split(" ")[0] || "ولي الأمر";
-    const guardianNickEn = selectedStudent.guardianInfo?.nickname?.en || guardianFullName.split(" ")[0] || "Guardian";
-    const studentNick = lang === "ar" ? studentNickAr : studentNickEn;
-    const guardianNick = lang === "ar" ? guardianNickAr : guardianNickEn;
-    const salutationBaseAr = resolveVar("salutation_ar", "ar", genderCtx) || (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
-    const salutationBaseEn = resolveVar("salutation_en", "en", genderCtx) || "Dear student";
-    const guardianSalutationBaseAr = resolveVar("guardianSalutation_ar", "ar", genderCtx) || (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
-    const guardianSalutationBaseEn = resolveVar("guardianSalutation_en", "en", genderCtx) || (isFather ? "Dear Mr." : "Dear Mrs.");
-    const childTitleAr = resolveVar("childTitle", "ar", genderCtx) || (isMale ? "ابنك" : "ابنتك");
-    const childTitleEn = resolveVar("childTitle", "en", genderCtx) || (isMale ? "your son" : "your daughter");
-    const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
-    const salutationAr = `${salutationBaseAr} ${studentNickAr}`;
-    const salutationEn = `${salutationBaseEn} ${studentNickEn}`;
-    const guardianSalutationAr = `${guardianSalutationBaseAr} ${guardianNickAr}`;
-    const guardianSalutationEn = `${guardianSalutationBaseEn} ${guardianNickEn}`;
-    const studentSalutation = lang === "ar" ? salutationAr : salutationEn;
-    const guardianSalutation = lang === "ar" ? guardianSalutationAr : guardianSalutationEn;
-    const supervisorNameValue = resolveVar("supervisorName", lang, genderCtx) || "";
-    return { lang, studentGender, guardianType, isMale, isFather, studentNick, guardianNick, childTitle, studentSalutation, guardianSalutation, salutationAr, salutationEn, guardianSalutationAr, guardianSalutationEn, childTitleAr, childTitleEn, supervisorNameValue };
-  }, [selectedStudent, resolveVar, getGenderFlags, supervisorGender]);
+    try {
+      const lang = selectedStudent?.communicationPreferences?.preferredLanguage || "ar";
+      const studentGender = selectedStudent?.personalInfo?.gender || "Male";
+      const guardianType = selectedStudent?.guardianInfo?.relationship || "father";
+      const genderCtx = { studentGender, guardianType, instructorGender: supervisorGender };
+      const { isMale, isFather } = getGenderFlags(selectedStudent);
 
-  // UPDATED: buildReplacementsMap — added moduleTitle and moduleDescription from courseModule
-  const buildReplacementsMap = useCallback((type) => {
+      const studentFullName = safe(selectedStudent?.personalInfo?.fullName);
+      const guardianFullName = safe(selectedStudent?.guardianInfo?.name);
+
+      const studentNickAr = safe(selectedStudent?.personalInfo?.nickname?.ar) || studentFullName.split(" ")[0] || "الطالب";
+      const studentNickEn = safe(selectedStudent?.personalInfo?.nickname?.en) || studentFullName.split(" ")[0] || "Student";
+      const guardianNickAr = safe(selectedStudent?.guardianInfo?.nickname?.ar) || guardianFullName.split(" ")[0] || "ولي الأمر";
+      const guardianNickEn = safe(selectedStudent?.guardianInfo?.nickname?.en) || guardianFullName.split(" ")[0] || "Guardian";
+
+      const studentNick = lang === "ar" ? studentNickAr : studentNickEn;
+      const guardianNick = lang === "ar" ? guardianNickAr : guardianNickEn;
+
+      const salutationBaseAr = resolveVar("salutation_ar", "ar", genderCtx) || (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
+      const salutationBaseEn = resolveVar("salutation_en", "en", genderCtx) || "Dear student";
+      const guardianSalutationBaseAr = resolveVar("guardianSalutation_ar", "ar", genderCtx) || (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
+      const guardianSalutationBaseEn = resolveVar("guardianSalutation_en", "en", genderCtx) || (isFather ? "Dear Mr." : "Dear Mrs.");
+      const childTitleAr = resolveVar("childTitle", "ar", genderCtx) || (isMale ? "ابنك" : "ابنتك");
+      const childTitleEn = resolveVar("childTitle", "en", genderCtx) || (isMale ? "your son" : "your daughter");
+      const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
+
+      const salutationAr = `${salutationBaseAr} ${studentNickAr}`;
+      const salutationEn = `${salutationBaseEn} ${studentNickEn}`;
+      const guardianSalutationAr = `${guardianSalutationBaseAr} ${guardianNickAr}`;
+      const guardianSalutationEn = `${guardianSalutationBaseEn} ${guardianNickEn}`;
+
+      return {
+        lang, studentGender, guardianType, isMale, isFather,
+        studentNick, guardianNick, childTitle,
+        studentSalutation: lang === "ar" ? salutationAr : salutationEn,
+        guardianSalutation: lang === "ar" ? guardianSalutationAr : guardianSalutationEn,
+        salutationAr, salutationEn,
+        guardianSalutationAr, guardianSalutationEn,
+        childTitleAr, childTitleEn,
+        supervisorNameValue: safe(resolveVar("supervisorName", lang, genderCtx)),
+        isOffline,
+      };
+    } catch (err) {
+      console.error("❌ getStudentContext error:", err);
+      return null;
+    }
+  }, [selectedStudent, resolveVar, getGenderFlags, supervisorGender, isOffline]);
+
+  // ✅ buildReplacementsMap — كل المتغيرات متاحة دايماً
+  const buildReplacementsMap = useCallback(() => {
     const ctx = getStudentContext();
     if (!ctx || !group) return {};
-    const { lang, isMale, isFather, studentNick, guardianNick, childTitle, salutationAr, salutationEn, guardianSalutationAr, guardianSalutationEn, supervisorNameValue } = ctx;
-    const startDate = group.schedule?.startDate ? new Date(group.schedule.startDate).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "";
-    const instructorNames = buildInstructorsNames(group.instructors, lang);
 
-    // NEW: use courseModule for moduleTitle and moduleDescription
-    const moduleTitleValue = courseModule.title || group.courseSnapshot?.currentModuleTitle || group.courseSnapshot?.title || "";
-    const moduleDescriptionValue = courseModule.description || "";
+    try {
+      const {
+        lang, isMale, isFather, studentNick, guardianNick, childTitle,
+        salutationAr, salutationEn, guardianSalutationAr, guardianSalutationEn,
+        childTitleAr, childTitleEn,
+        supervisorNameValue,
+      } = ctx;
 
-    const common = {
-      "{groupName}": group.name || "",
-      "{courseName}": group.courseSnapshot?.title || "",
-      "{startDate}": startDate,
-      "{timeFrom}": group.schedule?.timeFrom || "",
-      "{timeTo}": group.schedule?.timeTo || "",
-      "{instructor}": instructorNames,
-      "{firstMeetingLink}": group.firstMeetingLink || "",
-      // NEW: moduleTitle and moduleDescription from real course
-      "{moduleTitle}": moduleTitleValue,
-      "{moduleDescription}": moduleDescriptionValue,
-      "{supervisorName}": supervisorNameValue,
-    };
-    if (type === "student") {
+      const startDate = group?.schedule?.startDate
+        ? new Date(group.schedule.startDate).toLocaleDateString(
+            lang === "ar" ? "ar-EG" : "en-US",
+            { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+          )
+        : "";
+
+      const instructorNames = buildInstructorsNames(group?.instructors, lang);
+
+      const moduleTitleValue =
+        courseModule?.title ||
+        group?.courseSnapshot?.currentModuleTitle ||
+        group?.courseSnapshot?.title ||
+        "";
+
+      const moduleDescriptionValue = courseModule?.description || "";
+
+      // Location data (Offline)
+      const loc = group?.locationDetails || {};
+      const placeName = loc.placeName || group?.location || "";
+      const address = loc.address || loc.extraDetails || "";
+      const mapsLink = isOffline ? buildMapsLink(group) : "";
+
+      // Meeting link (Online only)
+      const meetingLink = !isOffline ? safe(group?.firstMeetingLink) : "";
+
+      // Smart block
+      const sessionLocationBlock = isOffline
+        ? [
+            placeName && `📍 ${lang === "ar" ? "المكان" : "Location"}: ${placeName}`,
+            address && `📌 ${lang === "ar" ? "العنوان" : "Address"}: ${address}`,
+            mapsLink && `🗺️ ${lang === "ar" ? "اللوكيشن" : "Maps"}: ${mapsLink}`,
+          ].filter(Boolean).join("\n")
+        : meetingLink
+          ? `🔗 ${lang === "ar" ? "رابط الجلسة" : "Meeting Link"}: ${meetingLink}`
+          : "";
+
       return {
-        "{salutation_ar}": salutationAr || (isMale ? `عزيزي الطالب ${studentNick}` : `عزيزتي الطالبة ${studentNick}`),
-        "{salutation_en}": salutationEn || `Dear student ${studentNick}`,
-        "{studentName}": studentNick,
-        ...common,
-      };
-    }
-    return {
-      "{guardianSalutation}": lang === "ar" ? guardianSalutationAr : guardianSalutationEn,
-      "{guardianSalutation_ar}": guardianSalutationAr || (isFather ? `عزيزي الأستاذ ${guardianNick}` : `عزيزتي السيدة ${guardianNick}`),
-      "{guardianSalutation_en}": guardianSalutationEn || `${isFather ? "Dear Mr." : "Dear Mrs."} ${guardianNick}`,
-      "{guardianName}": guardianNick,
-      "{studentName}": studentNick,
-      "{childTitle}": childTitle,
-      ...common,
-    };
-  }, [getStudentContext, group, courseModule]);
+        // ── Student vars ──────────────────────────────────────────
+        "{salutation_ar}": safe(salutationAr) || (isMale ? `عزيزي الطالب ${studentNick}` : `عزيزتي الطالبة ${studentNick}`),
+        "{salutation_en}": safe(salutationEn) || `Dear student ${studentNick}`,
+        "{studentSalutation}": safe(lang === "ar" ? salutationAr : salutationEn),
+        "{studentName}": safe(studentNick),
+        "{studentFullName}": safe(selectedStudent?.personalInfo?.fullName),
 
-  const replaceVars = useCallback((msg, type) => {
-    if (!msg || !selectedStudent || !group) return msg || "";
-    const map = buildReplacementsMap(type);
-    let result = msg;
-    for (const [key, value] of Object.entries(map)) {
-      result = result.replace(new RegExp(key.replace(/[{}]/g, "\\$&"), "g"), value ?? "");
+        // ── Guardian vars ─────────────────────────────────────────
+        "{guardianSalutation}": safe(lang === "ar" ? guardianSalutationAr : guardianSalutationEn),
+        "{guardianSalutation_ar}": safe(guardianSalutationAr) || (isFather ? `عزيزي الأستاذ ${guardianNick}` : `عزيزتي السيدة ${guardianNick}`),
+        "{guardianSalutation_en}": safe(guardianSalutationEn) || `${isFather ? "Dear Mr." : "Dear Mrs."} ${guardianNick}`,
+        "{guardianName}": safe(guardianNick),
+        "{guardianFullName}": safe(selectedStudent?.guardianInfo?.name),
+        "{childTitle}": safe(childTitle),
+        "{childTitle_ar}": safe(childTitleAr),
+        "{childTitle_en}": safe(childTitleEn),
+
+        // ── Common ────────────────────────────────────────────────
+        "{groupName}": safe(group?.name),
+        "{groupCode}": safe(group?.code),
+        "{courseName}": safe(group?.courseSnapshot?.title),
+        "{startDate}": safe(startDate),
+        "{timeFrom}": safe(group?.schedule?.timeFrom),
+        "{timeTo}": safe(group?.schedule?.timeTo),
+        "{instructor}": safe(instructorNames),
+        "{moduleTitle}": safe(moduleTitleValue),
+        "{moduleDescription}": safe(moduleDescriptionValue),
+        "{supervisorName}": safe(supervisorNameValue),
+
+        // ── Online ────────────────────────────────────────────────
+        "{firstMeetingLink}": meetingLink,
+        "{meetingLink}": meetingLink,
+
+        // ── Offline ───────────────────────────────────────────────
+        "{placeName}": isOffline ? safe(placeName) : "",
+        "{address}": isOffline ? safe(address) : "",
+        "{mapsLink}": isOffline ? safe(mapsLink) : "",
+
+        // ── Smart block ───────────────────────────────────────────
+        "{sessionLocationBlock}": sessionLocationBlock,
+      };
+    } catch (err) {
+      console.error("❌ buildReplacementsMap error:", err);
+      return {};
     }
-    return result;
+  }, [getStudentContext, group, courseModule, isOffline, selectedStudent]);
+
+  // ✅ replaceVars
+  const replaceVars = useCallback((msg) => {
+    if (!msg || !selectedStudent || !group) return safe(msg);
+    try {
+      const map = buildReplacementsMap();
+      if (!map || typeof map !== "object") return safe(msg);
+
+      let result = String(msg);
+      for (const [key, value] of Object.entries(map)) {
+        if (value === undefined || value === null) continue;
+        try {
+          result = result.replace(
+            new RegExp(key.replace(/[{}]/g, "\\$&"), "g"),
+            String(value)
+          );
+        } catch (innerErr) {
+          console.warn("⚠️ Failed to replace", key, innerErr);
+        }
+      }
+      return result;
+    } catch (err) {
+      console.error("❌ replaceVars error:", err);
+      return safe(msg);
+    }
   }, [selectedStudent, group, buildReplacementsMap]);
 
+  // ✅ getStudentVariables
   const getStudentVariables = useCallback(() => {
     const ctx = getStudentContext();
     if (!ctx || !group) return [];
-    const map = buildReplacementsMap("student");
+    const map = buildReplacementsMap();
     const lang = ctx.lang;
-    return [
+
+    const base = [
       { key: "{salutation_ar}", icon: "👋", label: lang === "ar" ? "تحية الطالب (عربي)" : "Student Salutation (AR)", example: map["{salutation_ar}"] },
       { key: "{salutation_en}", icon: "👋", label: lang === "ar" ? "تحية الطالب (إنجليزي)" : "Student Salutation (EN)", example: map["{salutation_en}"] },
+      { key: "{studentSalutation}", icon: "👋", label: lang === "ar" ? "تحية الطالب (موحّدة)" : "Student Salutation", example: map["{studentSalutation}"] },
       { key: "{studentName}", icon: "👤", label: lang === "ar" ? "اسم الطالب" : "Student Name", example: map["{studentName}"] },
       { key: "{groupName}", icon: "👥", label: lang === "ar" ? "اسم المجموعة" : "Group Name", example: map["{groupName}"] },
       { key: "{courseName}", icon: "📚", label: lang === "ar" ? "اسم الكورس" : "Course Name", example: map["{courseName}"] },
@@ -313,16 +468,33 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       { key: "{timeFrom}", icon: "⏰", label: lang === "ar" ? "وقت البداية" : "Time From", example: map["{timeFrom}"] },
       { key: "{timeTo}", icon: "⏰", label: lang === "ar" ? "وقت النهاية" : "Time To", example: map["{timeTo}"] },
       { key: "{instructor}", icon: "👨‍🏫", label: lang === "ar" ? "المدرب/المدربين" : "Instructor(s)", example: map["{instructor}"] },
-      { key: "{firstMeetingLink}", icon: "🔗", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", example: map["{firstMeetingLink}"] || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") },
+      { key: "{sessionLocationBlock}", icon: "🧩", label: lang === "ar" ? "بلوك الموقع/الرابط (تلقائي)" : "Location/Link Block (auto)", example: map["{sessionLocationBlock}"] },
     ];
-  }, [getStudentContext, buildReplacementsMap, group]);
 
+    if (isOffline) {
+      return [
+        ...base,
+        { key: "{placeName}", icon: "📍", label: lang === "ar" ? "اسم المكان" : "Location Name", example: map["{placeName}"] },
+        { key: "{address}", icon: "📌", label: lang === "ar" ? "العنوان" : "Address", example: map["{address}"] },
+        { key: "{mapsLink}", icon: "🗺️", label: lang === "ar" ? "رابط الخريطة" : "Maps Link", example: map["{mapsLink}"] || (lang === "ar" ? "غير متاح" : "N/A") },
+      ];
+    }
+
+    return [
+      ...base,
+      { key: "{firstMeetingLink}", icon: "🔗", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", example: map["{firstMeetingLink}"] || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") },
+      { key: "{meetingLink}", icon: "🔗", label: lang === "ar" ? "رابط الجلسة (alias)" : "Meeting Link (alias)", example: map["{meetingLink}"] || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") },
+    ];
+  }, [getStudentContext, buildReplacementsMap, group, isOffline]);
+
+  // ✅ getGuardianVariables
   const getGuardianVariables = useCallback(() => {
     const ctx = getStudentContext();
     if (!ctx || !group) return [];
-    const map = buildReplacementsMap("guardian");
+    const map = buildReplacementsMap();
     const lang = ctx.lang;
-    return [
+
+    const base = [
       { key: "{guardianSalutation}", icon: "👋", label: lang === "ar" ? "تحية ولي الأمر" : "Guardian Salutation", example: map["{guardianSalutation}"] },
       { key: "{guardianSalutation_ar}", icon: "👋", label: lang === "ar" ? "تحية ولي الأمر (عربي)" : "Guardian Salutation (AR)", example: map["{guardianSalutation_ar}"] },
       { key: "{guardianSalutation_en}", icon: "👋", label: lang === "ar" ? "تحية ولي الأمر (إنجليزي)" : "Guardian Salutation (EN)", example: map["{guardianSalutation_en}"] },
@@ -335,93 +507,124 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       { key: "{timeFrom}", icon: "⏰", label: lang === "ar" ? "وقت البداية" : "Time From", example: map["{timeFrom}"] },
       { key: "{timeTo}", icon: "⏰", label: lang === "ar" ? "وقت النهاية" : "Time To", example: map["{timeTo}"] },
       { key: "{instructor}", icon: "👨‍🏫", label: lang === "ar" ? "المدرب/المدربين" : "Instructor(s)", example: map["{instructor}"] },
-      { key: "{firstMeetingLink}", icon: "🔗", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", example: map["{firstMeetingLink}"] || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") },
-      // NEW: added moduleTitle and moduleDescription in guardian variables
       { key: "{moduleTitle}", icon: "📘", label: lang === "ar" ? "عنوان الموديول" : "Module Title", example: map["{moduleTitle}"] || (lang === "ar" ? "عنوان الموديول" : "Module Title") },
       { key: "{moduleDescription}", icon: "📝", label: lang === "ar" ? "وصف الموديول" : "Module Description", example: map["{moduleDescription}"] || (lang === "ar" ? "وصف الموديول" : "Module Description") },
       { key: "{supervisorName}", icon: "🎓", label: lang === "ar" ? "اسم المشرف" : "Supervisor Name", example: map["{supervisorName}"] },
+      { key: "{sessionLocationBlock}", icon: "🧩", label: lang === "ar" ? "بلوك الموقع/الرابط (تلقائي)" : "Location/Link Block (auto)", example: map["{sessionLocationBlock}"] },
     ];
-  }, [getStudentContext, buildReplacementsMap, group]);
 
-  // NEW: getModuleOverviewVariables — variables specific to module overview message
+    if (isOffline) {
+      return [
+        ...base,
+        { key: "{placeName}", icon: "📍", label: lang === "ar" ? "اسم المكان" : "Location Name", example: map["{placeName}"] },
+        { key: "{address}", icon: "📌", label: lang === "ar" ? "العنوان" : "Address", example: map["{address}"] },
+        { key: "{mapsLink}", icon: "🗺️", label: lang === "ar" ? "رابط الخريطة" : "Maps Link", example: map["{mapsLink}"] || (lang === "ar" ? "غير متاح" : "N/A") },
+      ];
+    }
+
+    return [
+      ...base,
+      { key: "{firstMeetingLink}", icon: "🔗", label: lang === "ar" ? "رابط الجلسة الأولى" : "First Session Link", example: map["{firstMeetingLink}"] || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") },
+      { key: "{meetingLink}", icon: "🔗", label: lang === "ar" ? "رابط الجلسة (alias)" : "Meeting Link (alias)", example: map["{meetingLink}"] || (lang === "ar" ? "سيُضاف قريباً" : "Coming soon") },
+    ];
+  }, [getStudentContext, buildReplacementsMap, group, isOffline]);
+
+  // ✅ getModuleOverviewVariables
   const getModuleOverviewVariables = useCallback(() => {
     const ctx = getStudentContext();
     if (!ctx || !group) return [];
-    const map = buildReplacementsMap("guardian");
+    const map = buildReplacementsMap();
     const lang = ctx.lang;
-    return [
+
+    const base = [
       { key: "{guardianSalutation}", icon: "👋", label: lang === "ar" ? "تحية ولي الأمر" : "Guardian Salutation", example: map["{guardianSalutation}"] },
       { key: "{guardianSalutation_ar}", icon: "👋", label: lang === "ar" ? "تحية ولي الأمر (عربي)" : "Guardian Salutation (AR)", example: map["{guardianSalutation_ar}"] },
       { key: "{guardianSalutation_en}", icon: "👋", label: lang === "ar" ? "تحية ولي الأمر (إنجليزي)" : "Guardian Salutation (EN)", example: map["{guardianSalutation_en}"] },
       { key: "{guardianName}", icon: "👤", label: lang === "ar" ? "اسم ولي الأمر" : "Guardian Name", example: map["{guardianName}"] },
       { key: "{studentName}", icon: "👶", label: lang === "ar" ? "اسم الطالب" : "Student Name", example: map["{studentName}"] },
       { key: "{childTitle}", icon: "👨‍👦", label: lang === "ar" ? "ابنك/ابنتك" : "Child Title", example: map["{childTitle}"] },
-      // moduleTitle and moduleDescription first because they're most important in module overview
-      { key: "{moduleTitle}", icon: "📘", label: lang === "ar" ? "عنوان الموديول" : "Module Title", example: map["{moduleTitle}"] || courseModule.title || (lang === "ar" ? "عنوان الموديول" : "Module Title") },
-      { key: "{moduleDescription}", icon: "📝", label: lang === "ar" ? "وصف الموديول" : "Module Description", example: map["{moduleDescription}"] || courseModule.description || (lang === "ar" ? "وصف الموديول" : "Module Description") },
+      { key: "{moduleTitle}", icon: "📘", label: lang === "ar" ? "عنوان الموديول" : "Module Title", example: map["{moduleTitle}"] || courseModule?.title || (lang === "ar" ? "عنوان الموديول" : "Module Title") },
+      { key: "{moduleDescription}", icon: "📝", label: lang === "ar" ? "وصف الموديول" : "Module Description", example: map["{moduleDescription}"] || courseModule?.description || (lang === "ar" ? "وصف الموديول" : "Module Description") },
       { key: "{courseName}", icon: "📚", label: lang === "ar" ? "اسم الكورس" : "Course Name", example: map["{courseName}"] },
       { key: "{groupName}", icon: "👥", label: lang === "ar" ? "اسم المجموعة" : "Group Name", example: map["{groupName}"] },
       { key: "{supervisorName}", icon: "🎓", label: lang === "ar" ? "اسم المشرف" : "Supervisor Name", example: map["{supervisorName}"] },
+      { key: "{sessionLocationBlock}", icon: "🧩", label: lang === "ar" ? "بلوك الموقع/الرابط (تلقائي)" : "Location/Link Block (auto)", example: map["{sessionLocationBlock}"] },
     ];
-  }, [getStudentContext, buildReplacementsMap, group, courseModule]);
+
+    if (isOffline) {
+      return [
+        ...base,
+        { key: "{placeName}", icon: "📍", label: lang === "ar" ? "اسم المكان" : "Location Name", example: map["{placeName}"] },
+        { key: "{address}", icon: "📌", label: lang === "ar" ? "العنوان" : "Address", example: map["{address}"] },
+        { key: "{mapsLink}", icon: "🗺️", label: lang === "ar" ? "رابط الخريطة" : "Maps Link", example: map["{mapsLink}"] || (lang === "ar" ? "غير متاح" : "N/A") },
+      ];
+    }
+
+    return base;
+  }, [getStudentContext, buildReplacementsMap, group, courseModule, isOffline]);
 
   const pickTemplateSlot = useCallback((student, type) => {
     if (!student) return { ar: "", en: "" };
     const { isMale, isFather } = getGenderFlags(student);
-    if (type === "student") return isMale ? { ar: templates.studentMaleAr, en: templates.studentMaleEn } : { ar: templates.studentFemaleAr, en: templates.studentFemaleEn };
-    if (type === "guardian") return isFather ? { ar: templates.guardianFatherAr, en: templates.guardianFatherEn } : { ar: templates.guardianMotherAr, en: templates.guardianMotherEn };
-    return { ar: templates.moduleOverviewAr, en: templates.moduleOverviewEn };
+    if (type === "student") {
+      return isMale
+        ? { ar: safe(templates?.studentMaleAr), en: safe(templates?.studentMaleEn) }
+        : { ar: safe(templates?.studentFemaleAr), en: safe(templates?.studentFemaleEn) };
+    }
+    if (type === "guardian") {
+      return isFather
+        ? { ar: safe(templates?.guardianFatherAr), en: safe(templates?.guardianFatherEn) }
+        : { ar: safe(templates?.guardianMotherAr), en: safe(templates?.guardianMotherEn) };
+    }
+    return { ar: safe(templates?.moduleOverviewAr), en: safe(templates?.moduleOverviewEn) };
   }, [templates, getGenderFlags]);
 
-  // ─── Effects ──────────────────────────────────────────────────────────────
+  // ─── Load Data ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!groupId) return;
     const loadData = async () => {
       setLoading(true);
       try {
-        const [groupRes, studentsRes, templateRes, moduleOverviewRes] = await Promise.all([
+        const [groupRes, studentsRes, templateOnlineRes, templateOfflineRes, moduleOverviewRes] = await Promise.all([
           fetch(`/api/groups/${groupId}`),
           fetch("/api/allStudents?status=Active&limit=1000"),
-          fetch(`/api/whatsapp/group-templates?default=true&groupId=${groupId}`),
+          fetch(`/api/whatsapp/group-templates?type=group_welcome`),
+          fetch(`/api/whatsapp/group-templates?type=group_welcome_offline`),
           fetch(`/api/whatsapp/message-templates?type=module_overview&default=true`),
         ]);
 
+        // ── Group ────────────────────────────────────────────────────
         const groupData = await groupRes.json();
+        let groupDeliveryMode = "online";
+
         if (groupData.success) {
           setGroup(groupData.data);
+          groupDeliveryMode = groupData.data?.deliveryMode || "online";
+          setIsOffline(groupDeliveryMode === "offline");
 
-          // NEW: extract first module from course
           const groupInfo = groupData.data;
           const curriculum =
             groupInfo?.courseId?.curriculum ||
             groupInfo?.courseSnapshot?.curriculum ||
             [];
 
-          if (curriculum.length > 0) {
+          if (Array.isArray(curriculum) && curriculum.length > 0) {
             const firstModule = curriculum[0];
             setCourseModule({
               title: firstModule?.title || "",
               description: firstModule?.description || "",
             });
-            console.log("✅ Course module loaded:", {
-              title: firstModule?.title,
-              description: firstModule?.description?.substring(0, 80),
-            });
           } else {
-            // Fallback: if no curriculum in group response, fetch from course API
             const courseId = groupInfo?.courseId?._id || groupInfo?.courseId;
             if (courseId) {
               try {
                 const courseRes = await fetch(`/api/courses/${courseId}`);
                 const courseData = await courseRes.json();
-                if (courseData.success && courseData.data?.curriculum?.length > 0) {
+                if (courseData.success && Array.isArray(courseData.data?.curriculum) && courseData.data.curriculum.length > 0) {
                   const firstModule = courseData.data.curriculum[0];
                   setCourseModule({
                     title: firstModule?.title || "",
                     description: firstModule?.description || "",
-                  });
-                  console.log("✅ Course module loaded from course API:", {
-                    title: firstModule?.title,
                   });
                 }
               } catch (courseErr) {
@@ -431,35 +634,89 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           }
         }
 
+        // ── Students ──────────────────────────────────────────────────
         const studentsData = await studentsRes.json();
         if (studentsData.success) {
           const groupStudentIds = (groupData.data?.students || []).map(s => String(s._id || s.id || s));
           setStudents(studentsData.data.filter(s => !groupStudentIds.includes(String(s._id || s.id))));
         }
 
-        if (templateRes.ok) {
-          const templateData = await templateRes.json();
-          if (templateData.success && templateData.data) {
-            const d = templateData.data;
-            templateId.current = d._id;
-            setTemplates({
-              studentMaleAr: d.studentMaleContentAr || d.studentContentAr || "",
-              studentMaleEn: d.studentMaleContentEn || d.studentContentEn || "",
-              studentFemaleAr: d.studentFemaleContentAr || d.studentContentAr || "",
-              studentFemaleEn: d.studentFemaleContentEn || d.studentContentEn || "",
-              guardianFatherAr: d.guardianFatherContentAr || d.guardianContentAr || "",
-              guardianFatherEn: d.guardianFatherContentEn || d.guardianContentEn || "",
-              guardianMotherAr: d.guardianMotherContentAr || d.guardianContentAr || "",
-              guardianMotherEn: d.guardianMotherContentEn || d.guardianContentEn || "",
-              moduleOverviewAr: "",
-              moduleOverviewEn: "",
-            });
+        // ═══════════════════════════════════════════════════════════════
+        // ── ✅ اختار القالب الصح حسب الحالة + Defensive Reading + Auto-Swap
+        // ═══════════════════════════════════════════════════════════════
+        const templateData = groupDeliveryMode === "offline"
+          ? await templateOfflineRes.json()
+          : await templateOnlineRes.json();
+
+        if (templateData.success && templateData.data) {
+          const d = Array.isArray(templateData.data) ? templateData.data[0] : templateData.data;
+          templateId.current = d._id;
+
+          // ✅ قراءة بأسماء متعددة (defensive)
+          const pick = (...keys) => {
+            for (const k of keys) {
+              const v = d?.[k];
+              if (typeof v === "string" && v.trim()) return v;
+            }
+            return "";
+          };
+
+          // قراءة خام
+          let studentMaleAr = pick("studentMaleContentAr", "studentContentAr");
+          let studentMaleEn = pick("studentMaleContentEn", "studentContentEn");
+          let studentFemaleAr = pick("studentFemaleContentAr", "studentContentAr");
+          let studentFemaleEn = pick("studentFemaleContentEn", "studentContentEn");
+          let guardianFatherAr = pick("guardianFatherContentAr", "guardianContentAr");
+          let guardianFatherEn = pick("guardianFatherContentEn", "guardianContentEn");
+          let guardianMotherAr = pick("guardianMotherContentAr", "guardianContentAr");
+          let guardianMotherEn = pick("guardianMotherContentEn", "guardianContentEn");
+
+          // 🔍 Debug log
+          console.log("📥 [Group Template] Read from DB:", {
+            studentMaleAr: studentMaleAr?.slice(0, 80),
+            studentMaleEn: studentMaleEn?.slice(0, 80),
+            guardianFatherAr: guardianFatherAr?.slice(0, 80),
+            guardianFatherEn: guardianFatherEn?.slice(0, 80),
+            studentLooksLikeGuardian: looksLikeGuardianContent(studentMaleAr),
+            guardianLooksLikeGuardian: looksLikeGuardianContent(guardianFatherAr),
+          });
+
+          // 🔄 Auto-Swap: لو الطالب فيه guardian markers والـ guardian مفيهوش
+          if (
+            looksLikeGuardianContent(studentMaleAr) &&
+            !looksLikeGuardianContent(guardianFatherAr)
+          ) {
+            console.warn("🔄 [Group Template] Swapping Student ↔ Guardian (AR) — DB has them reversed");
+            [studentMaleAr, guardianFatherAr] = [guardianFatherAr, studentMaleAr];
+            [studentFemaleAr, guardianMotherAr] = [guardianMotherAr, studentFemaleAr];
           }
+          if (
+            looksLikeGuardianContent(studentMaleEn) &&
+            !looksLikeGuardianContent(guardianFatherEn)
+          ) {
+            console.warn("🔄 [Group Template] Swapping Student ↔ Guardian (EN) — DB has them reversed");
+            [studentMaleEn, guardianFatherEn] = [guardianFatherEn, studentMaleEn];
+            [studentFemaleEn, guardianMotherEn] = [guardianMotherEn, studentFemaleEn];
+          }
+
+          setTemplates({
+            studentMaleAr,
+            studentMaleEn,
+            studentFemaleAr,
+            studentFemaleEn,
+            guardianFatherAr,
+            guardianFatherEn,
+            guardianMotherAr,
+            guardianMotherEn,
+            moduleOverviewAr: "",
+            moduleOverviewEn: "",
+          });
         }
 
+        // ── Module Overview ───────────────────────────────────────────
         if (moduleOverviewRes.ok) {
           const moData = await moduleOverviewRes.json();
-          if (moData.success && moData.data?.length > 0) {
+          if (moData.success && Array.isArray(moData.data) && moData.data.length > 0) {
             const mo = moData.data[0];
             setTemplates(prev => ({
               ...prev,
@@ -481,21 +738,24 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
   useEffect(() => {
     if (!selectedStudent) return;
-    const lang = selectedStudent.communicationPreferences?.preferredLanguage || "ar";
-    const studentSlot = pickTemplateSlot(selectedStudent, "student");
-    const guardianSlot = pickTemplateSlot(selectedStudent, "guardian");
-    const moduleOverviewSlot = pickTemplateSlot(selectedStudent, "moduleOverview");
-    setStudentMessage(lang === "ar" ? studentSlot.ar : studentSlot.en);
-    setGuardianMessage(lang === "ar" ? guardianSlot.ar : guardianSlot.en);
-    setModuleOverviewMessage(lang === "ar" ? moduleOverviewSlot.ar : moduleOverviewSlot.en);
-  }, [selectedStudent, templates]);
+    try {
+      const lang = selectedStudent?.communicationPreferences?.preferredLanguage || "ar";
+      const studentSlot = pickTemplateSlot(selectedStudent, "student");
+      const guardianSlot = pickTemplateSlot(selectedStudent, "guardian");
+      const moduleOverviewSlot = pickTemplateSlot(selectedStudent, "moduleOverview");
+      setStudentMessage(lang === "ar" ? studentSlot.ar : studentSlot.en);
+      setGuardianMessage(lang === "ar" ? guardianSlot.ar : guardianSlot.en);
+      setModuleOverviewMessage(lang === "ar" ? moduleOverviewSlot.ar : moduleOverviewSlot.en);
+    } catch (err) {
+      console.error("❌ Template pick error:", err);
+    }
+  }, [selectedStudent, templates, pickTemplateSlot]);
 
-  // UPDATED: preview effect — added courseModule to dependencies
   useEffect(() => {
     if (selectedStudent && group) {
-      setStudentPreview(replaceVars(studentMessage, "student"));
-      setGuardianPreview(replaceVars(guardianMessage, "guardian"));
-      setModuleOverviewPreview(replaceVars(moduleOverviewMessage, "guardian"));
+      setStudentPreview(safe(replaceVars(studentMessage)));
+      setGuardianPreview(safe(replaceVars(guardianMessage)));
+      setModuleOverviewPreview(safe(replaceVars(moduleOverviewMessage)));
     }
   }, [studentMessage, guardianMessage, moduleOverviewMessage, selectedStudent, group, replaceVars, supervisorGender, courseModule]);
 
@@ -503,17 +763,26 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       if (!templateId.current || !selectedStudent) return;
-      const lang = selectedStudent.communicationPreferences?.preferredLanguage || "ar";
-      const { isMale, isFather } = getGenderFlags(selectedStudent);
-      let fieldKey;
-      if (type === "student") fieldKey = isMale ? (lang === "ar" ? "studentMaleContentAr" : "studentMaleContentEn") : (lang === "ar" ? "studentFemaleContentAr" : "studentFemaleContentEn");
-      else if (type === "guardian") fieldKey = isFather ? (lang === "ar" ? "guardianFatherContentAr" : "guardianFatherContentEn") : (lang === "ar" ? "guardianMotherContentAr" : "guardianMotherContentEn");
-      else fieldKey = lang === "ar" ? "moduleOverviewContentAr" : "moduleOverviewContentEn";
       try {
+        const lang = selectedStudent?.communicationPreferences?.preferredLanguage || "ar";
+        const { isMale, isFather } = getGenderFlags(selectedStudent);
+        let fieldKey;
+        if (type === "student") {
+          fieldKey = isMale
+            ? (lang === "ar" ? "studentMaleContentAr" : "studentMaleContentEn")
+            : (lang === "ar" ? "studentFemaleContentAr" : "studentFemaleContentEn");
+        } else if (type === "guardian") {
+          fieldKey = isFather
+            ? (lang === "ar" ? "guardianFatherContentAr" : "guardianFatherContentEn")
+            : (lang === "ar" ? "guardianMotherContentAr" : "guardianMotherContentEn");
+        } else {
+          fieldKey = lang === "ar" ? "moduleOverviewContentAr" : "moduleOverviewContentEn";
+        }
+
         await fetch("/api/whatsapp/group-templates", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: templateId.current, [fieldKey]: content, setAsDefault: true }),
+          body: JSON.stringify({ id: templateId.current, [fieldKey]: safe(content), setAsDefault: true }),
         });
       } catch (err) {
         console.error("Save error:", err);
@@ -522,19 +791,28 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   }, [selectedStudent, getGenderFlags]);
 
   const insertVariable = (variable, type) => {
-    const textarea = type === "student" ? studentTextareaRef.current : type === "guardian" ? guardianTextareaRef.current : moduleOverviewTextareaRef.current;
-    const currentValue = type === "student" ? studentMessage : type === "guardian" ? guardianMessage : moduleOverviewMessage;
-    const cursorPos = type === "student" ? studentCursor : type === "guardian" ? guardianCursor : moduleOverviewCursor;
-    const textBefore = currentValue.substring(0, cursorPos);
-    const lastAt = textBefore.lastIndexOf("@");
-    let newValue, newCursorPos;
-    if (lastAt !== -1) { newValue = currentValue.substring(0, lastAt) + variable.key + currentValue.substring(cursorPos); newCursorPos = lastAt + variable.key.length; }
-    else { newValue = currentValue.substring(0, cursorPos) + variable.key + currentValue.substring(cursorPos); newCursorPos = cursorPos + variable.key.length; }
-    if (type === "student") { setStudentMessage(newValue); setShowStudentHints(false); setStudentCursor(newCursorPos); }
-    else if (type === "guardian") { setGuardianMessage(newValue); setShowGuardianHints(false); setGuardianCursor(newCursorPos); }
-    else { setModuleOverviewMessage(newValue); setShowModuleOverviewHints(false); setModuleOverviewCursor(newCursorPos); }
-    autoSave(type, newValue);
-    setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(newCursorPos, newCursorPos); }, 0);
+    try {
+      const textarea = type === "student" ? studentTextareaRef.current : type === "guardian" ? guardianTextareaRef.current : moduleOverviewTextareaRef.current;
+      const currentValue = type === "student" ? studentMessage : type === "guardian" ? guardianMessage : moduleOverviewMessage;
+      const cursorPos = type === "student" ? studentCursor : type === "guardian" ? guardianCursor : moduleOverviewCursor;
+      const textBefore = String(currentValue || "").substring(0, cursorPos);
+      const lastAt = textBefore.lastIndexOf("@");
+      let newValue, newCursorPos;
+      if (lastAt !== -1) {
+        newValue = String(currentValue).substring(0, lastAt) + variable.key + String(currentValue).substring(cursorPos);
+        newCursorPos = lastAt + variable.key.length;
+      } else {
+        newValue = String(currentValue).substring(0, cursorPos) + variable.key + String(currentValue).substring(cursorPos);
+        newCursorPos = cursorPos + variable.key.length;
+      }
+      if (type === "student") { setStudentMessage(newValue); setShowStudentHints(false); setStudentCursor(newCursorPos); }
+      else if (type === "guardian") { setGuardianMessage(newValue); setShowGuardianHints(false); setGuardianCursor(newCursorPos); }
+      else { setModuleOverviewMessage(newValue); setShowModuleOverviewHints(false); setModuleOverviewCursor(newCursorPos); }
+      autoSave(type, newValue);
+      setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(newCursorPos, newCursorPos); }, 0);
+    } catch (err) {
+      console.error("❌ insertVariable error:", err);
+    }
   };
 
   const handleTextareaChange = (e, type) => {
@@ -551,11 +829,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   };
 
   const handleKeyDown = (e, type) => {
-    // UPDATED: module overview uses getModuleOverviewVariables
     const variables = type === "student" ? getStudentVariables() : type === "guardian" ? getGuardianVariables() : getModuleOverviewVariables();
     const show = type === "student" ? showStudentHints : type === "guardian" ? showGuardianHints : showModuleOverviewHints;
     const setShow = type === "student" ? setShowStudentHints : type === "guardian" ? setShowGuardianHints : setShowModuleOverviewHints;
-    if (!show) return;
+    if (!show || !variables.length) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setSelectedHintIndex(p => (p + 1) % variables.length); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setSelectedHintIndex(p => (p - 1 + variables.length) % variables.length); }
     else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertVariable(variables[selectedHintIndex], type); }
@@ -584,10 +861,11 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           studentId: String(selectedStudent._id || selectedStudent.id),
-          studentMessage: replaceVars(studentMessage, "student"),
-          guardianMessage: replaceVars(guardianMessage, "guardian"),
-          moduleOverviewMessage: replaceVars(moduleOverviewMessage, "guardian"),
+          studentMessage: replaceVars(studentMessage),
+          guardianMessage: replaceVars(guardianMessage),
+          moduleOverviewMessage: replaceVars(moduleOverviewMessage),
           sendWhatsApp: true,
+          isOffline,
         }),
       });
       const result = await res.json();
@@ -607,24 +885,23 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     }
   };
 
-  // ─── Sub-components ────────────────────────────────────────────────────────
-
+  // ─── Sub-components ───────────────────────────────────────────────────
   const HintsDropdown = ({ vars, type, show, hintsRef }) => {
     if (!show || !vars.length) return null;
     const lang = getStudentContext()?.lang || "ar";
     return (
       <div
         ref={hintsRef}
-        className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden"
+        className="absolute z-50 mt-1.5 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl overflow-hidden animate-[fadeIn_.15s_ease-out]"
         style={{ top: "100%" }}
       >
-        <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-800/60 border-b border-gray-100 dark:border-gray-700">
           <Icon.Zap />
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
             {lang === "ar" ? "المتغيرات المتاحة" : "Available Variables"}
           </span>
         </div>
-        <div className="max-h-52 overflow-y-auto">
+        <div className="max-h-52 overflow-y-auto scroll-thin">
           {vars.map((v, i) => (
             <button
               key={v.key}
@@ -661,11 +938,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const MessageCard = ({ step, title, badge, subtitle, accentClass, previewHeaderClass, textareaRef, hintsRef, value, type, showHints, vars, preview }) => {
     const lang = getStudentContext()?.lang || "ar";
     return (
-      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-        {/* Card Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/60 to-transparent dark:from-gray-800/30">
           <div className="flex items-center gap-2.5">
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${accentClass}`}>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ring-2 ring-white dark:ring-gray-900 ${accentClass}`}>
               {step}
             </span>
             <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</span>
@@ -678,16 +954,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           {subtitle && <span className="text-xs text-gray-400">{subtitle}</span>}
         </div>
 
-        {/* Card Body */}
         <div className="p-4 space-y-3">
-          {/* Show Module Info Banner for module overview */}
-          {type === "moduleOverview" && courseModule.title && (
+          {type === "moduleOverview" && courseModule?.title && (
             <div className="mb-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
               <span className="text-blue-500 mt-0.5 flex-shrink-0"><Icon.BookOpen /></span>
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-                  {lang === "ar" ? "الموديول الحالي:" : "Current Module:"}
-                  {" "}
+                  {lang === "ar" ? "الموديول الحالي:" : "Current Module:"}{" "}
                   <span className="font-bold">{courseModule.title}</span>
                 </p>
                 {courseModule.description && (
@@ -703,8 +976,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             <Icon.Zap />
             {lang === "ar"
               ? <>اكتب <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> لإدراج متغير</>
-              : <>Type <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> to insert a variable</>
-            }
+              : <>Type <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> to insert a variable</>}
           </p>
 
           <div className="relative">
@@ -716,19 +988,18 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
               dir={lang === "ar" ? "rtl" : "ltr"}
               rows={5}
               placeholder={lang === "ar" ? "اكتب رسالتك هنا..." : "Write your message here..."}
-              className="w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 dark:focus:border-violet-600 transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
+              className="w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 dark:focus:border-violet-600 focus:shadow-md transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
             />
             <HintsDropdown vars={vars} type={type} show={showHints} hintsRef={hintsRef} />
           </div>
 
-          {/* Preview */}
-          <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
+          <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-inner">
             <div className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium ${previewHeaderClass}`}>
               <Icon.Eye />
               <span>{lang === "ar" ? "معاينة" : "Preview"}</span>
             </div>
             <div
-              className="px-3 py-2.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400 whitespace-pre-line max-h-28 overflow-y-auto bg-white dark:bg-gray-900"
+              className="px-3 py-2.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400 whitespace-pre-line max-h-28 overflow-y-auto scroll-thin bg-white dark:bg-gray-900"
               dir={lang === "ar" ? "rtl" : "ltr"}
             >
               {preview || <span className="text-gray-300 dark:text-gray-600 italic">{lang === "ar" ? "لا توجد معاينة بعد" : "No preview yet"}</span>}
@@ -739,7 +1010,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     );
   };
 
-  // ─── Guards ────────────────────────────────────────────────────────────────
+  // ─── Guards ───────────────────────────────────────────────────────────
   if (loading || loadingVars) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -758,16 +1029,17 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
     );
   }
 
-  // ─── Render values ────────────────────────────────────────────────────────
+  // ─── Render values ────────────────────────────────────────────────────
   const currentCount = group.currentStudentsCount || group.students?.length || 0;
   const maxStudents = group.maxStudents || 0;
   const isFull = currentCount >= maxStudents;
   const available = maxStudents - currentCount;
 
   const filteredStudents = students.filter(s => {
-    const name = s.personalInfo?.fullName?.toLowerCase() || "";
-    const email = s.personalInfo?.email?.toLowerCase() || "";
-    return name.includes(search.toLowerCase()) || email.includes(search.toLowerCase());
+    const name = String(s?.personalInfo?.fullName || "").toLowerCase();
+    const email = String(s?.personalInfo?.email || "").toLowerCase();
+    const q = String(search || "").toLowerCase();
+    return name.includes(q) || email.includes(q);
   });
 
   const ctx = getStudentContext();
@@ -775,19 +1047,21 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const studentVars = getStudentVariables();
   const guardianVars = getGuardianVariables();
   const moduleOverviewVars = getModuleOverviewVariables();
-  const instructorNamesDisplay = buildInstructorsNames(group.instructors, locale === "ar" ? "ar" : "en");
+  const instructorNamesDisplay = buildInstructorsNames(group?.instructors, locale === "ar" ? "ar" : "en");
 
   return (
     <div className="space-y-5" dir={isRTL ? "rtl" : "ltr"}>
 
-      {/* ── Group Card ─────────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+      {/* ── Group Card ── */}
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
         <div className="p-4 flex items-start gap-3.5">
-          {/* Icon */}
-          <div className="w-12 h-12 rounded-xl bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0">
-            <Icon.Users />
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ring-2 ring-white dark:ring-gray-900 ${
+            isOffline
+              ? "bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/40 dark:to-emerald-900/20 text-emerald-600 dark:text-emerald-400"
+              : "bg-gradient-to-br from-violet-100 to-violet-50 dark:from-violet-900/40 dark:to-violet-900/20 text-violet-600 dark:text-violet-400"
+          }`}>
+            {isOffline ? <Icon.MapPin /> : <Icon.Users />}
           </div>
-          {/* Info */}
           <div className="flex-1 min-w-0">
             <h3 className="text-base font-bold text-gray-900 dark:text-white leading-snug mb-0.5">
               {group.name}
@@ -798,7 +1072,14 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
               <span className="font-mono">{group.code}</span>
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {group.instructors?.length > 0 && (
+              {isOffline && (
+                <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium">
+                  <Icon.MapPin />
+                  {locale === "ar" ? "أوفلاين (حضوري)" : "Offline"}
+                </span>
+              )}
+
+              {Array.isArray(group.instructors) && group.instructors.length > 0 && (
                 <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-medium">
                   <Icon.School />
                   {instructorNamesDisplay}
@@ -810,7 +1091,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                   {group.schedule.timeFrom} — {group.schedule.timeTo}
                 </span>
               )}
-              {group.firstMeetingLink && (
+              {!isOffline && group.firstMeetingLink && (
                 <a
                   href={group.firstMeetingLink}
                   target="_blank"
@@ -822,17 +1103,41 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 </a>
               )}
             </div>
+
+            {isOffline && (
+              <div className="mt-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-xs space-y-0.5">
+                {group.locationDetails?.placeName && (
+                  <p className="text-emerald-800 dark:text-emerald-300">
+                    📍 <strong>{group.locationDetails.placeName}</strong>
+                  </p>
+                )}
+                {group.locationDetails?.address && (
+                  <p className="text-emerald-700 dark:text-emerald-400">
+                    📌 {group.locationDetails.address}
+                  </p>
+                )}
+                {buildMapsLink(group) && (
+                  <a
+                    href={buildMapsLink(group)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-emerald-600 hover:underline dark:text-emerald-400"
+                  >
+                    🗺️ {locale === "ar" ? "عرض على الخريطة" : "View on map"}
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-100 dark:divide-gray-800 border-t border-gray-100 dark:border-gray-800">
+        <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-100 dark:divide-gray-800 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20">
           {[
             { value: currentCount, label: locale === "ar" ? "الحاليون" : "Current", color: "text-violet-600 dark:text-violet-400" },
             { value: maxStudents, label: locale === "ar" ? "الحد الأقصى" : "Maximum", color: "text-gray-500" },
             { value: available, label: locale === "ar" ? "متاح" : "Available", color: available > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500" },
           ].map((s) => (
-            <div key={s.label} className="py-3 text-center">
+            <div key={s.label} className="py-3 text-center hover:bg-white dark:hover:bg-gray-800/40 transition-colors">
               <div className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</div>
               <div className="text-xs text-gray-400 mt-0.5">{s.label}</div>
             </div>
@@ -840,7 +1145,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         </div>
       </div>
 
-      {/* ── Search ─────────────────────────────────────────────────────────── */}
+      {/* ── Search ── */}
       <div className="relative">
         <span className={`absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${isRTL ? "right-3.5" : "left-3.5"}`}>
           <Icon.Search />
@@ -850,101 +1155,100 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder={locale === "ar" ? "ابحث باسم الطالب أو البريد..." : "Search by name or email..."}
-          className={`w-full py-2.5 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-800 dark:text-white placeholder:text-gray-300 dark:placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 transition-all
+          className={`w-full py-2.5 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-800 dark:text-white placeholder:text-gray-300 dark:placeholder:text-gray-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 focus:shadow-md transition-all
             ${isRTL ? "pr-9 pl-4" : "pl-9 pr-4"}`}
         />
       </div>
 
-      {/* ── Students List ──────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
-        {/* List header */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-800">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+      {/* ── Students List ── */}
+      <div className="rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900 shadow-sm">
+        <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800/60 dark:to-gray-800/20 border-b border-gray-100 dark:border-gray-800">
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+            <Icon.Users />
             {locale === "ar" ? "الطلاب المتاحون" : "Available students"}
           </span>
-          <span className="text-xs font-bold text-violet-600 dark:text-violet-400">{filteredStudents.length}</span>
+          <span className="text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 rounded-full">{filteredStudents.length}</span>
         </div>
 
-        <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800">
-          {filteredStudents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-300 dark:text-gray-600">
-              <Icon.Users />
-              <p className="text-sm">{locale === "ar" ? "لا يوجد طلاب متاحين" : "No available students"}</p>
-            </div>
-          ) : (
-            filteredStudents.map(student => {
-              const sid = String(student._id || student.id);
-              const isSelected = selectedStudent && String(selectedStudent._id || selectedStudent.id) === sid;
-              const name = student.personalInfo?.fullName || "";
-              const avatarColor = getAvatarColor(name);
-              const sLang = student.communicationPreferences?.preferredLanguage || "ar";
-              const sGender = String(student.personalInfo?.gender || "Male").toLowerCase();
-              const sRelation = String(student.guardianInfo?.relationship || "father").toLowerCase();
+        <div className="relative">
+          <div className="max-h-72 overflow-y-auto scroll-thin divide-y divide-gray-50 dark:divide-gray-800">
+            {filteredStudents.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-300 dark:text-gray-600">
+                <Icon.Users />
+                <p className="text-sm">{locale === "ar" ? "لا يوجد طلاب متاحين" : "No available students"}</p>
+              </div>
+            ) : (
+              filteredStudents.map(student => {
+                const sid = String(student._id || student.id);
+                const isSelected = selectedStudent && String(selectedStudent._id || selectedStudent.id) === sid;
+                const name = student.personalInfo?.fullName || "";
+                const avatarColor = getAvatarColor(name);
+                const sLang = student.communicationPreferences?.preferredLanguage || "ar";
+                const sGender = String(student.personalInfo?.gender || "Male").toLowerCase();
+                const sRelation = String(student.guardianInfo?.relationship || "father").toLowerCase();
 
-              return (
-                <div
-                  key={sid}
-                  onClick={() => {
-                    if (isFull && !isSelected) return;
-                    setSelectedStudent(isSelected ? null : student);
-                  }}
-                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors
-                    ${isSelected
-                      ? "bg-violet-50 dark:bg-violet-900/20"
-                      : "hover:bg-gray-50 dark:hover:bg-gray-800/60"
-                    }
-                    ${isFull && !isSelected ? "opacity-40 cursor-not-allowed" : ""}`}
-                >
-                  {/* Avatar */}
+                return (
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0"
-                    style={{ background: avatarColor.bg, color: avatarColor.text }}
+                    key={sid}
+                    onClick={() => {
+                      if (isFull && !isSelected) return;
+                      setSelectedStudent(isSelected ? null : student);
+                    }}
+                    className={`relative flex items-center gap-3 px-4 py-3 cursor-pointer transition-all duration-150
+                      ${isSelected
+                        ? "bg-violet-50 dark:bg-violet-900/20"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800/60"
+                      }
+                      ${isFull && !isSelected ? "opacity-40 cursor-not-allowed" : ""}`}
                   >
-                    {getInitials(name)}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{name}</p>
+                    {isSelected && <div className="absolute inset-y-0 start-0 w-1 bg-violet-500" />}
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ring-2 ring-white dark:ring-gray-900 shadow-sm"
+                      style={{ background: avatarColor.bg, color: avatarColor.text }}
+                    >
+                      {getInitials(name)}
                     </div>
-                    <p className="text-xs text-gray-400 truncate mb-1.5">{student.personalInfo?.email}</p>
-                    <div className="flex gap-1.5 flex-wrap">
-                      <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
-                        ${sLang === "ar"
-                          ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300"
-                          : "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300"}`}>
-                        {sLang === "ar" ? "عربي" : "EN"}
-                      </span>
-                      <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
-                        ${sGender === "female"
-                          ? "bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300"
-                          : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300"}`}>
-                        {sGender === "female" ? (locale === "ar" ? "أنثى" : "Female") : (locale === "ar" ? "ذكر" : "Male")}
-                      </span>
-                      <span className="text-xs px-1.5 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 font-medium">
-                        {sRelation === "mother" ? (locale === "ar" ? "أم" : "Mother") : (locale === "ar" ? "أب" : "Father")}
-                      </span>
-                    </div>
-                  </div>
 
-                  {/* Check */}
-                  {isSelected && (
-                    <span className="text-violet-500 flex-shrink-0">
-                      <Icon.Check />
-                    </span>
-                  )}
-                </div>
-              );
-            })
-          )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{name}</p>
+                      </div>
+                      <p className="text-xs text-gray-400 truncate mb-1.5">{student.personalInfo?.email}</p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
+                          ${sLang === "ar"
+                            ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300"
+                            : "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300"}`}>
+                          {sLang === "ar" ? "عربي" : "EN"}
+                        </span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
+                          ${sGender === "female"
+                            ? "bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300"
+                            : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300"}`}>
+                          {sGender === "female" ? (locale === "ar" ? "أنثى" : "Female") : (locale === "ar" ? "ذكر" : "Male")}
+                        </span>
+                        <span className="text-xs px-1.5 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 font-medium">
+                          {sRelation === "mother" ? (locale === "ar" ? "أم" : "Mother") : (locale === "ar" ? "أب" : "Father")}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isSelected && (
+                      <span className="text-violet-500 flex-shrink-0">
+                        <Icon.Check />
+                      </span>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Messages Section ───────────────────────────────────────────────── */}
+      {/* ── Messages Section ── */}
       {selectedStudent && ctx && (
         <>
-          {/* Divider */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
             <span className="text-xs font-semibold text-gray-400 px-1">
@@ -953,7 +1257,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
           </div>
 
-          {/* Context Bar */}
           <div className="rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 px-4 py-3 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
@@ -972,6 +1275,11 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
               <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 font-medium">
                 {ctx.isFather ? (lang === "ar" ? "أب" : "Father") : (lang === "ar" ? "أم" : "Mother")}
               </span>
+              {isOffline && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 font-medium">
+                  {locale === "ar" ? "أوفلاين" : "Offline"}
+                </span>
+              )}
             </div>
             <div className="grid grid-cols-1 gap-1 text-xs text-gray-500 dark:text-gray-400">
               <div className="flex items-center gap-1.5">
@@ -986,7 +1294,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "ابنك/ابنتك:" : "Child title:"}</span>
                 <span className="text-violet-600 dark:text-violet-400 font-medium">{ctx.childTitle}</span>
               </div>
-              {group.instructors?.length > 0 && (
+              {Array.isArray(group.instructors) && group.instructors.length > 0 && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "المدرب:" : "Instructor:"}</span>
                   <span className="text-violet-600 dark:text-violet-400 font-medium">{buildInstructorsNames(group.instructors, lang)}</span>
@@ -995,7 +1303,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             </div>
           </div>
 
-          {/* Message 1: Student */}
           <MessageCard
             step="1"
             title={lang === "ar" ? "رسالة الطالب" : "Student Message"}
@@ -1012,7 +1319,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             preview={studentPreview}
           />
 
-          {/* Message 2: Guardian */}
           <MessageCard
             step="2"
             title={lang === "ar" ? "رسالة ولي الأمر" : "Guardian Message"}
@@ -1030,10 +1336,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           />
 
           {/* Message 3: Module Overview */}
-          <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+          <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/60 to-transparent dark:from-gray-800/30">
               <div className="flex items-center gap-2.5">
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">3</span>
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ring-2 ring-white dark:ring-gray-900 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">3</span>
                 <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                   {lang === "ar" ? "نظرة عامة على الموديول" : "Module Overview"}
                 </span>
@@ -1044,14 +1350,12 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             </div>
 
             <div className="p-4 space-y-3">
-              {/* Module Info Banner */}
-              {courseModule.title && (
+              {courseModule?.title && (
                 <div className="mb-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
                   <span className="text-blue-500 mt-0.5 flex-shrink-0"><Icon.BookOpen /></span>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-                      {lang === "ar" ? "الموديول الحالي:" : "Current Module:"}
-                      {" "}
+                      {lang === "ar" ? "الموديول الحالي:" : "Current Module:"}{" "}
                       <span className="font-bold">{courseModule.title}</span>
                     </p>
                     {courseModule.description && (
@@ -1063,7 +1367,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 </div>
               )}
 
-              {/* Supervisor Gender Toggle */}
               <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
                 <Icon.School />
                 <span className="text-xs text-gray-500 dark:text-gray-400 flex-1">
@@ -1072,7 +1375,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                     {"{supervisorName}"}
                   </code>
                 </span>
-                {/* Toggle Pills */}
                 <div className="flex gap-1 p-0.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
                   {["male", "female"].map((g) => (
                     <button
@@ -1081,7 +1383,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                       onClick={() => setSupervisorGender(g)}
                       className={`text-xs px-3 py-1 rounded-md transition-all font-medium
                         ${supervisorGender === g
-                          ? "bg-emerald-500 text-white shadow-sm"
+                          ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-sm"
                           : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"}`}
                     >
                       {g === "male" ? (lang === "ar" ? "ذكر" : "Male") : (lang === "ar" ? "أنثى" : "Female")}
@@ -1095,7 +1397,6 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 )}
               </div>
 
-              {/* Hint */}
               <p className="text-xs text-gray-400 flex items-center gap-1.5">
                 <Icon.Zap />
                 {lang === "ar"
@@ -1114,19 +1415,18 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                   placeholder={lang === "ar"
                     ? "مثال: {guardianSalutation}، سيتناول {moduleTitle}... المشرف: {supervisorName}"
                     : "e.g. {guardianSalutation}, this module covers {moduleTitle}... Supervisor: {supervisorName}"}
-                  className="w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-300 dark:focus:border-emerald-600 transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                  className="w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-300 dark:focus:border-emerald-600 focus:shadow-md transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
                 />
                 <HintsDropdown vars={moduleOverviewVars} type="moduleOverview" show={showModuleOverviewHints} hintsRef={moduleOverviewHintsRef} />
               </div>
 
-              {/* Preview */}
-              <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
+              <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-inner">
                 <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                   <Icon.Eye />
                   <span>{lang === "ar" ? "معاينة" : "Preview"}</span>
                 </div>
                 <div
-                  className="px-3 py-2.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400 whitespace-pre-line max-h-28 overflow-y-auto bg-white dark:bg-gray-900"
+                  className="px-3 py-2.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400 whitespace-pre-line max-h-28 overflow-y-auto scroll-thin bg-white dark:bg-gray-900"
                   dir={lang === "ar" ? "rtl" : "ltr"}
                 >
                   {moduleOverviewPreview || <span className="text-gray-300 dark:text-gray-600 italic">{lang === "ar" ? "لا توجد معاينة بعد" : "No preview yet"}</span>}
@@ -1137,12 +1437,12 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         </>
       )}
 
-      {/* ── Actions ───────────────────────────────────────────────────────── */}
+      {/* ── Actions ── */}
       <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
         <button
           onClick={onClose}
           disabled={adding}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-sm transition-all disabled:opacity-40"
         >
           <Icon.X />
           {locale === "ar" ? "إلغاء" : "Cancel"}
@@ -1151,7 +1451,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         <button
           onClick={handleAdd}
           disabled={!selectedStudent || !studentMessage.trim() || !guardianMessage.trim() || isFull || adding}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-600 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-violet-600/20 hover:shadow-lg active:scale-[0.98]"
         >
           {adding ? (
             <>
@@ -1169,6 +1469,39 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           )}
         </button>
       </div>
+
+      <style jsx global>{`
+        .scroll-thin {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+        }
+        .scroll-thin::-webkit-scrollbar {
+          width: 6px;
+        }
+        .scroll-thin::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .scroll-thin::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.18);
+          border-radius: 999px;
+        }
+        .scroll-thin::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 0, 0, 0.3);
+        }
+        :global(.dark) .scroll-thin {
+          scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+        }
+        :global(.dark) .scroll-thin::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.18);
+        }
+        :global(.dark) .scroll-thin::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

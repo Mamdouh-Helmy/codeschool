@@ -23,6 +23,7 @@ import {
   MapPin,
   Navigation,
   PauseCircle,
+  Gift,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -852,6 +853,12 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
                     <MapPin className="w-3 h-3" />{t("Offline", "Offline")}
                   </span>
                 )}
+                {/* ✅ Badge الحصة التعويضية (بدون خصم رصيد) */}
+                {session.isComplimentary && (
+                  <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
+                    <Gift className="w-3 h-3" />{t("حصة تعويضية", "Make-up")}
+                  </span>
+                )}
                 {isPartial && (
                   <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
                     <Lock className="w-3 h-3" />{t("معاينة فقط", "Preview Only")}
@@ -996,7 +1003,8 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             </button>
           )}
 
-          {isCompleted && session.recordingLink && (
+          {/* ✅ الـ offline مفيهاش تسجيل (الباك بيرجّع null أصلًا — ده defense-in-depth) */}
+          {isCompleted && session.recordingLink && !session.isOffline && (
             <a href={session.recordingLink} target="_blank" rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border border-[#004d59]/30 dark:border-[#004d59]/30 bg-gradient-to-r from-[#004d59]/10 to-transparent dark:from-[#004d59]/10 text-[#004d59] dark:text-teal-400 hover:from-[#004d59]/15 transition-all">
               <Play className="w-4 h-4" />{t("مشاهدة التسجيل", "Watch Recording")}
@@ -1225,6 +1233,13 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
             <span className="text-[10px] font-black text-[#f67d00] dark:text-[#feaf00] flex items-center gap-1">
               <MapPin className="w-2.5 h-2.5" />
               {t("Offline", "Offline")}
+            </span>
+          )}
+          {/* ✅ Badge الحصة التعويضية (بدون خصم رصيد) */}
+          {session.isComplimentary && (
+            <span className="text-[10px] font-black text-[#004d59] dark:text-teal-400 flex items-center gap-1">
+              <Gift className="w-2.5 h-2.5" />
+              {t("تعويضية", "Make-up")}
             </span>
           )}
           <h3 className="font-black text-sm truncate text-gray-900 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors duration-200">

@@ -1,9 +1,17 @@
-// lib/auth.ts - FIXED VERSION (next-auth aware)
-import { getToken } from "next-auth/jwt";
+// lib/auth.ts
+import { cache } from "react";
+import { cookies, headers } from "next/headers";
+import mongoose from "mongoose";
+import { getToken, type JWT } from "next-auth/jwt";
 import { connectDB } from "./mongodb";
 import User from "@/app/models/User";
+import { resolveAvatar } from "./avatar";
 
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET;
+const IS_DEV = process.env.NODE_ENV !== "production";
+const log = (...args: unknown[]) => {
+  if (IS_DEV) console.log(...args);
+};
 
 export interface SafeUser {
   id: string;
@@ -22,110 +30,69 @@ interface UserDoc {
   isActive?: boolean;
 }
 
-/**
- * ✅ الطريقة الصح للتعامل مع next-auth JWT في App Router API routes.
- * getToken بتفك تشفير next-auth session token صح (JWE) بدل jwt.verify العادي.
- */
-export async function getUserFromRequest(req: Request): Promise<SafeUser | null> {
+/** يحوّل الـ token لـ user من الداتابيز: id ← sub (لو ObjectId) ← email */
+async function userFromToken(token: JWT | null): Promise<SafeUser | null> {
+  if (!token) return null;
+
+  const rawId = (token.id ?? token.sub) as string | undefined;
+  const email =
+    typeof token.email === "string" ? token.email.toLowerCase() : null;
+
+  let query: Record<string, unknown>;
+  if (rawId && mongoose.isValidObjectId(rawId)) query = { _id: rawId };
+  else if (email) query = { email };
+  else {
+    console.error("❌ [Auth] token has neither a valid id nor an email");
+    return null;
+  }
+
+  await connectDB();
+  const user = await User.findOne(query)
+    .select("_id name email role image isActive")
+    .lean<UserDoc>();
+
+  if (!user || user.isActive === false) return null;
+
+  log("✅ [Auth] user resolved:", String(user._id));
+
+  return {
+    id: String(user._id),
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    image: resolveAvatar(user.image),
+  };
+}
+
+/** للـ API routes (بياخد Request) */
+export async function getUserFromRequest(
+  req: Request,
+): Promise<SafeUser | null> {
   try {
-    console.log("🔐 [Auth] getUserFromRequest called");
-
-    const token = await getToken({
-      req: req as any,
-      secret: NEXTAUTH_SECRET,
-    });
-
-    if (!token) {
-      console.log("❌ [Auth] No next-auth session token found");
-      return null;
-    }
-
-    const userId = token.id as string;
-    if (!userId) {
-      console.error("❌ [Auth] No user ID in next-auth token");
-      return null;
-    }
-
-    console.log(`👤 [Auth] Looking for user ID: ${userId}`);
-
-    try {
-      await connectDB();
-    } catch (dbError) {
-      console.error("❌ [Auth] Database connection failed:", dbError);
-      return null;
-    }
-
-    let user: UserDoc | null;
-    try {
-      user = await User.findById(userId)
-        .select("_id name email role image isActive")
-        .lean<UserDoc>();
-
-      console.log("✅ [Auth] User query completed:", user ? "Found" : "Not found");
-    } catch (dbError) {
-      console.error("❌ [Auth] Database query failed:", dbError);
-      return null;
-    }
-
-    if (!user) {
-      console.error("❌ [Auth] User not found in database");
-      return null;
-    }
-
-    if (user.isActive === false) {
-      console.error("❌ [Auth] User account is inactive");
-      return null;
-    }
-
-    console.log("✅ [Auth] User authenticated successfully:", {
-      id: user._id.toString(),
-      name: user.name,
-      role: user.role,
-      email: user.email,
-    });
-
-    return {
-      id: String(user._id),
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      image: user.image || null,
-    };
+    const token = await getToken({ req: req as any, secret: NEXTAUTH_SECRET });
+    return await userFromToken(token);
   } catch (err) {
-    console.error("❌ [Auth] Unexpected error in getUserFromRequest:", err);
+    console.error("❌ [Auth] getUserFromRequest failed:", err);
     return null;
   }
 }
 
-/**
- * NEW: Helper function for API responses
- */
-export function createAuthResponse(user: SafeUser | null) {
-  if (!user) {
-    return {
-      success: false,
-      message: "Authentication required",
-      code: "AUTH_REQUIRED",
+/** للـ Server Components والـ layouts (من غير Request). cache = استعلام واحد لكل render */
+export const getCurrentUser = cache(async (): Promise<SafeUser | null> => {
+  try {
+    const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+
+    const req = {
+      headers: Object.fromEntries(headerStore.entries()),
+      cookies: Object.fromEntries(
+        cookieStore.getAll().map((c) => [c.name, c.value]),
+      ),
     };
+
+    const token = await getToken({ req: req as any, secret: NEXTAUTH_SECRET });
+    return await userFromToken(token);
+  } catch (err) {
+    console.error("❌ [Auth] getCurrentUser failed:", err);
+    return null;
   }
-
-  return {
-    success: true,
-    user,
-    permissions: getUserPermissions(user.role),
-  };
-}
-
-/**
- * NEW: Get user permissions based on role
- */
-function getUserPermissions(role?: string) {
-  const permissions = {
-    admin: ["read", "write", "delete", "manage_users", "manage_courses", "manage_groups"],
-    marketing: ["read", "write", "manage_campaigns", "view_analytics"],
-    instructor: ["read", "write_student_evaluations", "manage_sessions"],
-    student: ["read"],
-  };
-
-  return permissions[role as keyof typeof permissions] || ["read"];
-}
+});

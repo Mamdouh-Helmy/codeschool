@@ -1,304 +1,433 @@
+// app/api/dashboard/route.ts
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
+
+import Student from "../../models/Student";
+import Group from "../../models/Group";
+import Invoice from "../../models/Invoice";
+import Payment from "../../models/Payment";
+import StudentEvaluation from "../../models/StudentEvaluation";
 import User from "../../models/User";
-import Subscription from "../../models/Subscription";
 import Project from "../../models/Project";
 import BlogPost from "../../models/BlogPost";
-import Event from "../../models/Event";
-import Webinar from "../../models/Webinar";
 
-// دالة لاستخراج اللغة من الـ headers
-function getLocaleFromHeaders(headers: Headers): "ar" | "en" {
-  const acceptLanguage = headers.get("accept-language");
-  return acceptLanguage?.startsWith("ar") ? "ar" : "en";
+import { FLOW_COLORS } from "../../../lib/constants/dashboard";
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function getLocale(req: Request): "ar" | "en" {
+  return (req.headers.get("accept-language") || "").startsWith("ar") ? "ar" : "en";
 }
 
-// رسائل باللغتين
-const messages = {
-  en: {
-    noRealData: "No real data available yet",
-    failedToFetch: "Failed to fetch dashboard data",
-    unknownStudent: "Unknown Student",
-    noEmail: "No email",
-    generalPlan: "General Plan",
-    newStudentRegistration: "New Student Registration",
-    joinedPlatform: "joined the platform",
-    newSubscription: "New Subscription",
-    subscribedTo: "subscribed to",
-    newProjectSubmitted: "New Project Submitted",
-    created: "created",
-    blogPosts: "Blog Posts",
-    studentProjects: "Student Projects",
-    writeNewBlog: "Write New Blog Post",
-    contentCreation: "Content creation",
-    viewStudentProjects: "View Student Projects",
-    portfolioReview: "Portfolio review",
-    days: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-    timeAgo: {
-      minutes: (mins: number) => `${mins} minutes ago`,
-      hours: (hours: number) => `${hours} hours ago`,
-      days: (days: number) => `${days} days ago`,
-    },
-  },
-  ar: {
-    noRealData: "لا توجد بيانات حقيقية متاحة بعد",
-    failedToFetch: "فشل في جلب بيانات لوحة التحكم",
-    unknownStudent: "طالب غير معروف",
-    noEmail: "لا يوجد بريد إلكتروني",
-    generalPlan: "الخطة العامة",
-    newStudentRegistration: "تسجيل طالب جديد",
-    joinedPlatform: "انضم إلى المنصة",
-    newSubscription: "اشتراك جديد",
-    subscribedTo: "اشترك في",
-    newProjectSubmitted: "تم تقديم مشروع جديد",
-    created: "أنشأ",
-    blogPosts: "مقالات المدونة",
-    studentProjects: "مشاريع الطلاب",
-    writeNewBlog: "كتابة مقال جديد",
-    contentCreation: "إنشاء محتوى",
-    viewStudentProjects: "عرض مشاريع الطلاب",
-    portfolioReview: "مراجعة المحفظة",
-    days: [
-      "الأحد",
-      "الإثنين",
-      "الثلاثاء",
-      "الأربعاء",
-      "الخميس",
-      "الجمعة",
-      "السبت",
-    ],
-    timeAgo: {
-      minutes: (mins: number) => `قبل ${mins} دقيقة`,
-      hours: (hours: number) => `قبل ${hours} ساعة`,
-      days: (days: number) => `قبل ${days} يوم`,
-    },
-  },
-};
+function fmtTimeAgo(date: Date | string, locale: "ar" | "en"): string {
+  const diff = Date.now() - new Date(date).getTime();
+  const m = Math.max(0, Math.floor(diff / 60000));
+  const h = Math.floor(diff / 3600000);
+  const d = Math.floor(diff / 86400000);
+
+  if (locale === "ar") {
+    if (m < 60) return `قبل ${m} دقيقة`;
+    if (h < 24) return `قبل ${h} ساعة`;
+    return `قبل ${d} يوم`;
+  }
+  if (m < 60) return `${m}m ago`;
+  if (h < 24) return `${h}h ago`;
+  return `${d}d ago`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const locale = getLocaleFromHeaders(request.headers);
-    const msg = messages[locale];
-
+    const locale = getLocale(request);
     await connectDB();
 
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+    // ─── COUNTS (parallel) ──────────────────────────────────
     const [
       totalStudents,
       activeSubscriptions,
+      totalGroups,
+      activeGroups,
+      totalInstructors,
       totalProjects,
       totalBlogs,
-      totalEvents,
-      totalWebinars,
-      subscriptions,
-      recentSubscriptions,
-      recentUsers,
-      recentProjects,
-      allSubscriptions,
-      weeklySubscriptions,
-      userActivity,
+      draftPosts,
+      pendingInvoices,
+      overdueInvoices,
+      completedEvals,
+      totalEvals,
+      zeroBalanceStudents,
     ] = await Promise.all([
-      User.countDocuments({ role: "student" }),
-      Subscription.countDocuments({ status: "active" }),
+      Student.countDocuments({ isDeleted: false }),
+
+      Student.countDocuments({
+        isDeleted: false,
+        "creditSystem.status": "active",
+        "creditSystem.currentPackage.remainingHours": { $gt: 0 },
+      }),
+
+      Group.countDocuments({ isDeleted: false, isMakeupGroup: { $ne: true } }),
+
+      Group.countDocuments({
+        isDeleted: false,
+        isMakeupGroup: { $ne: true },
+        status: "active",
+        "hold.isHeld": false,
+      }),
+
+      User.countDocuments({ role: "instructor", isActive: true }),
+
       Project.countDocuments({ isActive: true }),
       BlogPost.countDocuments({ status: "published" }),
-      Event.countDocuments({ isActive: true }),
-      Webinar.countDocuments({ isActive: true }),
-      Subscription.find({ status: "active" }).populate("plan"),
-      Subscription.find({})
-        .populate("user", "name email")
-        .populate("plan", "name")
-        .sort({ createdAt: -1 })
-        .limit(5),
-      User.find({})
-        .sort({ createdAt: -1 })
-        .limit(3)
-        .select("name email createdAt"),
-      Project.find({ isActive: true })
-        .sort({ createdAt: -1 })
-        .limit(3)
-        .select("title student createdAt"),
-      Subscription.find({}).populate("plan"),
-      Subscription.aggregate([
-        {
-          $match: {
-            createdAt: {
-              $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-            },
-          },
-        },
-        {
-          $group: {
-            _id: { $dayOfWeek: "$createdAt" },
-            count: { $sum: 1 },
-            totalRevenue: { $sum: "$totalAmount" },
-          },
-        },
-        {
-          $sort: { _id: 1 },
-        },
+      BlogPost.countDocuments({ status: "draft" }),
+
+      Invoice.countDocuments({ status: "Pending" }),
+      Invoice.countDocuments({
+        status: { $in: ["Pending", "Suspended"] },
+        dueDate: { $lt: now },
+      }),
+
+      StudentEvaluation.countDocuments({ isDeleted: false, finalDecision: "pass" }),
+      StudentEvaluation.countDocuments({ isDeleted: false }),
+
+      Student.countDocuments({
+        isDeleted: false,
+        "creditSystem.currentPackage": { $ne: null },
+        "creditSystem.currentPackage.remainingHours": { $lte: 0 },
+      }),
+    ]);
+
+    // ─── REVENUE (collected + escrow) ───────────────────────
+    const [thisMonthAgg, lastMonthAgg, escrowAgg] = await Promise.all([
+      Payment.aggregate([
+        { $match: { type: "payment", status: "completed", date: { $gte: startOfMonth, $lte: now } } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
-      Subscription.aggregate([
-        {
-          $match: {
-            status: "active",
-            startDate: { $exists: true },
-          },
-        },
-        {
-          $group: {
-            _id: {
-              $dateToString: {
-                format: "%Y-%m-%d",
-                date: "$startDate",
-              },
-            },
-            activeUsers: { $sum: "$studentCount" },
-            dailyRevenue: { $sum: "$totalAmount" },
-          },
-        },
-        {
-          $sort: { _id: -1 },
-        },
-        {
-          $limit: 7,
-        },
+      Payment.aggregate([
+        { $match: { type: "payment", status: "completed", date: { $gte: lastMonthStart, $lte: lastMonthEnd } } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      // ✅ Escrow من Invoice (مش Payment) — لأن Invoice هو اللي بيحمل حالة Escrow
+      Invoice.aggregate([
+        { $match: { status: "Escrow" } },
+        { $group: { _id: null, total: { $sum: { $subtract: ["$totalAmount", "$paidAmount"] } } } },
       ]),
     ]);
 
-    const hasRealData = checkIfHasRealData({
-      totalStudents,
-      activeSubscriptions,
-      totalProjects,
-      totalBlogs,
-      recentSubscriptions,
-      recentUsers,
-      recentProjects,
-      weeklySubscriptions,
-      userActivity,
+    const monthlyRevenue = thisMonthAgg[0]?.total || 0;
+    const prevRevenue = lastMonthAgg[0]?.total || 0;
+    const escrowAmount = escrowAgg[0]?.total || 0;
+
+    const revenueTrendPct =
+      prevRevenue > 0
+        ? Math.round(((monthlyRevenue - prevRevenue) / prevRevenue) * 100)
+        : monthlyRevenue > 0
+          ? 100
+          : 0;
+
+    const courseCompletion = totalEvals > 0 ? Math.round((completedEvals / totalEvals) * 100) : 0;
+
+    // ─── PERFORMANCE (weekly engagement) ────────────────────
+    const activeGroupsList = await Group.find({
+      isDeleted: false,
+      isMakeupGroup: { $ne: true },
+      status: "active",
+      "hold.isHeld": false,
+    })
+      .select("schedule.daysOfWeek currentStudentsCount maxStudents")
+      .lean();
+
+    const daysEn = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const daysAr = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+    const performance = daysEn.map((dayEn, idx) => {
+      const groups = activeGroupsList.filter((g: any) => g.schedule?.daysOfWeek?.includes(dayEn));
+      const label = locale === "ar" ? daysAr[idx] : dayEn.slice(0, 3);
+      if (groups.length === 0) return { label, value: 0 };
+      const avg =
+        groups.reduce((sum: number, g: any) => {
+          const cap = g.maxStudents > 0 ? (g.currentStudentsCount / g.maxStudents) * 100 : 0;
+          return sum + cap;
+        }, 0) / groups.length;
+      return { label, value: Math.round(avg) };
     });
 
-    if (!hasRealData) {
-      return NextResponse.json({
-        success: true,
-        data: null,
-        message: msg.noRealData,
-        hasData: false,
-        timestamp: new Date().toISOString(),
-      });
+    // ─── STUDENT LIFECYCLE ─────────────────────────────────
+    const [enrolled, inGroup, withPackage, attended] = await Promise.all([
+      Student.countDocuments({ isDeleted: false }),
+      Student.countDocuments({ isDeleted: false, "academicInfo.groupIds.0": { $exists: true } }),
+      Student.countDocuments({ isDeleted: false, "creditSystem.status": "active" }),
+      Student.countDocuments({
+        isDeleted: false,
+        "creditSystem.stats.totalSessionsAttended": { $gt: 0 },
+      }),
+    ]);
+
+    const studentLifecycle = [
+      { stage: "enrolled", count: enrolled, color: FLOW_COLORS.lifecycle.enrolled },
+      { stage: "assigned_to_group", count: inGroup, color: FLOW_COLORS.lifecycle.assigned_to_group },
+      { stage: "has_active_package", count: withPackage, color: FLOW_COLORS.lifecycle.has_active_package },
+      { stage: "attended_session", count: attended, color: FLOW_COLORS.lifecycle.attended_session },
+    ];
+
+    // ─── BILLING FUNNEL ─────────────────────────────────────
+    const billingAgg = await Invoice.aggregate([
+      { $match: { status: { $ne: "Voided" } } },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+          amount: { $sum: { $subtract: ["$totalAmount", "$paidAmount"] } },
+        },
+      },
+    ]);
+
+    const bMap = billingAgg.reduce((acc: any, b: any) => {
+      acc[b._id] = { count: b.count, amount: Math.max(0, b.amount || 0) };
+      return acc;
+    }, {} as Record<string, { count: number; amount: number }>);
+
+    const billingFunnel = [
+      { stage: "pending", count: bMap.Pending?.count || 0, amount: bMap.Pending?.amount || 0, color: FLOW_COLORS.billing.pending },
+      { stage: "escrow", count: bMap.Escrow?.count || 0, amount: bMap.Escrow?.amount || 0, color: FLOW_COLORS.billing.escrow },
+      { stage: "suspended", count: bMap.Suspended?.count || 0, amount: bMap.Suspended?.amount || 0, color: FLOW_COLORS.billing.suspended },
+      { stage: "paid", count: bMap.Paid?.count || 0, amount: 0, color: FLOW_COLORS.billing.paid },
+    ];
+
+    // ─── CREDIT HEALTH (fixed buckets) ──────────────────────
+    const creditAgg = await Student.aggregate([
+      { $match: { isDeleted: false, "creditSystem.currentPackage": { $ne: null } } },
+      {
+        $bucket: {
+          groupBy: "$creditSystem.currentPackage.remainingHours",
+          boundaries: [0, 0.1, 5, 15],
+          default: "good",
+          output: { count: { $sum: 1 } },
+        },
+      },
+    ]);
+
+    const creditHealth = [
+      { level: "zero", count: creditAgg.find((b: any) => b._id === 0)?.count || 0, color: FLOW_COLORS.credit.zero },
+      { level: "critical", count: creditAgg.find((b: any) => b._id === 0.1)?.count || 0, color: FLOW_COLORS.credit.critical },
+      { level: "low", count: creditAgg.find((b: any) => b._id === 5)?.count || 0, color: FLOW_COLORS.credit.low },
+      { level: "good", count: creditAgg.find((b: any) => b._id === "good")?.count || 0, color: FLOW_COLORS.credit.good },
+    ];
+
+    // ─── REVENUE TREND (6 months) ───────────────────────────
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+    const trendAgg = await Payment.aggregate([
+      { $match: { type: "payment", status: "completed", date: { $gte: sixMonthsAgo } } },
+      {
+        $group: {
+          _id: {
+            y: { $year: "$date" },
+            m: { $month: "$date" },
+            escrow: { $ifNull: ["$escrow.status", "recognized"] },
+          },
+          total: { $sum: "$amount" },
+        },
+      },
+    ]);
+
+    const revenueTrend = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const label = d.toLocaleString(locale === "ar" ? "ar-EG" : "en", { month: "short" });
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+
+      const collected = trendAgg
+        .filter((t: any) => t._id.y === y && t._id.m === m && t._id.escrow === "recognized")
+        .reduce((s: number, t: any) => s + t.total, 0);
+
+      const esc = trendAgg
+        .filter((t: any) => t._id.y === y && t._id.m === m && t._id.escrow === "in_escrow")
+        .reduce((s: number, t: any) => s + t.total, 0);
+
+      revenueTrend.push({ month: label, collected, escrow: esc });
     }
 
-    const last30Days = new Date();
-    last30Days.setDate(last30Days.getDate() - 30);
+    // ─── ACTIVITIES ────────────────────────────────────────
+    const [payments, evals, groups, users] = await Promise.all([
+      Payment.find({ type: "payment", status: "completed" })
+        .sort({ date: -1 })
+        .limit(3)
+        .populate("studentId", "personalInfo.fullName")
+        .lean(),
+      StudentEvaluation.find({ isDeleted: false })
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .populate("studentId", "personalInfo.fullName")
+        .populate("groupId", "name")
+        .lean(),
+      Group.find({ isDeleted: false, isMakeupGroup: { $ne: true } })
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .select("name code courseSnapshot status createdAt")
+        .lean(),
+      User.find({ role: "student", isActive: true })
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .select("name createdAt")
+        .lean(),
+    ]);
 
-    const monthlyRevenueFromSubscriptions = allSubscriptions.reduce(
-      (total, sub) => {
-        const subDate = new Date(sub.startDate);
-        if (sub.status === "active" && subDate >= last30Days) {
-          return total + (sub.totalAmount || 0);
-        }
-        return total;
-      },
-      0
-    );
+    const activities: any[] = [];
 
-    const performanceData = generateRealPerformanceData(
-      weeklySubscriptions,
-      userActivity,
-      locale
-    );
-
-    const enrollments = recentSubscriptions.map((subscription, index) => ({
-      id: subscription._id?.toString() || `sub-${index}-${Date.now()}`,
-      name: subscription.user?.name || msg.unknownStudent,
-      email: subscription.user?.email || msg.noEmail,
-      course: subscription.plan?.name || msg.generalPlan,
-      progress: calculateProgress(subscription),
-      enrolledOn: new Date(subscription.startDate).toLocaleDateString(
-        locale === "ar" ? "ar-EG" : "en-US"
-      ),
-      status: mapSubscriptionStatus(subscription.status),
-    }));
-
-    type Activity = {
-      id: string;
-      title: string;
-      description: string;
-      timestamp: string;
-      icon: string;
-      tone: "success" | "info" | "warning" | "error";
-    };
-
-    const activities: Activity[] = [];
-
-    recentUsers.forEach((user, index) => {
+    payments.forEach((p: any) => {
       activities.push({
-        id: user._id?.toString() || `user-${index}-${Date.now()}`,
-        title: msg.newStudentRegistration,
-        description: `${user.name} ${msg.joinedPlatform}`,
-        timestamp: formatTimestamp(user.createdAt, locale),
+        id: `pay-${p._id}`,
+        title: `${locale === "ar" ? "دفعة مستلمة" : "Payment received"} — ${(p.amount || 0).toLocaleString()} EGP`,
+        description: `${p.studentId?.personalInfo?.fullName || (locale === "ar" ? "طالب" : "Student")} • ${p.method || "cash"}`,
+        timestamp: fmtTimeAgo(p.date, locale),
+        rawTime: new Date(p.date).getTime(),
+        icon: "ion:cash-outline",
+        tone: "success",
+      });
+    });
+
+    evals.forEach((e: any) => {
+      activities.push({
+        id: `eval-${e._id}`,
+        title: `${locale === "ar" ? "تقييم" : "Evaluation"}: ${(e.finalDecision || "").toUpperCase()}`,
+        description: `${e.studentId?.personalInfo?.fullName || "—"} ${locale === "ar" ? "في" : "in"} ${e.groupId?.name || "Group"}`,
+        timestamp: fmtTimeAgo(e.createdAt, locale),
+        rawTime: new Date(e.createdAt).getTime(),
+        icon: "ion:ribbon-outline",
+        tone: e.finalDecision === "pass" ? "success" : "warning",
+      });
+    });
+
+    groups.forEach((g: any) => {
+      activities.push({
+        id: `grp-${g._id}`,
+        title: `${locale === "ar" ? "جروب جديد" : "New group"}: ${g.name}`,
+        description: `${g.courseSnapshot?.title || g.code} • ${g.status}`,
+        timestamp: fmtTimeAgo(g.createdAt, locale),
+        rawTime: new Date(g.createdAt).getTime(),
+        icon: "ion:people-circle-outline",
+        tone: "info",
+      });
+    });
+
+    users.forEach((u: any) => {
+      activities.push({
+        id: `usr-${u._id}`,
+        title: locale === "ar" ? "تسجيل طالب جديد" : "New Student Registration",
+        description: `${u.name} ${locale === "ar" ? "انضم للمنصة" : "joined the platform"}`,
+        timestamp: fmtTimeAgo(u.createdAt, locale),
+        rawTime: new Date(u.createdAt).getTime(),
         icon: "ion:person-add",
         tone: "success",
       });
     });
 
-    recentSubscriptions.forEach((sub, index) => {
+    if (zeroBalanceStudents > 0) {
       activities.push({
-        id: sub._id?.toString() || `sub-act-${index}-${Date.now()}`,
-        title: msg.newSubscription,
-        description: `${sub.user?.name || "User"} ${msg.subscribedTo} ${
-          sub.plan?.name || "a plan"
-        }`,
-        timestamp: formatTimestamp(sub.createdAt, locale),
-        icon: "ion:card",
-        tone: "info",
-      });
-    });
-
-    recentProjects.forEach((project, index) => {
-      activities.push({
-        id: project._id?.toString() || `project-${index}-${Date.now()}`,
-        title: msg.newProjectSubmitted,
-        description: `${project.student?.name || "Student"} ${msg.created} "${
-          project.title
-        }"`,
-        timestamp: formatTimestamp(project.createdAt, locale),
-        icon: "ion:rocket",
+        id: "zero-balance",
+        title: `${zeroBalanceStudents} ${locale === "ar" ? "طالب برصيد صفر" : "students with zero balance"}`,
+        description: locale === "ar"
+          ? "الرصيد استنفد — تم تعطيل الإشعارات"
+          : "Credit exhausted — notifications disabled",
+        timestamp: locale === "ar" ? "الآن" : "now",
+        rawTime: Date.now(),
+        icon: "ion:alert-circle-outline",
         tone: "warning",
       });
+    }
+
+    activities.sort((a, b) => b.rawTime - a.rawTime);
+
+    // ─── ENROLLMENTS ───────────────────────────────────────
+    const recentStudents = await Student.find({ isDeleted: false })
+      .sort({ "enrollmentInfo.enrollmentDate": -1, createdAt: -1 })
+      .limit(8)
+      .populate({
+        path: "academicInfo.groupIds",
+        select: "name courseSnapshot",
+      })
+      .select(
+        "personalInfo.fullName personalInfo.email enrollmentInfo.enrollmentDate creditSystem.currentPackage academicInfo.groupIds"
+      )
+      .lean();
+
+    const enrollments = recentStudents.map((s: any, i: number) => {
+      const pkg = s.creditSystem?.currentPackage;
+      const progress =
+        pkg && pkg.totalHours > 0
+          ? Math.round(((pkg.totalHours - pkg.remainingHours) / pkg.totalHours) * 100)
+          : 0;
+
+      let status: "active" | "pending" | "trial" = "pending";
+      if (pkg?.status === "active") status = "active";
+      else if (!s.academicInfo?.groupIds?.length) status = "trial";
+
+      const firstGroup = s.academicInfo?.groupIds?.[0];
+
+      return {
+        id: s._id?.toString() || `enroll-${i}-${Date.now()}`,
+        name: s.personalInfo?.fullName || (locale === "ar" ? "غير معروف" : "Unknown"),
+        email: s.personalInfo?.email || "—",
+        course:
+          firstGroup?.courseSnapshot?.title ||
+          firstGroup?.name ||
+          (locale === "ar" ? "غير محدد" : "Not assigned"),
+        progress,
+        enrolledOn: new Date(s.enrollmentInfo?.enrollmentDate || Date.now()).toLocaleDateString(
+          locale === "ar" ? "ar-EG" : "en-US"
+        ),
+        status,
+      };
     });
 
-    activities.sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-
+    // ─── RESPONSE ──────────────────────────────────────────
     return NextResponse.json({
       success: true,
+      hasData: true,
+      timestamp: new Date().toISOString(),
       data: {
         stats: {
           totalStudents,
           activeSubscriptions,
-          monthlyRevenue: monthlyRevenueFromSubscriptions,
-          courseCompletion: calculateCourseCompletion(allSubscriptions),
+          monthlyRevenue,
+          courseCompletion,
           totalProjects,
           totalBlogs,
-          totalEvents,
-          totalWebinars,
+          totalGroups,
+          activeGroups,
+          totalInstructors,
+          pendingInvoices,
+          overdueInvoices,
+          escrowAmount,
+          revenueTrendPct,
         },
+        performance,
+        activities: activities.slice(0, 6).map(({ rawTime, ...r }) => r),
         enrollments: enrollments.slice(0, 5),
-        activities: activities.slice(0, 5),
-        performance: performanceData,
         content: {
           stats: [
             {
-              label: msg.blogPosts,
+              label: locale === "ar" ? "المقالات المنشورة" : "Published Posts",
               value: totalBlogs.toString(),
-              change: "+12%",
-              isPositive: true,
+              change: `${draftPosts} ${locale === "ar" ? "مسودة" : "drafts"}`,
+              isPositive: draftPosts < 5,
               icon: "ion:document-text",
             },
             {
-              label: msg.studentProjects,
+              label: locale === "ar" ? "المشاريع النشطة" : "Active Projects",
               value: totalProjects.toString(),
               change: "+8%",
               isPositive: true,
@@ -307,235 +436,26 @@ export async function GET(request: Request) {
           ],
           actions: [
             {
-              label: msg.writeNewBlog,
-              description: msg.contentCreation,
+              label: locale === "ar" ? "كتابة مقال جديد" : "Write New Blog Post",
+              description: locale === "ar" ? "إنشاء محتوى" : "Content creation",
               href: "/admin/blogs",
             },
             {
-              label: msg.viewStudentProjects,
-              description: msg.portfolioReview,
+              label: locale === "ar" ? "عرض مشاريع الطلاب" : "View Student Projects",
+              description: locale === "ar" ? "مراجعة المحفظة" : "Portfolio review",
               href: "/admin/projects",
             },
           ],
         },
+        flows: { studentLifecycle, billingFunnel, creditHealth },
+        revenueTrend,
       },
-      hasData: true,
-      timestamp: new Date().toISOString(),
     });
-  } catch (error: unknown) {
-    console.error("Error fetching dashboard data:", error);
-    const locale = getLocaleFromHeaders(new Headers());
-    const msg = messages[locale];
-
-    let errorMessage = "Unknown error";
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-
+  } catch (error: any) {
+    console.error("❌ Dashboard API error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: msg.failedToFetch,
-        error: errorMessage,
-      },
+      { success: false, message: error.message || "Failed to fetch dashboard" },
       { status: 500 }
     );
-  }
-}
-
-function checkIfHasRealData(data: {
-  totalStudents: number;
-  activeSubscriptions: number;
-  totalProjects: number;
-  totalBlogs: number;
-  recentSubscriptions: any[];
-  recentUsers: any[];
-  recentProjects: any[];
-  weeklySubscriptions: any[];
-  userActivity: any[];
-}): boolean {
-  const {
-    totalStudents,
-    activeSubscriptions,
-    totalProjects,
-    totalBlogs,
-    recentSubscriptions,
-    recentUsers,
-    recentProjects,
-    weeklySubscriptions,
-    userActivity,
-  } = data;
-
-  const hasStudents = totalStudents > 0;
-  const hasSubscriptions = activeSubscriptions > 0;
-  const hasProjects = totalProjects > 0;
-  const hasBlogs = totalBlogs > 0;
-  const hasRecentSubscriptions = recentSubscriptions.length > 0;
-  const hasRecentUsers = recentUsers.length > 0;
-  const hasRecentProjects = recentProjects.length > 0;
-  const hasWeeklyData = weeklySubscriptions.length > 0;
-  const hasUserActivity = userActivity.length > 0;
-
-  return (
-    hasStudents ||
-    hasSubscriptions ||
-    hasProjects ||
-    hasBlogs ||
-    hasRecentSubscriptions ||
-    hasRecentUsers ||
-    hasRecentProjects ||
-    hasWeeklyData ||
-    hasUserActivity
-  );
-}
-
-function generateRealPerformanceData(
-  weeklySubscriptions: any[],
-  userActivity: any[],
-  locale: "ar" | "en" = "en"
-) {
-  if (weeklySubscriptions.length === 0 && userActivity.length === 0) {
-    return [];
-  }
-
-  const msg = messages[locale];
-  const daysOfWeek = msg.days;
-
-  if (weeklySubscriptions.length > 0) {
-    const performanceData = daysOfWeek.map((day, index) => {
-      const mongoDay = index === 0 ? 7 : index;
-      const dayData = weeklySubscriptions.find((item) => item._id === mongoDay);
-
-      if (dayData) {
-        const subscriptionCount = dayData.count || 0;
-        const revenue = dayData.totalRevenue || 0;
-        let engagementRate = Math.min(
-          100,
-          subscriptionCount * 15 + revenue / 10
-        );
-        engagementRate = Math.max(40, Math.min(95, engagementRate));
-
-        return {
-          label: day,
-          value: Math.round(engagementRate),
-        };
-      }
-
-      return {
-        label: day,
-        value: 0,
-      };
-    });
-
-    return performanceData;
-  }
-
-  if (userActivity.length > 0) {
-    const last7Days = getLast7Days(locale);
-
-    const performanceData = last7Days.map((day, index) => {
-      const dayData = userActivity.find((item) => item._id === day.date);
-
-      if (dayData) {
-        const activeUsers = dayData.activeUsers || 0;
-        let engagementRate = Math.min(100, activeUsers * 20);
-        engagementRate = Math.max(40, Math.min(95, engagementRate));
-
-        return {
-          label: day.label,
-          value: Math.round(engagementRate),
-        };
-      }
-
-      return {
-        label: day.label,
-        value: 0,
-      };
-    });
-
-    return performanceData;
-  }
-
-  return [];
-}
-
-function getLast7Days(locale: "ar" | "en" = "en") {
-  const msg = messages[locale];
-  const days = [];
-  const dayLabels = msg.days;
-
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-
-    days.push({
-      date: date.toISOString().split("T")[0],
-      label: dayLabels[date.getDay()],
-    });
-  }
-
-  return days;
-}
-
-function calculateCourseCompletion(subscriptions: any[]): number {
-  if (subscriptions.length === 0) return 0;
-
-  const activeSubscriptions = subscriptions.filter(
-    (sub) => sub.status === "active"
-  );
-
-  if (activeSubscriptions.length === 0) return 0;
-
-  const totalProgress = activeSubscriptions.reduce((sum, sub) => {
-    return sum + calculateProgress(sub);
-  }, 0);
-
-  const averageProgress = Math.round(
-    totalProgress / activeSubscriptions.length
-  );
-
-  return Math.max(0, Math.min(100, averageProgress));
-}
-
-function formatTimestamp(date: Date, locale: "ar" | "en" = "en"): string {
-  const msg = messages[locale];
-  const now = new Date();
-  const diffMs = now.getTime() - new Date(date).getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 60) {
-    return msg.timeAgo.minutes(diffMins);
-  } else if (diffHours < 24) {
-    return msg.timeAgo.hours(diffHours);
-  } else {
-    return msg.timeAgo.days(diffDays);
-  }
-}
-
-function calculateProgress(subscription: any): number {
-  if (!subscription.startDate || !subscription.endDate) return 0;
-
-  const start = new Date(subscription.startDate).getTime();
-  const end = new Date(subscription.endDate).getTime();
-  const now = new Date().getTime();
-
-  if (now >= end) return 100;
-  if (now <= start) return 0;
-
-  const total = end - start;
-  const elapsed = now - start;
-  return Math.min(100, Math.round((elapsed / total) * 100));
-}
-
-function mapSubscriptionStatus(status: string): "active" | "pending" | "trial" {
-  switch (status) {
-    case "active":
-      return "active";
-    case "pending":
-      return "pending";
-    default:
-      return "trial";
   }
 }

@@ -12,6 +12,7 @@ import {
     UserCheck, Layers, Tag, Sparkles, FolderOpen,
     Link2Off,
     PauseCircle,
+    Gift,  // ✅ NEW
 } from "lucide-react";
 import Modal from "./Modal";
 import GroupForm from "./GroupForm";
@@ -21,6 +22,7 @@ import MeetingLinksCheckModal from "./MeetingLinksCheckModal";
 import FixGroupLinksModal from "./FixGroupLinksModal";
 import GroupDetailsPage from "./GroupDetailsPage";
 import GroupHoldModal from "./GroupHoldModal";
+import MakeupSessionForm from "./MakeupSessionForm";  // ✅ NEW
 import { useI18n } from "@/i18n/I18nProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -54,6 +56,7 @@ const INITIAL_STATS = {
     completed: 0,
     cancelled: 0,
     onHold: 0,
+    makeup: 0,  // ✅ NEW
 };
 
 const STATUS_COLORS = {
@@ -153,6 +156,9 @@ export default function GroupsAdmin() {
     // ✅ Hold state
     const [holdModal, setHoldModal] = useState({ open: false, groupId: null });
 
+    // 🎁 Make-up Session state
+    const [makeupModalOpen, setMakeupModalOpen] = useState(false);
+
     const [pendingActivation, setPendingActivation] = useState({
         forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "",
     });
@@ -213,6 +219,13 @@ export default function GroupsAdmin() {
             accent: "from-rose-500/15 via-rose-500/5 to-transparent", ring: "ring-rose-500/15",
             iconWrap: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
             icon: <XCircle className="w-5 h-5 md:w-6 md:h-6" />,
+        },
+        // ✅ Make-up stat
+        {
+            label: t("groups.stats.makeup") || "Make-up", value: stats.makeup || 0,
+            accent: "from-orange-deep/15 via-orange-deep/5 to-transparent", ring: "ring-orange-deep/15",
+            iconWrap: "bg-orange-deep/10 text-orange-deep dark:text-amber-brand",
+            icon: <Gift className="w-5 h-5 md:w-6 md:h-6" />,
         },
     ], [stats, t]);
 
@@ -471,6 +484,23 @@ export default function GroupsAdmin() {
         setHoldModal({ open: true, groupId });
     }, []);
 
+    // 🎁 فتح مودال الحصة التعويضية
+    const onMakeup = useCallback(() => {
+        setMakeupModalOpen(true);
+    }, []);
+
+    const closeMakeupModal = useCallback(() => {
+        setMakeupModalOpen(false);
+    }, []);
+
+    const onMakeupSaved = useCallback(async () => {
+        await loadGroups();
+        toast.success(
+            t("groups.makeup.created") || "تم إنشاء الحصة التعويضية بنجاح",
+            { position: "top-center" }
+        );
+    }, [loadGroups, t]);
+
     // ✅ فكّ الـ Hold مباشرة
     const onRelease = useCallback(async (groupId, groupName) => {
         const confirmed = window.confirm(
@@ -636,7 +666,7 @@ export default function GroupsAdmin() {
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <button
                             onClick={() => setTagsModalOpen(true)}
                             className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700/60 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all flex items-center gap-2 border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
@@ -644,6 +674,19 @@ export default function GroupsAdmin() {
                             <Tag className="w-4 h-4" />
                             {t("groups.tags.manage") || "Manage Tags"}
                         </button>
+
+                        {/* 🎁 Make-up Session Button */}
+                        <button
+                            onClick={onMakeup}
+                            className="bg-gradient-to-r from-primary to-orange-deep hover:shadow-lg active:scale-[0.98] text-white px-4 py-2.5 md:px-5 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all shadow-md shadow-primary/20 flex items-center gap-2 justify-center"
+                            title={t("groups.makeup.title") || "إنشاء حصة تعويضية"}
+                        >
+                            <Gift className="w-4 h-4" />
+                            <span className="hidden sm:inline">
+                                {t("groups.makeup.button") || "حصة تعويضية"}
+                            </span>
+                        </button>
+
                         <button
                             onClick={() => { setEditingGroup(null); setModalOpen(true); }}
                             className="bg-primary hover:bg-primary/90 active:scale-[0.98] text-white px-4 py-2.5 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/25 flex items-center gap-2 w-full md:w-auto justify-center"
@@ -655,20 +698,20 @@ export default function GroupsAdmin() {
                 </div>
             </div>
 
-            {/* ── Stats (6 cards) ── */}
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 md:gap-4">
+            {/* ── Stats (7 cards) ── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
                 {statsConfig.map((stat) => (
                     <div
                         key={stat.label}
                         className={`relative overflow-hidden bg-white dark:bg-darkmode rounded-2xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm hover:shadow-md transition-shadow ring-1 ${stat.ring}`}
                     >
                         <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${stat.accent}`} />
-                        <div className="relative flex items-center justify-between">
-                            <div>
-                                <p className="text-[10px] md:text-xs font-medium text-SlateBlueText dark:text-darktext uppercase tracking-wide">{stat.label}</p>
+                        <div className="relative flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                                <p className="text-[10px] md:text-xs font-medium text-SlateBlueText dark:text-darktext uppercase tracking-wide truncate">{stat.label}</p>
                                 <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white tabular-nums">{stat.value}</p>
                             </div>
-                            <div className={`p-2 md:p-2.5 rounded-xl ${stat.iconWrap}`}>
+                            <div className={`p-2 md:p-2.5 rounded-xl ${stat.iconWrap} flex-shrink-0`}>
                                 {stat.icon}
                             </div>
                         </div>
@@ -1077,6 +1120,19 @@ export default function GroupsAdmin() {
                 </Modal>
             )}
 
+            {/* 🎁 Make-up Session Modal */}
+            <Modal
+                open={makeupModalOpen}
+                onClose={closeMakeupModal}
+                size="2xl"
+                noPadding
+            >
+                <MakeupSessionForm
+                    onClose={closeMakeupModal}
+                    onSaved={onMakeupSaved}
+                />
+            </Modal>
+
             {/* ✅ مودال إدارة الوسوم */}
             <Modal
                 open={tagsModalOpen}
@@ -1216,16 +1272,19 @@ function DateRangeFilter({ label, icon, fromValue, toValue, onFromChange, onToCh
     );
 }
 
-// ✅ GroupRow مع حالة until_session
+// ✅ GroupRow مع حالة until_session + بادج الحصة التعويضية
 function GroupRow({
     group, dayLabels, statusLabels, t,
     onViewDetails, onActivate, onAddStudents, onViewSessions,
     onEdit, onDelete, onFixLinks,
     onHold, onRelease,
 }) {
-    const hasLinkIssue = !!group.linkHealth?.hasIssue;
+        // ✅ نتجاهل فحص اللينكات للجروبات الأوفلاين (مالهاش لينكات أصلاً)
+    const isOffline = group.deliveryMode === "offline";
+    const hasLinkIssue = !isOffline && !!group.linkHealth?.hasIssue;
     const isOnHold = !!group.isOnHold;
-    const linkIssueLabel = group.linkHealth?.orphanedCount > 0
+    const isMakeup = !!group.isMakeupGroup;
+        const linkIssueLabel = !isOffline && group.linkHealth?.orphanedCount > 0
         ? (t("groups.links.orphaned") || "لينك محذوف من الداتابيز")
         : (t("groups.links.missing") || "جلسات بدون لينك");
 
@@ -1251,7 +1310,18 @@ function GroupRow({
 
             {/* Group Info */}
             <td className="py-3.5 px-4">
-                <p className="font-semibold text-sm text-MidnightNavyText dark:text-white">{group.name}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-sm text-MidnightNavyText dark:text-white">{group.name}</p>
+                    {isMakeup && (
+                        <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-primary/15 to-orange-deep/15 text-primary border border-primary/25 dark:border-primary/30"
+                            title={t("groups.makeup.badgeTitle") || "حصة تعويضية"}
+                        >
+                            <Gift className="w-3 h-3" />
+                            {t("groups.makeup.badge") || "تعويضية"}
+                        </span>
+                    )}
+                </div>
                 <p className="text-xs text-SlateBlueText dark:text-darktext flex items-center gap-1 mt-0.5">
                     <Hash className="w-3 h-3" />{group.code}
                 </p>
@@ -1395,7 +1465,7 @@ function GroupRow({
                         </ActionButton>
                     )}
 
-                    {hasLinkIssue && (
+                                       {hasLinkIssue && !isOffline && (
                         <ActionButton onClick={() => onFixLinks(group.id)} hoverColor="red" title={t("groups.actions.fixLinks") || "إصلاح لينكات الاجتماعات"}>
                             <Link2Off className="w-4 h-4 text-amber-600" />
                         </ActionButton>

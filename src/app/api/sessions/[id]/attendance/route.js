@@ -1,30 +1,34 @@
 // /api/sessions/[id]/attendance/route.js
-// ✅ منطق الخصم (الجديد - أبسط):
+// ✅ منطق الخصم:
 // - أول ما تتسجل حالة حضور لطالب في السيشن دي (أي حالة: حاضر/غايب/متأخر/معتذر)
 //   → يتخصم ساعتين مرة واحدة بس.
 // - أي تعديل بعد كده على نفس الطالب في نفس السيشن (يقلبها لأي حالة تانية)
 //   → مفيش أي خصم أو إرجاع تاني. الساعتين ثابتة زي ما هي.
+// - ✅ NEW: لو السيشن دي isComplimentary (حصة تعويضية/Makeup) → بيتسجل الحضور
+//   عادي تمامًا، بس من غير أي خصم من رصيد الطالب خالص. المدرس بياخد حقه
+//   عادي من خلال processSessionPayroll لما السيشن تتحدد completed — مفيش
+//   أي علاقة بين الاستثناء ده وبين مرتب المدرس.
 //
-// ✅ HOLD GUARD: 
+// ✅ HOLD GUARD:
 // - منع تسجيل الحضور على أي سيشن مقفولة بسبب الـ Hold
 // - indefinite / duration → كل السيشنات مقفولة
 // - sessions → أول N سيشنات (بترتيب moduleIndex → sessionNumber) مقفولة
 // - until_session → من أول الجروب لحد السيشن المستهدفة (شاملة) مقفولة
 
-import { NextResponse } from 'next/server';
-import { connectDB } from '@/lib/mongodb';
-import Session from '../../../../models/Session';
-import Student from '../../../../models/Student';
-import Group from '../../../../models/Group';
-import { requireAdmin } from '@/utils/authMiddleware';
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongodb";
+import Session from "../../../../models/Session";
+import Student from "../../../../models/Student";
+import Group from "../../../../models/Group";
+import { requireAdmin } from "@/utils/authMiddleware";
 import {
   onAttendanceSubmitted,
   sendLowBalanceAlerts,
-  disableZeroBalanceNotifications
-} from '../../../../services/groupAutomation';
-import mongoose from 'mongoose';
+  disableZeroBalanceNotifications,
+} from "../../../../services/groupAutomation";
+import mongoose from "mongoose";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const HOURS_PER_SESSION = 2;
@@ -40,7 +44,8 @@ const HOURS_PER_SESSION = 2;
 function sortSessionsForHold(sessions) {
   return [...sessions].sort((a, b) => {
     if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
-    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    if (a.sessionNumber !== b.sessionNumber)
+      return a.sessionNumber - b.sessionNumber;
     return new Date(a.scheduledDate) - new Date(b.scheduledDate);
   });
 }
@@ -81,7 +86,9 @@ function isSessionLockedByHold(sessionId, group, allSessions) {
   if (hold.holdType === "until_session") {
     const targetId = hold.holdUntilSessionId;
     if (!targetId) return true;
-    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
+    const targetIndex = sorted.findIndex(
+      (s) => String(s._id) === String(targetId),
+    );
     if (targetIndex === -1) return true;
     return myIndex <= targetIndex;
   }
@@ -106,18 +113,24 @@ export async function POST(req, { params }) {
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid session ID format' },
-        { status: 400 }
+        { success: false, error: "Invalid session ID format" },
+        { status: 400 },
       );
     }
 
     // ✅ populate hold + status
-    const session = await Session.findOne({ _id: id, isDeleted: false }).populate({
-      path: 'groupId',
-      select: 'name code hold status',
+    const session = await Session.findOne({
+      _id: id,
+      isDeleted: false,
+    }).populate({
+      path: "groupId",
+      select: "name code hold status",
     });
     if (!session) {
-      return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Session not found" },
+        { status: 404 },
+      );
     }
 
     const group = session.groupId;
@@ -131,29 +144,34 @@ export async function POST(req, { params }) {
         groupId: group._id,
         isDeleted: false,
       })
-        .select('_id moduleIndex sessionNumber scheduledDate status')
+        .select("_id moduleIndex sessionNumber scheduledDate status")
         .lean();
 
       const locked = isSessionLockedByHold(id, group, allSessions);
 
       if (locked) {
         console.log(
-          `⏭️ [HOLD GUARD] Blocked attendance POST for locked session ${id} — ${group.hold.holdType}`
+          `⏭️ [HOLD GUARD] Blocked attendance POST for locked session ${id} — ${group.hold.holdType}`,
         );
         return NextResponse.json(
           {
             success: false,
-            error: 'السيشن دي مقفولة بسبب الـ Hold — مينفعش تسجل حضور',
-            code: 'SESSION_ON_HOLD',
+            error: "السيشن دي مقفولة بسبب الـ Hold — مينفعش تسجل حضور",
+            code: "SESSION_ON_HOLD",
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
     }
 
+    // ✅ NEW: الحصة التعويضية (Makeup) — بيتسجل الحضور عادي، بس من غير أي
+    // خصم من رصيد الطالب خالص. مفيش أي تأثير على مرتب المدرس (ده بيتحسب
+    // عادي من processSessionPayroll لما السيشن تتحدد completed).
+    const isComplimentary = !!session.isComplimentary;
+
     // ── مين اللي أصلاً متسجل له حضور في السيشن دي قبل الحفظة الحالية ─────────
     const alreadyRecordedStudentIds = new Set(
-      (session.attendance || []).map((record) => record.studentId.toString())
+      (session.attendance || []).map((record) => record.studentId.toString()),
     );
 
     const creditDeductions = [];
@@ -167,6 +185,11 @@ export async function POST(req, { params }) {
       // ✅ لو الطالب ده أصلاً متسجل له حضور في السيشن دي من قبل → متلمسش الرصيد
       if (alreadyRecordedStudentIds.has(studentId)) continue;
 
+      // ✅ الحصة التعويضية: نسجل الحضور من غير أي خصم من رصيد الطالب،
+      // ونتخطى كل منطق الخصم والتنبيهات (low balance / zero balance) لأنها
+      // كلها مبنية على خصم فعلي حصل، وده مش الحال هنا.
+      if (isComplimentary) continue;
+
       // ✅ أول مرة يتسجل له حضور في السيشن دي → اخصم ساعتين
       const student = await Student.findById(studentId);
       if (!student?.creditSystem?.currentPackage) continue;
@@ -178,7 +201,7 @@ export async function POST(req, { params }) {
         sessionTitle: session.title,
         groupName: group.name,
         attendanceStatus: newStatus,
-        notes: `Attendance recorded: ${newStatus}`
+        notes: `Attendance recorded: ${newStatus}`,
       });
 
       if (!deductionResult.success) continue;
@@ -187,10 +210,10 @@ export async function POST(req, { params }) {
 
       creditDeductions.push({
         studentId,
-        action: 'deduct',
+        action: "deduct",
         hoursDeducted: HOURS_PER_SESSION,
         remainingHours,
-        reason: `First record for this session: ${newStatus}`
+        reason: `First record for this session: ${newStatus}`,
       });
 
       const previousBalance = remainingHours + HOURS_PER_SESSION;
@@ -200,7 +223,7 @@ export async function POST(req, { params }) {
           studentId,
           student,
           remainingHours,
-          alertType: '4h',
+          alertType: "4h",
         });
       }
 
@@ -209,7 +232,7 @@ export async function POST(req, { params }) {
           studentId,
           student,
           remainingHours,
-          alertType: '2h',
+          alertType: "2h",
         });
       }
 
@@ -223,7 +246,7 @@ export async function POST(req, { params }) {
       try {
         await sendLowBalanceAlerts(lowBalanceStudents);
       } catch (err) {
-        console.error('Low balance alerts error:', err);
+        console.error("Low balance alerts error:", err);
       }
     }
 
@@ -231,7 +254,7 @@ export async function POST(req, { params }) {
       try {
         await disableZeroBalanceNotifications(zeroBalanceStudents);
       } catch (err) {
-        console.error('Disable notifications error:', err);
+        console.error("Disable notifications error:", err);
       }
     }
 
@@ -239,9 +262,9 @@ export async function POST(req, { params }) {
     const attendanceRecords = attendance.map((record) => ({
       studentId: record.studentId,
       status: record.status,
-      notes: record.notes || '',
+      notes: record.notes || "",
       markedAt: new Date(),
-      markedBy: adminUser.id
+      markedBy: adminUser.id,
     }));
 
     const updatedSession = await Session.findByIdAndUpdate(
@@ -250,58 +273,67 @@ export async function POST(req, { params }) {
         $set: {
           attendance: attendanceRecords,
           attendanceTaken: true,
-          'metadata.updatedBy': adminUser.id,
-          'metadata.updatedAt': new Date()
-        }
+          "metadata.updatedBy": adminUser.id,
+          "metadata.updatedAt": new Date(),
+        },
       },
-      { new: true }
+      { new: true },
     );
 
     // ── إشعارات الغياب/التأخير/الاعتذار ─────────────────────────────────────
+    // ✅ الحصة التعويضية برضو بتاخد إشعارات غياب/تأخير عادي لو حصلت — ده
+    // مستقل تمامًا عن الرصيد، فمحدش لمسه هنا.
     let automationResult = { successCount: 0, failCount: 0 };
     const studentsNeedingMessages = attendance.filter((r) =>
-      ['absent', 'late', 'excused'].includes(r.status)
+      ["absent", "late", "excused"].includes(r.status),
     );
 
     if (studentsNeedingMessages.length > 0) {
       try {
-        automationResult = await onAttendanceSubmitted(id, customMessages || {});
+        automationResult = await onAttendanceSubmitted(
+          id,
+          customMessages || {},
+        );
       } catch (err) {
-        console.error('Automation error:', err);
+        console.error("Automation error:", err);
       }
     }
 
     const stats = {
       total: attendanceRecords.length,
-      present: attendanceRecords.filter((a) => a.status === 'present').length,
-      absent: attendanceRecords.filter((a) => a.status === 'absent').length,
-      late: attendanceRecords.filter((a) => a.status === 'late').length,
-      excused: attendanceRecords.filter((a) => a.status === 'excused').length
+      present: attendanceRecords.filter((a) => a.status === "present").length,
+      absent: attendanceRecords.filter((a) => a.status === "absent").length,
+      late: attendanceRecords.filter((a) => a.status === "late").length,
+      excused: attendanceRecords.filter((a) => a.status === "excused").length,
     };
 
     return NextResponse.json({
       success: true,
-      message: 'Attendance submitted successfully',
+      message: "Attendance submitted successfully",
       data: {
         sessionId: updatedSession._id,
         sessionTitle: updatedSession.title,
-        stats
+        stats,
       },
+      isComplimentary,
       creditUpdates: {
         deductions: creditDeductions,
         lowBalanceAlerts: lowBalanceStudents.length,
-        zeroBalanceAlerts: zeroBalanceStudents.length
+        zeroBalanceAlerts: zeroBalanceStudents.length,
       },
       automation: {
         completed: automationResult.success !== false,
         notificationsSent: automationResult.successCount || 0,
         notificationsFailed: automationResult.failCount || 0,
-        customMessagesUsed: Object.keys(customMessages || {}).length
-      }
+        customMessagesUsed: Object.keys(customMessages || {}).length,
+      },
     });
   } catch (error) {
-    console.error('Attendance POST error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("Attendance POST error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -319,12 +351,15 @@ export async function GET(req, { params }) {
 
     // ✅ جيب session + hold + status في الجروب
     const session = await Session.findOne({ _id: id, isDeleted: false })
-      .populate('groupId', 'name code hold status')
-      .populate('attendance.studentId', '_id')
+      .populate("groupId", "name code hold status")
+      .populate("attendance.studentId", "_id")
       .lean();
 
     if (!session) {
-      return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Session not found" },
+        { status: 404 },
+      );
     }
 
     const group = session.groupId;
@@ -340,7 +375,7 @@ export async function GET(req, { params }) {
         groupId: group._id,
         isDeleted: false,
       })
-        .select('_id moduleIndex sessionNumber scheduledDate status')
+        .select("_id moduleIndex sessionNumber scheduledDate status")
         .lean();
 
       sessionLocked = isSessionLockedByHold(id, group, allSessions);
@@ -360,10 +395,12 @@ export async function GET(req, { params }) {
 
     // جيب طلاب الجروب
     const groupStudents = await Student.find({
-      'academicInfo.groupIds': group._id,
-      isDeleted: false
+      "academicInfo.groupIds": group._id,
+      isDeleted: false,
     })
-      .select('personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem')
+      .select(
+        "personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem",
+      )
       .lean();
 
     const attendanceMap = new Map();
@@ -371,13 +408,16 @@ export async function GET(req, { params }) {
     (session.attendance || []).forEach((record) => {
       if (!record.studentId) return;
       const studentId = record.studentId._id.toString();
-      attendanceMap.set(studentId, { status: record.status, notes: record.notes || '' });
+      attendanceMap.set(studentId, {
+        status: record.status,
+        notes: record.notes || "",
+      });
       attendance.push({
         studentId: record.studentId._id,
         status: record.status,
-        notes: record.notes || '',
+        notes: record.notes || "",
         markedAt: record.markedAt,
-        markedBy: record.markedBy
+        markedBy: record.markedBy,
       });
     });
 
@@ -386,37 +426,43 @@ export async function GET(req, { params }) {
 
       const creditSystem = student.creditSystem || {
         currentPackage: null,
-        status: 'no_package',
-        stats: { totalHoursPurchased: 0, totalHoursUsed: 0, totalHoursRemaining: 0 }
+        status: "no_package",
+        stats: {
+          totalHoursPurchased: 0,
+          totalHoursUsed: 0,
+          totalHoursRemaining: 0,
+        },
       };
       if (!creditSystem.currentPackage) {
         creditSystem.currentPackage = {
           remainingHours: 0,
           totalHours: 0,
           packageType: null,
-          status: 'inactive'
+          status: "inactive",
         };
       }
 
       return {
         _id: student._id,
         id: student._id,
-        enrollmentNumber: student.enrollmentNumber || '',
+        enrollmentNumber: student.enrollmentNumber || "",
         personalInfo: student.personalInfo || {},
         guardianInfo: student.guardianInfo || {},
-        communicationPreferences: student.communicationPreferences || { preferredLanguage: 'ar' },
+        communicationPreferences: student.communicationPreferences || {
+          preferredLanguage: "ar",
+        },
         creditSystem,
         attendanceStatus: attendanceRecord?.status || null,
-        attendanceNotes: attendanceRecord?.notes || ''
+        attendanceNotes: attendanceRecord?.notes || "",
       };
     });
 
     const stats = {
       total: students.length,
-      present: attendance.filter((a) => a.status === 'present').length,
-      absent: attendance.filter((a) => a.status === 'absent').length,
-      late: attendance.filter((a) => a.status === 'late').length,
-      excused: attendance.filter((a) => a.status === 'excused').length
+      present: attendance.filter((a) => a.status === "present").length,
+      absent: attendance.filter((a) => a.status === "absent").length,
+      late: attendance.filter((a) => a.status === "late").length,
+      excused: attendance.filter((a) => a.status === "excused").length,
     };
 
     return NextResponse.json({
@@ -426,6 +472,9 @@ export async function GET(req, { params }) {
         sessionTitle: session.title,
         scheduledDate: session.scheduledDate,
         attendanceTaken: session.attendanceTaken || false,
+        // ✅ NEW: الفرونت محتاجها عشان يعرض بادج "حصة تعويضية" ويخفي منطق
+        // الرصيد/التنبيهات في الواجهة بدل ما يفضل يحاول يحسبه من غير داعي
+        isComplimentary: !!session.isComplimentary,
         attendance,
         students,
         stats,
@@ -439,10 +488,13 @@ export async function GET(req, { params }) {
         },
         // ✅ الحقلين دول بس هما اللي المودال محتاجهم
         sessionLocked,
-      }
+      },
     });
   } catch (error) {
-    console.error('Attendance GET error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("Attendance GET error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
   }
 }

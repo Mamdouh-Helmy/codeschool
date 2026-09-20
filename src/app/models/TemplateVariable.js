@@ -1,11 +1,6 @@
 // src/models/TemplateVariable.js
 import mongoose from "mongoose";
 
-/**
- * يخزّن قيم المتغيرات القابلة للتعديل من الـ UI
- * كل متغير بيتخزن مرة واحدة بالعربي والإنجليزي
- * مع دعم الجنس: male/female للطالب والمدرب، father/mother لولي الأمر
- */
 const TemplateVariableSchema = new mongoose.Schema(
   {
     key: {
@@ -14,37 +9,25 @@ const TemplateVariableSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
-
     labelAr: { type: String, required: true, trim: true },
     labelEn: { type: String, required: true, trim: true },
-
     icon: { type: String, default: "📝" },
-
-    // ── القيم الافتراضية (للمعاينة) ──────────────────────────
     valueAr: { type: String, required: true, default: "" },
     valueEn: { type: String, required: true, default: "" },
-
-    // ── قيم الجنس للطالب (ذكر / أنثى) ──────────────────────
     valueMaleAr: { type: String, default: "" },
     valueMaleEn: { type: String, default: "" },
     valueFemaleAr: { type: String, default: "" },
     valueFemaleEn: { type: String, default: "" },
-
-    // ── قيم ولي الأمر (أب / أم) ──────────────────────────────
     valueFatherAr: { type: String, default: "" },
     valueFatherEn: { type: String, default: "" },
     valueMotherAr: { type: String, default: "" },
     valueMotherEn: { type: String, default: "" },
-
-    // هل يدعم هذا المتغير التمييز بالجنس؟
     hasGender: { type: Boolean, default: false },
-    // نوع الجنس: "student" | "guardian" | "instructor" | "portfolio_owner"
     genderType: {
       type: String,
       enum: ["student", "guardian", "instructor", "portfolio_owner", null],
       default: null,
     },
-
     group: {
       type: String,
       enum: [
@@ -59,12 +42,12 @@ const TemplateVariableSchema = new mongoose.Schema(
         "evaluation",
         "portfolio",
         "offline",
-        "billing", 
+        "billing",
+        "makeup",
         "common",
       ],
       default: "common",
     },
-
     description: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -76,11 +59,6 @@ TemplateVariableSchema.index({ key: 1 }, { unique: true });
 TemplateVariableSchema.index({ group: 1 });
 TemplateVariableSchema.index({ isActive: 1 });
 
-/**
- * Static: بيجيب كل المتغيرات كـ map جاهز للاستخدام في render
- * @param {string} lang - "ar" | "en"
- * @param {object} genderContext - { studentGender: "male"|"female", guardianType: "father"|"mother", instructorGender: "male"|"female", ownerGender: "male"|"female" }
- */
 TemplateVariableSchema.statics.getVarsMap = async function (
   lang = "ar",
   genderContext = {},
@@ -136,16 +114,13 @@ TemplateVariableSchema.statics.getVarsMap = async function (
   return map;
 };
 
-/**
- * Static: seed المتغيرات الافتراضية لو مش موجودة
- */
 TemplateVariableSchema.statics.seedDefaults = async function () {
   const defaults = getDefaultVariables();
   const results = [];
   for (const variable of defaults) {
     const result = await this.findOneAndUpdate(
       { key: variable.key },
-      { $setOnInsert: variable }, // ✅ بيضيف بس لو مش موجود، ومش بيعدل الموجود
+      { $setOnInsert: variable },
       { upsert: true, new: true },
     );
     results.push({
@@ -160,12 +135,12 @@ export default mongoose.models.TemplateVariable ||
   mongoose.model("TemplateVariable", TemplateVariableSchema);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// القيم الافتراضية الكاملة — مع دعم الجنس
+// القيم الافتراضية الكاملة
 // ─────────────────────────────────────────────────────────────────────────────
 export function getDefaultVariables() {
   return [
     // ══════════════════════════════════════════════════════════
-    // STUDENT — الطالب (مع ذكر / أنثى)
+    // STUDENT
     // ══════════════════════════════════════════════════════════
     {
       key: "supervisorName",
@@ -364,7 +339,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // GUARDIAN — ولي الأمر (أب / أم)
+    // GUARDIAN
     // ══════════════════════════════════════════════════════════
     {
       key: "guardianSalutation_ar",
@@ -553,7 +528,6 @@ export function getDefaultVariables() {
       valueFatherEn: "your son",
       valueMotherAr: "ابنتك",
       valueMotherEn: "your daughter",
-      // للمزيد من الدقة — يتأثر بجنس الطالب أيضاً
       valueMaleAr: "ابنك",
       valueMaleEn: "your son",
       valueFemaleAr: "ابنتك",
@@ -574,7 +548,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // INSTRUCTOR — المدرب (مع ذكر / أنثى)
+    // INSTRUCTOR
     // ══════════════════════════════════════════════════════════
     {
       key: "instructorSalutation",
@@ -653,7 +627,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // GROUP — المجموعة
+    // GROUP
     // ══════════════════════════════════════════════════════════
     {
       key: "courseName",
@@ -752,7 +726,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // SESSION — الحصة
+    // SESSION
     // ══════════════════════════════════════════════════════════
     {
       key: "sessionName",
@@ -796,23 +770,25 @@ export function getDefaultVariables() {
     },
     {
       key: "newDate",
-      labelAr: "التاريخ الجديد (بعد التأجيل)",
-      labelEn: "New Date",
+      labelAr: "التاريخ الجديد (للتأجيل أو الحصة التعويضية)",
+      labelEn: "New Date (postpone / make-up)",
       icon: "📅",
       valueAr: "الخميس 22 مايو 2024",
       valueEn: "Thursday, May 22, 2024",
       hasGender: false,
       group: "session",
+      description: "بيتستخدم في رسائل التأجيل ورسائل الحصة التعويضية",
     },
     {
       key: "newTime",
-      labelAr: "الوقت الجديد (بعد التأجيل)",
-      labelEn: "New Time",
+      labelAr: "الوقت الجديد (للتأجيل أو الحصة التعويضية)",
+      labelEn: "New Time (postpone / make-up)",
       icon: "⏰",
       valueAr: "08:00 - 09:30 مساءً",
       valueEn: "08:00 - 09:30 PM",
       hasGender: false,
       group: "session",
+      description: "بيتستخدم في رسائل التأجيل ورسائل الحصة التعويضية",
     },
     {
       key: "cancellationReason",
@@ -836,7 +812,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // OFFLINE — متغيرات المكان/اللوكيشن (جديد)
+    // OFFLINE
     // ══════════════════════════════════════════════════════════
     {
       key: "placeName",
@@ -876,7 +852,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // ATTENDANCE — الحضور
+    // ATTENDANCE
     // ══════════════════════════════════════════════════════════
     {
       key: "attendanceStatus",
@@ -920,7 +896,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // REMINDER — التذكيرات
+    // REMINDER
     // ══════════════════════════════════════════════════════════
     {
       key: "reminderType",
@@ -954,7 +930,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // COMPLETION — الإكمال
+    // COMPLETION
     // ══════════════════════════════════════════════════════════
     {
       key: "completionDate",
@@ -998,7 +974,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // EVALUATION — التقييم
+    // EVALUATION
     // ══════════════════════════════════════════════════════════
     {
       key: "sessionDate",
@@ -1107,7 +1083,7 @@ export function getDefaultVariables() {
     },
 
     // ══════════════════════════════════════════════════════════
-    // COMMON — عامة
+    // COMMON
     // ══════════════════════════════════════════════════════════
     {
       key: "decision",
@@ -1220,6 +1196,67 @@ export function getDefaultVariables() {
       hasGender: false,
       group: "billing",
       description: "عدد الساعات المتبقية في باقة الطالب وقت إرسال التنبيه",
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // 🎁 MAKE-UP SESSION (NEW)
+    // ══════════════════════════════════════════════════════════
+    {
+      key: "newSessionTitle",
+      labelAr: "عنوان الحصة التعويضية الجديدة",
+      labelEn: "New Make-up Session Title",
+      icon: "🎁",
+      valueAr: "Make-up Session 1: Introduction",
+      valueEn: "Make-up Session 1: Introduction",
+      hasGender: false,
+      group: "makeup",
+      description: "عنوان السيشن الجديدة اللي بتتعمل كتعويض",
+    },
+    {
+      key: "originalSessionTitle",
+      labelAr: "عنوان الحصة الأصلية",
+      labelEn: "Original Session Title",
+      icon: "🔄",
+      valueAr: "Session 1: Introduction",
+      valueEn: "Session 1: Introduction",
+      hasGender: false,
+      group: "makeup",
+      description: "عنوان السيشن الأصلية اللي الطالب غاب عنها",
+    },
+    {
+      key: "originalDate",
+      labelAr: "تاريخ الحصة الأصلية",
+      labelEn: "Original Session Date",
+      icon: "📅",
+      valueAr: "السبت 15 أغسطس 2026",
+      valueEn: "Saturday, August 15, 2026",
+      hasGender: false,
+      group: "makeup",
+      description: "التاريخ اللي كانت مفروض تحصل فيه الحصة الأصلية",
+    },
+    {
+      key: "originalTime",
+      labelAr: "وقت الحصة الأصلية",
+      labelEn: "Original Session Time",
+      icon: "⏰",
+      valueAr: "05:00 PM - 07:00 PM",
+      valueEn: "05:00 PM - 07:00 PM",
+      hasGender: false,
+      group: "makeup",
+      description: "وقت الحصة الأصلية",
+    },
+    // ✅ NEW: المتغير الذكي
+    {
+      key: "sessionLocationBlock",
+      labelAr: "معلومات المكان / لينك الحصة (تلقائي)",
+      labelEn: "Location / Meeting Link Block (auto)",
+      icon: "🧩",
+      valueAr: "🔗 رابط الحصة: https://meet.google.com/xxx",
+      valueEn: "🔗 Meeting Link: https://meet.google.com/xxx",
+      hasGender: false,
+      group: "makeup",
+      description:
+        "متغير محسوب تلقائيًا: لو الحصة أونلاين بيرجّع لينك الميتنج، ولو أوفلاين بيرجّع اسم المكان والعنوان ولينك الخريطة. مش بيتعدل يدويًا — قيمته بتتحسب في الكود وقت الإرسال.",
     },
   ];
 }

@@ -9,7 +9,8 @@ import {
   ClipboardList, Zap, ArrowLeft, ArrowRight, RefreshCw, Info,
   Phone, CreditCard, AlertTriangle,
   BookOpen, ShieldCheck, Hash, Globe, Sparkles, TrendingUp,
-  BarChart3, Bell, Star, ListChecks
+  BarChart3, Bell, Star, ListChecks,
+  Lock, Gift,
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
 
@@ -145,7 +146,7 @@ function RollCallCard({ student, status, onSetStatus, isAr, sendStatus }) {
   );
 }
 
-function RollCallSummaryBar({ rollCall, total, isAr }) {
+function RollCallSummaryBar({ rollCall, total, isAr, isComplimentary }) {
   const presentCount = Object.values(rollCall).filter((s) => s === "present").length;
   const lateCount = Object.values(rollCall).filter((s) => s === "late").length;
   const markedCount = presentCount + lateCount;
@@ -182,11 +183,17 @@ function RollCallSummaryBar({ rollCall, total, isAr }) {
           style={{ width: `${pct}%`, background: "linear-gradient(90deg, #004d59, #ff6700)" }} />
       </div>
       <p className="text-[11px] text-gray-400 dark:text-[#6e7681] mt-2.5 leading-relaxed">
-        {t(
-          "دي خطوة سريعة بس للمتابعة — مفيش أي خصم ساعات هنا. الخصم بيحصل في خطوة تأكيد الحضور النهائي بعدها.",
-          "This is just a quick tracking step — no hours are deducted here. Deduction happens in the final confirmation step next.",
-          isAr
-        )}
+        {isComplimentary
+          ? t(
+              "حصة تعويضية — مفيش خصم ساعات في أي خطوة.",
+              "Make-up session — no hours are deducted at any step.",
+              isAr
+            )
+          : t(
+              "دي خطوة سريعة بس للمتابعة — مفيش أي خصم ساعات هنا. الخصم بيحصل في خطوة تأكيد الحضور النهائي بعدها.",
+              "This is just a quick tracking step — no hours are deducted here. Deduction happens in the final confirmation step next.",
+              isAr
+            )}
       </p>
     </div>
   );
@@ -364,10 +371,16 @@ export default function InstructorAttendancePage() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // error = فشل التحميل (بيخفي الفورم) — submitError = فشل الحفظ (بيتعرض فوق زرار الحفظ من غير ما يخفي الفورم)
   const [error, setError] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [success, setSuccess] = useState(false);
   const [sessionData, setSessionData] = useState(null);
   const [students, setStudents] = useState([]);
+
+  // ✅ من الباك: هل السيشن دي مقفولة بسبب الـ Hold؟ وهل هي حصة تعويضية؟
+  const [sessionLocked, setSessionLocked] = useState(false);
+  const [isComplimentary, setIsComplimentary] = useState(false);
 
   // 🆕 المرحلة: "rollcall" (الحضور المبدئي) أو "final" (التأكيد النهائي)
   const [phase, setPhase] = useState("rollcall");
@@ -381,6 +394,11 @@ export default function InstructorAttendancePage() {
   const [lateSendStatus, setLateSendStatus] = useState({});
 
   const savedStatusRef = useRef({});
+
+  // ✅ الباك بيرجّع الجروب في session.groupId (populated) — بنقبل الشكلين
+  const groupName = sessionData?.group?.name || sessionData?.groupId?.name || "";
+  // ✅ الفورم بيظهر بس لو التحميل نجح والسيشن مش مقفولة
+  const showPhases = !loading && !error && !sessionLocked;
 
   // 🩹 FIX (double-send bug): مرآة لحالة rollCall نقرأها بره الـ setState updater.
   // السبب الأصلي للمشكلة: كنا بننادي sendLateNotification (اللي فيها fetch)
@@ -406,12 +424,16 @@ export default function InstructorAttendancePage() {
     }
     try {
       setLoading(true);
+      setError("");
+      setSubmitError("");
       const res = await fetch(`/api/instructor/sessions/${sessionId}/attendance`, { credentials: "include" });
       const data = await res.json();
 
       if (data.success) {
         setSessionData(data.data.session);
         setStudents(data.data.students || []);
+        setSessionLocked(data.data.sessionLocked === true);
+        setIsComplimentary(data.data.isComplimentary === true);
 
         const existing = {};
         (data.data.students || []).forEach((s) => {
@@ -420,7 +442,7 @@ export default function InstructorAttendancePage() {
         savedStatusRef.current = { ...existing };
 
         // 🆕 لو الجلسة دي أصلًا مسجّل عليها حضور من قبل، نروح على طول للتأكيد
-        // النهائي (نتخطى خطوة الحضور المبدئي، مالهاش لازمة هنا)
+        // النهائي (نتخطى خطوة الحضور المبدئي، مالهاش لازم هنا)
         const hasExistingAttendance = Object.keys(existing).length > 0;
         if (hasExistingAttendance) {
           setAttendance(existing);
@@ -432,7 +454,8 @@ export default function InstructorAttendancePage() {
           setPhase("rollcall");
         }
       } else {
-        setError(data.message || t("فشل تحميل البيانات", "Failed to load data", isAr));
+        // ✅ الباك بيرجّع الأخطاء في error مش message
+        setError(data.error || data.message || t("فشل تحميل البيانات", "Failed to load data", isAr));
       }
     } catch {
       setError(t("خطأ في الاتصال بالسيرفر", "Server connection error", isAr));
@@ -531,6 +554,7 @@ export default function InstructorAttendancePage() {
 
     try {
       setSubmitting(true);
+      setSubmitError("");
 
       const records = Object.entries(attendance)
         .filter(([studentId, status]) => {
@@ -558,10 +582,11 @@ export default function InstructorAttendancePage() {
         setSuccess(true);
         setTimeout(() => router.push(`/instructor/evaluation?session=${sessionId}`), 2000);
       } else {
-        setError(data.error || t("فشل حفظ الحضور", "Failed to save attendance", isAr));
+        // ✅ فشل الحفظ مايخفيش الفورم ومايمسحش اللي المدرس عمله
+        setSubmitError(data.error || t("فشل حفظ الحضور", "Failed to save attendance", isAr));
       }
     } catch {
-      setError(t("خطأ في الاتصال", "Connection error", isAr));
+      setSubmitError(t("خطأ في الاتصال", "Connection error", isAr));
     } finally {
       setSubmitting(false);
     }
@@ -681,17 +706,25 @@ export default function InstructorAttendancePage() {
                     <h1 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] truncate leading-none">
                       {sessionData.title}
                     </h1>
-                    <span className="flex-shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full"
-                      style={phase === "rollcall"
-                        ? { background: "#f59e0b20", color: "#d97706" }
-                        : { background: "#ff670020", color: "#ff6700" }}>
-                      {phase === "rollcall"
-                        ? t("1/2 مبدئي", "1/2 Roll Call", isAr)
-                        : t("2/2 تأكيد نهائي", "2/2 Final", isAr)}
-                    </span>
+                    {!sessionLocked && (
+                      <span className="flex-shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full"
+                        style={phase === "rollcall"
+                          ? { background: "#f59e0b20", color: "#d97706" }
+                          : { background: "#ff670020", color: "#ff6700" }}>
+                        {phase === "rollcall"
+                          ? t("1/2 مبدئي", "1/2 Roll Call", isAr)
+                          : t("2/2 تأكيد نهائي", "2/2 Final", isAr)}
+                      </span>
+                    )}
+                    {isComplimentary && (
+                      <span className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-[#feaf00]/15 text-[#f67d00] dark:text-[#feaf00] border border-[#feaf00]/30">
+                        <Gift className="w-2.5 h-2.5" />
+                        {t("تعويضية", "Make-up", isAr)}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-gray-400 dark:text-[#6e7681] truncate">
-                    {sessionData.group?.name} · {fmtDate(sessionData.scheduledDate, isAr)}
+                    {groupName} · {fmtDate(sessionData.scheduledDate, isAr)}
                   </p>
                 </>
               ) : (
@@ -734,17 +767,23 @@ export default function InstructorAttendancePage() {
 
               <div className="relative z-10 flex items-center justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <Sparkles className="w-4 h-4 text-[#feaf00] animate-pulse" />
                     <span className="font-medium text-xs" style={{ color: "#feaf00" }}>
                       {phase === "rollcall"
                         ? t("الحضور المبدئي", "Initial Roll Call", isAr)
                         : t("تسجيل الحضور النهائي", "Final Attendance", isAr)}
                     </span>
+                    {isComplimentary && (
+                      <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-black px-2 py-0.5 rounded-full border border-white/30 flex items-center gap-1">
+                        <Gift className="w-2.5 h-2.5" />
+                        {t("حصة تعويضية", "Make-up session", isAr)}
+                      </span>
+                    )}
                   </div>
                   <h2 className="text-xl font-black text-white mb-1">{sessionData.title}</h2>
                   <p className="text-white/70 text-sm">
-                    {sessionData.group?.name} · {fmtTime(sessionData.startTime, isAr)} – {fmtTime(sessionData.endTime, isAr)}
+                    {groupName} · {fmtTime(sessionData.startTime, isAr)} – {fmtTime(sessionData.endTime, isAr)}
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 flex-shrink-0">
@@ -782,11 +821,33 @@ export default function InstructorAttendancePage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════
+            ✅ السيشن مقفولة بسبب الـ Hold — منعرضش أي خطوة
+            ══════════════════════════════════════════════════════════════ */}
+        {!loading && !error && sessionLocked && (
+          <div className="text-center py-16 bg-white dark:bg-[#161b22] rounded-2xl border border-amber-200 dark:border-amber-500/20 shadow-sm">
+            <div className="w-20 h-20 mx-auto bg-amber-100 dark:bg-amber-500/10 rounded-full flex items-center justify-center mb-4">
+              <Lock className="w-10 h-10 text-amber-500" />
+            </div>
+            <p className="font-black text-gray-900 dark:text-[#e6edf3] mb-1">
+              {t("السيشن دي مقفولة بسبب الـ Hold", "This session is on hold", isAr)}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-[#8b949e] mb-5">
+              {t("مينفعش تسجل حضور لحد ما يتفك الـ Hold.", "Attendance is unavailable until the hold is released.", isAr)}
+            </p>
+            <button onClick={() => router.push("/instructor/sessions")}
+              className="px-6 py-3 text-white rounded-xl font-bold shadow-lg"
+              style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+              {t("العودة للجلسات", "Back to sessions", isAr)}
+            </button>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════
             المرحلة 1: الحضور المبدئي — design بسيط ومختلف (list)
             ══════════════════════════════════════════════════════════════ */}
-        {!loading && !error && phase === "rollcall" && students.length > 0 && (
+        {showPhases && phase === "rollcall" && students.length > 0 && (
           <>
-            <RollCallSummaryBar rollCall={rollCall} total={students.length} isAr={isAr} />
+            <RollCallSummaryBar rollCall={rollCall} total={students.length} isAr={isAr} isComplimentary={isComplimentary} />
 
             <div className="flex gap-2">
               <button onClick={() => rollCallMarkAll("present")}
@@ -863,7 +924,7 @@ export default function InstructorAttendancePage() {
         {/* ══════════════════════════════════════════════════════════════
             المرحلة 2: التأكيد النهائي — هنا بس بيتم الخصم (present/absent/excused)
             ══════════════════════════════════════════════════════════════ */}
-        {!loading && !error && phase === "final" && students.length > 0 && (
+        {showPhases && phase === "final" && students.length > 0 && (
           <>
             {rollCallMarkedCount > 0 && !sessionData?.attendanceTaken && (
               <button
@@ -872,6 +933,18 @@ export default function InstructorAttendancePage() {
                 {isAr ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
                 {t("رجوع للحضور المبدئي", "Back to roll call", isAr)}
               </button>
+            )}
+
+            {/* ✅ الحصة التعويضية: مفيش خصم ولا تنبيهات رصيد */}
+            {isComplimentary && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-[#feaf00]/10 border border-[#feaf00]/30 text-xs font-bold text-[#f67d00] dark:text-[#feaf00]">
+                <Gift className="w-4 h-4 flex-shrink-0" />
+                {t(
+                  "حصة تعويضية — بيتسجل الحضور من غير خصم ساعات ولا تنبيهات رصيد.",
+                  "Make-up session — attendance is recorded with no deduction or balance alerts.",
+                  isAr
+                )}
+              </div>
             )}
 
             <SummaryBar attendance={attendance} total={students.length} isAr={isAr} animateProgress={animateProgress} />
@@ -950,6 +1023,14 @@ export default function InstructorAttendancePage() {
             {/* Submit sticky bar */}
             <div className="sticky bottom-0 pt-3 pb-4">
               <div className="bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-[#30363d] p-4 shadow-xl">
+                {/* ✅ خطأ الحفظ — بيظهر هنا من غير ما يخفي الفورم */}
+                {submitError && (
+                  <div className="flex items-center gap-2 mb-3 p-2.5 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800/40">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                    <p className="text-xs font-bold text-red-600 dark:text-red-400">{submitError}</p>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-4">
                   <div className="flex-1">
                     <p className="text-sm font-bold text-gray-900 dark:text-[#e6edf3]">
@@ -1005,7 +1086,7 @@ export default function InstructorAttendancePage() {
           </>
         )}
 
-        {!loading && !error && students.length === 0 && (
+        {showPhases && students.length === 0 && (
           <div className="text-center py-16 bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] shadow-sm">
             <div className="w-24 h-24 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
               <Users className="w-12 h-12 text-gray-300 dark:text-[#6e7681]" />

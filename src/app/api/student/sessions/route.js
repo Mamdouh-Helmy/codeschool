@@ -13,7 +13,8 @@ import Group from "../../../models/Group";
 function sortSessionsForHold(sessions) {
   return [...sessions].sort((a, b) => {
     if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
-    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    if (a.sessionNumber !== b.sessionNumber)
+      return a.sessionNumber - b.sessionNumber;
     return new Date(a.scheduledDate) - new Date(b.scheduledDate);
   });
 }
@@ -24,17 +25,15 @@ function isSessionLockedByHold(session, group, allGroupSessions) {
 
   const hold = group.hold;
 
-  if (hold.holdType === "indefinite" || hold.holdType === "duration") {
+  if (hold.holdType === "indefinite" || hold.holdType === "duration")
     return true;
-  }
-
-  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) {
+  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0)
     return true;
-  }
 
   const sorted = sortSessionsForHold(allGroupSessions);
-  const myId = String(session._id);
-  const myIndex = sorted.findIndex((s) => String(s._id) === myId);
+  const myIndex = sorted.findIndex(
+    (s) => String(s._id) === String(session._id),
+  );
   if (myIndex === -1) return false;
 
   if (hold.holdType === "sessions") {
@@ -46,7 +45,9 @@ function isSessionLockedByHold(session, group, allGroupSessions) {
   if (hold.holdType === "until_session") {
     const targetId = hold.holdUntilSessionId;
     if (!targetId) return true;
-    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
+    const targetIndex = sorted.findIndex(
+      (s) => String(s._id) === String(targetId),
+    );
     if (targetIndex === -1) return true;
     return myIndex <= targetIndex;
   }
@@ -54,21 +55,23 @@ function isSessionLockedByHold(session, group, allGroupSessions) {
   return false;
 }
 
+const json = (body, status = 200) => NextResponse.json(body, { status });
+
 // ═══════════════════════════════════════════════════════════════════════════
 // GET
 // ═══════════════════════════════════════════════════════════════════════════
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-    const status  = searchParams.get("status");
-    const groupId = searchParams.get("groupId");
-    const limit   = parseInt(searchParams.get("limit") || "100");
+    const status = searchParams.get("status");
+    const groupIdFilter = searchParams.get("groupId");
+    const limit = parseInt(searchParams.get("limit") || "100");
 
     const user = await getUserFromRequest(req);
     if (!user) {
-      return NextResponse.json(
+      return json(
         { success: false, message: "غير مصرح بالوصول", code: "UNAUTHORIZED" },
-        { status: 401 }
+        401,
       );
     }
 
@@ -79,27 +82,53 @@ export async function GET(req) {
       .lean();
 
     if (!student) {
-      return NextResponse.json(
+      return json(
         { success: false, message: "لم يتم العثور على بيانات الطالب" },
-        { status: 404 }
+        404,
       );
     }
 
     const groupIds = student.academicInfo?.groupIds || [];
     if (groupIds.length === 0) {
-      return NextResponse.json({
+      return json({
         success: true,
-        data: { sessions: [], stats: { total: 0, completed: 0, scheduled: 0, cancelled: 0 } },
+        data: {
+          sessions: [],
+          stats: { total: 0, completed: 0, scheduled: 0, cancelled: 0 },
+        },
       });
     }
 
+    // ✅ FIX (SECURITY): كان groupId من الـ query string بيتحط مباشرة في الـ
+    // query من غير ما نتأكد إنه من جروبات الطالب ده، فأي طالب كان يقدر يشوف
+    // سيشنات (وميتنج لينك) جروب مش بتاعه. دلوقتي لازم يكون ضمن groupIds بتاعته.
+    let targetGroupIds = groupIds;
+    if (groupIdFilter) {
+      const matchedGroupId = groupIds.find(
+        (gid) => gid.toString() === groupIdFilter,
+      );
+      if (!matchedGroupId) {
+        return json(
+          {
+            success: false,
+            message: "غير مصرح لك بالوصول لهذا الجروب",
+            code: "FORBIDDEN_GROUP",
+          },
+          403,
+        );
+      }
+      targetGroupIds = [matchedGroupId];
+    }
+
     // ── جلب الجروبات مع الـ curriculum + hold + status ──────────────────────
-    const groups = await Group.find({ _id: { $in: groupIds }, isDeleted: false })
+    const groups = await Group.find({
+      _id: { $in: groupIds },
+      isDeleted: false,
+    })
       .populate({ path: "courseId", select: "title level curriculum" })
       .select("_id name code courseId hold status")
       .lean();
 
-    // Map: groupId → curriculum + hold info + status
     const groupCurriculumMap = {};
     const groupHoldMap = {};
     const groupStatusMap = {};
@@ -112,28 +141,32 @@ export async function GET(req) {
     });
 
     // ── Build query ──────────────────────────────────────────────────────────
-    const query = {
-      groupId: groupId ? { $in: [groupId] } : { $in: groupIds },
-      isDeleted: false,
-    };
+    const query = { groupId: { $in: targetGroupIds }, isDeleted: false };
     if (status && status !== "all") query.status = status;
 
     // ── جلب الجلسات ──────────────────────────────────────────────────────────
     const allSessions = await Session.find(query)
-      .populate({ path: "groupId", select: "name code courseId hold status" })
+      .populate({
+        path: "groupId",
+        select: "name code courseId hold status deliveryMode",
+      })
       .populate({ path: "courseId", select: "title level" })
       .select(
         "title status scheduledDate startTime endTime moduleIndex sessionNumber " +
-        "lessonIndexes attendanceTaken attendance meetingLink meetingPlatform " +
-        "recordingLink materials instructorNotes groupId courseId description"
+          "lessonIndexes attendanceTaken attendance meetingLink meetingPlatform " +
+          "recordingLink materials instructorNotes groupId courseId description " +
+          "isComplimentary deliveryMode",
       )
       .sort({ scheduledDate: 1, startTime: 1 })
       .limit(limit)
       .lean();
 
-    // ── ترتيب الجلسات لكل جروب ──────────────────────────────────────────────
+    // ── ترتيب الجلسات لكل جروب (للـ prevCompleted + Hold) ─────────────────
+    // بنجيبها لكل groupIds (مش targetGroupIds) عشان الترتيب يفضل صح.
     const sessionsByGroup = {};
-    groupIds.forEach((gid) => { sessionsByGroup[gid.toString()] = []; });
+    groupIds.forEach((gid) => {
+      sessionsByGroup[gid.toString()] = [];
+    });
 
     const allGroupSessions = await Session.find({
       groupId: { $in: groupIds },
@@ -151,142 +184,144 @@ export async function GET(req) {
 
     // ── Process sessions ──────────────────────────────────────────────────────
     const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(now);
+    todayEnd.setHours(23, 59, 59, 999);
 
     const processedSessions = allSessions.map((session) => {
-      const gid = session.groupId?._id?.toString() || session.groupId?.toString();
+      const gid =
+        session.groupId?._id?.toString() || session.groupId?.toString();
       const groupOrder = sessionsByGroup[gid] || [];
+
+      // ✅ FIX: طبقة حماية إضافية — حتى لو حصل وكان فيه recordingLink متخزن
+      // من قبل على سيشن offline (بيانات قديمة قبل إصلاح مصدر المشكلة)، برضو
+      // منمنعش نعرضه للطالب
+      const sessionIsOffline =
+        (session.deliveryMode || session.groupId?.deliveryMode) === "offline";
       const sessionIdx = groupOrder.findIndex(
-        (s) => s._id.toString() === session._id.toString()
+        (s) => s._id.toString() === session._id.toString(),
       );
 
-      const isFirst      = sessionIdx === 0;
-      const prevSession  = sessionIdx > 0 ? groupOrder[sessionIdx - 1] : null;
-      const prevCompleted = isFirst || (prevSession && prevSession.status === "completed");
+      const isFirst = sessionIdx === 0;
+      const prevSession = sessionIdx > 0 ? groupOrder[sessionIdx - 1] : null;
+      const prevCompleted =
+        isFirst || (prevSession && prevSession.status === "completed");
 
-      // ✅ هل الجروب على Hold؟ (من الـ session.groupId أو من الـ map)
+      // ✅ Hold
       const sessionGroupHold = session.groupId?.hold;
-      const groupIsOnHold = !!(sessionGroupHold?.isHeld || groupHoldMap[gid]?.isHeld);
+      const holdInfo = sessionGroupHold?.isHeld
+        ? sessionGroupHold
+        : groupHoldMap[gid];
+      const groupIsOnHold = !!holdInfo?.isHeld;
 
-      // ✅ هل السيشن دي بالتحديد مقفولة؟
-      let sessionIsLocked = false;
-      if (groupIsOnHold) {
-        const holdInfo = sessionGroupHold?.isHeld ? sessionGroupHold : groupHoldMap[gid];
-        sessionIsLocked = isSessionLockedByHold(
-          {
-            _id: session._id,
-            moduleIndex: session.moduleIndex,
-            sessionNumber: session.sessionNumber,
-            status: session.status,
-          },
-          { hold: holdInfo },
-          groupOrder
-        );
-      }
+      const sessionIsLocked = groupIsOnHold
+        ? isSessionLockedByHold(
+            {
+              _id: session._id,
+              moduleIndex: session.moduleIndex,
+              sessionNumber: session.sessionNumber,
+              status: session.status,
+            },
+            { hold: holdInfo },
+            groupOrder,
+          )
+        : false;
 
-      // ✅ هل الجروب فعّال أصلًا؟
-      const sessionGroupStatus = session.groupId?.status || groupStatusMap[gid] || "draft";
+      const sessionGroupStatus =
+        session.groupId?.status || groupStatusMap[gid] || "draft";
       const groupIsActive = sessionGroupStatus === "active";
 
-      // ✅ canAccess الأساسي
+      // ✅ canAccess: الأساسي + override لو الجروب مش active أو السيشن مقفولة
+      const isCompleted = session.status === "completed";
       let canAccess =
-        session.status === "completed" ||
-        (prevCompleted && session.status !== "cancelled");
-
-      // ✅ OVERRIDE: لو الجروب على Hold أو مش active
-      if (session.status !== "completed") {
-        if (!groupIsActive) {
-          canAccess = false;
-        } else if (sessionIsLocked) {
-          canAccess = false;
-        }
-      }
+        isCompleted || (prevCompleted && session.status !== "cancelled");
+      if (!isCompleted && (!groupIsActive || sessionIsLocked))
+        canAccess = false;
 
       // Attendance
       const attRecord = session.attendance?.find(
-        (a) => a.studentId?.toString() === student._id.toString()
+        (a) => a.studentId?.toString() === student._id.toString(),
       );
       const studentAttendance = attRecord
         ? attRecord.status
-        : session.status === "completed" ? "absent" : null;
+        : isCompleted
+          ? "absent"
+          : null;
 
       // Join button
       const sessionDate = new Date(session.scheduledDate);
-      const todayStart  = new Date(now); todayStart.setHours(0, 0, 0, 0);
-      const todayEnd    = new Date(now); todayEnd.setHours(23, 59, 59, 999);
-      const isToday     = sessionDate >= todayStart && sessionDate <= todayEnd;
+      const isToday = sessionDate >= todayStart && sessionDate <= todayEnd;
 
-      const [endH = 23, endM = 59] = (session.endTime || "23:59").split(":").map(Number);
+      const [endH = 23, endM = 59] = (session.endTime || "23:59")
+        .split(":")
+        .map(Number);
       const sessionEndTime = new Date(sessionDate);
       sessionEndTime.setHours(endH, endM, 0, 0);
 
-      // ✅ showJoinButton: لازم الجروب مش مقفول
-      let showJoinButton =
+      const showJoinButton =
+        groupIsActive &&
+        !sessionIsLocked &&
         prevCompleted &&
         session.status === "scheduled" &&
         isToday &&
         sessionEndTime > now &&
         !!session.meetingLink;
 
-      if (!groupIsActive || sessionIsLocked) {
-        showJoinButton = false;
-      }
-
       // ── الدروس من الـ curriculum ──────────────────────────────────────────
-      const curriculum  = groupCurriculumMap[gid] || [];
-      const moduleData  = curriculum[session.moduleIndex] || {};
+      const moduleData =
+        (groupCurriculumMap[gid] || [])[session.moduleIndex] || {};
+      const moduleLessons = moduleData.lessons || [];
 
-      const bySessionNum = (moduleData.lessons || []).filter(
-        (l) => l.sessionNumber === session.sessionNumber
+      const bySessionNum = moduleLessons.filter(
+        (l) => l.sessionNumber === session.sessionNumber,
       );
-      const byIndexes = (moduleData.lessons || []).filter(
-        (l) => (session.lessonIndexes || []).includes(l.order - 1)
+      const byIndexes = moduleLessons.filter((l) =>
+        (session.lessonIndexes || []).includes(l.order - 1),
       );
       const rawLessons = bySessionNum.length > 0 ? bySessionNum : byIndexes;
-
       const lessons = rawLessons.map((l) => ({ title: l.title }));
 
-      // ✅ Recording: للسيشنات المكتملة بس
-      const recordingLink =
-        session.status === "completed" ? session.recordingLink : null;
-
-      // ✅ materials: بس للسيشنات اللي الطالب عنده وصول ليها
+      // ✅ المواد: للمكتملة، أو للي الطالب عنده وصول ليها (ومش مقفولة)
       const materials =
-        (session.status === "completed" || canAccess) && !sessionIsLocked
+        isCompleted || (canAccess && !sessionIsLocked)
           ? session.materials || []
-          : session.status === "completed"
-            ? session.materials || []
-            : [];
+          : [];
 
       return {
-        _id:              session._id,
-        title:            session.title,
-        description:      session.description || "",
-        status:           session.status,
-        scheduledDate:    session.scheduledDate,
-        startTime:        session.startTime,
-        endTime:          session.endTime,
-        moduleIndex:      session.moduleIndex,
-        moduleName:       moduleData.title || `الوحدة ${session.moduleIndex + 1}`,
-        sessionNumber:    session.sessionNumber,
+        _id: session._id,
+        title: session.title,
+        description: session.description || "",
+        status: session.status,
+        scheduledDate: session.scheduledDate,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        moduleIndex: session.moduleIndex,
+        moduleName: moduleData.title || `الوحدة ${session.moduleIndex + 1}`,
+        sessionNumber: session.sessionNumber,
         lessons,
-        attendanceTaken:  session.attendanceTaken,
+        attendanceTaken: session.attendanceTaken,
         studentAttendance,
-        meetingLink:      canAccess ? session.meetingLink : null,
-        meetingPlatform:  session.meetingPlatform,
-        recordingLink,
+        meetingLink: canAccess ? session.meetingLink : null,
+        meetingPlatform: session.meetingPlatform,
+        recordingLink:
+          isCompleted && !sessionIsOffline ? session.recordingLink : null,
         materials,
-        instructorNotes:  session.status === "completed" ? session.instructorNotes : null,
+        instructorNotes: isCompleted ? session.instructorNotes : null,
         canAccess,
         isToday,
         showJoinButton,
 
-        // ✅ Hold info — جديد
+        // ✅ Hold info
         groupIsOnHold,
         groupIsActive,
-        sessionIsLocked, // ✅ جديد — هل السيشن دي بالتحديد مقفولة؟
+        sessionIsLocked,
+
+        // ✅ للفرونت يعرض بادج "حصة تعويضية"
+        isComplimentary: session.isComplimentary === true,
 
         group: {
-          _id:  session.groupId?._id || session.groupId,
+          _id: session.groupId?._id || session.groupId,
           name: session.groupId?.name || "",
           code: session.groupId?.code || "",
         },
@@ -300,34 +335,36 @@ export async function GET(req) {
     const statsAll = await Session.find({
       groupId: { $in: groupIds },
       isDeleted: false,
-    }).select("status groupId").lean();
+    })
+      .select("status groupId")
+      .lean();
 
-    // ✅ إحصائيات الـ Hold
-    const heldGroupIds = Object.keys(groupHoldMap).filter(
-      (gid) => groupHoldMap[gid]?.isHeld
+    const heldGroupIds = new Set(
+      Object.keys(groupHoldMap).filter((gid) => groupHoldMap[gid]?.isHeld),
     );
-    const heldSessions = statsAll.filter((s) =>
-      heldGroupIds.includes(s.groupId?.toString())
-    );
+    const countByStatus = (s) => statsAll.filter((x) => x.status === s).length;
 
     const stats = {
-      total:     statsAll.length,
-      completed: statsAll.filter((s) => s.status === "completed").length,
-      scheduled: statsAll.filter((s) => s.status === "scheduled").length,
-      cancelled: statsAll.filter((s) => s.status === "cancelled").length,
-      postponed: statsAll.filter((s) => s.status === "postponed").length,
-      onHold:    heldSessions.filter((s) => s.status !== "completed").length,
+      total: statsAll.length,
+      completed: countByStatus("completed"),
+      scheduled: countByStatus("scheduled"),
+      cancelled: countByStatus("cancelled"),
+      postponed: countByStatus("postponed"),
+      onHold: statsAll.filter(
+        (s) =>
+          heldGroupIds.has(s.groupId?.toString()) && s.status !== "completed",
+      ).length,
     };
 
-    return NextResponse.json({
+    return json({
       success: true,
       data: { sessions: processedSessions, stats, studentId: student._id },
     });
   } catch (error) {
     console.error("❌ [All Sessions API] Error:", error);
-    return NextResponse.json(
+    return json(
       { success: false, message: "فشل في تحميل الجلسات", error: error.message },
-      { status: 500 }
+      500,
     );
   }
 }

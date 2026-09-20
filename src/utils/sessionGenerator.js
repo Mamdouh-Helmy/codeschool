@@ -320,6 +320,13 @@ async function persistLinkReservations(sessionsWithLinks, group, userId) {
 /**
  * ✅ Generate sessions based on module selection
  */
+/**
+ * ✅ Generate sessions based on module selection
+ *
+ * 🆕 دعم الحصص التعويضية:
+ * لو group.isMakeupGroup === true → بنولّد سيشن واحدة بس (مش الجدول الكامل)،
+ * مربوطة بالسيشن الأصلية اللي الأدمن اختارها، وعليها isComplimentary: true.
+ */
 export async function generateSessionsForGroup(
   groupId,
   group,
@@ -333,6 +340,7 @@ export async function generateSessionsForGroup(
     console.log(`Group ID: ${groupId}`);
     console.log(`Group Name: ${group.name}`);
     console.log(`Group Status: ${group.status}`);
+    console.log(`🎯 Is Makeup Group: ${group.isMakeupGroup ? "YES" : "NO"}`);
     console.log(
       `🔗 Selected Link IDs: ${selectedLinkIds.length > 0 ? selectedLinkIds.join(", ") : "none (no links)"}`,
     );
@@ -357,6 +365,220 @@ export async function generateSessionsForGroup(
       throw new Error("Course curriculum not found");
     }
 
+    const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
+
+    if (!startDate || !daysOfWeek || daysOfWeek.length === 0) {
+      throw new Error(
+        "Invalid schedule: Must have start date and at least 1 selected day",
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 🎯 MAKE-UP GROUP FLOW — سيشن واحدة بس
+    // ═══════════════════════════════════════════════════════════════════
+    if (group.isMakeupGroup === true) {
+      console.log(`\n🎯 MAKE-UP GROUP MODE — generating a single session`);
+
+      const originalSessionId = group.makeupInfo?.originalSessionId;
+      if (!originalSessionId) {
+        throw new Error(
+          "Make-up group is missing originalSessionId in makeupInfo",
+        );
+      }
+
+      // جيب السيشن الأصلية عشان ناخد منها moduleIndex/sessionNumber/lessonIndexes
+      const OriginalSession = (await import("../app/models/Session")).default;
+      const originalSession = await OriginalSession.findById(originalSessionId)
+        .select(
+          "title description moduleIndex sessionNumber lessonIndexes groupId scheduledDate startTime endTime",
+        )
+        .lean();
+
+      if (!originalSession) {
+        throw new Error("Original session not found");
+      }
+
+      const moduleData = course.curriculum[originalSession.moduleIndex];
+      if (!moduleData?.lessons || moduleData.lessons.length !== 6) {
+        throw new Error(
+          `Module ${originalSession.moduleIndex + 1} is invalid (needs exactly 6 lessons)`,
+        );
+      }
+
+      // التاريخ = startDate بالظبط (تاريخ واحد بس)
+      const scheduledDate = new Date(startDate);
+
+      // العنوان — بنفس منطق السيشن الأصلية
+      const lessonIndexes = originalSession.lessonIndexes || [0, 1];
+      const lessonTitle =
+        moduleData.lessons[lessonIndexes[0]]?.title?.trim() || "";
+      const title = `Make-up Session ${originalSession.sessionNumber}: ${lessonTitle}`;
+
+      // الوصف — بنفس منطق السيشن الأصلية
+      const description =
+        moduleData.lessons[lessonIndexes[0]]?.description ||
+        originalSession.description ||
+        "";
+
+      const sessionDoc = {
+        _id: new mongoose.Types.ObjectId(),
+        groupId: group._id,
+        courseId: course._id,
+        moduleIndex: originalSession.moduleIndex,
+        sessionNumber: originalSession.sessionNumber,
+        lessonIndexes,
+        title,
+        description,
+        scheduledDate,
+        startTime: timeFrom,
+        endTime: timeTo,
+        status: "scheduled",
+        attendanceTaken: false,
+        attendance: [],
+
+        // ✅ العلامة المهمة جدًا
+        isComplimentary: true,
+        makeupInfo: {
+          originalSessionId: originalSession._id,
+          originalGroupId: originalSession.groupId,
+          originalSessionTitle: originalSession.title || "",
+          originalSessionDate: originalSession.scheduledDate || null,
+          createdBy: userId,
+          createdAt: new Date(),
+        },
+
+        automationEvents: {
+          reminderSent: false,
+          absentNotificationsSent: false,
+          postponeNotificationSent: false,
+          cancelNotificationSent: false,
+          meetingLinkAssigned: false,
+        },
+        metadata: {
+          createdBy: userId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        isDeleted: false,
+      };
+
+      // 🔗 حجز اللينكات لو موجودة
+      let allAvailableLinks = [];
+
+      if (selectedLinkIds.length > 0) {
+        allAvailableLinks = await MeetingLink.find({
+          _id: { $in: selectedLinkIds },
+          isDeleted: false,
+        }).lean();
+
+        allAvailableLinks.sort(
+          (a, b) =>
+            selectedLinkIds.indexOf(a._id.toString()) -
+            selectedLinkIds.indexOf(b._id.toString()),
+        );
+      }
+
+      // ✅ فحص تعارض اللينكات
+      if (allAvailableLinks.length > 0) {
+        const { checkLinksConflictForSchedule } = await import(
+          "./checkMeetingLinks"
+        );
+        const linkIdsToCheck = allAvailableLinks.map((l) => l._id.toString());
+        const conflictCheck = await checkLinksConflictForSchedule(
+          linkIdsToCheck,
+          { daysOfWeek, timeFrom, timeTo },
+          group._id,
+        );
+
+        if (conflictCheck.hasConflicts) {
+          console.log(
+            `❌ Link conflicts found: ${conflictCheck.conflicts.length}`,
+          );
+          conflictCheck.conflicts.forEach((c) => {
+            console.log(
+              `   - ${c.linkName}: conflicts with group ${c.conflictingGroupId} (${c.conflictingDays?.join(", ")} ${c.conflictingTime || ""})`,
+            );
+          });
+          const error = new Error(
+            "اللينكات المختارة متعارضة مع جروب تاني في نفس الميعاد",
+          );
+          error.code = "LINK_CONFLICT";
+          error.linkConflicts = conflictCheck.conflicts;
+          throw error;
+        }
+        console.log(`✅ No link conflicts found for selected links`);
+      }
+
+      // حط اللينك الأول (لو فيه)
+      if (allAvailableLinks.length > 0) {
+        const link = allAvailableLinks[0];
+        sessionDoc.meetingLink = link.link;
+        sessionDoc.meetingCredentials = {
+          username: link.credentials?.username,
+          password: link.credentials?.password,
+        };
+        sessionDoc.meetingLinkId = link._id;
+        sessionDoc.meetingPlatform = link.platform;
+        sessionDoc.automationEvents.meetingLinkAssigned = true;
+        sessionDoc.automationEvents.meetingLinkAssignedAt = new Date();
+      }
+
+      const sessionsWithLinks = [sessionDoc];
+
+      // نسجل الحجز الفعلي على اللينك
+      if (sessionDoc.meetingLinkId) {
+        await persistLinkReservations(sessionsWithLinks, group, userId);
+      }
+
+      // Day distribution analysis
+      const dayDistribution = {};
+      const dateSet = new Set();
+
+      sessionsWithLinks.forEach((s) => {
+        const dayName = getDayName(new Date(s.scheduledDate).getDay());
+        const dateStr = s.scheduledDate.toISOString().split("T")[0];
+        dayDistribution[dayName] = (dayDistribution[dayName] || 0) + 1;
+        dateSet.add(dateStr);
+      });
+
+      console.log(`\n✅ Make-up session generated successfully`);
+      console.log(`  Title: ${title}`);
+      console.log(`  Date: ${scheduledDate.toISOString().split("T")[0]}`);
+      console.log(`  Time: ${timeFrom} - ${timeTo}`);
+      console.log(`  Is Complimentary: true`);
+
+      return {
+        success: true,
+        sessions: sessionsWithLinks,
+        totalGenerated: sessionsWithLinks.length,
+        startDate: sessionsWithLinks[0]?.scheduledDate,
+        endDate: sessionsWithLinks[0]?.scheduledDate,
+        distribution: dayDistribution,
+        uniqueDates: Array.from(dateSet).sort(),
+        schedule: {
+          daysOfWeek,
+          daysPerWeek: daysOfWeek.length,
+          startDate: new Date(startDate),
+          timeFrom,
+          timeTo,
+        },
+        moduleSelection: {
+          mode: "single",
+          selectedModules: [originalSession.moduleIndex],
+          modulesProcessed: 1,
+        },
+        meetingLinks: {
+          assigned: sessionDoc.meetingLinkId ? 1 : 0,
+          failed: sessionDoc.meetingLinkId ? 0 : 1,
+          total: sessionsWithLinks.length,
+        },
+        isMakeupGroup: true,
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 📚 NORMAL GROUP FLOW — كل السيشنز العادية
+    // ═══════════════════════════════════════════════════════════════════
     const moduleSelection = group.moduleSelection || {
       mode: "all",
       selectedModules: [],
@@ -386,14 +608,6 @@ export async function generateSessionsForGroup(
 
     if (modulesToGenerate.length === 0)
       throw new Error("No modules selected for session generation");
-
-    const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
-
-    if (!startDate || !daysOfWeek || daysOfWeek.length === 0) {
-      throw new Error(
-        "Invalid schedule: Must have start date and at least 1 selected day",
-      );
-    }
 
     console.log("📅 Schedule configuration:", {
       startDate: new Date(startDate).toISOString().split("T")[0],
@@ -504,6 +718,7 @@ export async function generateSessionsForGroup(
           status: "scheduled",
           attendanceTaken: false,
           attendance: [],
+          isComplimentary: false,
           automationEvents: {
             reminderSent: false,
             absentNotificationsSent: false,
@@ -562,10 +777,10 @@ export async function generateSessionsForGroup(
 
     // ✅ فحص تعارض: اللينكات المختارة لازم تكون فاضية فعليًا على جدول
     // الجروب الجديد (أيام + وقت) — مش بس "status: available" شكليًا.
-    // من غير الفحص ده، اللينك ممكن يتحط على سيشنات الجروب ده وهو فعليًا
-    // متحجز لجروب تاني في نفس الميعاد.
     if (allAvailableLinks.length > 0) {
-      const { checkLinksConflictForSchedule } = await import("./checkMeetingLinks");
+      const { checkLinksConflictForSchedule } = await import(
+        "./checkMeetingLinks"
+      );
       const linkIdsToCheck = allAvailableLinks.map((l) => l._id.toString());
       const conflictCheck = await checkLinksConflictForSchedule(
         linkIdsToCheck,
@@ -576,9 +791,13 @@ export async function generateSessionsForGroup(
       if (conflictCheck.hasConflicts) {
         console.log(`❌ Link conflicts found: ${conflictCheck.conflicts.length}`);
         conflictCheck.conflicts.forEach((c) => {
-          console.log(`   - ${c.linkName}: conflicts with group ${c.conflictingGroupId} (${c.conflictingDays?.join(", ")} ${c.conflictingTime || ""})`);
+          console.log(
+            `   - ${c.linkName}: conflicts with group ${c.conflictingGroupId} (${c.conflictingDays?.join(", ")} ${c.conflictingTime || ""})`,
+          );
         });
-        const error = new Error("اللينكات المختارة متعارضة مع جروب تاني في نفس الميعاد");
+        const error = new Error(
+          "اللينكات المختارة متعارضة مع جروب تاني في نفس الميعاد",
+        );
         error.code = "LINK_CONFLICT";
         error.linkConflicts = conflictCheck.conflicts;
         throw error;
@@ -625,8 +844,7 @@ export async function generateSessionsForGroup(
     console.log(`  Links Assigned:  ${linksAssigned}`);
     console.log(`  Links Failed:    ${linksFailed}`);
 
-    // ✅ نسجل الحجز الفعلي على الـ MeetingLink documents نفسها — من غير
-    // الخطوة دي اللينكات هتفضل "available" في الداتابيز حتى لو مستخدمة.
+    // ✅ نسجل الحجز الفعلي على الـ MeetingLink documents نفسها
     if (linksAssigned > 0) {
       await persistLinkReservations(sessionsWithLinks, group, userId);
     }

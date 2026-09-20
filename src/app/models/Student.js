@@ -116,10 +116,14 @@ const whatsappMessageSchema = new mongoose.Schema(
         "credit_low_balance_4h_guardian",
         "credit_low_balance_2h_student",
         "credit_low_balance_2h_guardian",
+        "makeup_session_student",
+        "makeup_session_guardian",
+        "makeup_session_student_offline",
+        "makeup_session_guardian_offline",
       ],
       required: true,
     },
-    messageContent: { type: String, required: true },
+messageContent: { type: String, default: "" },
     language: { type: String, enum: ["ar", "en", "bilingual"], default: "ar" },
     status: {
       type: String,
@@ -403,24 +407,24 @@ const StudentSchema = new mongoose.Schema(
     // ✅ NEW: Certificates issued to the student
     // تخزين معرفات الشهادات التي تم إرسالها للطالب لمنع التكرار
     issuedCertificates: [
-  {
-    moduleId: { type: String, required: true },
-    courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
-    imageUrl: { type: String },
-    issuedAt: { type: Date, default: Date.now },
-    studentDelivered: { type: Boolean, default: false },
-    studentDeliveredAt: { type: Date },
-    guardianDelivered: { type: Boolean, default: false },
-    guardianDeliveredAt: { type: Date },
-    // ✅ جديد: قفل يمنع التكرار حتى لو الكرون اشتغل بالتوازي
-    generationStatus: {
-      type: String,
-      enum: ["idle", "generating"],
-      default: "idle",
-    },
-    generationClaimedAt: { type: Date, default: null },
-  },
-],
+      {
+        moduleId: { type: String, required: true },
+        courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+        imageUrl: { type: String },
+        issuedAt: { type: Date, default: Date.now },
+        studentDelivered: { type: Boolean, default: false },
+        studentDeliveredAt: { type: Date },
+        guardianDelivered: { type: Boolean, default: false },
+        guardianDeliveredAt: { type: Date },
+        // ✅ جديد: قفل يمنع التكرار حتى لو الكرون اشتغل بالتوازي
+        generationStatus: {
+          type: String,
+          enum: ["idle", "generating"],
+          default: "idle",
+        },
+        generationClaimedAt: { type: Date, default: null },
+      },
+    ],
 
     moduleOverviewsSent: [
       {
@@ -698,7 +702,7 @@ StudentSchema.methods.addCreditPackage = async function (packageData) {
       this.communicationPreferences.notificationChannels.whatsapp = true;
     }
 
-    await this.save();
+      await this.save({ validateModifiedOnly: true });
     return { success: true, data: newPackage };
   } catch (error) {
     console.error("❌ Error adding credit package:", error);
@@ -843,8 +847,7 @@ StudentSchema.methods.editCreditPackage = async function (updates) {
       updates.editedBy || this.metadata.lastModifiedBy;
     this.metadata.updatedAt = new Date();
 
-    await this.save();
-
+await this.save({ validateModifiedOnly: true });
     return {
       success: true,
       data: pkg,
@@ -974,7 +977,7 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
       }
     }
 
-    await this.save();
+     await this.save({ validateModifiedOnly: true });
     console.log("✅ Exception added successfully");
     console.log(
       `📊 Final totalHoursRemaining: ${this.creditSystem.stats.totalHoursRemaining}`,
@@ -1015,7 +1018,7 @@ StudentSchema.methods.endCreditException = async function (exceptionId) {
       }
     }
 
-    await this.save();
+       await this.save({ validateModifiedOnly: true });
     return { success: true, data: exception };
   } catch (error) {
     console.error("❌ Error ending credit exception:", error);
@@ -1147,7 +1150,7 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
       (this.creditSystem.stats.totalSessionsAttended || 0) + 1;
     this.creditSystem.stats.lastUsageDate = new Date();
 
-    await this.save();
+     await this.save({ validateModifiedOnly: true });
 
     // ✅ NEW: تفعيل بداية الإسكرو (14 يوم) لو ده أول سيشن بتتخصم منها ساعات
     // في الجروب ده — بأي حالة حضور. العملية غير حرجة: لو فشلت متأثرش على
@@ -1231,7 +1234,7 @@ StudentSchema.methods.addCreditHours = async function (addData) {
       this.communicationPreferences.notificationChannels.whatsapp = true;
     }
 
-    await this.save();
+      await this.save({ validateModifiedOnly: true });
 
     return {
       success: true,

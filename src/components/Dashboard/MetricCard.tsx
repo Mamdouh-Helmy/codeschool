@@ -1,55 +1,59 @@
-// MetricCard.tsx
+// components/Dashboard/MetricCard.tsx
 "use client";
 import { Icon } from "@iconify/react";
-import { useI18n } from "@/i18n/I18nProvider";
+import { METRIC_ACCENTS } from "@/lib/constants/dashboard";
 
-export type MetricTrend = {
-  value: string;
-  isPositive: boolean;
-  description: string;
-};
-
-type MetricCardProps = {
+type Props = {
   label: string;
   value: string;
   icon: string;
-  trend: MetricTrend;
+  trend: { value: string; isPositive: boolean; description: string };
   sublabel?: string;
+  accent?: keyof typeof METRIC_ACCENTS;
 };
 
-const MetricCard = ({ label, value, icon, trend, sublabel }: MetricCardProps) => {
-  const { t } = useI18n();
+const MetricCard = ({ label, value, icon, trend, sublabel, accent = "primary" }: Props) => {
+  const a = METRIC_ACCENTS[accent];
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md dark:border-dark_border dark:bg-darklight">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm font-medium text-SlateBlueText dark:text-darktext">{label}</p>
-          <p className="mt-2 text-2xl sm:text-3xl font-semibold text-MidnightNavyText dark:text-white">{value}</p>
-          {sublabel ? (
-            <p className="mt-1 text-sm text-slate-400 dark:text-darktext">{sublabel}</p>
-          ) : null}
+    <article className="group relative flex h-full min-h-[140px] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md dark:border-dark_border dark:bg-darklight">
+      <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${a.bar}`} />
+
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-darktext">
+            {label}
+          </p>
+          <p className="mt-1.5 truncate text-2xl font-bold tracking-tight text-MidnightNavyText dark:text-white">
+            {value}
+          </p>
+          {sublabel && (
+            <p className="mt-1 truncate text-[11px] font-medium text-slate-400 dark:text-darktext">
+              {sublabel}
+            </p>
+          )}
         </div>
-        <span className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Icon icon={icon} className="h-5 w-5 sm:h-6 sm:w-6" />
+
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${a.bg} ${a.ring} ${a.text}`}>
+          <Icon icon={icon} className="h-5 w-5" />
         </span>
-      </div>
-      <div className="mt-4 sm:mt-5 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 dark:bg-darkmode dark:text-white">
+      </header>
+
+      <footer className="mt-auto flex items-center gap-2 pt-3">
         <span
-          className={`inline-flex items-center gap-1 font-semibold ${
-            trend.isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600"
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+            trend.isPositive
+              ? "bg-emerald-500/10 text-emerald-600"
+              : "bg-red-500/10 text-red-600"
           }`}
         >
-          <Icon
-            icon={trend.isPositive ? "ion:arrow-up" : "ion:arrow-down"}
-            className="h-4 w-4"
-          />
+          <Icon icon={trend.isPositive ? "ion:trending-up" : "ion:trending-down"} className="h-3 w-3" />
           {trend.value}
         </span>
-        <span className="text-xs font-normal text-slate-500 dark:text-darktext">
+        <span className="truncate text-[10px] text-slate-400 dark:text-darktext">
           {trend.description}
         </span>
-      </div>
+      </footer>
     </article>
   );
 };

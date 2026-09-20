@@ -11,15 +11,7 @@ import { wapilotService } from "./wapilot-service";
 // ✅ HOLD GUARD — حماية من إرسال أي رسالة لجروب على Hold
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * 🔒 هل الجروب مسموح له يبعت رسائل دلوقتي؟
- * بترجع { ok: true } لو الجروب:
- *   - موجود
- *   - مش isDeleted
- *   - status === "active"
- *   - مش على Hold
- */
-async function canGroupSendMessages(groupId) {
+export async function canGroupSendMessages(groupId) {
   if (!groupId) return { ok: false, reason: "no_group_id" };
 
   try {
@@ -43,11 +35,103 @@ async function canGroupSendMessages(groupId) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ HOLD GUARD — على مستوى السيشن نفسها (مش الجروب كله)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function sortSessionsForHoldCheck(sessions) {
+  return [...sessions].sort((a, b) => {
+    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
+    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
+  });
+}
+
+function isSessionLockedByHoldCheck(session, group, allGroupSessions) {
+  if (!group?.hold?.isHeld) return false;
+  if (session?.status === "completed") return false;
+
+  const hold = group.hold;
+
+  if (hold.holdType === "indefinite" || hold.holdType === "duration") return true;
+  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) return true;
+
+  const sorted = sortSessionsForHoldCheck(allGroupSessions);
+  const myIndex = sorted.findIndex((s) => String(s._id) === String(session._id));
+  if (myIndex === -1) return false;
+
+  if (hold.holdType === "sessions") {
+    const consumed = hold.holdSessionsConsumed || 0;
+    if (consumed === 0) return true;
+    return myIndex < consumed;
+  }
+
+  if (hold.holdType === "until_session") {
+    const targetId = hold.holdUntilSessionId;
+    if (!targetId) return true;
+    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
+    if (targetIndex === -1) return true;
+    return myIndex <= targetIndex;
+  }
+
+  return false;
+}
+
+/**
+ * ✅ هل يُسمح بإرسال رسائل مرتبطة بسيشن معينة؟
+ * - لو الجروب مش Active أو محذوف أو مش على Hold أصلاً → نفس فحص canGroupSendMessages
+ * - لو الـ Hold نوعه duration/indefinite → بيقفل كل حاجة (زي القديم)
+ * - لو الـ Hold نوعه sessions/until_session → بيقفل بس لو السيشن دي بالذات مقفولة،
+ *   وباقي سيشنات الجروب تفضل تقدر تبعت رسايلها عادي
+ */
+export async function canSessionSendMessages(sessionId) {
+  if (!sessionId) return { ok: false, reason: "no_session_id" };
+
+  try {
+    const session = await Session.findById(sessionId)
+      .populate({ path: "groupId", select: "name code status hold isDeleted" })
+      .select("_id moduleIndex sessionNumber scheduledDate status groupId")
+      .lean();
+
+    if (!session) return { ok: false, reason: "session_not_found" };
+
+    const group = session.groupId;
+    if (!group) return { ok: false, reason: "group_not_found" };
+    if (group.isDeleted) return { ok: false, reason: "group_deleted" };
+    if (group.status !== "active") {
+      return { ok: false, reason: `group_status_${group.status}`, group };
+    }
+    if (!group.hold?.isHeld) return { ok: true, group };
+
+    // duration / indefinite → كل حاجة في الجروب مقفولة، زي الأول بالظبط
+    if (group.hold.holdType === "duration" || group.hold.holdType === "indefinite") {
+      return { ok: false, reason: "group_on_hold", group };
+    }
+
+    // sessions / until_session → نفحص السيشن دي بالذات بس
+    const allGroupSessions = await Session.find({
+      groupId: group._id,
+      isDeleted: false,
+    })
+      .select("_id moduleIndex sessionNumber scheduledDate status")
+      .lean();
+
+    const locked = isSessionLockedByHoldCheck(session, group, allGroupSessions);
+    if (locked) {
+      return { ok: false, reason: "session_on_hold", group };
+    }
+
+    return { ok: true, group };
+  } catch (err) {
+    console.error("❌ canSessionSendMessages error:", err.message);
+    return { ok: false, reason: "check_failed" };
+  }
+}
+
 // ── Fetch TemplateVariable map from DB ────────────────────────────────────
 async function fetchDbVars(genderContext = {}) {
   try {
-    const TemplateVariable = (await import("../models/TemplateVariable"))
-      .default;
+    const TemplateVariable = (await import("../models/TemplateVariable")).default;
     const vars = await TemplateVariable.find({ isActive: true }).lean();
     const map = {};
     vars.forEach((v) => {
@@ -61,9 +145,9 @@ async function fetchDbVars(genderContext = {}) {
 }
 
 // ============================================================
-// ✅ NEW: استخراج الاسم المختصر للحصة من الـ title
+// ✅ استخراج الاسم المختصر للحصة من الـ title
 // ============================================================
-function extractSessionShortName(title) {
+export function extractSessionShortName(title) {
   if (!title) return "";
   if (title.includes(":")) {
     const afterColon = title.split(":").slice(1).join(":").trim();
@@ -84,24 +168,17 @@ function extractSessionShortName(title) {
 export async function canSendMessage(student) {
   if (!student) return false;
 
-  if (!student.creditSystem?.currentPackage) {
-    return false;
-  }
+  if (!student.creditSystem?.currentPackage) return false;
 
-  const remainingHours =
-    student.creditSystem.currentPackage.remainingHours || 0;
+  const remainingHours = student.creditSystem.currentPackage.remainingHours || 0;
   if (remainingHours <= 0) {
-    console.log(
-      `🔕 Student ${student._id} has zero balance - notifications disabled`,
-    );
+    console.log(`🔕 Student ${student._id} has zero balance - notifications disabled`);
     return false;
   }
 
   const whatsappEnabled =
     student.communicationPreferences?.notificationChannels?.whatsapp;
-  if (!whatsappEnabled) {
-    return false;
-  }
+  if (!whatsappEnabled) return false;
 
   return true;
 }
@@ -111,262 +188,184 @@ export async function canSendMessage(student) {
  */
 async function filterEligibleStudents(students) {
   const eligibleStudents = [];
-
   for (const student of students) {
     const canSend = await canSendMessage(student);
     if (canSend) {
       eligibleStudents.push(student);
     } else {
-      console.log(
-        `⏭️ Skipping student ${student._id} - not eligible for messages`,
-      );
+      console.log(`⏭️ Skipping student ${student._id} - not eligible for messages`);
     }
   }
-
   return eligibleStudents;
 }
 
-/**
- * ✅ EVENT 1: Group Activated
- * ملحوظة: مش محتاجة Hold Guard لأنها بتتنادى وقت التفعيل نفسه.
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ CORE — توليد السيشنات + حجز اللينكات (مشترك بين العادي والتعويضي)
+// ═══════════════════════════════════════════════════════════════════════════
+export async function activateGroupSessionsCore(groupId, userId, selectedLinkIds = []) {
+  const group = await Group.findById(groupId)
+    .populate("courseId")
+    .populate("instructors", "name email profile");
+  if (!group) throw new Error("Group not found");
+
+  if (
+    !group.schedule.daysOfWeek ||
+    group.schedule.daysOfWeek.length === 0 ||
+    group.schedule.daysOfWeek.length > 3
+  ) {
+    throw new Error(
+      `Group must have 1 to 3 days selected (currently ${group.schedule.daysOfWeek?.length || 0})`,
+    );
+  }
+
+  const Session = (await import("../models/Session")).default;
+  const existingSessionsCount = await Session.countDocuments({
+    groupId,
+    isDeleted: false,
+  });
+
+  if (group.sessionsGenerated || existingSessionsCount > 0) {
+    const existingSessions = await Session.find({
+      groupId,
+      isDeleted: false,
+      meetingLinkId: { $ne: null },
+    });
+
+    for (const session of existingSessions) {
+      try {
+        const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
+        await releaseMeetingLink(session._id);
+      } catch (e) {
+        console.warn(`⚠️ releaseMeetingLink failed for ${session._id}:`, e.message);
+      }
+    }
+
+    await Session.deleteMany({ groupId });
+    await Group.findByIdAndUpdate(groupId, {
+      $set: { sessionsGenerated: false, totalSessionsCount: 0 },
+    });
+  }
+
+  const { generateSessionsForGroup } = await import("../../utils/sessionGenerator");
+  const sessionsResult = await generateSessionsForGroup(
+    groupId,
+    group,
+    userId,
+    selectedLinkIds,
+  );
+
+  if (!sessionsResult.success) {
+    throw new Error(sessionsResult.message || "Failed to generate sessions");
+  }
+
+  if (sessionsResult.sessions?.length > 0) {
+    try {
+      await Session.insertMany(sessionsResult.sessions, { ordered: false });
+
+      await Group.findByIdAndUpdate(groupId, {
+        $set: {
+          sessionsGenerated: true,
+          totalSessionsCount: sessionsResult.totalGenerated,
+          "metadata.updatedAt": new Date(),
+          "metadata.sessionsGeneratedAt": new Date(),
+          "metadata.lastSessionGeneration": {
+            date: new Date(),
+            sessionsCount: sessionsResult.totalGenerated,
+            userId,
+          },
+        },
+      });
+
+      if (selectedLinkIds.length > 0) {
+        const MeetingLink = (await import("../models/MeetingLink")).default;
+        for (const linkId of selectedLinkIds) {
+          try {
+            const link = await MeetingLink.findById(linkId);
+            if (!link) continue;
+
+            const using = sessionsResult.sessions.filter(
+              (s) => s.meetingLinkId?.toString() === linkId.toString(),
+            );
+            if (using.length === 0) continue;
+
+            const first = using[0];
+            const last = using[using.length - 1];
+
+            const startTime = new Date(first.scheduledDate);
+            const [sh, sm] = first.startTime.split(":").map(Number);
+            startTime.setHours(sh, sm, 0, 0);
+
+            const endTime = new Date(last.scheduledDate);
+            const [eh, em] = last.endTime.split(":").map(Number);
+            endTime.setHours(eh, em, 0, 0);
+
+            await link.reserveForSession(
+              last._id,
+              groupId,
+              startTime,
+              endTime,
+              userId,
+              {
+                daysOfWeek: group.schedule.daysOfWeek,
+                timeFrom: group.schedule.timeFrom,
+                timeTo: group.schedule.timeTo,
+              },
+            );
+          } catch (e) {
+            console.warn(`⚠️ Could not reserve link ${linkId}:`, e.message);
+          }
+        }
+      }
+    } catch (insertError) {
+      if (insertError.code === 11000) {
+        for (const sessionData of sessionsResult.sessions) {
+          try {
+            await Session.findOneAndUpdate(
+              {
+                groupId: sessionData.groupId,
+                moduleIndex: sessionData.moduleIndex,
+                sessionNumber: sessionData.sessionNumber,
+              },
+              sessionData,
+              { upsert: true, new: true, setDefaultsOnInsert: true },
+            );
+          } catch {}
+        }
+        await Group.findByIdAndUpdate(groupId, {
+          $set: {
+            sessionsGenerated: true,
+            totalSessionsCount: sessionsResult.sessions.length,
+            "metadata.updatedAt": new Date(),
+          },
+        });
+      } else {
+        throw insertError;
+      }
+    }
+  }
+
+  return { group, sessionsResult, existingSessionsCount };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ EVENT 1: Group Activated (للجروبات العادية فقط)
+// ═══════════════════════════════════════════════════════════════════════════
 export async function onGroupActivated(groupId, userId, selectedLinkIds = []) {
   try {
     console.log(`\n🎯 EVENT: Group Activated ==========`);
     console.log(`👥 Group: ${groupId}`);
     console.log(`👤 Activated by: ${userId}`);
-    console.log(
-      `🔗 Selected Link IDs: ${selectedLinkIds.length > 0 ? selectedLinkIds.join(", ") : "none"}`,
-    );
+    console.log(`🔗 Selected Link IDs: ${selectedLinkIds.join(", ") || "none"}`);
 
-    const group = await Group.findById(groupId)
-      .populate("courseId")
-      .populate("instructors", "name email profile");
+    const { group, sessionsResult, existingSessionsCount } =
+      await activateGroupSessionsCore(groupId, userId, selectedLinkIds);
 
-    if (!group) throw new Error("Group not found");
-
-    console.log(`📊 Group status: ${group.status}`);
-    console.log(`📚 Course: ${group.courseId?.title}`);
-    console.log(
-      `📖 Curriculum modules: ${group.courseId?.curriculum?.length || 0}`,
-    );
-    console.log(
-      `📅 Schedule: ${group.schedule.daysOfWeek} | ${group.schedule.timeFrom} - ${group.schedule.timeTo}`,
-    );
-
-    if (
-      !group.schedule.daysOfWeek ||
-      group.schedule.daysOfWeek.length === 0 ||
-      group.schedule.daysOfWeek.length > 3
-    ) {
-      throw new Error(
-        `Group must have 1 to 3 days selected for schedule (currently has ${group.schedule.daysOfWeek?.length || 0} days)`,
-      );
-    }
-
-    const Session = (await import("../models/Session")).default;
-    const existingSessionsCount = await Session.countDocuments({
-      groupId: groupId,
-      isDeleted: false,
-    });
-
-    console.log(`📊 Existing sessions count: ${existingSessionsCount}`);
-
-    if (group.sessionsGenerated || existingSessionsCount > 0) {
-      console.log(`🔄 Regenerating sessions for group ${group.code}...`);
-
-      const existingSessions = await Session.find({
-        groupId: groupId,
-        isDeleted: false,
-        meetingLinkId: { $ne: null },
-      });
-
-      for (const session of existingSessions) {
-        try {
-          const { releaseMeetingLink } =
-            await import("../../utils/sessionGenerator");
-          await releaseMeetingLink(session._id);
-        } catch (releaseError) {
-          console.warn(
-            `⚠️ Failed to release meeting link for session ${session._id}:`,
-            releaseError.message,
-          );
-        }
-      }
-
-      const deleteResult = await Session.deleteMany({ groupId: groupId });
-      console.log(`✅ Deleted ${deleteResult.deletedCount} existing sessions`);
-
-      await Group.findByIdAndUpdate(groupId, {
-        $set: { sessionsGenerated: false, totalSessionsCount: 0 },
-      });
-    }
-
-    console.log("📅 Generating new sessions...");
-
-    const { generateSessionsForGroup } =
-      await import("../../utils/sessionGenerator");
-
-    const sessionsResult = await generateSessionsForGroup(
-      groupId,
-      group,
-      userId,
-      selectedLinkIds,
-    );
-
-    if (!sessionsResult.success) {
-      throw new Error(sessionsResult.message || "Failed to generate sessions");
-    }
-
-    console.log(`📊 Sessions Generation Result:`);
-    console.log(`   Total Generated: ${sessionsResult.totalGenerated}`);
-    console.log(`   Distribution:`, sessionsResult.distribution);
-
-    if (sessionsResult.sessions && sessionsResult.sessions.length > 0) {
-      console.log(
-        `💾 Saving ${sessionsResult.sessions.length} sessions to database...`,
-      );
-
-      try {
-        const insertResult = await Session.insertMany(sessionsResult.sessions, {
-          ordered: false,
-        });
-        console.log(`✅ Successfully saved ${insertResult.length} sessions`);
-
-        await Group.findByIdAndUpdate(groupId, {
-          $set: {
-            sessionsGenerated: true,
-            totalSessionsCount: sessionsResult.totalGenerated,
-            "metadata.updatedAt": new Date(),
-            "metadata.sessionsGeneratedAt": new Date(),
-            "metadata.lastSessionGeneration": {
-              date: new Date(),
-              sessionsCount: sessionsResult.totalGenerated,
-              userId: userId,
-            },
-          },
-        });
-
-        console.log(
-          `✅ Generated and saved ${sessionsResult.totalGenerated} sessions`,
-        );
-        console.log(`   First session: ${sessionsResult.startDate}`);
-        console.log(`   Last session: ${sessionsResult.endDate}`);
-
-        if (selectedLinkIds.length > 0) {
-          console.log(
-            `\n🔒 Reserving ${selectedLinkIds.length} selected meeting link(s)...`,
-          );
-
-          const MeetingLink = (await import("../models/MeetingLink")).default;
-
-          for (const linkId of selectedLinkIds) {
-            try {
-              const link = await MeetingLink.findById(linkId);
-              if (!link) {
-                console.warn(`⚠️ Link ${linkId} not found, skipping`);
-                continue;
-              }
-
-              const sessionsUsingLink = sessionsResult.sessions.filter(
-                (s) => s.meetingLinkId?.toString() === linkId.toString(),
-              );
-
-              if (sessionsUsingLink.length === 0) continue;
-
-              const firstSession = sessionsUsingLink[0];
-              const lastSession =
-                sessionsUsingLink[sessionsUsingLink.length - 1];
-
-              const startTime = new Date(firstSession.scheduledDate);
-              const [sh, sm] = firstSession.startTime.split(":").map(Number);
-              startTime.setHours(sh, sm, 0, 0);
-
-              const endTime = new Date(lastSession.scheduledDate);
-              const [eh, em] = lastSession.endTime.split(":").map(Number);
-              endTime.setHours(eh, em, 0, 0);
-
-              await link.reserveForSession(
-                lastSession._id,
-                groupId,
-                startTime,
-                endTime,
-                userId,
-                {
-                  daysOfWeek: group.schedule.daysOfWeek,
-                  timeFrom: group.schedule.timeFrom,
-                  timeTo: group.schedule.timeTo,
-                },
-              );
-
-              console.log(
-                `✅ Reserved "${link.name}" — ${sessionsUsingLink.length} sessions` +
-                  ` (${startTime.toISOString().split("T")[0]} → ${endTime.toISOString().split("T")[0]})`,
-              );
-            } catch (reserveError) {
-              console.warn(
-                `⚠️ Could not reserve link ${linkId}:`,
-                reserveError.message,
-              );
-            }
-          }
-        }
-      } catch (insertError) {
-        console.error("❌ Error inserting sessions:", insertError);
-
-        if (insertError.code === 11000) {
-          console.log(
-            "🔄 Trying to insert sessions individually with conflict resolution...",
-          );
-
-          let successCount = 0;
-          let errorCount = 0;
-
-          for (const sessionData of sessionsResult.sessions) {
-            try {
-              await Session.findOneAndUpdate(
-                {
-                  groupId: sessionData.groupId,
-                  moduleIndex: sessionData.moduleIndex,
-                  sessionNumber: sessionData.sessionNumber,
-                },
-                sessionData,
-                { upsert: true, new: true, setDefaultsOnInsert: true },
-              );
-              successCount++;
-            } catch (individualError) {
-              errorCount++;
-            }
-          }
-
-          if (successCount > 0) {
-            await Group.findByIdAndUpdate(groupId, {
-              $set: {
-                sessionsGenerated: true,
-                totalSessionsCount: successCount,
-                "metadata.updatedAt": new Date(),
-              },
-            });
-            console.log(
-              `✅ Saved ${successCount} sessions (${errorCount} failed)`,
-            );
-          } else {
-            throw new Error(
-              `Failed to save any sessions. All ${errorCount} attempts failed.`,
-            );
-          }
-        } else {
-          throw insertError;
-        }
-      }
-    }
+    console.log(`📊 Sessions Generation Result:`, sessionsResult.distribution);
 
     if (group.automation?.whatsappEnabled && group.instructors?.length > 0) {
       console.log("📱 Sending notifications to instructors...");
       for (const instructor of group.instructors) {
-        console.log(
-          `📤 Notify instructor: ${instructor.name} (${instructor.email})`,
-        );
+        console.log(`📤 Notify instructor: ${instructor.name} (${instructor.email})`);
       }
     }
 
@@ -382,17 +381,6 @@ export async function onGroupActivated(groupId, userId, selectedLinkIds = []) {
     };
   } catch (error) {
     console.error("❌ Error in onGroupActivated:", error);
-
-    if (error.code === 11000) {
-      try {
-        const Session = (await import("../models/Session")).default;
-        await Session.syncIndexes();
-        console.log("🔄 Attempted to sync indexes");
-      } catch (syncError) {
-        console.error("❌ Failed to sync indexes:", syncError.message);
-      }
-    }
-
     throw error;
   }
 }
@@ -414,33 +402,21 @@ export async function getMessageTemplate(
 
     if (template) {
       let content = "";
-
       if (validLanguage === "ar") {
         content = template.contentAr;
       } else {
         content = template.contentEn;
       }
 
-      console.log(`📋 Using ${validLanguage} content for ${templateType}`);
-      console.log(`   Content preview: ${content?.substring(0, 100)}...`);
-
       if (!content || content.trim() === "") {
-        console.log(`⚠️ ${validLanguage} content empty, trying other language`);
-
-        if (validLanguage === "ar") {
-          content = template.contentEn;
-        } else {
-          content = template.contentAr;
-        }
+        content = validLanguage === "ar" ? template.contentEn : template.contentAr;
 
         if (!content || content.trim() === "") {
-          console.log(`⚠️ Both languages empty, using fallback template`);
           const fallbackContent = getFallbackTemplate(
             templateType,
             validLanguage,
             recipientType,
           );
-
           return {
             content: fallbackContent,
             templateId: template._id,
@@ -463,9 +439,6 @@ export async function getMessageTemplate(
       };
     }
 
-    console.log(
-      `⚠️ No template found in DB for ${templateType}, using fallback`,
-    );
     const fallbackContent = getFallbackTemplate(
       templateType,
       validLanguage,
@@ -485,7 +458,6 @@ export async function getMessageTemplate(
       validLanguage,
       recipientType,
     );
-
     return {
       content: fallbackContent,
       isCustom: false,
@@ -502,7 +474,6 @@ export async function getAttendanceTemplates(attendanceStatus, student) {
       student.communicationPreferences?.preferredLanguage || "ar";
 
     let guardianTemplateType = "";
-
     switch (attendanceStatus) {
       case "absent":
         guardianTemplateType = "absence_notification";
@@ -546,12 +517,8 @@ export async function getAttendanceTemplatesForFrontend(
 ) {
   try {
     const student = await Student.findById(studentId).lean();
-    if (!student) {
-      throw new Error("Student not found");
-    }
-
-    const templates = await getAttendanceTemplates(attendanceStatus, student);
-    return templates;
+    if (!student) throw new Error("Student not found");
+    return await getAttendanceTemplates(attendanceStatus, student);
   } catch (error) {
     console.error("❌ Error in getAttendanceTemplatesForFrontend:", error);
     throw error;
@@ -569,16 +536,12 @@ export async function sendAbsenceNotifications(
   try {
     console.log(`\n📤 Sending absence notifications for session ${sessionId}`);
 
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .lean();
-
+    const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) throw new Error("Session not found");
 
-    const group = session.groupId;
+        const group = session.groupId;
 
-    // ✅ HOLD GUARD — لو الجروب على Hold، منبعتش إشعارات غياب/تأخير/عذر
-    const holdCheck = await canGroupSendMessages(group?._id || group);
+    const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] sendAbsenceNotifications skipped — ${holdCheck.reason}`,
@@ -596,7 +559,6 @@ export async function sendAbsenceNotifications(
     );
 
     if (studentsNeedingNotifications.length === 0) {
-      console.log("✅ No students need notifications");
       return { success: true, sentCount: 0, skippedCount: 0 };
     }
 
@@ -606,7 +568,6 @@ export async function sendAbsenceNotifications(
 
     for (const record of studentsNeedingNotifications) {
       const student = await Student.findById(record.studentId);
-
       if (!student) {
         skippedCount++;
         continue;
@@ -631,12 +592,10 @@ export async function sendAbsenceNotifications(
       }
 
       let messageContent = customMessages[student._id.toString()];
-
       if (!messageContent) {
         const templates = await getAttendanceTemplates(record.status, student);
         messageContent = templates.guardian?.content;
       }
-
       if (!messageContent) {
         skippedCount++;
         continue;
@@ -656,8 +615,7 @@ export async function sendAbsenceNotifications(
         late: "late_notification",
         excused: "excused_notification",
       };
-      const messageType =
-        messageTypeMap[record.status] || "absence_notification";
+      const messageType = messageTypeMap[record.status] || "absence_notification";
 
       const sendResult = await wapilotService.sendAndLogMessage({
         studentId: student._id,
@@ -686,18 +644,11 @@ export async function sendAbsenceNotifications(
       }
     }
 
-    console.log(
-      `✅ Notifications sent: ${sentCount}, skipped: ${skippedCount}`,
-    );
+    console.log(`✅ Notifications sent: ${sentCount}, skipped: ${skippedCount}`);
     return { success: true, sentCount, skippedCount, results };
   } catch (error) {
     console.error("❌ Error sending absence notifications:", error);
-    return {
-      success: false,
-      error: error.message,
-      sentCount: 0,
-      skippedCount: 0,
-    };
+    return { success: false, error: error.message, sentCount: 0, skippedCount: 0 };
   }
 }
 
@@ -710,7 +661,6 @@ function getFallbackTemplate(
   recipientType = "guardian",
 ) {
   const templates = {
-    // ========== قوالب الطالب ==========
     reminder_24h_student: {
       ar: `{salutation_ar} 👋
 حبيت أفكرك إن ميعادنا بكرة إن شاء الله ✨
@@ -771,8 +721,6 @@ We're waiting for you 💻🚀
 Nour ✨
 Follow-up Team`,
     },
-
-    // ========== قوالب ولي الأمر ==========
     reminder_24h_guardian: {
       ar: `{guardianSalutation} 👋
 بفكر حضرتك بميعاد حصة {childTitle} {studentName} بكرة إن شاء الله ✨
@@ -1105,10 +1053,6 @@ We look forward to seeing {studentName}'s progress! 🚀
 
 Code School Team 💻`,
     },
-
-    // ══════════════════════════════════════════════════════════
-    // ✅ BILLING — تنبيهات الرصيد المنخفض
-    // ══════════════════════════════════════════════════════════
     credit_low_balance_4h_student: {
       ar: `{salutation_ar} 👋
 
@@ -1208,31 +1152,28 @@ Code School Team 💻`,
   ];
 
   let templateKey;
-
   if (noSuffixTypes.includes(templateType)) {
     templateKey = templateType;
   } else {
     const baseKey = templateType
       .replace(/_guardian$/, "")
       .replace(/_student$/, "");
-
     templateKey =
-      recipientType === "student"
-        ? `${baseKey}_student`
-        : `${baseKey}_guardian`;
+      recipientType === "student" ? `${baseKey}_student` : `${baseKey}_guardian`;
   }
 
   const template = templates[templateKey];
-
   if (!template) {
     console.log(`⚠️ No fallback template found for key: ${templateKey}`);
     return "";
   }
-
   return template[language] || template.ar || "";
 }
 
-async function prepareStudentVariables(
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ prepareStudentVariables — EXPORTED (يستخدمها makeupAutomation كمان)
+// ═══════════════════════════════════════════════════════════════════════════
+export async function prepareStudentVariables(
   student,
   group,
   session = null,
@@ -1340,9 +1281,30 @@ async function prepareStudentVariables(
   const instructorNames = buildInstructorsNames(group?.instructors, language);
   const firstMeetingLink = await getFirstSessionMeetingLink(group?._id);
 
-  const sessionShortName = session
-    ? extractSessionShortName(session.title)
-    : "";
+  const sessionShortName = session ? extractSessionShortName(session.title) : "";
+
+  const isOffline =
+    extra.isOffline === true || group?.deliveryMode === "offline";
+
+  const loc = group?.locationDetails || {};
+  const placeName = extra.placeName || loc.placeName || group?.location || "";
+  const address = extra.address || loc.address || loc.extraDetails || "";
+  let mapsLink = extra.mapsLink || "";
+
+  if (isOffline && !mapsLink) {
+    if (loc.lat != null && loc.lng != null) {
+      mapsLink = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+    } else if (address) {
+      mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    } else if (placeName) {
+      mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeName)}`;
+    }
+  }
+
+  const sessionLocationBlock =
+    isOffline && (placeName || address || mapsLink)
+      ? `📍 المكان: ${placeName}\n📌 العنوان: ${address}${mapsLink ? `\n🗺️ اللوكيشن: ${mapsLink}` : ""}`
+      : "";
 
   const variables = {
     studentSalutation,
@@ -1374,8 +1336,14 @@ async function prepareStudentVariables(
     timeFrom: group?.schedule?.timeFrom || "",
     timeTo: group?.schedule?.timeTo || "",
     instructor: instructorNames,
-    firstMeetingLink: firstMeetingLink || "",
     enrollmentNumber: student.enrollmentNumber || "",
+    firstMeetingLink: isOffline ? "" : firstMeetingLink || "",
+    meetingLink: isOffline ? "" : firstMeetingLink || "",
+    placeName: isOffline ? placeName : "",
+    address: isOffline ? address : "",
+    mapsLink: isOffline ? mapsLink : "",
+    sessionLocationBlock: isOffline ? sessionLocationBlock : "",
+    isOffline,
   };
 
   if (session) {
@@ -1386,7 +1354,9 @@ async function prepareStudentVariables(
       sessionNumber: session.sessionNumber || "",
       date: sessionDate,
       time: `${session.startTime || ""} - ${session.endTime || ""}`,
-      meetingLink: session.meetingLink || firstMeetingLink || "",
+      ...(isOffline
+        ? {}
+        : { meetingLink: session.meetingLink || firstMeetingLink || "" }),
     });
   }
 
@@ -1430,7 +1400,10 @@ async function prepareStudentVariables(
   return { variables, language, gender, relationship };
 }
 
-async function prepareInstructorVariables(instructor, group, session = null) {
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ prepareInstructorVariables — EXPORTED (يستخدمها makeupAutomation كمان)
+// ═══════════════════════════════════════════════════════════════════════════
+export async function prepareInstructorVariables(instructor, group, session = null) {
   const lang = instructor.language || "ar";
   const gender = instructor.gender || "male";
   const isMale = gender !== "female";
@@ -1473,9 +1446,7 @@ async function prepareInstructorVariables(instructor, group, session = null) {
       )
     : "";
 
-  const sessionShortName = session
-    ? extractSessionShortName(session.title)
-    : "";
+  const sessionShortName = session ? extractSessionShortName(session.title) : "";
 
   const variables = {
     instructorSalutation,
@@ -1522,15 +1493,10 @@ export async function sendInstructorSessionReminder(
     console.log(`\n🎯 Instructor Session Reminder ==========`);
     console.log(`📋 Session: ${sessionId} | Type: ${reminderType}`);
 
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .lean();
+    const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) throw new Error("Session not found");
 
-    // ✅ HOLD GUARD — لو الجروب على Hold، منبعتش تذكيرات للمدرسين
-    const holdCheck = await canGroupSendMessages(
-      session.groupId?._id || session.groupId,
-    );
+       const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] sendInstructorSessionReminder skipped — ${holdCheck.reason}`,
@@ -1547,11 +1513,9 @@ export async function sendInstructorSessionReminder(
     const group = await Group.findById(session.groupId._id || session.groupId)
       .populate("instructors.userId", "name email gender language profile")
       .lean();
-
     if (!group) throw new Error("Group not found");
 
     if (!group.instructors || group.instructors.length === 0) {
-      console.log("⚠️ No instructors in group");
       return { success: false, reason: "no_instructors" };
     }
 
@@ -1573,7 +1537,6 @@ export async function sendInstructorSessionReminder(
 
     for (const instructorEntry of group.instructors) {
       const instructor = instructorEntry.userId;
-
       if (!instructor?._id) {
         failCount++;
         continue;
@@ -1581,7 +1544,6 @@ export async function sendInstructorSessionReminder(
 
       const instructorPhone = instructor.profile?.phone?.trim();
       if (!instructorPhone) {
-        console.log(`⚠️ No phone for instructor ${instructor.name}`);
         failCount++;
         results.push({
           instructorId: instructor._id,
@@ -1599,7 +1561,6 @@ export async function sendInstructorSessionReminder(
         );
 
         let messageContent = "";
-
         if (dbTemplate) {
           messageContent =
             language === "ar"
@@ -1621,8 +1582,7 @@ export async function sendInstructorSessionReminder(
 
         const finalMessage = replaceVariables(messageContent, variables);
 
-        const preparedPhone =
-          wapilotService.preparePhoneNumber(instructorPhone);
+        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
         if (!preparedPhone) throw new Error("Invalid phone number");
 
         const sendResult = await wapilotService.sendTextMessage(
@@ -1638,7 +1598,6 @@ export async function sendInstructorSessionReminder(
             status: "sent",
             language,
           });
-          console.log(`✅ Sent to instructor ${instructor.name} [${language}]`);
         } else {
           throw new Error("Send failed");
         }
@@ -1654,28 +1613,31 @@ export async function sendInstructorSessionReminder(
       }
     }
 
-    return {
-      success: successCount > 0,
-      successCount,
-      failCount,
-      results,
-    };
+    return { success: successCount > 0, successCount, failCount, results };
   } catch (error) {
     console.error("❌ Error in sendInstructorSessionReminder:", error);
     return { success: false, error: error.message };
   }
 }
 
-/**
- * ✅ إرسال إشعارات الرصيد المنخفض
- * ملحوظة: مش محتاجة Hold Guard لأنها بتتنادى من attendance route
- * اللي أصلاً بيتحقق من الـ Hold قبل ما يشتغل.
- */
-export async function sendLowBalanceAlerts(students) {
+export async function sendLowBalanceAlerts(students, sessionId = null) {
   try {
-    console.log(
-      `\n📤 Sending low balance alerts to ${students.length} students`,
-    );
+    console.log(`\n📤 Sending low balance alerts to ${students.length} students`);
+
+    if (sessionId) {
+      const holdCheck = await canSessionSendMessages(sessionId);
+      if (!holdCheck.ok) {
+        console.log(
+          `⏭️ [HOLD GUARD] sendLowBalanceAlerts skipped — ${holdCheck.reason}`,
+        );
+        return {
+          success: true,
+          sentCount: 0,
+          failCount: 0,
+          reason: holdCheck.reason,
+        };
+      }
+    }
 
     let successCount = 0;
     let failCount = 0;
@@ -1684,7 +1646,6 @@ export async function sendLowBalanceAlerts(students) {
     for (const { student, remainingHours } of students) {
       try {
         const canSend = await canSendMessageForLowBalance(student);
-
         if (!canSend) {
           failCount++;
           results.push({
@@ -1866,12 +1827,7 @@ export async function sendLowBalanceAlerts(students) {
       }
     }
 
-    return {
-      success: successCount > 0,
-      sentCount: successCount,
-      failCount,
-      results,
-    };
+    return { success: successCount > 0, sentCount: successCount, failCount, results };
   } catch (error) {
     console.error("❌ Error in sendLowBalanceAlerts:", error);
     return {
@@ -1888,9 +1844,7 @@ export async function canSendMessageForLowBalance(student) {
 
   const whatsappEnabled =
     student.communicationPreferences?.notificationChannels?.whatsapp;
-  if (!whatsappEnabled) {
-    return false;
-  }
+  if (!whatsappEnabled) return false;
 
   if (
     !student.personalInfo?.whatsappNumber &&
@@ -1903,11 +1857,26 @@ export async function canSendMessageForLowBalance(student) {
   return true;
 }
 
-export async function disableZeroBalanceNotifications(zeroBalanceStudents) {
+export async function disableZeroBalanceNotifications(zeroBalanceStudents, sessionId = null) {
   try {
     console.log(
       `\n🔕 Disabling notifications for ${zeroBalanceStudents.length} students with zero balance`,
     );
+
+    if (sessionId) {
+      const holdCheck = await canSessionSendMessages(sessionId);
+      if (!holdCheck.ok) {
+        console.log(
+          `⏭️ [HOLD GUARD] disableZeroBalanceNotifications skipped — ${holdCheck.reason}`,
+        );
+        return {
+          success: true,
+          disabledCount: 0,
+          failCount: 0,
+          reason: holdCheck.reason,
+        };
+      }
+    }
 
     let successCount = 0;
     let failCount = 0;
@@ -1945,7 +1914,7 @@ export async function disableZeroBalanceNotifications(zeroBalanceStudents) {
             phoneNumber: studentPhone,
             messageContent: studentMessage,
             messageType: "credit_exhausted",
-            language: language,
+            language,
             metadata: {
               alertType: "zero_balance",
               notificationsDisabled: true,
@@ -1978,7 +1947,7 @@ export async function disableZeroBalanceNotifications(zeroBalanceStudents) {
             phoneNumber: guardianPhone,
             messageContent: guardianMessage,
             messageType: "credit_exhausted",
-            language: language,
+            language,
             metadata: {
               alertType: "zero_balance",
               notificationsDisabled: true,
@@ -2005,12 +1974,7 @@ export async function disableZeroBalanceNotifications(zeroBalanceStudents) {
       }
     }
 
-    return {
-      success: successCount > 0,
-      disabledCount: successCount,
-      failCount,
-      results,
-    };
+    return { success: successCount > 0, disabledCount: successCount, failCount, results };
   } catch (error) {
     console.error("❌ Error in disableZeroBalanceNotifications:", error);
     return {
@@ -2022,10 +1986,10 @@ export async function disableZeroBalanceNotifications(zeroBalanceStudents) {
   }
 }
 
-/**
- * ✅ استبدال المتغيرات في الرسالة
- */
-function replaceVariables(message, variables) {
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ replaceVariables — EXPORTED (يستخدمها makeupAutomation كمان)
+// ═══════════════════════════════════════════════════════════════════════════
+export function replaceVariables(message, variables) {
   if (!message) return message;
   let result = message;
   Object.entries(variables).forEach(([key, value]) => {
@@ -2115,17 +2079,10 @@ export async function getTemplatesForEvent(eventType, student, extraData = {}) {
   }
 }
 
-export async function getTemplatesForFrontend(
-  eventType,
-  studentId,
-  extraData = {},
-) {
+export async function getTemplatesForFrontend(eventType, studentId, extraData = {}) {
   try {
     const student = await Student.findById(studentId).lean();
-    if (!student) {
-      throw new Error("Student not found");
-    }
-
+    if (!student) throw new Error("Student not found");
     return await getTemplatesForEvent(eventType, student, extraData);
   } catch (error) {
     console.error("❌ Error in getTemplatesForFrontend:", error);
@@ -2134,13 +2091,10 @@ export async function getTemplatesForFrontend(
 }
 
 export function replaceInstructorVariables(message, instructor, group) {
-  const instructorName =
-    instructor.name?.split(" ")[0] || instructor.name || "";
-
+  const instructorName = instructor.name?.split(" ")[0] || instructor.name || "";
   const gender = instructor.gender || "male";
 
   let salutation = "";
-
   if (gender === "male") {
     salutation = `عزيزي ${instructorName}`;
   } else if (gender === "female") {
@@ -2164,10 +2118,9 @@ export function replaceInstructorVariables(message, instructor, group) {
 
   const timeFrom = group.schedule?.timeFrom || "{timeFrom}";
   const timeTo = group.schedule?.timeTo || "{timeTo}";
-  const studentCount =
-    group.currentStudentsCount || group.students?.length || 0;
+  const studentCount = group.currentStudentsCount || group.students?.length || 0;
 
-  const result = message
+  return message
     .replace(/\{salutation\}/g, salutation)
     .replace(/\{instructorName\}/g, instructorName)
     .replace(/\{groupName\}/g, groupName)
@@ -2176,13 +2129,12 @@ export function replaceInstructorVariables(message, instructor, group) {
     .replace(/\{timeFrom\}/g, timeFrom)
     .replace(/\{timeTo\}/g, timeTo)
     .replace(/\{studentCount\}/g, studentCount.toString());
-
-  return result;
 }
 
 export async function sendInstructorWelcomeMessages(
   groupId,
   instructorMessages = {},
+  options = {},
 ) {
   try {
     console.log(`\n🎯 EVENT: Send Instructor Welcome Messages ==========`);
@@ -2194,7 +2146,6 @@ export async function sendInstructorWelcomeMessages(
 
     if (!group) throw new Error("Group not found");
 
-    // ✅ HOLD GUARD
     if (group.hold?.isHeld) {
       console.log(
         `⏭️ [HOLD GUARD] sendInstructorWelcomeMessages skipped — group_on_hold`,
@@ -2226,13 +2177,20 @@ export async function sendInstructorWelcomeMessages(
       };
     }
 
-    let successCount = 0;
+       let successCount = 0;
     let failCount = 0;
     const notificationResults = [];
 
-    for (const instructorEntry of group.instructors) {
-      const instructor = instructorEntry.userId;
+    // ✅ لو اتحدد onlyInstructorIds نبعت لهم بس (إضافة مدرس جديد لجروب شغال)
+    const onlyIds = (options.onlyInstructorIds || []).map(String);
+    const instructorsToNotify = onlyIds.length
+      ? group.instructors.filter((entry) =>
+          onlyIds.includes(String(entry.userId?._id || entry.userId)),
+        )
+      : group.instructors;
 
+    for (const instructorEntry of instructorsToNotify) {
+      const instructor = instructorEntry.userId;
       if (!instructor || !instructor._id) {
         failCount++;
         notificationResults.push({
@@ -2293,17 +2251,11 @@ export async function sendInstructorWelcomeMessages(
 مع أطيب التحيات،
 إدارة Code School 💻`;
 
-        messageContent = replaceInstructorVariables(
-          defaultTemplate,
-          instructor,
-          group,
-        );
+        messageContent = replaceInstructorVariables(defaultTemplate, instructor, group);
       }
 
       try {
-        const preparedPhone =
-          wapilotService.preparePhoneNumber(instructorPhone);
-
+        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
         if (!preparedPhone) {
           throw new Error(`Invalid phone number format: ${instructorPhone}`);
         }
@@ -2333,7 +2285,7 @@ export async function sendInstructorWelcomeMessages(
                 groupName: group.name,
                 courseName:
                   group.courseSnapshot?.title || group.courseId?.title || "",
-                messageContent: messageContent,
+                messageContent,
                 language: messageLang,
                 sentAt: new Date(),
                 status: "sent",
@@ -2342,10 +2294,7 @@ export async function sendInstructorWelcomeMessages(
             },
           });
         } catch (updateError) {
-          console.warn(
-            `⚠️ Could not update instructor metadata:`,
-            updateError.message,
-          );
+          console.warn(`⚠️ Could not update instructor metadata:`, updateError.message);
         }
       } catch (error) {
         failCount++;
@@ -2436,10 +2385,7 @@ async function sendToStudentWithLogging({
       studentId,
       studentName: student.personalInfo?.fullName,
       sentTo: { guardian: results.guardian, student: results.student },
-      errors: {
-        guardian: results.guardianError,
-        student: results.studentError,
-      },
+      errors: { guardian: results.guardianError, student: results.studentError },
     };
   } catch (error) {
     console.error(`❌ Critical error in sendToStudentWithLogging:`, error);
@@ -2456,6 +2402,7 @@ export async function onStudentAddedToGroup(
 ) {
   try {
     console.log(`\n🎯 EVENT: Student Added to Group ==========`);
+    console.log(`👤 Student: ${studentId} | 👥 Group: ${groupId}`);
 
     const [student, group] = await Promise.all([
       Student.findById(studentId),
@@ -2466,11 +2413,8 @@ export async function onStudentAddedToGroup(
 
     if (!student || !group) throw new Error("Student or Group not found");
 
-    // ✅ HOLD GUARD — مينفعش نضيف طالب لجروب على Hold
     if (group.hold?.isHeld) {
-      console.log(
-        `⏭️ [HOLD GUARD] onStudentAddedToGroup skipped — group_on_hold`,
-      );
+      console.log(`⏭️ [HOLD GUARD] onStudentAddedToGroup skipped — group_on_hold`);
       throw new Error("لا يمكن إضافة طالب لجروب على Hold حاليًا");
     }
 
@@ -2482,6 +2426,51 @@ export async function onStudentAddedToGroup(
       },
       { new: true },
     );
+
+    const isOffline = group.deliveryMode === "offline";
+    const loc = group.locationDetails || {};
+    const placeName = moduleData.placeName || loc.placeName || group.location || "";
+    const address = moduleData.address || loc.address || loc.extraDetails || "";
+
+    let mapsLink = moduleData.mapsLink || "";
+    if (isOffline && !mapsLink) {
+      if (loc.lat != null && loc.lng != null) {
+        mapsLink = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+      } else if (address) {
+        mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+      } else if (placeName) {
+        mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeName)}`;
+      }
+    }
+
+    const groupTemplateType = isOffline ? "group_welcome_offline" : "group_welcome";
+
+    let groupTemplate = null;
+    try {
+      const WhatsAppTemplateAddGroup = (
+        await import("../models/WhatsAppTemplateAddGroup")
+      ).default;
+
+      groupTemplate = await WhatsAppTemplateAddGroup.findOne({
+        templateType: groupTemplateType,
+        isDefault: true,
+        isActive: true,
+      }).lean();
+
+      if (!groupTemplate) {
+        groupTemplate = await WhatsAppTemplateAddGroup.findOne({
+          templateType: groupTemplateType,
+          isActive: true,
+        })
+          .sort({ updatedAt: -1 })
+          .lean();
+      }
+    } catch (templateErr) {
+      console.warn(
+        `⚠️ Could not load group template (${groupTemplateType}):`,
+        templateErr.message,
+      );
+    }
 
     let studentMessageSent = false;
     let guardianMessageSent = false;
@@ -2499,6 +2488,10 @@ export async function onStudentAddedToGroup(
         {
           moduleTitle: moduleData.moduleTitle || "",
           moduleDescription: moduleData.moduleDescription || "",
+          isOffline,
+          placeName,
+          address,
+          mapsLink,
         },
       );
 
@@ -2507,16 +2500,34 @@ export async function onStudentAddedToGroup(
 
         if (customMessages.student) {
           finalStudentMessage = customMessages.student;
+        } else if (groupTemplate) {
+          const isMale =
+            String(student.personalInfo?.gender || "male").toLowerCase() !== "female";
+
+          let slotContent = "";
+          if (isMale) {
+            slotContent =
+              language === "ar"
+                ? groupTemplate.studentMaleContentAr
+                : groupTemplate.studentMaleContentEn;
+          } else {
+            slotContent =
+              language === "ar"
+                ? groupTemplate.studentFemaleContentAr
+                : groupTemplate.studentFemaleContentEn;
+          }
+
+          if (!slotContent) {
+            slotContent =
+              language === "ar"
+                ? groupTemplate.studentContentAr || groupTemplate.content || ""
+                : groupTemplate.studentContentEn || "";
+          }
+
+          finalStudentMessage = replaceVariables(slotContent || "", variables);
         } else {
-          const template = await getMessageTemplate(
-            "student_welcome",
-            language,
-            "student",
-          );
-          const studentVars = {
-            ...variables,
-            salutation: variables.studentSalutation,
-          };
+          const template = await getMessageTemplate("student_welcome", language, "student");
+          const studentVars = { ...variables, salutation: variables.studentSalutation };
           finalStudentMessage = replaceVariables(template.content, studentVars);
         }
 
@@ -2534,6 +2545,8 @@ export async function onStudentAddedToGroup(
               isCustomMessage: !!customMessages.student,
               automationType: "group_enrollment",
               recipientType: "student",
+              isOffline,
+              templateType: groupTemplateType,
             },
           });
           studentMessageSent = true;
@@ -2547,20 +2560,40 @@ export async function onStudentAddedToGroup(
 
         if (customMessages.guardian) {
           finalGuardianMessage = customMessages.guardian;
+        } else if (groupTemplate) {
+          const isFather =
+            String(student.guardianInfo?.relationship || "father").toLowerCase() !==
+            "mother";
+
+          let slotContent = "";
+          if (isFather) {
+            slotContent =
+              language === "ar"
+                ? groupTemplate.guardianFatherContentAr
+                : groupTemplate.guardianFatherContentEn;
+          } else {
+            slotContent =
+              language === "ar"
+                ? groupTemplate.guardianMotherContentAr
+                : groupTemplate.guardianMotherContentEn;
+          }
+
+          if (!slotContent) {
+            slotContent =
+              language === "ar"
+                ? groupTemplate.guardianContentAr || ""
+                : groupTemplate.guardianContentEn || "";
+          }
+
+          finalGuardianMessage = replaceVariables(slotContent || "", variables);
         } else {
           const template = await getMessageTemplate(
             "guardian_notification",
             language,
             "guardian",
           );
-          const guardianVars = {
-            ...variables,
-            salutation: variables.guardianSalutation,
-          };
-          finalGuardianMessage = replaceVariables(
-            template.content,
-            guardianVars,
-          );
+          const guardianVars = { ...variables, salutation: variables.guardianSalutation };
+          finalGuardianMessage = replaceVariables(template.content, guardianVars);
         }
 
         try {
@@ -2578,6 +2611,8 @@ export async function onStudentAddedToGroup(
               automationType: "group_enrollment",
               recipientType: "guardian",
               guardianName: student.guardianInfo?.name,
+              isOffline,
+              templateType: groupTemplateType,
             },
           });
           guardianMessageSent = true;
@@ -2586,10 +2621,7 @@ export async function onStudentAddedToGroup(
         }
       }
 
-      if (
-        customMessages.moduleOverview &&
-        customMessages.moduleOverview.trim()
-      ) {
+      if (customMessages.moduleOverview && customMessages.moduleOverview.trim()) {
         if (student.guardianInfo?.whatsappNumber) {
           try {
             await wapilotService.sendAndLogEvalMessage({
@@ -2607,6 +2639,7 @@ export async function onStudentAddedToGroup(
                 recipientType: "guardian",
                 guardianName: student.guardianInfo?.name,
                 messageSubType: "module_overview",
+                isOffline,
               },
             });
             moduleOverviewSent = true;
@@ -2623,6 +2656,9 @@ export async function onStudentAddedToGroup(
       groupId,
       groupCode: group.code,
       studentName: student.personalInfo.fullName,
+      deliveryMode: group.deliveryMode,
+      isOffline,
+      templateType: groupTemplateType,
       messagesSent: {
         student: studentMessageSent,
         guardian: guardianMessageSent,
@@ -2661,7 +2697,6 @@ export function replaceStudentVariables(
   const relationship = student.guardianInfo?.relationship || "father";
 
   let salutation = "";
-
   if (recipientType === "student") {
     if (language === "ar") {
       salutation =
@@ -2708,12 +2743,7 @@ export function replaceStudentVariables(
   const startDate = group.schedule?.startDate
     ? new Date(group.schedule.startDate).toLocaleDateString(
         language === "ar" ? "ar-EG" : "en-US",
-        {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        },
+        { weekday: "long", year: "numeric", month: "long", day: "numeric" },
       )
     : "{startDate}";
 
@@ -2721,12 +2751,7 @@ export function replaceStudentVariables(
   const timeTo = group.schedule?.timeTo || "{timeTo}";
 
   let instructorName = "";
-
-  if (
-    group.instructors &&
-    Array.isArray(group.instructors) &&
-    group.instructors.length > 0
-  ) {
+  if (group.instructors && Array.isArray(group.instructors) && group.instructors.length > 0) {
     const instructor = group.instructors[0];
     instructorName =
       instructor.name ||
@@ -2738,12 +2763,9 @@ export function replaceStudentVariables(
   if (!instructorName && group.courseSnapshot?.instructor) {
     instructorName = group.courseSnapshot.instructor;
   }
+  if (instructorName) instructorName = instructorName.trim();
 
-  if (instructorName) {
-    instructorName = instructorName.trim();
-  }
-
-  const result = message
+  return message
     .replace(/\{salutation\}/g, salutation)
     .replace(/\{studentName\}/g, studentNickname)
     .replace(/\{guardianName\}/g, guardianNickname)
@@ -2755,21 +2777,14 @@ export function replaceStudentVariables(
     .replace(/\{timeFrom\}/g, timeFrom)
     .replace(/\{timeTo\}/g, timeTo)
     .replace(/\{instructor\}/g, instructorName);
-
-  return result;
 }
 
 export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
   try {
     console.log(`\n🎯 EVENT: Attendance Submitted ==========`);
 
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .lean();
-
-    if (!session) {
-      throw new Error("Session not found");
-    }
+    const session = await Session.findById(sessionId).populate("groupId").lean();
+    if (!session) throw new Error("Session not found");
 
     const notificationResult = await sendAbsenceNotifications(
       sessionId,
@@ -2785,30 +2800,20 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
     };
   } catch (error) {
     console.error("❌ Error in onAttendanceSubmitted:", error);
-    return {
-      success: false,
-      error: error.message,
-      successCount: 0,
-      failCount: 0,
-    };
+    return { success: false, error: error.message, successCount: 0, failCount: 0 };
   }
 }
 
 export async function sendLowBalanceAlert(student) {
   try {
     const canSend = await canSendMessageForLowBalance(student);
+    if (!canSend) return { success: false, reason: "not_eligible" };
 
-    if (!canSend) {
-      return { success: false, reason: "not_eligible" };
-    }
-
-    const language =
-      student.communicationPreferences?.preferredLanguage || "ar";
+    const language = student.communicationPreferences?.preferredLanguage || "ar";
     const studentPhone = student.personalInfo?.whatsappNumber;
     const guardianPhone =
       student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
-    const remainingHours =
-      student.creditSystem?.currentPackage?.remainingHours || 0;
+    const remainingHours = student.creditSystem?.currentPackage?.remainingHours || 0;
 
     const studentFirstName =
       language === "ar"
@@ -2853,7 +2858,7 @@ export async function sendLowBalanceAlert(student) {
         phoneNumber: studentPhone,
         messageContent: alertMessage,
         messageType: "credit_alert",
-        language: language,
+        language,
         metadata: {
           remainingHours,
           alertType: remainingHours <= 2 ? "critical" : "low_balance",
@@ -2861,10 +2866,7 @@ export async function sendLowBalanceAlert(student) {
           studentName: studentFirstName,
         },
       });
-
-      if (studentResult.success) {
-        results.push({ recipient: "student", success: true });
-      }
+      if (studentResult.success) results.push({ recipient: "student", success: true });
     }
 
     if (guardianPhone) {
@@ -2878,7 +2880,7 @@ export async function sendLowBalanceAlert(student) {
         phoneNumber: guardianPhone,
         messageContent: guardianMessage,
         messageType: "credit_alert",
-        language: language,
+        language,
         metadata: {
           remainingHours,
           alertType: remainingHours <= 2 ? "critical" : "low_balance",
@@ -2887,16 +2889,10 @@ export async function sendLowBalanceAlert(student) {
           guardianName: guardianFirstName,
         },
       });
-
-      if (guardianResult.success) {
-        results.push({ recipient: "guardian", success: true });
-      }
+      if (guardianResult.success) results.push({ recipient: "guardian", success: true });
     }
 
-    return {
-      success: results.length > 0,
-      results,
-    };
+    return { success: results.length > 0, results };
   } catch (error) {
     console.error(`❌ Error sending low balance alert:`, error);
     return { success: false, error: error.message };
@@ -2919,15 +2915,12 @@ export async function onSessionStatusChanged(
       return { success: true, message: "No notifications needed" };
     }
 
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .lean();
+    const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) return { success: false, error: "Session not found" };
 
-    const group = session.groupId;
+        const group = session.groupId;
 
-    // ✅ HOLD GUARD — لو الجروب على Hold، منبعتش إشعارات إلغاء/تأجيل
-    const holdCheck = await canGroupSendMessages(group?._id || group);
+        const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] onSessionStatusChanged skipped — ${holdCheck.reason}`,
@@ -2962,7 +2955,6 @@ export async function onSessionStatusChanged(
         const studentIdStr = student._id.toString();
 
         let finalStudentMessage = "";
-
         const perStudentMsg = metadata?.studentMessages?.[studentIdStr];
         const sharedStudentMsg = metadata?.studentMessage;
 
@@ -2975,16 +2967,11 @@ export async function onSessionStatusChanged(
             newStatus === "cancelled"
               ? "session_cancelled_student"
               : "session_postponed_student";
-          const template = await getMessageTemplate(
-            templateType,
-            language,
-            "student",
-          );
+          const template = await getMessageTemplate(templateType, language, "student");
           finalStudentMessage = replaceVariables(template.content, variables);
         }
 
         let finalGuardianMessage = "";
-
         const perGuardianMsg = metadata?.guardianMessages?.[studentIdStr];
         const sharedGuardianMsg = metadata?.guardianMessage;
 
@@ -2997,11 +2984,7 @@ export async function onSessionStatusChanged(
             newStatus === "cancelled"
               ? "session_cancelled_guardian"
               : "session_postponed_guardian";
-          const template = await getMessageTemplate(
-            templateType,
-            language,
-            "guardian",
-          );
+          const template = await getMessageTemplate(templateType, language, "guardian");
           finalGuardianMessage = replaceVariables(template.content, variables);
         }
 
@@ -3011,9 +2994,7 @@ export async function onSessionStatusChanged(
           studentMessage: finalStudentMessage,
           guardianMessage: finalGuardianMessage,
           messageType:
-            newStatus === "cancelled"
-              ? "session_cancelled"
-              : "session_postponed",
+            newStatus === "cancelled" ? "session_cancelled" : "session_postponed",
           metadata: {
             sessionId,
             sessionTitle: session.title,
@@ -3056,9 +3037,6 @@ export async function onSessionStatusChanged(
   }
 }
 
-/**
- * ✅ Send manual session reminder
- */
 export async function sendManualSessionReminder(
   sessionId,
   reminderType,
@@ -3068,17 +3046,13 @@ export async function sendManualSessionReminder(
   try {
     console.log(`\n🎯 Manual Session Reminder ==========`);
     console.log(`📋 Session: ${sessionId} | Type: ${reminderType}`);
-    console.log(`🤖 Automated Cron: ${metadata?.automatedCron ? "Yes" : "No"}`);
 
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .lean();
+    const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) throw new Error("Session not found");
 
-    const group = session.groupId;
+       const group = session.groupId;
 
-    // ✅ HOLD GUARD — لو الجروب على Hold، منبعتش تذكيرات
-    const holdCheck = await canGroupSendMessages(group?._id || group);
+    const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] sendManualSessionReminder skipped — ${holdCheck.reason}`,
@@ -3099,9 +3073,7 @@ export async function sendManualSessionReminder(
       isDeleted: false,
     }).lean();
 
-    console.log(`👥 Found ${students.length} students`);
-    if (students.length === 0)
-      return { success: false, reason: "No students found" };
+    if (students.length === 0) return { success: false, reason: "No students found" };
 
     let successCount = 0;
     let failCount = 0;
@@ -3125,10 +3097,7 @@ export async function sendManualSessionReminder(
 
         const studentIdStr = student._id.toString();
 
-        console.log(`📤 ${student.personalInfo?.fullName} | ${language}`);
-
         let finalStudentMessage = "";
-
         const perStudentTemplate = metadata?.studentMessages?.[studentIdStr];
         const sharedStudentTemplate = metadata?.studentMessage;
 
@@ -3136,10 +3105,7 @@ export async function sendManualSessionReminder(
           finalStudentMessage = replaceVariables(perStudentTemplate, variables);
         } else if (sharedStudentTemplate) {
           if (language === "ar") {
-            finalStudentMessage = replaceVariables(
-              sharedStudentTemplate,
-              variables,
-            );
+            finalStudentMessage = replaceVariables(sharedStudentTemplate, variables);
           } else {
             const template = await getMessageTemplate(
               studentTemplateType,
@@ -3158,31 +3124,21 @@ export async function sendManualSessionReminder(
         }
 
         let finalGuardianMessage = "";
-
         const perGuardianTemplate = metadata?.guardianMessages?.[studentIdStr];
         const sharedGuardianTemplate = metadata?.guardianMessage;
 
         if (perGuardianTemplate) {
-          finalGuardianMessage = replaceVariables(
-            perGuardianTemplate,
-            variables,
-          );
+          finalGuardianMessage = replaceVariables(perGuardianTemplate, variables);
         } else if (sharedGuardianTemplate) {
           if (language === "ar") {
-            finalGuardianMessage = replaceVariables(
-              sharedGuardianTemplate,
-              variables,
-            );
+            finalGuardianMessage = replaceVariables(sharedGuardianTemplate, variables);
           } else {
             const template = await getMessageTemplate(
               guardianTemplateType,
               "en",
               "guardian",
             );
-            finalGuardianMessage = replaceVariables(
-              template.content,
-              variables,
-            );
+            finalGuardianMessage = replaceVariables(template.content, variables);
           }
         } else {
           const template = await getMessageTemplate(
@@ -3209,10 +3165,7 @@ export async function sendManualSessionReminder(
 
         if (result.success) {
           successCount++;
-          notificationResults.push({
-            ...result,
-            language,
-          });
+          notificationResults.push({ ...result, language });
         } else {
           failCount++;
         }
@@ -3225,7 +3178,6 @@ export async function sendManualSessionReminder(
     if (metadata?.automatedCron && successCount > 0) {
       try {
         let updateField = {};
-
         if (reminderType === "24hours") {
           updateField = {
             "automationEvents.reminder24hSent": true,
@@ -3250,11 +3202,7 @@ export async function sendManualSessionReminder(
             "automationEvents.reminderStats.total1hFailed": failCount,
           };
         }
-
         await Session.findByIdAndUpdate(sessionId, { $set: updateField });
-        console.log(
-          `✅ [CRON] Marked ${reminderType} reminder as sent in DB for session ${sessionId}`,
-        );
       } catch (markError) {
         console.error(
           "⚠️ Failed to mark reminder as sent in DB (non-critical):",
@@ -3262,10 +3210,6 @@ export async function sendManualSessionReminder(
         );
       }
     }
-
-    console.log(
-      `\n✅ Reminder complete: ${successCount} sent, ${failCount} failed`,
-    );
 
     return {
       success: successCount > 0,
@@ -3295,14 +3239,9 @@ export async function onGroupCompleted(
       .lean();
     if (!group) return { success: false, error: "Group not found" };
 
-    // ✅ HOLD GUARD — مينفعش نعلن إتمام دورة لجروب على Hold
     if (group.hold?.isHeld) {
       console.log(`⏭️ [HOLD GUARD] onGroupCompleted skipped — group_on_hold`);
-      return {
-        success: false,
-        error: "Group is on hold",
-        reason: "group_on_hold",
-      };
+      return { success: false, error: "Group is on hold", reason: "group_on_hold" };
     }
 
     const students = await Student.find({
@@ -3314,8 +3253,7 @@ export async function onGroupCompleted(
       )
       .lean();
 
-    if (students.length === 0)
-      return { success: false, error: "No students in group" };
+    if (students.length === 0) return { success: false, error: "No students in group" };
 
     const totalSessions =
       group.totalSessionsCount ||
@@ -3356,12 +3294,7 @@ export async function onGroupCompleted(
 
         const completionDateFormatted = completionDate.toLocaleDateString(
           language === "ar" ? "ar-EG" : "en-US",
-          {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          },
+          { weekday: "long", year: "numeric", month: "long", day: "numeric" },
         );
 
         const enhancedVars = {
@@ -3374,11 +3307,7 @@ export async function onGroupCompleted(
           feedbackLink: feedbackLink || "",
         };
 
-        const certificates = await getStudentCertificates(
-          student,
-          group,
-          group.courseId,
-        );
+        const certificates = await getStudentCertificates(student, group, group.courseId);
 
         let certificateLine = "";
         if (certificates.length > 0) {
@@ -3387,17 +3316,13 @@ export async function onGroupCompleted(
               certificates.length === 1
                 ? `\n\n🏆 شهادتك جاهزة!\n${certificates[0].moduleTitle}: ${certificates[0].imageUrl}`
                 : `\n\n🏆 شهاداتك جاهزة (${certificates.length}):\n` +
-                  certificates
-                    .map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`)
-                    .join("\n");
+                  certificates.map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`).join("\n");
           } else {
             certificateLine =
               certificates.length === 1
                 ? `\n\n🏆 Your certificate is ready!\n${certificates[0].moduleTitle}: ${certificates[0].imageUrl}`
                 : `\n\n🏆 Your certificates are ready (${certificates.length}):\n` +
-                  certificates
-                    .map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`)
-                    .join("\n");
+                  certificates.map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`).join("\n");
           }
         }
 
@@ -3415,10 +3340,7 @@ export async function onGroupCompleted(
             language,
             "student",
           );
-          finalStudentMessage = replaceVariables(
-            template.content,
-            enhancedVars,
-          );
+          finalStudentMessage = replaceVariables(template.content, enhancedVars);
         }
 
         let finalGuardianMessage = "";
@@ -3432,19 +3354,12 @@ export async function onGroupCompleted(
             language,
             "guardian",
           );
-          finalGuardianMessage = replaceVariables(
-            template.content,
-            enhancedVars,
-          );
+          finalGuardianMessage = replaceVariables(template.content, enhancedVars);
         }
 
         if (certificateLine) {
-          if (!finalStudentMessage.includes("🏆")) {
-            finalStudentMessage += certificateLine;
-          }
-          if (!finalGuardianMessage.includes("🏆")) {
-            finalGuardianMessage += certificateLine;
-          }
+          if (!finalStudentMessage.includes("🏆")) finalStudentMessage += certificateLine;
+          if (!finalGuardianMessage.includes("🏆")) finalGuardianMessage += certificateLine;
         }
 
         if (feedbackLink) {
@@ -3452,13 +3367,8 @@ export async function onGroupCompleted(
             language === "ar"
               ? `\n\n📋 نرجو منك تقييم الدورة:\n${feedbackLink}`
               : `\n\n📋 Please rate the course:\n${feedbackLink}`;
-
-          if (!finalStudentMessage.includes(feedbackLink)) {
-            finalStudentMessage += feedbackSuffix;
-          }
-          if (!finalGuardianMessage.includes(feedbackLink)) {
-            finalGuardianMessage += feedbackSuffix;
-          }
+          if (!finalStudentMessage.includes(feedbackLink)) finalStudentMessage += feedbackSuffix;
+          if (!finalGuardianMessage.includes(feedbackLink)) finalGuardianMessage += feedbackSuffix;
         }
 
         const result = await sendToStudentWithLogging({
@@ -3518,8 +3428,7 @@ export function processCustomMessage(message, student, session, group, status) {
   const variables = {
     guardianName,
     studentName,
-    sessionName:
-      extractSessionShortName(session.title) || session.title || "Session",
+    sessionName: extractSessionShortName(session.title) || session.title || "Session",
     sessionNumber: `Session ${session.sessionNumber || "N/A"}`,
     date: session.scheduledDate
       ? new Date(session.scheduledDate).toLocaleDateString("en-US", {
@@ -3536,21 +3445,14 @@ export function processCustomMessage(message, student, session, group, status) {
   };
 
   let processedMessage = message;
-
   Object.entries(variables).forEach(([key, value]) => {
     const regex = new RegExp(`\\{${key}\\}`, "g");
     processedMessage = processedMessage.replace(regex, value);
   });
-
   return processedMessage;
 }
 
-export function processCompletionMessage(
-  message,
-  student,
-  group,
-  feedbackLink,
-) {
+export function processCompletionMessage(message, student, group, feedbackLink) {
   const studentName = student.personalInfo?.fullName || "Student";
   const courseName =
     group.courseId?.title || group.courseSnapshot?.title || "Course";
@@ -3564,21 +3466,14 @@ export function processCompletionMessage(
   };
 
   let processedMessage = message;
-
   Object.entries(variables).forEach(([key, value]) => {
     const regex = new RegExp(`\\{${key}\\}`, "g");
     processedMessage = processedMessage.replace(regex, value);
   });
-
   return processedMessage;
 }
 
-export function prepareCompletionMessage(
-  studentName,
-  group,
-  feedbackLink,
-  language = "ar",
-) {
+export function prepareCompletionMessage(studentName, group, feedbackLink, language = "ar") {
   const courseName =
     group.courseId?.title || group.courseSnapshot?.title || "Course";
 
@@ -3808,7 +3703,6 @@ export function prepareReminderMessages(
 
   const guardianMessage = {};
   const studentMessage = {};
-
   const is15min = reminderType === "15min" || reminderType === "1hour";
 
   if (language === "en") {
@@ -3925,13 +3819,7 @@ ${session.meetingLink ? `🔗 رابط الدخول: ${session.meetingLink}` : "
   return { guardianMessage, studentMessage };
 }
 
-export function prepareReminderMessage(
-  studentName,
-  session,
-  group,
-  reminderType,
-  language = "ar",
-) {
+export function prepareReminderMessage(studentName, session, group, reminderType, language = "ar") {
   const messages = prepareReminderMessages(
     studentName,
     session,
@@ -3941,7 +3829,6 @@ export function prepareReminderMessage(
     "ولي الأمر",
     "",
   );
-
   return messages.studentMessage.content;
 }
 
@@ -4030,9 +3917,7 @@ Code School Team`;
 function buildInstructorsNames(instructors, language = "ar") {
   if (!instructors || instructors.length === 0) return "";
 
-  const names = instructors
-    .map((i) => i.userId?.name || i.name)
-    .filter(Boolean);
+  const names = instructors.map((i) => i.userId?.name || i.name).filter(Boolean);
 
   if (names.length === 0) return "";
   if (names.length === 1) return names[0];
@@ -4049,7 +3934,7 @@ function buildInstructorsNames(instructors, language = "ar") {
 async function getFirstSessionMeetingLink(groupId) {
   try {
     const firstSession = await Session.findOne({
-      groupId: groupId,
+      groupId,
       isDeleted: false,
       status: { $in: ["scheduled", "completed"] },
       meetingLink: { $exists: true, $ne: null, $ne: "" },
@@ -4064,9 +3949,6 @@ async function getFirstSessionMeetingLink(groupId) {
   }
 }
 
-/**
- * ✅ يحدد أي موديولات اتكملت فعلاً
- */
 async function getCompletedModuleIndexes(groupId) {
   const sessions = await Session.find({ groupId, isDeleted: false }).lean();
 
@@ -4079,17 +3961,13 @@ async function getCompletedModuleIndexes(groupId) {
   const completed = [];
   Object.entries(byModule).forEach(([idx, moduleSessions]) => {
     const allDone =
-      moduleSessions.length > 0 &&
-      moduleSessions.every((s) => s.status === "completed");
+      moduleSessions.length > 0 && moduleSessions.every((s) => s.status === "completed");
     if (allDone) completed.push(Number(idx));
   });
 
   return completed.sort((a, b) => a - b);
 }
 
-/**
- * ✅ يبني ويبعت رسالة Module Overview لولي أمر طالب واحد
- */
 async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) {
   const language = student.communicationPreferences?.preferredLanguage || "ar";
   const gender = student.personalInfo?.gender || "male";
@@ -4154,27 +4032,13 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
   });
 }
 
-/**
- * يحاول يحجز "slot" للرسالة في الـ DB بشكل atomic
- */
-async function claimModuleOverviewSlot(
-  studentId,
-  groupId,
-  courseId,
-  moduleIdx,
-  moduleTitle,
-) {
+async function claimModuleOverviewSlot(studentId, groupId, courseId, moduleIdx, moduleTitle) {
   try {
     const updated = await Student.findOneAndUpdate(
       {
         _id: studentId,
         moduleOverviewsSent: {
-          $not: {
-            $elemMatch: {
-              groupId: groupId,
-              moduleIndex: moduleIdx,
-            },
-          },
+          $not: { $elemMatch: { groupId, moduleIndex: moduleIdx } },
         },
       },
       {
@@ -4191,7 +4055,6 @@ async function claimModuleOverviewSlot(
       },
       { new: true },
     );
-
     return !!updated;
   } catch (err) {
     console.error(
@@ -4208,16 +4071,10 @@ async function markModuleOverviewSent(studentId, groupId, moduleIdx) {
       {
         _id: studentId,
         moduleOverviewsSent: {
-          $elemMatch: {
-            groupId,
-            moduleIndex: moduleIdx,
-            status: "sending",
-          },
+          $elemMatch: { groupId, moduleIndex: moduleIdx, status: "sending" },
         },
       },
-      {
-        $set: { "moduleOverviewsSent.$.status": "sent" },
-      },
+      { $set: { "moduleOverviewsSent.$.status": "sent" } },
     );
   } catch (err) {
     console.error(
@@ -4233,20 +4090,12 @@ async function releaseModuleOverviewClaim(studentId, groupId, moduleIdx) {
       {
         _id: studentId,
         moduleOverviewsSent: {
-          $elemMatch: {
-            groupId,
-            moduleIndex: moduleIdx,
-            status: "sending",
-          },
+          $elemMatch: { groupId, moduleIndex: moduleIdx, status: "sending" },
         },
       },
       {
         $pull: {
-          moduleOverviewsSent: {
-            groupId,
-            moduleIndex: moduleIdx,
-            status: "sending",
-          },
+          moduleOverviewsSent: { groupId, moduleIndex: moduleIdx, status: "sending" },
         },
       },
     );
@@ -4263,7 +4112,7 @@ export async function checkAndSendModuleOverviewNotifications() {
     status: "active",
     isDeleted: false,
     sessionsGenerated: true,
-    "hold.isHeld": { $ne: true }, // ✅ HOLD GUARD
+    "hold.isHeld": { $ne: true },
   })
     .populate({ path: "courseId", select: "title curriculum" })
     .populate("students");
@@ -4288,11 +4137,7 @@ export async function checkAndSendModuleOverviewNotifications() {
       for (const student of studentsInGroup) {
         if (!student) continue;
 
-        for (
-          let moduleIdx = 1;
-          moduleIdx <= highestCompleted + 1;
-          moduleIdx++
-        ) {
+        for (let moduleIdx = 1; moduleIdx <= highestCompleted + 1; moduleIdx++) {
           if (moduleIdx >= curriculum.length) continue;
 
           const eligible = await canSendMessage(student);
@@ -4321,12 +4166,7 @@ export async function checkAndSendModuleOverviewNotifications() {
 
           let sendResult;
           try {
-            sendResult = await sendModuleOverviewMessage(
-              student,
-              group,
-              moduleData,
-              moduleIdx,
-            );
+            sendResult = await sendModuleOverviewMessage(student, group, moduleData, moduleIdx);
           } catch (sendErr) {
             console.error(
               `❌ sendModuleOverviewMessage threw [student=${student._id}, module=${moduleIdx}]:`,
@@ -4355,9 +4195,7 @@ export async function checkAndSendModuleOverviewNotifications() {
   }
 
   console.log(
-    `\n✅ MODULE OVERVIEW CRON DONE — sent: ${
-      results.filter((r) => r.success).length
-    }/${results.length}`,
+    `\n✅ MODULE OVERVIEW CRON DONE — sent: ${results.filter((r) => r.success).length}/${results.length}`,
   );
   return {
     processed: results.length,
@@ -4366,27 +4204,14 @@ export async function checkAndSendModuleOverviewNotifications() {
   };
 }
 
-/**
- * ✅ Helper: يحدد لو الجروب خلص فعليًا
- */
 async function isGroupFullyCompleted(groupId) {
-  const sessions = await Session.find({
-    groupId,
-    isDeleted: false,
-  })
+  const sessions = await Session.find({ groupId, isDeleted: false })
     .select("status")
     .lean();
-
   if (sessions.length === 0) return false;
-
-  return sessions.every((s) =>
-    ["completed", "cancelled"].includes(s.status),
-  );
+  return sessions.every((s) => ["completed", "cancelled"].includes(s.status));
 }
 
-/**
- * ✅ Helper: يبني قائمة لينكات الشهادات المتاحة للطالب
- */
 async function getStudentCertificates(student, group, course) {
   try {
     const issued = student.issuedCertificates || [];
@@ -4441,23 +4266,16 @@ async function getStudentCertificates(student, group, course) {
   }
 }
 
-/**
- * ✅ EVENT (Cron): يفحص كل الجروبات، ولو خلصت يبعت
- *    رسالة إتمام الدورة لكل طالب وولي أمر (مرة واحدة بس)
- */
 export async function checkAndSendGroupCompletionNotifications() {
   console.log(`\n🎓 Checking for completed groups...`);
 
   const groups = await Group.find({
     isDeleted: false,
     status: { $in: ["active", "completed"] },
-    "hold.isHeld": { $ne: true }, // ✅ HOLD GUARD
+    "hold.isHeld": { $ne: true },
     "metadata.completionNotification.sent": { $ne: true },
   })
-    .populate({
-      path: "courseId",
-      select: "title curriculum hasCertificate",
-    })
+    .populate({ path: "courseId", select: "title curriculum hasCertificate" })
     .populate("students");
 
   console.log(`📋 Found ${groups.length} candidate group(s)`);
@@ -4475,12 +4293,7 @@ export async function checkAndSendGroupCompletionNotifications() {
 
       const feedbackLink = group.metadata?.feedbackLink || null;
 
-      const sendResult = await onGroupCompleted(
-        group._id,
-        null,
-        feedbackLink,
-        {},
-      );
+      const sendResult = await onGroupCompleted(group._id, null, feedbackLink, {});
 
       await Group.findByIdAndUpdate(group._id, {
         $set: {
@@ -4506,10 +4319,7 @@ export async function checkAndSendGroupCompletionNotifications() {
         failCount: sendResult.failCount || 0,
       });
     } catch (groupErr) {
-      console.error(
-        `❌ Error processing group ${group._id}:`,
-        groupErr.message,
-      );
+      console.error(`❌ Error processing group ${group._id}:`, groupErr.message);
       results.push({
         groupId: group._id,
         groupName: group.name,
@@ -4520,9 +4330,7 @@ export async function checkAndSendGroupCompletionNotifications() {
   }
 
   console.log(
-    `\n✅ GROUP COMPLETION CRON DONE — sent: ${
-      results.filter((r) => r.success).length
-    }/${results.length}`,
+    `\n✅ GROUP COMPLETION CRON DONE — sent: ${results.filter((r) => r.success).length}/${results.length}`,
   );
 
   return {
@@ -4532,9 +4340,6 @@ export async function checkAndSendGroupCompletionNotifications() {
   };
 }
 
-/**
- * ✅ Helper: بناء لينك الـ Maps من الـ Group
- */
 function buildMapsLink(group, session) {
   const loc = group?.locationDetails || {};
 
@@ -4552,9 +4357,6 @@ function buildMapsLink(group, session) {
   return "";
 }
 
-/**
- * ✅ يجهز المتغيرات الخاصة بالـ Offline (location/maps)
- */
 async function prepareOfflineLocationVariables(group, session, language = "ar") {
   const loc = group?.locationDetails || {};
 
@@ -4573,20 +4375,12 @@ async function prepareOfflineLocationVariables(group, session, language = "ar") 
   return { placeName, address, mapsLink };
 }
 
-/**
- * ✅ OFFLINE: تذكير قبل 24 ساعة (Maps / Location Reminder)
- */
-export async function sendOfflineLocationReminder(
-  sessionId,
-  metadata = {},
-) {
+export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
   try {
     console.log(`\n📍 OFFLINE 24h Reminder ==========`);
     console.log(`📋 Session: ${sessionId}`);
 
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .lean();
+    const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) throw new Error("Session not found");
 
     const group = await Group.findById(session.groupId._id || session.groupId)
@@ -4594,12 +4388,12 @@ export async function sendOfflineLocationReminder(
       .lean();
     if (!group) throw new Error("Group not found");
 
-    // ✅ HOLD GUARD
-    if (group.hold?.isHeld) {
+       const holdCheck = await canSessionSendMessages(sessionId);
+    if (!holdCheck.ok) {
       console.log(
-        `⏭️ [HOLD GUARD] sendOfflineLocationReminder skipped — group_on_hold`,
+        `⏭️ [HOLD GUARD] sendOfflineLocationReminder skipped — ${holdCheck.reason}`,
       );
-      return { success: false, reason: "group_on_hold" };
+      return { success: false, reason: holdCheck.reason };
     }
 
     const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
@@ -4616,8 +4410,6 @@ export async function sendOfflineLocationReminder(
       isDeleted: false,
     }).lean();
 
-    console.log(`👥 Found ${students.length} students`);
-
     let sentCount = 0;
     let failCount = 0;
     const results = [];
@@ -4630,40 +4422,17 @@ export async function sendOfflineLocationReminder(
           continue;
         }
 
-        const { variables, language } = await prepareStudentVariables(
-          student,
-          group,
-          session,
-        );
-
-        const locVars = await prepareOfflineLocationVariables(
-          group,
-          session,
-          language,
-        );
+        const { variables, language } = await prepareStudentVariables(student, group, session);
+        const locVars = await prepareOfflineLocationVariables(group, session, language);
         Object.assign(variables, locVars);
 
         const studentTemplateType = "reminder_24h_offline_student";
-        const studentTpl = await getMessageTemplate(
-          studentTemplateType,
-          language,
-          "student",
-        );
-        const finalStudentMessage = replaceVariables(
-          studentTpl.content,
-          variables,
-        );
+        const studentTpl = await getMessageTemplate(studentTemplateType, language, "student");
+        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
 
         const guardianTemplateType = "reminder_24h_offline_guardian";
-        const guardianTpl = await getMessageTemplate(
-          guardianTemplateType,
-          language,
-          "guardian",
-        );
-        const finalGuardianMessage = replaceVariables(
-          guardianTpl.content,
-          variables,
-        );
+        const guardianTpl = await getMessageTemplate(guardianTemplateType, language, "guardian");
+        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
 
         const result = await sendToStudentWithLogging({
           studentId: student._id,
@@ -4706,15 +4475,10 @@ export async function sendOfflineLocationReminder(
   }
 }
 
-/**
- * ✅ OFFLINE: Drop-off Alert قبل 30 دقيقة
- */
 export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
   try {
     console.log(`\n🚗 OFFLINE 30min Drop-off Alert ==========`);
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .lean();
+    const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) throw new Error("Session not found");
 
     const group = await Group.findById(session.groupId._id || session.groupId)
@@ -4722,12 +4486,12 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
       .lean();
     if (!group) throw new Error("Group not found");
 
-    // ✅ HOLD GUARD
-    if (group.hold?.isHeld) {
+       const holdCheck = await canSessionSendMessages(sessionId);
+    if (!holdCheck.ok) {
       console.log(
-        `⏭️ [HOLD GUARD] sendOfflineDropoffAlert skipped — group_on_hold`,
+        `⏭️ [HOLD GUARD] sendOfflineDropoffAlert skipped — ${holdCheck.reason}`,
       );
-      return { success: false, reason: "group_on_hold" };
+      return { success: false, reason: holdCheck.reason };
     }
 
     const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
@@ -4752,17 +4516,8 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
           continue;
         }
 
-        const { variables, language } = await prepareStudentVariables(
-          student,
-          group,
-          session,
-        );
-
-        const locVars = await prepareOfflineLocationVariables(
-          group,
-          session,
-          language,
-        );
+        const { variables, language } = await prepareStudentVariables(student, group, session);
+        const locVars = await prepareOfflineLocationVariables(group, session, language);
         Object.assign(variables, locVars);
 
         const studentTpl = await getMessageTemplate(
@@ -4770,20 +4525,14 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
           language,
           "student",
         );
-        const finalStudentMessage = replaceVariables(
-          studentTpl.content,
-          variables,
-        );
+        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
 
         const guardianTpl = await getMessageTemplate(
           "reminder_30min_offline_guardian",
           language,
           "guardian",
         );
-        const finalGuardianMessage = replaceVariables(
-          guardianTpl.content,
-          variables,
-        );
+        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
 
         const result = await sendToStudentWithLogging({
           studentId: student._id,
@@ -4826,15 +4575,10 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
   }
 }
 
-/**
- * ✅ OFFLINE: Pre-Attendance Ping
- */
 export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
   try {
     console.log(`\n✅ OFFLINE Pre-Attendance Ping ==========`);
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .lean();
+    const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) throw new Error("Session not found");
 
     const group = await Group.findById(session.groupId._id || session.groupId)
@@ -4842,12 +4586,12 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
       .lean();
     if (!group) throw new Error("Group not found");
 
-    // ✅ HOLD GUARD
-    if (group.hold?.isHeld) {
+       const holdCheck = await canSessionSendMessages(sessionId);
+    if (!holdCheck.ok) {
       console.log(
-        `⏭️ [HOLD GUARD] sendOfflinePreAttendancePing skipped — group_on_hold`,
+        `⏭️ [HOLD GUARD] sendOfflinePreAttendancePing skipped — ${holdCheck.reason}`,
       );
-      return { success: false, reason: "group_on_hold" };
+      return { success: false, reason: holdCheck.reason };
     }
 
     const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
@@ -4872,31 +4616,21 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
           continue;
         }
 
-        const { variables, language } = await prepareStudentVariables(
-          student,
-          group,
-          session,
-        );
+        const { variables, language } = await prepareStudentVariables(student, group, session);
 
         const studentTpl = await getMessageTemplate(
           "pre_attendance_ping_student",
           language,
           "student",
         );
-        const finalStudentMessage = replaceVariables(
-          studentTpl.content,
-          variables,
-        );
+        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
 
         const guardianTpl = await getMessageTemplate(
           "pre_attendance_ping_guardian",
           language,
           "guardian",
         );
-        const finalGuardianMessage = replaceVariables(
-          guardianTpl.content,
-          variables,
-        );
+        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
 
         const result = await sendToStudentWithLogging({
           studentId: student._id,
@@ -4937,20 +4671,11 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
   }
 }
 
-/**
- * ✅ OFFLINE: إرسال تذكير للمدرس (24h / 30min / ping)
- */
-export async function sendInstructorOfflineReminder(
-  sessionId,
-  reminderType,
-  metadata = {},
-) {
+export async function sendInstructorOfflineReminder(sessionId, reminderType, metadata = {}) {
   try {
     console.log(`\n👨‍🏫 Instructor OFFLINE Reminder | Type: ${reminderType}`);
 
-    const session = await Session.findById(sessionId)
-      .populate("groupId")
-      .lean();
+    const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) throw new Error("Session not found");
 
     const group = await Group.findById(session.groupId._id || session.groupId)
@@ -4958,12 +4683,12 @@ export async function sendInstructorOfflineReminder(
       .lean();
     if (!group) throw new Error("Group not found");
 
-    // ✅ HOLD GUARD
-    if (group.hold?.isHeld) {
+        const holdCheck = await canSessionSendMessages(sessionId);
+    if (!holdCheck.ok) {
       console.log(
-        `⏭️ [HOLD GUARD] sendInstructorOfflineReminder skipped — group_on_hold`,
+        `⏭️ [HOLD GUARD] sendInstructorOfflineReminder skipped — ${holdCheck.reason}`,
       );
-      return { success: false, reason: "group_on_hold" };
+      return { success: false, reason: holdCheck.reason };
     }
 
     const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
@@ -5019,12 +4744,7 @@ export async function sendInstructorOfflineReminder(
           group,
           session,
         );
-
-        const locVars = await prepareOfflineLocationVariables(
-          group,
-          session,
-          language,
-        );
+        const locVars = await prepareOfflineLocationVariables(group, session, language);
         Object.assign(variables, locVars);
 
         let messageContent = "";
@@ -5054,14 +4774,10 @@ export async function sendInstructorOfflineReminder(
         }
 
         const finalMessage = replaceVariables(messageContent, variables);
-        const preparedPhone =
-          wapilotService.preparePhoneNumber(instructorPhone);
+        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
         if (!preparedPhone) throw new Error("Invalid phone number");
 
-        const sendResult = await wapilotService.sendTextMessage(
-          preparedPhone,
-          finalMessage,
-        );
+        const sendResult = await wapilotService.sendTextMessage(preparedPhone, finalMessage);
 
         if (sendResult?.success) {
           successCount++;

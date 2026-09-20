@@ -4,7 +4,8 @@ const WhatsAppTemplateAddGroupSchema = new mongoose.Schema(
   {
     templateType: {
       type: String,
-      enum: ["student_welcome", "guardian_notification", "group_welcome"],
+      // ✅ ضيفنا group_welcome_offline
+      enum: ["student_welcome", "guardian_notification", "group_welcome", "group_welcome_offline"],
       required: true,
     },
     name: {
@@ -70,7 +71,6 @@ const WhatsAppTemplateAddGroupSchema = new mongoose.Schema(
 WhatsAppTemplateAddGroupSchema.index({ templateType: 1, isActive: 1 });
 WhatsAppTemplateAddGroupSchema.index({ isDefault: 1 });
 
-// ✅ الحل: async بدل next callback
 WhatsAppTemplateAddGroupSchema.pre("save", async function () {
   this.metadata.updatedAt = new Date();
   // sync content مع رسالة الطالب العربي كـ default للتوافق
@@ -83,7 +83,6 @@ WhatsAppTemplateAddGroupSchema.methods.incrementUsage = async function () {
   await this.save();
 };
 
-// ✅ الحل: try/catch بدل || للتحقق من الـ model
 const WhatsAppTemplateAddGroup = (() => {
   try {
     return mongoose.model("WhatsAppTemplateAddGroup");

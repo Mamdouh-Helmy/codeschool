@@ -14,7 +14,8 @@ import mongoose from "mongoose";
 function sortSessionsForHold(sessions) {
   return [...sessions].sort((a, b) => {
     if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
-    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
+    if (a.sessionNumber !== b.sessionNumber)
+      return a.sessionNumber - b.sessionNumber;
     return new Date(a.scheduledDate) - new Date(b.scheduledDate);
   });
 }
@@ -47,7 +48,9 @@ function isSessionLockedByHold(session, group, allGroupSessions) {
   if (hold.holdType === "until_session") {
     const targetId = hold.holdUntilSessionId;
     if (!targetId) return true;
-    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
+    const targetIndex = sorted.findIndex(
+      (s) => String(s._id) === String(targetId),
+    );
     if (targetIndex === -1) return true;
     return myIndex <= targetIndex;
   }
@@ -67,23 +70,29 @@ export async function GET(req) {
 
     const { searchParams } = new URL(req.url);
     const groupId = searchParams.get("groupId");
-    const status  = searchParams.get("status");
-    const page    = parseInt(searchParams.get("page")  || "1");
-    const limit   = parseInt(searchParams.get("limit") || "50");
+    const status = searchParams.get("status");
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "50");
 
     const query = { isDeleted: false };
     if (groupId) {
       if (!mongoose.Types.ObjectId.isValid(groupId))
-        return NextResponse.json({ success: false, error: "Invalid group ID format" }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: "Invalid group ID format" },
+          { status: 400 },
+        );
       query.groupId = new mongoose.Types.ObjectId(groupId);
     }
     if (status) query.status = status;
 
-    const total    = await Session.countDocuments(query);
+    const total = await Session.countDocuments(query);
     const sessions = await Session.find(query)
-      .populate("groupId",  "name code deliveryMode hold status")
+      .populate("groupId", "name code deliveryMode hold status")
       .populate("courseId", "title level")
-      .populate("attendance.studentId", "personalInfo.fullName enrollmentNumber")
+      .populate(
+        "attendance.studentId",
+        "personalInfo.fullName enrollmentNumber",
+      )
       .sort({ scheduledDate: 1, startTime: 1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -91,39 +100,46 @@ export async function GET(req) {
 
     const formattedSessions = sessions.map((session) => {
       const scheduledDate = new Date(session.scheduledDate);
-      const dayName       = scheduledDate.toLocaleDateString("en-US", { weekday: "long" });
+      const dayName = scheduledDate.toLocaleDateString("en-US", {
+        weekday: "long",
+      });
       const formattedDate = scheduledDate.toISOString().split("T")[0];
-      const attendance    = session.attendance || [];
+      const attendance = session.attendance || [];
 
       return {
-        id:              session._id,
-        title:           session.title,
-        description:     session.description,
-        sessionNumber:   session.sessionNumber,
-        moduleIndex:     session.moduleIndex,
-        lessonIndexes:   session.lessonIndexes,
-        scheduledDate:   session.scheduledDate,
+        id: session._id,
+        title: session.title,
+        description: session.description,
+        sessionNumber: session.sessionNumber,
+        moduleIndex: session.moduleIndex,
+        lessonIndexes: session.lessonIndexes,
+        scheduledDate: session.scheduledDate,
         formattedDate,
         dayName,
-        startTime:       session.startTime,
-        endTime:         session.endTime,
-        status:          session.status,
-        meetingLink:     session.meetingLink,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        status: session.status,
+        meetingLink: session.meetingLink,
         meetingPlatform: session.meetingPlatform,
         meetingCredentials: session.meetingCredentials || null,
-        recordingLink:   session.recordingLink,
+        recordingLink: session.recordingLink,
         attendanceTaken: session.attendanceTaken,
 
-        deliveryMode:    session.deliveryMode || session.groupId?.deliveryMode || "online",
+        deliveryMode:
+          session.deliveryMode || session.groupId?.deliveryMode || "online",
         actualStartTime: session.actualStartTime || "",
-        actualEndTime:   session.actualEndTime || "",
-        payroll: session.payroll || { processed: false, durationMinutes: 0, entriesCount: 0 },
+        actualEndTime: session.actualEndTime || "",
+        payroll: session.payroll || {
+          processed: false,
+          durationMinutes: 0,
+          entriesCount: 0,
+        },
 
         attendance: {
-          total:   attendance.length,
+          total: attendance.length,
           present: attendance.filter((a) => a.status === "present").length,
-          absent:  attendance.filter((a) => a.status === "absent").length,
-          late:    attendance.filter((a) => a.status === "late").length,
+          absent: attendance.filter((a) => a.status === "absent").length,
+          late: attendance.filter((a) => a.status === "late").length,
           excused: attendance.filter((a) => a.status === "excused").length,
         },
 
@@ -139,42 +155,58 @@ export async function GET(req) {
           : null,
 
         course: session.courseId
-          ? { id: session.courseId._id, title: session.courseId.title, level: session.courseId.level }
+          ? {
+              id: session.courseId._id,
+              title: session.courseId.title,
+              level: session.courseId.level,
+            }
           : null,
-        instructorNotes:  session.instructorNotes,
-        materials:        session.materials || [],
+        instructorNotes: session.instructorNotes,
+        materials: session.materials || [],
         automationEvents: session.automationEvents,
-        createdAt:        session.createdAt || session.metadata?.createdAt,
-        updatedAt:        session.updatedAt || session.metadata?.updatedAt,
+        createdAt: session.createdAt || session.metadata?.createdAt,
+        updatedAt: session.updatedAt || session.metadata?.updatedAt,
       };
     });
 
     const stats = {
       total,
-      scheduled: await Session.countDocuments({ ...query, status: "scheduled" }),
-      completed: await Session.countDocuments({ ...query, status: "completed" }),
-      cancelled: await Session.countDocuments({ ...query, status: "cancelled" }),
-      postponed: await Session.countDocuments({ ...query, status: "postponed" }),
+      scheduled: await Session.countDocuments({
+        ...query,
+        status: "scheduled",
+      }),
+      completed: await Session.countDocuments({
+        ...query,
+        status: "completed",
+      }),
+      cancelled: await Session.countDocuments({
+        ...query,
+        status: "cancelled",
+      }),
+      postponed: await Session.countDocuments({
+        ...query,
+        status: "postponed",
+      }),
     };
 
     return NextResponse.json({
       success: true,
-      data:    formattedSessions,
+      data: formattedSessions,
       stats,
       pagination: {
         page,
         limit,
         total,
         totalPages: Math.ceil(total / limit),
-        hasNext:    page < Math.ceil(total / limit),
-        hasPrev:    page > 1,
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
       },
     });
   } catch (error) {
     console.error("❌ Error fetching sessions:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to fetch sessions" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -192,41 +224,72 @@ export async function POST(req) {
 
     const body = await req.json();
     const {
-      groupId, courseId, moduleIndex, sessionNumber, lessonIndexes,
-      title, description, scheduledDate, startTime, endTime,
-      meetingLink, meetingPlatform,
+      groupId,
+      courseId,
+      moduleIndex,
+      sessionNumber,
+      lessonIndexes,
+      title,
+      description,
+      scheduledDate,
+      startTime,
+      endTime,
+      meetingLink,
+      meetingPlatform,
     } = body;
 
     if (
-      !groupId || !courseId || moduleIndex === undefined || !sessionNumber ||
-      !lessonIndexes || !title || !scheduledDate || !startTime || !endTime
+      !groupId ||
+      !courseId ||
+      moduleIndex === undefined ||
+      !sessionNumber ||
+      !lessonIndexes ||
+      !title ||
+      !scheduledDate ||
+      !startTime ||
+      !endTime
     ) {
-      return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Missing required fields" },
+        { status: 400 },
+      );
     }
 
     const existingSession = await Session.findOne({
-      groupId, moduleIndex, sessionNumber, isDeleted: false,
+      groupId,
+      moduleIndex,
+      sessionNumber,
+      isDeleted: false,
     });
     if (existingSession) {
       return NextResponse.json(
-        { success: false, error: "Session already exists for this module and session number" },
-        { status: 409 }
+        {
+          success: false,
+          error: "Session already exists for this module and session number",
+        },
+        { status: 409 },
       );
     }
 
     const group = await Group.findById(groupId).select("deliveryMode").lean();
 
     const session = await Session.create({
-      groupId, courseId, moduleIndex, sessionNumber, lessonIndexes,
-      title, description: description || "",
-      scheduledDate:  new Date(scheduledDate),
-      startTime, endTime,
-      status:         "scheduled",
-      meetingLink:    meetingLink || "",
+      groupId,
+      courseId,
+      moduleIndex,
+      sessionNumber,
+      lessonIndexes,
+      title,
+      description: description || "",
+      scheduledDate: new Date(scheduledDate),
+      startTime,
+      endTime,
+      status: "scheduled",
+      meetingLink: meetingLink || "",
       meetingPlatform: meetingPlatform || null,
-      deliveryMode:   group?.deliveryMode || "online",
+      deliveryMode: group?.deliveryMode || "online",
       attendanceTaken: false,
-      attendance:      [],
+      attendance: [],
       metadata: {
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -235,26 +298,38 @@ export async function POST(req) {
     });
 
     const populatedSession = await Session.findById(session._id)
-      .populate("groupId",  "name code")
+      .populate("groupId", "name code")
       .populate("courseId", "title level")
       .lean();
 
     return NextResponse.json(
-      { success: true, message: "Session created successfully", data: populatedSession },
-      { status: 201 }
+      {
+        success: true,
+        message: "Session created successfully",
+        data: populatedSession,
+      },
+      { status: 201 },
     );
   } catch (error) {
     console.error("❌ Error creating session:", error);
     if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors || {}).map((e) => e.message).join("; ");
-      return NextResponse.json({ success: false, error: "Validation failed", details: messages }, { status: 400 });
+      const messages = Object.values(error.errors || {})
+        .map((e) => e.message)
+        .join("; ");
+      return NextResponse.json(
+        { success: false, error: "Validation failed", details: messages },
+        { status: 400 },
+      );
     }
     if (error.code === 11000) {
-      return NextResponse.json({ success: false, error: "Duplicate session detected" }, { status: 409 });
+      return NextResponse.json(
+        { success: false, error: "Duplicate session detected" },
+        { status: 409 },
+      );
     }
     return NextResponse.json(
       { success: false, error: error.message || "Failed to create session" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -292,17 +367,26 @@ export async function PUT(req, { params }) {
     const updateData = await req.json();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: "Invalid session ID format" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid session ID format" },
+        { status: 400 },
+      );
     }
 
-    const existingSession = await Session.findOne({ _id: id, isDeleted: false })
-      .populate({
-        path: "groupId",
-        select: "name code automation courseSnapshot instructors deliveryMode hold status",
-      });
+    const existingSession = await Session.findOne({
+      _id: id,
+      isDeleted: false,
+    }).populate({
+      path: "groupId",
+      select:
+        "name code automation courseSnapshot instructors deliveryMode hold status",
+    });
 
     if (!existingSession) {
-      return NextResponse.json({ success: false, error: "Session not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Session not found" },
+        { status: 404 },
+      );
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -326,7 +410,7 @@ export async function PUT(req, { params }) {
           status: existingSession.status,
         },
         existingSession.groupId,
-        allGroupSessions
+        allGroupSessions,
       );
 
       if (sessionIsLocked) {
@@ -336,7 +420,7 @@ export async function PUT(req, { params }) {
             error: "السيشن دي مقفولة بسبب الـ Hold — مينفعش تعدّل أي حاجة فيها",
             code: "SESSION_ON_HOLD",
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
     }
@@ -344,19 +428,31 @@ export async function PUT(req, { params }) {
     const oldStatus = existingSession.status;
     const newStatus = updateData.status;
 
-    const isNewlyCancelled    = newStatus === "cancelled" && oldStatus !== "cancelled";
-    const isPostponedWithDate = newStatus === "postponed" && !!updateData.newDate;
+    const isNewlyCancelled =
+      newStatus === "cancelled" && oldStatus !== "cancelled";
+    const isPostponedWithDate =
+      newStatus === "postponed" && !!updateData.newDate;
+
+    // ✅ FIX: السيشن الـ Offline معندهاش لينك تسجيل أصلاً — نمنع تخزينه من
+    // الأساس هنا بدل ما نعتمد على إخفائه لاحقًا في أماكن تانية بس
+    const sessionDeliveryMode =
+      existingSession.deliveryMode ||
+      existingSession.groupId?.deliveryMode ||
+      "online";
+    const sessionIsOffline = sessionDeliveryMode === "offline";
 
     const basePayload = {
-      meetingLink:      updateData.meetingLink      || "",
-      recordingLink:    updateData.recordingLink    || "",
-      instructorNotes:  updateData.instructorNotes  || "",
+      meetingLink: updateData.meetingLink || "",
+      recordingLink: sessionIsOffline ? "" : updateData.recordingLink || "",
+      instructorNotes: updateData.instructorNotes || "",
       "metadata.updatedBy": adminUser.id,
       "metadata.updatedAt": new Date(),
     };
 
-    if (updateData.actualStartTime) basePayload.actualStartTime = updateData.actualStartTime;
-    if (updateData.actualEndTime)   basePayload.actualEndTime   = updateData.actualEndTime;
+    if (updateData.actualStartTime)
+      basePayload.actualStartTime = updateData.actualStartTime;
+    if (updateData.actualEndTime)
+      basePayload.actualEndTime = updateData.actualEndTime;
 
     if (updateData.metadata && Object.keys(updateData.metadata).length > 0) {
       basePayload["metadata.lastNotificationMessages"] = updateData.metadata;
@@ -369,52 +465,64 @@ export async function PUT(req, { params }) {
       try {
         cascadeResult = await Session.cascadeShiftOnCancel(id, adminUser.id, 7);
         console.log(
-          `🔁 Cascade cancel: shifted ${cascadeResult.shiftedCount} session(s), skipped ${cascadeResult.skippedCount}`
+          `🔁 Cascade cancel: shifted ${cascadeResult.shiftedCount} session(s), skipped ${cascadeResult.skippedCount}`,
         );
       } catch (cascadeError) {
         console.error("❌ Error cascading cancel:", cascadeError);
         return NextResponse.json(
-          { success: false, error: cascadeError.message || "فشل إلغاء السيشن وترحيل الباقي" },
-          { status: 400 }
+          {
+            success: false,
+            error: cascadeError.message || "فشل إلغاء السيشن وترحيل الباقي",
+          },
+          { status: 400 },
         );
       }
 
       updatedSession = await Session.findByIdAndUpdate(id, basePayload, {
-        new:           true,
+        new: true,
         runValidators: true,
       })
-        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode hold status")
+        .populate(
+          "groupId",
+          "name code automation courseSnapshot instructors deliveryMode hold status",
+        )
         .populate("courseId", "title");
-
     } else if (isPostponedWithDate) {
       const oldStart = existingSession.startTime;
-      const oldEnd   = existingSession.endTime;
+      const oldEnd = existingSession.endTime;
       const newStart = updateData.newTime || oldStart;
 
-      basePayload.status        = newStatus;
+      basePayload.status = newStatus;
       basePayload.scheduledDate = new Date(updateData.newDate);
-      basePayload.startTime     = newStart;
-      basePayload.endTime       = shiftTimeByDuration(oldStart, oldEnd, newStart);
+      basePayload.startTime = newStart;
+      basePayload.endTime = shiftTimeByDuration(oldStart, oldEnd, newStart);
 
       updatedSession = await Session.findByIdAndUpdate(id, basePayload, {
-        new:           true,
+        new: true,
         runValidators: true,
       })
-        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode hold status")
+        .populate(
+          "groupId",
+          "name code automation courseSnapshot instructors deliveryMode hold status",
+        )
         .populate("courseId", "title");
-
     } else {
       basePayload.status = newStatus;
 
       updatedSession = await Session.findByIdAndUpdate(id, basePayload, {
-        new:           true,
+        new: true,
         runValidators: true,
       })
-        .populate("groupId",  "name code automation courseSnapshot instructors deliveryMode hold status")
+        .populate(
+          "groupId",
+          "name code automation courseSnapshot instructors deliveryMode hold status",
+        )
         .populate("courseId", "title");
     }
 
-    console.log(`✅ Session updated: ${updatedSession.title} | ${oldStatus} → ${newStatus}`);
+    console.log(
+      `✅ Session updated: ${updatedSession.title} | ${oldStatus} → ${newStatus}`,
+    );
 
     let instructorHoursResult = null;
     let payrollResult = null;
@@ -425,7 +533,7 @@ export async function PUT(req, { params }) {
         payrollResult = await processSessionPayroll({
           sessionId: id,
           actualStartTime: updateData.actualStartTime || null,
-          actualEndTime:   updateData.actualEndTime   || null,
+          actualEndTime: updateData.actualEndTime || null,
           actedBy: adminUser.id,
           source: "admin_complete",
         });
@@ -435,10 +543,12 @@ export async function PUT(req, { params }) {
       }
 
       try {
-        const group = await Group.findById(existingSession.groupId._id || existingSession.groupId);
+        const group = await Group.findById(
+          existingSession.groupId._id || existingSession.groupId,
+        );
         if (group?.instructors?.length) {
           instructorHoursResult = await group.addInstructorHours(
-            payrollResult?.durationMinutes || 0
+            payrollResult?.durationMinutes || 0,
           );
         }
       } catch (err) {
@@ -458,7 +568,9 @@ export async function PUT(req, { params }) {
           actedBy: adminUser.id,
           reason: `تم تغيير حالة السيشن من completed إلى ${newStatus}`,
         });
-        console.log(`💸 Payroll cancelled: ${cancelRes.cancelledCount} entry(ies)`);
+        console.log(
+          `💸 Payroll cancelled: ${cancelRes.cancelledCount} entry(ies)`,
+        );
       } catch (err) {
         console.error("⚠️ Failed to cancel payroll entries:", err.message);
       }
@@ -479,13 +591,13 @@ export async function PUT(req, { params }) {
             null,
             newStatus === "postponed" ? updateData.newDate : null,
             newStatus === "postponed" ? updateData.newTime : null,
-            updateData.metadata || {}
+            updateData.metadata || {},
           );
 
           console.log("✅ Automation completed:", {
             success: automationResult.success,
-            sent:    automationResult.successCount,
-            failed:  automationResult.failCount,
+            sent: automationResult.successCount,
+            failed: automationResult.failCount,
           });
         } catch (automationError) {
           console.error("❌ Automation failed:", automationError);
@@ -495,15 +607,19 @@ export async function PUT(req, { params }) {
       return NextResponse.json({
         success: true,
         message: "Session updated successfully",
-        data:    updatedSession,
+        data: updatedSession,
         instructorHours: instructorHoursResult,
         payroll: payrollResult,
         cascade: cascadeResult,
         automation: {
           triggered: true,
-          action:    `Sending ${newStatus} notifications`,
-          studentMessagesCount:  Object.keys(updateData.metadata?.studentMessages  || {}).length,
-          guardianMessagesCount: Object.keys(updateData.metadata?.guardianMessages || {}).length,
+          action: `Sending ${newStatus} notifications`,
+          studentMessagesCount: Object.keys(
+            updateData.metadata?.studentMessages || {},
+          ).length,
+          guardianMessagesCount: Object.keys(
+            updateData.metadata?.guardianMessages || {},
+          ).length,
         },
       });
     }
@@ -511,15 +627,17 @@ export async function PUT(req, { params }) {
     return NextResponse.json({
       success: true,
       message: "Session updated successfully",
-      data:    updatedSession,
+      data: updatedSession,
       instructorHours: instructorHoursResult,
       payroll: payrollResult,
       cascade: cascadeResult,
     });
-
   } catch (error) {
     console.error("❌ Error updating session:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -536,17 +654,23 @@ export async function DELETE(req, { params }) {
     await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: "Invalid session ID format" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid session ID format" },
+        { status: 400 },
+      );
     }
 
     const deletedSession = await Session.findByIdAndUpdate(
       id,
       { $set: { isDeleted: true, deletedAt: new Date(), status: "cancelled" } },
-      { new: true }
+      { new: true },
     );
 
     if (!deletedSession) {
-      return NextResponse.json({ success: false, error: "Session not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Session not found" },
+        { status: 404 },
+      );
     }
 
     try {
@@ -563,8 +687,8 @@ export async function DELETE(req, { params }) {
       success: true,
       message: "Session deleted successfully (soft delete)",
       data: {
-        id:        deletedSession._id,
-        title:     deletedSession.title,
+        id: deletedSession._id,
+        title: deletedSession.title,
         deletedAt: deletedSession.deletedAt,
       },
     });
@@ -572,7 +696,7 @@ export async function DELETE(req, { params }) {
     console.error("❌ Error deleting session:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to delete session" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

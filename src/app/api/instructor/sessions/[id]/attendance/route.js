@@ -30,17 +30,11 @@ function isSessionLockedByHold(session, group, allGroupSessions) {
 
   const hold = group.hold;
 
-  if (hold.holdType === "indefinite" || hold.holdType === "duration") {
-    return true;
-  }
-
-  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) {
-    return true;
-  }
+  if (hold.holdType === "indefinite" || hold.holdType === "duration") return true;
+  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) return true;
 
   const sorted = sortSessionsForHold(allGroupSessions);
-  const myId = String(session._id);
-  const myIndex = sorted.findIndex((s) => String(s._id) === myId);
+  const myIndex = sorted.findIndex((s) => String(s._id) === String(session._id));
   if (myIndex === -1) return false;
 
   if (hold.holdType === "sessions") {
@@ -60,35 +54,10 @@ function isSessionLockedByHold(session, group, allGroupSessions) {
   return false;
 }
 
-// ─── Constants ───────────────────────────────────────────
-const DEDUCT_STATUSES = ["present", "late", "absent", "excused"];
-const CREDIT_DEDUCTION = 2;
+/** ✅ بيجيب سيشنات الجروب ويحدد هل السيشن دي مقفولة (مكان واحد بدل 3 نسخ) */
+async function resolveSessionLock(session, group) {
+  if (!group?.hold?.isHeld) return false;
 
-// ─── Helper: التحقق من صلاحية الجروب / السيشن (مش على Hold)
-async function checkGroupAvailability(session) {
-  const groupId = session?.groupId?._id || session?.groupId;
-  if (!groupId) return { ok: false, error: "Session has no group" };
-
-  const group = await Group.findById(groupId)
-    .select("name code status hold")
-    .lean();
-
-  if (!group) return { ok: false, error: "Group not found" };
-
-  if (!group.hold?.isHeld) {
-    // مفيش Hold — نتحقق من حالة الجروب بس
-    if (group.status !== "active" && group.status !== "completed") {
-      return {
-        ok: false,
-        code: "GROUP_NOT_ACTIVE",
-        error: `الجروب حالته "${group.status}" — مينفعش تسجل حضور`,
-        group,
-      };
-    }
-    return { ok: true, group };
-  }
-
-  // ✅ فيه Hold — نفحص لو السيشن دي بالتحديد مقفولة
   const allGroupSessions = await Session.find({
     groupId: group._id,
     isDeleted: false,
@@ -96,7 +65,7 @@ async function checkGroupAvailability(session) {
     .select("_id moduleIndex sessionNumber scheduledDate status")
     .lean();
 
-  const sessionIsLocked = isSessionLockedByHold(
+  return isSessionLockedByHold(
     {
       _id: session._id,
       moduleIndex: session.moduleIndex,
@@ -104,69 +73,125 @@ async function checkGroupAvailability(session) {
       status: session.status,
     },
     group,
-    allGroupSessions
+    allGroupSessions,
   );
+}
 
-  if (sessionIsLocked) {
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ AUTH / OWNERSHIP HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const json = (body, status = 200) => NextResponse.json(body, { status });
+
+/**
+ * ✅ FIX (SECURITY): الملف ده كان بيتحقق بس إن فيه user مسجل دخول، من غير
+ * فحص الدور ولا إن المدرس مسؤول عن جروب السيشن. يعني أي مستخدم كان يقدر
+ * يشوف بيانات الطلاب وأرقام أولياء الأمور أو يسجل حضور/يخصم رصيد لأي سيشن.
+ */
+function checkRole(user) {
+  if (!user) return json({ success: false, error: "غير مصرح بالوصول" }, 401);
+  if (user.role !== "instructor" && user.role !== "admin") {
+    return json({ success: false, error: "هذه الصفحة للمدرسين فقط", code: "FORBIDDEN" }, 403);
+  }
+  return null;
+}
+
+function checkGroupOwnership(user, group) {
+  if (user.role === "admin") return null;
+  const isOwner = group?.instructors?.some(
+    (i) => String(i.userId) === String(user.id),
+  );
+  return isOwner
+    ? null
+    : json({ success: false, error: "مش مدرس هذا الجروب", code: "FORBIDDEN_GROUP" }, 403);
+}
+
+function getGroupStudentIdSet(group) {
+  return new Set((group?.students || []).map((s) => String(s.studentId || s)));
+}
+
+async function parseBody(req) {
+  const text = await req.text();
+  return text ? JSON.parse(text) : {};
+}
+
+// ─── Constants ───────────────────────────────────────────
+const VALID_STATUSES = ["present", "late", "absent", "excused"];
+const DEDUCT_STATUSES = VALID_STATUSES;
+const NOTIFY_STATUSES = ["absent", "late", "excused"];
+const CREDIT_DEDUCTION = 2;
+
+const SESSION_POPULATE = {
+  path: "groupId",
+  select: "name code students instructors hold status",
+};
+
+/**
+ * ✅ تحميل السيشن + صلاحيات المستخدم عليها.
+ * بيرجع { session } لو تمام، أو { error: NextResponse } لو لأ.
+ */
+async function loadAuthorizedSession(req, id, { lean = false } = {}) {
+  const user = await getUserFromRequest(req);
+  const roleError = checkRole(user);
+  if (roleError) return { error: roleError };
+
+  await connectDB();
+
+  let query = Session.findById(id).populate(SESSION_POPULATE);
+  if (lean) query = query.lean();
+  const session = await query;
+
+  if (!session) return { error: json({ success: false, error: "Session not found" }, 404) };
+
+  const ownershipError = checkGroupOwnership(user, session.groupId);
+  if (ownershipError) return { error: ownershipError };
+
+  return { user, session };
+}
+
+// ─── Helper: صلاحية الجروب / السيشن لتسجيل الحضور ────────
+async function checkGroupAvailability(session) {
+  const group = session?.groupId;
+  if (!group?._id) return { ok: false, error: "Session has no group" };
+
+  if (!group.hold?.isHeld) {
+    if (group.status !== "active" && group.status !== "completed") {
+      return {
+        ok: false,
+        code: "GROUP_NOT_ACTIVE",
+        error: `الجروب حالته "${group.status}" — مينفعش تسجل حضور`,
+      };
+    }
+    return { ok: true };
+  }
+
+  if (await resolveSessionLock(session, group)) {
     return {
       ok: false,
       code: "SESSION_ON_HOLD",
       error: "السيشن دي مقفولة بسبب الـ Hold — مينفعش تسجل حضور",
-      group,
     };
   }
 
-  // ✅ الجروب على Hold، بس السيشن دي مش مقفولة → نكمل عادي
-  return { ok: true, group, sessionIsLocked: false };
+  return { ok: true };
 }
+
+const holdBlockedResponse = () =>
+  json(
+    { success: false, error: "السيشن دي مقفولة بسبب الـ Hold", code: "SESSION_ON_HOLD" },
+    403,
+  );
 
 // ─── GET ─────────────────────────────────────────────────
 export async function GET(req, { params }) {
   try {
-    const user = await getUserFromRequest(req);
-    if (!user) return NextResponse.json({ success: false }, { status: 401 });
-
-    await connectDB();
     const { id } = await params;
-
-    const session = await Session.findById(id)
-      .populate({
-        path: "groupId",
-        select: "name code students instructors hold status",
-      })
-      .lean();
-
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: "Session not found" },
-        { status: 404 },
-      );
-    }
+    const { session, error } = await loadAuthorizedSession(req, id, { lean: true });
+    if (error) return error;
 
     const group = session.groupId;
     const isOnHold = !!group?.hold?.isHeld;
-
-    // ✅ نحدد لو السيشن دي بالتحديد مقفولة
-    let sessionLocked = false;
-    if (isOnHold) {
-      const allGroupSessions = await Session.find({
-        groupId: group._id,
-        isDeleted: false,
-      })
-        .select("_id moduleIndex sessionNumber scheduledDate status")
-        .lean();
-
-      sessionLocked = isSessionLockedByHold(
-        {
-          _id: session._id,
-          moduleIndex: session.moduleIndex,
-          sessionNumber: session.sessionNumber,
-          status: session.status,
-        },
-        group,
-        allGroupSessions
-      );
-    }
+    const sessionLocked = isOnHold ? await resolveSessionLock(session, group) : false;
 
     const studentIds = (group?.students || []).map((s) => s.studentId || s);
 
@@ -184,166 +209,98 @@ export async function GET(req, { params }) {
     });
 
     const studentsWithAttendance = students.map((s) => {
-      const absenceMessages = (s.whatsappMessages || []).filter(
+      const absenceCount = (s.whatsappMessages || []).filter(
         (m) => m.messageType === "absence_notification",
-      );
+      ).length;
 
       return {
         _id: s._id,
         name: s.personalInfo?.fullName || "بدون اسم",
         enrollmentNumber: s.enrollmentNumber || "",
-
         nicknameAr: s.personalInfo?.nickname?.ar?.trim() || "",
         nicknameEn: s.personalInfo?.nickname?.en?.trim() || "",
-
         guardianNicknameAr: s.guardianInfo?.nickname?.ar?.trim() || "",
         guardianNicknameEn: s.guardianInfo?.nickname?.en?.trim() || "",
-
         gender: s.personalInfo?.gender || "male",
-
         guardianName: s.guardianInfo?.name || "",
-        guardianPhone:
-          s.guardianInfo?.phone || s.guardianInfo?.whatsappNumber || "",
+        guardianPhone: s.guardianInfo?.phone || s.guardianInfo?.whatsappNumber || "",
         guardianRelationship: s.guardianInfo?.relationship || "father",
-
-        preferredLanguage:
-          s.communicationPreferences?.preferredLanguage || "ar",
+        preferredLanguage: s.communicationPreferences?.preferredLanguage || "ar",
         credits: s.creditSystem?.currentPackage?.remainingHours ?? 0,
         creditStatus: s.creditSystem?.status || "no_package",
-
-        absenceCount: absenceMessages.length,
+        absenceCount,
         currentStatus: existingAttendance[s._id.toString()] || null,
       };
     });
 
-    return NextResponse.json({
+    return json({
       success: true,
       data: {
         session,
         students: studentsWithAttendance,
         groupIsOnHold: isOnHold,
-        sessionLocked, // ✅ جديد — هل السيشن دي بالتحديد مقفولة؟
+        sessionLocked,
         groupHold: group?.hold || null,
+        isComplimentary: session.isComplimentary === true,
+        makeupInfo: session.makeupInfo || null,
       },
     });
   } catch (error) {
     console.error("❌ GET attendance error:", error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 },
-    );
+    return json({ success: false, error: error.message }, 500);
   }
 }
 
 // ─── POST (preview template أو إرسال فوري) ────────────────
 export async function POST(req, { params }) {
   try {
-    const user = await getUserFromRequest(req);
-    if (!user) return NextResponse.json({ success: false }, { status: 401 });
-
-    await connectDB();
     const { id } = await params;
+    const { session, error } = await loadAuthorizedSession(req, id, { lean: true });
+    if (error) return error;
 
-    let body = {};
+    let body;
     try {
-      const text = await req.text();
-      if (text) body = JSON.parse(text);
+      body = await parseBody(req);
     } catch {
-      return NextResponse.json(
-        { success: false, error: "Invalid JSON" },
-        { status: 400 },
-      );
+      return json({ success: false, error: "Invalid JSON" }, 400);
     }
 
-    const {
-      attendanceStatus,
-      studentId,
-      extraData = {},
-      sendNow = false,
-    } = body;
+    const { attendanceStatus, studentId, extraData = {}, sendNow = false } = body;
 
     if (!studentId || !attendanceStatus) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "studentId and attendanceStatus are required",
-        },
-        { status: 400 },
-      );
+      return json({ success: false, error: "studentId and attendanceStatus are required" }, 400);
+    }
+    if (!VALID_STATUSES.includes(attendanceStatus)) {
+      return json({ success: false, error: "Invalid attendanceStatus" }, 400);
     }
 
-    // ✅ افحص هل السيشن دي بالتحديد مقفولة
-    const sessionCheck = await Session.findById(id)
-      .populate({ path: "groupId", select: "hold status name code" })
-      .lean();
+    // ✅ الطالب لازم يكون في جروب السيشن
+    if (!getGroupStudentIdSet(session.groupId).has(String(studentId))) {
+      return json({ success: false, error: "الطالب ده مش في جروب السيشن" }, 403);
+    }
 
-    if (sessionCheck?.groupId?.hold?.isHeld) {
-      const allGroupSessions = await Session.find({
-        groupId: sessionCheck.groupId._id,
-        isDeleted: false,
-      })
-        .select("_id moduleIndex sessionNumber scheduledDate status")
-        .lean();
-
-      const sessionIsLocked = isSessionLockedByHold(
-        {
-          _id: sessionCheck._id,
-          moduleIndex: sessionCheck.moduleIndex,
-          sessionNumber: sessionCheck.sessionNumber,
-          status: sessionCheck.status,
-        },
-        sessionCheck.groupId,
-        allGroupSessions
-      );
-
-      if (sessionIsLocked) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "السيشن دي مقفولة بسبب الـ Hold",
-            code: "SESSION_ON_HOLD",
-          },
-          { status: 403 },
-        );
-      }
+    if (await resolveSessionLock(session, session.groupId)) {
+      return holdBlockedResponse();
     }
 
     // 🆕 sendNow: إرسال فوري لرسالة الواتساب بس
     if (sendNow) {
       try {
-        await sendAbsenceNotifications(id, [
-          { studentId, status: attendanceStatus },
-        ]);
-        return NextResponse.json({ success: true, data: { sent: true } });
+        await sendAbsenceNotifications(id, [{ studentId, status: attendanceStatus }]);
+        return json({ success: true, data: { sent: true } });
       } catch (sendError) {
         console.error("❌ [sendNow] notification error:", sendError);
-        return NextResponse.json(
-          {
-            success: false,
-            error: sendError.message || "Failed to send notification",
-          },
-          { status: 500 },
+        return json(
+          { success: false, error: sendError.message || "Failed to send notification" },
+          500,
         );
       }
     }
 
-    const [student, session] = await Promise.all([
-      Student.findById(studentId)
-        .select(
-          "personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem",
-        )
-        .lean(),
-      Session.findById(id)
-        .populate({ path: "groupId", select: "name code" })
-        .lean(),
-    ]);
-
-    if (!student) {
-      return NextResponse.json(
-        { success: false, error: "Student not found" },
-        { status: 404 },
-      );
-    }
+    const student = await Student.findById(studentId)
+      .select("personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem")
+      .lean();
+    if (!student) return json({ success: false, error: "Student not found" }, 404);
 
     const templates = await getAttendanceTemplatesForFrontend(
       attendanceStatus,
@@ -355,113 +312,90 @@ export async function POST(req, { params }) {
       language: student.communicationPreferences?.preferredLanguage || "ar",
       gender: student.personalInfo?.gender || "male",
       relationship: student.guardianInfo?.relationship || "father",
-
       studentFullName: student.personalInfo?.fullName || "",
       guardianFullName: student.guardianInfo?.name || "",
-
       studentNicknameAr: student.personalInfo?.nickname?.ar?.trim() || "",
       studentNicknameEn: student.personalInfo?.nickname?.en?.trim() || "",
       guardianNicknameAr: student.guardianInfo?.nickname?.ar?.trim() || "",
       guardianNicknameEn: student.guardianInfo?.nickname?.en?.trim() || "",
-
       enrollmentNumber: student.enrollmentNumber || "",
-
-      sessionTitle: session?.title || "",
-      scheduledDate: session?.scheduledDate || null,
-      startTime: session?.startTime || "",
-      endTime: session?.endTime || "",
-      groupName: session?.groupId?.name || "",
-      groupCode: session?.groupId?.code || "",
-      meetingLink: session?.meetingLink || "",
+      sessionTitle: session.title || "",
+      scheduledDate: session.scheduledDate || null,
+      startTime: session.startTime || "",
+      endTime: session.endTime || "",
+      groupName: session.groupId?.name || "",
+      groupCode: session.groupId?.code || "",
+      meetingLink: session.meetingLink || "",
     };
 
-    return NextResponse.json({
+    return json({
       success: true,
       data: {
         guardian: templates?.guardian
-          ? {
-              content: templates.guardian.content,
-              isFallback: templates.guardian.isFallback,
-            }
+          ? { content: templates.guardian.content, isFallback: templates.guardian.isFallback }
           : null,
         metadata,
       },
     });
   } catch (error) {
     console.error("❌ POST attendance preview error:", error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 },
-    );
+    return json({ success: false, error: error.message }, 500);
   }
 }
 
 // ─── PATCH (save attendance + credits) ───────────────────
 export async function PATCH(req, { params }) {
   try {
-    const user = await getUserFromRequest(req);
-    if (!user) return NextResponse.json({ success: false }, { status: 401 });
-
-    await connectDB();
     const { id } = await params;
+    const { session, error } = await loadAuthorizedSession(req, id);
+    if (error) return error;
 
-    let body = {};
+    let body;
     try {
-      const text = await req.text();
-      if (text) body = JSON.parse(text);
+      body = await parseBody(req);
     } catch {
-      return NextResponse.json(
-        { success: false, error: "Invalid JSON" },
-        { status: 400 },
-      );
+      return json({ success: false, error: "Invalid JSON" }, 400);
     }
 
     const { attendanceRecords } = body;
-
     if (!Array.isArray(attendanceRecords) || attendanceRecords.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "attendanceRecords array is required" },
-        { status: 400 },
+      return json({ success: false, error: "attendanceRecords array is required" }, 400);
+    }
+
+    // ✅ كل سجل لازم يكون حالته صحيحة وطالبه في جروب السيشن
+    const groupStudentIds = getGroupStudentIdSet(session.groupId);
+    const invalidRecord = attendanceRecords.find(
+      (r) => !r?.studentId || !VALID_STATUSES.includes(r.status) || !groupStudentIds.has(String(r.studentId)),
+    );
+    if (invalidRecord) {
+      return json(
+        { success: false, error: "سجل حضور غير صالح أو طالب مش في جروب السيشن", code: "INVALID_RECORD" },
+        400,
       );
     }
 
-    const session = await Session.findById(id).populate({
-      path: "groupId",
-      select: "name instructors students hold status",
-    });
-
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: "Session not found" },
-        { status: 404 },
-      );
-    }
-
-    // ✅ افحص هل السيشن دي مقفولة
     const availability = await checkGroupAvailability(session);
     if (!availability.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: availability.error,
-          code: availability.code,
-        },
-        { status: 403 },
+      return json(
+        { success: false, error: availability.error, code: availability.code },
+        403,
       );
     }
 
-    // 📌 oldStatusSnapshot من الـ DB الفعلي
+    // ✅ الحصة التعويضية: بيتسجل الحضور عادي بس من غير أي خصم/refund/تنبيهات رصيد
+    const isComplimentarySession = session.isComplimentary === true;
+
+    console.log(`📋 [Attendance PATCH] Session ${id} | isComplimentary: ${isComplimentarySession}`);
+
     const oldStatusSnapshot = {};
     session.attendance.forEach((a) => {
       oldStatusSnapshot[a.studentId?.toString()] = a.status;
     });
 
-    const studentIds = attendanceRecords.map((r) => r.studentId);
-    const students = await Student.find({ _id: { $in: studentIds } });
-    const studentMap = {};
-    students.forEach((s) => {
-      studentMap[s._id.toString()] = s;
+    const students = await Student.find({
+      _id: { $in: attendanceRecords.map((r) => r.studentId) },
     });
+    const studentMap = Object.fromEntries(students.map((s) => [s._id.toString(), s]));
 
     const results = [];
     const notifyList = [];
@@ -471,128 +405,85 @@ export async function PATCH(req, { params }) {
       const oldStatus = oldStatusSnapshot[studentId] || null;
 
       if (oldStatus === newStatus) {
-        results.push({
-          studentId,
-          oldStatus,
-          newStatus,
-          action: "no_change",
-          creditAction: "nothing",
-        });
+        results.push({ studentId, oldStatus, newStatus, action: "no_change", creditAction: "nothing" });
         continue;
       }
 
-      const existing = session.attendance.find(
-        (a) => a.studentId?.toString() === studentId,
-      );
-      if (existing) {
-        existing.status = newStatus;
-      } else {
-        session.attendance.push({ studentId, status: newStatus });
-      }
+      const existing = session.attendance.find((a) => a.studentId?.toString() === studentId);
+      if (existing) existing.status = newStatus;
+      else session.attendance.push({ studentId, status: newStatus });
 
-      const wasDeducting =
-        oldStatus !== null && DEDUCT_STATUSES.includes(oldStatus);
+      const wasDeducting = oldStatus !== null && DEDUCT_STATUSES.includes(oldStatus);
       const willDeduct = DEDUCT_STATUSES.includes(newStatus);
 
       let creditAction = "nothing";
       if (!wasDeducting && willDeduct) creditAction = "deduct";
       if (wasDeducting && !willDeduct) creditAction = "refund";
+      if (isComplimentarySession) creditAction = "skipped_complimentary";
 
       const student = studentMap[studentId];
-      if (student && creditAction !== "nothing") {
-        if (creditAction === "deduct") {
-          await student.deductCreditHours({
-            hours: CREDIT_DEDUCTION,
-            sessionId: id,
-            sessionTitle: session.title || "",
-            groupId: session.groupId?._id,
-            groupName: session.groupId?.name || "",
-            attendanceStatus: newStatus,
-            notes: `Attendance: ${oldStatus || "none"} → ${newStatus}`,
-          });
-        } else {
-          await student.addCreditHours({
-            hours: CREDIT_DEDUCTION,
-            sessionId: id,
-            sessionTitle: session.title || "",
-            groupId: session.groupId?._id,
-            groupName: session.groupId?.name || "",
-            reason: `Attendance changed: ${oldStatus} → ${newStatus}`,
-          });
-        }
+      const creditPayload = {
+        hours: CREDIT_DEDUCTION,
+        sessionId: id,
+        sessionTitle: session.title || "",
+        groupId: session.groupId?._id,
+        groupName: session.groupId?.name || "",
+      };
+
+      if (student && creditAction === "deduct") {
+        await student.deductCreditHours({
+          ...creditPayload,
+          attendanceStatus: newStatus,
+          notes: `Attendance: ${oldStatus || "none"} → ${newStatus}`,
+        });
+      } else if (student && creditAction === "refund") {
+        await student.addCreditHours({
+          ...creditPayload,
+          reason: `Attendance changed: ${oldStatus} → ${newStatus}`,
+        });
+      } else if (student && creditAction === "skipped_complimentary") {
+        console.log(`🎁 [Make-up] Skipping credit deduction for student ${studentId}`);
       }
 
-      results.push({
-        studentId,
-        oldStatus,
-        newStatus,
-        action: "updated",
-        creditAction,
-      });
+      results.push({ studentId, oldStatus, newStatus, action: "updated", creditAction });
 
-      if (["absent", "late", "excused"].includes(newStatus)) {
+      if (NOTIFY_STATUSES.includes(newStatus)) {
         notifyList.push({ studentId, status: newStatus });
       }
     }
 
-    // ✅ تجميع طلاب تنبيهات الرصيد
+    // ✅ تنبيهات الرصيد — بنتخطاها للحصص التعويضية
     const lowBalanceStudents = [];
     const zeroBalanceStudents = [];
 
-    for (const record of results) {
-      if (record.action !== "updated") continue;
+    if (!isComplimentarySession) {
+      for (const record of results) {
+        if (record.action !== "updated" || record.creditAction !== "deduct") continue;
 
-      const student = studentMap[record.studentId];
-      if (!student?.creditSystem?.currentPackage) continue;
+        const student = studentMap[record.studentId];
+        if (!student?.creditSystem?.currentPackage) continue;
 
-      const remainingHours =
-        student.creditSystem.currentPackage.remainingHours || 0;
+        const remainingHours = student.creditSystem.currentPackage.remainingHours || 0;
+        const previousBalance = remainingHours + CREDIT_DEDUCTION;
+        const base = { studentId: record.studentId, student, remainingHours };
 
-      const wasDeductedNow = record.creditAction === "deduct";
-      const previousBalance = wasDeductedNow
-        ? remainingHours + CREDIT_DEDUCTION
-        : remainingHours;
-
-      if (
-        wasDeductedNow &&
-        previousBalance > 4 &&
-        remainingHours <= 4 &&
-        remainingHours > 2
-      ) {
-        lowBalanceStudents.push({
-          studentId: record.studentId,
-          student,
-          remainingHours,
-          alertType: "4h",
-        });
+        if (previousBalance > 4 && remainingHours <= 4 && remainingHours > 2) {
+          lowBalanceStudents.push({ ...base, alertType: "4h" });
+        }
+        if (previousBalance > 2 && remainingHours <= 2 && remainingHours > 0) {
+          lowBalanceStudents.push({ ...base, alertType: "2h" });
+        }
+        if (remainingHours <= 0) {
+          zeroBalanceStudents.push({ ...base, remainingHours: 0 });
+        }
       }
-
-      if (
-        wasDeductedNow &&
-        previousBalance > 2 &&
-        remainingHours <= 2 &&
-        remainingHours > 0
-      ) {
-        lowBalanceStudents.push({
-          studentId: record.studentId,
-          student,
-          remainingHours,
-          alertType: "2h",
-        });
-      }
-
-      if (remainingHours <= 0) {
-        zeroBalanceStudents.push({
-          studentId: record.studentId,
-          student,
-          remainingHours: 0,
-        });
-      }
+    } else {
+      console.log(`🎁 [Make-up] Skipping balance alerts for session ${id}`);
     }
 
-    if (lowBalanceStudents.length > 0) {
+      if (lowBalanceStudents.length > 0) {
       try {
-        await sendLowBalanceAlerts(lowBalanceStudents);
+        await sendLowBalanceAlerts(lowBalanceStudents, id);
       } catch (err) {
         console.error("⚠️ Low balance alerts error:", err.message);
       }
@@ -600,63 +491,46 @@ export async function PATCH(req, { params }) {
 
     if (zeroBalanceStudents.length > 0) {
       try {
-        await disableZeroBalanceNotifications(zeroBalanceStudents);
+        await disableZeroBalanceNotifications(zeroBalanceStudents, id);
       } catch (err) {
         console.error("⚠️ Zero balance notifications error:", err.message);
       }
     }
 
     session.attendanceTaken = true;
-
     if (session.earlyAccess?.enabled && !session.earlyAccess?.consumedAt) {
       session.earlyAccess.consumedAt = new Date();
     }
-
     await session.save();
 
-    // ═══════════════════════════════════════════════════════════════════
-    // ✅ HOLD — استهلاك أو فكّ تلقائي
-    // ═══════════════════════════════════════════════════════════════════
+    // ── HOLD: استهلاك أو فكّ تلقائي ─────────────────────────────────────
     try {
       const groupId = session.groupId?._id || session.groupId;
-      if (groupId) {
-        const groupDoc = await Group.findById(groupId);
+      const groupDoc = groupId ? await Group.findById(groupId) : null;
 
-        if (groupDoc?.hold?.isHeld) {
-          // 🎯 sessions: استهلك سيشن
-          if (groupDoc.hold.holdType === "sessions") {
-            const consumeResult = await groupDoc.consumeHoldSession();
-            if (consumeResult.autoReleased) {
-              console.log(
-                `✅ Hold auto-released for group ${groupDoc.code} (sessions consumed)`,
-              );
-            }
+      if (groupDoc?.hold?.isHeld) {
+        if (groupDoc.hold.holdType === "sessions") {
+          const consumeResult = await groupDoc.consumeHoldSession();
+          if (consumeResult.autoReleased) {
+            console.log(`✅ Hold auto-released for group ${groupDoc.code} (sessions consumed)`);
           }
-
-          // 🎯 until_session: افحص لو السيشن دي هي المستهدفة
-          if (groupDoc.hold.holdType === "until_session") {
-            const releaseResult =
-              await groupDoc.checkAndReleaseUntilSessionHold(session._id);
-            if (releaseResult?.released) {
-              console.log(
-                `✅ Hold auto-released for group ${groupDoc.code} (target session consumed)`,
-              );
-            }
+        }
+        if (groupDoc.hold.holdType === "until_session") {
+          const releaseResult = await groupDoc.checkAndReleaseUntilSessionHold(session._id);
+          if (releaseResult?.released) {
+            console.log(`✅ Hold auto-released for group ${groupDoc.code} (target session consumed)`);
           }
         }
       }
     } catch (holdErr) {
-      console.warn(
-        "⚠️ Could not process hold consumption/release:",
-        holdErr.message,
-      );
+      console.warn("⚠️ Could not process hold consumption/release:", holdErr.message);
     }
 
     if (notifyList.length) {
       await sendAbsenceNotifications(id, notifyList);
     }
 
-    return NextResponse.json({
+    return json({
       success: true,
       data: {
         results,
@@ -664,13 +538,11 @@ export async function PATCH(req, { params }) {
           lowBalanceAlerts: lowBalanceStudents.length,
           zeroBalanceAlerts: zeroBalanceStudents.length,
         },
+        isComplimentary: isComplimentarySession,
       },
     });
   } catch (error) {
     console.error("❌ PATCH attendance error:", error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 },
-    );
+    return json({ success: false, error: error.message }, 500);
   }
 }

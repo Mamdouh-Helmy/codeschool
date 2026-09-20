@@ -1,12 +1,16 @@
+// components/Dashboard/TopBar.tsx
 "use client";
 
+import { useCallback } from "react";
 import { Icon } from "@iconify/react";
-import ThemeToggler from "@/components/Layout/Header/ThemeToggler";
 import { useSession, signOut } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import ThemeToggler from "@/components/Layout/Header/ThemeToggler";
+import AdminNotificationBell from "@/components/Admin/AdminNotificationBell";
+import SearchInput from "@/components/Dashboard/shared/SearchInput";
+import DateRangePicker from "@/components/Dashboard/shared/DateRangePicker";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
-import AdminNotificationBell from "@/components/Admin/AdminNotificationBell";
 
 type TopBarProps = {
   onMenuClick: () => void;
@@ -17,59 +21,29 @@ type TopBarProps = {
     role?: string;
     image?: string | null;
   } | null;
-  showSecondaryToggle?: boolean;
-  onSecondaryToggle?: () => void;
   isRTL?: boolean;
-  onBackToCategories?: () => void;
-  showBackButton?: boolean;
 };
 
-const TopBar = ({
-  onMenuClick,
-  user: serverUser,
-  showSecondaryToggle = false,
-  onSecondaryToggle,
-  isRTL = false,
-  onBackToCategories,
-  showBackButton = false
-}: TopBarProps) => {
+const TopBar = ({ onMenuClick, user: serverUser, isRTL = false }: TopBarProps) => {
   const { data: session } = useSession();
   const { t } = useI18n();
   const { locale, toggleLocale } = useLocale();
+  const router = useRouter();
+  const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
 
-  const [user, setUser] = useState<{
-    name?: string;
-    role?: string;
-    image?: string | null;
-  } | null>(
-    serverUser
+  const user =
+    serverUser ??
+    (session?.user
       ? {
-        name: serverUser.name,
-        role: serverUser.role,
-        image: serverUser.image ?? null,
-      }
-      : null
-  );
+          name: session.user.name as string,
+          role: (session as any).user?.role || "guest",
+          image: session.user.image || null,
+        }
+      : null);
 
-  useEffect(() => {
-    if (serverUser) {
-      setUser({
-        name: serverUser.name,
-        role: serverUser.role,
-        image: serverUser.image ?? null,
-      });
-    } else if (session?.user) {
-      setUser({
-        name: session.user.name as string,
-        role: (session as any).user?.role || "user",
-        image: session.user.image || null,
-      });
-    }
-  }, [serverUser, session]);
-
-  const displayName = user?.name || t("dashboard.user") || "User";
+  const displayName = user?.name || t("dashboard.user");
   const role = user?.role || "guest";
-
   const initials = displayName
     .split(" ")
     .map((p) => p[0] ?? "")
@@ -77,148 +51,122 @@ const TopBar = ({
     .slice(0, 2)
     .toUpperCase();
 
+  // ─── URL sync ──────────────────────────────────────────
+  const setParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      Object.entries(updates).forEach(([k, v]) => (v ? params.set(k, v) : params.delete(k)));
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams]
+  );
+
+  const handleSearch = useCallback((q: string) => setParams({ q: q || null }), [setParams]);
+
+  const handleDateRange = useCallback(
+    (range: { from: Date | null; to: Date | null }) =>
+      setParams({
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+      }),
+    [setParams]
+  );
+
   const handleSignOut = async () => {
     try {
-      if (typeof window !== "undefined") {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-        });
-
-        localStorage.removeItem("token");
-      }
+      await fetch("/api/auth/logout", { method: "POST" });
+      if (typeof window !== "undefined") localStorage.removeItem("token");
       await signOut({ callbackUrl: "/" });
-    } catch (err) {
-      console.error("Error during sign out:", err);
-      try {
-        await signOut({ callbackUrl: "/" });
-      } catch { }
+    } catch {
+      await signOut({ callbackUrl: "/" });
     }
   };
 
+  const iconBtn =
+    "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 dark:border-dark_border dark:text-darktext dark:hover:bg-darkmode";
+
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur-md dark:border-dark_border dark:bg-darklight/80">
-      <div className={`flex items-center justify-between gap-2 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3 lg:px-6 lg:py-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-        <div className={`flex flex-1 items-center gap-2 sm:gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-          {/* Primary Menu Button - Mobile only */}
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-md dark:border-dark_border dark:bg-darklight/95">
+      <div className="flex h-16 items-center justify-between gap-3 px-3 lg:px-5">
+        {/* Start: menu + search */}
+        <div className="flex flex-1 items-center gap-2 lg:gap-3">
           <button
             type="button"
             onClick={onMenuClick}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary lg:hidden dark:border-dark_border dark:text-darktext dark:hover:bg-darkmode"
-            aria-label={t("dashboard.openNavigation") || "Open navigation"}
+            className={`${iconBtn} lg:hidden`}
+            aria-label={t("dashboard.openNavigation")}
           >
-            <Icon icon="ion:menu" className="h-5 w-5 sm:h-6 sm:w-6" />
+            <Icon icon="ion:menu" className="h-5 w-5" />
           </button>
 
-          {/* Back to categories button - Desktop only when secondary sidebar is open */}
-          {showBackButton && onBackToCategories && (
-            <button
-              type="button"
-              onClick={onBackToCategories}
-              className="hidden h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary lg:inline-flex dark:border-dark_border dark:text-darktext dark:hover:bg-darkmode"
-              aria-label={t("common.backToCategories") || "Back to Categories"}
-            >
-              <Icon icon={isRTL ? "ion:arrow-forward" : "ion:arrow-back"} className="h-5 w-5" />
-            </button>
-          )}
-
-          {/* Secondary sidebar toggle button - Desktop only */}
-          {showSecondaryToggle && onSecondaryToggle && (
-            <button
-              type="button"
-              onClick={onSecondaryToggle}
-              className="hidden h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary lg:inline-flex dark:border-dark_border dark:text-darktext dark:hover:bg-darkmode"
-              aria-label={t("dashboard.toggleSubmenu") || "Toggle submenu"}
-            >
-              <Icon icon="ion:apps-outline" className="h-5 w-5" />
-            </button>
-          )}
-
-          {/* Search bar - Adjust for mobile */}
-          <div className={`hidden max-w-md flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm sm:flex dark:border-dark_border dark:bg-darkmode ${isRTL ? 'flex-row-reverse' : ''}`}>
-            <Icon icon="ion:search" className="h-5 w-5 text-slate-400" />
-            <input
-              type="search"
-              placeholder={
-                t("dashboard.searchPlaceholder") ||
-                "Search reports, users, or events"
-              }
-              className="w-full border-none bg-transparent text-sm text-slate-600 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-darktext"
-              dir={isRTL ? "rtl" : "ltr"}
+          <div className="hidden max-w-md flex-1 sm:block">
+            <SearchInput
+              defaultValue={searchParams.get("q") || ""}
+              onDebouncedChange={handleSearch}
+              placeholder={t("dashboard.searchPlaceholder")}
             />
           </div>
         </div>
 
-        <div className={`flex items-center gap-1.5 sm:gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-          {/* Schedule Review - Hidden on small mobile */}
-          <div className={`hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm sm:flex dark:border-dark_border dark:bg-darkmode ${isRTL ? 'flex-row-reverse' : ''}`}>
-            <Icon icon="ion:calendar" className="h-5 w-5 text-primary" />
-            <span className="hidden text-slate-600 dark:text-white sm:inline">
-              {t("dashboard.scheduleReview") || "Schedule review"}
-            </span>
+        {/* End: actions */}
+        <div className="flex items-center gap-2 lg:gap-3">
+          <div className="hidden w-[220px] sm:block">
+            <DateRangePicker onChange={handleDateRange} />
           </div>
 
-          {/* Language Toggle - Smaller on mobile */}
           <button
+            type="button"
             aria-label="Toggle language"
             onClick={toggleLocale}
-            className="px-2 py-1 text-xs rounded border border-slate-300 dark:border-dark_border dark:text-white sm:px-3 sm:py-1 sm:text-sm"
+            className="h-9 rounded-lg border border-slate-300 px-2.5 text-[11px] font-bold transition hover:bg-slate-100 dark:border-dark_border dark:text-white dark:hover:bg-darkmode"
           >
-            {locale === "en" ? "العربية" : "English"}
+            {locale === "en" ? "ع" : "EN"}
           </button>
 
           <ThemeToggler />
-
-          {/* Notifications - Adjust size for mobile */}
           <AdminNotificationBell isRTL={isRTL} t={t} locale={locale} />
 
-          {/* User Profile - Compact on mobile */}
-          <div className={`flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:px-3 sm:py-2 dark:border-dark_border dark:bg-darkmode ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-sm dark:border-dark_border dark:bg-darkmode">
             {user?.image ? (
-              <img
-                src={user.image || ""}
-                alt="avatar"
-                className="h-8 w-8 rounded-full object-cover sm:h-9 sm:w-9"
-              />
+              <img src={user.image} alt={displayName} className="h-7 w-7 rounded-full object-cover" />
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary sm:h-9 sm:w-9 sm:text-sm">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
                 {initials}
               </div>
             )}
-            <div className={`hidden text-xs sm:block ${isRTL ? 'text-right' : 'text-left'}`}>
-              <p className="font-medium text-slate-700 dark:text-white">
-                {displayName}
-              </p>
-              <p className="text-slate-400">{role}</p>
+            <div className="hidden text-start text-[11px] sm:block">
+              <p className="font-bold leading-tight text-slate-700 dark:text-white">{displayName}</p>
+              <p className="text-slate-400">{t(`common.${role}`) || role}</p>
             </div>
             <button
+              type="button"
               onClick={handleSignOut}
-              className="ml-1 hidden text-xs text-red-500 hover:underline sm:block"
+              className="hidden text-[11px] font-medium text-red-500 hover:underline sm:block"
             >
-              {t("profile.signOut") || "Sign out"}
+              {t("profile.signOut")}
             </button>
-            {/* Mobile sign out icon */}
             <button
+              type="button"
               onClick={handleSignOut}
-              className="ml-1 sm:hidden"
-              aria-label={t("profile.signOut") || "Sign out"}
+              className="sm:hidden"
+              aria-label={t("profile.signOut")}
             >
-              <Icon icon="ion:log-out-outline" className="h-4 w-4 text-red-500" />
+              <Icon icon="ion:log-out-outline" className="h-4 w-4 text-red-500 rtl:-scale-x-100" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile search bar - Appears at bottom */}
-      <div className="border-t border-slate-200 px-3 py-2 dark:border-dark_border lg:hidden">
-        <div className={`flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-dark_border dark:bg-darkmode ${isRTL ? 'flex-row-reverse' : ''}`}>
-          <Icon icon="ion:search" className="h-4 w-4 text-slate-400" />
-          <input
-            type="search"
-            placeholder={t("dashboard.search") || "Search..."}
-            className="w-full border-none bg-transparent text-sm text-slate-600 outline-none dark:text-white"
-            dir={isRTL ? "rtl" : "ltr"}
-          />
-        </div>
+      {/* Mobile row */}
+      <div className="flex gap-2 border-t border-slate-200 px-3 py-2 sm:hidden dark:border-dark_border">
+        <SearchInput
+          defaultValue={searchParams.get("q") || ""}
+          onDebouncedChange={handleSearch}
+          placeholder={t("dashboard.search")}
+          className="flex-1"
+        />
+        <DateRangePicker onChange={handleDateRange} className="w-[130px]" />
       </div>
     </header>
   );

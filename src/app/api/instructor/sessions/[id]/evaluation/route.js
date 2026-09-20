@@ -27,17 +27,11 @@ function isSessionLockedByHold(session, group, allGroupSessions) {
 
   const hold = group.hold;
 
-  if (hold.holdType === 'indefinite' || hold.holdType === 'duration') {
-    return true;
-  }
-
-  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) {
-    return true;
-  }
+  if (hold.holdType === 'indefinite' || hold.holdType === 'duration') return true;
+  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) return true;
 
   const sorted = sortSessionsForHold(allGroupSessions);
-  const myId = String(session._id);
-  const myIndex = sorted.findIndex((s) => String(s._id) === myId);
+  const myIndex = sorted.findIndex((s) => String(s._id) === String(session._id));
   if (myIndex === -1) return false;
 
   if (hold.holdType === 'sessions') {
@@ -57,95 +51,183 @@ function isSessionLockedByHold(session, group, allGroupSessions) {
   return false;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ AUTH / OWNERSHIP HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const json = (body, status = 200) => NextResponse.json(body, { status });
+
+/** بيرجع response لو المستخدم مش مصرح له، وإلا null */
+function checkRole(user) {
+  if (!user) return json({ success: false, message: 'غير مصرح بالوصول' }, 401);
+  if (user.role !== 'instructor' && user.role !== 'admin') {
+    return json({ success: false, message: 'مش مدرس' }, 403);
+  }
+  return null;
+}
+
+/** الأدمن يعدّي دايمًا، المدرس لازم يكون مسؤول عن الجروب */
+function checkGroupOwnership(user, group) {
+  if (user.role === 'admin') return null;
+  const isOwner = group?.instructors?.some(
+    (i) => String(i.userId) === String(user.id),
+  );
+  return isOwner
+    ? null
+    : json({ success: false, message: 'مش مدرس هذا الجروب' }, 403);
+}
+
+/** مجموعة IDs الطلاب اللي في الجروب (بتدعم الشكلين: ObjectId أو { studentId }) */
+function getGroupStudentIdSet(group) {
+  return new Set((group?.students || []).map((s) => String(s.studentId || s)));
+}
+
+async function parseBody(req) {
+  const text = await req.text();
+  return text?.trim() ? JSON.parse(text) : {};
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════
+
 const EVALUATION_TEMPLATE_MAP = {
-  pass:   'evaluation_pass',
+  pass: 'evaluation_pass',
   review: 'evaluation_review',
   repeat: 'evaluation_repeat',
 };
 
+const VALID_DECISIONS = Object.keys(EVALUATION_TEMPLATE_MAP);
 const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'late', 'excused'];
 
-// ─── Helper: resolve var from DB ─────────────────────────────────────────────
+// ✅ الـ select الموحد لبيانات الجروب في كل الـ handlers.
+// deliveryMode لازم يكون موجود عشان الـ fallback (session.deliveryMode || group.deliveryMode) يشتغل.
+const GROUP_POPULATE_SELECT = 'name code students instructors hold status deliveryMode';
+
+/** ✅ مصدر واحد لتحديد نوع السيشن (بيدعم الـ fallback على الجروب) */
+function resolveDeliveryMode(session) {
+  return session?.deliveryMode || session?.groupId?.deliveryMode || 'online';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ TEMPLATE HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
 function resolveVar(dbVars, key, lang = 'ar', genderContext = {}) {
   const v = dbVars[key];
   if (!v) return null;
 
   const { studentGender = 'male', guardianType = 'father' } = genderContext;
-  const isMale   = String(studentGender).toLowerCase() !== 'female';
-  const isFather = String(guardianType).toLowerCase()  !== 'mother';
+  const isMale = String(studentGender).toLowerCase() !== 'female';
+  const isFather = String(guardianType).toLowerCase() !== 'mother';
+  const isAr = lang === 'ar';
 
   if (v.hasGender) {
-    if (v.genderType === 'student') {
-      return lang === 'ar'
-        ? (isMale ? v.valueMaleAr   : v.valueFemaleAr) || v.valueAr || null
-        : (isMale ? v.valueMaleEn   : v.valueFemaleEn) || v.valueEn || null;
-    }
-    if (v.genderType === 'guardian') {
-      return lang === 'ar'
-        ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || null
-        : (isFather ? v.valueFatherEn : v.valueMotherEn) || v.valueEn || null;
-    }
-    if (v.genderType === 'instructor') {
-      return lang === 'ar'
+    if (v.genderType === 'student' || v.genderType === 'instructor') {
+      return isAr
         ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || null
         : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || null;
     }
+    if (v.genderType === 'guardian') {
+      return isAr
+        ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || null
+        : (isFather ? v.valueFatherEn : v.valueMotherEn) || v.valueEn || null;
+    }
   }
 
-  return lang === 'ar' ? v.valueAr || null : v.valueEn || null;
+  return isAr ? v.valueAr || null : v.valueEn || null;
 }
 
-// ─── Helper: load DB vars map ─────────────────────────────────────────────────
 async function loadDbVars() {
   const list = await TemplateVariable.find({ isActive: true }).lean();
-  const map = {};
-  list.forEach(v => { map[v.key] = v; });
-  return map;
+  return Object.fromEntries(list.map((v) => [v.key, v]));
 }
 
-// ─── Helper: نجوم من رقم ─────────────────────────────────────────────────────
 function buildStars(score) {
   const n = Math.min(5, Math.max(1, Math.round(score || 3)));
   return '⭐'.repeat(n);
 }
 
-// ─── Helper: حالة الحضور ─────────────────────────────────────────────────────
 function localizeAttendance(status, lang) {
   const map = {
-    ar: { present: 'حاضر', late: 'متأخر', absent: 'غائب', excused: 'بعذر', null: 'لم يُسجَّل' },
-    en: { present: 'Present', late: 'Late', absent: 'Absent', excused: 'Excused', null: 'N/A' },
+    ar: { present: 'حاضر', late: 'متأخر', absent: 'غائب', excused: 'بعذر' },
+    en: { present: 'Present', late: 'Late', absent: 'Absent', excused: 'Excused' },
   };
-  return (map[lang] || map.ar)[status] || (lang === 'ar' ? 'لم يُسجَّل' : 'N/A');
+  const fallback = lang === 'ar' ? 'لم يُسجَّل' : 'N/A';
+  return (map[lang] || map.ar)[status] || fallback;
 }
 
-// ─── Helper: عدد الحصص المكتملة ──────────────────────────────────────────────
 async function getCompletedSessionsCount(groupId, studentId) {
   try {
-    const count = await Session.countDocuments({
+    return await Session.countDocuments({
       groupId,
       status: 'completed',
       isDeleted: false,
       'attendance.studentId': studentId,
       'attendance.status': { $in: ['present', 'late'] },
     });
-    return count;
-  } catch { return 0; }
+  } catch {
+    return 0;
+  }
 }
 
-// ─── Helper: fallback يدوي لـ guardianSalutation لو DB فاضي ─────────────────
 function buildGuardianSalutation(guardianFirstName, isFather, lang) {
   if (lang === 'ar') {
     return isFather
       ? `عزيزي الأستاذ ${guardianFirstName}`
       : `عزيزتي السيدة ${guardianFirstName}`;
-  } else {
-    return isFather
-      ? `Dear Mr. ${guardianFirstName}`
-      : `Dear Mrs. ${guardianFirstName}`;
   }
+  return isFather ? `Dear Mr. ${guardianFirstName}` : `Dear Mrs. ${guardianFirstName}`;
 }
 
-// ─── Helper: جيب بيانات الـ module من الـ group ──────────────────────────────
+/**
+ * ✅ كل اللي الرسائل التلاتة محتاجاه من بيانات الطالب/ولي الأمر في مكان واحد
+ * (كان متكرر حرفيًا في 3 دوال).
+ */
+function buildRecipientContext(student, dbVars) {
+  const lang = student.communicationPreferences?.preferredLanguage || 'ar';
+  const isAr = lang === 'ar';
+  const gender = (student.personalInfo?.gender || 'male').toLowerCase();
+  const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase();
+  const isMale = gender !== 'female';
+  const isFather = relationship !== 'mother';
+  const genderCtx = { studentGender: gender, guardianType: relationship };
+
+  const studentFirstName = isAr
+    ? student.personalInfo?.nickname?.ar?.trim() || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب'
+    : student.personalInfo?.nickname?.en?.trim() || student.personalInfo?.fullName?.split(' ')[0] || 'Student';
+
+  const guardianFirstName = isAr
+    ? student.guardianInfo?.nickname?.ar?.trim() || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
+    : student.guardianInfo?.nickname?.en?.trim() || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
+
+  const salutationFromDb = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
+  const guardianSalutation = salutationFromDb
+    ? salutationFromDb.replace(/\{guardianName\}/g, guardianFirstName)
+    : buildGuardianSalutation(guardianFirstName, isFather, lang);
+
+  const childTitle =
+    resolveVar(dbVars, 'childTitle', lang, genderCtx) ||
+    (isAr ? (isMale ? 'ابنك' : 'ابنتك') : isMale ? 'your son' : 'your daughter');
+
+  return {
+    lang,
+    genderCtx,
+    studentFirstName,
+    guardianFirstName,
+    guardianSalutation,
+    childTitle,
+  };
+}
+
+function renderTemplate(template, variables) {
+  let rendered = template;
+  Object.entries(variables).forEach(([key, value]) => {
+    rendered = rendered.replace(new RegExp(`\\{${key}\\}`, 'g'), value ?? '');
+  });
+  return rendered;
+}
+
 async function getModuleData(groupId, moduleIndex) {
   try {
     const group = await Group.findById(groupId)
@@ -153,7 +235,7 @@ async function getModuleData(groupId, moduleIndex) {
       .lean();
     const moduleData = group?.courseId?.curriculum?.[moduleIndex] || {};
     return {
-      moduleTitle:       moduleData.title       || '',
+      moduleTitle: moduleData.title || '',
       moduleDescription: moduleData.description || '',
     };
   } catch (err) {
@@ -162,7 +244,6 @@ async function getModuleData(groupId, moduleIndex) {
   }
 }
 
-// ─── Helper: جيب بيانات البلوج ───────────────────────────────────────────────
 async function getSessionBlogInfo(session) {
   try {
     if (!session?.courseId || session.moduleIndex === undefined || !session.sessionNumber) {
@@ -170,232 +251,133 @@ async function getSessionBlogInfo(session) {
     }
 
     const Course = (await import('../../../../../models/Course')).default;
-    const course = await Course.findById(session.courseId)
-      .select('curriculum')
-      .lean();
-
+    const course = await Course.findById(session.courseId).select('curriculum').lean();
     if (!course) return null;
 
     const moduleData = course.curriculum?.[session.moduleIndex];
     const sessionBlog = (moduleData?.sessions || []).find(
-      (s) => Number(s.sessionNumber) === Number(session.sessionNumber)
+      (s) => Number(s.sessionNumber) === Number(session.sessionNumber),
     );
-
     if (!sessionBlog) return null;
 
     const hasAr = !!sessionBlog.blogBodyAr?.trim();
     const hasEn = !!sessionBlog.blogBodyEn?.trim();
-
-    if (!hasAr && !hasEn) return null;
-
-    return { hasAr, hasEn };
+    return hasAr || hasEn ? { hasAr, hasEn } : null;
   } catch (err) {
     console.warn('⚠️ Could not fetch session blog info:', err.message);
     return null;
   }
 }
 
-// ─── Build rendered evaluation message ───────────────────────────────────────
+// ─── Evaluation message ──────────────────────────────────────────────────────
 async function buildEvaluationMessage(student, decision, session, extra = {}) {
-  const lang         = student.communicationPreferences?.preferredLanguage || 'ar';
-  const gender       = (student.personalInfo?.gender || 'male').toLowerCase();
-  const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase();
-  const isMale       = gender !== 'female';
-  const isFather     = relationship !== 'mother';
-  const genderCtx    = { studentGender: gender, guardianType: relationship };
-
   const dbVars = await loadDbVars();
+  const ctx = buildRecipientContext(student, dbVars);
+  const { lang, genderCtx } = ctx;
+  const isAr = lang === 'ar';
 
-  const studentFirstName =
-    lang === 'ar'
-      ? student.personalInfo?.nickname?.ar?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب'
-      : student.personalInfo?.nickname?.en?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'Student';
-
-  const guardianFirstName =
-    lang === 'ar'
-      ? student.guardianInfo?.nickname?.ar?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
-      : student.guardianInfo?.nickname?.en?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
-
-  const guardianSalutationFromDB = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
-  const guardianSalutation = guardianSalutationFromDB
-    ? guardianSalutationFromDB.replace(/\{guardianName\}/g, guardianFirstName)
-    : buildGuardianSalutation(guardianFirstName, isFather, lang);
-
-  const childTitle =
-    resolveVar(dbVars, 'childTitle', lang, genderCtx) ||
-    (lang === 'ar'
-      ? (isMale ? 'ابنك' : 'ابنتك')
-      : (isMale ? 'your son' : 'your daughter'));
-
-  const decisionFromDB = resolveVar(dbVars, 'evaluationDecision', lang, genderCtx);
-  const decisionText = decisionFromDB || (
-    lang === 'ar'
-      ? (decision === 'pass' ? 'ممتاز' : decision === 'review' ? 'يحتاج مراجعة' : 'يحتاج دعم إضافي')
-      : (decision === 'pass' ? 'Excellent' : decision === 'review' ? 'Needs Review' : 'Needs Support')
-  );
+  const decisionText =
+    resolveVar(dbVars, 'evaluationDecision', lang, genderCtx) ||
+    (isAr
+      ? { pass: 'ممتاز', review: 'يحتاج مراجعة', repeat: 'يحتاج دعم إضافي' }[decision]
+      : { pass: 'Excellent', review: 'Needs Review', repeat: 'Needs Support' }[decision]);
 
   const supervisorName =
     resolveVar(dbVars, 'supervisorName', lang, genderCtx) ||
-    (lang === 'ar' ? 'المشرف الأكاديمي' : 'Learning Supervisor');
+    (isAr ? 'المشرف الأكاديمي' : 'Learning Supervisor');
 
   const sessionDate = session?.scheduledDate
-    ? new Date(session.scheduledDate).toLocaleDateString(
-        lang === 'ar' ? 'ar-EG' : 'en-US',
-        { day: '2-digit', month: '2-digit', year: 'numeric' }
-      )
+    ? new Date(session.scheduledDate).toLocaleDateString(isAr ? 'ar-EG' : 'en-US', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
     : '';
 
-  const sessionNumber      = session?.sessionNumber || '';
-  const attendanceStatus   = localizeAttendance(extra.attendanceStatus || null, lang);
-  const ratings            = extra.ratings || {};
-  const starsCommitment    = buildStars(ratings.commitment    ?? 3);
-  const starsUnderstanding = buildStars(ratings.understanding ?? 3);
-  const starsTaskExecution = buildStars(ratings.taskExecution ?? 3);
-  const starsParticipation = buildStars(ratings.participation ?? 3);
-  const instructorComment  = extra.comment?.trim() || (lang === 'ar' ? '—' : '—');
+  const ratings = extra.ratings || {};
 
-  const recordingLinkText = session?.recordingLink
-    ? lang === 'ar'
-      ? `🎥 رابط التسجيل: ${session.recordingLink}`
-      : `🎥 Recording: ${session.recordingLink}`
-    : '';
+  // ✅ مينفعش نحط لينك تسجيل في رسالة سيشن Offline حتى لو كان
+  // session.recordingLink متسجل بطريقة تانية على السيشن نفسها
+  const isSessionOffline = resolveDeliveryMode(session) === 'offline';
+  const recordingLinkText =
+    session?.recordingLink && !isSessionOffline
+      ? `${isAr ? '🎥 رابط التسجيل' : '🎥 Recording'}: ${session.recordingLink}`
+      : '';
 
   const completedSessions = extra.groupId
     ? await getCompletedSessionsCount(extra.groupId, student._id)
     : 0;
 
-  const moduleTitle =
-    extra.moduleTitle ||
-    resolveVar(dbVars, 'moduleTitle', lang, genderCtx) ||
-    '';
-
-  const moduleDescription =
-    extra.moduleDescription ||
-    resolveVar(dbVars, 'moduleDescription', lang, genderCtx) ||
-    '';
-
-  let template   = extra.rawContent;
+  let template = extra.rawContent;
   let isFallback = false;
-
   if (!template) {
     const result = await MessageTemplate.getOrFallback(EVALUATION_TEMPLATE_MAP[decision], lang);
-    template   = result.content;
+    template = result.content;
     isFallback = result.isFallback;
   }
 
   const variables = {
-    guardianSalutation,
-    guardianName:        guardianFirstName,
-    studentName:         studentFirstName,
-    childTitle,
-    sessionName:         session?.title || '',
+    guardianSalutation: ctx.guardianSalutation,
+    guardianName: ctx.guardianFirstName,
+    studentName: ctx.studentFirstName,
+    childTitle: ctx.childTitle,
+    sessionName: session?.title || '',
     sessionDate,
-    sessionNumber,
-    date:                sessionDate,
-    time:                session ? `${session.startTime || ''} - ${session.endTime || ''}` : '',
-    attendanceStatus,
-    starsCommitment,
-    starsUnderstanding,
-    starsTaskExecution,
-    starsParticipation,
-    instructorComment,
-    completedSessions:   String(completedSessions),
-    enrollmentNumber:    student.enrollmentNumber || '',
-    recordingLink:       recordingLinkText,
-    evaluationDecision:  decisionText,
-    decision:            decisionText,
-    moduleTitle,
-    moduleDescription,
+    sessionNumber: session?.sessionNumber || '',
+    date: sessionDate,
+    time: session ? `${session.startTime || ''} - ${session.endTime || ''}` : '',
+    attendanceStatus: localizeAttendance(extra.attendanceStatus || null, lang),
+    starsCommitment: buildStars(ratings.commitment ?? 3),
+    starsUnderstanding: buildStars(ratings.understanding ?? 3),
+    starsTaskExecution: buildStars(ratings.taskExecution ?? 3),
+    starsParticipation: buildStars(ratings.participation ?? 3),
+    instructorComment: extra.comment?.trim() || '—',
+    completedSessions: String(completedSessions),
+    enrollmentNumber: student.enrollmentNumber || '',
+    recordingLink: recordingLinkText,
+    evaluationDecision: decisionText,
+    decision: decisionText,
+    moduleTitle: extra.moduleTitle || resolveVar(dbVars, 'moduleTitle', lang, genderCtx) || '',
+    moduleDescription:
+      extra.moduleDescription || resolveVar(dbVars, 'moduleDescription', lang, genderCtx) || '',
     supervisorName,
   };
 
-  let rendered = template;
-  Object.entries(variables).forEach(([key, value]) => {
-    rendered = rendered.replace(new RegExp(`\\{${key}\\}`, 'g'), value ?? '');
-  });
-
   return {
-    rendered,
+    rendered: renderTemplate(template, variables),
     lang,
     isFallback,
     guardianPhone: student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone || '',
   };
 }
 
-// ─── Build recording message ──────────────────────────────────────────────────
+// ─── Recording message ───────────────────────────────────────────────────────
 async function buildRecordingMessage(student, session, recordingLink) {
-  const lang         = student.communicationPreferences?.preferredLanguage || 'ar';
-  const gender       = (student.personalInfo?.gender || 'male').toLowerCase();
-  const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase();
-  const isMale       = gender !== 'female';
-  const isFather     = relationship !== 'mother';
-  const genderCtx    = { studentGender: gender, guardianType: relationship };
-
   const dbVars = await loadDbVars();
+  const ctx = buildRecipientContext(student, dbVars);
 
-  const studentFirstName =
-    lang === 'ar'
-      ? student.personalInfo?.nickname?.ar?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب'
-      : student.personalInfo?.nickname?.en?.trim()  || student.personalInfo?.fullName?.split(' ')[0] || 'Student';
+  const result = await MessageTemplate.getOrFallback('session_recording', ctx.lang);
 
-  const guardianFirstName =
-    lang === 'ar'
-      ? student.guardianInfo?.nickname?.ar?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
-      : student.guardianInfo?.nickname?.en?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
-
-  const guardianSalutationFromDB = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
-  const guardianSalutation = guardianSalutationFromDB
-    ? guardianSalutationFromDB.replace(/\{guardianName\}/g, guardianFirstName)
-    : buildGuardianSalutation(guardianFirstName, isFather, lang);
-
-  const childTitle =
-    resolveVar(dbVars, 'childTitle', lang, genderCtx) ||
-    (lang === 'ar'
-      ? (isMale ? 'ابنك' : 'ابنتك')
-      : (isMale ? 'your son' : 'your daughter'));
-
-  const result = await MessageTemplate.getOrFallback('session_recording', lang);
-  let rendered = result.content;
-
-  const variables = {
-    guardianSalutation,
-    guardianName:  guardianFirstName,
-    studentName:   studentFirstName,
-    childTitle,
-    sessionName:   session?.title || '',
+  const rendered = renderTemplate(result.content, {
+    guardianSalutation: ctx.guardianSalutation,
+    guardianName: ctx.guardianFirstName,
+    studentName: ctx.studentFirstName,
+    childTitle: ctx.childTitle,
+    sessionName: session?.title || '',
     recordingLink: recordingLink.trim(),
-  };
-
-  Object.entries(variables).forEach(([key, value]) => {
-    rendered = rendered.replace(new RegExp(`\\{${key}\\}`, 'g'), value || '');
   });
 
-  return { rendered, lang, isFallback: result.isFallback };
+  return { rendered, lang: ctx.lang, isFallback: result.isFallback };
 }
 
-// ─── Build session blog (summary) message ────────────────────────────────────
+// ─── Session blog message ────────────────────────────────────────────────────
 async function buildBlogMessage(student, session, blogInfo) {
   const lang = student.communicationPreferences?.preferredLanguage || 'ar';
+  const hasContentForLang = lang === 'ar' ? blogInfo?.hasAr : blogInfo?.hasEn;
+  if (!hasContentForLang) return null;
 
-  if (!blogInfo || !((lang === 'ar' && blogInfo.hasAr) || (lang === 'en' && blogInfo.hasEn))) {
-    return null;
-  }
-
-  const dbVars       = await loadDbVars();
-  const gender       = (student.personalInfo?.gender || 'male').toLowerCase();
-  const relationship = (student.guardianInfo?.relationship || 'father').toLowerCase();
-  const isFather     = relationship !== 'mother';
-  const genderCtx    = { studentGender: gender, guardianType: relationship };
-
-  const guardianFirstName =
-    lang === 'ar'
-      ? student.guardianInfo?.nickname?.ar?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
-      : student.guardianInfo?.nickname?.en?.trim()  || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
-
-  const guardianSalutationFromDB = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
-  const guardianSalutation = guardianSalutationFromDB
-    ? guardianSalutationFromDB.replace(/\{guardianName\}/g, guardianFirstName)
-    : buildGuardianSalutation(guardianFirstName, isFather, lang);
+  const dbVars = await loadDbVars();
+  const { guardianSalutation } = buildRecipientContext(student, dbVars);
 
   const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
   const blogUrl = `${baseUrl}/session-blog/${session._id}`;
@@ -409,21 +391,17 @@ async function buildBlogMessage(student, session, blogInfo) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ HELPER: حماية من الـ Hold (بتاخد بعين الاعتبار نوع الـ Hold)
+// ✅ HOLD GUARD
 // ═══════════════════════════════════════════════════════════════════════════
 async function checkGroupHoldResponse(session) {
   if (!session?.groupId?.hold?.isHeld) return null;
 
-  // جيب كل سيشنات الجروب
   const groupId = session.groupId._id || session.groupId;
-  const allGroupSessions = await Session.find({
-    groupId,
-    isDeleted: false,
-  })
+  const allGroupSessions = await Session.find({ groupId, isDeleted: false })
     .select('_id moduleIndex sessionNumber scheduledDate status')
     .lean();
 
-  const sessionIsLocked = isSessionLockedByHold(
+  const locked = isSessionLockedByHold(
     {
       _id: session._id,
       moduleIndex: session.moduleIndex,
@@ -434,15 +412,15 @@ async function checkGroupHoldResponse(session) {
     allGroupSessions,
   );
 
-  if (!sessionIsLocked) return null;
+  if (!locked) return null;
 
-  return NextResponse.json(
+  return json(
     {
       success: false,
       error: 'السيشن دي مقفولة بسبب الـ Hold — التقييم مش متاح',
       code: 'SESSION_ON_HOLD',
     },
-    { status: 403 },
+    403,
   );
 }
 
@@ -450,31 +428,26 @@ async function checkGroupHoldResponse(session) {
 export async function GET(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
-    if (!user) return NextResponse.json({ success: false, message: 'غير مصرح بالوصول' }, { status: 401 });
-    if (user.role !== 'instructor' && user.role !== 'admin') return NextResponse.json({ success: false, message: 'مش مدرس' }, { status: 403 });
+    const roleError = checkRole(user);
+    if (roleError) return roleError;
 
     await connectDB();
     const { id } = await params;
 
     const session = await Session.findById(id)
-      .populate({ path: 'groupId', select: 'name code students instructors hold status' })
+      .populate({ path: 'groupId', select: GROUP_POPULATE_SELECT })
       .lean();
+    if (!session) return json({ success: false, message: 'الجلسة غير موجودة' }, 404);
 
-    if (!session) return NextResponse.json({ success: false, message: 'الجلسة غير موجودة' }, { status: 404 });
+    // ✅ الملكية الأول (قبل أي معلومة تانية)
+    const ownershipError = checkGroupOwnership(user, session.groupId);
+    if (ownershipError) return ownershipError;
 
-    // ✅ حماية من الـ Hold
     const holdResponse = await checkGroupHoldResponse(session);
     if (holdResponse) return holdResponse;
 
     if (!session.attendanceTaken) {
-      return NextResponse.json({ success: false, message: 'سجّل الحضور أولاً قبل التقييم' }, { status: 400 });
-    }
-
-    if (user.role === 'instructor') {
-      const isInstructor = session.groupId?.instructors?.some(
-        (i) => i.userId?.toString() === user.id?.toString()
-      );
-      if (!isInstructor) return NextResponse.json({ success: false, message: 'مش مدرس هذا الجروب' }, { status: 403 });
+      return json({ success: false, message: 'سجّل الحضور أولاً قبل التقييم' }, 400);
     }
 
     const allStudentIds = (session.groupId?.students || []).map((s) => s.studentId || s);
@@ -489,21 +462,22 @@ export async function GET(req, { params }) {
     });
 
     const existingEvals = await StudentEvaluation.find({
-      groupId:   session.groupId?._id,
+      groupId: session.groupId?._id,
       sessionId: session._id,
       studentId: { $in: allStudentIds },
     }).lean();
+
     const existingEvalMap = {};
     existingEvals.forEach((e) => {
       existingEvalMap[e.studentId.toString()] = {
         decision: e.finalDecision,
-        ratings:  e.criteria,
-        comment:  e.notes || '',
+        ratings: e.criteria,
+        comment: e.notes || '',
       };
     });
 
     const [passResult, reviewResult, repeatResult, recordingResult] = await Promise.all([
-      MessageTemplate.getOrFallback('evaluation_pass',   'ar'),
+      MessageTemplate.getOrFallback('evaluation_pass', 'ar'),
       MessageTemplate.getOrFallback('evaluation_review', 'ar'),
       MessageTemplate.getOrFallback('evaluation_repeat', 'ar'),
       MessageTemplate.getOrFallback('session_recording', 'ar'),
@@ -514,47 +488,62 @@ export async function GET(req, { params }) {
         const status = attendanceMap[s._id.toString()] || null;
         return !EXCLUDED_FROM_EVALUATION_STATUSES.includes(status);
       })
-      .map((s) => ({
-        _id:               s._id,
-        name:              s.personalInfo?.fullName || 'بدون اسم',
-        enrollmentNumber:  s.enrollmentNumber || '',
-        credits:           s.creditSystem?.currentPackage?.remainingHours ?? 0,
-        guardianPhone:     s.guardianInfo?.whatsappNumber || s.guardianInfo?.phone || '',
-        guardianName:      s.guardianInfo?.name || '',
-        preferredLanguage: s.communicationPreferences?.preferredLanguage || 'ar',
-        attendanceStatus:  attendanceMap[s._id.toString()] || null,
-        currentDecision:   existingEvalMap[s._id.toString()]?.decision || null,
-        currentRatings:    existingEvalMap[s._id.toString()]?.ratings  || null,
-        currentComment:    existingEvalMap[s._id.toString()]?.comment  || '',
-      }));
+      .map((s) => {
+        const sid = s._id.toString();
+        return {
+          _id: s._id,
+          name: s.personalInfo?.fullName || 'بدون اسم',
+          enrollmentNumber: s.enrollmentNumber || '',
+          credits: s.creditSystem?.currentPackage?.remainingHours ?? 0,
+          guardianPhone: s.guardianInfo?.whatsappNumber || s.guardianInfo?.phone || '',
+          guardianName: s.guardianInfo?.name || '',
+          preferredLanguage: s.communicationPreferences?.preferredLanguage || 'ar',
+          attendanceStatus: attendanceMap[sid] || null,
+          currentDecision: existingEvalMap[sid]?.decision || null,
+          currentRatings: existingEvalMap[sid]?.ratings || null,
+          currentComment: existingEvalMap[sid]?.comment || '',
+        };
+      });
 
-    return NextResponse.json({
+    // ✅ نوع السيشن (مع fallback على الجروب) — الفرونت بيعتمد عليه لإخفاء لينك التسجيل
+    const deliveryMode = resolveDeliveryMode(session);
+    const isOffline = deliveryMode === 'offline';
+
+    return json({
       success: true,
       data: {
         session: {
-          _id:           session._id,
-          title:         session.title,
+          _id: session._id,
+          title: session.title,
           scheduledDate: session.scheduledDate,
-          startTime:     session.startTime,
-          endTime:       session.endTime,
+          startTime: session.startTime,
+          endTime: session.endTime,
           sessionNumber: session.sessionNumber,
-          moduleIndex:   session.moduleIndex,
-          recordingLink: session.recordingLink || '',
-          deliveryMode:  session.deliveryMode || null,
-          group: { _id: session.groupId?._id, name: session.groupId?.name, code: session.groupId?.code },
+          moduleIndex: session.moduleIndex,
+          // ✅ سياسة: السيشنات الـ offline معندهاش تسجيل — حتى لو فيه قيمة قديمة مخزنة
+          recordingLink: isOffline ? '' : (session.recordingLink || ''),
+          deliveryMode,
+          isOffline,
+          // ✅ عشان الفرونت يعرض بادج "حصة تعويضية"
+          isComplimentary: session.isComplimentary === true,
+          group: {
+            _id: session.groupId?._id,
+            name: session.groupId?.name,
+            code: session.groupId?.code,
+          },
         },
         students: studentsForEval,
         templates: {
-          pass:      { contentAr: passResult.content,      isFallback: passResult.isFallback      },
-          review:    { contentAr: reviewResult.content,    isFallback: reviewResult.isFallback    },
-          repeat:    { contentAr: repeatResult.content,    isFallback: repeatResult.isFallback    },
+          pass: { contentAr: passResult.content, isFallback: passResult.isFallback },
+          review: { contentAr: reviewResult.content, isFallback: reviewResult.isFallback },
+          repeat: { contentAr: repeatResult.content, isFallback: repeatResult.isFallback },
           recording: { contentAr: recordingResult.content, isFallback: recordingResult.isFallback },
         },
       },
     });
   } catch (error) {
     console.error('❌ [Evaluation GET]:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return json({ success: false, error: error.message }, 500);
   }
 }
 
@@ -562,75 +551,92 @@ export async function GET(req, { params }) {
 export async function POST(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
-    if (!user) return NextResponse.json({ success: false, message: 'غير مصرح بالوصول' }, { status: 401 });
-    if (user.role !== 'instructor' && user.role !== 'admin') return NextResponse.json({ success: false, message: 'مش مدرس' }, { status: 403 });
+    const roleError = checkRole(user);
+    if (roleError) return roleError;
 
     await connectDB();
     const { id } = await params;
 
-    let body = {};
-    try { const t = await req.text(); if (t?.trim()) body = JSON.parse(t); }
-    catch { return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 }); }
+    let body;
+    try {
+      body = await parseBody(req);
+    } catch {
+      return json({ success: false, error: 'Invalid JSON' }, 400);
+    }
 
     const { studentId, decision, customContent, ratings, comment, attendanceStatus } = body;
-    if (!studentId || !decision) return NextResponse.json({ success: false, error: 'studentId and decision required' }, { status: 400 });
-    if (!['pass', 'review', 'repeat'].includes(decision)) return NextResponse.json({ success: false, error: 'Invalid decision' }, { status: 400 });
-
+    if (!studentId || !decision) {
+      return json({ success: false, error: 'studentId and decision required' }, 400);
+    }
+    if (!VALID_DECISIONS.includes(decision)) {
+      return json({ success: false, error: 'Invalid decision' }, 400);
+    }
     if (EXCLUDED_FROM_EVALUATION_STATUSES.includes(attendanceStatus)) {
-      return NextResponse.json(
-        { success: false, error: 'الطالب غايب أو معذور — لا يدخل خطوة التقييم' },
-        { status: 400 }
-      );
+      return json({ success: false, error: 'الطالب غايب أو معذور — لا يدخل خطوة التقييم' }, 400);
     }
 
     const [student, session] = await Promise.all([
-      Student.findById(studentId).select('personalInfo guardianInfo communicationPreferences enrollmentNumber').lean(),
+      Student.findById(studentId)
+        .select('personalInfo guardianInfo communicationPreferences enrollmentNumber')
+        .lean(),
       Session.findById(id)
-        .populate({ path: 'groupId', select: 'hold status name' })
+        .populate({ path: 'groupId', select: GROUP_POPULATE_SELECT })
         .lean(),
     ]);
-    if (!student) return NextResponse.json({ success: false, error: 'Student not found' }, { status: 404 });
 
-    // ✅ حماية من الـ Hold
+    if (!session) return json({ success: false, error: 'Session not found' }, 404);
+    if (!student) return json({ success: false, error: 'Student not found' }, 404);
+
+    // ✅ المدرس لازم يكون مسؤول عن الجروب والطالب لازم يكون فيه
+    const ownershipError = checkGroupOwnership(user, session.groupId);
+    if (ownershipError) return ownershipError;
+
+    if (!getGroupStudentIdSet(session.groupId).has(String(studentId))) {
+      return json({ success: false, error: 'الطالب ده مش في جروب السيشن' }, 403);
+    }
+
     const holdResponse = await checkGroupHoldResponse(session);
     if (holdResponse) return holdResponse;
 
-    const { moduleTitle, moduleDescription } = session?.groupId
-      ? await getModuleData(session.groupId, session.moduleIndex ?? 0)
+    const groupId = session.groupId?._id;
+    const { moduleTitle, moduleDescription } = groupId
+      ? await getModuleData(groupId, session.moduleIndex ?? 0)
       : { moduleTitle: '', moduleDescription: '' };
 
-    const blogInfo = session ? await getSessionBlogInfo(session) : null;
+    const blogInfo = await getSessionBlogInfo(session);
 
     const { rendered, lang, isFallback, guardianPhone } = await buildEvaluationMessage(
-      student, decision, session,
+      student,
+      decision,
+      session,
       {
-        rawContent:        customContent || null,
-        ratings:           ratings       || {},
-        comment:           comment       || '',
-        attendanceStatus:  attendanceStatus || null,
-        groupId:           session?.groupId,
+        rawContent: customContent || null,
+        ratings: ratings || {},
+        comment: comment || '',
+        attendanceStatus: attendanceStatus || null,
+        groupId,
         moduleTitle,
         moduleDescription,
-      }
+      },
     );
 
-    const blogMessage = session ? await buildBlogMessage(student, session, blogInfo) : null;
+    const blogMessage = await buildBlogMessage(student, session, blogInfo);
 
-    return NextResponse.json({
+    return json({
       success: true,
       data: {
-        content:      rendered,
-        blogContent:  blogMessage?.rendered || null,
+        content: rendered,
+        blogContent: blogMessage?.rendered || null,
         lang,
         isFallback,
         guardianPhone,
-        guardianName: student.guardianInfo?.name     || '',
-        studentName:  student.personalInfo?.fullName || '',
+        guardianName: student.guardianInfo?.name || '',
+        studentName: student.personalInfo?.fullName || '',
       },
     });
   } catch (error) {
     console.error('❌ [Evaluation POST]:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return json({ success: false, error: error.message }, 500);
   }
 }
 
@@ -638,63 +644,84 @@ export async function POST(req, { params }) {
 export async function PATCH(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
-    if (!user) return NextResponse.json({ success: false, message: 'غير مصرح بالوصول' }, { status: 401 });
-    if (user.role !== 'instructor' && user.role !== 'admin') return NextResponse.json({ success: false, message: 'مش مدرس' }, { status: 403 });
+    const roleError = checkRole(user);
+    if (roleError) return roleError;
 
     await connectDB();
     const { id } = await params;
 
-    let body = {};
-    try { const t = await req.text(); if (t?.trim()) body = JSON.parse(t); }
-    catch { return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 }); }
+    let body;
+    try {
+      body = await parseBody(req);
+    } catch {
+      return json({ success: false, error: 'Invalid JSON' }, 400);
+    }
 
     const { evaluations, actualStartTime, actualEndTime } = body;
-
     if (!Array.isArray(evaluations) || evaluations.length === 0) {
-      return NextResponse.json({ success: false, error: 'evaluations array required' }, { status: 400 });
+      return json({ success: false, error: 'evaluations array required' }, 400);
     }
 
     const session = await Session.findById(id)
-      .populate({ path: 'groupId', select: 'name instructors deliveryMode hold status' })
+      .populate({ path: 'groupId', select: GROUP_POPULATE_SELECT })
       .select('+recordingLink');
-    if (!session) return NextResponse.json({ success: false, message: 'الجلسة غير موجودة' }, { status: 404 });
+    if (!session) return json({ success: false, message: 'الجلسة غير موجودة' }, 404);
 
-    // ✅ حماية من الـ Hold
+    const ownershipError = checkGroupOwnership(user, session.groupId);
+    if (ownershipError) return ownershipError;
+
     const holdResponse = await checkGroupHoldResponse(session);
     if (holdResponse) return holdResponse;
 
-    if (user.role === 'instructor') {
-      const isInstructor = session.groupId?.instructors?.some(
-        (i) => i.userId?.toString() === user.id?.toString()
-      );
-      if (!isInstructor) return NextResponse.json({ success: false, message: 'مش مدرس هذا الجروب' }, { status: 403 });
-    }
-
     const wasAlreadyCompleted = session.status === 'completed';
 
-    const { moduleTitle, moduleDescription } = session.groupId?._id
-      ? await getModuleData(session.groupId._id, session.moduleIndex ?? 0)
+    // ✅ الحصة التعويضية: الرسايل بتتبعت حتى لو رصيد الطالب صفر (مفيش خصم أصلاً)
+    const isComplimentary = session.isComplimentary === true;
+
+    // ✅ السيشن الـ Offline معندهاش لينك تسجيل أصلاً — الفرونت بيخفي
+    // الحقل، لكن لازم نمنعه من الباك كمان لو حد بعت request مباشر
+    const sessionIsOffline = resolveDeliveryMode(session) === 'offline';
+
+    const groupId = session.groupId?._id;
+    const groupStudentIds = getGroupStudentIdSet(session.groupId);
+
+    const { moduleTitle, moduleDescription } = groupId
+      ? await getModuleData(groupId, session.moduleIndex ?? 0)
       : { moduleTitle: '', moduleDescription: '' };
 
     const blogInfo = await getSessionBlogInfo(session);
 
     const attendanceMap = {};
-    (session.attendance || []).forEach((a) => { attendanceMap[a.studentId?.toString()] = a.status; });
+    (session.attendance || []).forEach((a) => {
+      attendanceMap[a.studentId?.toString()] = a.status;
+    });
 
     const results = [];
+    const skippedResult = (studentId, decision, attendanceStatus, skipReason) => ({
+      studentId,
+      decision,
+      attendanceStatus,
+      messageSent: false,
+      recordingLinkSent: false,
+      blogSent: false,
+      skipped: true,
+      skipReason,
+    });
 
     for (const ev of evaluations) {
       const { studentId, decision, notes, recordingLink, ratings, comment } = ev;
-      if (!['pass', 'review', 'repeat'].includes(decision)) continue;
+      if (!VALID_DECISIONS.includes(decision)) continue;
 
-      const attendanceStatus = attendanceMap[studentId?.toString()] || 'absent';
+      // ✅ مينفعش نقيّم/نبعت لطالب مش في جروب السيشن
+      if (!groupStudentIds.has(String(studentId))) {
+        results.push(skippedResult(studentId, decision, null, 'student_not_in_group'));
+        continue;
+      }
+
+      const attendanceStatus = attendanceMap[String(studentId)] || 'absent';
 
       if (EXCLUDED_FROM_EVALUATION_STATUSES.includes(attendanceStatus)) {
-        results.push({
-          studentId, decision, attendanceStatus,
-          messageSent: false, recordingLinkSent: false, blogSent: false,
-          skipped: true, skipReason: 'excluded_attendance_status',
-        });
+        results.push(skippedResult(studentId, decision, attendanceStatus, 'excluded_attendance_status'));
         continue;
       }
 
@@ -706,58 +733,70 @@ export async function PATCH(req, { params }) {
       const lang = student.communicationPreferences?.preferredLanguage || 'ar';
 
       const { rendered, guardianPhone, isFallback } = await buildEvaluationMessage(
-        student, decision, session,
+        student,
+        decision,
+        session,
         {
-          rawContent:        null,
-          ratings:           ratings || {},
-          comment:           comment || notes || '',
+          rawContent: null,
+          ratings: ratings || {},
+          comment: comment || notes || '',
           attendanceStatus,
-          groupId:           session.groupId?._id,
+          groupId,
           moduleTitle,
           moduleDescription,
-        }
+        },
       );
 
-      const attendanceScore = attendanceStatus === 'present' ? 5 : attendanceStatus === 'late' ? 3 : 1;
-      const perfScore       = decision === 'pass' ? 4 : decision === 'review' ? 3 : 2;
+      const attendanceScore = { present: 5, late: 3 }[attendanceStatus] ?? 1;
+      const perfScore = { pass: 4, review: 3, repeat: 2 }[decision];
       const criteria = {
         understanding: ratings?.understanding ?? perfScore,
-        commitment:    ratings?.commitment    ?? perfScore,
-        attendance:    attendanceScore,
+        commitment: ratings?.commitment ?? perfScore,
+        attendance: attendanceScore,
         participation: ratings?.participation ?? perfScore,
       };
 
       await StudentEvaluation.findOneAndUpdate(
-        { groupId: session.groupId?._id, studentId, sessionId: session._id },
+        { groupId, studentId, sessionId: session._id },
         {
-          groupId:       session.groupId?._id,
+          groupId,
           studentId,
-          sessionId:     session._id,
-          instructorId:  user.id,
+          sessionId: session._id,
+          instructorId: user.id,
           finalDecision: decision,
-          notes:         comment || notes || '',
+          notes: comment || notes || '',
           criteria,
-          'metadata.evaluatedAt':    new Date(),
-          'metadata.evaluatedBy':    user.id,
+          'metadata.evaluatedAt': new Date(),
+          'metadata.evaluatedBy': user.id,
           'metadata.lastModifiedAt': new Date(),
           'metadata.lastModifiedBy': user.id,
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true },
       );
 
+      // ✅ فحص الرصيد الصفري بيتطبق على الحصص العادية بس.
+      // الحصة التعويضية غالبًا بتتعمل لطالب رصيده خلص، فمينفعش نمنع عنه الرسالة.
       const remainingHours = student.creditSystem?.currentPackage?.remainingHours ?? 0;
-      if (remainingHours <= 0) {
-        results.push({ studentId, decision, attendanceStatus, messageSent: false, recordingLinkSent: false, blogSent: false, skipped: true });
+      if (!isComplimentary && remainingHours <= 0) {
+        results.push(skippedResult(studentId, decision, attendanceStatus, 'zero_balance'));
         continue;
       }
 
-      let messageSent       = false;
+      let messageSent = false;
       let recordingLinkSent = false;
-      let blogSent          = false;
+      let blogSent = false;
 
       if (guardianPhone && rendered) {
         try {
-          const { wapilotService } = await import("../../../../../services/wapilot-service");
+          const { wapilotService } = await import('../../../../../services/wapilot-service');
+
+          const baseMeta = {
+            sessionId: id,
+            sessionTitle: session.title,
+            recipientType: 'guardian',
+            remainingHours,
+            isComplimentary,
+          };
 
           const evalResult = await wapilotService.sendAndLogEvalMessage({
             studentId,
@@ -765,37 +804,20 @@ export async function PATCH(req, { params }) {
             messageContent: rendered,
             messageType: `evaluation_${decision}`,
             language: lang,
-            metadata: {
-              sessionId: id,
-              sessionTitle: session.title,
-              decision,
-              attendanceStatus,
-              recipientType: "guardian",
-              remainingHours,
-              isFallback,
-              moduleTitle,
-            },
+            metadata: { ...baseMeta, decision, attendanceStatus, isFallback, moduleTitle },
           });
-
           messageSent = evalResult?.success || false;
 
-          if (recordingLink?.trim()) {
+          if (recordingLink?.trim() && !sessionIsOffline) {
             const { rendered: recRendered } = await buildRecordingMessage(student, session, recordingLink);
-
             const linkResult = await wapilotService.sendAndLogMessage({
               studentId,
               phoneNumber: guardianPhone,
               messageContent: recRendered,
-              messageType: "session_recording",
+              messageType: 'session_recording',
               language: lang,
-              metadata: {
-                sessionId: id,
-                sessionTitle: session.title,
-                recipientType: "guardian",
-                remainingHours,
-              },
+              metadata: baseMeta,
             });
-
             recordingLinkSent = linkResult?.success || false;
           }
 
@@ -806,23 +828,17 @@ export async function PATCH(req, { params }) {
                 studentId,
                 phoneNumber: guardianPhone,
                 messageContent: blogMessage.rendered,
-                messageType: "session_blog",
+                messageType: 'session_blog',
                 language: blogMessage.lang,
-                metadata: {
-                  sessionId: id,
-                  sessionTitle: session.title,
-                  recipientType: "guardian",
-                  remainingHours,
-                },
+                metadata: baseMeta,
               });
-
               blogSent = blogResult?.success || false;
             } catch (blogErr) {
-              console.error("❌ BLOG SEND ERROR:", blogErr);
+              console.error('❌ BLOG SEND ERROR:', blogErr);
             }
           }
         } catch (err) {
-          console.error("❌ SEND ERROR:", err);
+          console.error('❌ SEND ERROR:', err);
         }
       }
 
@@ -834,10 +850,8 @@ export async function PATCH(req, { params }) {
 
     if (!wasAlreadyCompleted) {
       session.status = 'completed';
-
       if (actualStartTime) session.actualStartTime = actualStartTime;
-      if (actualEndTime)   session.actualEndTime   = actualEndTime;
-
+      if (actualEndTime) session.actualEndTime = actualEndTime;
       await session.save();
 
       try {
@@ -845,7 +859,7 @@ export async function PATCH(req, { params }) {
         payrollResult = await processSessionPayroll({
           sessionId: id,
           actualStartTime: actualStartTime || null,
-          actualEndTime:   actualEndTime   || null,
+          actualEndTime: actualEndTime || null,
           actedBy: user.id,
           source: 'instructor_evaluation',
         });
@@ -855,29 +869,23 @@ export async function PATCH(req, { params }) {
       }
 
       try {
-        const group = await Group.findById(session.groupId?._id || session.groupId);
-        if (group) {
-          await group.addInstructorHours(payrollResult?.durationMinutes || 0);
-        }
+        const group = await Group.findById(groupId || session.groupId);
+        if (group) await group.addInstructorHours(payrollResult?.durationMinutes || 0);
       } catch (err) {
         console.error('⚠️ addInstructorHours failed:', err.message);
       }
     } else {
-      console.log(`⏭️ Session already completed — skipping status, hours and payroll`);
+      console.log('⏭️ Session already completed — skipping status, hours and payroll');
     }
 
-    const evalSent      = results.filter((r) => r.messageSent).length;
-    const linkSent      = results.filter((r) => r.recordingLinkSent).length;
-    const blogSentCount = results.filter((r) => r.blogSent).length;
-    const skipped       = results.filter((r) => r.skipped).length;
-
-    return NextResponse.json({
+    return json({
       success: true,
       message: 'تم حفظ التقييمات بنجاح',
       data: {
         results,
         sessionCompleted: true,
         alreadyWasCompleted: wasAlreadyCompleted,
+        isComplimentary,
         payroll: payrollResult
           ? {
               processed: !!payrollResult.success,
@@ -886,12 +894,17 @@ export async function PATCH(req, { params }) {
               deliveryMode: payrollResult.deliveryMode || null,
             }
           : null,
-        summary: { total: results.length, evalSent, linkSent, blogSent: blogSentCount, skipped },
+        summary: {
+          total: results.length,
+          evalSent: results.filter((r) => r.messageSent).length,
+          linkSent: results.filter((r) => r.recordingLinkSent).length,
+          blogSent: results.filter((r) => r.blogSent).length,
+          skipped: results.filter((r) => r.skipped).length,
+        },
       },
     });
-
   } catch (error) {
     console.error('❌ [Evaluation PATCH]:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return json({ success: false, error: error.message }, 500);
   }
 }

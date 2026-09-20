@@ -10,7 +10,7 @@ import {
   Zap, RefreshCw,
   Video, Sparkles, TrendingUp, BarChart3,
   Pencil, MessageSquarePlus, Link2, Check,
-  MapPin, // ✅ جديد
+  MapPin,
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
 
@@ -214,6 +214,7 @@ function StudentEvalCard({
   student, decision, onSetDecision, submitting,
   ratings, onRatingChange,
   comment, onOpenComment,
+  isComplimentary,
   isAr,
 }) {
   const cfg = decision ? DECISIONS[decision] : null;
@@ -325,7 +326,8 @@ function StudentEvalCard({
           </button>
         )}
 
-        {cfg && (student.credits ?? 0) <= 0 && (
+        {/* ✅ رسالة "رصيد صفر" مبتنطبقش على الحصة التعويضية — الباك بيبعت فيها الرسايل عادي */}
+        {cfg && !isComplimentary && (student.credits ?? 0) <= 0 && (
           <div className="mt-2.5 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs bg-gray-50 dark:bg-[#21262d] text-gray-400 border border-gray-100 dark:border-[#30363d]">
             🔕 {t("لن تُرسل رسالة — رصيد صفر", "No message — zero credits")}
           </div>
@@ -415,7 +417,9 @@ export default function InstructorEvaluationPage() {
 
   const [loading, setLoading]           = useState(true);
   const [submitting, setSubmitting]     = useState(false);
+  // error = فشل التحميل (بيخفي الفورم) — submitError = فشل الحفظ (بيتعرض فوق زرار الإرسال من غير ما يخفي الفورم)
   const [error, setError]               = useState("");
+  const [submitError, setSubmitError]   = useState("");
   const [success, setSuccess]           = useState(false);
   const [sessionData, setSessionData]   = useState(null);
   const [students, setStudents]         = useState([]);
@@ -431,15 +435,18 @@ export default function InstructorEvaluationPage() {
   const [moduleDescription, setModuleDescription] = useState("");
   const [supervisorName, setSupervisorName]     = useState("");
 
-  // ✅ هل السيشن Offline؟
+  // ✅ هل السيشن Offline؟ (الباك دلوقتي بيرجّع isOffline + deliveryMode بعد الـ fallback على الجروب)
   const isOfflineSession =
     sessionData?.isOffline === true ||
     sessionData?.deliveryMode === "offline";
 
+  // ✅ هل هي حصة تعويضية؟
+  const isComplimentary = sessionData?.isComplimentary === true;
+
   const fetchData = useCallback(async () => {
     if (!sessionId) { setError(t("لم يتم تحديد جلسة", "No session specified")); setLoading(false); return; }
     try {
-      setLoading(true); setError("");
+      setLoading(true); setError(""); setSubmitError("");
       const res = await fetch(`/api/instructor/sessions/${sessionId}/evaluation`, { credentials: "include" });
       const data = await res.json();
       if (data.success) {
@@ -512,10 +519,12 @@ export default function InstructorEvaluationPage() {
     if (filled.length === 0) return;
     try {
       setSubmitting(true);
+      setSubmitError("");
       const evaluations = filled.map((studentId) => ({
         studentId,
         decision:      decisions[studentId],
-        recordingLink: recordingLink?.trim() || null,
+        // الباك بيتجاهله للـ offline، بس مفيش داعي نبعته
+        recordingLink: isOfflineSession ? null : (recordingLink?.trim() || null),
         ratings:       ratings[studentId] || { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 },
         comment:       comments[studentId] || '',
       }));
@@ -531,9 +540,10 @@ export default function InstructorEvaluationPage() {
         setSuccess(true);
         setTimeout(() => router.push("/instructor/sessions"), 3000);
       } else {
-        setError(data.error || data.message || t("فشل الحفظ", "Failed to save"));
+        // ✅ فشل الحفظ مايخفيش الفورم ومايضيعش التقييمات اللي المدرس عملها
+        setSubmitError(data.error || data.message || t("فشل الحفظ", "Failed to save"));
       }
-    } catch { setError(t("خطأ في الاتصال", "Connection error")); }
+    } catch { setSubmitError(t("خطأ في الاتصال", "Connection error")); }
     finally { setSubmitting(false); }
   };
 
@@ -577,7 +587,14 @@ export default function InstructorEvaluationPage() {
           <div className="mt-4 mb-4 grid grid-cols-3 gap-3">
             {[
               { value: submitSummary.evalSent, label: t("رسائل التقييم", "Eval Messages"), color: "#ff6700" },
-              { value: submitSummary.linkSent, label: t("روابط التسجيل", "Recording Links"), color: "#004d59" },
+              // ✅ الـ offline مفيهاش روابط تسجيل — بنعرض بدالها عدد ملخصات الجلسة
+              {
+                value: isOfflineSession ? submitSummary.blogSent : submitSummary.linkSent,
+                label: isOfflineSession
+                  ? t("ملخصات الجلسة", "Session Summaries")
+                  : t("روابط التسجيل", "Recording Links"),
+                color: "#004d59",
+              },
               { value: submitSummary.skipped,  label: t("تم تخطيه", "Skipped"),           color: "#8b949e" },
             ].map((item, i) => (
               <div key={i} className="bg-white dark:bg-[#161b22] rounded-2xl p-4 border border-gray-100 dark:border-[#30363d] shadow-sm">
@@ -674,6 +691,12 @@ export default function InstructorEvaluationPage() {
                     {isOfflineSession && (
                       <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-[10px] font-black px-2 py-0.5 rounded-full border border-[#feaf00]/40 flex items-center gap-1">
                         <MapPin className="w-2.5 h-2.5" /> {t("Offline", "Offline")}
+                      </span>
+                    )}
+                    {/* ✅ Badge الحصة التعويضية */}
+                    {isComplimentary && (
+                      <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-black px-2 py-0.5 rounded-full border border-white/30 flex items-center gap-1">
+                        🎁 {t("حصة تعويضية", "Make-up session")}
                       </span>
                     )}
                   </div>
@@ -827,6 +850,7 @@ export default function InstructorEvaluationPage() {
                   onRatingChange={handleRatingChange}
                   comment={comments[student._id] || ""}
                   onOpenComment={handleOpenComment}
+                  isComplimentary={isComplimentary}
                   isAr={isAr}
                 />
               ))}
@@ -849,6 +873,14 @@ export default function InstructorEvaluationPage() {
         <div className="fixed bottom-0 left-0 right-0 z-30 p-3 sm:p-4">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-[#30363d] p-4 shadow-xl">
+              {/* ✅ خطأ الحفظ — بيظهر هنا من غير ما يخفي الفورم */}
+              {submitError && (
+                <div className="flex items-center gap-2 mb-3 p-2.5 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800/40">
+                  <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                  <p className="text-xs font-bold text-red-600 dark:text-red-400">{submitError}</p>
+                </div>
+              )}
+
               <div className="flex items-center gap-4" dir={isAr ? "rtl" : "ltr"}>
                 <div className="flex-1">
                   <p className="text-sm font-bold text-gray-900 dark:text-[#e6edf3]">

@@ -119,6 +119,46 @@ const groupSchema = new mongoose.Schema(
       default: "",
     },
 
+        // ═══════════════════════════════════════════════════════════════
+    // ✅ MAKE-UP GROUP (جروب تعويضي) — Ad-hoc group
+    // ═══════════════════════════════════════════════════════════════
+    // الجروب ده بيتعمل من صفحة الأدمن لما يعمل حصة تعويضية لطالب.
+    // بيتميز بإنه:
+    //   - طالب واحد بس
+    //   - سيشن واحدة بس (بتتولّد عند الـActivation)
+    //   - كل سيشناته isComplimentary: true
+    // makeupInfo بيحفظ رابط الطالب + السيشن الأصلية + الجروب الأصلي.
+    isMakeupGroup: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    makeupInfo: {
+      studentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Student",
+        default: null,
+      },
+      originalSessionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Session",
+        default: null,
+      },
+      originalGroupId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Group",
+        default: null,
+      },
+      originalSessionTitle: { type: String, default: "" },
+      originalSessionDate: { type: Date, default: null },
+      createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      createdAt: { type: Date, default: null },
+    },
+
     // ✅ نوع الجروب: أونلاين ولا أوفلاين
     deliveryMode: {
       type: String,

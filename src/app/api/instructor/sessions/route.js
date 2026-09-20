@@ -112,6 +112,28 @@ export async function GET(req) {
       });
     }
 
+    // ✅ FIX (SECURITY): كان بيستخدم groupIdFilter مباشرة في الـ query من غير
+    // ما يتأكد إنه من ضمن groupIds بتاعت المدرس ده. النتيجة كانت إن أي مدرس
+    // يقدر يبعت groupId لجروب مش بتاعه ويشوف تفاصيل سيشناته (بما فيها
+    // meetingCredentials لو كانت السيشن "اليوم")، وكمان حماية الـ Hold كانت
+    // بتتجاوز لأن groupMap مبني بس من groupIds الحقيقية بتاعته.
+    // الحل: لو فيه فلتر، لازم يكون عنصر موجود فعلاً في groupIds بتاعته.
+    let targetGroupIds = groupIds;
+    if (groupIdFilter) {
+      const matchedGroupId = groupIds.find((gid) => gid.toString() === groupIdFilter);
+      if (!matchedGroupId) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "غير مصرح لك بالوصول لهذا الجروب",
+            code: "FORBIDDEN_GROUP",
+          },
+          { status: 403 },
+        );
+      }
+      targetGroupIds = [matchedGroupId];
+    }
+
     // ✅ Map للجروبات
     const groupMap = {};
     groups.forEach((g) => {
@@ -138,6 +160,8 @@ export async function GET(req) {
     });
 
     // ✅ نجيب كل سيشنات الجروبات (للـ Hold logic + current module detection)
+    // ملحوظة: بنجيبها لكل groupIds (مش targetGroupIds) عشان الـ hold/module
+    // maps تفضل صح لأي جروب من جروبات المدرس، حتى لو الفلتر ضيّق النتيجة النهائية.
     const allGroupSessionsRaw = await Session.find({
       groupId: { $in: groupIds },
       isDeleted: false,
@@ -182,9 +206,9 @@ export async function GET(req) {
       currentModuleIndexMap[gid] = current;
     });
 
-    // ✅ Build query للـ sessions
+    // ✅ Build query للـ sessions — targetGroupIds بعد التحقق من الملكية
     const query = {
-      groupId: groupIdFilter ? groupIdFilter : { $in: groupIds },
+      groupId: { $in: targetGroupIds },
       isDeleted: false,
     };
     if (statusFilter && statusFilter !== "all") query.status = statusFilter;
@@ -196,7 +220,7 @@ export async function GET(req) {
         "title description status scheduledDate startTime endTime moduleIndex sessionNumber " +
           "lessonIndexes attendanceTaken attendance meetingLink meetingPlatform meetingCredentials " +
           "meetingLinkId recordingLink materials instructorNotes groupId pendingReschedule earlyAccess " +
-          "deliveryMode",
+          "deliveryMode isComplimentary",
       )
       .sort({ scheduledDate: 1, startTime: 1 })
       .limit(limit)
@@ -407,7 +431,7 @@ export async function GET(req) {
         meetingLink,
         meetingPlatform,
         meetingCredentials,
-        recordingLink: session.recordingLink || null,
+        recordingLink: isOffline ? null : (session.recordingLink || null),
         materials: session.materials || [],
         instructorNotes: session.instructorNotes || null,
         isToday,
@@ -422,8 +446,10 @@ export async function GET(req) {
         isOffline,
         locationInfo,
         groupIsOnHold,
-        sessionIsLocked, // ✅ جديد — هل السيشن دي بالتحديد مقفولة؟
+        sessionIsLocked, // ✅ هل السيشن دي بالتحديد مقفولة؟
         groupHold: grp.hold || null,
+        // ✅ NEW: للفرونت يعرض بادج "حصة تعويضية" (بدون خصم رصيد)
+        isComplimentary: session.isComplimentary === true,
         pendingReschedule: session.pendingReschedule
           ? {
               status: session.pendingReschedule.status,

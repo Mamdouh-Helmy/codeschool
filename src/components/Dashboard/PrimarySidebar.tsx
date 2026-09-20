@@ -1,283 +1,202 @@
+// components/Dashboard/PrimarySidebar.tsx
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Icon } from "@iconify/react";
-import type { ReactNode } from "react";
-import { useI18n } from "@/i18n/I18nProvider";
 import useSWR from "swr";
+import { useI18n } from "@/i18n/I18nProvider";
+import { NavLink, type CategoryItem, type DashboardNavItem } from "./navigation";
 
-export type DashboardNavItem = {
-    label: string;
-    href: string;
-    icon: string;
-    badge?: ReactNode;
-};
-
-export type CategoryItem = {
-    id: string;
-    label: string;
-    icon: string;
-    items: DashboardNavItem[];
-};
+// Re-exported so existing imports keep working
+export type { CategoryItem, DashboardNavItem };
 
 type PrimarySidebarProps = {
-    categories: CategoryItem[];
-    activeCategory: string | null;
-    isOpen: boolean;
-    onClose: () => void;
-    onCategoryClick: (categoryId: string) => void;
-    isMobile?: boolean;
-    isRTL?: boolean;
+  home: DashboardNavItem;
+  categories: CategoryItem[];
+  activeCategory: string | null;
+  activePath: string | null;
+  isHomeActive: boolean;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+  onCategoryClick: (categoryId: string) => void;
 };
 
-// Fetcher function for SWR
 const fetcher = async (url: string) => {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to fetch stats');
-    const data = await res.json();
-    return data;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch stats");
+  return res.json();
 };
+
+const compact = new Intl.NumberFormat("en-US", { notation: "compact" });
+
+const IDLE =
+  "text-SlateBlueText hover:bg-slate-100 hover:text-primary dark:text-darktext dark:hover:bg-darkmode";
+const SELECTED = "bg-primary/10 text-primary";
 
 const PrimarySidebar = ({
-    categories,
-    activeCategory,
-    isOpen,
-    onClose,
-    onCategoryClick,
-    isMobile = false,
-    isRTL = false
+  home,
+  categories,
+  activeCategory,
+  activePath,
+  isHomeActive,
+  mobileOpen,
+  onMobileClose,
+  onCategoryClick,
 }: PrimarySidebarProps) => {
-    const { t } = useI18n();
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState<string | null>(activeCategory);
 
-    // استخدام SWR للـ real-time updates
-    const { data, error, isLoading } = useSWR(
-        '/api/admin/stats',
-        fetcher,
-        {
-            refreshInterval: 3000, // تحديث كل 3 ثواني
-            revalidateOnFocus: true, // تحديث عند العودة للصفحة
-            revalidateOnReconnect: true, // تحديث عند إعادة الاتصال
-            dedupingInterval: 2000, // منع الطلبات المكررة
-        }
-    );
+  useEffect(() => setExpanded(activeCategory), [activeCategory]);
 
-    // البيانات من الـ API
-    const stats = data?.success ? data.data : {
-        totalUsers: 0,
-        activeCourses: 0,
-    };
+  const { data, error, isLoading } = useSWR("/api/admin/stats", fetcher, {
+    refreshInterval: 30000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+  });
 
-    // دالة لتنسيق الأرقام
-    const formatNumber = (num: number) => {
-        return new Intl.NumberFormat('en-US').format(num);
-    };
+  const stats = data?.success ? data.data : null;
+  const show = (v?: number) =>
+    isLoading ? "…" : error || v == null ? "--" : compact.format(v);
 
-    // For mobile, keep the full sidebar
-    if (isMobile) {
-        return (
-            <>
-                <div
-                    className={`fixed inset-y-0 ${isRTL ? 'right-0' : 'left-0'} z-40 w-72 transform border-r border-slate-200 bg-white transition-transform duration-300 ease-in-out dark:border-dark_border dark:bg-darklight ${isOpen ? "translate-x-0" : isRTL ? "translate-x-full" : "-translate-x-full"}`}
-                >
-                    <div className={`flex items-center justify-between px-6 pt-6 pb-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                        <div className="text-lg font-semibold text-MidnightNavyText dark:text-white">
-                            {t('dashboard.adminConsole') || "Admin Console"}
-                        </div>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary dark:text-darktext dark:hover:bg-darkmode"
-                            aria-label={t('dashboard.closeNavigation') || "Close navigation"}
-                        >
-                            <Icon icon="ion:close" className="h-5 w-5" />
-                        </button>
-                    </div>
+  const statRows = [
+    { icon: "ion:people-outline", label: t("dashboard.totalUsers") || "Total Users", value: stats?.totalUsers },
+    { icon: "ion:book-outline", label: t("dashboard.activeCourses") || "Active Courses", value: stats?.activeCourses },
+  ];
 
-                    <div className="mt-8 px-4">
-                        <div className={`mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-darktext ${isRTL ? 'text-right' : 'text-left'}`}>
-                            {t('dashboard.categories') || "Categories"}
-                        </div>
+  return (
+    <>
+      {/* ───────── Desktop rail ───────── */}
+      <aside className="fixed inset-y-0 start-0 z-40 hidden w-[5.5rem] flex-col border-e border-slate-200 bg-white dark:border-dark_border dark:bg-darklight lg:flex">
+        <div className="flex h-16 shrink-0 items-center justify-center border-b border-slate-200 dark:border-dark_border">
+          <Icon icon="ion:settings-outline" className="h-6 w-6 text-primary" />
+        </div>
 
-                        <nav className="space-y-2">
-                            {categories.map((category) => {
-                                const isActive = activeCategory === category.id;
+        <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-2 py-3" aria-label={t("dashboard.adminConsole") || "Admin Console"}>
+          <Link
+            href={home.href}
+            aria-current={isHomeActive ? "page" : undefined}
+            className={`relative flex flex-col items-center gap-1 rounded-lg px-1 py-2.5 text-center text-[11px] font-medium leading-tight transition-colors ${isHomeActive ? SELECTED : IDLE}`}
+          >
+            {isHomeActive && <span className="absolute inset-y-2 start-0 w-1 rounded-e bg-primary" />}
+            <Icon icon={home.icon} className="h-6 w-6" />
+            <span className="line-clamp-2 break-words">{home.label}</span>
+          </Link>
 
-                                return (
-                                    <button
-                                        key={category.id}
-                                        onClick={() => onCategoryClick(category.id)}
-                                        suppressHydrationWarning
-                                        className={`group flex w-full items-center justify-between rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 ${isActive
-                                                ? "bg-primary/10 text-primary"
-                                                : "text-SlateBlueText hover:bg-slate-100 hover:text-primary dark:text-darktext dark:hover:bg-darkmode"
-                                            } ${isRTL ? 'flex-row-reverse text-right' : 'text-left'}`}
-                                    >
-                                        <span className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                                            <Icon
-                                                icon={category.icon}
-                                                className={`h-5 w-5 ${isActive ? "text-primary" : "text-current"
-                                                    }`}
-                                            />
-                                            <span className="truncate">{category.label}</span>
-                                        </span>
-                                        <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                                            <span className="text-xs text-slate-400 dark:text-darktext">
-                                                {category.items.length}
-                                            </span>
-                                            <Icon
-                                                icon={isRTL ? "ion:chevron-back" : "ion:chevron-forward"}
-                                                className={`h-4 w-4 transition-transform ${isActive ? (isRTL ? "-rotate-90" : "rotate-90") : ""} ${isActive ? "text-primary" : "text-slate-400"
-                                                    }`}
-                                            />
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </nav>
-                    </div>
+          <div className="mx-2 my-2 border-t border-slate-200 dark:border-dark_border" />
 
-                    {/* Mobile footer with close button */}
-                    <div className="absolute bottom-0 left-0 right-0 border-t border-slate-200 bg-white p-4 dark:border-dark_border dark:bg-darklight">
-                        <button
-                            onClick={onClose}
-                            className="w-full rounded-lg bg-slate-100 py-3 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-darkmode dark:text-white dark:hover:bg-darkmode/80"
-                        >
-                            {t('common.close') || "Close Menu"}
-                        </button>
-                    </div>
-                </div>
+          {categories.map((category) => {
+            const active = activeCategory === category.id;
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => onCategoryClick(category.id)}
+                aria-pressed={active}
+                title={category.label}
+                className={`relative flex w-full flex-col items-center gap-1 rounded-lg px-1 py-2.5 text-center text-[11px] font-medium leading-tight transition-colors ${active ? SELECTED : IDLE}`}
+              >
+                {active && <span className="absolute inset-y-2 start-0 w-1 rounded-e bg-primary" />}
+                <Icon icon={category.icon} className="h-6 w-6" />
+                <span className="line-clamp-2 break-words">{category.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-                {/* Overlay for mobile only */}
-                {isOpen && (
-                    <div
-                        className="fixed inset-0 z-30 bg-black/50 lg:hidden"
-                        role="presentation"
-                        onClick={onClose}
-                    />
-                )}
-            </>
-        );
-    }
-
-    // For desktop - icons only with hover effect
-    return (
-        <>
-            <div
-                className={`fixed inset-y-0 ${isRTL ? 'right-0' : 'left-0'} z-40 w-20 transform border-r border-slate-200 bg-white transition-all duration-300 ease-in-out hover:w-72 group dark:border-dark_border dark:bg-darklight lg:static lg:w-20 lg:hover:w-72`}
-            >
-                {/* Logo/Header - Small version */}
-                <div className={`flex items-center justify-center px-4 pt-6 pb-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                    <div className="text-lg font-semibold text-MidnightNavyText dark:text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                        {t('dashboard.adminConsole') || "Admin Console"}
-                    </div>
-                    <div className="absolute left-1/2 transform -translate-x-1/2 group-hover:hidden">
-                        <Icon icon="ion:settings-outline" className="h-6 w-6 text-primary" />
-                    </div>
-                </div>
-
-                <div className="mt-8 px-2">
-                    {/* Categories label - Hidden by default, shown on hover */}
-                    <div className={`mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-darktext opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap ${isRTL ? 'text-right px-3' : 'text-left px-3'}`}>
-                        {t('dashboard.categories') || "Categories"}
-                    </div>
-
-                    <nav className="space-y-2">
-                        {categories.map((category) => {
-                            const isActive = activeCategory === category.id;
-
-                            return (
-                                <button
-                                    key={category.id}
-                                    onClick={() => onCategoryClick(category.id)}
-                                    suppressHydrationWarning
-                                    className={`group/btn flex w-full items-center justify-between rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200 relative overflow-hidden ${isActive
-                                            ? "bg-primary/10 text-primary"
-                                            : "text-SlateBlueText hover:bg-slate-100 hover:text-primary dark:text-darktext dark:hover:bg-darkmode"
-                                        } ${isRTL ? 'flex-row-reverse' : ''}`}
-                                    title={category.label}
-                                >
-                                    {/* Active indicator */}
-                                    {isActive && (
-                                        <div className={`absolute ${isRTL ? 'right-0' : 'left-0'} top-1/2 transform -translate-y-1/2 w-1 h-8 bg-primary rounded-r ${isRTL ? 'rounded-l rounded-r-none' : 'rounded-r rounded-l-none'}`} />
-                                    )}
-
-                                    {/* Icon */}
-                                    <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                                        <Icon
-                                            icon={category.icon}
-                                            className={`h-6 w-6 ${isActive ? "text-primary" : "text-current"
-                                                }`}
-                                        />
-                                        {/* Label - Hidden by default, shown on sidebar hover */}
-                                        <span className="truncate opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                                            {category.label}
-                                        </span>
-                                    </div>
-
-                                    {/* Items count and chevron - Hidden by default, shown on sidebar hover */}
-                                    <div className={`flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                                        <span className="text-xs text-slate-400 dark:text-darktext whitespace-nowrap">
-                                            {category.items.length}
-                                        </span>
-                                        <Icon
-                                            icon={isRTL ? "ion:chevron-back" : "ion:chevron-forward"}
-                                            className={`h-4 w-4 transition-transform ${isActive ? (isRTL ? "-rotate-90" : "rotate-90") : ""} ${isActive ? "text-primary" : "text-slate-400"
-                                                }`}
-                                        />
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </nav>
-                </div>
-
-                {/* Quick Stats Section - Hidden by default, shown on hover */}
-                <div className="mt-8 border-t border-slate-200 px-4 pt-6 dark:border-dark_border opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className={`mb-4 flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
-                        <div className={`text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-darktext ${isRTL ? 'text-right' : 'text-left'}`}>
-                            {t('dashboard.quickStats') || "Quick Stats"}
-                        </div>
-                        {/* Live indicator */}
-                        {!isLoading && !error && (
-                            <div className="flex items-center gap-1">
-                                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
-                                <span className="text-[10px] text-green-600 dark:text-green-400">Live</span>
-                            </div>
-                        )}
-                    </div>
-                    <div className="space-y-3">
-                        <div className={`flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3 dark:bg-darkmode ${isRTL ? 'flex-row-reverse' : ''}`}>
-                            <span className="text-sm text-slate-600 dark:text-darktext">
-                                {t('dashboard.totalUsers') || "Total Users"}
-                            </span>
-                            {isLoading ? (
-                                <div className="h-4 w-12 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                            ) : error ? (
-                                <span className="text-sm font-semibold text-red-500">--</span>
-                            ) : (
-                                <span className="text-sm font-semibold text-primary transition-all duration-300">
-                                    {formatNumber(stats.totalUsers)}
-                                </span>
-                            )}
-                        </div>
-                        <div className={`flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3 dark:bg-darkmode ${isRTL ? 'flex-row-reverse' : ''}`}>
-                            <span className="text-sm text-slate-600 dark:text-darktext">
-                                {t('dashboard.activeCourses') || "Active Courses"}
-                            </span>
-                            {isLoading ? (
-                                <div className="h-4 w-12 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                            ) : error ? (
-                                <span className="text-sm font-semibold text-red-500">--</span>
-                            ) : (
-                                <span className="text-sm font-semibold text-primary transition-all duration-300">
-                                    {formatNumber(stats.activeCourses)}
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                </div>
+        {/* Live stats — compact */}
+        <div className="shrink-0 space-y-2 border-t border-slate-200 px-2 py-3 dark:border-dark_border">
+          {statRows.map((s) => (
+            <div key={s.label} title={s.label} className="flex flex-col items-center gap-0.5 text-slate-500 dark:text-darktext">
+              <Icon icon={s.icon} className="h-4 w-4" />
+              <span className="text-[11px] font-semibold text-primary">{show(s.value)}</span>
             </div>
-        </>
-    );
+          ))}
+        </div>
+      </aside>
+
+      {/* ───────── Mobile drawer ───────── */}
+      <aside
+        aria-hidden={!mobileOpen}
+        className={`fixed inset-y-0 start-0 z-50 flex w-72 max-w-[85vw] flex-col border-e border-slate-200 bg-white transition-[transform,visibility] duration-300 ease-in-out dark:border-dark_border dark:bg-darklight lg:hidden ${
+          mobileOpen ? "visible translate-x-0" : "invisible -translate-x-full rtl:translate-x-full"
+        }`}
+      >
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-4 dark:border-dark_border">
+          <span className="text-lg font-semibold text-MidnightNavyText dark:text-white">
+            {t("dashboard.adminConsole") || "Admin Console"}
+          </span>
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary dark:text-darktext dark:hover:bg-darkmode"
+            aria-label={t("dashboard.closeNavigation") || "Close navigation"}
+          >
+            <Icon icon="ion:close" className="h-5 w-5" />
+          </button>
+        </div>
+
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+          <NavLink item={home} active={isHomeActive} onNavigate={onMobileClose} />
+
+          {categories.map((category) => {
+            const isOpen = expanded === category.id;
+            return (
+              <div key={category.id}>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : category.id)}
+                  aria-expanded={isOpen}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    activeCategory === category.id ? SELECTED : IDLE
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <Icon icon={category.icon} className="h-5 w-5 shrink-0" />
+                    <span className="truncate">{category.label}</span>
+                  </span>
+                  <Icon
+                    icon="ion:chevron-down"
+                    className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {isOpen && (
+                  <div className="ms-5 mt-1 space-y-1 border-s border-slate-200 ps-2 dark:border-dark_border">
+                    {category.items.map((item) => (
+                      <NavLink
+                        key={item.href}
+                        item={item}
+                        active={activePath === item.href}
+                        onNavigate={onMobileClose}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="shrink-0 space-y-2 border-t border-slate-200 p-4 dark:border-dark_border">
+          {statRows.map((s) => (
+            <div key={s.label} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-darkmode">
+              <span className="text-slate-600 dark:text-darktext">{s.label}</span>
+              <span className="font-semibold text-primary">{show(s.value)}</span>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          role="presentation"
+          onClick={onMobileClose}
+        />
+      )}
+    </>
+  );
 };
 
 export default PrimarySidebar;
