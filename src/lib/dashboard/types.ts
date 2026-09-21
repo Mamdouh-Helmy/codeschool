@@ -1,8 +1,5 @@
 import type { MetricTrend } from "@/components/Dashboard/MetricCard";
 import type { PerformancePoint } from "@/components/Dashboard/PerformanceChart";
-import type { ActivityItem } from "@/components/Dashboard/ActivityFeed";
-import type { EnrollmentRecord } from "@/components/Dashboard/RecentEnrollmentsTable";
-import type { ContentAction, ContentStat } from "@/components/Dashboard/ContentManager";
 
 export type DashboardMetric = {
   label: string;
@@ -27,12 +24,6 @@ export type DashboardSnapshot = {
     description: string;
     goalLabel: string;
     goalValue: string;
-  };
-  activities: ActivityItem[];
-  enrollments: EnrollmentRecord[];
-  content: {
-    stats: ContentStat[];
-    actions: ContentAction[];
   };
   health: HealthCard[];
   updatedAt: string;

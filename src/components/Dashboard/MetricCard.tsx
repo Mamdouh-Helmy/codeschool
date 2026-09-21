@@ -3,11 +3,17 @@
 import { Icon } from "@iconify/react";
 import { METRIC_ACCENTS } from "@/lib/constants/dashboard";
 
+export type MetricTrend = {
+  value: string;
+  isPositive: boolean;
+  description: string;
+};
+
 type Props = {
   label: string;
   value: string;
   icon: string;
-  trend: { value: string; isPositive: boolean; description: string };
+  trend: MetricTrend;
   sublabel?: string;
   accent?: keyof typeof METRIC_ACCENTS;
 };
