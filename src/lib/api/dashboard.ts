@@ -81,10 +81,8 @@ export interface DashboardData {
   revenueTrend: RevenuePoint[];
 }
 
-const API_BASE = process.env.NEXTAUTH_URL || "http://localhost:3000";
-
 export async function getDashboardData(locale: "ar" | "en" = "en"): Promise<DashboardData> {
-  const res = await fetch(`${API_BASE}/api/dashboard`, {
+  const res = await fetch(`/api/dashboard`, {
     cache: "no-store",
     headers: {
       "Content-Type": "application/json",
