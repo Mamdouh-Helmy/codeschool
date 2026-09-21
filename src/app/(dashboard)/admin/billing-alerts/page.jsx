@@ -18,7 +18,7 @@ import {
     BarChart3,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import AdminDrawer from "@/components/admin/AdminDrawer"; // ← عدّل المسار حسب مكان الملف عندك
+import AdminDrawer from "../../../../components/Admin/AdminDrawer"; // ← عدّل المسار حسب مكان الملف عندك
 
 /* ───────────── Helpers ───────────── */
 
