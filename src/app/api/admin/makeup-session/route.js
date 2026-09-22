@@ -620,7 +620,6 @@ export async function POST(req) {
         );
       }
 
-      // ✅ افحص كل لينك ضد التعارضات الفعلية
       const linksToCheck = await MeetingLink.find({
         _id: { $in: validLinkIds },
         isDeleted: false,
@@ -633,7 +632,10 @@ export async function POST(req) {
         );
       }
 
+      // ✅ نفصل الفاضي عن المتعارض — الحصة التعويضية سيشن واحدة، فيكفي لينك فاضي واحد
       const conflictingLinks = [];
+      const freeLinks = [];
+
       for (const link of linksToCheck) {
         const conflict = findScheduleConflict(link, newSchedule, null);
         if (conflict) {
@@ -644,21 +646,31 @@ export async function POST(req) {
             conflictingDays: conflict.conflictingDays || [],
             conflictingTime: conflict.conflictingTime || "",
           });
+        } else {
+          freeLinks.push(link);
         }
       }
 
-      if (conflictingLinks.length > 0) {
+      // نرفض بس لو مفيش ولا لينك فاضي من المختارين
+      if (freeLinks.length === 0) {
         return NextResponse.json(
           {
             success: false,
-            error: "بعض اللينكات المختارة متعارضة مع جروبات تانية",
+            error: "كل اللينكات المختارة متعارضة مع جروبات تانية",
             linkConflicts: conflictingLinks,
           },
           { status: 409 },
         );
       }
 
-      validatedLinkIds = linksToCheck.map((l) => l._id.toString());
+      // نحتفظ بالفاضي بس، وبنفس ترتيب اختيار الأدمن (عشان أول لينك فاضي يتاخد)
+      const order = validLinkIds.map(String);
+      validatedLinkIds = freeLinks
+        .sort(
+          (a, b) =>
+            order.indexOf(a._id.toString()) - order.indexOf(b._id.toString()),
+        )
+        .map((l) => l._id.toString());
     }
 
     // ─── 12. ابني courseSnapshot ────────────────────────────────────────
@@ -780,6 +792,14 @@ export async function POST(req) {
 
     const newGroup = await Group.create(newGroupData);
 
+    // ✅ لازم نضيف الجروب التعويضي الجديد لـ academicInfo.groupIds بتاع
+    // الطالب — من غير الخطوة دي، أي استعلام بيجيب "طلاب الجروب" باستخدام
+    // Student.academicInfo.groupIds (زي شاشة الحضور وصفحة طلاب الجروب) مش
+    // هيلاقي الطالب خالص، رغم إنه موجود في Group.students بالفعل.
+    await Student.findByIdAndUpdate(studentId, {
+      $addToSet: { "academicInfo.groupIds": newGroup._id },
+    });
+
     // ─── 16. فعّل الجروب: توليد السيشن + حجز اللينك + إرسال الـ 3 رسائل ───
     // ✅ اتغير النداء — بقى onMakeupGroupActivated من makeupAutomation
     await Group.findByIdAndUpdate(newGroup._id, {
@@ -808,6 +828,10 @@ export async function POST(req) {
       await Session.deleteMany({ groupId: newGroup._id });
       await Group.findByIdAndUpdate(newGroup._id, {
         $set: { isDeleted: true, status: "draft" },
+      });
+      // ✅ نشيل الجروب اللي فشل من academicInfo.groupIds بتاع الطالب برضو
+      await Student.findByIdAndUpdate(studentId, {
+        $pull: { "academicInfo.groupIds": newGroup._id },
       });
 
       return NextResponse.json(

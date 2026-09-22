@@ -452,8 +452,7 @@ export async function PATCH(req, { params }) {
       }
     }
 
-    // ✅ تنبيهات الرصيد — بنتخطاها للحصص التعويضية
-    const lowBalanceStudents = [];
+        const lowBalanceStudents = [];
     const zeroBalanceStudents = [];
 
     if (!isComplimentarySession) {
@@ -467,13 +466,13 @@ export async function PATCH(req, { params }) {
         const previousBalance = remainingHours + CREDIT_DEDUCTION;
         const base = { studentId: record.studentId, student, remainingHours };
 
-        if (previousBalance > 4 && remainingHours <= 4 && remainingHours > 2) {
+        // ✅ عتبة 2 ساعة → قالب "4h" (التنبيه المبدئي)
+        if (previousBalance > 2 && remainingHours <= 2 && remainingHours > 0) {
           lowBalanceStudents.push({ ...base, alertType: "4h" });
         }
-        if (previousBalance > 2 && remainingHours <= 2 && remainingHours > 0) {
-          lowBalanceStudents.push({ ...base, alertType: "2h" });
-        }
+        // ✅ عتبة الصفر → قالب "2h" (التنبيه العاجل)
         if (remainingHours <= 0) {
+          lowBalanceStudents.push({ ...base, remainingHours: 0, alertType: "2h" });
           zeroBalanceStudents.push({ ...base, remainingHours: 0 });
         }
       }

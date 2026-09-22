@@ -155,15 +155,30 @@ export async function POST(req, { params }) {
       // واحدة يدويًا — بتعمل فحص تعارض دفاعي كمان قبل الحجز الفعلي
       const { manuallyAssignMeetingLink } = await import("@/utils/sessionGenerator");
 
-      for (let i = 0; i < brokenSessions.length; i++) {
-        const session = brokenSessions[i];
-        const linkId = selectedLinkIds[i % selectedLinkIds.length];
-        try {
-          const result = await manuallyAssignMeetingLink(session.id, linkId, adminUser.id);
-          if (result.success) fixedCount++;
-          else failures.push({ sessionId: session.id, error: result.error });
-        } catch (e) {
-          failures.push({ sessionId: session.id, error: e.message });
+      // ✅ لكل سيشن معطوبة، نجرب اللينكات المختارة بالترتيب لحد ما نلاقي
+      // واحد فاضي في يوم السيشن دي بالذات — مش round-robin ثابت. لو الأول
+      // مشغول نجرب اللي بعده، وهكذا؛ لو محدش فاضي نسجل فشل السيشن دي بس
+      // ونكمل الباقي (كل سيشن مستقلة، ليها يومها وميعادها بالفعل).
+      for (const session of brokenSessions) {
+        let assigned = false;
+        let lastError = "لا يوجد لينك فاضي من المختارة لهذا الميعاد";
+
+        for (const linkId of selectedLinkIds) {
+          try {
+            const result = await manuallyAssignMeetingLink(session.id, linkId, adminUser.id);
+            if (result.success) {
+              assigned = true;
+              fixedCount++;
+              break;
+            }
+            lastError = result.error || lastError;
+          } catch (e) {
+            lastError = e.message || lastError;
+          }
+        }
+
+        if (!assigned) {
+          failures.push({ sessionId: session.id, error: lastError });
         }
       }
     } else {

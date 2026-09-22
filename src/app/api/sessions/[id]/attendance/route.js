@@ -216,9 +216,10 @@ export async function POST(req, { params }) {
         reason: `First record for this session: ${newStatus}`,
       });
 
-      const previousBalance = remainingHours + HOURS_PER_SESSION;
+            const previousBalance = remainingHours + HOURS_PER_SESSION;
 
-      if (previousBalance > 4 && remainingHours <= 4 && remainingHours > 2) {
+      // ✅ عتبة 2 ساعة → قالب "4h" (التنبيه المبدئي)
+      if (previousBalance > 2 && remainingHours <= 2 && remainingHours > 0) {
         lowBalanceStudents.push({
           studentId,
           student,
@@ -227,16 +228,14 @@ export async function POST(req, { params }) {
         });
       }
 
-      if (previousBalance > 2 && remainingHours <= 2 && remainingHours > 0) {
+      // ✅ عتبة الصفر → قالب "2h" (التنبيه العاجل)
+      if (remainingHours <= 0) {
         lowBalanceStudents.push({
           studentId,
           student,
-          remainingHours,
+          remainingHours: 0,
           alertType: "2h",
         });
-      }
-
-      if (remainingHours <= 0) {
         zeroBalanceStudents.push({ studentId, student, remainingHours: 0 });
       }
     }

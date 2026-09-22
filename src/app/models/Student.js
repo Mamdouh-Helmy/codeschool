@@ -1091,15 +1091,17 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
       hoursToDeduct -= deductFromPackage;
       deductedFromPackage += deductFromPackage;
 
-      if (currentPackage.remainingHours === 0) {
+            if (currentPackage.remainingHours === 0) {
         currentPackage.status = "completed";
         this.creditSystem.status = "expired";
         this.creditSystem.stats.zeroBalanceDate = new Date();
 
-        if (this.communicationPreferences?.notificationChannels) {
-          this.communicationPreferences.notificationChannels.whatsapp = false;
-          this.creditSystem.stats.notificationsDisabledAt = new Date();
-        }
+        // ✅ FIX: متبقاش تقفل قناة الواتساب هنا فورًا — ده كان بيمنع
+        // sendLowBalanceAlerts من بعت رسالة "credit_low_balance_2h" لأن
+        // canSendMessageForLowBalance كانت بترجع false على طول (القناة
+        // اتقفلت قبل ما نوصل لمرحلة الإرسال). التعطيل الفعلي بقى مسؤولية
+        // disableZeroBalanceNotifications، اللي بتتنفذ في الـ route بعد
+        // إرسال رسالة الـ 2h مباشرة، مش هنا جوه الخصم نفسه.
       }
     }
 

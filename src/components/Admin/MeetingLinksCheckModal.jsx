@@ -6,6 +6,21 @@ import { createPortal } from "react-dom";
 import { X, Loader2, MapPin, ExternalLink, Info, AlertTriangle, Check } from "lucide-react";
 import toast from "react-hot-toast";
 
+const DEFAULT_ASSIGNMENT_MODE = "first_available";
+
+const ASSIGNMENT_MODE_OPTIONS = [
+  {
+    value: "first_available",
+    title: "أول لينك فاضي",
+    desc: "بيحجز الأول بس، ولو مشغول في يوم معين بيجرب اللي بعده",
+  },
+  {
+    value: "round_robin",
+    title: "توزيع بالتناوب",
+    desc: "كل سيشن على لينك بالترتيب",
+  },
+];
+
 // ── Shared building blocks ──────────────────────────────────────────────
 
 // Overlay بيتعمل render في document.body عشان يملا الشاشة طول وعرض
@@ -171,6 +186,32 @@ function ToggleRow({ checked, onChange, title, description }) {
   );
 }
 
+// ✅ اختيار طريقة توزيع اللينكات (بيظهر بس لما يكون فيه أكتر من لينك مختار)
+function AssignmentModeSelector({ value, onChange }) {
+  return (
+    <div className="space-y-2 px-6 py-3">
+      <p className="text-[11px] font-medium text-gray-400">طريقة توزيع اللينكات</p>
+      {ASSIGNMENT_MODE_OPTIONS.map((opt) => (
+        <label key={opt.value} className="flex cursor-pointer items-start gap-2.5">
+          <input
+            type="radio"
+            name="linkAssignmentMode"
+            checked={value === opt.value}
+            onChange={() => onChange(opt.value)}
+            className="mt-0.5 h-4 w-4 text-primary focus:ring-primary"
+          />
+          <span>
+            <span className="block text-xs font-medium text-gray-700 dark:text-gray-200">
+              {opt.title}
+            </span>
+            <span className="block text-[11px] text-gray-400">{opt.desc}</span>
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
 // ── Main component ───────────────────────────────────────────────────────
 
 export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onConfirm }) {
@@ -179,6 +220,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
   const [selectedLinks, setSelectedLinks] = useState([]);
   const [forceActivate, setForceActivate] = useState(false);
   const [releaseReserved, setReleaseReserved] = useState(false);
+  const [linkAssignmentMode, setLinkAssignmentMode] = useState(DEFAULT_ASSIGNMENT_MODE);
 
   // ── Fetch preview ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -221,6 +263,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
       setSelectedLinks([]);
       setForceActivate(false);
       setReleaseReserved(false);
+      setLinkAssignmentMode(DEFAULT_ASSIGNMENT_MODE);
     }
   }, [isOpen]);
 
@@ -233,7 +276,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
 
   const handleConfirm = () => {
     if (data?.isOffline) {
-      onConfirm(false, false, [], []);
+      onConfirm(false, false, [], [], DEFAULT_ASSIGNMENT_MODE);
       return;
     }
 
@@ -246,7 +289,13 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
       ...(data?.preselectedLinks || []),
       ...(data?.availableLinks || []),
     ];
-    onConfirm(forceActivate, releaseReserved, selectedLinks, availableLinks);
+    onConfirm(
+      forceActivate,
+      releaseReserved,
+      selectedLinks,
+      availableLinks,
+      linkAssignmentMode,
+    );
   };
 
   if (!isOpen) return null;
@@ -358,6 +407,7 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
   } = data;
 
   const canProceed = forceActivate || selectedLinks.length > 0;
+  const showModeSelector = selectedLinks.length > 1 && !forceActivate;
 
   return (
     <ModalOverlay>
@@ -446,6 +496,12 @@ export default function MeetingLinksCheckModal({ isOpen, groupId, onClose, onCon
           )}
 
           <div className="mt-2 divide-y divide-gray-100 border-t border-gray-100 dark:divide-dark_border dark:border-dark_border">
+            {showModeSelector && (
+              <AssignmentModeSelector
+                value={linkAssignmentMode}
+                onChange={setLinkAssignmentMode}
+              />
+            )}
             <ToggleRow
               checked={releaseReserved}
               onChange={(e) => setReleaseReserved(e.target.checked)}

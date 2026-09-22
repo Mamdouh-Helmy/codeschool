@@ -59,6 +59,14 @@ const INITIAL_STATS = {
     makeup: 0,  // ✅ NEW
 };
 
+const DEFAULT_PENDING_ACTIVATION = {
+    forceActivate: false,
+    releaseReserved: false,
+    selectedLinkIds: [],
+    firstMeetingLink: "",
+    linkAssignmentMode: "first_available",
+};
+
 const STATUS_COLORS = {
     active: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20",
     draft: "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:ring-slate-600/40",
@@ -159,9 +167,7 @@ export default function GroupsAdmin() {
     // 🎁 Make-up Session state
     const [makeupModalOpen, setMakeupModalOpen] = useState(false);
 
-    const [pendingActivation, setPendingActivation] = useState({
-        forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "",
-    });
+    const [pendingActivation, setPendingActivation] = useState(DEFAULT_PENDING_ACTIVATION);
 
     const searchTimeoutRef = useRef(null);
 
@@ -406,69 +412,87 @@ export default function GroupsAdmin() {
         setMeetingLinksModal({ open: true, groupId });
     }, [t]);
 
-    const onMeetingLinksCheckConfirmed = useCallback(async (forceActivate, releaseReserved, selectedLinkIds = [], availableLinks = []) => {
-        const groupId = meetingLinksModal.groupId;
-        setMeetingLinksModal({ open: false, groupId: null });
+   const onMeetingLinksCheckConfirmed = useCallback(async (
+    forceActivate,
+    releaseReserved,
+    selectedLinkIds = [],
+    availableLinks = [],
+    linkAssignmentMode = "first_available",
+) => {
+    const groupId = meetingLinksModal.groupId;
+    setMeetingLinksModal({ open: false, groupId: null });
 
-        const firstSelectedLink = availableLinks.find(
-            (l) => selectedLinkIds.includes(l._id?.toString() || l.id?.toString())
-        );
-        const firstMeetingLink = firstSelectedLink?.link || "";
-        setPendingActivation({ forceActivate, releaseReserved, selectedLinkIds, firstMeetingLink });
+    const firstSelectedLink = availableLinks.find(
+        (l) => selectedLinkIds.includes(l._id?.toString() || l.id?.toString())
+    );
+    const firstMeetingLink = firstSelectedLink?.link || "";
+    setPendingActivation({
+        forceActivate,
+        releaseReserved,
+        selectedLinkIds,
+        firstMeetingLink,
+        linkAssignmentMode,
+    });
 
-        try {
-            const res = await fetch(`/api/groups/${groupId}`, {
-                cache: "no-store",
-                headers: { "Cache-Control": "no-cache" },
+    try {
+        const res = await fetch(`/api/groups/${groupId}`, {
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache" },
+        });
+        if (!res.ok) throw new Error(`Failed to fetch group: ${res.status}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+            setInstructorNotificationModal({
+                open: true,
+                groupData: { ...json.data, firstMeetingLink: firstMeetingLink || json.data.firstMeetingLink || "" },
+                instructors: json.data.instructors || [],
             });
-            if (!res.ok) throw new Error(`Failed to fetch group: ${res.status}`);
-            const json = await res.json();
-            if (json.success && json.data) {
-                setInstructorNotificationModal({
-                    open: true,
-                    groupData: { ...json.data, firstMeetingLink: firstMeetingLink || json.data.firstMeetingLink || "" },
-                    instructors: json.data.instructors || [],
-                });
-            } else {
-                throw new Error(json.error || t("groups.activate.loadError"));
-            }
-        } catch (err) {
-            toast.error(err.message || t("groups.activate.loadError"), { position: "top-center" });
+        } else {
+            throw new Error(json.error || t("groups.activate.loadError"));
         }
-    }, [meetingLinksModal.groupId, t]);
+    } catch (err) {
+        toast.error(err.message || t("groups.activate.loadError"), { position: "top-center" });
+    }
+}, [meetingLinksModal.groupId, t]);
 
-    const handleActivateAndNotify = useCallback(async (instructorMessages) => {
-        const groupId = instructorNotificationModal?.groupData?._id || instructorNotificationModal?.groupData?.id;
-        if (!groupId) {
-            toast.error(t("groups.activate.invalidId"), { position: "top-center" });
-            return;
-        }
+   const handleActivateAndNotify = useCallback(async (instructorMessages) => {
+    const groupId = instructorNotificationModal?.groupData?._id || instructorNotificationModal?.groupData?.id;
+    if (!groupId) {
+        toast.error(t("groups.activate.invalidId"), { position: "top-center" });
+        return;
+    }
 
-        const loadingToast = toast.loading(t("groups.activate.loading"), { position: "top-center" });
-        try {
-            const res = await fetch(`/api/groups/${groupId}/activate`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    instructorMessages,
-                    forceActivate: pendingActivation.forceActivate,
-                    releaseReserved: pendingActivation.releaseReserved,
-                    selectedLinkIds: pendingActivation.selectedLinkIds,
-                }),
+    const loadingToast = toast.loading(t("groups.activate.loading"), { position: "top-center" });
+    try {
+        const res = await fetch(`/api/groups/${groupId}/activate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                instructorMessages,
+                forceActivate: pendingActivation.forceActivate,
+                releaseReserved: pendingActivation.releaseReserved,
+                selectedLinkIds: pendingActivation.selectedLinkIds,
+                linkAssignmentMode: pendingActivation.linkAssignmentMode,
+            }),
+        });
+        const result = await res.json();
+        if (res.ok && result.success) {
+            await loadGroups();
+            toast.success(t("groups.activate.success"), { id: loadingToast, position: "top-center" });
+            setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
+            setPendingActivation(DEFAULT_PENDING_ACTIVATION);
+        } else {
+            // ✅ رسالة الـ 409 (مفيش لينك فاضي) فيها الأيام وعدد السيشنات
+            toast.error(result.error || t("groups.activate.failed"), {
+                id: loadingToast,
+                position: "top-center",
+                duration: 8000,
             });
-            const result = await res.json();
-            if (res.ok && result.success) {
-                await loadGroups();
-                toast.success(t("groups.activate.success"), { id: loadingToast, position: "top-center" });
-                setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
-                setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "" });
-            } else {
-                toast.error(result.error || t("groups.activate.failed"), { id: loadingToast, position: "top-center" });
-            }
-        } catch {
-            toast.error(t("groups.activate.failed"), { id: loadingToast, position: "top-center" });
         }
-    }, [instructorNotificationModal, pendingActivation, loadGroups, t]);
+    } catch {
+        toast.error(t("groups.activate.failed"), { id: loadingToast, position: "top-center" });
+    }
+}, [instructorNotificationModal, pendingActivation, loadGroups, t]);
 
     const onAddStudents = useCallback((groupId) => {
         setSelectedGroupForStudents(groupId);
@@ -621,10 +645,10 @@ export default function GroupsAdmin() {
         setSelectedGroupForStudents(null);
     }, []);
 
-    const closeInstructorModal = useCallback(() => {
-        setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
-        setPendingActivation({ forceActivate: false, releaseReserved: false, selectedLinkIds: [], firstMeetingLink: "" });
-    }, []);
+   const closeInstructorModal = useCallback(() => {
+    setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
+    setPendingActivation(DEFAULT_PENDING_ACTIVATION);
+}, []);
 
     const closeFixLinksModal = useCallback(() => {
         setFixLinksModal({ open: false, groupId: null });

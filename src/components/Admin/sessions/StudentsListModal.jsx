@@ -25,8 +25,10 @@ export default function StudentsListModal({ groupStudents, group, onClose, isRTL
       <div className="space-y-2.5">
         {groupStudents.map((student) => {
           const lang   = student.communicationPreferences?.preferredLanguage || "ar";
-          const gender = student.personalInfo?.gender || "male";
-          const rel    = student.guardianInfo?.relationship || "father";
+          // ✅ الموديل بيسمح بـ "male"/"Male" و"female"/"Female" مع بعض —
+          // توحيد الحالة هنا قبل المقارنة عشان "Male" ماتقعش غلط على فرع الأنثى
+          const gender = (student.personalInfo?.gender || "male").toLowerCase();
+          const rel    = (student.guardianInfo?.relationship || "father").toLowerCase();
 
           return (
             <div

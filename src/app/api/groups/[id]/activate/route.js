@@ -16,6 +16,9 @@ import {
   pruneOrphanedReservations,
 } from "@/utils/checkMeetingLinks";
 
+const LINK_ERROR_CODES = ["NO_AVAILABLE_LINK", "LINK_CONFLICT"];
+const VALID_ASSIGNMENT_MODES = ["first_available", "round_robin"];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: build simulated session list for preview (no DB writes)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,7 +159,7 @@ export async function GET(req, { params }) {
       );
     }
 
-    // ✅ NEW: Offline Groups مش محتاجة أي لينكات خالص — المدرس بيروح المكان
+    // ✅ Offline Groups مش محتاجة أي لينكات خالص — المدرس بيروح المكان
     if (group.deliveryMode === "offline") {
       const sessions = previewSessions(group);
       const totalSessions = sessions.length;
@@ -227,8 +230,7 @@ export async function GET(req, { params }) {
     const sessions = previewSessions(group);
     const totalSessions = sessions.length;
 
-    // ✅ NEW: اجمع اللينكات المختارة مسبقًا من فورم الحصة التعويضية
-    // (لو الجروب تعويضي والأدمن اختار لينكات وقت الإنشاء)
+    // ✅ اللينكات المختارة مسبقًا من فورم الحصة التعويضية
     const preselectedLinkIds = (group.metadata?.selectedLinkIds || []).map(
       (lid) => lid.toString(),
     );
@@ -250,7 +252,6 @@ export async function GET(req, { params }) {
         link: l.link,
       }));
 
-      // ✅ شيل اللينكات دي من قايمة available عشان ما تتكررش في العرض
       const preselSet = new Set(preselectedLinkIds);
       finalAvailableLinks = availableLinks.filter(
         (l) => !preselSet.has(l._id.toString()),
@@ -261,14 +262,8 @@ export async function GET(req, { params }) {
       );
     }
 
-    const sessionsWithLinks =
-      finalAvailableLinks.length > 0 || preselectedLinks.length > 0
-        ? totalSessions
-        : 0;
-    const sessionsWithout =
-      finalAvailableLinks.length > 0 || preselectedLinks.length > 0
-        ? 0
-        : totalSessions;
+    const hasAnyLink =
+      finalAvailableLinks.length > 0 || preselectedLinks.length > 0;
 
     return NextResponse.json({
       success: true,
@@ -281,12 +276,11 @@ export async function GET(req, { params }) {
         reservedLinksCount: reservedLinks.length,
         hasNoLinks: allLinks.length === 0,
         hasAvailableLinks: finalAvailableLinks.length > 0,
-        sessionsWithLinks,
-        sessionsWithout,
+        sessionsWithLinks: hasAnyLink ? totalSessions : 0,
+        sessionsWithout: hasAnyLink ? 0 : totalSessions,
         sessions,
         availableLinks: finalAvailableLinks,
         reservedLinks,
-        // ✅ اللينكات المختارة مسبقًا من فورم الحصة التعويضية
         preselectedLinks,
         preselectedLinkIds,
       },
@@ -316,9 +310,14 @@ export async function POST(req, { params }) {
       instructorMessages = {},
       forceActivate = false,
       releaseReserved = false,
-      // ✅ استقبل الـ IDs المختارة من الفرونت (لو الفرونت بعتها)
       selectedLinkIds = [],
+      linkAssignmentMode: requestedMode = "first_available",
     } = body;
+
+    // ✅ نتأكد إن الـ mode قيمة مسموحة، وغير كده نرجع للافتراضي
+    const linkAssignmentMode = VALID_ASSIGNMENT_MODES.includes(requestedMode)
+      ? requestedMode
+      : "first_available";
 
     await connectDB();
 
@@ -340,12 +339,11 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ فلاج الـ Offline — بيتحسب مرة واحدة وبيتحكم في كل الفلو بعد كده
     const isOffline = group.deliveryMode === "offline";
 
     console.log(`\n🎯 Activating group ${group.code}`);
     console.log(
-      `   Delivery Mode: ${group.deliveryMode} (isOffline: ${isOffline})`,
+      `   Delivery Mode: ${group.deliveryMode} (isOffline: ${isOffline}) | Link mode: ${linkAssignmentMode}`,
     );
 
     // ── Release reserved links if requested (Online Only) ────────────────
@@ -474,25 +472,24 @@ export async function POST(req, { params }) {
 
     // ── Automation ───────────────────────────────────────────────────────
     try {
-      // ✅ NEW: لو الفرونت مبعتش selectedLinkIds (زي حالة الـ Make-up Group
-      // اللي بيتفعّل من صفحة الجروبات بدون ما المودال يبعتهم)، نقراها من
-      // الـ metadata اللي اتخزنت وقت إنشاء الجروب التعويضي.
+      // لو الفرونت مبعتش selectedLinkIds (زي الـ Make-up Group) نقراها من الـ metadata
       const selectedLinkIdsFromMetadata =
         updatedGroup.metadata?.selectedLinkIds || [];
 
       const finalSelectedLinkIds =
         selectedLinkIds.length > 0
-          ? selectedLinkIds // من الفرونت (اختيار يدوي في المودال)
-          : selectedLinkIdsFromMetadata; // من الـ Make-up form
+          ? selectedLinkIds
+          : selectedLinkIdsFromMetadata;
+
+      const linkSource =
+        selectedLinkIds.length > 0
+          ? "frontend"
+          : selectedLinkIdsFromMetadata.length > 0
+            ? "metadata"
+            : "none";
 
       console.log(
-        `   🔗 Selected links source: ${
-          selectedLinkIds.length > 0
-            ? "frontend"
-            : selectedLinkIdsFromMetadata.length > 0
-              ? "metadata (make-up form)"
-              : "none"
-        } (${finalSelectedLinkIds.length} link(s))`,
+        `   🔗 Links source: ${linkSource} (${finalSelectedLinkIds.length}) | mode: ${linkAssignmentMode}`,
       );
 
       // ✅ للـ Offline بنمرر [] عشان الـ sessionGenerator ماتحاولش تحجز أي لينك
@@ -500,6 +497,7 @@ export async function POST(req, { params }) {
         id,
         adminUser.id,
         isOffline ? [] : finalSelectedLinkIds,
+        { linkAssignmentMode },
       );
 
       let instructorNotificationResult = {
@@ -531,6 +529,11 @@ export async function POST(req, { params }) {
           countTime: entry.countTime || 0,
         }),
       );
+
+      // ✅ اللينكات اللي اتحجزت فعليًا (مش كل المختار)
+      const usedLinkIds = isOffline
+        ? []
+        : (automationResult.meetingLinks?.linksUsed ?? finalSelectedLinkIds);
 
       return NextResponse.json({
         success: true,
@@ -565,13 +568,9 @@ export async function POST(req, { params }) {
             mode: "all",
             selectedModules: [],
           },
-          usedLinkIds: isOffline ? [] : finalSelectedLinkIds,
-          linkSource:
-            selectedLinkIds.length > 0
-              ? "frontend"
-              : selectedLinkIdsFromMetadata.length > 0
-                ? "metadata"
-                : "none",
+          usedLinkIds,
+          linkSource,
+          linkAssignmentMode,
         },
         automation: {
           sessions: {
@@ -596,19 +595,28 @@ export async function POST(req, { params }) {
       });
     } catch (automationError) {
       console.error("❌ Automation failed:", automationError);
+
       if (!isReactivation) {
         await Group.findByIdAndUpdate(id, {
           $set: { status: "draft", "metadata.updatedAt": new Date() },
         });
       }
+
+      const isLinkError = LINK_ERROR_CODES.includes(automationError.code);
+
       return NextResponse.json(
         {
           success: false,
-          error: `Automation failed: ${automationError.message}`,
+          error: isLinkError
+            ? automationError.message
+            : `Automation failed: ${automationError.message}`,
+          code: automationError.code,
+          uncoveredDays: automationError.uncoveredDays,
+          linkConflicts: automationError.linkConflicts,
           suggestion:
-            "Group status reverted to draft. Please check the schedule and try again.",
+            "Group status reverted to draft. اختار لينكات تانية أو فك الحجز وحاول تاني.",
         },
-        { status: 500 },
+        { status: isLinkError ? 409 : 500 },
       );
     }
   } catch (error) {

@@ -188,13 +188,19 @@ async function buildMakeupVariables({
   const studentNameForSalutation = sv.studentName || "";
   const guardianNameForSalutation = sv.guardianName || "";
 
-  // ✅ التحية النهائية = القيمة من DB + الاسم
-  const studentSalutationFromDB = studentSalutationBase
-    ? `${studentSalutationBase} ${studentNameForSalutation}`.trim()
-    : "";
-  const guardianSalutationFromDB = guardianSalutationBase
-    ? `${guardianSalutationBase} ${guardianNameForSalutation}`.trim()
-    : "";
+  // ✅ لو القيمة من الداتا بيس أصلاً فيها {guardianName}/{studentName} جواها،
+// بدّلها هنا مباشرة ومتضيفش الاسم تاني عشان الاسم يظهر مرة واحدة بس
+const studentSalutationFromDB = studentSalutationBase
+  ? (studentSalutationBase.includes("{studentName}")
+      ? studentSalutationBase.replace(/\{studentName\}/g, studentNameForSalutation)
+      : `${studentSalutationBase} ${studentNameForSalutation}`.trim())
+  : "";
+
+const guardianSalutationFromDB = guardianSalutationBase
+  ? (guardianSalutationBase.includes("{guardianName}")
+      ? guardianSalutationBase.replace(/\{guardianName\}/g, guardianNameForSalutation)
+      : `${guardianSalutationBase} ${guardianNameForSalutation}`.trim())
+  : "";
 
   // ── القاموس النهائي ────────────────────────────────────────────
   return {

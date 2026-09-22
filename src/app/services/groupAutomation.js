@@ -201,8 +201,14 @@ async function filterEligibleStudents(students) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ CORE — توليد السيشنات + حجز اللينكات (مشترك بين العادي والتعويضي)
+// options.linkAssignmentMode: "first_available" (default) | "round_robin"
 // ═══════════════════════════════════════════════════════════════════════════
-export async function activateGroupSessionsCore(groupId, userId, selectedLinkIds = []) {
+export async function activateGroupSessionsCore(
+  groupId,
+  userId,
+  selectedLinkIds = [],
+  options = {},
+) {
   const group = await Group.findById(groupId)
     .populate("courseId")
     .populate("instructors", "name email profile");
@@ -246,12 +252,15 @@ export async function activateGroupSessionsCore(groupId, userId, selectedLinkIds
     });
   }
 
+  // ✅ generateSessionsForGroup بيوزّع اللينكات وبيسجّل الحجز الفعلي
+  // (persistLinkReservations) بالأيام الفعلية لكل لينك — فمفيش حجز تاني هنا.
   const { generateSessionsForGroup } = await import("../../utils/sessionGenerator");
   const sessionsResult = await generateSessionsForGroup(
     groupId,
     group,
     userId,
     selectedLinkIds,
+    options,
   );
 
   if (!sessionsResult.success) {
@@ -275,47 +284,6 @@ export async function activateGroupSessionsCore(groupId, userId, selectedLinkIds
           },
         },
       });
-
-      if (selectedLinkIds.length > 0) {
-        const MeetingLink = (await import("../models/MeetingLink")).default;
-        for (const linkId of selectedLinkIds) {
-          try {
-            const link = await MeetingLink.findById(linkId);
-            if (!link) continue;
-
-            const using = sessionsResult.sessions.filter(
-              (s) => s.meetingLinkId?.toString() === linkId.toString(),
-            );
-            if (using.length === 0) continue;
-
-            const first = using[0];
-            const last = using[using.length - 1];
-
-            const startTime = new Date(first.scheduledDate);
-            const [sh, sm] = first.startTime.split(":").map(Number);
-            startTime.setHours(sh, sm, 0, 0);
-
-            const endTime = new Date(last.scheduledDate);
-            const [eh, em] = last.endTime.split(":").map(Number);
-            endTime.setHours(eh, em, 0, 0);
-
-            await link.reserveForSession(
-              last._id,
-              groupId,
-              startTime,
-              endTime,
-              userId,
-              {
-                daysOfWeek: group.schedule.daysOfWeek,
-                timeFrom: group.schedule.timeFrom,
-                timeTo: group.schedule.timeTo,
-              },
-            );
-          } catch (e) {
-            console.warn(`⚠️ Could not reserve link ${linkId}:`, e.message);
-          }
-        }
-      }
     } catch (insertError) {
       if (insertError.code === 11000) {
         for (const sessionData of sessionsResult.sessions) {
@@ -350,15 +318,21 @@ export async function activateGroupSessionsCore(groupId, userId, selectedLinkIds
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ EVENT 1: Group Activated (للجروبات العادية فقط)
 // ═══════════════════════════════════════════════════════════════════════════
-export async function onGroupActivated(groupId, userId, selectedLinkIds = []) {
+export async function onGroupActivated(
+  groupId,
+  userId,
+  selectedLinkIds = [],
+  options = {},
+) {
   try {
     console.log(`\n🎯 EVENT: Group Activated ==========`);
     console.log(`👥 Group: ${groupId}`);
     console.log(`👤 Activated by: ${userId}`);
     console.log(`🔗 Selected Link IDs: ${selectedLinkIds.join(", ") || "none"}`);
+    console.log(`🔗 Link assignment mode: ${options.linkAssignmentMode || "first_available"}`);
 
     const { group, sessionsResult, existingSessionsCount } =
-      await activateGroupSessionsCore(groupId, userId, selectedLinkIds);
+      await activateGroupSessionsCore(groupId, userId, selectedLinkIds, options);
 
     console.log(`📊 Sessions Generation Result:`, sessionsResult.distribution);
 
@@ -378,6 +352,7 @@ export async function onGroupActivated(groupId, userId, selectedLinkIds = []) {
       startDate: sessionsResult.startDate,
       endDate: sessionsResult.endDate,
       regeneration: existingSessionsCount > 0,
+      meetingLinks: sessionsResult.meetingLinks, // ✅ { assigned, failed, mode, linksUsed }
     };
   } catch (error) {
     console.error("❌ Error in onGroupActivated:", error);
@@ -1624,6 +1599,7 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
   try {
     console.log(`\n📤 Sending low balance alerts to ${students.length} students`);
 
+    let sessionGroup = null;
     if (sessionId) {
       const holdCheck = await canSessionSendMessages(sessionId);
       if (!holdCheck.ok) {
@@ -1637,13 +1613,14 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           reason: holdCheck.reason,
         };
       }
+      sessionGroup = holdCheck.group || null;
     }
 
     let successCount = 0;
     let failCount = 0;
     const results = [];
 
-    for (const { student, remainingHours } of students) {
+    for (const { student, remainingHours, alertType } of students) {
       try {
         const canSend = await canSendMessageForLowBalance(student);
         if (!canSend) {
@@ -1656,29 +1633,9 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           continue;
         }
 
-        const language =
-          student.communicationPreferences?.preferredLanguage || "ar";
         const studentPhone = student.personalInfo?.whatsappNumber;
         const guardianPhone =
           student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
-
-        const studentFirstName =
-          language === "ar"
-            ? student.personalInfo?.nickname?.ar?.trim() ||
-              student.personalInfo?.fullName?.split(" ")[0] ||
-              "الطالب"
-            : student.personalInfo?.nickname?.en?.trim() ||
-              student.personalInfo?.fullName?.split(" ")[0] ||
-              "Student";
-
-        const guardianFirstName =
-          language === "ar"
-            ? student.guardianInfo?.nickname?.ar?.trim() ||
-              student.guardianInfo?.name?.split(" ")[0] ||
-              "ولي الأمر"
-            : student.guardianInfo?.nickname?.en?.trim() ||
-              student.guardianInfo?.name?.split(" ")[0] ||
-              "Guardian";
 
         if (!studentPhone && !guardianPhone) {
           failCount++;
@@ -1690,8 +1647,28 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           continue;
         }
 
-        const isCritical = remainingHours <= 2;
-        const templateKey = isCritical ? "2h" : "4h";
+        // ✅ FIX: بنجيب الجروب الفعلي (من السيشن لو متوفرة، وإلا من أول
+        // جروب للطالب) وبنبني المتغيرات بنفس دالة prepareStudentVariables
+        // اللي بتستخدمها كل الرسايل التانية — ده اللي بيخلي
+        // {guardianSalutation} و {childTitle} ياخدوا القيم المحفوظة فعليًا
+        // في صفحة المتغيرات (TemplateVariable) بدل النص الثابت اللي كان
+        // متكتوب يدويًا هنا ("عزيزي الأستاذ"، "ابنك"...).
+        let group = sessionGroup;
+        if (!group) {
+          const groupId = student.academicInfo?.groupIds?.[0];
+          if (groupId) {
+            group = await Group.findById(groupId).lean();
+          }
+        }
+
+        const { variables: baseVariables, language } =
+          await prepareStudentVariables(student, group || {}, null, {});
+
+        // ✅ FIX: بنحترم alertType الجاي من الـ caller بدل ما نعيد حسابه من
+        // remainingHours — ده اللي بيسمح بتبديل نقاط الإطلاق (عند 2 ساعة
+        // وعند الصفر) عن القالب المُستخدم (4h/2h) من غير ما نلمس القوالب نفسها
+        const templateKey = alertType || (remainingHours <= 0 ? "2h" : "4h");
+        const isCritical = templateKey === "2h";
 
         const studentTemplateType = `credit_low_balance_${templateKey}_student`;
         const guardianTemplateType = `credit_low_balance_${templateKey}_guardian`;
@@ -1701,38 +1678,8 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           student.creditSystem?.currentPackage?.packageType ||
           (language === "ar" ? "الباقة" : "Package");
 
-        const relationship = student.guardianInfo?.relationship || "father";
-        const isFather = relationship !== "mother";
-        const guardianSalutation_ar = isFather
-          ? `عزيزي الأستاذ ${guardianFirstName}`
-          : `عزيزتي السيدة ${guardianFirstName}`;
-        const guardianSalutation_en = isFather
-          ? `Dear Mr. ${guardianFirstName}`
-          : `Dear Mrs. ${guardianFirstName}`;
-        const guardianSalutation =
-          language === "ar" ? guardianSalutation_ar : guardianSalutation_en;
-
-        const gender = student.personalInfo?.gender || "male";
-        const isMale = gender !== "female";
-        const childTitle =
-          language === "ar"
-            ? isMale
-              ? "ابنك"
-              : "ابنتك"
-            : isMale
-              ? "your son"
-              : "your daughter";
-
-        const salutationBase_ar = isMale ? "عزيزي الطالب" : "عزيزتي الطالبة";
-        const salutation_en = `Dear ${studentFirstName}`;
-
         const variables = {
-          salutation_ar: `${salutationBase_ar} ${studentFirstName}`,
-          salutation_en,
-          guardianSalutation,
-          childTitle,
-          studentName: studentFirstName,
-          guardianName: guardianFirstName,
+          ...baseVariables,
           remainingHours: String(remainingHours),
           packageName,
         };
@@ -1756,9 +1703,9 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
                 remainingHours,
                 alertType: isCritical ? "critical_2h" : "low_balance_4h",
                 recipientType: "student",
-                studentName: studentFirstName,
+                studentName: baseVariables.studentName,
                 packageName,
-                threshold: isCritical ? "2h" : "4h",
+                threshold: templateKey,
               },
             });
           } catch (err) {
@@ -1788,10 +1735,10 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
                 remainingHours,
                 alertType: isCritical ? "critical_2h" : "low_balance_4h",
                 recipientType: "guardian",
-                studentName: studentFirstName,
-                guardianName: guardianFirstName,
+                studentName: baseVariables.studentName,
+                guardianName: baseVariables.guardianName,
                 packageName,
-                threshold: isCritical ? "2h" : "4h",
+                threshold: templateKey,
               },
             });
           } catch (err) {
@@ -1807,7 +1754,7 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           studentId: student._id,
           status: "sent",
           remainingHours,
-          threshold: isCritical ? "2h" : "4h",
+          threshold: templateKey,
         });
 
         if (typeof student.logLowBalanceAlert === "function") {
@@ -1863,20 +1810,10 @@ export async function disableZeroBalanceNotifications(zeroBalanceStudents, sessi
       `\n🔕 Disabling notifications for ${zeroBalanceStudents.length} students with zero balance`,
     );
 
-    if (sessionId) {
-      const holdCheck = await canSessionSendMessages(sessionId);
-      if (!holdCheck.ok) {
-        console.log(
-          `⏭️ [HOLD GUARD] disableZeroBalanceNotifications skipped — ${holdCheck.reason}`,
-        );
-        return {
-          success: true,
-          disabledCount: 0,
-          failCount: 0,
-          reason: holdCheck.reason,
-        };
-      }
-    }
+    // ✅ FIX: مبقاش فيه HOLD GUARD هنا لأن الدالة دي بقت بس بتعطّل قناة
+    // الواتساب في قاعدة البيانات — مش بتبعت أي رسالة، فمفيش داعي نمنعها
+    // بسبب Hold. الإرسال الفعلي عند وصول الرصيد للصفر بقى مسؤولية
+    // sendLowBalanceAlerts (قالب "2h") بس.
 
     let successCount = 0;
     let failCount = 0;
@@ -1884,79 +1821,14 @@ export async function disableZeroBalanceNotifications(zeroBalanceStudents, sessi
 
     for (const { student } of zeroBalanceStudents) {
       try {
+        // ✅ FIX: بنعطّل قناة الواتساب بس، من غير إرسال أي رسالة "تم استنفاد
+        // الرصيد" منفصلة — الرسالة الوحيدة اللي المفروض تتبعت عند وصول
+        // الرصيد للصفر هي قالب credit_low_balance_2h (من sendLowBalanceAlerts)
         student.communicationPreferences.notificationChannels = {
           ...student.communicationPreferences.notificationChannels,
           whatsapp: false,
         };
         await student.save();
-
-        const language =
-          student.communicationPreferences?.preferredLanguage || "ar";
-        const studentPhone = student.personalInfo?.whatsappNumber;
-
-        const studentFirstName =
-          language === "ar"
-            ? student.personalInfo?.nickname?.ar?.trim() ||
-              student.personalInfo?.fullName?.split(" ")[0] ||
-              "الطالب"
-            : student.personalInfo?.nickname?.en?.trim() ||
-              student.personalInfo?.fullName?.split(" ")[0] ||
-              "Student";
-
-        if (studentPhone) {
-          const studentMessage =
-            language === "ar"
-              ? `❌ تم استنفاد رصيد الساعات الخاص بك. لن تتمكن من حضور الجلسات القادمة. يرجى التواصل مع الإدارة لتجديد الباقة.`
-              : `❌ Your credit hours have been exhausted. You cannot attend future sessions. Please contact administration to renew your package.`;
-
-          await wapilotService.sendAndLogMessage({
-            studentId: student._id,
-            phoneNumber: studentPhone,
-            messageContent: studentMessage,
-            messageType: "credit_exhausted",
-            language,
-            metadata: {
-              alertType: "zero_balance",
-              notificationsDisabled: true,
-              recipientType: "student",
-              studentName: studentFirstName,
-            },
-          });
-        }
-
-        const guardianPhone =
-          student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
-
-        if (guardianPhone) {
-          const guardianFirstName =
-            language === "ar"
-              ? student.guardianInfo?.nickname?.ar?.trim() ||
-                student.guardianInfo?.name?.split(" ")[0] ||
-                "ولي الأمر"
-              : student.guardianInfo?.nickname?.en?.trim() ||
-                student.guardianInfo?.name?.split(" ")[0] ||
-                "Guardian";
-
-          const guardianMessage =
-            language === "ar"
-              ? `❌ تم استنفاد رصيد ساعات ${studentFirstName}. لن يتمكن من حضور الجلسات القادمة. يرجى التواصل مع الإدارة لتجديد الباقة.`
-              : `❌ ${studentFirstName}'s credit hours have been exhausted. They cannot attend future sessions. Please contact administration to renew the package.`;
-
-          await wapilotService.sendAndLogMessage({
-            studentId: student._id,
-            phoneNumber: guardianPhone,
-            messageContent: guardianMessage,
-            messageType: "credit_exhausted",
-            language,
-            metadata: {
-              alertType: "zero_balance",
-              notificationsDisabled: true,
-              recipientType: "guardian",
-              studentName: studentFirstName,
-              guardianName: guardianFirstName,
-            },
-          });
-        }
 
         successCount++;
         results.push({ studentId: student._id, status: "disabled" });

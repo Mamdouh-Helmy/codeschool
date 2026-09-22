@@ -1,3 +1,4 @@
+//api//groups/[id]/students/route.js
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../../../models/Group';
