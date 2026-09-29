@@ -595,17 +595,13 @@ export default function CourseManager({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // ✅ الـ id ممكن يجي باسم id أو _id حسب الـ useAuth
-        const currentUserId = (user as any)?.id || (user as any)?._id;
-
-        // ✅ اللوجين مطلوب بس عند إنشاء كورس جديد، التعديل بيستخدم createdBy الموجود
-        if (!editingCourse?._id && !currentUserId) {
-            toast.error("Please login to create course");
+        if (!form.title.trim()) {
+            toast.error("Title is required");
             return;
         }
 
-        if (!form.title.trim()) {
-            toast.error("Title is required");
+        if (!form.description?.trim() || form.description.trim().length < 10) {
+            toast.error("Description is required (at least 10 characters)");
             return;
         }
 
@@ -620,12 +616,12 @@ export default function CourseManager({
                 title: form.title,
                 description: form.description || "",
                 level: form.level,
-                curriculum: form.curriculum.map(module => ({
+                curriculum: form.curriculum.map((module) => ({
                     title: module.title,
                     description: module.description || "",
                     order: module.order,
                     totalSessions: 3,
-                    lessons: module.lessons.map(lesson => ({
+                    lessons: module.lessons.map((lesson) => ({
                         title: lesson.title,
                         description: lesson.description || "",
                         order: lesson.order,
@@ -635,7 +631,7 @@ export default function CourseManager({
                     sessions: module.sessions || [
                         { sessionNumber: 1, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
                         { sessionNumber: 2, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-                        { sessionNumber: 3, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" }
+                        { sessionNumber: 3, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
                     ],
                     projects: module.projects || [],
                     blog: {
@@ -645,9 +641,9 @@ export default function CourseManager({
                         updatedAt: new Date(),
                     },
                     hasCertificate: module.hasCertificate || false,
-                    certificateBackground: module.hasCertificate ? (module.certificateBackground || "") : "",
-                    certificateSignatureName: module.hasCertificate ? (module.certificateSignatureName || "") : "",
-                    certificateCaption: module.hasCertificate ? (module.certificateCaption || "") : "",
+                    certificateBackground: module.hasCertificate ? module.certificateBackground || "" : "",
+                    certificateSignatureName: module.hasCertificate ? module.certificateSignatureName || "" : "",
+                    certificateCaption: module.hasCertificate ? module.certificateCaption || "" : "",
                 })),
                 grade: form.grade,
                 subject: form.subject,
@@ -655,17 +651,12 @@ export default function CourseManager({
                 isActive: form.isActive,
                 featured: form.featured,
                 thumbnail: form.thumbnail,
-                createdBy: editingCourse?.createdBy || {
-                    id: currentUserId,
-                    name: user?.name || "Admin",
-                    email: user?.email || "",
-                    role: user?.role || "admin",
-                },
             };
 
             const res = await fetch(url, {
                 method,
                 headers: { "Content-Type": "application/json" },
+                credentials: "same-origin", // ✅ عشان الكوكيز تتبعت
                 body: JSON.stringify(payload),
             });
 
@@ -678,9 +669,7 @@ export default function CourseManager({
             }
 
             toast.success(
-                method === "POST"
-                    ? "Course created successfully"
-                    : "Course updated successfully"
+                method === "POST" ? "Course created successfully" : "Course updated successfully"
             );
 
             await loadCourses();

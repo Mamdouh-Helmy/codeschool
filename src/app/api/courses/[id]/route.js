@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
+import { getUserFromRequest } from "@/lib/auth";
 import Course from "../../../models/Course";
 
 const calculateSessionNumber = (lessonOrder) => Math.ceil(lessonOrder / 2);
@@ -31,7 +32,6 @@ const processModule = (module, moduleIndex) => {
         lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
       duration: lesson.duration || "45 mins",
     })),
-    // ✅ Session-level blog (Ar/En) + cover image
     sessions: (module.sessions || []).map((session, sessionIndex) => ({
       sessionNumber: session.sessionNumber || sessionIndex + 1,
       presentationUrl: session.presentationUrl?.trim() || "",
@@ -40,21 +40,57 @@ const processModule = (module, moduleIndex) => {
       blogImage: session.blogImage?.trim() || "",
       blogUpdatedAt: new Date(),
     })),
-    // ✅ Certificate fields
     hasCertificate: !!module.hasCertificate,
     certificateBackground: module.hasCertificate
-      ? (module.certificateBackground?.trim() || "")
+      ? module.certificateBackground?.trim() || ""
       : "",
     certificateSignatureName: module.hasCertificate
-      ? (module.certificateSignatureName?.trim() || "")
+      ? module.certificateSignatureName?.trim() || ""
       : "",
-
-       // ✅ جديد
     certificateCaption: module.hasCertificate
-      ? (module.certificateCaption?.trim() || "")
+      ? module.certificateCaption?.trim() || ""
       : "",
   };
 };
+
+// ✅ الحقول المسموح بتعديلها فقط (createdBy و slug و _id مش بينتعدلوا من الـ client)
+const ALLOWED_UPDATE_FIELDS = [
+  "title",
+  "description",
+  "level",
+  "grade",
+  "subject",
+  "duration",
+  "curriculum",
+  "isActive",
+  "featured",
+  "thumbnail",
+];
+
+// ✅ حماية: لازم يكون مسجل دخول (وممكن تحصرها على أدوار معينة)
+async function requireUser(request) {
+  const currentUser = await getUserFromRequest(request);
+  if (!currentUser) {
+    return {
+      error: NextResponse.json(
+        { success: false, error: "Please login first" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  // (اختياري) اسمح بس للأدمن/المدرس - فك الكومنت وعدّل الـ roles حسب عندك
+  // if (!["admin", "teacher"].includes(currentUser.role)) {
+  //   return {
+  //     error: NextResponse.json(
+  //       { success: false, error: "Forbidden" },
+  //       { status: 403 }
+  //     ),
+  //   };
+  // }
+
+  return { user: currentUser };
+}
 
 export async function GET(request, { params }) {
   try {
@@ -84,17 +120,30 @@ export async function PUT(request, { params }) {
   try {
     await connectDB();
 
+    const { error: authError } = await requireUser(request);
+    if (authError) return authError;
+
     const { id } = await params;
     const body = await request.json();
 
+    // ✅ ناخد الحقول المسموحة بس
+    const updates = {};
+    for (const key of ALLOWED_UPDATE_FIELDS) {
+      if (body[key] !== undefined) updates[key] = body[key];
+    }
+
     // Process curriculum if present
-    if (body.curriculum && Array.isArray(body.curriculum)) {
-      body.curriculum = body.curriculum.map(processModule);
+    if (updates.curriculum && Array.isArray(updates.curriculum)) {
+      updates.curriculum = updates.curriculum.map(processModule);
+    }
+
+    if (typeof updates.level === "string") {
+      updates.level = updates.level.toLowerCase();
     }
 
     const course = await Course.findByIdAndUpdate(
       id,
-      { $set: body },
+      { $set: updates },
       { new: true, runValidators: true }
     ).lean();
 
@@ -131,6 +180,9 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
+
+    const { error: authError } = await requireUser(request);
+    if (authError) return authError;
 
     const { id } = await params;
     const course = await Course.findByIdAndDelete(id);

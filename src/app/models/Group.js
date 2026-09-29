@@ -119,7 +119,7 @@ const groupSchema = new mongoose.Schema(
       default: "",
     },
 
-        // ═══════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════
     // ✅ MAKE-UP GROUP (جروب تعويضي) — Ad-hoc group
     // ═══════════════════════════════════════════════════════════════
     // الجروب ده بيتعمل من صفحة الأدمن لما يعمل حصة تعويضية لطالب.
@@ -251,19 +251,22 @@ const groupSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
-      // duration: لفترة محددة بالأيام
-      // sessions: لعدد سيشنات محددة
-      // until_session: لحد سيشن محددة بالـ ID
-      // indefinite: مفتوح لحد ما الأدمن يفكّه
+      // الأنواع المتاحة للـ Hold الجديد:
+      //   duration:      لفترة محددة بالأيام
+      //   until_session: لحد سيشن محددة بالـ ID
+      //   indefinite:    مفتوح لحد ما الأدمن يفكّه
+      // legacy (للجروبات القديمة بس — مبيتعملش بيه Hold جديد):
+      //   sessions:      كان لعدد سيشنات محددة
       holdType: {
         type: String,
         enum: ["duration", "sessions", "until_session", "indefinite", null],
         default: null,
       },
       holdDays: { type: Number, default: 0 },
+      // legacy: بتتستخدم مع holdType === "sessions" بس
       holdSessionsCount: { type: Number, default: 0 },
       holdSessionsConsumed: { type: Number, default: 0 },
-      // ✅ جديد: لو holdType === "until_session" — الـ ID بتاع السيشن المستهدفة
+      // لو holdType === "until_session" — الـ ID بتاع السيشن المستهدفة
       holdUntilSessionId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Session",
@@ -445,6 +448,7 @@ groupSchema.virtual("holdRemaining").get(function () {
     };
   }
 
+  // legacy: جروبات قديمة اتعملها Hold بنوع "sessions"
   if (this.hold.holdType === "sessions") {
     return {
       type: "sessions",
@@ -531,11 +535,11 @@ groupSchema.methods.getInstructorHours = function (userId) {
 
 /**
  * 🎯 تفعيل الـ Hold على الجروب
+ * الأنواع المتاحة: duration | until_session | indefinite
  */
 groupSchema.methods.holdGroup = async function ({
   holdType = "duration",
   holdDays = 7,
-  holdSessionsCount = 1,
   holdUntilSessionId = null,
   reason = "",
   userId = null,
@@ -589,39 +593,7 @@ groupSchema.methods.holdGroup = async function ({
   }
 
   // ────────────────────────────────────────────────────────────────
-  // 2️⃣ Hold لعدد سيشنات محددة
-  // ────────────────────────────────────────────────────────────────
-  else if (holdType === "sessions") {
-    if (!holdSessionsCount || holdSessionsCount <= 0) {
-      return { success: false, error: "لازم تحدد عدد سيشنات صحيح" };
-    }
-    const daysPerWeek = this.schedule?.daysOfWeek?.length || 1;
-    const daysBetweenSessions = Math.ceil(7 / daysPerWeek);
-    shiftDays = daysBetweenSessions * holdSessionsCount;
-    holdEndDate = new Date(now);
-    holdEndDate.setDate(holdEndDate.getDate() + shiftDays);
-
-    if (shiftSessions && shiftDays > 0) {
-      const affectedSessions = await Session.find({
-        groupId: this._id,
-        isDeleted: false,
-        status: { $in: ["scheduled", "postponed"] },
-      });
-      for (const session of affectedSessions) {
-        const oldDate = new Date(session.scheduledDate);
-        const newDate = new Date(oldDate);
-        newDate.setDate(newDate.getDate() + shiftDays);
-        session.scheduledDate = newDate;
-        session.metadata.lastModifiedBy = userId;
-        session.metadata.updatedAt = now;
-        await session.save();
-        sessionsShifted++;
-      }
-    }
-  }
-
-  // ────────────────────────────────────────────────────────────────
-  // 3️⃣ Hold لحد سيشن محددة بالـ ID
+  // 2️⃣ Hold لحد سيشن محددة بالـ ID
   // ────────────────────────────────────────────────────────────────
   else if (holdType === "until_session") {
     if (!holdUntilSessionId) {
@@ -680,7 +652,7 @@ groupSchema.methods.holdGroup = async function ({
   }
 
   // ────────────────────────────────────────────────────────────────
-  // 4️⃣ Hold مفتوح (indefinite)
+  // 3️⃣ Hold مفتوح (indefinite) — لحد ما الأدمن يفكّه يدويًا
   // ────────────────────────────────────────────────────────────────
   else if (holdType === "indefinite") {
     holdEndDate = null;
@@ -712,7 +684,7 @@ groupSchema.methods.holdGroup = async function ({
     isHeld: true,
     holdType,
     holdDays: holdType === "duration" ? holdDays : 0,
-    holdSessionsCount: holdType === "sessions" ? holdSessionsCount : 0,
+    holdSessionsCount: 0,
     holdSessionsConsumed: 0,
     holdUntilSessionId:
       holdType === "until_session" ? holdUntilSessionId : null,
@@ -734,7 +706,6 @@ groupSchema.methods.holdGroup = async function ({
     data: {
       holdType,
       holdDays: holdType === "duration" ? holdDays : 0,
-      holdSessionsCount: holdType === "sessions" ? holdSessionsCount : 0,
       holdUntilSessionId:
         holdType === "until_session" ? holdUntilSessionId : null,
       holdStartDate: now,
@@ -811,7 +782,8 @@ groupSchema.methods.releaseGroup = async function ({
 };
 
 /**
- * 🎯 استهلاك سيشن من Hold من نوع "sessions"
+ * 🎯 (legacy) استهلاك سيشن من Hold من نوع "sessions"
+ * موجودة عشان الجروبات القديمة بس — مفيش Hold جديد بيوصلها.
  */
 groupSchema.methods.consumeHoldSession = async function () {
   if (!this.hold?.isHeld) return { success: false, consumed: 0 };
@@ -841,7 +813,7 @@ groupSchema.methods.consumeHoldSession = async function () {
 };
 
 /**
- * 🎯 جديد: لو الـ holdType = "until_session" ولسه شغال، افحص لو السيشن
+ * 🎯 لو الـ holdType = "until_session" ولسه شغال، افحص لو السيشن
  *    المستهدفة اتحسبت (اتاخد فيها حضور) → نفكّ الـ Hold تلقائيًا
  *
  *    @param {ObjectId} sessionId — السيشن اللي اتحسبت دلوقتي
@@ -963,8 +935,10 @@ groupSchema.statics.autoReleaseExpiredHolds = async function () {
   }
 
   // ────────────────────────────────────────────────────────────────
-  // 2️⃣ until_session: لو السيشن المستهدفة مكتملة / اتحذفت / تاريخها
-  //    عدى من زمان (حماية إضافية للـ attendance route)
+  // 2️⃣ until_session: لو السيشن المستهدفة مكتملة أو اتحذفت
+  //    (حماية إضافية للـ attendance route).
+  //    ⚠️ مفيش شرط على التاريخ عمدًا: الـ Hold ده مفتوح لحد ما
+  //    السيشن المستهدفة تتحسب، والأدمن هو اللي يقرر لو عايز يفكه قبل كدا.
   // ────────────────────────────────────────────────────────────────
   const untilSessionGroups = await this.find({
     isDeleted: false,
@@ -978,21 +952,18 @@ groupSchema.statics.autoReleaseExpiredHolds = async function () {
       const targetSession = await mongoose
         .model("Session")
         .findById(group.hold.holdUntilSessionId)
-        .select("scheduledDate status isDeleted")
+        .select("status isDeleted")
         .lean();
 
       const shouldRelease =
         !targetSession ||
         targetSession.isDeleted ||
-        targetSession.status === "completed" ||
-        new Date(targetSession.scheduledDate) <
-          new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+        targetSession.status === "completed";
 
       if (shouldRelease) {
         await group.releaseGroup({
           userId: null,
-          reason:
-            "فك تلقائي — السيشن المستهدفة انتهت أو اتحذفت",
+          reason: "فك تلقائي — السيشن المستهدفة انتهت أو اتحذفت",
         });
         released.push({
           _id: group._id,

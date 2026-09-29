@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 import {
   PauseCircle,
   Clock,
-  Layers,
   Infinity as InfinityIcon,
   Loader2,
   Calendar,
@@ -146,9 +145,9 @@ export default function GroupHoldModal({
   };
 
   // ── State ────────────────────────────────────────────────────────────
+  // الأنواع المتاحة: duration | until_session | indefinite
   const [holdType, setHoldType] = useState("duration");
   const [holdDays, setHoldDays] = useState("7");
-  const [holdSessionsCount, setHoldSessionsCount] = useState("1");
   const [holdUntilSessionId, setHoldUntilSessionId] = useState("");
   const [reason, setReason] = useState("");
   const [shiftSessions, setShiftSessions] = useState(true);
@@ -187,27 +186,20 @@ export default function GroupHoldModal({
 
   // ── Derived ──────────────────────────────────────────────────────────
   const daysNum = parseInt(holdDays, 10);
-  const sessionsNum = parseInt(holdSessionsCount, 10);
   const selectedSession = sessions.find((s) => s._id === holdUntilSessionId);
 
   const isValid =
     holdType === "duration"
       ? daysNum >= 1 && daysNum <= 365
-      : holdType === "sessions"
-        ? sessionsNum >= 1 && sessionsNum <= 100
-        : holdType === "until_session"
-          ? Boolean(holdUntilSessionId)
-          : true;
+      : holdType === "until_session"
+        ? Boolean(holdUntilSessionId)
+        : true;
 
   const summary = (() => {
     switch (holdType) {
       case "duration":
         return daysNum >= 1
           ? tr("groups.hold.summary.duration", { days: daysNum })
-          : null;
-      case "sessions":
-        return sessionsNum >= 1
-          ? tr("groups.hold.summary.sessions", { count: sessionsNum })
           : null;
       case "until_session":
         return selectedSession
@@ -226,9 +218,7 @@ export default function GroupHoldModal({
       toast.error(
         holdType === "until_session"
           ? tr("groups.hold.selectSession")
-          : holdType === "sessions"
-            ? tr("groups.hold.invalidSessions")
-            : tr("groups.hold.invalidDays"),
+          : tr("groups.hold.invalidDays"),
       );
       return;
     }
@@ -238,7 +228,6 @@ export default function GroupHoldModal({
       const payload = {
         holdType,
         holdDays: holdType === "duration" ? daysNum : 0,
-        holdSessionsCount: holdType === "sessions" ? sessionsNum : 0,
         holdUntilSessionId:
           holdType === "until_session" ? holdUntilSessionId : null,
         reason,
@@ -274,12 +263,6 @@ export default function GroupHoldModal({
       icon: Clock,
       title: tr("groups.hold.type.duration.title"),
       desc: tr("groups.hold.type.duration.desc"),
-    },
-    {
-      value: "sessions",
-      icon: Layers,
-      title: tr("groups.hold.type.sessions.title"),
-      desc: tr("groups.hold.type.sessions.desc"),
     },
     {
       value: "until_session",
@@ -421,18 +404,6 @@ export default function GroupHoldModal({
                         ))}
                       </div>
                     </div>
-                  )}
-
-                  {/* Sessions count */}
-                  {opt.value === "sessions" && (
-                    <Stepper
-                      value={holdSessionsCount}
-                      onChange={setHoldSessionsCount}
-                      min={1}
-                      max={100}
-                      unit={tr("groups.hold.unit.sessions")}
-                      label={tr("groups.hold.sessionsCount")}
-                    />
                   )}
 
                   {/* Until session */}

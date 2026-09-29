@@ -1,10 +1,13 @@
 // app/api/groups/[id]/hold/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
-import Group from "../../../../models/Group";
-import Session from "../../../../models/Session";
+import Group from "@/models/Group";
+import Session from "@/models/Session";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
+
+// الأنواع المسموحة لإنشاء Hold جديد
+const ALLOWED_HOLD_TYPES = ["duration", "until_session", "indefinite"];
 
 // ─── GET: حالة الـ Hold + السيشنات المتاحة للاختيار ──────────────────────
 export async function GET(req, { params }) {
@@ -103,14 +106,13 @@ export async function POST(req, { params }) {
     const {
       holdType = "duration",
       holdDays = 7,
-      holdSessionsCount = 1,
-      holdUntilSessionId = null, // ✅ جديد
+      holdUntilSessionId = null,
       reason = "",
       shiftSessions = true,
     } = body;
 
     // ✅ validation صريح قبل ما ندخل على الموديل
-    if (!["duration", "sessions", "until_session", "indefinite"].includes(holdType)) {
+    if (!ALLOWED_HOLD_TYPES.includes(holdType)) {
       return NextResponse.json(
         { success: false, error: "holdType غير صالح" },
         { status: 400 },
@@ -131,13 +133,6 @@ export async function POST(req, { params }) {
       );
     }
 
-    if (holdType === "sessions" && (!holdSessionsCount || holdSessionsCount <= 0)) {
-      return NextResponse.json(
-        { success: false, error: "لازم تحدد عدد سيشنات صحيح" },
-        { status: 400 },
-      );
-    }
-
     const group = await Group.findOne({ _id: id, isDeleted: false });
     if (!group) {
       return NextResponse.json(
@@ -149,7 +144,6 @@ export async function POST(req, { params }) {
     const result = await group.holdGroup({
       holdType,
       holdDays,
-      holdSessionsCount,
       holdUntilSessionId,
       reason,
       userId: authCheck.user.id,

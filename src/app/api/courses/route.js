@@ -2,16 +2,19 @@
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
+import { getUserFromRequest } from "@/lib/auth";
 import Course from "../../models/Course";
 
 const generateSlug = (title) => {
   if (!title) return `course-${Date.now()}`;
-  return title
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim() || `course-${Date.now()}`;
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .trim() || `course-${Date.now()}`
+  );
 };
 
 const calculateSessionNumber = (lessonOrder) => Math.ceil(lessonOrder / 2);
@@ -53,15 +56,13 @@ const processModule = (module, moduleIndex) => {
     // ✅ Certificate fields
     hasCertificate: !!module.hasCertificate,
     certificateBackground: module.hasCertificate
-      ? (module.certificateBackground?.trim() || "")
+      ? module.certificateBackground?.trim() || ""
       : "",
     certificateSignatureName: module.hasCertificate
-      ? (module.certificateSignatureName?.trim() || "")
+      ? module.certificateSignatureName?.trim() || ""
       : "",
-
-       // ✅ جديد
     certificateCaption: module.hasCertificate
-      ? (module.certificateCaption?.trim() || "")
+      ? module.certificateCaption?.trim() || ""
       : "",
   };
 };
@@ -128,6 +129,23 @@ export async function POST(request) {
   try {
     await connectDB();
 
+    // ✅ الـ user من الـ session على السيرفر (مش من الـ client)
+    const currentUser = await getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: "Please login to create course" },
+        { status: 401 }
+      );
+    }
+
+    // (اختياري) اسمح بس للأدمن/المدرس - شيل الكومنتات وعدّل الـ roles حسب عندك
+    // if (!["admin", "teacher"].includes(currentUser.role)) {
+    //   return NextResponse.json(
+    //     { success: false, error: "Forbidden" },
+    //     { status: 403 }
+    //   );
+    // }
+
     const body = await request.json();
     const {
       title,
@@ -140,7 +158,6 @@ export async function POST(request) {
       featured,
       thumbnail,
       duration,
-      createdBy,
     } = body;
 
     // Validation
@@ -165,13 +182,6 @@ export async function POST(request) {
       );
     }
 
-    if (!createdBy?.id || !createdBy?.name || !createdBy?.email || !createdBy?.role) {
-      return NextResponse.json(
-        { success: false, error: "Creator information is incomplete" },
-        { status: 400 }
-      );
-    }
-
     // Process curriculum
     const processedCurriculum =
       curriculum && Array.isArray(curriculum) ? curriculum.map(processModule) : [];
@@ -190,10 +200,10 @@ export async function POST(request) {
       thumbnail: thumbnail?.trim() || "",
       duration: duration?.trim() || "",
       createdBy: {
-        id: createdBy.id,
-        name: createdBy.name.trim(),
-        email: createdBy.email.trim().toLowerCase(),
-        role: createdBy.role.trim(),
+        id: currentUser.id,
+        name: (currentUser.name || "Admin").trim(),
+        email: (currentUser.email || "").trim().toLowerCase(),
+        role: (currentUser.role || "admin").trim(),
       },
     });
 
