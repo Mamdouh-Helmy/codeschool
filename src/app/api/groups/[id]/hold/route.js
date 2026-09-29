@@ -1,8 +1,8 @@
 // app/api/groups/[id]/hold/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
-import Group from "@/models/Group";
-import Session from "@/models/Session";
+import Group from "../../../../models/Group";
+import Session from "../../../../models/Session";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
