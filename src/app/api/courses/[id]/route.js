@@ -48,6 +48,11 @@ const processModule = (module, moduleIndex) => {
     certificateSignatureName: module.hasCertificate
       ? (module.certificateSignatureName?.trim() || "")
       : "",
+
+       // ✅ جديد
+    certificateCaption: module.hasCertificate
+      ? (module.certificateCaption?.trim() || "")
+      : "",
   };
 };
 

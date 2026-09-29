@@ -8,20 +8,20 @@
 // ✅ الصور دلوقتي بتتقرأ مباشرة من الـ filesystem وتتحول لـ base64 (data
 // URI) بدل ما تتطلب بـ HTTP request محلي، عشان نضمن استقرار Puppeteer.
 //
-// ✅ جديد: أي صورة من الصور الثابتة (badge, logo, stem, iAIDL, finland,
-// kidsafe) ممكن تتبدّل من الأدمن (CertificateSettings في الداتابيز عبر
+// ✅ أي صورة من الصور الثابتة (badge, logo, stem, iAIDL, finland, kidsafe)
+// ممكن تتبدّل من الأدمن (CertificateSettings في الداتابيز عبر
 // /api/admin/certificate-assets). لو الأدمن رفع صورة بديلة، بنجيبها من
-// Cloudinary ونحولها base64 برضه (عشان تفضل نفس فلسفة "مفيش شبكة وقت
-// setContent")، ولو مفيش حاجة مخصصة أو فشل الجلب، بترجع تلقائيًا للصورة
-// المحلية الافتراضية زي ما كانت.
+// Cloudinary ونحولها base64 برضه، ولو مفيش حاجة مخصصة أو فشل الجلب،
+// بترجع تلقائيًا للصورة المحلية الافتراضية.
 //
-// ✅ جديد كمان: باراميتر "interactive" (افتراضيًا false). لما يبقى true
-// (بيتفعل بس في معاينة مودال الأدمن /api/admin/certificates/preview-html)،
-// كل صورة قابلة للتخصيص بتتلف بـ overlay وبتقبل الدوس عليها؛ الدوسة بتبعت
-// postMessage لصفحة الأدمن اللي برا الـ iframe عشان تفتح نفس الـ file input
-// بتاع الصورة دي مباشرة. الوضع ده مالوش أي علاقة بتوليد الشهادة الحقيقية
-// (الكرون بيفضل يستخدم interactive=false زي ما هو، فمفيش أي تأثير على
-// الصورة اللي بتتبعت فعليًا للطلبة عبر Puppeteer).
+// ✅ باراميتر "interactive" (افتراضيًا false). لما يبقى true (بيتفعل بس في
+// معاينة مودال الأدمن /api/admin/certificates/preview-html)، كل صورة
+// قابلة للتخصيص بتتلف بـ overlay وبتقبل الدوس عليها؛ الدوسة بتبعت
+// postMessage لصفحة الأدمن اللي برا الـ iframe عشان تفتح نفس الـ file input.
+// الوضع ده مالوش أي علاقة بالتوليد الحقيقي (الكرون بيستخدم interactive=false).
+//
+// ✅ جديد: الشهادة بقت بتعرض "الكابشن" (certificateCaption اللي بيتحدد لكل
+// موديول) مكان اسم الموديول، وقائمة الإنجازات اتشالت بالكامل.
 //
 // لو غيّرت تصميم CertificateTemplate.jsx (الكومبوننت اللي بتتعرض في
 // المتصفح)، لازم تحدّث الدالة دي هنا كمان عشان يفضلوا متطابقين.
@@ -91,9 +91,8 @@ function imageToDataUri(imageName) {
 }
 
 // ✅ Cache للصور المرفوعة من الأدمن (URL -> data URI). المفتاح هو رابط
-// Cloudinary نفسه، فلو الأدمن رفع صورة جديدة هيبقى ليها رابط مختلف تلقائي
-// (Cloudinary بيديله public_id جديد)، فالـ cache القديم مش بيسبب مشكلة —
-// مفيش داعي لأي invalidation يدوي.
+// Cloudinary نفسه، فلو الأدمن رفع صورة جديدة هيبقى ليها رابط مختلف تلقائي،
+// فمفيش داعي لأي invalidation يدوي.
 const remoteImageCache = {};
 
 async function remoteImageToDataUri(url) {
@@ -150,13 +149,18 @@ function escapeHtml(str = "") {
     .replace(/"/g, "&quot;");
 }
 
+// ✅ الكابشن ممكن يبقى أكتر من سطر (textarea في الأدمن)، فبنحول السطور
+// الجديدة لـ <br/> بعد الـ escape عشان تظهر في الشهادة زي ما اتكتبت.
+function captionToHtml(str = "") {
+  return escapeHtml(str).replace(/\r?\n/g, "<br/>");
+}
+
 /**
  * @param {Object} data
  * @param {string} data.studentName
- * @param {string} data.moduleTitle
+ * @param {string} data.caption - الكابشن اللي بيظهر في الشهادة (بدل اسم الموديول)
  * @param {string} data.signatureName
  * @param {string} data.date
- * @param {string[]} data.achievements
  * @param {string} data.backgroundStyle
  * @param {Object} [data.assets] - روابط Cloudinary المخصصة (اختياري):
  *   { badge, logo, stem, iAIDL, finland, kidsafe }
@@ -166,24 +170,14 @@ function escapeHtml(str = "") {
  */
 export async function buildCertificateHtml({
   studentName = "Youssef Mourad",
-  moduleTitle = "Grade 5-6 Module 1 Chatbot Dev 1",
+  caption = "Grade 5-6 Module 1 Chatbot Dev 1",
   signatureName = "Aya Elnagar",
   date = "15/12/2025",
-  achievements = ["Successfully completed all module requirements."],
   backgroundStyle = "navy-orange",
   assets = {},
   interactive = false,
 } = {}) {
   const theme = BACKGROUND_THEMES[backgroundStyle] || BACKGROUND_THEMES["navy-orange"];
-
-  const achievementsHtml = achievements
-    .map(
-      (item) =>
-        `<p style="font-size:23px;margin:12px 0;"><span style="font-weight:bold;">•</span> ${escapeHtml(
-          item,
-        )}</p>`,
-    )
-    .join("");
 
   // ✅ حل كل الصور (مخصصة أو افتراضية) مع بعض بـ Promise.all
   const [badgeSrc, logoSrc, stemSrc, iaidlSrc, finlandSrc, kidsafeSrc] = await Promise.all([
@@ -336,12 +330,8 @@ export async function buildCertificateHtml({
       <div style="text-align:center;padding:0 30px;width:100%;color:#0d2b3e;">
         <div style="display:inline-block;text-align:center;font-family:'Cormorant Garamond','Playfair Display',serif;">
           <p style="font-size:26px;margin:12px 0;">
-            You have successfully completed <strong>${escapeHtml(moduleTitle)}</strong>
+            You have successfully completed <strong>${captionToHtml(caption)}</strong>
           </p>
-          <p style="font-size:23px;margin:12px 0;">
-            Throughout this module, you have achieved the following outcomes:
-          </p>
-          ${achievementsHtml}
         </div>
       </div>
 

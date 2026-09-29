@@ -69,10 +69,9 @@ interface CertificateAssets {
 
 interface DesignForm {
     studentName: string;
-    moduleTitle: string;
+    caption: string;
     signatureName: string;
     background: string;
-    achievements: string;
 }
 
 const BACKGROUND_OPTIONS = [
@@ -444,11 +443,9 @@ function CertificateDesignModal({ onClose }: { onClose: () => void }) {
 
     const [form, setForm] = useState<DesignForm>({
         studentName: "Youssef Mourad",
-        moduleTitle: "Grade 5-6 Module 1 Chatbot Dev 1",
+        caption: "Grade 5-6 Module 1 Chatbot Dev 1",
         signatureName: "Aya Elnagar",
         background: "navy-orange",
-        achievements:
-            "Define the concept of a chatbot and recognize its role in various applications\nExplain the fundamentals of algorithms and their significance in chatbot dev\nPython syntax, including variables, data types, and control structures",
     });
 
     const [html, setHtml] = useState<string | null>(null);
@@ -636,9 +633,9 @@ function CertificateDesignModal({ onClose }: { onClose: () => void }) {
                 img.complete
                     ? Promise.resolve()
                     : new Promise<void>((resolve) => {
-                          img.addEventListener("load", () => resolve(), { once: true });
-                          img.addEventListener("error", () => resolve(), { once: true });
-                      })
+                        img.addEventListener("load", () => resolve(), { once: true });
+                        img.addEventListener("error", () => resolve(), { once: true });
+                    })
             );
 
             Promise.all([fontsReady, ...imagePromises]).then(() => {
@@ -766,11 +763,10 @@ function CertificateDesignModal({ onClose }: { onClose: () => void }) {
             onClick={onClose}
         >
             <div
-                className={`bg-white dark:bg-darkmode shadow-2xl overflow-hidden flex flex-col transition-all duration-200 ${
-                    isFullscreen
+                className={`bg-white dark:bg-darkmode shadow-2xl overflow-hidden flex flex-col transition-all duration-200 ${isFullscreen
                         ? "w-[98vw] h-[96vh] rounded-xl"
                         : "w-full max-w-7xl h-[88vh] rounded-2xl"
-                }`}
+                    }`}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header (ثابت) */}
@@ -823,20 +819,20 @@ function CertificateDesignModal({ onClose }: { onClose: () => void }) {
                                     className={inputCls}
                                 />
                             </TestField>
-                            <TestField label="اسم الموديول">
-                                <input
-                                    type="text"
-                                    value={form.moduleTitle}
-                                    onChange={(e) => onFieldChange("moduleTitle", e.target.value)}
-                                    className={inputCls}
-                                />
-                            </TestField>
                             <TestField label="اسم الموقّع">
                                 <input
                                     type="text"
                                     value={form.signatureName}
                                     onChange={(e) => onFieldChange("signatureName", e.target.value)}
                                     className={inputCls}
+                                />
+                            </TestField>
+                            <TestField label="الكابشن">
+                                <textarea
+                                    rows={2}
+                                    value={form.caption}
+                                    onChange={(e) => onFieldChange("caption", e.target.value)}
+                                    className={`${inputCls} resize-none`}
                                 />
                             </TestField>
                             <TestField label="خلفية الشهادة">
@@ -852,14 +848,7 @@ function CertificateDesignModal({ onClose }: { onClose: () => void }) {
                                     ))}
                                 </select>
                             </TestField>
-                            <TestField label="الإنجازات (سطر لكل عنصر)">
-                                <textarea
-                                    rows={4}
-                                    value={form.achievements}
-                                    onChange={(e) => onFieldChange("achievements", e.target.value)}
-                                    className={`${inputCls} resize-none`}
-                                />
-                            </TestField>
+
                         </div>
 
                         <div className="bg-white dark:bg-darkmode rounded-xl border border-PowderBlueBorder dark:border-dark_border p-4 space-y-3">
@@ -1185,11 +1174,10 @@ function TabButton({
     return (
         <button
             onClick={onClick}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-13 font-semibold transition-all duration-200 ${
-                active
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-13 font-semibold transition-all duration-200 ${active
                     ? "bg-white dark:bg-darkmode text-primary shadow-sm"
                     : "text-SlateBlueText dark:text-darktext hover:text-primary"
-            }`}
+                }`}
         >
             {children}
         </button>
@@ -1416,4 +1404,3 @@ function AssetCard({
 
 const inputCls =
     "w-full px-3 py-2.5 border border-PowderBlueBorder dark:border-dark_border outline-none rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-dark_input dark:text-white text-13 transition-all duration-200";
-    

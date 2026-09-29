@@ -16,6 +16,9 @@ import { uploadToCloudinary } from "@/lib/cloudinary";
 //    لأنه وقت شغل الـ cron ماكانش عند أي منهم (لا الطالب ولا ولي الأمر) رقم
 //    واتساب خالص، فالـ cron ماولدش الصورة أصلاً
 //
+// ✅ الحقل moduleTitle بقى بيرجع الكابشن (certificateCaption) لو موجود،
+// وإلا بيرجع لاسم الموديول للموديولات القديمة — نفس منطق الكرون.
+//
 // ملاحظة: نفس منطق الأهلية (حضور + hasCertificate) اللي في الـ cron job،
 // لكن هنا للعرض فقط — من غير توليد صور ولا إرسال رسائل.
 // ============================================================
@@ -56,6 +59,10 @@ export async function GET() {
           if (!module.hasCertificate) continue;
 
           const moduleId = `${course._id}-${moduleIndex}`;
+
+          // ✅ الكابشن اللي بيظهر في الشهادة (fallback على اسم الموديول)
+          const displayTitle = module.certificateCaption?.trim() || module.title;
+
           const certRecord = student.issuedCertificates?.find(
             (c) => c.moduleId === moduleId
           );
@@ -86,14 +93,6 @@ export async function GET() {
             else if (partiallyDelivered) summary.partiallyDelivered++;
             else summary.pendingNoPhone++;
 
-            // ✅ محاولة جلب رابط Cloudinary بدلاً من الرابط المحلي
-            let imageUrl = certRecord.imageUrl;
-            // لو الرابط محلي (يبدأ بـ /api/temp-image/)، نحوله إلى Cloudinary
-            if (imageUrl && imageUrl.startsWith('/api/temp-image/')) {
-              // نحتفظ بالرابط المحلي، لكن ممكن نضيف رابط Cloudinary لو موجود
-              // في metadata تاني
-            }
-
             issued.push({
               studentId: student._id,
               studentName: student.personalInfo?.fullName || "",
@@ -104,8 +103,8 @@ export async function GET() {
               courseTitle: course.title,
               moduleId,
               moduleIndex,
-              moduleTitle: module.title,
-              imageUrl: imageUrl,
+              moduleTitle: displayTitle,
+              imageUrl: certRecord.imageUrl,
               issuedAt: certRecord.issuedAt,
               student: {
                 phone: studentNumber || null,
@@ -162,7 +161,7 @@ export async function GET() {
             courseTitle: course.title,
             moduleId,
             moduleIndex,
-            moduleTitle: module.title,
+            moduleTitle: displayTitle,
             student: { phone: null, delivered: false, pendingReason: "no_student_phone" },
             guardian: { phone: null, delivered: false, pendingReason: "no_guardian_phone" },
           });

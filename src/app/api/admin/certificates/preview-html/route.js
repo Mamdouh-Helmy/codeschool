@@ -6,14 +6,15 @@
 // الخام بس (نفس نص buildCertificateHtml بالظبط)، عشان الفرونت يعرضه فورًا
 // جوه <iframe> كمعاينة حية (Live) من غير أي انتظار توليد صورة.
 //
-// ✅ جديد: بيبعت interactive=true افتراضيًا (المعاينة في مودال الأدمن
-// دايمًا تفاعلية) عشان تقدر تدوس على أي صورة/شعار في الشهادة نفسها وتغيّرها
-// مباشرة من مكانها، بدل ما تدور عليها في فورم منفصل.
+// ✅ بيبعت interactive=true افتراضيًا (المعاينة في مودال الأدمن دايمًا
+// تفاعلية) عشان تقدر تدوس على أي صورة/شعار في الشهادة نفسها وتغيّرها
+// مباشرة من مكانها.
+//
+// ✅ الشهادة بتعرض "caption" بدل اسم الموديول، ومفيش إنجازات.
 //
 // ⚠️ مهم: الصور المستخدمة هنا هي نفسها بالظبط اللي متخزنة في
 // CertificateSettings (نفس الـ singleton اللي بيستخدمه الكرون الفعلي وقت
-// إرسال الشهادات للطلبة) — يعني اللي شايفه هنا هو اللي فعلاً هيتبعت،
-// مفيش نسخة "تجريبية" منفصلة عن الحقيقية.
+// إرسال الشهادات للطلبة) — يعني اللي شايفه هنا هو اللي فعلاً هيتبعت.
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
@@ -28,23 +29,12 @@ export async function POST(request) {
 
     const {
       studentName = "Youssef Mourad",
-      moduleTitle = "Grade 5-6 Module 1 Chatbot Dev 1",
+      caption = "Grade 5-6 Module 1 Chatbot Dev 1",
       signatureName = "Aya Elnagar",
       background = "navy-orange",
       date,
-      interactive = true, // ✅ جديد: المعاينة في المودال دايمًا تفاعلية افتراضيًا
+      interactive = true,
     } = body;
-
-    let achievements = body.achievements;
-    if (typeof achievements === "string") {
-      achievements = achievements
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean);
-    }
-    if (!Array.isArray(achievements) || achievements.length === 0) {
-      achievements = ["Successfully completed all module requirements."];
-    }
 
     // ✅ نفس الإعدادات الحقيقية المستخدمة فعليًا وقت إرسال الشهادات
     const certSettings = await CertificateSettings.getSingleton();
@@ -59,10 +49,9 @@ export async function POST(request) {
 
     const html = await buildCertificateHtml({
       studentName,
-      moduleTitle,
+      caption,
       signatureName,
       date: date || new Date().toLocaleDateString("en-GB"),
-      achievements,
       backgroundStyle: background,
       assets,
       interactive,

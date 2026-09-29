@@ -152,46 +152,16 @@ async function cleanupStaleCertificateClaims() {
 }
 
 // ============================================================
-// ✅ بناء قائمة الإنجازات
-// ============================================================
-function buildAchievementsFromLessons(lessons) {
-  if (!lessons?.length) {
-    return ["Successfully completed all module requirements."];
-  }
-
-  const sortedLessons = [...lessons].sort((a, b) => a.order - b.order);
-
-  const bySession = sortedLessons.reduce((acc, lesson) => {
-    const key = lesson.sessionNumber ?? lesson.order;
-    if (!acc[key]) {
-      acc[key] = lesson.title;
-    }
-    return acc;
-  }, {});
-
-  return Object.values(bySession);
-}
-
-// ============================================================
 // ✅ توليد صورة الشهادة
 // ============================================================
 async function generateCertificateImage(browser, data) {
-  const {
-    studentName,
-    moduleTitle,
-    achievements,
-    signature,
-    background,
-    date,
-    assets,
-  } = data;
+  const { studentName, caption, signature, background, date, assets } = data;
 
   const fullHtml = await buildCertificateHtml({
     studentName,
-    moduleTitle,
+    caption,
     signatureName: signature,
     date,
-    achievements,
     backgroundStyle: background,
     assets,
   });
@@ -243,15 +213,19 @@ async function syncCertificateToStudentPortfolio(
   moduleId,
   module,
   fullImageUrl,
+  certCaption,
 ) {
   const userId = student.authUserId;
   if (!userId) return { added: false, reason: "NO_LINKED_USER" };
 
+  // ✅ الكابشن هو اللي بيظهر في البورتفوليو (fallback على اسم الموديول)
+  const displayTitle = certCaption || module.title;
+
   try {
     const { added } = await Portfolio.addModuleCertificateIfMissing(userId, {
       moduleId,
-      title: module.title,
-      description: `تم إنجاز موديول "${module.title}" بنجاح`,
+      title: displayTitle,
+      description: `تم إنجاز "${displayTitle}" بنجاح`,
       imageUrl: fullImageUrl,
       issuer: module.certificateSignatureName || "Aya Elnagar",
       issueDate: new Date(),
@@ -451,9 +425,11 @@ export async function GET(request) {
               `🎓 Generating certificate for ${student.personalInfo.fullName} - ${module.title}`,
             );
 
-            const achievements = buildAchievementsFromLessons(
-              module.lessons,
-            );
+            // ✅ الكابشن اللي بيظهر في الشهادة وفي رسائل الواتساب.
+            // fallback على اسم الموديول للموديولات القديمة اللي معندهاش كابشن،
+            // عشان الشهادة/الرسالة ما تطلعش فاضية.
+            const certCaption =
+              module.certificateCaption?.trim() || module.title;
 
             const browser = await getBrowser();
 
@@ -461,8 +437,7 @@ export async function GET(request) {
               browser,
               {
                 studentName: student.personalInfo.fullName,
-                moduleTitle: module.title,
-                achievements,
+                caption: certCaption,
                 signature:
                   module.certificateSignatureName || "Aya Elnagar",
                 background: module.certificateBackground || "navy-orange",
@@ -491,6 +466,7 @@ export async function GET(request) {
                 moduleId,
                 module,
                 fullImageUrl,
+                certCaption,
               );
             if (portfolioResult?.added) {
               summary.portfolioSynced++;
@@ -505,12 +481,14 @@ export async function GET(request) {
             let guardianDelivered = guardianAlreadyDelivered;
 
             if (studentNeedsSend) {
+              // ✅ بنمرر الكابشن مكان module.title (نفس الباراميتر moduleTitle
+              // في wapilot-service، فمفيش أي تعديل مطلوب هناك)
               const caption =
                 await wapilotService.prepareCertificateStudentMessage(
                   student.personalInfo.fullName,
                   student.personalInfo.gender,
                   preferredLanguage,
-                  module.title,
+                  certCaption,
                   student.personalInfo.nickname,
                 );
 
@@ -541,7 +519,7 @@ export async function GET(request) {
                   preferredLanguage,
                   student.guardianInfo?.nickname,
                   student.personalInfo?.nickname,
-                  module.title,
+                  certCaption,
                 );
 
               const result = await sendCertificateWithFallback(

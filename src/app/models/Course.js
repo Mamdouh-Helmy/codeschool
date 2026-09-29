@@ -49,6 +49,7 @@ const ModuleSchema = new mongoose.Schema({
     default: "",
   },
   certificateSignatureName: { type: String, default: "" },
+    certificateCaption: { type: String, default: "" }, // ✅ جديد
 });
 
 // Course Schema

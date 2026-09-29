@@ -61,6 +61,7 @@ interface Module {
     hasCertificate?: boolean;
     certificateBackground?: string;
     certificateSignatureName?: string;
+    certificateCaption?: string;
 }
 
 interface Course {
@@ -350,6 +351,7 @@ export default function CourseManager({
                 hasCertificate: existingModule.hasCertificate || false,
                 certificateBackground: existingModule.certificateBackground || "",
                 certificateSignatureName: existingModule.certificateSignatureName || "",
+                certificateCaption: existingModule.certificateCaption || "",
             });
 
             // استرجاع بيانات الجلسات من الدروس والـ sessions الموجودة
@@ -418,6 +420,7 @@ export default function CourseManager({
                 hasCertificate: false,
                 certificateBackground: "",
                 certificateSignatureName: "",
+                certificateCaption: "",
             });
 
             // إعادة تعيين بيانات الجلسات
@@ -455,6 +458,11 @@ export default function CourseManager({
                 toast.error("من فضلك اكتب اسم التوقيع على الشهادة");
                 return;
             }
+
+            if (!tempModule.certificateCaption?.trim()) {
+                toast.error("من فضلك اكتب الكابشن اللي هيظهر على الشهادة");
+                return;
+            }
         }
 
         // تحديث الدروس بناءً على بيانات الجلسات
@@ -484,6 +492,7 @@ export default function CourseManager({
             hasCertificate: tempModule.hasCertificate || false,
             certificateBackground: tempModule.hasCertificate ? (tempModule.certificateBackground || "") : "",
             certificateSignatureName: tempModule.hasCertificate ? (tempModule.certificateSignatureName || "") : "",
+            certificateCaption: tempModule.hasCertificate ? (tempModule.certificateCaption || "") : "",
         };
 
         console.log("💾 Saving module with blog data:", {
@@ -586,7 +595,11 @@ export default function CourseManager({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!user?.id) {
+        // ✅ الـ id ممكن يجي باسم id أو _id حسب الـ useAuth
+        const currentUserId = (user as any)?.id || (user as any)?._id;
+
+        // ✅ اللوجين مطلوب بس عند إنشاء كورس جديد، التعديل بيستخدم createdBy الموجود
+        if (!editingCourse?._id && !currentUserId) {
             toast.error("Please login to create course");
             return;
         }
@@ -603,7 +616,6 @@ export default function CourseManager({
                 ? `/api/courses/${editingCourse._id}`
                 : "/api/courses";
 
-            // ✅ Send data with flat blog structure (module-level) + session-level blog fields + certificate
             const payload = {
                 title: form.title,
                 description: form.description || "",
@@ -626,17 +638,16 @@ export default function CourseManager({
                         { sessionNumber: 3, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" }
                     ],
                     projects: module.projects || [],
-                    // ✅ Send module-level blog as nested object (API will flatten it)
                     blog: {
                         bodyAr: module.blogBodyAr || "",
                         bodyEn: module.blogBodyEn || "",
                         createdAt: module.blogCreatedAt || new Date(),
                         updatedAt: new Date(),
                     },
-                    // ✅ Certificate fields
                     hasCertificate: module.hasCertificate || false,
                     certificateBackground: module.hasCertificate ? (module.certificateBackground || "") : "",
                     certificateSignatureName: module.hasCertificate ? (module.certificateSignatureName || "") : "",
+                    certificateCaption: module.hasCertificate ? (module.certificateCaption || "") : "",
                 })),
                 grade: form.grade,
                 subject: form.subject,
@@ -645,14 +656,12 @@ export default function CourseManager({
                 featured: form.featured,
                 thumbnail: form.thumbnail,
                 createdBy: editingCourse?.createdBy || {
-                    id: user.id,
-                    name: user.name || "Admin",
-                    email: user.email || "",
-                    role: user.role || "admin",
+                    id: currentUserId,
+                    name: user?.name || "Admin",
+                    email: user?.email || "",
+                    role: user?.role || "admin",
                 },
             };
-
-            console.log("📤 Full payload to send:", JSON.stringify(payload, null, 2));
 
             const res = await fetch(url, {
                 method,
@@ -667,8 +676,6 @@ export default function CourseManager({
                 toast.error(json.error || json.message || "Failed to save course");
                 return;
             }
-
-            console.log("✅ API Success Response:", json);
 
             toast.success(
                 method === "POST"
@@ -1347,6 +1354,19 @@ export default function CourseManager({
                                                         className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                                                     />
                                                 </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                                                        الكابشن (بيظهر في الشهادة)
+                                                    </label>
+                                                    <textarea
+                                                        rows={2}
+                                                        value={tempModule.certificateCaption || ""}
+                                                        onChange={(e) => updateTempModule("certificateCaption", e.target.value)}
+                                                        placeholder="مثال: Grade 5-6 Module 1 Chatbot Dev 1"
+                                                        className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm resize-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                    />
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -1366,6 +1386,10 @@ export default function CourseManager({
                                                     }
                                                     if (!tempModule.certificateSignatureName?.trim()) {
                                                         toast.error("من فضلك اكتب اسم التوقيع على الشهادة");
+                                                        return;
+                                                    }
+                                                    if (!tempModule.certificateCaption?.trim()) {
+                                                        toast.error("من فضلك اكتب الكابشن اللي هيظهر على الشهادة");
                                                         return;
                                                     }
                                                 }
@@ -1934,6 +1958,8 @@ export default function CourseManager({
                                                                 اللون: {CERTIFICATE_BACKGROUNDS.find(b => b.id === module.certificateBackground)?.label || module.certificateBackground}
                                                                 {" • "}
                                                                 التوقيع: {module.certificateSignatureName}
+                                                                {" • "}
+                                                                الكابشن: {module.certificateCaption}
                                                             </p>
                                                         </div>
                                                     )}

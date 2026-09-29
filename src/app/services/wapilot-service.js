@@ -1326,10 +1326,16 @@ The Code School Team 💻`;
       englishName,
     );
 
+    // ✅ moduleTitle هنا هو الكابشن. بنحوّل أي سطور جديدة لمسافة عشان
+    // النجمتين (bold) في واتساب بيشتغلوا على سطر واحد بس
+    const captionText = String(moduleTitle || "")
+      .replace(/\s*\r?\n\s*/g, " ")
+      .trim();
+
     if (language === "en") {
       return `${salutation}, 🎉
 
-Congratulations! You have successfully completed the *${moduleTitle}* module and earned your certificate.
+Congratulations! You have successfully completed *${captionText}* and earned your certificate.
 
 Wishing you all the best in your learning journey with us! 🌟
 
@@ -1338,9 +1344,62 @@ The Code School Team 💻`;
 
     return `${salutation}، 🎉
 
-تهانينا! لقد أكملت بنجاح وحدة *${moduleTitle}* وحصلت على شهادتك.
+تهانينا! لقد أكملت بنجاح *${captionText}* وحصلت على شهادتك.
 
 كل التوفيق في مسيرتك التعليمية معنا! 🌟
+
+فريق Code School 💻`;
+  }
+
+  async prepareCertificateGuardianMessage(
+    guardianName,
+    relationship,
+    studentName,
+    studentGender,
+    language = "ar",
+    guardianNickname = null,
+    studentNickname = null,
+    moduleTitle,
+  ) {
+    const salutation = await this.getGuardianSalutation(
+      guardianName,
+      relationship,
+      guardianNickname,
+      language,
+    );
+    const studentDisplayNameAr =
+      studentNickname?.ar || studentName.split(" ")[0] || studentName;
+    const studentDisplayNameEn =
+      studentNickname?.en || studentName.split(" ")[0] || studentName;
+    const male = isMaleGender(studentGender);
+
+    // ✅ moduleTitle هنا هو الكابشن (نفس المعالجة اللي فوق)
+    const captionText = String(moduleTitle || "")
+      .replace(/\s*\r?\n\s*/g, " ")
+      .trim();
+
+    if (language === "en") {
+      const childTitle = await this.getStudentChildTitle(studentGender, "en");
+      const pronoun = male ? "his" : "her";
+      return `${salutation},
+
+We are pleased to inform you that your ${childTitle} **${studentDisplayNameEn}** has successfully completed *${captionText}* and earned ${pronoun} completion certificate. 🎉
+
+Congratulations, and we wish continued progress!
+
+The Code School Team 💻`;
+    }
+
+    const childTitle = await this.getStudentChildTitle(studentGender, "ar");
+    const completedVerb = male ? "أكمل" : "أكملت";
+    const earnedVerb = male ? "حصل" : "حصلت";
+    const pronoun = male ? "له" : "لها";
+
+    return `${salutation}،
+
+يسعدنا إبلاغكم بأن ${childTitle} **${studentDisplayNameAr}** ${completedVerb} بنجاح *${captionText}* و${earnedVerb} على شهادة الإتمام. 🎉
+
+مبروك ونتمنى ${pronoun} المزيد من التقدم! 🌟
 
 فريق Code School 💻`;
   }
